@@ -1,8 +1,9 @@
 {
-  "name": "mcp-server-neon",
+  "name": "@neondatabase/mcp-server-neon",
   "version": "0.1.0",
   "description": "MCP server for interacting with Neon Management API and databases",
-  "private": true,
+  "license": "MIT",
+  "author": "Neon",
   "type": "module",
   "bin": {
     "mcp-server-neon": "./build/index.js"
@@ -21,7 +22,7 @@
     "@modelcontextprotocol/sdk": "0.6.0",
     "@neondatabase/api-client": "^1.10.3",
     "@neondatabase/serverless": "^0.10.4",
-    "dotenv": "^16.4.5"
+    "chalk": "^5.3.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",

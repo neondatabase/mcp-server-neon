@@ -9,6 +9,21 @@ import {
 import { log } from 'console';
 import { NEON_HANDLERS, NEON_TOOLS } from './tools.js';
 import { isNeonToolName } from './utils.js';
+import { createApiClient } from '@neondatabase/api-client';
+import { initClaudeConfig } from './initConfig.js';
+
+const args = process.argv.slice(2);
+if (args.length === 0) {
+  console.error(
+    'Please provide a NEON_API_KEY as a command-line argument - you can get one through the Neon console: https://neon.tech/docs/manage/api-keys#create-an-api-key',
+  );
+  process.exit(1);
+}
+
+const { neonApiKey } = await initClaudeConfig();
+export const neonClient = createApiClient({
+  apiKey: neonApiKey,
+});
 
 const server = new Server(
   {

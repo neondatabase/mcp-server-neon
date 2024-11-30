@@ -4,8 +4,10 @@ import {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'console';
-import { getNeonClient } from './utils.js';
 import { neon } from '@neondatabase/serverless';
+import { neonClient } from './index.js';
+
+const NEON_ROLE_NAME = 'neondb_owner';
 
 export const NEON_TOOLS = [
   {
@@ -115,7 +117,7 @@ type ToolHandlers = {
 
 async function handleListProjects() {
   log('Executing list_projects');
-  const response = await getNeonClient().listProjects({});
+  const response = await neonClient.listProjects({});
   if (response.status !== 200) {
     throw new Error(`Failed to list projects: ${response.statusText}`);
   }
@@ -124,7 +126,7 @@ async function handleListProjects() {
 
 async function handleCreateProject(name?: string) {
   log('Executing create_project');
-  const response = await getNeonClient().createProject({
+  const response = await neonClient.createProject({
     project: { name },
   });
   if (response.status !== 201) {
@@ -135,7 +137,7 @@ async function handleCreateProject(name?: string) {
 
 async function handleDeleteProject(projectId: string) {
   log('Executing delete_project');
-  const response = await getNeonClient().deleteProject(projectId);
+  const response = await neonClient.deleteProject(projectId);
   if (response.status !== 200) {
     throw new Error(`Failed to delete project: ${response.statusText}`);
   }
@@ -150,9 +152,9 @@ async function handleRunSql(
 ) {
   log('Executing run_sql');
 
-  const connectionString = await getNeonClient().getConnectionUri({
+  const connectionString = await neonClient.getConnectionUri({
     projectId,
-    role_name: 'neondb_owner',
+    role_name: NEON_ROLE_NAME,
     database_name: databaseName,
     branch_id: branchId,
   });
@@ -173,9 +175,9 @@ async function handleGetDatabaseTables({
 }) {
   log('Executing get_database_tables');
 
-  const connectionString = await getNeonClient().getConnectionUri({
+  const connectionString = await neonClient.getConnectionUri({
     projectId,
-    role_name: 'neondb_owner',
+    role_name: NEON_ROLE_NAME,
     database_name: databaseName,
     branch_id: branchId,
   });
@@ -203,7 +205,7 @@ async function handleCreateBranch({
   branchName?: string;
 }) {
   log('Executing create_branch');
-  const response = await getNeonClient().createProjectBranch(projectId, {
+  const response = await neonClient.createProjectBranch(projectId, {
     branch: {
       name: branchName,
     },
