@@ -18,7 +18,10 @@
     "format": "prettier --write ."
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "0.6.0"
+    "@modelcontextprotocol/sdk": "0.6.0",
+    "@neondatabase/api-client": "^1.10.3",
+    "@neondatabase/serverless": "^0.10.4",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",
