@@ -67,6 +67,46 @@ export const NEON_TOOLS = [
       required: ['sql', 'databaseName', 'projectId'],
     },
   },
+  {
+    name: 'get_database_tables' as const,
+    description: 'List all tables in a database in a Neon project',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: {
+          type: 'string',
+          description: 'The ID of the project',
+        },
+        branchId: {
+          type: 'string',
+          description: 'An optional ID of the branch',
+        },
+        databaseName: {
+          type: 'string',
+          description: 'The name of the database',
+        },
+      },
+      required: ['projectId', 'databaseName'],
+    },
+  },
+  {
+    name: 'create_branch' as const,
+    description: 'Create a branch in a Neon project',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: {
+          type: 'string',
+          description: 'The ID of the project to create the branch in',
+        },
+        branchName: {
+          type: 'string',
+          description: 'An optional name for the branch',
+        },
+      },
+      required: ['projectId'],
+    },
+  },
 ] satisfies Array<Tool>;
 export type NeonToolName = (typeof NEON_TOOLS)[number]['name'];
 type ToolHandlers = {
@@ -120,6 +160,60 @@ async function handleRunSql(
   const response = await runQuery(sql);
 
   return response;
+}
+
+async function handleGetDatabaseTables({
+  projectId,
+  databaseName,
+  branchId,
+}: {
+  projectId: string;
+  databaseName: string;
+  branchId?: string;
+}) {
+  log('Executing get_database_tables');
+
+  const connectionString = await getNeonClient().getConnectionUri({
+    projectId,
+    role_name: 'neondb_owner',
+    database_name: databaseName,
+    branch_id: branchId,
+  });
+
+  const runQuery = neon(connectionString.data.uri);
+  const query = `
+    SELECT 
+      table_schema,
+      table_name,
+      table_type
+    FROM information_schema.tables 
+    WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+    ORDER BY table_schema, table_name;
+  `;
+
+  const tables = await runQuery(query);
+  return tables;
+}
+
+async function handleCreateBranch({
+  projectId,
+  branchName,
+}: {
+  projectId: string;
+  branchName?: string;
+}) {
+  log('Executing create_branch');
+  const response = await getNeonClient().createProjectBranch(projectId, {
+    branch: {
+      name: branchName,
+    },
+  });
+
+  if (response.status !== 201) {
+    throw new Error(`Failed to create branch: ${response.statusText}`);
+  }
+
+  return response.data;
 }
 
 export const NEON_HANDLERS: ToolHandlers = {
@@ -185,10 +279,56 @@ export const NEON_HANDLERS: ToolHandlers = {
       },
     };
   },
-};
+  get_database_tables: async (request) => {
+    const { projectId, branchId, databaseName } = request.params.arguments as {
+      projectId: string;
+      branchId: string;
+      databaseName: string;
+    };
 
-/**
- * List all Neon projects in your account.
- * Each Project in the response contains multiple branches.
- * Use the 'list_branch_databases' tool to find out all available databases on each branch.
- */
+    const tables = await handleGetDatabaseTables({
+      projectId,
+      branchId,
+      databaseName,
+    });
+
+    return {
+      toolResult: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(tables, null, 2),
+          },
+        ],
+      },
+    };
+  },
+  create_branch: async (request) => {
+    const { projectId, branchName } = request.params.arguments as {
+      projectId: string;
+      branchName?: string;
+    };
+
+    const result = await handleCreateBranch({
+      projectId,
+      branchName,
+    });
+
+    return {
+      toolResult: {
+        content: [
+          {
+            type: 'text',
+            text: [
+              'Branch created successfully.',
+              `Project ID: ${result.branch.project_id}`,
+              `Branch ID: ${result.branch.id}`,
+              `Branch name: ${result.branch.name}`,
+              `Parent branch: ${result.branch.parent_id}`,
+            ].join('\n'),
+          },
+        ],
+      },
+    };
+  },
+};
