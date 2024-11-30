@@ -8,7 +8,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'console';
 import { NEON_HANDLERS, NEON_TOOLS } from './tools.js';
-import { IsNeonToolName } from './utils.js';
+import { isNeonToolName } from './utils.js';
 
 const server = new Server(
   {
@@ -34,7 +34,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   log('Received tool call:', toolName);
 
   try {
-    if (IsNeonToolName(toolName)) {
+    if (isNeonToolName(toolName)) {
       return await NEON_HANDLERS[toolName](request);
     }
 

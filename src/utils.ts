@@ -23,6 +23,6 @@ export const getNeonClient = () => {
   return neonClientInstance;
 };
 
-export const IsNeonToolName = (name: string): name is NeonToolName => {
+export const isNeonToolName = (name: string): name is NeonToolName => {
   return name in NEON_HANDLERS;
 };
