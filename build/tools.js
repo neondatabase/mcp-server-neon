@@ -1,6 +1,9 @@
 import { log } from 'console';
 import { neon } from '@neondatabase/serverless';
 import { neonClient } from './index.js';
+import crypto from 'crypto';
+import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
+import { EndpointType, Provisioner } from '@neondatabase/api-client';
 const NEON_ROLE_NAME = 'neondb_owner';
 export const NEON_TOOLS = [
     {
@@ -101,6 +104,39 @@ export const NEON_TOOLS = [
             required: ['projectId'],
         },
     },
+    {
+        name: 'start_database_migration',
+        description: 'Start a database migration',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                migrationSql: {
+                    type: 'string',
+                    description: 'The SQL to execute to create the migration',
+                },
+                databaseName: {
+                    type: 'string',
+                    description: 'The name of the database to execute the query against',
+                },
+                projectId: {
+                    type: 'string',
+                    description: 'The ID of the project to execute the query against',
+                },
+            },
+            required: ['migrationSql', 'databaseName', 'projectId'],
+        },
+    },
+    {
+        name: 'commit_database_migration',
+        description: 'Commit a database migration',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                migrationId: { type: 'string' },
+            },
+            required: ['migrationId'],
+        },
+    },
 ];
 async function handleListProjects() {
     log('Executing list_projects');
@@ -128,7 +164,7 @@ async function handleDeleteProject(projectId) {
     }
     return response.data;
 }
-async function handleRunSql(sql, databaseName, projectId, branchId) {
+async function handleRunSql({ sql, databaseName, projectId, branchId, }) {
     log('Executing run_sql');
     const connectionString = await neonClient.getConnectionUri({
         projectId,
@@ -167,11 +203,65 @@ async function handleCreateBranch({ projectId, branchName, }) {
         branch: {
             name: branchName,
         },
+        endpoints: [
+            {
+                type: EndpointType.ReadWrite,
+                autoscaling_limit_min_cu: 0.25,
+                autoscaling_limit_max_cu: 0.25,
+                provisioner: Provisioner.K8SNeonvm,
+            },
+        ],
     });
     if (response.status !== 201) {
         throw new Error(`Failed to create branch: ${response.statusText}`);
     }
     return response.data;
+}
+async function handleDeleteBranch({ projectId, branchId, }) {
+    log('Executing delete_branch');
+    const response = await neonClient.deleteProjectBranch(projectId, branchId);
+    return response.data;
+}
+async function handleSchemaMigration({ migrationSql, databaseName, projectId, }) {
+    log('Executing schema_migration');
+    const newBranch = await handleCreateBranch({ projectId });
+    const result = await handleRunSql({
+        sql: migrationSql,
+        databaseName,
+        projectId,
+        branchId: newBranch.branch.id,
+    });
+    const migrationId = crypto.randomUUID();
+    persistMigrationToMemory(migrationId, {
+        migrationSql,
+        databaseName,
+        appliedBranch: newBranch.branch,
+    });
+    return {
+        branch: newBranch.branch,
+        migrationId,
+        migrationResult: result,
+    };
+}
+async function handleCommitMigration({ migrationId }) {
+    log('Executing commit_migration');
+    const migration = getMigrationFromMemory(migrationId);
+    if (!migration) {
+        throw new Error(`Migration not found: ${migrationId}`);
+    }
+    const result = await handleRunSql({
+        sql: migration.migrationSql,
+        databaseName: migration.databaseName,
+        projectId: migration.appliedBranch.project_id,
+        branchId: migration.appliedBranch.parent_id,
+    });
+    await handleDeleteBranch({
+        projectId: migration.appliedBranch.project_id,
+        branchId: migration.appliedBranch.id,
+    });
+    return {
+        migrationResult: result,
+    };
 }
 export const NEON_HANDLERS = {
     list_projects: async (request) => {
@@ -222,7 +312,12 @@ export const NEON_HANDLERS = {
     run_sql: async (request) => {
         const { sql, databaseName, projectId, branchId } = request.params
             .arguments;
-        const result = await handleRunSql(sql, databaseName, projectId, branchId);
+        const result = await handleRunSql({
+            sql,
+            databaseName,
+            projectId,
+            branchId,
+        });
         return {
             toolResult: {
                 content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -264,6 +359,50 @@ export const NEON_HANDLERS = {
                             `Branch ID: ${result.branch.id}`,
                             `Branch name: ${result.branch.name}`,
                             `Parent branch: ${result.branch.parent_id}`,
+                        ].join('\n'),
+                    },
+                ],
+            },
+        };
+    },
+    start_database_migration: async (request) => {
+        const { migrationSql, databaseName, projectId } = request.params
+            .arguments;
+        const result = await handleSchemaMigration({
+            migrationSql,
+            databaseName,
+            projectId,
+        });
+        return {
+            toolResult: {
+                content: [
+                    {
+                        type: 'text',
+                        text: [
+                            `Your schema has been temporarily applied to this branch: ${result.branch.name}.`,
+                            `Using the Run SQL tool against the new branch ${result.branch.id}, show the results to the user to make sure it looks good.`,
+                            `If everything looks good, show the user some details about the branch to which this was applied, and ask the user if he wants to commit this migration to the main branch.`,
+                            `When he confirms, call the "Commit database migration" tool using this migration ID: ${result.migrationId}.`,
+                            '',
+                            'Migration details:',
+                            JSON.stringify(result.migrationResult, null, 2),
+                        ].join('\n'),
+                    },
+                ],
+            },
+        };
+    },
+    commit_database_migration: async (request) => {
+        const { migrationId } = request.params.arguments;
+        const result = await handleCommitMigration({ migrationId });
+        return {
+            toolResult: {
+                content: [
+                    {
+                        type: 'text',
+                        text: [
+                            'The migration has been committed to the main branch and the temporary branch has been deleted.',
+                            `Result: ${JSON.stringify(result.migrationResult, null, 2)}`,
                         ].join('\n'),
                     },
                 ],
