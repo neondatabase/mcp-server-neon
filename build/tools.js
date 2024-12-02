@@ -380,7 +380,7 @@ export const NEON_HANDLERS = {
                         type: 'text',
                         text: [
                             `Your schema has been temporarily applied to this branch: ${result.branch.name}.`,
-                            `Using the Run SQL tool against the new branch ${result.branch.id}, show the results to the user to make sure it looks good.`,
+                            `Using the 'run-sql' tool with the temporary branch ID ${result.branch.id}, show the results to the user to make sure it looks good.`,
                             `If everything looks good, show the user some details about the branch to which this was applied, and ask the user if he wants to commit this migration to the main branch.`,
                             `When he confirms, call the "Commit database migration" tool using this migration ID: ${result.migrationId}.`,
                             '',
