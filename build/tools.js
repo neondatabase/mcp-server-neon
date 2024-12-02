@@ -106,7 +106,21 @@ export const NEON_TOOLS = [
     },
     {
         name: 'start_database_migration',
-        description: 'Start a database migration',
+        description: `Start a database migration, use this tool for any DDL changes to your database.
+      After the migration is applied, these information will be available:
+      
+      Migration Details:
+              - Migration ID
+              - Temporary Branch Name
+              - Temporary Branch ID
+              - Migration Result
+
+      With that information, it must:
+            1. Use 'run-sql' tool to verify changes on the temporary branch
+            2. If everything looks good, prompt the user to confirm the migration
+            3. Ask the users if he wants to commit this migration to the main branch using this migration ID: <migration_id> (show the migration ID in the prompt)
+            4. End chat here - don't commit the migration, only ask the user if he wants to commit it.
+          `,
         inputSchema: {
             type: 'object',
             properties: {
@@ -128,7 +142,7 @@ export const NEON_TOOLS = [
     },
     {
         name: 'commit_database_migration',
-        description: 'Commit a database migration',
+        description: 'Commit a database migration when the user confirms the migration is ready to be applied to the main branch',
         inputSchema: {
             type: 'object',
             properties: {
@@ -378,15 +392,13 @@ export const NEON_HANDLERS = {
                 content: [
                     {
                         type: 'text',
-                        text: [
-                            `Your schema has been temporarily applied to this branch: ${result.branch.name}.`,
-                            `Using the 'run-sql' tool with the temporary branch ID ${result.branch.id}, show the results to the user to make sure it looks good.`,
-                            `If everything looks good, show the user some details about the branch to which this was applied, and ask the user if he wants to commit this migration to the main branch.`,
-                            `When he confirms, call the "Commit database migration" tool using this migration ID: ${result.migrationId}.`,
-                            '',
-                            'Migration details:',
-                            JSON.stringify(result.migrationResult, null, 2),
-                        ].join('\n'),
+                        text: `
+            Migration Details:
+              - Migration ID: ${result.migrationId}
+              - Temporary Branch Name: ${result.branch.name}
+              - Temporary Branch ID: ${result.branch.id}
+              - Migration Result: ${JSON.stringify(result.migrationResult, null, 2)}
+            `,
                     },
                 ],
             },
