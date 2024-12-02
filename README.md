@@ -4,9 +4,9 @@ Model Context Protocol (MCP) is a [new, standardized protocol](https://modelcont
 
 This lets you use Claude Desktop, or any MCP Client, to use natural language to accomplish things with Neon, e.g.:
 
-* `Let's create a new Postgres database, and call it "my-database". Let's then create a table called users with the following columns: id, name, email, and password.`
-* `I want to run a migration on my project called "my-project" that alters the users table to add a new column called "created_at".`
-* `Can you give me a summary of all of my Neon projects and what data is in each one?`
+- `Let's create a new Postgres database, and call it "my-database". Let's then create a table called users with the following columns: id, name, email, and password.`
+- `I want to run a migration on my project called "my-project" that alters the users table to add a new column called "created_at".`
+- `Can you give me a summary of all of my Neon projects and what data is in each one?`
 
 # Claude Setup
 
@@ -24,17 +24,23 @@ This lets you use Claude Desktop, or any MCP Client, to use natural language to 
 
 # Features
 
-## Supported Commands
+## Supported Tools
 
-* `list_projects`
-* `describe_project`
-* `create_project`
-* `delete_project`
-* `run_sql`
-* `get_database_tables`
-* `create_branch`
-* `start_database_migration`
-* `commit_database_migration`
+- `list_projects`
+- `describe_project`
+- `create_project`
+- `delete_project`
+
+- `create_branch`
+- `delete_branch`
+- `describe_branch`
+
+- `run_sql`
+- `get_database_tables`
+- `describe_table_schema`
+
+- `start_database_migration`
+- `commit_database_migration`
 
 ## Migrations
 
@@ -49,6 +55,7 @@ In the current project folder, run:
 ```bash
 npm install
 npm run watch
+npx ./ $NEON_API_KEY
 ```
 
-And run `npx ./ $NEON_API_KEY` each time you make changes. Then, restart Claude each time you want to test changes.
+Then, **restart Claude** each time you want to test changes.

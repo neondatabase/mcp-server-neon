@@ -4,6 +4,7 @@ import { neonClient } from './index.js';
 import crypto from 'crypto';
 import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
 import { EndpointType, Provisioner } from '@neondatabase/api-client';
+import { DESCRIBE_DATABASE_STATEMENTS } from './utils.js';
 const NEON_ROLE_NAME = 'neondb_owner';
 export const NEON_TOOLS = [
     {
@@ -188,6 +189,46 @@ export const NEON_TOOLS = [
             required: ['migrationId'],
         },
     },
+    {
+        name: 'describe_branch',
+        description: 'Get a tree view of all objects in a branch, including databases, schemas, tables, views, and functions',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                projectId: {
+                    type: 'string',
+                    description: 'The ID of the project',
+                },
+                branchId: {
+                    type: 'string',
+                    description: 'An ID of the branch to describe',
+                },
+                databaseName: {
+                    type: 'string',
+                    description: 'The name of the database',
+                },
+            },
+            required: ['projectId', 'databaseName', 'branchId'],
+        },
+    },
+    {
+        name: 'delete_branch',
+        description: 'Delete a branch from a Neon project',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                projectId: {
+                    type: 'string',
+                    description: 'The ID of the project containing the branch',
+                },
+                branchId: {
+                    type: 'string',
+                    description: 'The ID of the branch to delete',
+                },
+            },
+            required: ['projectId', 'branchId'],
+        },
+    },
 ];
 async function handleListProjects() {
     log('Executing list_projects');
@@ -227,7 +268,7 @@ async function handleDescribeProject(projectId) {
     }
     return {
         branches: projectBranches.data,
-        project: projectDetails,
+        project: projectDetails.data,
     };
 }
 async function handleRunSql({ sql, databaseName, projectId, branchId, }) {
@@ -347,6 +388,18 @@ async function handleCommitMigration({ migrationId }) {
         migrationResult: result,
     };
 }
+async function handleDescribeBranch({ projectId, databaseName, branchId, }) {
+    log('Executing describe_branch');
+    const connectionString = await neonClient.getConnectionUri({
+        projectId,
+        role_name: NEON_ROLE_NAME,
+        database_name: databaseName,
+        branch_id: branchId,
+    });
+    const runQuery = neon(connectionString.data.uri);
+    const response = await runQuery.transaction(DESCRIBE_DATABASE_STATEMENTS.map((sql) => runQuery(sql)));
+    return response;
+}
 export const NEON_HANDLERS = {
     list_projects: async (request) => {
         const projects = await handleListProjects();
@@ -402,7 +455,7 @@ export const NEON_HANDLERS = {
                     {
                         type: 'text',
                         text: [
-                            `This project is called ${result.project.data.project.name}.`,
+                            `This project is called ${result.project.project.name}.`,
                         ].join('\n'),
                     },
                     {
@@ -522,6 +575,45 @@ export const NEON_HANDLERS = {
                         text: [
                             'The migration has been committed to the main branch and the temporary branch has been deleted.',
                             `Result: ${JSON.stringify(result.migrationResult, null, 2)}`,
+                        ].join('\n'),
+                    },
+                ],
+            },
+        };
+    },
+    describe_branch: async (request) => {
+        const { projectId, branchId, databaseName } = request.params.arguments;
+        const result = await handleDescribeBranch({
+            projectId,
+            branchId,
+            databaseName,
+        });
+        return {
+            toolResult: {
+                content: [
+                    {
+                        type: 'text',
+                        text: ['Database Structure:', JSON.stringify(result, null, 2)].join('\n'),
+                    },
+                ],
+            },
+        };
+    },
+    delete_branch: async (request) => {
+        const { projectId, branchId } = request.params.arguments;
+        await handleDeleteBranch({
+            projectId,
+            branchId,
+        });
+        return {
+            toolResult: {
+                content: [
+                    {
+                        type: 'text',
+                        text: [
+                            'Branch deleted successfully.',
+                            `Project ID: ${projectId}`,
+                            `Branch ID: ${branchId}`,
                         ].join('\n'),
                     },
                 ],
