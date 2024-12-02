@@ -65,8 +65,31 @@ export const NEON_TOOLS = [
         },
     },
     {
+        name: 'describe_table_schema',
+        description: 'Describe the schema of a table in a Neon database',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                tableName: { type: 'string', description: 'The name of the table' },
+                databaseName: {
+                    type: 'string',
+                    description: 'The name of the database to get the table schema from',
+                },
+                projectId: {
+                    type: 'string',
+                    description: 'The ID of the project to execute the query against',
+                },
+                branchId: {
+                    type: 'string',
+                    description: 'An optional ID of the branch to execute the query against',
+                },
+            },
+            required: ['tableName', 'databaseName', 'projectId'],
+        },
+    },
+    {
         name: 'get_database_tables',
-        description: 'List all tables in a database in a Neon project',
+        description: 'Get all tables in a Neon database',
         inputSchema: {
             type: 'object',
             properties: {
@@ -211,6 +234,24 @@ async function handleGetDatabaseTables({ projectId, databaseName, branchId, }) {
     const tables = await runQuery(query);
     return tables;
 }
+async function handleDescribeTableSchema({ projectId, databaseName, branchId, tableName, }) {
+    log('Executing describe_table_schema');
+    const result = await handleRunSql({
+        sql: `SELECT 
+    column_name, 
+    data_type, 
+    character_maximum_length, 
+    is_nullable, 
+    column_default 
+FROM 
+    information_schema.columns 
+    WHERE table_name = '${tableName}'`,
+        databaseName,
+        projectId,
+        branchId,
+    });
+    return result;
+}
 async function handleCreateBranch({ projectId, branchName, }) {
     log('Executing create_branch');
     const response = await neonClient.createProjectBranch(projectId, {
@@ -338,9 +379,24 @@ export const NEON_HANDLERS = {
             },
         };
     },
+    describe_table_schema: async (request) => {
+        const { tableName, databaseName, projectId, branchId } = request.params
+            .arguments;
+        const result = await handleDescribeTableSchema({
+            tableName,
+            databaseName,
+            projectId,
+            branchId,
+        });
+        return {
+            toolResult: {
+                content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            },
+        };
+    },
     get_database_tables: async (request) => {
         const { projectId, branchId, databaseName } = request.params.arguments;
-        const tables = await handleGetDatabaseTables({
+        const result = await handleGetDatabaseTables({
             projectId,
             branchId,
             databaseName,
@@ -350,7 +406,7 @@ export const NEON_HANDLERS = {
                 content: [
                     {
                         type: 'text',
-                        text: JSON.stringify(tables, null, 2),
+                        text: JSON.stringify(result, null, 2),
                     },
                 ],
             },
