@@ -9,6 +9,7 @@ const parseArgs = () => {
         console.error('Please provide a NEON_API_KEY as a command-line argument - you can get one through the Neon console: https://neon.tech/docs/manage/api-keys');
         process.exit(1);
     }
+    console.log('args', args);
     return {
         executablePath: args[1],
         neonApiKey: args[2],
@@ -19,7 +20,7 @@ export async function initClaudeConfig() {
     const claudeConfigPath = path.join(os.homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
     const neonConfig = {
         command: 'npx',
-        args: ['-y', executablePath, neonApiKey],
+        args: ['--no-cache', '-y', executablePath, neonApiKey],
     };
     const configDir = path.dirname(claudeConfigPath);
     if (!fs.existsSync(configDir)) {
