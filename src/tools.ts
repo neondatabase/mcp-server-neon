@@ -189,7 +189,7 @@ export const NEON_TOOLS = [
   {
     name: 'commit_database_migration' as const,
     description:
-      'Commit a database migration when the user confirms the migration is ready to be applied to the main branch',
+      'Commit a database migration when the user confirms the migration is ready to be applied to the main branch and notices the user that the temporary branch was deleted',
     inputSchema: {
       type: 'object',
       properties: {
@@ -473,6 +473,7 @@ async function handleCommitMigration({ migrationId }: { migrationId: string }) {
   });
 
   return {
+    deletedBranch: migration.appliedBranch,
     migrationResult: result,
   };
 }
@@ -703,10 +704,14 @@ export const NEON_HANDLERS: ToolHandlers = {
         content: [
           {
             type: 'text',
-            text: [
-              'The migration has been committed to the main branch and the temporary branch has been deleted.',
-              `Result: ${JSON.stringify(result.migrationResult, null, 2)}`,
-            ].join('\n'),
+            text: `Result: ${JSON.stringify(
+              {
+                deletedBranch: result.deletedBranch,
+                migrationResult: result.migrationResult,
+              },
+              null,
+              2,
+            )}`,
           },
         ],
       },
