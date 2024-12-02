@@ -32,7 +32,7 @@ export async function initClaudeConfig() {
 
   const neonConfig = {
     command: 'npx',
-    args: ['--no-cache', '-y', executablePath, neonApiKey],
+    args: ['-y', '--no-cache', executablePath, neonApiKey],
   };
 
   const configDir = path.dirname(claudeConfigPath);

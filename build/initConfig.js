@@ -20,7 +20,7 @@ export async function initClaudeConfig() {
     const claudeConfigPath = path.join(os.homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
     const neonConfig = {
         command: 'npx',
-        args: ['--no-cache', '-y', executablePath, neonApiKey],
+        args: ['-y', '--no-cache', executablePath, neonApiKey],
     };
     const configDir = path.dirname(claudeConfigPath);
     if (!fs.existsSync(configDir)) {
