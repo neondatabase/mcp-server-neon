@@ -22,7 +22,6 @@ const parseArgs = () => {
 
 export async function initClaudeConfig() {
   const { executablePath, neonApiKey } = parseArgs();
-  console.log(executablePath, neonApiKey);
   const claudeConfigPath = path.join(
     os.homedir(),
     'Library',
