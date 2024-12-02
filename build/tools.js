@@ -42,6 +42,20 @@ export const NEON_TOOLS = [
         },
     },
     {
+        name: 'describe_project',
+        description: 'Describes a Neon project',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                projectId: {
+                    type: 'string',
+                    description: 'The ID of the project to describe',
+                },
+            },
+            required: ['projectId'],
+        },
+    },
+    {
         name: 'run_sql',
         description: 'Execute a SQL query against a Neon database',
         inputSchema: {
@@ -201,6 +215,21 @@ async function handleDeleteProject(projectId) {
     }
     return response.data;
 }
+async function handleDescribeProject(projectId) {
+    log('Executing describe_project');
+    const projectBranches = await neonClient.listProjectBranches(projectId);
+    const projectDetails = await neonClient.getProject(projectId);
+    if (projectBranches.status !== 200) {
+        throw new Error(`Failed to get project branches: ${projectBranches.statusText}`);
+    }
+    if (projectDetails.status !== 200) {
+        throw new Error(`Failed to get project: ${projectDetails.statusText}`);
+    }
+    return {
+        branches: projectBranches.data,
+        project: projectDetails,
+    };
+}
 async function handleRunSql({ sql, databaseName, projectId, branchId, }) {
     log('Executing run_sql');
     const connectionString = await neonClient.getConnectionUri({
@@ -358,6 +387,28 @@ export const NEON_HANDLERS = {
                         text: [
                             'Project deleted successfully.',
                             `Project ID: ${projectId}`,
+                        ].join('\n'),
+                    },
+                ],
+            },
+        };
+    },
+    describe_project: async (request) => {
+        const { projectId } = request.params.arguments;
+        const result = await handleDescribeProject(projectId);
+        return {
+            toolResult: {
+                content: [
+                    {
+                        type: 'text',
+                        text: [
+                            `This project is called ${result.project.data.project.name}.`,
+                        ].join('\n'),
+                    },
+                    {
+                        type: 'text',
+                        text: [
+                            `It contains the following branches (use the describe branch tool to learn more about each branch): ${JSON.stringify(result.branches, null, 2)}`,
                         ].join('\n'),
                     },
                 ],

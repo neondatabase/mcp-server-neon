@@ -27,6 +27,7 @@ This lets you use Claude Desktop, or any MCP Client, to use natural language to 
 ## Supported Commands
 
 * `list_projects`
+* `describe_project`
 * `create_project`
 * `delete_project`
 * `run_sql`
@@ -50,4 +51,4 @@ npm install
 npm run watch
 ```
 
-Then, restart Claude each time you want to test changes.
+And run `npx ./ $NEON_API_KEY` each time you make changes. Then, restart Claude each time you want to test changes.
