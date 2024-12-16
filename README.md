@@ -1,6 +1,6 @@
 # Neon MCP Server
 
-[![smithery badge](https://smithery.ai/badge/@neondatabase/mcp-server-neon)](https://smithery.ai/protocol/@neondatabase/mcp-server-neon)
+[![smithery badge](https://smithery.ai/badge/neon)](https://smithery.ai/protocol/neon)
 
 Model Context Protocol (MCP) is a [new, standardized protocol](https://modelcontextprotocol.io/introduction) for managing context between large language models (LLMs) and external systems. In this repository, we provide an installer as well as an MCP Server for [Neon](https://neon.tech).
 
@@ -14,7 +14,7 @@ This lets you use Claude Desktop, or any MCP Client, to use natural language to 
 
 ### Installing via Smithery
 
-To install Neon MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/protocol/@neondatabase/mcp-server-neon):
+To install Neon MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/protocol/neon):
 
 ```bash
 npx @smithery/cli install @neondatabase/mcp-server-neon --client claude
