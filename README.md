@@ -17,7 +17,7 @@ This lets you use Claude Desktop, or any MCP Client, to use natural language to 
 To install Neon MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/protocol/neon):
 
 ```bash
-npx @smithery/cli install @neondatabase/mcp-server-neon --client claude
+npx -y @smithery/cli install neon --client claude
 ```
 
 ## Requirements
