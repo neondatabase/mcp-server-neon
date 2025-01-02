@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { InteractiveCLI } from './index.js';
 import { parseArgs } from 'node:util';
+import { MCPClientCLI } from './cli-client.js';
 
 function checkRequiredEnvVars() {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -34,7 +34,7 @@ async function main() {
       process.exit(1);
     }
 
-    const cli = new InteractiveCLI({
+    const cli = new MCPClientCLI({
       command: serverCommand,
       args: serverArgs,
     });

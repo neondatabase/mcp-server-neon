@@ -10,41 +10,28 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import chalk from 'chalk';
-import readline from 'readline/promises';
 import { Tool } from '@anthropic-ai/sdk/resources/index.mjs';
 import { Stream } from '@anthropic-ai/sdk/streaming.mjs';
-
-const EXIT_COMMAND = 'exit';
-
-const styles = {
-  prompt: chalk.green('You: '),
-  assistant: chalk.blue('Claude: '),
-  tool: {
-    name: chalk.cyan.bold,
-    args: chalk.yellow,
-    bracket: chalk.dim,
-  },
-  error: chalk.red,
-  info: chalk.blue,
-  success: chalk.green,
-  warning: chalk.yellow,
-  separator: chalk.gray('─'.repeat(50)),
-};
+import { consoleStyles, Logger, LoggerOptions } from './logger.js';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
 
-export class InteractiveCLI {
+type MCPClientOptions = StdioServerParameters & {
+  loggerOptions?: LoggerOptions;
+};
+
+export class MCPClient {
   private anthropicClient: Anthropic;
   private messages: Message[] = [];
   private mcpClient: Client;
   private transport: StdioClientTransport;
   private tools: Tool[] = [];
-  private rl: readline.Interface;
+  private logger: Logger;
 
-  constructor(serverConfig: StdioServerParameters) {
+  constructor({ loggerOptions, ...serverConfig }: MCPClientOptions) {
     this.anthropicClient = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
@@ -55,32 +42,23 @@ export class InteractiveCLI {
     );
 
     this.transport = new StdioClientTransport(serverConfig);
-    this.rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
+    this.logger = new Logger(loggerOptions ?? { mode: 'verbose' });
   }
 
   async start() {
     try {
-      console.log(styles.separator);
-      console.log(styles.info('🤖 Interactive Claude CLI'));
-      console.log(
-        styles.info(`Type your queries or "${EXIT_COMMAND}" to exit`),
-      );
-      console.log(styles.separator);
-
       await this.mcpClient.connect(this.transport);
       await this.initMCPTools();
-
-      await this.chat_loop();
     } catch (error) {
-      console.error(styles.error('Failed to initialize tools:'), error);
+      this.logger.log('Failed to initialize MCP Client: ' + error + '\n', {
+        type: 'error',
+      });
       process.exit(1);
-    } finally {
-      this.rl.close();
-      process.exit(0);
     }
+  }
+
+  async stop() {
+    await this.mcpClient.close();
   }
 
   private async initMCPTools() {
@@ -97,10 +75,10 @@ export class InteractiveCLI {
   private formatToolCall(toolName: string, args: any): string {
     return (
       '\n' +
-      styles.tool.bracket('[') +
-      styles.tool.name(toolName) +
-      styles.tool.bracket('] ') +
-      styles.tool.args(JSON.stringify(args, null, 2)) +
+      consoleStyles.tool.bracket('[') +
+      consoleStyles.tool.name(toolName) +
+      consoleStyles.tool.bracket('] ') +
+      consoleStyles.tool.args(JSON.stringify(args, null, 2)) +
       '\n'
     );
   }
@@ -118,7 +96,7 @@ export class InteractiveCLI {
     let currentToolName = '';
     let currentToolInputString = '';
 
-    process.stdout.write(styles.assistant);
+    this.logger.log(consoleStyles.assistant);
     for await (const chunk of stream) {
       switch (chunk.type) {
         case 'message_start':
@@ -133,7 +111,7 @@ export class InteractiveCLI {
 
         case 'content_block_delta':
           if (chunk.delta.type === 'text_delta') {
-            process.stdout.write(chunk.delta.text);
+            this.logger.log(chunk.delta.text);
             currentMessage += chunk.delta.text;
           } else if (chunk.delta.type === 'input_json_delta') {
             if (currentToolName && chunk.delta.partial_json) {
@@ -143,12 +121,21 @@ export class InteractiveCLI {
           break;
 
         case 'message_delta':
+          if (currentMessage) {
+            this.messages.push({
+              role: 'assistant',
+              content: currentMessage,
+            });
+          }
+
           if (chunk.delta.stop_reason === 'tool_use') {
             const toolArgs = currentToolInputString
               ? JSON.parse(currentToolInputString)
               : {};
 
-            console.log(this.formatToolCall(currentToolName, toolArgs));
+            this.logger.log(
+              this.formatToolCall(currentToolName, toolArgs) + '\n',
+            );
             const toolResult = await this.mcpClient.request(
               {
                 method: 'tools/call',
@@ -159,13 +146,6 @@ export class InteractiveCLI {
               },
               CallToolResultSchema,
             );
-
-            if (currentMessage) {
-              this.messages.push({
-                role: 'assistant',
-                content: currentMessage,
-              });
-            }
 
             const formattedResult = this.formatJSON(
               JSON.stringify(toolResult.content.flatMap((c) => c.text)),
@@ -191,14 +171,14 @@ export class InteractiveCLI {
           break;
 
         default:
-          console.warn(
-            styles.warning(`Unknown event type: ${JSON.stringify(chunk)}`),
-          );
+          this.logger.log(`Unknown event type: ${JSON.stringify(chunk)}\n`, {
+            type: 'warning',
+          });
       }
     }
   }
 
-  private async processQuery(query: string) {
+  async processQuery(query: string) {
     try {
       this.messages.push({ role: 'user', content: query });
 
@@ -210,32 +190,19 @@ export class InteractiveCLI {
         stream: true,
       });
       await this.processStream(stream);
+
+      return this.messages;
     } catch (error) {
-      console.error(styles.error('\nError during query processing:'), error);
+      this.logger.log('\nError during query processing: ' + error + '\n', {
+        type: 'error',
+      });
       if (error instanceof Error) {
-        process.stdout.write(
-          styles.assistant +
+        this.logger.log(
+          consoleStyles.assistant +
             'I apologize, but I encountered an error: ' +
             error.message +
             '\n',
         );
-      }
-    }
-  }
-
-  private async chat_loop() {
-    while (true) {
-      try {
-        const query = (await this.rl.question(styles.prompt)).trim();
-        if (query.toLowerCase() === EXIT_COMMAND) {
-          console.log(styles.warning('\nGoodbye! 👋'));
-          break;
-        }
-
-        await this.processQuery(query);
-        console.log('\n' + styles.separator);
-      } catch (error) {
-        console.error(styles.error('\nError:'), error);
       }
     }
   }

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Setups tests to the `prepare_database_migration` tool
+- Updates the `prepare_database_migration` tool to be more deterministic
+
 ## [0.1.8] - 2024-12-25
 
 - Added `beforePublish` script so make sure the changelog is updated before publishing

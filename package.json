@@ -21,7 +21,8 @@
     "watch": "tsc-watch --onSuccess \"chmod 755 dist/index.js\"",
     "inspector": "npx @modelcontextprotocol/inspector dist/index.js",
     "format": "prettier --write .",
-    "prepublishOnly": "bun scripts/before-publish.ts"
+    "prepublishOnly": "bun scripts/before-publish.ts",
+    "test": "npx braintrust eval src/tools-evaluations"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.0.3",
@@ -34,10 +35,12 @@
   "devDependencies": {
     "@types/node": "^20.11.24",
     "@types/node-fetch": "^2.6.12",
+    "bun": "^1.1.38",
     "prettier": "^3.4.1",
     "tsc-watch": "^6.2.1",
     "typescript": "^5.3.3",
-    "bun": "^1.1.38"
+    "autoevals": "0.0.111",
+    "braintrust": "0.0.177"
   },
   "engines": {
     "node": ">=18.0.0"

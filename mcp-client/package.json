@@ -9,7 +9,7 @@
   "type": "module",
   "access": "public",
   "bin": {
-    "mcp-client": "./dist/executable.js"
+    "mcp-client": "./dist/bin.js"
   },
   "files": [
     "dist"
@@ -25,13 +25,14 @@
     "@anthropic-ai/sdk": "^0.32.1",
     "@modelcontextprotocol/sdk": "^1.0.3",
     "chalk": "^5.3.0",
+    "dotenv": "16.4.7",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "tsc-watch": "^6.2.1",
     "@types/node": "^22.10.2",
     "bun": "^1.1.38",
-    "typescript": "^5.7.2",
-    "prettier": "^3.4.1"
+    "prettier": "^3.4.1",
+    "tsc-watch": "^6.2.1",
+    "typescript": "^5.7.2"
   }
 }
