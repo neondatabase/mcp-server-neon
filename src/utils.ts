@@ -1,9 +1,9 @@
 export const splitSqlStatements = (sql: string) => {
-    return sql.split(';').filter(Boolean);
+  return sql.split(';').filter(Boolean);
 };
 
 export const DESCRIBE_DATABASE_STATEMENTS = [
-    `
+  `
 CREATE OR REPLACE FUNCTION public.show_db_tree()
 RETURNS TABLE (tree_structure text) AS
 $$
@@ -89,7 +89,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 `,
-    `     
+  `     
 -- To use the function:
 SELECT * FROM show_db_tree();
 `,

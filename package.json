@@ -43,6 +43,7 @@
     "braintrust": "0.0.177",
     "bun": "^1.1.38",
     "eslint": "^9.21.0",
+    "eslint-config-prettier": "^10.0.2",
     "prettier": "^3.4.1",
     "tsc-watch": "^6.2.1",
     "typescript": "^5.3.3",
