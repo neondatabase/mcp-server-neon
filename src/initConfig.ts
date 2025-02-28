@@ -39,7 +39,7 @@ export const parseArgs = () => {
   };
 };
 
-export async function handleInit({
+export function handleInit({
   executablePath,
   neonApiKey,
 }: {

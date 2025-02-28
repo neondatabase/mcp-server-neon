@@ -16,10 +16,13 @@
     "CHANGELOG.md"
   ],
   "scripts": {
+    "typecheck": "tsc --noEmit",
     "build": "tsc && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
     "watch": "tsc-watch --onSuccess \"chmod 755 dist/index.js\"",
     "inspector": "npx @modelcontextprotocol/inspector dist/index.js",
     "format": "prettier --write .",
+    "lint": "npm run typecheck && eslint src && prettier --check .",
+    "lint:fix": "npm run typecheck && eslint src --fix && prettier --w .",
     "prerelease": "npm run build",
     "prepublishOnly": "bun scripts/before-publish.ts",
     "test": "npx braintrust eval src/tools-evaluations"
@@ -33,14 +36,17 @@
     "zod": "3.24.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.21.0",
     "@types/node": "^20.11.24",
     "@types/node-fetch": "^2.6.12",
     "autoevals": "0.0.111",
     "braintrust": "0.0.177",
     "bun": "^1.1.38",
+    "eslint": "^9.21.0",
     "prettier": "^3.4.1",
     "tsc-watch": "^6.2.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "typescript-eslint": "v8.25.0"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -15,6 +15,7 @@ if (!commands.includes(command as (typeof commands)[number])) {
 }
 
 if (command === 'init') {
+  // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression, @typescript-eslint/await-thenable
   await handleInit({
     executablePath,
     neonApiKey,
@@ -28,12 +29,10 @@ export const neonClient = createApiClient({
   apiKey: neonApiKey,
 });
 
-const server = new McpServer(
-  {
-    name: 'mcp-server-neon',
-    version: '0.1.0',
-  },
-);
+const server = new McpServer({
+  name: 'mcp-server-neon',
+  version: '0.1.0',
+});
 
 NEON_TOOLS.forEach((tool) => {
   const handler = NEON_HANDLERS[tool.name];
@@ -45,7 +44,7 @@ NEON_TOOLS.forEach((tool) => {
     tool.name,
     tool.description,
     { params: tool.inputSchema },
-    handler as ToolHandler<typeof tool.name>
+    handler as ToolHandler<typeof tool.name>,
   );
 });
 
@@ -58,7 +57,7 @@ async function main() {
   await server.connect(transport);
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   console.error('Server error:', error);
   process.exit(1);
 });

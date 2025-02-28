@@ -4,65 +4,79 @@ import crypto from 'crypto';
 import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
 import { EndpointType, ListProjectsParams } from '@neondatabase/api-client';
 import { DESCRIBE_DATABASE_STATEMENTS, splitSqlStatements } from './utils.js';
-import { listProjectsInputSchema, nodeVersionInputSchema, createProjectInputSchema, deleteProjectInputSchema, describeProjectInputSchema, runSqlInputSchema, runSqlTransactionInputSchema, describeTableSchemaInputSchema, getDatabaseTablesInputSchema, createBranchInputSchema, prepareDatabaseMigrationInputSchema, completeDatabaseMigrationInputSchema, describeBranchInputSchema, deleteBranchInputSchema } from './toolsSchema.js';
+import {
+  listProjectsInputSchema,
+  nodeVersionInputSchema,
+  createProjectInputSchema,
+  deleteProjectInputSchema,
+  describeProjectInputSchema,
+  runSqlInputSchema,
+  runSqlTransactionInputSchema,
+  describeTableSchemaInputSchema,
+  getDatabaseTablesInputSchema,
+  createBranchInputSchema,
+  prepareDatabaseMigrationInputSchema,
+  completeDatabaseMigrationInputSchema,
+  describeBranchInputSchema,
+  deleteBranchInputSchema,
+} from './toolsSchema.js';
 import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 const NEON_ROLE_NAME = 'neondb_owner';
 const NEON_DEFAULT_DATABASE_NAME = 'neondb';
-
 
 // Define the tools with their configurations
 export const NEON_TOOLS = [
   {
     name: '__node_version' as const,
     description: `Get the Node.js version used by the MCP server`,
-    inputSchema: nodeVersionInputSchema
+    inputSchema: nodeVersionInputSchema,
   },
   {
     name: 'list_projects' as const,
     description: `List all Neon projects in your account.`,
-    inputSchema: listProjectsInputSchema
+    inputSchema: listProjectsInputSchema,
   },
   {
     name: 'create_project' as const,
     description: 'Create a new Neon project',
-    inputSchema: createProjectInputSchema
+    inputSchema: createProjectInputSchema,
   },
   {
     name: 'delete_project' as const,
     description: 'Delete a Neon project',
-    inputSchema: deleteProjectInputSchema
+    inputSchema: deleteProjectInputSchema,
   },
   {
     name: 'describe_project' as const,
     description: 'Describes a Neon project',
-    inputSchema: describeProjectInputSchema
+    inputSchema: describeProjectInputSchema,
   },
   {
     name: 'run_sql' as const,
     description: 'Execute a single SQL statement against a Neon database',
-    inputSchema: runSqlInputSchema
+    inputSchema: runSqlInputSchema,
   },
   {
     name: 'run_sql_transaction' as const,
     description:
       'Execute a SQL transaction against a Neon database, should be used for multiple SQL statements',
-    inputSchema: runSqlTransactionInputSchema
+    inputSchema: runSqlTransactionInputSchema,
   },
   {
     name: 'describe_table_schema' as const,
     description: 'Describe the schema of a table in a Neon database',
-    inputSchema: describeTableSchemaInputSchema
+    inputSchema: describeTableSchemaInputSchema,
   },
   {
     name: 'get_database_tables' as const,
     description: 'Get all tables in a Neon database',
-    inputSchema: getDatabaseTablesInputSchema
+    inputSchema: getDatabaseTablesInputSchema,
   },
   {
     name: 'create_branch' as const,
     description: 'Create a branch in a Neon project',
-    inputSchema: createBranchInputSchema
+    inputSchema: createBranchInputSchema,
   },
   {
     name: 'prepare_database_migration' as const,
@@ -190,35 +204,37 @@ export const NEON_TOOLS = [
     Important: After a failed retry, you must terminate the current flow completely. Do not attempt to use alternative tools or workarounds.
   </error_handling>
           `,
-    inputSchema: prepareDatabaseMigrationInputSchema
+    inputSchema: prepareDatabaseMigrationInputSchema,
   },
   {
     name: 'complete_database_migration' as const,
     description:
       'Complete a database migration when the user confirms the migration is ready to be applied to the main branch. This tool also lets the client know that the temporary branch created by the prepare_database_migration tool has been deleted.',
-    inputSchema: completeDatabaseMigrationInputSchema
+    inputSchema: completeDatabaseMigrationInputSchema,
   },
   {
     name: 'describe_branch' as const,
     description:
       'Get a tree view of all objects in a branch, including databases, schemas, tables, views, and functions',
-    inputSchema: describeBranchInputSchema
+    inputSchema: describeBranchInputSchema,
   },
   {
     name: 'delete_branch' as const,
     description: 'Delete a branch from a Neon project',
-    inputSchema: deleteBranchInputSchema
+    inputSchema: deleteBranchInputSchema,
   },
 ];
 
 // Extract the tool names as a union type
-type NeonToolName = typeof NEON_TOOLS[number]['name'];
+type NeonToolName = (typeof NEON_TOOLS)[number]['name'];
 
-export type ToolHandler<T extends NeonToolName> = ToolCallback<{ params: Extract<typeof NEON_TOOLS[number], { name: T }>['inputSchema'] }>;
+export type ToolHandler<T extends NeonToolName> = ToolCallback<{
+  params: Extract<(typeof NEON_TOOLS)[number], { name: T }>['inputSchema'];
+}>;
 
 // Create a type for the tool handlers that directly maps each tool to its appropriate input schema
 type ToolHandlers = {
-  [K in NeonToolName]: ToolHandler<K>
+  [K in NeonToolName]: ToolHandler<K>;
 };
 
 async function handleListProjects(params: ListProjectsParams) {
@@ -295,7 +311,7 @@ async function handleRunSqlTransaction({
   projectId,
   branchId,
 }: {
-  sqlStatements: Array<string>;
+  sqlStatements: string[];
   databaseName: string;
   projectId: string;
   branchId?: string;
@@ -494,7 +510,7 @@ async function handleDescribeBranch({
 
 export const NEON_HANDLERS = {
   // for debugging reasons.
-  __node_version: async () => ({
+  __node_version: () => ({
     content: [{ type: 'text', text: process.version }],
   }),
 
@@ -673,7 +689,9 @@ export const NEON_HANDLERS = {
   },
 
   complete_database_migration: async ({ params }) => {
-    const result = await handleCommitMigration({ migrationId: params.migrationId });
+    const result = await handleCommitMigration({
+      migrationId: params.migrationId,
+    });
 
     return {
       content: [
