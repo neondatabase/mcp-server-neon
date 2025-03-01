@@ -2,7 +2,11 @@ import { neon } from '@neondatabase/serverless';
 import { neonClient } from './index.js';
 import crypto from 'crypto';
 import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
-import { EndpointType, ListProjectsParams } from '@neondatabase/api-client';
+import {
+  EndpointType,
+  ListProjectsParams,
+  IdentitySupportedAuthProvider,
+} from '@neondatabase/api-client';
 import { DESCRIBE_DATABASE_STATEMENTS, splitSqlStatements } from './utils.js';
 import {
   listProjectsInputSchema,
@@ -20,8 +24,10 @@ import {
   describeBranchInputSchema,
   deleteBranchInputSchema,
   getConnectionStringInputSchema,
+  provisionNeonAuthInputSchema,
 } from './toolsSchema.js';
 import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
 
 const NEON_ROLE_NAME = 'neondb_owner';
 const NEON_DEFAULT_DATABASE_NAME = 'neondb';
@@ -230,6 +236,23 @@ export const NEON_TOOLS = [
     description:
       'Get a PostgreSQL connection string for a Neon database with all parameters being optional',
     inputSchema: getConnectionStringInputSchema,
+  },
+  {
+    name: 'provision_neon_auth' as const,
+    inputSchema: provisionNeonAuthInputSchema,
+    description: `
+    This tool provisions authentication for a Neon project. It allows developers to easily setup authentication infrastructure by creating a integration with Stack Auth.
+      
+    The tool will:
+      1. Establish a connection between your Neon Auth project and Stack Auth
+      2. Creates a dedicated authentication schema in your database ("neon_auth")
+      3. Sets up the user table under the "neon_auth" schema. This table is synced with Stack Auth. It does not store user credentials or secrets.
+      4. Generates Client Key and Secret Key to connect your application with authentication provider
+      
+      The Project ID will be automatically extracted from your request.
+
+      If the Branch ID and Database Name are not provided, the tool will use the default branch and database.
+        `,
   },
 ];
 
@@ -858,5 +881,11 @@ export const NEON_HANDLERS = {
         },
       ],
     };
+  },
+
+  provision_neon_auth: async ({ params }) => {
+    return handleProvisionNeonAuth({
+      projectId: params.projectId,
+    });
   },
 } satisfies ToolHandlers;
