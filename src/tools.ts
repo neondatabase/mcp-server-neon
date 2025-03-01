@@ -2,11 +2,7 @@ import { neon } from '@neondatabase/serverless';
 import { neonClient } from './index.js';
 import crypto from 'crypto';
 import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
-import {
-  EndpointType,
-  ListProjectsParams,
-  IdentitySupportedAuthProvider,
-} from '@neondatabase/api-client';
+import { EndpointType, ListProjectsParams } from '@neondatabase/api-client';
 import { DESCRIBE_DATABASE_STATEMENTS, splitSqlStatements } from './utils.js';
 import {
   listProjectsInputSchema,
@@ -28,7 +24,6 @@ import {
 } from './toolsSchema.js';
 import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
-
 const NEON_ROLE_NAME = 'neondb_owner';
 const NEON_DEFAULT_DATABASE_NAME = 'neondb';
 
@@ -886,6 +881,7 @@ export const NEON_HANDLERS = {
   provision_neon_auth: async ({ params }) => {
     return handleProvisionNeonAuth({
       projectId: params.projectId,
+      database: params.database,
     });
   },
 } satisfies ToolHandlers;

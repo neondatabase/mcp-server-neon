@@ -5,7 +5,7 @@
       "name": "@neondatabase/mcp-server-neon",
       "dependencies": {
         "@modelcontextprotocol/sdk": "1.6.0",
-        "@neondatabase/api-client": "1.11.1",
+        "@neondatabase/api-client": "1.13.0",
         "@neondatabase/serverless": "0.10.4",
         "chalk": "5.3.0",
         "node-fetch": "2.7.0",
@@ -140,7 +140,7 @@
 
     "@modelcontextprotocol/sdk": ["@modelcontextprotocol/sdk@1.6.0", "", { "dependencies": { "content-type": "^1.0.5", "cors": "^2.8.5", "eventsource": "^3.0.2", "express": "^5.0.1", "express-rate-limit": "^7.5.0", "pkce-challenge": "^4.1.0", "raw-body": "^3.0.0", "zod": "^3.23.8", "zod-to-json-schema": "^3.24.1" } }, "sha512-585s8g+jzuGBomzgzDeP5l8gEyiSs+KhoAHbA2ZZ24Zgm83IZsyCLl/fmWhPHbfYsuLG8NE6SWGZA5ZBql8jSw=="],
 
-    "@neondatabase/api-client": ["@neondatabase/api-client@1.11.1", "", { "dependencies": { "axios": "^1.7.9" } }, "sha512-fV+gcTtQSLEvziAYa+6LSM7DpMy6bZ5zt2bWAegq87b4VSo62fhNGGm/tBsfKX0G7kkN48V0jJr0OI1L+/d5Qg=="],
+    "@neondatabase/api-client": ["@neondatabase/api-client@1.13.0", "", { "dependencies": { "axios": "^1.7.9" } }, "sha512-grB9eW8YBS6oJe1Hun9mAzebpW2+ZoWb3BVKM1dhkYV/ZAtEOX2VOxwUcRKmi5PGA7xYItgszsKQuuQv068ULQ=="],
 
     "@neondatabase/serverless": ["@neondatabase/serverless@0.10.4", "", { "dependencies": { "@types/pg": "8.11.6" } }, "sha512-2nZuh3VUO9voBauuh+IGYRhGU/MskWHt1IuZvHcJw6GLjDgtqj/KViKo7SIrLdGLdot7vFbiRRw+BgEy3wT9HA=="],
 

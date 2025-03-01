@@ -1,12 +1,14 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { neonClient } from '../index.js';
 import { IdentitySupportedAuthProvider } from '@neondatabase/api-client';
+import { provisionNeonAuthInputSchema } from '../toolsSchema.js';
+import { z } from 'zod';
 
+type Props = z.infer<typeof provisionNeonAuthInputSchema>;
 export async function handleProvisionNeonAuth({
   projectId,
-}: {
-  projectId: string;
-}): Promise<CallToolResult> {
+  database = 'neondb',
+}: Props): Promise<CallToolResult> {
   const {
     data: { branches },
   } = await neonClient.listProjectBranches({
@@ -29,14 +31,17 @@ export async function handleProvisionNeonAuth({
     data: { databases },
   } = await neonClient.listProjectBranchDatabases(projectId, defaultBranch.id);
   const defaultDatabase =
-    databases.find((database) => database.name === 'neondb') ?? databases[0];
+    databases.find((db) => db.name === database) ?? databases[0];
+
   if (!defaultDatabase) {
     return {
       isError: true,
       content: [
         {
           type: 'text',
-          text: 'The project has no database. Neon Auth can only be provisioned with a database.',
+          text: database
+            ? `The project has no database named ${database}.`
+            : 'The project has no database. Neon Auth can only be provisioned with a database.',
         },
       ],
     };

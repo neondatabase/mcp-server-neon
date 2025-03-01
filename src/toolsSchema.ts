@@ -160,4 +160,10 @@ export const provisionNeonAuthInputSchema = z.object({
   projectId: z
     .string()
     .describe('The ID of the project to provision Neon Auth for'),
+  database: z
+    .string()
+    .optional()
+    .describe(
+      'The database name to setup Neon Auth for. Defaults to "neondb" or first available database if not specified',
+    ),
 });
