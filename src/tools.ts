@@ -226,7 +226,8 @@ export const NEON_TOOLS = [
   },
   {
     name: 'get_connection_string' as const,
-    description: 'Get a PostgreSQL connection string for a Neon database with all parameters being optional',
+    description:
+      'Get a PostgreSQL connection string for a Neon database with all parameters being optional',
     inputSchema: getConnectionStringInputSchema,
   },
 ];
@@ -442,12 +443,22 @@ async function handleGetConnectionString({
   databaseName,
   roleName,
 }: {
-  projectId: string;
+  projectId?: string;
   branchId?: string;
   computeId?: string;
   databaseName?: string;
   roleName?: string;
 }) {
+  // If projectId is not provided, get the first project but only if there is only one project
+  if (!projectId) {
+    const projects = await handleListProjects({});
+    if (projects.length === 1) {
+      projectId = projects[0].id;
+    } else {
+      throw new Error('No projects found in your account');
+    }
+  }
+
   // If databaseName is not provided, use the default
   if (!databaseName) {
     databaseName = NEON_DEFAULT_DATABASE_NAME;
@@ -573,6 +584,13 @@ export const NEON_HANDLERS = {
   create_project: async ({ params }) => {
     const result = await handleCreateProject(params.name);
 
+    // Get the connection string for the newly created project
+    const connectionString = await handleGetConnectionString({
+      projectId: result.project.id,
+      branchId: result.branch.id,
+      databaseName: result.databases[0].name,
+    });
+
     return {
       content: [
         {
@@ -580,9 +598,20 @@ export const NEON_HANDLERS = {
           text: [
             'Your Neon project is ready.',
             `The project_id is "${result.project.id}"`,
-            `The branch name is "${result.branch.name}"`,
+            `The branch name is "${result.branch.name}" (ID: ${result.branch.id})`,
             `There is one database available on this branch, called "${result.databases[0].name}",`,
             'but you can create more databases using SQL commands.',
+            '',
+            'Connection string details:',
+            `URI: ${connectionString.uri}`,
+            `Project ID: ${connectionString.projectId}`,
+            `Branch ID: ${connectionString.branchId}`,
+            `Database: ${connectionString.databaseName}`,
+            `Role: ${connectionString.roleName}`,
+            '',
+            'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
+            'For example, with psql:',
+            `psql "${connectionString.uri}"`,
           ].join('\n'),
         },
       ],
@@ -816,8 +845,12 @@ export const NEON_HANDLERS = {
             `Project ID: ${result.projectId}`,
             `Database: ${result.databaseName}`,
             `Role: ${result.roleName}`,
-            result.branchId ? `Branch ID: ${result.branchId}` : 'Using default branch',
-            result.computeId ? `Compute ID: ${result.computeId}` : 'Using default compute',
+            result.branchId
+              ? `Branch ID: ${result.branchId}`
+              : 'Using default branch',
+            result.computeId
+              ? `Compute ID: ${result.computeId}`
+              : 'Using default compute',
             '',
             'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
           ].join('\n'),
