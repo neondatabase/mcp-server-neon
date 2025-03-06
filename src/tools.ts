@@ -40,7 +40,8 @@ export const NEON_TOOLS = [
   },
   {
     name: 'create_project' as const,
-    description: 'Create a new Neon project. If someone is trying to create a database, use this tool.',
+    description:
+      'Create a new Neon project. If someone is trying to create a database, use this tool.',
     inputSchema: createProjectInputSchema,
   },
   {
