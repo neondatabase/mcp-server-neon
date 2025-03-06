@@ -54,6 +54,7 @@ npx -y @smithery/cli install neon --client claude
 - `delete_branch`
 - `describe_branch`
 
+- `get_connection_string`
 - `run_sql`
 - `run_sql_transaction`
 - `get_database_tables`

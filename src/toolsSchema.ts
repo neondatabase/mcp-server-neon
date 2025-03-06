@@ -123,3 +123,25 @@ export const deleteBranchInputSchema = z.object({
   projectId: z.string().describe('The ID of the project containing the branch'),
   branchId: z.string().describe('The ID of the branch to delete'),
 });
+
+export const getConnectionStringInputSchema = z.object({
+  projectId: z
+    .string()
+    .describe('The ID of the project. If not provided, the only available project will be used.'),
+  branchId: z
+    .string()
+    .optional()
+    .describe('The ID or name of the branch. If not provided, the default branch will be used.'),
+  computeId: z
+    .string()
+    .optional()
+    .describe('The ID of the compute/endpoint. If not provided, the only available compute will be used.'),
+  databaseName: z
+    .string()
+    .optional()
+    .describe('The name of the database. If not provided, the default database (usually "neondb") will be used.'),
+  roleName: z
+    .string()
+    .optional()
+    .describe('The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.'),
+});
