@@ -259,53 +259,18 @@ export const NEON_TOOLS = [
         - \`NEXT_PUBLIC_STACK_PROJECT_ID\`
         - \`NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY\`
         - \`STACK_SECRET_SERVER_KEY\`
-      3. Add the \`@stackframe/stack\` dependency to your project
-      4. Create a \`stack.ts\` file in the root of your project with following content:
-        \`\`\`tsx
-          import "server-only";
-          import { StackServerApp } from "@stackframe/stack";
-
-          export const stackServerApp = new StackServerApp({
-            tokenStore: "nextjs-cookie", // storing auth tokens in cookies
-          });
+      3. To setup Stack Auth, run following command: 
+        \`\`\`bash
+        npx @stackframe/init-stack@latest . --no-browser 
         \`\`\`
-        This will read the environment variabls automatically from your project's \`.env.local\` or \`.env\` file and create a server app that you can later use to access Stac from Next.js Server 
-      5. Create a new page \`app/handler/[...stack]/pages.tsx\` with following content:
-        \`\`\`tsx
-            import { StackHandler } from "@stackframe/stack";
-            import { stackServerApp } from "@/stack";
-
-            export default function Handler(props: unknown) {
-              return <StackHandler fullPage app={stackServerApp} routeProps={props} />;
-            }
-        \`\`\`
-        This will create pages for sign in, sign up, password reset, and others. Additionally, it will be used as a callback URL for OAuth. 
-      6. Add \`StackProvider\` to your \`app/layout.tsx\` file to wrap entire body of your app with \`StackTheme\` and \`StackProvider\`:
-        \`\`\`tsx
-          import React from "react";
-          import { StackProvider, StackTheme } from "@stackframe/stack";
-          import { stackServerApp } from "@/stack";
-
-          export default function RootLayout({ children }: { children: React.ReactNode }) {
-            return (
-              <html lang="en">
-                <body>
-                  <StackProvider app={stackServerApp}>
-                    <StackTheme>
-                      {children}
-                    </StackTheme>
-                  </StackProvider>
-                </body>
-              </html>
-            );
-          }
-        \`\`\`
-      7. By default, Stack uses React Suspense to handle loading states. To show a loading indicator while Stack s fetching user data, make sure there is a \`loading.tsx\` file in app directory. If not, create one with following contents:
-        \`\`\`tsx
-          export default function Loading() {
-            return <div>Loading...</div>;
-          }
-        \`\`\`
+        This command will automaticallysetup the project with - 
+        - It will add \`@stackframe/stack\` dependency to \`package.json\`
+        - It will create a \`stack.ts\` file in your project to setup \`StackServerApp\`. 
+        - It will wrap the root layout with \`StackProvider\` and \`StackTheme\`
+        - It will create root Suspense boundary \`app/loading.tsx\` to handle loading state while Stack is fetching user data.
+        - It will also create \`app/handler/[...stack]/page.tsx\` file to handle auth routes like sign in, sign up, forgot password, etc.
+      4. Do not try to manually create any of these files or directories. Do not try to create SignIn, SignUp, or UserButton components manually, instead use the ones provided by \`@stackframe/stack\`.
+      
       
     ## Components Guidelines
       - Use pre-built components from \`@stackframe/stack\` like \`<UserButton />\`, \`<SignIn />\`, and \`<SignUp />\` to quickly set up auth UI.
