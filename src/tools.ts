@@ -261,7 +261,7 @@ export const NEON_TOOLS = [
         - \`STACK_SECRET_SERVER_KEY\`
       3. To setup Stack Auth, run following command: 
         \`\`\`bash
-        npx @stackframe/init-stack@latest . --no-browser 
+        npx @stackframe/init-stack@2.7.25 . --no-browser 
         \`\`\`
         This command will automaticallysetup the project with - 
         - It will add \`@stackframe/stack\` dependency to \`package.json\`
