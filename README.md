@@ -63,6 +63,8 @@ npx -y @smithery/cli install neon --client claude
 - `prepare_database_migration`
 - `complete_database_migration`
 
+- `provision_neon_auth`
+
 ## Migrations
 
 Migrations are a way to manage changes to your database schema over time. With the Neon MCP server, LLMs are empowered to do migrations safely with separate "Start" and "Commit" commands.
