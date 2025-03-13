@@ -7,7 +7,7 @@ import { z } from 'zod';
 type Props = z.infer<typeof provisionNeonAuthInputSchema>;
 export async function handleProvisionNeonAuth({
   projectId,
-  database = 'neondb',
+  database,
 }: Props): Promise<CallToolResult> {
   const {
     data: { branches },
@@ -39,9 +39,7 @@ export async function handleProvisionNeonAuth({
       content: [
         {
           type: 'text',
-          text: database
-            ? `The project has no database named ${database}.`
-            : 'The project has no database. Neon Auth can only be provisioned with a database.',
+          text: `The project has no database named '${database}'.`,
         },
       ],
     };
@@ -85,20 +83,22 @@ export async function handleProvisionNeonAuth({
       {
         type: 'text',
         text: `Authentication has been successfully provisioned for your Neon project. Following are the environment variables you need to set in your project:
-        <code>
+        \`\`\`
           NEXT_PUBLIC_STACK_PROJECT_ID='${response.data.auth_provider_project_id}'
           NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY='${response.data.pub_client_key}'
           STACK_SECRET_SERVER_KEY='${response.data.secret_server_key}'
-        </code>
+        \`\`\`
 
-        Copy the above environment variables and place them in  your <code>.env.local</code> file for Next.js project. Note that variables with <code>NEXT_PUBLIC_</code> prefix will be available in the client side.
+        Copy the above environment variables and place them in  your \`.env.local\` file for Next.js project. Note that variables with \`NEXT_PUBLIC_\` prefix will be available in the client side.
         `,
       },
       {
         type: 'text',
         text: `
         Use Following JWKS URL to retrieve the public key to verify the JSON Web Tokens (JWT) issued by authentication provider:
-        <code title="jwks_url" language="bash">${response.data.jwks_url}</code>
+        \`\`\`
+        ${response.data.jwks_url}
+        \`\`\`
         `,
       },
     ],
