@@ -1,10 +1,11 @@
 import { Branch } from '@neondatabase/api-client';
 
 type MigrationId = string;
-type MigrationDetails = {
+export type MigrationDetails = {
   migrationSql: string;
-  appliedBranch: Branch;
   databaseName: string;
+  appliedBranch: Branch;
+  roleName?: string;
 };
 
 const migrationsState = new Map<MigrationId, MigrationDetails>();

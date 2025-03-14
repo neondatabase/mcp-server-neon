@@ -132,6 +132,10 @@ export const prepareDatabaseMigrationInputSchema = z.object({
   projectId: z
     .string()
     .describe('The ID of the project to execute the query against'),
+  roleName: z
+    .string()
+    .optional()
+    .describe('The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.'),
 });
 
 export const completeDatabaseMigrationInputSchema = z.object({
