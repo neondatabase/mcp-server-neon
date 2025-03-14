@@ -28,6 +28,7 @@ import {
   NEON_DEFAULT_ROLE_NAME,
   NEON_DEFAULT_DATABASE_NAME,
 } from './constants.js';
+import { logger } from './logger.js';
 
 // Define the tools with their configurations
 export const NEON_TOOLS = [
@@ -707,11 +708,17 @@ export const NEON_HANDLERS = {
   }),
 
   list_projects: async ({ params }) => {
-    const projects = await handleListProjects(params);
-
-    return {
-      content: [{ type: 'text', text: JSON.stringify(projects, null, 2) }],
-    };
+    logger.log('Calling list_projects with params:', params);
+    try {
+      const projects = await handleListProjects(params);
+      logger.log('Projects response:', projects);
+      return {
+        content: [{ type: 'text', text: JSON.stringify(projects, null, 2) }],
+      };
+    } catch (error) {
+      logger.error('Error in list_projects:', error);
+      throw error;
+    }
   },
 
   create_project: async ({ params }) => {
@@ -768,24 +775,30 @@ export const NEON_HANDLERS = {
   },
 
   describe_project: async ({ params }) => {
-    const result = await handleDescribeProject(params.projectId);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: [`This project is called ${result.project.project.name}.`].join(
-            '\n',
-          ),
-        },
-        {
-          type: 'text',
-          text: [
-            `It contains the following branches (use the describe branch tool to learn more about each branch): ${JSON.stringify(result.branches, null, 2)}`,
-          ].join('\n'),
-        },
-      ],
-    };
+    logger.log('Calling describe_project with params:', params);
+    try {
+      const result = await handleDescribeProject(params.projectId);
+      logger.log('Project details:', result);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `This project is called ${result.project.project.name}.`,
+          },
+          {
+            type: 'text',
+            text: `It contains the following branches (use the describe branch tool to learn more about each branch): ${JSON.stringify(
+              result.branches,
+              null,
+              2,
+            )}`,
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Error in describe_project:', error);
+      throw error;
+    }
   },
 
   run_sql: async ({ params }) => {
