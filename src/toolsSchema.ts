@@ -55,6 +55,12 @@ export const runSqlInputSchema = z.object({
     .string()
     .optional()
     .describe('An optional ID of the branch to execute the query against'),
+  roleName: z
+    .string()
+    .optional()
+    .describe(
+      'The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.',
+    ),
 });
 
 export const runSqlTransactionInputSchema = z.object({
@@ -69,6 +75,12 @@ export const runSqlTransactionInputSchema = z.object({
     .string()
     .optional()
     .describe('An optional ID of the branch to execute the query against'),
+  roleName: z
+    .string()
+    .optional()
+    .describe(
+      'The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.',
+    ),
 });
 
 export const describeTableSchemaInputSchema = z.object({
@@ -83,12 +95,24 @@ export const describeTableSchemaInputSchema = z.object({
     .string()
     .optional()
     .describe('An optional ID of the branch to execute the query against'),
+  roleName: z
+    .string()
+    .optional()
+    .describe(
+      'The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.',
+    ),
 });
 
 export const getDatabaseTablesInputSchema = z.object({
   projectId: z.string().describe('The ID of the project'),
   branchId: z.string().optional().describe('An optional ID of the branch'),
   databaseName: z.string().describe('The name of the database'),
+  roleName: z
+    .string()
+    .optional()
+    .describe(
+      'The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.',
+    ),
 });
 
 export const createBranchInputSchema = z.object({
@@ -118,6 +142,12 @@ export const describeBranchInputSchema = z.object({
   projectId: z.string().describe('The ID of the project'),
   branchId: z.string().describe('An ID of the branch to describe'),
   databaseName: z.string().describe('The name of the database'),
+  roleName: z
+    .string()
+    .optional()
+    .describe(
+      'The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.',
+    ),
 });
 
 export const deleteBranchInputSchema = z.object({

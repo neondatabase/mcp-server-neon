@@ -428,15 +428,17 @@ async function handleRunSql({
   databaseName,
   projectId,
   branchId,
+  role_name,
 }: {
   sql: string;
   databaseName: string;
   projectId: string;
   branchId?: string;
+  role_name?: string;
 }) {
   const connectionString = await neonClient.getConnectionUri({
     projectId,
-    role_name: NEON_DEFAULT_ROLE_NAME,
+    role_name: role_name || NEON_DEFAULT_ROLE_NAME,
     database_name: databaseName,
     branch_id: branchId,
   });
@@ -451,15 +453,17 @@ async function handleRunSqlTransaction({
   databaseName,
   projectId,
   branchId,
+  role_name,
 }: {
   sqlStatements: string[];
   databaseName: string;
   projectId: string;
   branchId?: string;
+  role_name?: string;
 }) {
   const connectionString = await neonClient.getConnectionUri({
     projectId,
-    role_name: NEON_DEFAULT_ROLE_NAME,
+    role_name: role_name || NEON_DEFAULT_ROLE_NAME,
     database_name: databaseName,
     branch_id: branchId,
   });
@@ -475,14 +479,16 @@ async function handleGetDatabaseTables({
   projectId,
   databaseName,
   branchId,
+  role_name,
 }: {
   projectId: string;
   databaseName: string;
   branchId?: string;
+  role_name?: string;
 }) {
   const connectionString = await neonClient.getConnectionUri({
     projectId,
-    role_name: NEON_DEFAULT_ROLE_NAME,
+    role_name: role_name || NEON_DEFAULT_ROLE_NAME,
     database_name: databaseName,
     branch_id: branchId,
   });
@@ -507,11 +513,13 @@ async function handleDescribeTableSchema({
   databaseName,
   branchId,
   tableName,
+  role_name,
 }: {
   projectId: string;
   databaseName: string;
   branchId?: string;
   tableName: string;
+  role_name?: string;
 }) {
   const result = await handleRunSql({
     sql: `SELECT 
@@ -526,6 +534,7 @@ FROM
     databaseName,
     projectId,
     branchId,
+    role_name,
   });
 
   return result;
@@ -682,14 +691,16 @@ async function handleDescribeBranch({
   projectId,
   databaseName,
   branchId,
+  role_name,
 }: {
   projectId: string;
   databaseName: string;
   branchId?: string;
+  role_name?: string;
 }) {
   const connectionString = await neonClient.getConnectionUri({
     projectId,
-    role_name: NEON_DEFAULT_ROLE_NAME,
+    role_name: role_name || NEON_DEFAULT_ROLE_NAME,
     database_name: databaseName,
     branch_id: branchId,
   });
@@ -823,6 +834,7 @@ export const NEON_HANDLERS = {
         databaseName: params.databaseName,
         projectId: params.projectId,
         branchId: params.branchId,
+        role_name: params.roleName,
       });
       logger.log('SQL execution result:', result);
       return {
@@ -842,6 +854,7 @@ export const NEON_HANDLERS = {
         databaseName: params.databaseName,
         projectId: params.projectId,
         branchId: params.branchId,
+        role_name: params.roleName,
       });
       logger.log('SQL transaction result:', result);
       return {
@@ -861,6 +874,7 @@ export const NEON_HANDLERS = {
         databaseName: params.databaseName,
         projectId: params.projectId,
         branchId: params.branchId,
+        role_name: params.roleName,
       });
       logger.log('Table schema:', result);
       return {
@@ -879,6 +893,7 @@ export const NEON_HANDLERS = {
         projectId: params.projectId,
         branchId: params.branchId,
         databaseName: params.databaseName,
+        role_name: params.roleName,
       });
       logger.log('Database tables:', result);
       return {
@@ -998,6 +1013,7 @@ export const NEON_HANDLERS = {
         projectId: params.projectId,
         branchId: params.branchId,
         databaseName: params.databaseName,
+        role_name: params.roleName,
       });
       logger.log('Branch description:', result);
       return {
