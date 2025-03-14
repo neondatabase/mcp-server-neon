@@ -722,56 +722,70 @@ export const NEON_HANDLERS = {
   },
 
   create_project: async ({ params }) => {
-    const result = await handleCreateProject(params.name);
+    logger.log('Calling create_project with params:', params);
+    try {
+      const result = await handleCreateProject(params.name);
+      logger.log('Project creation response:', result);
 
-    // Get the connection string for the newly created project
-    const connectionString = await handleGetConnectionString({
-      projectId: result.project.id,
-      branchId: result.branch.id,
-      databaseName: result.databases[0].name,
-    });
+      // Get the connection string for the newly created project
+      const connectionString = await handleGetConnectionString({
+        projectId: result.project.id,
+        branchId: result.branch.id,
+        databaseName: result.databases[0].name,
+      });
+      logger.log('Connection string response:', connectionString);
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: [
-            'Your Neon project is ready.',
-            `The project_id is "${result.project.id}"`,
-            `The branch name is "${result.branch.name}" (ID: ${result.branch.id})`,
-            `There is one database available on this branch, called "${result.databases[0].name}",`,
-            'but you can create more databases using SQL commands.',
-            '',
-            'Connection string details:',
-            `URI: ${connectionString.uri}`,
-            `Project ID: ${connectionString.projectId}`,
-            `Branch ID: ${connectionString.branchId}`,
-            `Database: ${connectionString.databaseName}`,
-            `Role: ${connectionString.roleName}`,
-            '',
-            'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
-            'For example, with psql:',
-            `psql "${connectionString.uri}"`,
-          ].join('\n'),
-        },
-      ],
-    };
+      return {
+        content: [
+          {
+            type: 'text',
+            text: [
+              'Your Neon project is ready.',
+              `The project_id is "${result.project.id}"`,
+              `The branch name is "${result.branch.name}" (ID: ${result.branch.id})`,
+              `There is one database available on this branch, called "${result.databases[0].name}",`,
+              'but you can create more databases using SQL commands.',
+              '',
+              'Connection string details:',
+              `URI: ${connectionString.uri}`,
+              `Project ID: ${connectionString.projectId}`,
+              `Branch ID: ${connectionString.branchId}`,
+              `Database: ${connectionString.databaseName}`,
+              `Role: ${connectionString.roleName}`,
+              '',
+              'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
+              'For example, with psql:',
+              `psql "${connectionString.uri}"`,
+            ].join('\n'),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Error in create_project:', error);
+      throw error;
+    }
   },
 
   delete_project: async ({ params }) => {
-    await handleDeleteProject(params.projectId);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: [
-            'Project deleted successfully.',
-            `Project ID: ${params.projectId}`,
-          ].join('\n'),
-        },
-      ],
-    };
+    logger.log('Calling delete_project with params:', params);
+    try {
+      await handleDeleteProject(params.projectId);
+      logger.log('Project deleted successfully');
+      return {
+        content: [
+          {
+            type: 'text',
+            text: [
+              'Project deleted successfully.',
+              `Project ID: ${params.projectId}`,
+            ].join('\n'),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Error in delete_project:', error);
+      throw error;
+    }
   },
 
   describe_project: async ({ params }) => {
@@ -802,213 +816,277 @@ export const NEON_HANDLERS = {
   },
 
   run_sql: async ({ params }) => {
-    const result = await handleRunSql({
-      sql: params.sql,
-      databaseName: params.databaseName,
-      projectId: params.projectId,
-      branchId: params.branchId,
-    });
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
+    logger.log('Calling run_sql with params:', params);
+    try {
+      const result = await handleRunSql({
+        sql: params.sql,
+        databaseName: params.databaseName,
+        projectId: params.projectId,
+        branchId: params.branchId,
+      });
+      logger.log('SQL execution result:', result);
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    } catch (error) {
+      logger.error('Error in run_sql:', error);
+      throw error;
+    }
   },
 
   run_sql_transaction: async ({ params }) => {
-    const result = await handleRunSqlTransaction({
-      sqlStatements: params.sqlStatements,
-      databaseName: params.databaseName,
-      projectId: params.projectId,
-      branchId: params.branchId,
-    });
-
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
+    logger.log('Calling run_sql_transaction with params:', params);
+    try {
+      const result = await handleRunSqlTransaction({
+        sqlStatements: params.sqlStatements,
+        databaseName: params.databaseName,
+        projectId: params.projectId,
+        branchId: params.branchId,
+      });
+      logger.log('SQL transaction result:', result);
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    } catch (error) {
+      logger.error('Error in run_sql_transaction:', error);
+      throw error;
+    }
   },
 
   describe_table_schema: async ({ params }) => {
-    const result = await handleDescribeTableSchema({
-      tableName: params.tableName,
-      databaseName: params.databaseName,
-      projectId: params.projectId,
-      branchId: params.branchId,
-    });
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
+    logger.log('Calling describe_table_schema with params:', params);
+    try {
+      const result = await handleDescribeTableSchema({
+        tableName: params.tableName,
+        databaseName: params.databaseName,
+        projectId: params.projectId,
+        branchId: params.branchId,
+      });
+      logger.log('Table schema:', result);
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    } catch (error) {
+      logger.error('Error in describe_table_schema:', error);
+      throw error;
+    }
   },
 
   get_database_tables: async ({ params }) => {
-    const result = await handleGetDatabaseTables({
-      projectId: params.projectId,
-      branchId: params.branchId,
-      databaseName: params.databaseName,
-    });
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
+    logger.log('Calling get_database_tables with params:', params);
+    try {
+      const result = await handleGetDatabaseTables({
+        projectId: params.projectId,
+        branchId: params.branchId,
+        databaseName: params.databaseName,
+      });
+      logger.log('Database tables:', result);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Error in get_database_tables:', error);
+      throw error;
+    }
   },
 
   create_branch: async ({ params }) => {
-    const result = await handleCreateBranch({
-      projectId: params.projectId,
-      branchName: params.branchName,
-    });
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: [
-            'Branch created successfully.',
-            `Project ID: ${result.branch.project_id}`,
-            `Branch ID: ${result.branch.id}`,
-            `Branch name: ${result.branch.name}`,
-            `Parent branch: ${result.branch.parent_id}`,
-          ].join('\n'),
-        },
-      ],
-    };
+    logger.log('Calling create_branch with params:', params);
+    try {
+      const result = await handleCreateBranch({
+        projectId: params.projectId,
+        branchName: params.branchName,
+      });
+      logger.log('Branch creation result:', result);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: [
+              'Branch created successfully.',
+              `Project ID: ${result.branch.project_id}`,
+              `Branch ID: ${result.branch.id}`,
+              `Branch name: ${result.branch.name}`,
+              `Parent branch: ${result.branch.parent_id}`,
+            ].join('\n'),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Error in create_branch:', error);
+      throw error;
+    }
   },
 
   prepare_database_migration: async ({ params }) => {
-    const result = await handleSchemaMigration({
-      migrationSql: params.migrationSql,
-      databaseName: params.databaseName,
-      projectId: params.projectId,
-    });
+    logger.log('Calling prepare_database_migration with params:', params);
+    try {
+      const result = await handleSchemaMigration({
+        migrationSql: params.migrationSql,
+        databaseName: params.databaseName,
+        projectId: params.projectId,
+      });
+      logger.log('Migration preparation result:', result);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `
+              <status>Migration created successfully in temporary branch</status>
+              <details>
+                <migration_id>${result.migrationId}</migration_id>
+                <temporary_branch>
+                  <name>${result.branch.name}</name>
+                  <id>${result.branch.id}</id>
+                </temporary_branch>
+              </details>
+              <execution_result>${JSON.stringify(result.migrationResult, null, 2)}</execution_result>
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `
-            <status>Migration created successfully in temporary branch</status>
-            <details>
-              <migration_id>${result.migrationId}</migration_id>
-              <temporary_branch>
-                <name>${result.branch.name}</name>
-                <id>${result.branch.id}</id>
-              </temporary_branch>
-            </details>
-            <execution_result>${JSON.stringify(result.migrationResult, null, 2)}</execution_result>
-
-            <next_actions>
-            You MUST follow these steps:
-              1. Test this migration using 'run_sql' tool on branch '${result.branch.name}'
-              2. Verify the changes meet your requirements
-              3. If satisfied, use 'complete_database_migration' with migration_id: ${result.migrationId}
-            </next_actions>
-          `,
-        },
-      ],
-    };
+              <next_actions>
+              You MUST follow these steps:
+                1. Test this migration using 'run_sql' tool on branch '${result.branch.name}'
+                2. Verify the changes meet your requirements
+                3. If satisfied, use 'complete_database_migration' with migration_id: ${result.migrationId}
+              </next_actions>
+            `,
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Error in prepare_database_migration:', error);
+      throw error;
+    }
   },
 
   complete_database_migration: async ({ params }) => {
-    const result = await handleCommitMigration({
-      migrationId: params.migrationId,
-    });
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Result: ${JSON.stringify(
-            {
-              deletedBranch: result.deletedBranch,
-              migrationResult: result.migrationResult,
-            },
-            null,
-            2,
-          )}`,
-        },
-      ],
-    };
+    logger.log('Calling complete_database_migration with params:', params);
+    try {
+      const result = await handleCommitMigration({
+        migrationId: params.migrationId,
+      });
+      logger.log('Migration completion result:', result);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Result: ${JSON.stringify(
+              {
+                deletedBranch: result.deletedBranch,
+                migrationResult: result.migrationResult,
+              },
+              null,
+              2,
+            )}`,
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Error in complete_database_migration:', error);
+      throw error;
+    }
   },
 
   describe_branch: async ({ params }) => {
-    const result = await handleDescribeBranch({
-      projectId: params.projectId,
-      branchId: params.branchId,
-      databaseName: params.databaseName,
-    });
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: ['Database Structure:', JSON.stringify(result, null, 2)].join(
-            '\n',
-          ),
-        },
-      ],
-    };
+    logger.log('Calling describe_branch with params:', params);
+    try {
+      const result = await handleDescribeBranch({
+        projectId: params.projectId,
+        branchId: params.branchId,
+        databaseName: params.databaseName,
+      });
+      logger.log('Branch description:', result);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: ['Database Structure:', JSON.stringify(result, null, 2)].join('\n'),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Error in describe_branch:', error);
+      throw error;
+    }
   },
 
   delete_branch: async ({ params }) => {
-    await handleDeleteBranch({
-      projectId: params.projectId,
-      branchId: params.branchId,
-    });
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: [
-            'Branch deleted successfully.',
-            `Project ID: ${params.projectId}`,
-            `Branch ID: ${params.branchId}`,
-          ].join('\n'),
-        },
-      ],
-    };
+    logger.log('Calling delete_branch with params:', params);
+    try {
+      await handleDeleteBranch({
+        projectId: params.projectId,
+        branchId: params.branchId,
+      });
+      logger.log('Branch deleted successfully');
+      return {
+        content: [
+          {
+            type: 'text',
+            text: [
+              'Branch deleted successfully.',
+              `Project ID: ${params.projectId}`,
+              `Branch ID: ${params.branchId}`,
+            ].join('\n'),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Error in delete_branch:', error);
+      throw error;
+    }
   },
 
   get_connection_string: async ({ params }) => {
-    const result = await handleGetConnectionString({
-      projectId: params.projectId,
-      branchId: params.branchId,
-      computeId: params.computeId,
-      databaseName: params.databaseName,
-      roleName: params.roleName,
-    });
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: [
-            'Connection string details:',
-            `URI: ${result.uri}`,
-            `Project ID: ${result.projectId}`,
-            `Database: ${result.databaseName}`,
-            `Role: ${result.roleName}`,
-            result.branchId
-              ? `Branch ID: ${result.branchId}`
-              : 'Using default branch',
-            result.computeId
-              ? `Compute ID: ${result.computeId}`
-              : 'Using default compute',
-            '',
-            'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
-          ].join('\n'),
-        },
-      ],
-    };
+    logger.log('Calling get_connection_string with params:', params);
+    try {
+      const result = await handleGetConnectionString({
+        projectId: params.projectId,
+        branchId: params.branchId,
+        computeId: params.computeId,
+        databaseName: params.databaseName,
+        roleName: params.roleName,
+      });
+      logger.log('Connection string result:', result);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: [
+              'Connection string details:',
+              `URI: ${result.uri}`,
+              `Project ID: ${result.projectId}`,
+              `Database: ${result.databaseName}`,
+              `Role: ${result.roleName}`,
+              result.branchId ? `Branch ID: ${result.branchId}` : 'Using default branch',
+              result.computeId ? `Compute ID: ${result.computeId}` : 'Using default compute',
+              '',
+              'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
+            ].join('\n'),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Error in get_connection_string:', error);
+      throw error;
+    }
   },
 
   provision_neon_auth: async ({ params }) => {
-    return handleProvisionNeonAuth({
-      projectId: params.projectId,
-      database: params.database,
-    });
+    logger.log('Calling provision_neon_auth with params:', params);
+    try {
+      const result = await handleProvisionNeonAuth({
+        projectId: params.projectId,
+        database: params.database,
+      });
+      logger.log('Neon Auth provisioning result:', result);
+      return result;
+    } catch (error) {
+      logger.error('Error in provision_neon_auth:', error);
+      throw error;
+    }
   },
 } satisfies ToolHandlers;
