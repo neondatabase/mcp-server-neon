@@ -37,6 +37,9 @@ npx -y @smithery/cli install neon --client claude
 
 ## Guides
 
+- [Neon MCP Server Guide](https://neon.tech/docs/ai/neon-mcp-server)
+- [Connect MCP Clients to Neon](https://neon.tech/docs/ai/connect-mcp-clients-to-neon)
+- [Cursor with Neon MCP Server](https://neon.tech/guides/cursor-mcp-neon)
 - [Claude Desktop with Neon MCP Server](https://neon.tech/guides/neon-mcp-server)
 - [Cline with Neon MCP Server](https://neon.tech/guides/cline-mcp-neon)
 - [Windsurf with Neon MCP Server](https://neon.tech/guides/windsurf-mcp-neon)
