@@ -223,3 +223,22 @@ export const provisionNeonAuthInputSchema = z.object({
     )
     .default(NEON_DEFAULT_DATABASE_NAME),
 });
+
+export const prepareQueryTuningInputSchema = z.object({
+  sql: z.string().describe('The SQL statement to analyze and tune'),
+  databaseName: z
+    .string()
+    .describe('The name of the database to execute the query against'),
+  projectId: z
+    .string()
+    .describe('The ID of the project to execute the query against'),
+  roleName: z
+    .string()
+    .optional()
+    .describe('The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.'),
+});
+
+export const completeQueryTuningInputSchema = z.object({
+  tuningId: z.string(),
+  shouldDeleteBranch: z.boolean().default(true).describe('Whether to delete the temporary branch after tuning'),
+});

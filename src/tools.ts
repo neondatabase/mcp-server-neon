@@ -1,7 +1,12 @@
 import { neon } from '@neondatabase/serverless';
 import { neonClient } from './index.js';
 import crypto from 'crypto';
-import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
+import {
+  getMigrationFromMemory,
+  persistMigrationToMemory,
+  getTuningFromMemory,
+  persistTuningToMemory,
+} from './state.js';
 import { EndpointType, ListProjectsParams } from '@neondatabase/api-client';
 import { DESCRIBE_DATABASE_STATEMENTS, splitSqlStatements } from './utils.js';
 import {
@@ -22,6 +27,8 @@ import {
   getConnectionStringInputSchema,
   provisionNeonAuthInputSchema,
   explainSqlStatementInputSchema,
+  prepareQueryTuningInputSchema,
+  completeQueryTuningInputSchema,
 } from './toolsSchema.js';
 import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
@@ -31,6 +38,10 @@ import {
 } from './constants.js';
 import { logger } from './logger.js';
 import { describeTable, formatTableDescription } from './describeUtils.js';
+import {
+  extractTableNamesFromPlan,
+  analyzePlanAndGenerateSuggestions,
+} from './queryAnalysis.js';
 
 // Define the tools with their configurations
 export const NEON_TOOLS = [
@@ -370,6 +381,130 @@ export const NEON_TOOLS = [
     name: 'explain_sql_statement' as const,
     description: 'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
     inputSchema: explainSqlStatementInputSchema,
+  },
+  {
+    name: 'prepare_query_tuning' as const,
+    description: `
+  <use_case>
+    This tool helps developers improve PostgreSQL query performance by analyzing execution plans and suggesting optimizations.
+    
+    The tool will:
+    1. Create a temporary branch for testing optimizations
+    2. Analyze the current query execution plan
+    3. Suggest and implement improvements like:
+      - Adding or modifying indexes
+      - Query structure modifications
+      - Table statistics updates
+    4. Compare performance before and after changes
+    
+    Project ID and database name will be automatically extracted from your request.
+    Default database is ${NEON_DEFAULT_DATABASE_NAME} if not specified.
+  </use_case>
+
+  <workflow>
+    1. Creates a temporary branch
+    2. Analyzes current query performance
+    3. Implements and tests improvements
+    4. Returns tuning details for verification
+  </workflow>
+
+  <important_notes>
+    After executing this tool, you MUST:
+    1. Review the suggested changes
+    2. Verify the performance improvements
+    3. Decide whether to keep or discard the changes
+    4. Use 'complete_query_tuning' tool to apply or discard changes
+
+    Note: Some operations like creating indexes or running ANALYZE can take significant time,
+    especially on large tables. Please be patient during these operations.
+  </important_notes>
+
+  <example>
+    For a query like:
+    SELECT * FROM orders WHERE status = 'pending' AND created_at > '2024-01-01';
+    
+    The tool might suggest:
+    1. Creating a composite index on (status, created_at)
+    2. Updating table statistics
+    3. Modifying the query to use more efficient operators
+    
+    You can then compare the execution plans before and after these changes.
+  </example>
+
+  <next_steps>
+  After executing this tool, you MUST follow these steps:
+    1. Review the execution plans and suggested changes
+    2. Follow these instructions to respond to the client: 
+
+      <response_instructions>
+        <instructions>
+          Provide a brief summary of the performance analysis and ask for approval to apply changes.
+
+          You MUST include ALL of the following fields in your response:
+          - Tuning ID (this is required for completion)
+          - Temporary Branch Name
+          - Temporary Branch ID
+          - Original Query Cost
+          - Improved Query Cost
+          - Suggested Changes
+
+          Even if some fields are missing from the tool's response, use placeholders like "not provided" rather than omitting fields.
+        </instructions>
+
+        <do_not_include>
+          IMPORTANT: Your response MUST NOT contain ANY technical implementation details such as:
+          - Exact index definitions
+          - Internal PostgreSQL settings
+          - Complex query rewrites
+          - Table partitioning details
+          
+          Keep the response focused on high-level changes and performance metrics.
+        </do_not_include>
+
+        <example>
+          I've analyzed your query and found potential improvements that could reduce execution time by [X]%.
+          Would you like to apply these changes to improve performance?
+          
+          Analysis Details:
+          - Tuning ID: [id]
+          - Temporary Branch: [name]
+          - Branch ID: [id]
+          - Original Cost: [cost]
+          - Improved Cost: [cost]
+          - Suggested Changes:
+            * Add index for frequently filtered columns
+            * Update table statistics
+            * Modify query structure for better performance
+        </example>
+      </response_instructions>
+
+    3. If approved, use 'complete_query_tuning' tool with the tuning_id
+  </next_steps>
+
+  <error_handling>
+    On error, the tool will:
+    1. Automatically attempt ONE retry of the exact same operation
+    2. If the retry fails:
+      - Terminate execution
+      - Return error details
+      - Clean up temporary branch
+      - DO NOT attempt any other tools or alternatives
+    
+    Error response will include:
+    - Original error details
+    - Confirmation that retry was attempted
+    - Final error state
+    
+    Important: After a failed retry, you must terminate the current flow completely.
+  </error_handling>
+    `,
+    inputSchema: prepareQueryTuningInputSchema,
+  },
+  {
+    name: 'complete_query_tuning' as const,
+    description:
+      'Complete a query tuning session by either applying the changes to the main branch or discarding them. This tool also handles cleanup of temporary branches.',
+    inputSchema: completeQueryTuningInputSchema,
   },
 ];
 
@@ -749,6 +884,148 @@ async function handleExplainSqlStatement({
         text: JSON.stringify(result, null, 2),
       },
     ],
+  };
+}
+
+async function handleQueryTuning({
+  sql,
+  databaseName,
+  projectId,
+  roleName,
+}: {
+  sql: string;
+  databaseName: string;
+  projectId: string;
+  roleName?: string;
+}) {
+  // Create a new branch for testing optimizations
+  const newBranch = await handleCreateBranch({ projectId });
+
+  // Get the original execution plan
+  const originalPlan = await handleExplainSqlStatement({
+    params: {
+      sql,
+      databaseName,
+      projectId,
+      branchId: newBranch.branch.id,
+      roleName: roleName || NEON_DEFAULT_ROLE_NAME,
+      analyze: true,
+    },
+  });
+
+  // Extract table names from the plan for analysis
+  const tableNames = extractTableNamesFromPlan(originalPlan);
+  
+  // Get schema information for all referenced tables
+  const tableSchemas = await Promise.all(
+    tableNames.map(tableName =>
+      handleDescribeTableSchema({
+        tableName,
+        databaseName,
+        projectId,
+        branchId: newBranch.branch.id,
+        roleName,
+      })
+    )
+  );
+
+  // Analyze the plan and generate suggestions
+  const suggestedChanges = analyzePlanAndGenerateSuggestions(originalPlan, tableSchemas);
+
+  // Apply suggested changes in the temporary branch
+  if (suggestedChanges.length > 0) {
+    await handleRunSqlTransaction({
+      sqlStatements: suggestedChanges,
+      databaseName,
+      projectId,
+      branchId: newBranch.branch.id,
+      roleName,
+    });
+
+    // Get the improved execution plan
+    const improvedPlan = await handleExplainSqlStatement({
+      params: {
+        sql,
+        databaseName,
+        projectId,
+        branchId: newBranch.branch.id,
+        roleName: roleName || NEON_DEFAULT_ROLE_NAME,
+        analyze: true,
+      },
+    });
+
+    const tuningId = crypto.randomUUID();
+    persistTuningToMemory(tuningId, {
+      sql,
+      databaseName,
+      tuningBranch: newBranch.branch,
+      roleName,
+      originalPlan,
+      suggestedChanges,
+      improvedPlan,
+    });
+
+    return {
+      branch: newBranch.branch,
+      tuningId,
+      originalPlan,
+      improvedPlan,
+      suggestedChanges,
+    };
+  }
+
+  return {
+    branch: newBranch.branch,
+    message: 'No performance improvements identified for the given query.',
+  };
+}
+
+async function handleCompleteTuning({
+  tuningId,
+  shouldDeleteBranch,
+}: {
+  tuningId: string;
+  shouldDeleteBranch: boolean;
+}) {
+  const tuning = getTuningFromMemory(tuningId);
+  if (!tuning) {
+    throw new Error(`Tuning session not found: ${tuningId}`);
+  }
+
+  if (tuning.suggestedChanges && tuning.suggestedChanges.length > 0) {
+    // Apply changes to main branch
+    const result = await handleRunSqlTransaction({
+      sqlStatements: tuning.suggestedChanges,
+      databaseName: tuning.databaseName,
+      projectId: tuning.tuningBranch.project_id,
+      branchId: tuning.tuningBranch.parent_id,
+      roleName: tuning.roleName,
+    });
+
+    if (shouldDeleteBranch) {
+      await handleDeleteBranch({
+        projectId: tuning.tuningBranch.project_id,
+        branchId: tuning.tuningBranch.id,
+      });
+    }
+
+    return {
+      appliedChanges: tuning.suggestedChanges,
+      result,
+      deletedBranch: shouldDeleteBranch ? tuning.tuningBranch : undefined,
+    };
+  }
+
+  if (shouldDeleteBranch) {
+    await handleDeleteBranch({
+      projectId: tuning.tuningBranch.project_id,
+      branchId: tuning.tuningBranch.id,
+    });
+  }
+
+  return {
+    message: 'No changes to apply.',
+    deletedBranch: shouldDeleteBranch ? tuning.tuningBranch : undefined,
   };
 }
 
@@ -1155,6 +1432,79 @@ export const NEON_HANDLERS = {
       return result;
     } catch (error) {
       logger.error('Error in explain_sql_statement:', error);
+      throw error;
+    }
+  },
+
+  prepare_query_tuning: async ({ params }) => {
+    logger.log('Calling prepare_query_tuning with params:', params);
+    try {
+      const result = await handleQueryTuning({
+        sql: params.sql,
+        databaseName: params.databaseName,
+        projectId: params.projectId,
+        roleName: params.roleName,
+      });
+      logger.log('Query tuning preparation result:', result);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `
+              <status>Query analysis completed in temporary branch</status>
+              <details>
+                <tuning_id>${result.tuningId}</tuning_id>
+                <temporary_branch>
+                  <name>${result.branch.name}</name>
+                  <id>${result.branch.id}</id>
+                </temporary_branch>
+                ${result.suggestedChanges ? `
+                <suggested_changes>
+                  ${result.suggestedChanges.join('\n')}
+                </suggested_changes>
+                <performance_comparison>
+                  <original_plan>${JSON.stringify(result.originalPlan, null, 2)}</original_plan>
+                  <improved_plan>${JSON.stringify(result.improvedPlan, null, 2)}</improved_plan>
+                </performance_comparison>
+                ` : `
+                <message>${result.message}</message>
+                `}
+              </details>
+
+              <next_actions>
+              You MUST:
+                1. Review the suggested changes and performance comparison
+                2. Decide whether to apply the changes
+                3. Use 'complete_query_tuning' with tuning_id: ${result.tuningId}
+              </next_actions>
+            `,
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Error in prepare_query_tuning:', error);
+      throw error;
+    }
+  },
+
+  complete_query_tuning: async ({ params }) => {
+    logger.log('Calling complete_query_tuning with params:', params);
+    try {
+      const result = await handleCompleteTuning({
+        tuningId: params.tuningId,
+        shouldDeleteBranch: params.shouldDeleteBranch,
+      });
+      logger.log('Query tuning completion result:', result);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Error in complete_query_tuning:', error);
       throw error;
     }
   },
