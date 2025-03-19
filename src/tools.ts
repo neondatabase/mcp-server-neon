@@ -29,6 +29,7 @@ import {
   NEON_DEFAULT_DATABASE_NAME,
 } from './constants.js';
 import { logger } from './logger.js';
+import { describeTable, formatTableDescription } from './describeUtils.js';
 
 // Define the tools with their configurations
 export const NEON_TOOLS = [
@@ -521,23 +522,15 @@ async function handleDescribeTableSchema({
   tableName: string;
   roleName?: string;
 }) {
-  const result = await handleRunSql({
-    sql: `SELECT 
-    column_name, 
-    data_type, 
-    character_maximum_length, 
-    is_nullable, 
-    column_default 
-FROM 
-    information_schema.columns 
-    WHERE table_name = '${tableName}'`,
-    databaseName,
+  const connectionString = await neonClient.getConnectionUri({
     projectId,
-    branchId,
-    roleName,
+    role_name: roleName || NEON_DEFAULT_ROLE_NAME,
+    database_name: databaseName,
+    branch_id: branchId,
   });
 
-  return result;
+  const description = await describeTable(connectionString.data.uri, tableName);
+  return formatTableDescription(description);
 }
 
 async function handleCreateBranch({
