@@ -400,13 +400,14 @@ export const NEON_TOOLS = [
     Default database is ${NEON_DEFAULT_DATABASE_NAME} if not specified.
 
     IMPORTANT: This tool is part of the query tuning workflow. Any suggested changes (like creating indexes)
-    must be applied using the 'complete_query_tuning' tool, NOT the 'prepare_database_migration' tool.
+    must be applied using the 'complete_query_tuning' tool, NOT the 'prepare_database_migration' tool. 
+    To apply using the 'complete_query_tuning' tool, you must pass the tuning_id, NOT the temporary branch ID to it.
   </use_case>
 
   <workflow>
     1. Creates a temporary branch
     2. Analyzes current query performance and extracts table information
-    3. Implements and tests improvements ((but ONLY on the temporary branch created in step 1 passing the same branch ID to all tools)
+    3. Implements and tests improvements (using tool run_sql for schema modifications and explain_sql_statement for performance analysis, but ONLY on the temporary branch created in step 1 passing the same branch ID to all tools)
     4. Returns tuning details for verification
   </workflow>
 
@@ -494,7 +495,7 @@ export const NEON_TOOLS = [
             * Add index for frequently filtered columns
             * Optimize join conditions
 
-          To apply these changes, I will use the 'complete_query_tuning' tool after your approval.
+          To apply these changes, I will use the 'complete_query_tuning' tool after your approval and pass the tuning_id, NOT the temporary branch ID to it.
         </example>
       </response_instructions>
 
