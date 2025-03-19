@@ -1,6 +1,6 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { neonClient } from '../index.js';
-import { IdentitySupportedAuthProvider } from '@neondatabase/api-client';
+import { NeonAuthSupportedAuthProvider } from '@neondatabase/api-client';
 import { provisionNeonAuthInputSchema } from '../toolsSchema.js';
 import { z } from 'zod';
 
@@ -45,8 +45,8 @@ export async function handleProvisionNeonAuth({
     };
   }
 
-  const response = await neonClient.createProjectIdentityIntegration({
-    auth_provider: IdentitySupportedAuthProvider.Stack,
+  const response = await neonClient.createNeonAuthIntegration({
+    auth_provider: NeonAuthSupportedAuthProvider.Stack,
     project_id: projectId,
     branch_id: defaultBranch.id,
     database_name: defaultDatabase.name,
