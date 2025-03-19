@@ -385,24 +385,28 @@ export const NEON_TOOLS = [
     This tool helps developers improve PostgreSQL query performance for slow queries or DML statements by analyzing execution plans and suggesting optimizations.
     
     The tool will:
-    1. Create a temporary branch for testing optimizations
+    1. Create a temporary branch for testing optimizations and remember the branch ID
     2. Extract and analyze the current query execution plan
-    3. Extract all fully qualified table names (schema.table) referenced in the plan
+    3. Extract all fully qualified table names (schema.table) referenced in the plan 
     4. Gather detailed schema information for each referenced table using describe_table_schema
     5. Suggest and implement improvements like:
       - Adding or modifying indexes based on table schemas and query patterns
       - Query structure modifications
       - Identifying potential performance bottlenecks
-    6. Compare performance before and after changes
+    6. Compare performance before and after changes (but ONLY on the temporary branch passing branch ID to all tools)
     
     Project ID and database name will be automatically extracted from your request.
+    The temporary branch ID will be added when invoking other tools.
     Default database is ${NEON_DEFAULT_DATABASE_NAME} if not specified.
+
+    IMPORTANT: This tool is part of the query tuning workflow. Any suggested changes (like creating indexes)
+    must be applied using the 'complete_query_tuning' tool, NOT the 'prepare_database_migration' tool.
   </use_case>
 
   <workflow>
     1. Creates a temporary branch
     2. Analyzes current query performance and extracts table information
-    3. Implements and tests improvements
+    3. Implements and tests improvements ((but ONLY on the temporary branch created in step 1 passing the same branch ID to all tools)
     4. Returns tuning details for verification
   </workflow>
 
@@ -412,6 +416,9 @@ export const NEON_TOOLS = [
     2. Verify the performance improvements
     3. Decide whether to keep or discard the changes
     4. Use 'complete_query_tuning' tool to apply or discard changes
+    
+    DO NOT use 'prepare_database_migration' tool for applying query tuning changes.
+    Always use 'complete_query_tuning' to ensure changes are properly tracked and applied.
 
     Note: 
     - Some operations like creating indexes can take significant time on large tables
@@ -486,10 +493,12 @@ export const NEON_TOOLS = [
           - Suggested Changes:
             * Add index for frequently filtered columns
             * Optimize join conditions
+
+          To apply these changes, I will use the 'complete_query_tuning' tool after your approval.
         </example>
       </response_instructions>
 
-    3. If approved, use 'complete_query_tuning' with tuning_id
+    3. If approved, use ONLY the 'complete_query_tuning' tool with the tuning_id
   </next_steps>
 
   <error_handling>
@@ -513,7 +522,25 @@ export const NEON_TOOLS = [
   },
   {
     name: 'complete_query_tuning' as const,
-    description: 'Complete a query tuning session by either applying the changes to the main branch or discarding them. This tool also handles cleanup of temporary branches. IMPORTANT: This tool should be called even when the user rejects the changes, to ensure proper cleanup of temporary branches.',
+    description: `Complete a query tuning session by either applying the changes to the main branch or discarding them. 
+    
+IMPORTANT: This tool is the ONLY way to apply changes suggested by the 'prepare_query_tuning' tool.
+DO NOT use 'prepare_database_migration' or other tools to apply query tuning changes.
+
+This tool:
+1. Applies suggested changes (like creating indexes) to the main branch if approved
+2. Handles cleanup of temporary branches
+3. Must be called even when changes are rejected to ensure proper cleanup
+
+Workflow:
+1. After 'prepare_query_tuning' suggests changes
+2. User reviews and approves/rejects changes
+3. This tool is called to either:
+   - Apply approved changes to main branch and cleanup
+   - OR just cleanup if changes are rejected
+
+Note: This tool should be called even when the user rejects the changes, 
+to ensure proper cleanup of temporary branches.`,
     inputSchema: completeQueryTuningInputSchema,
   },
 ];
@@ -1012,6 +1039,7 @@ interface QueryTuningResult {
   originalPlan: any;
   tableSchemas: any[];
   sql: string;
+  baselineMetrics: QueryMetrics;
 }
 
 interface CompleteTuningResult {
@@ -1027,51 +1055,92 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
   try {
     logger.log('Starting query tuning process with params:', {
       ...params,
-      sql: params.sql.substring(0, 100) + (params.sql.length > 100 ? '...' : '') // Log truncated SQL for readability
+      sql: params.sql.substring(0, 100) + (params.sql.length > 100 ? '...' : '')
     });
 
     // Create temporary branch
     logger.log('Creating temporary branch for query tuning');
     const newBranch = await createTemporaryBranch(params.projectId);
+    if (!newBranch.branch) {
+      throw new Error('Failed to create temporary branch: branch is undefined');
+    }
     tempBranch = newBranch.branch;
-    logger.log('Created temporary branch:', { 
-      branchId: tempBranch.id, 
-      branchName: tempBranch.name,
-      parentId: tempBranch.parent_id 
+    logger.log('Created temporary branch:', { id: tempBranch.id, name: tempBranch.name });
+
+    // Ensure all operations use the temporary branch
+    const branchParams = {
+      ...params,
+      branchId: tempBranch.id
+    };
+
+    // First, get the execution plan with table information
+    logger.log('Getting execution plan on temporary branch:', tempBranch.id);
+    const executionPlan = await handleExplainSqlStatement({
+      params: {
+        sql: branchParams.sql,
+        databaseName: branchParams.databaseName,
+        projectId: branchParams.projectId,
+        branchId: branchParams.branchId,
+        roleName: branchParams.roleName || NEON_DEFAULT_ROLE_NAME,
+        analyze: true,
+      },
     });
 
-    try {
-      // Get the execution plan and schema information
-      const { executionPlan, tableSchemas } = await explainQueryAndGetSchemaInformation({
-        sql: params.sql,
-        databaseName: params.databaseName,
-        projectId: params.projectId,
-        branchId: tempBranch.id,
-        roleName: params.roleName,
-      });
+    // Extract table names from the plan
+    logger.log('Extracting table names from execution plan');
+    const tableNames = extractTableNamesFromPlan(executionPlan);
+    logger.log('Found tables:', tableNames);
 
-      // Return the information for the LLM to analyze
-      const result: QueryTuningResult = {
-        branch: tempBranch,
-        originalPlan: executionPlan,
-        tableSchemas,
-        sql: params.sql,
-      };
-      
-      logger.log('Query tuning analysis completed successfully');
-      return result;
-
-    } catch (error) {
-      logger.error('Error during query analysis:', error);
-      throw error;
+    if (tableNames.length === 0) {
+      throw new Error('No tables found in execution plan. Cannot proceed with optimization.');
     }
+
+    // Get schema information for all referenced tables in parallel
+    logger.log('Getting schema information for tables on branch:', tempBranch.id);
+    const tableSchemas = await Promise.all(
+      tableNames.map(async tableName => {
+        try {
+          const schema = await handleDescribeTableSchema({
+            tableName,
+            databaseName: branchParams.databaseName,
+            projectId: branchParams.projectId,
+            branchId: branchParams.branchId,
+            roleName: branchParams.roleName,
+          });
+          return {
+            tableName,
+            schema: schema.raw,
+            formatted: schema.formatted
+          };
+        } catch (error) {
+          logger.error(`Failed to get schema for table ${tableName}:`, error);
+          throw new Error(`Failed to get schema for table ${tableName}: ${(error as Error).message}`);
+        }
+      })
+    );
+
+    // Get the baseline execution metrics
+    const baselineMetrics = extractExecutionMetrics(executionPlan);
+    
+    // Return the information for analysis
+    const result: QueryTuningResult = {
+      branch: tempBranch,
+      originalPlan: executionPlan,
+      tableSchemas,
+      sql: params.sql,
+      baselineMetrics,
+    };
+    
+    logger.log('Query tuning analysis completed successfully on branch:', tempBranch.id);
+    return result;
+
   } catch (error) {
     logger.error('Error during query tuning:', error);
     
     // Always attempt to clean up the temporary branch if it was created
     if (tempBranch) {
       try {
-        logger.log('Cleaning up temporary branch after error');
+        logger.log('Cleaning up temporary branch after error:', tempBranch.id);
         await handleDeleteBranch({
           projectId: params.projectId,
           branchId: tempBranch.id,
@@ -1079,7 +1148,6 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
         logger.log('Successfully cleaned up temporary branch');
       } catch (cleanupError) {
         logger.error('Failed to clean up temporary branch:', cleanupError);
-        // Don't throw cleanup error, we want to throw the original error
       }
     }
     
@@ -1087,59 +1155,98 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
   }
 }
 
-async function handleCompleteTuning(params: CompleteTuningParams): Promise<CompleteTuningResult> {
-  let results;
-  const operationLog: string[] = [];
-  
+// Helper function to extract execution metrics from EXPLAIN output
+function extractExecutionMetrics(plan: any): QueryMetrics {
   try {
-    // Only proceed with changes if we have both suggestedChanges and branch
-    if (params.applyChanges && params.suggestedChanges && params.suggestedChanges.length > 0 && params.branch) {
-      logger.log('Applying suggested changes to main branch');
-      operationLog.push('Applying optimizations to main branch...');
-      
-      // Apply changes to main branch only if requested
-      results = await handleRunSqlTransaction({
-        sqlStatements: params.suggestedChanges,
-        databaseName: 'neondb', // TODO: Pass this from the calling function
-        projectId: params.branch.project_id,
-        branchId: params.branch.parent_id,
-      });
-      
-      logger.log('Successfully applied changes to main branch');
-      operationLog.push('Successfully applied optimizations.');
-    } else {
-      logger.log('No changes to apply or changes were discarded');
-      operationLog.push('No changes were applied (either none suggested or changes were discarded).');
-    }
+    const planJson = typeof plan.content?.[0]?.text === 'string' 
+      ? JSON.parse(plan.content[0].text)
+      : plan;
 
-    // Only delete branch if shouldDeleteBranch is true and we have branch info
-    if (params.shouldDeleteBranch && params.branch) {
-      logger.log('Cleaning up temporary branch:', params.branch.id);
-      operationLog.push('Cleaning up temporary branch...');
-      
-      await handleDeleteBranch({
-        projectId: params.branch.project_id,
-        branchId: params.branch.id,
-      });
-      
-      logger.log('Successfully cleaned up temporary branch');
-      operationLog.push('Successfully cleaned up temporary branch.');
-    }
-
-    const result: CompleteTuningResult = {
-      appliedChanges: params.applyChanges && params.suggestedChanges ? params.suggestedChanges : undefined,
-      results,
-      deletedBranches: params.shouldDeleteBranch && params.branch ? [params.branch.id] : undefined,
-      message: operationLog.join('\n'),
+    const metrics: QueryMetrics = {
+      executionTime: 0,
+      planningTime: 0,
+      totalCost: 0,
+      actualRows: 0,
+      bufferUsage: {
+        shared: { hit: 0, read: 0, written: 0, dirtied: 0 },
+        local: { hit: 0, read: 0, written: 0, dirtied: 0 },
+      }
     };
-    
-    logger.log('Query tuning completion finished successfully:', result);
-    return result;
-    
+
+    // Extract planning and execution time if available
+    if (planJson?.[0]?.['Planning Time']) {
+      metrics.planningTime = planJson[0]['Planning Time'];
+    }
+    if (planJson?.[0]?.['Execution Time']) {
+      metrics.executionTime = planJson[0]['Execution Time'];
+    }
+
+    // Recursively process plan nodes to accumulate costs and buffer usage
+    function processNode(node: any) {
+      if (!node || typeof node !== 'object') return;
+
+      // Accumulate costs
+      if (node['Total Cost']) {
+        metrics.totalCost = Math.max(metrics.totalCost, node['Total Cost']);
+      }
+      if (node['Actual Rows']) {
+        metrics.actualRows += node['Actual Rows'];
+      }
+
+      // Accumulate buffer usage
+      if (node['Shared Hit Blocks']) metrics.bufferUsage.shared.hit += node['Shared Hit Blocks'];
+      if (node['Shared Read Blocks']) metrics.bufferUsage.shared.read += node['Shared Read Blocks'];
+      if (node['Shared Written Blocks']) metrics.bufferUsage.shared.written += node['Shared Written Blocks'];
+      if (node['Shared Dirtied Blocks']) metrics.bufferUsage.shared.dirtied += node['Shared Dirtied Blocks'];
+      
+      if (node['Local Hit Blocks']) metrics.bufferUsage.local.hit += node['Local Hit Blocks'];
+      if (node['Local Read Blocks']) metrics.bufferUsage.local.read += node['Local Read Blocks'];
+      if (node['Local Written Blocks']) metrics.bufferUsage.local.written += node['Local Written Blocks'];
+      if (node['Local Dirtied Blocks']) metrics.bufferUsage.local.dirtied += node['Local Dirtied Blocks'];
+
+      // Process child nodes
+      if (Array.isArray(node['Plans'])) {
+        node['Plans'].forEach(processNode);
+      }
+    }
+
+    if (planJson?.[0]?.Plan) {
+      processNode(planJson[0].Plan);
+    }
+
+    return metrics;
   } catch (error) {
-    logger.error('Error during query tuning completion:', error);
-    throw new Error(`Failed to complete query tuning: ${(error as Error).message}`);
+    logger.error('Error extracting execution metrics:', error);
+    return {
+      executionTime: 0,
+      planningTime: 0,
+      totalCost: 0,
+      actualRows: 0,
+      bufferUsage: {
+        shared: { hit: 0, read: 0, written: 0, dirtied: 0 },
+        local: { hit: 0, read: 0, written: 0, dirtied: 0 },
+      }
+    };
   }
+}
+
+// Types for query metrics
+interface BufferMetrics {
+  hit: number;
+  read: number;
+  written: number;
+  dirtied: number;
+}
+
+interface QueryMetrics {
+  executionTime: number;
+  planningTime: number;
+  totalCost: number;
+  actualRows: number;
+  bufferUsage: {
+    shared: BufferMetrics;
+    local: BufferMetrics;
+  };
 }
 
 // Function to extract table names from an execution plan
@@ -1197,6 +1304,72 @@ interface HandlerParams {
     suggestedChanges?: string[];
     branch?: Branch;
   };
+}
+
+async function handleCompleteTuning(params: CompleteTuningParams): Promise<CompleteTuningResult> {
+  let results;
+  const operationLog: string[] = [];
+  
+  try {
+    // Validate branch information
+    if (!params.branch) {
+      throw new Error('Branch information is required for completing query tuning');
+    }
+
+    logger.log('Starting query tuning completion with params:', {
+      shouldDeleteBranch: params.shouldDeleteBranch,
+      applyChanges: params.applyChanges,
+      branch: { id: params.branch.id, name: params.branch.name }
+    });
+
+    // Only proceed with changes if we have both suggestedChanges and branch
+    if (params.applyChanges && params.suggestedChanges && params.suggestedChanges.length > 0) {
+      logger.log('Applying suggested changes to main branch:', params.branch.parent_id);
+      operationLog.push('Applying optimizations to main branch...');
+      
+      // Apply changes to main branch only if requested
+      results = await handleRunSqlTransaction({
+        sqlStatements: params.suggestedChanges,
+        databaseName: 'neondb', // TODO: Pass this from the calling function
+        projectId: params.branch.project_id,
+        branchId: params.branch.parent_id, // Explicitly use parent branch ID
+      });
+      
+      logger.log('Successfully applied changes to main branch');
+      operationLog.push('Successfully applied optimizations to main branch.');
+    } else {
+      logger.log('No changes to apply or changes were discarded');
+      operationLog.push('No changes were applied (either none suggested or changes were discarded).');
+    }
+
+    // Only delete branch if shouldDeleteBranch is true
+    if (params.shouldDeleteBranch) {
+      logger.log('Cleaning up temporary branch:', params.branch.id);
+      operationLog.push('Cleaning up temporary branch...');
+      
+      await handleDeleteBranch({
+        projectId: params.branch.project_id,
+        branchId: params.branch.id,
+      });
+      
+      logger.log('Successfully cleaned up temporary branch');
+      operationLog.push('Successfully cleaned up temporary branch.');
+    }
+
+    const result: CompleteTuningResult = {
+      appliedChanges: params.applyChanges && params.suggestedChanges ? params.suggestedChanges : undefined,
+      results,
+      deletedBranches: params.shouldDeleteBranch ? [params.branch.id] : undefined,
+      message: operationLog.join('\n'),
+    };
+    
+    logger.log('Query tuning completion finished successfully:', result);
+    return result;
+    
+  } catch (error) {
+    logger.error('Error during query tuning completion:', error);
+    throw new Error(`Failed to complete query tuning: ${(error as Error).message}`);
+  }
 }
 
 export const NEON_HANDLERS = {
