@@ -390,12 +390,14 @@ export const NEON_TOOLS = [
     
     The tool will:
     1. Create a temporary branch for testing optimizations
-    2. Analyze the current query execution plan
-    3. Suggest and implement improvements like:
-      - Adding or modifying indexes
+    2. Extract and analyze the current query execution plan
+    3. Extract all fully qualified table names (schema.table) referenced in the plan
+    4. Gather detailed schema information for each referenced table using describe_table_schema
+    5. Suggest and implement improvements like:
+      - Adding or modifying indexes based on table schemas and query patterns
       - Query structure modifications
-      - Table statistics updates
-    4. Compare performance before and after changes
+      - Identifying potential performance bottlenecks
+    6. Compare performance before and after changes
     
     Project ID and database name will be automatically extracted from your request.
     Default database is ${NEON_DEFAULT_DATABASE_NAME} if not specified.
@@ -403,7 +405,7 @@ export const NEON_TOOLS = [
 
   <workflow>
     1. Creates a temporary branch
-    2. Analyzes current query performance
+    2. Analyzes current query performance and extracts table information
     3. Implements and tests improvements
     4. Returns tuning details for verification
   </workflow>
@@ -415,18 +417,28 @@ export const NEON_TOOLS = [
     3. Decide whether to keep or discard the changes
     4. Use 'complete_query_tuning' tool to apply or discard changes
 
-    Note: Some operations like creating indexes or running ANALYZE can take significant time,
-    especially on large tables. Please be patient during these operations.
+    Note: 
+    - Some operations like creating indexes can take significant time on large tables
+    - Table statistics updates (ANALYZE) are NOT automatically performed as they can be long-running
+    - Table statistics maintenance should be handled by PostgreSQL auto-analyze or scheduled maintenance jobs
+    - If statistics are suspected to be stale, suggest running ANALYZE as a separate maintenance task
   </important_notes>
 
   <example>
     For a query like:
-    SELECT * FROM orders WHERE status = 'pending' AND created_at > '2024-01-01';
+    SELECT o.*, c.name 
+    FROM orders o 
+    JOIN customers c ON c.id = o.customer_id 
+    WHERE o.status = 'pending' 
+    AND o.created_at > '2024-01-01';
     
-    The tool might suggest:
-    1. Creating a composite index on (status, created_at)
-    2. Updating table statistics
-    3. Modifying the query to use more efficient operators
+    The tool will:
+    1. Extract referenced tables: public.orders, public.customers
+    2. Gather schema information for both tables
+    3. Analyze the execution plan
+    4. Suggest improvements like:
+       - Creating a composite index on orders(status, created_at)
+       - Optimizing the join conditions
     
     You can then compare the execution plans before and after these changes.
   </example>
@@ -446,6 +458,7 @@ export const NEON_TOOLS = [
           - Temporary Branch ID
           - Original Query Cost
           - Improved Query Cost
+          - Referenced Tables (list all tables found in the plan)
           - Suggested Changes
 
           Even if some fields are missing from the tool's response, use placeholders like "not provided" rather than omitting fields.
@@ -471,14 +484,16 @@ export const NEON_TOOLS = [
           - Branch ID: [id]
           - Original Cost: [cost]
           - Improved Cost: [cost]
+          - Referenced Tables:
+            * public.orders
+            * public.customers
           - Suggested Changes:
             * Add index for frequently filtered columns
-            * Update table statistics
-            * Modify query structure for better performance
+            * Optimize join conditions
         </example>
       </response_instructions>
 
-    3. If approved, use 'complete_query_tuning' tool with the tuning_id
+    3. If approved, use 'complete_query_tuning' with tuning_id
   </next_steps>
 
   <error_handling>
@@ -502,8 +517,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'complete_query_tuning' as const,
-    description:
-      'Complete a query tuning session by either applying the changes to the main branch or discarding them. This tool also handles cleanup of temporary branches.',
+    description: 'Complete a query tuning session by either applying the changes to the main branch or discarding them. This tool also handles cleanup of temporary branches. IMPORTANT: This tool should be called even when the user rejects the changes, to ensure proper cleanup of temporary branches.',
     inputSchema: completeQueryTuningInputSchema,
   },
 ];
@@ -983,39 +997,30 @@ async function handleQueryTuning({
 async function handleCompleteTuning({
   tuningId,
   shouldDeleteBranch,
+  applyChanges = false
 }: {
   tuningId: string;
   shouldDeleteBranch: boolean;
+  applyChanges?: boolean;
 }) {
   const tuning = getTuningFromMemory(tuningId);
   if (!tuning) {
     throw new Error(`Tuning session not found: ${tuningId}`);
   }
 
-  if (tuning.suggestedChanges && tuning.suggestedChanges.length > 0) {
-    // Apply changes to main branch
-    const result = await handleRunSqlTransaction({
+  let result;
+  if (applyChanges && tuning.suggestedChanges && tuning.suggestedChanges.length > 0) {
+    // Apply changes to main branch only if requested
+    result = await handleRunSqlTransaction({
       sqlStatements: tuning.suggestedChanges,
       databaseName: tuning.databaseName,
       projectId: tuning.tuningBranch.project_id,
       branchId: tuning.tuningBranch.parent_id,
       roleName: tuning.roleName,
     });
-
-    if (shouldDeleteBranch) {
-      await handleDeleteBranch({
-        projectId: tuning.tuningBranch.project_id,
-        branchId: tuning.tuningBranch.id,
-      });
-    }
-
-    return {
-      appliedChanges: tuning.suggestedChanges,
-      result,
-      deletedBranch: shouldDeleteBranch ? tuning.tuningBranch : undefined,
-    };
   }
 
+  // Always clean up if requested, regardless of whether changes were applied
   if (shouldDeleteBranch) {
     await handleDeleteBranch({
       projectId: tuning.tuningBranch.project_id,
@@ -1024,8 +1029,10 @@ async function handleCompleteTuning({
   }
 
   return {
-    message: 'No changes to apply.',
+    appliedChanges: applyChanges ? tuning.suggestedChanges : undefined,
+    result,
     deletedBranch: shouldDeleteBranch ? tuning.tuningBranch : undefined,
+    message: applyChanges ? 'Changes applied successfully.' : 'Changes discarded.',
   };
 }
 
@@ -1493,6 +1500,7 @@ export const NEON_HANDLERS = {
       const result = await handleCompleteTuning({
         tuningId: params.tuningId,
         shouldDeleteBranch: params.shouldDeleteBranch,
+        applyChanges: params.applyChanges,
       });
       logger.log('Query tuning completion result:', result);
       return {

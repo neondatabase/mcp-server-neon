@@ -1,6 +1,7 @@
 interface PlanNode {
   'Node Type': string;
   'Relation Name'?: string;
+  'Schema'?: string;
   Plans?: PlanNode[];
   'Index Name'?: string;
   'Index Cond'?: string;
@@ -41,21 +42,23 @@ export function extractTableNamesFromPlan(planResult: any): string[] {
 
   try {
     const planJson = JSON.parse(plan);
-    const planNode = planJson[0]?.Plan;
-    if (!planNode) return [];
+    const queryPlan = planJson[0]?.['QUERY PLAN']?.[0]?.Plan;
+    if (!queryPlan) return [];
 
     const tableNames = new Set<string>();
     
     function extractFromNode(node: PlanNode) {
-      if (node['Relation Name']) {
-        tableNames.add(node['Relation Name']);
+      if (node['Relation Name'] && node['Schema']) {
+        // Create fully qualified table name: schema.table
+        const fullyQualifiedName = `${node['Schema']}.${node['Relation Name']}`;
+        tableNames.add(fullyQualifiedName);
       }
       if (node.Plans) {
         node.Plans.forEach(extractFromNode);
       }
     }
 
-    extractFromNode(planNode);
+    extractFromNode(queryPlan);
     return Array.from(tableNames);
   } catch (error) {
     console.error('Error parsing plan:', error);
@@ -72,7 +75,7 @@ export function analyzePlanAndGenerateSuggestions(
 
   try {
     const planJson = JSON.parse(plan);
-    const planNode = planJson[0]?.Plan;
+    const planNode = planJson[0]?.['QUERY PLAN']?.[0]?.Plan;
     if (!planNode) return [];
 
     const suggestions: string[] = [];
@@ -81,7 +84,8 @@ export function analyzePlanAndGenerateSuggestions(
     // Parse table schemas
     tableSchemas.forEach((schema) => {
       try {
-        analyzedTables.set(schema.tableName, JSON.parse(schema.content[0].text));
+        const schemaContent = JSON.parse(schema.content[0].text);
+        analyzedTables.set(schema.tableName, schemaContent);
       } catch (error) {
         console.error('Error parsing table schema:', error);
       }
@@ -89,8 +93,8 @@ export function analyzePlanAndGenerateSuggestions(
 
     function analyzeNode(node: PlanNode) {
       // Analyze sequential scans
-      if (node['Node Type'] === 'Seq Scan' && node['Relation Name']) {
-        const tableName = node['Relation Name'];
+      if (node['Node Type'] === 'Seq Scan' && node['Relation Name'] && node['Schema']) {
+        const tableName = `${node['Schema']}.${node['Relation Name']}`;
         const tableSchema = analyzedTables.get(tableName);
         
         if (tableSchema) {
@@ -115,7 +119,8 @@ export function analyzePlanAndGenerateSuggestions(
 
       // Analyze index scans for efficiency
       if (node['Node Type'].includes('Index Scan') && node['Index Name']) {
-        const tableName = node['Relation Name'];
+        const tableName = node['Schema'] && node['Relation Name'] ? 
+          `${node['Schema']}.${node['Relation Name']}` : undefined;
         if (!tableName) return;
         
         const tableSchema = analyzedTables.get(tableName);
@@ -130,12 +135,7 @@ export function analyzePlanAndGenerateSuggestions(
         }
       }
 
-      // Check for table statistics
-      if (node['Node Type'].includes('Scan') && node['Rows Removed by Filter'] > 1000) {
-        suggestions.push(
-          `ANALYZE ${node['Relation Name']} to update statistics for better planning`
-        );
-      }
+      // Note: Removed automatic ANALYZE suggestions as they should be handled by maintenance jobs
 
       // Recursively analyze child nodes
       if (node.Plans) {
