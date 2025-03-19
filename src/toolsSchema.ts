@@ -83,6 +83,26 @@ export const runSqlTransactionInputSchema = z.object({
     ),
 });
 
+export const explainSqlStatementInputSchema = z.object({
+  sql: z.string().describe('The SQL statement to analyze'),
+  databaseName: z
+    .string()
+    .describe('The name of the database to execute the query against'),
+  projectId: z
+    .string()
+    .describe('The ID of the project to execute the query against'),
+  branchId: z
+    .string()
+    .describe('The ID of the branch to execute the query against'),
+  roleName: z
+    .string()
+    .describe('The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.'),
+  analyze: z
+    .boolean()
+    .default(true)
+    .describe('Whether to include ANALYZE in the EXPLAIN command'),
+});
+
 export const describeTableSchemaInputSchema = z.object({
   tableName: z.string().describe('The name of the table'),
   databaseName: z

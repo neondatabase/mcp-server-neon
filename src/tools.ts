@@ -21,6 +21,7 @@ import {
   deleteBranchInputSchema,
   getConnectionStringInputSchema,
   provisionNeonAuthInputSchema,
+  explainSqlStatementInputSchema,
 } from './toolsSchema.js';
 import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
@@ -365,6 +366,11 @@ export const NEON_TOOLS = [
       \`\`\`
         `,
   },
+  {
+    name: 'explain_sql_statement' as const,
+    description: 'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
+    inputSchema: explainSqlStatementInputSchema,
+  },
 ];
 
 // Extract the tool names as a union type
@@ -708,6 +714,42 @@ async function handleDescribeBranch({
   );
 
   return response;
+}
+
+async function handleExplainSqlStatement({
+  params,
+}: {
+  params: {
+    sql: string;
+    databaseName: string;
+    projectId: string;
+    branchId: string;
+    roleName: string;
+    analyze: boolean;
+  };
+}) {
+  const explainPrefix = params.analyze
+    ? 'EXPLAIN (ANALYZE, VERBOSE, BUFFERS, FILECACHE, FORMAT JSON)'
+    : 'EXPLAIN (VERBOSE, FORMAT JSON)';
+  
+  const explainSql = `${explainPrefix} ${params.sql}`;
+  
+  const result = await handleRunSql({
+    sql: explainSql,
+    databaseName: params.databaseName,
+    projectId: params.projectId,
+    branchId: params.branchId,
+    roleName: params.roleName,
+  });
+
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
 }
 
 export const NEON_HANDLERS = {
@@ -1101,6 +1143,18 @@ export const NEON_HANDLERS = {
       return result;
     } catch (error) {
       logger.error('Error in provision_neon_auth:', error);
+      throw error;
+    }
+  },
+
+  explain_sql_statement: async ({ params }) => {
+    logger.log('Calling explain_sql_statement with params:', params);
+    try {
+      const result = await handleExplainSqlStatement({ params });
+      logger.log('Explain result:', result);
+      return result;
+    } catch (error) {
+      logger.error('Error in explain_sql_statement:', error);
       throw error;
     }
   },
