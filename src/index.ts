@@ -43,7 +43,7 @@ export const neonClient = createApiClient({
 
 const server = new McpServer({
   name: 'mcp-server-neon',
-  version: '0.1.0',
+  version: packageJson.version,
 });
 
 NEON_TOOLS.forEach((tool) => {
