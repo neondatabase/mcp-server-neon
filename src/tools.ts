@@ -7,7 +7,7 @@ import {
   getTuningFromMemory,
   persistTuningToMemory,
 } from './state.js';
-import { EndpointType, ListProjectsParams } from '@neondatabase/api-client';
+import { EndpointType, ListProjectsParams, Branch } from '@neondatabase/api-client';
 import { DESCRIBE_DATABASE_STATEMENTS, splitSqlStatements } from './utils.js';
 import {
   listProjectsInputSchema,
@@ -38,10 +38,6 @@ import {
 } from './constants.js';
 import { logger } from './logger.js';
 import { describeTable, formatTableDescription } from './describeUtils.js';
-import {
-  extractTableNamesFromPlan,
-  analyzePlanAndGenerateSuggestions,
-} from './queryAnalysis.js';
 
 // Define the tools with their configurations
 export const NEON_TOOLS = [
@@ -386,7 +382,7 @@ export const NEON_TOOLS = [
     name: 'prepare_query_tuning' as const,
     description: `
   <use_case>
-    This tool helps developers improve PostgreSQL query performance by analyzing execution plans and suggesting optimizations.
+    This tool helps developers improve PostgreSQL query performance for slow queries or DML statements by analyzing execution plans and suggesting optimizations.
     
     The tool will:
     1. Create a temporary branch for testing optimizations
@@ -684,8 +680,16 @@ async function handleDescribeTableSchema({
     branch_id: branchId,
   });
 
-  const description = await describeTable(connectionString.data.uri, tableName);
-  return formatTableDescription(description);
+  // Extract table name without schema if schema-qualified
+  const tableNameParts = tableName.split('.');
+  const simpleTableName = tableNameParts[tableNameParts.length - 1];
+  
+  logger.log('Describing table:', { fullName: tableName, simpleTableName });
+  const description = await describeTable(connectionString.data.uri, simpleTableName);
+  return {
+    raw: description,
+    formatted: formatTableDescription(description)
+  };
 }
 
 async function handleCreateBranch({
@@ -882,6 +886,7 @@ async function handleExplainSqlStatement({
     : 'EXPLAIN (VERBOSE, FORMAT JSON)';
   
   const explainSql = `${explainPrefix} ${params.sql}`;
+  logger.log('Executing EXPLAIN SQL:', explainSql);
   
   const result = await handleRunSql({
     sql: explainSql,
@@ -890,6 +895,8 @@ async function handleExplainSqlStatement({
     branchId: params.branchId,
     roleName: params.roleName,
   });
+
+  logger.log('Raw EXPLAIN result:', JSON.stringify(result, null, 2));
 
   return {
     content: [
@@ -901,138 +908,294 @@ async function handleExplainSqlStatement({
   };
 }
 
-async function handleQueryTuning({
+async function createTemporaryBranch(projectId: string): Promise<{ branch: Branch }> {
+  const result = await handleCreateBranch({ projectId });
+  if (!result?.branch) {
+    throw new Error('Failed to create temporary branch');
+  }
+  return result;
+}
+
+async function explainQueryAndGetSchemaInformation({
   sql,
   databaseName,
   projectId,
+  branchId,
   roleName,
 }: {
   sql: string;
   databaseName: string;
   projectId: string;
+  branchId?: string;
   roleName?: string;
 }) {
-  // Create a new branch for testing optimizations
-  const newBranch = await handleCreateBranch({ projectId });
-
-  // Get the original execution plan
-  const originalPlan = await handleExplainSqlStatement({
-    params: {
-      sql,
-      databaseName,
-      projectId,
-      branchId: newBranch.branch.id,
-      roleName: roleName || NEON_DEFAULT_ROLE_NAME,
-      analyze: true,
-    },
-  });
-
-  // Extract table names from the plan for analysis
-  const tableNames = extractTableNamesFromPlan(originalPlan);
-  
-  // Get schema information for all referenced tables
-  const tableSchemas = await Promise.all(
-    tableNames.map(tableName =>
-      handleDescribeTableSchema({
-        tableName,
-        databaseName,
-        projectId,
-        branchId: newBranch.branch.id,
-        roleName,
-      })
-    )
-  );
-
-  // Analyze the plan and generate suggestions
-  const suggestedChanges = analyzePlanAndGenerateSuggestions(originalPlan, tableSchemas);
-
-  // Apply suggested changes in the temporary branch
-  if (suggestedChanges.length > 0) {
-    await handleRunSqlTransaction({
-      sqlStatements: suggestedChanges,
-      databaseName,
-      projectId,
-      branchId: newBranch.branch.id,
-      roleName,
-    });
-
-    // Get the improved execution plan
-    const improvedPlan = await handleExplainSqlStatement({
+  try {
+    // Get the execution plan
+    logger.log('Getting execution plan for query:', sql);
+    const executionPlan = await handleExplainSqlStatement({
       params: {
         sql,
         databaseName,
         projectId,
-        branchId: newBranch.branch.id,
+        branchId: branchId || '',
         roleName: roleName || NEON_DEFAULT_ROLE_NAME,
         analyze: true,
       },
     });
+    logger.log('Retrieved execution plan');
 
-    const tuningId = crypto.randomUUID();
-    persistTuningToMemory(tuningId, {
-      sql,
-      databaseName,
-      tuningBranch: newBranch.branch,
-      roleName,
-      originalPlan,
-      suggestedChanges,
-      improvedPlan,
-    });
+    // Extract table names from the plan
+    logger.log('Extracting table names from execution plan');
+    const tableNames = extractTableNamesFromPlan(executionPlan);
+    logger.log('Found tables:', tableNames);
+    
+    if (tableNames.length === 0) {
+      const error = new Error('No tables found in execution plan. Cannot proceed with optimization.');
+      logger.error('Table extraction failed:', error);
+      throw error;
+    }
+
+    // Get schema information for all referenced tables
+    logger.log('Getting schema information for tables:', tableNames);
+    const tableSchemas = await Promise.all(
+      tableNames.map(async tableName => {
+        try {
+          const schema = await handleDescribeTableSchema({
+            tableName,
+            databaseName,
+            projectId,
+            branchId,
+            roleName,
+          });
+          logger.log(`Retrieved schema for table ${tableName}`);
+          return {
+            tableName,
+            schema: schema.raw,
+            formatted: schema.formatted
+          };
+        } catch (error) {
+          logger.error(`Failed to get schema for table ${tableName}:`, error);
+          throw new Error(`Failed to get schema for table ${tableName}: ${(error as Error).message}`);
+        }
+      })
+    );
+    logger.log('Retrieved schema information for all tables');
 
     return {
-      branch: newBranch.branch,
-      tuningId,
-      originalPlan,
-      improvedPlan,
-      suggestedChanges,
+      executionPlan,
+      tableSchemas,
+      sql
     };
+  } catch (error) {
+    logger.error('Error in explainQueryAndGetSchemaInformation:', error);
+    throw error;
   }
-
-  return {
-    branch: newBranch.branch,
-    message: 'No performance improvements identified for the given query.',
-  };
 }
 
-async function handleCompleteTuning({
-  tuningId,
-  shouldDeleteBranch,
-  applyChanges = false
-}: {
-  tuningId: string;
-  shouldDeleteBranch: boolean;
+interface QueryTuningParams {
+  sql: string;
+  databaseName: string;
+  projectId: string;
+  roleName?: string;
+}
+
+interface CompleteTuningParams {
+  tuningId?: string;
+  shouldDeleteBranch?: boolean;
   applyChanges?: boolean;
-}) {
-  const tuning = getTuningFromMemory(tuningId);
-  if (!tuning) {
-    throw new Error(`Tuning session not found: ${tuningId}`);
-  }
+  suggestedChanges?: string[];
+  branch?: Branch;
+}
 
-  let result;
-  if (applyChanges && tuning.suggestedChanges && tuning.suggestedChanges.length > 0) {
-    // Apply changes to main branch only if requested
-    result = await handleRunSqlTransaction({
-      sqlStatements: tuning.suggestedChanges,
-      databaseName: tuning.databaseName,
-      projectId: tuning.tuningBranch.project_id,
-      branchId: tuning.tuningBranch.parent_id,
-      roleName: tuning.roleName,
+interface QueryTuningResult {
+  branch: Branch;
+  originalPlan: any;
+  tableSchemas: any[];
+  sql: string;
+}
+
+interface CompleteTuningResult {
+  appliedChanges?: string[];
+  results?: any;
+  deletedBranches?: string[];
+  message: string;
+}
+
+async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuningResult> {
+  let tempBranch: Branch | undefined;
+  
+  try {
+    logger.log('Starting query tuning process with params:', {
+      ...params,
+      sql: params.sql.substring(0, 100) + (params.sql.length > 100 ? '...' : '') // Log truncated SQL for readability
     });
-  }
 
-  // Always clean up if requested, regardless of whether changes were applied
-  if (shouldDeleteBranch) {
-    await handleDeleteBranch({
-      projectId: tuning.tuningBranch.project_id,
-      branchId: tuning.tuningBranch.id,
+    // Create temporary branch
+    logger.log('Creating temporary branch for query tuning');
+    const newBranch = await createTemporaryBranch(params.projectId);
+    tempBranch = newBranch.branch;
+    logger.log('Created temporary branch:', { 
+      branchId: tempBranch.id, 
+      branchName: tempBranch.name,
+      parentId: tempBranch.parent_id 
     });
+
+    try {
+      // Get the execution plan and schema information
+      const { executionPlan, tableSchemas } = await explainQueryAndGetSchemaInformation({
+        sql: params.sql,
+        databaseName: params.databaseName,
+        projectId: params.projectId,
+        branchId: tempBranch.id,
+        roleName: params.roleName,
+      });
+
+      // Return the information for the LLM to analyze
+      const result: QueryTuningResult = {
+        branch: tempBranch,
+        originalPlan: executionPlan,
+        tableSchemas,
+        sql: params.sql,
+      };
+      
+      logger.log('Query tuning analysis completed successfully');
+      return result;
+
+    } catch (error) {
+      logger.error('Error during query analysis:', error);
+      throw error;
+    }
+  } catch (error) {
+    logger.error('Error during query tuning:', error);
+    
+    // Always attempt to clean up the temporary branch if it was created
+    if (tempBranch) {
+      try {
+        logger.log('Cleaning up temporary branch after error');
+        await handleDeleteBranch({
+          projectId: params.projectId,
+          branchId: tempBranch.id,
+        });
+        logger.log('Successfully cleaned up temporary branch');
+      } catch (cleanupError) {
+        logger.error('Failed to clean up temporary branch:', cleanupError);
+        // Don't throw cleanup error, we want to throw the original error
+      }
+    }
+    
+    throw new Error(`Query tuning failed: ${(error as Error).message}`);
+  }
+}
+
+async function handleCompleteTuning(params: CompleteTuningParams): Promise<CompleteTuningResult> {
+  let results;
+  const operationLog: string[] = [];
+  
+  try {
+    // Only proceed with changes if we have both suggestedChanges and branch
+    if (params.applyChanges && params.suggestedChanges && params.suggestedChanges.length > 0 && params.branch) {
+      logger.log('Applying suggested changes to main branch');
+      operationLog.push('Applying optimizations to main branch...');
+      
+      // Apply changes to main branch only if requested
+      results = await handleRunSqlTransaction({
+        sqlStatements: params.suggestedChanges,
+        databaseName: 'neondb', // TODO: Pass this from the calling function
+        projectId: params.branch.project_id,
+        branchId: params.branch.parent_id,
+      });
+      
+      logger.log('Successfully applied changes to main branch');
+      operationLog.push('Successfully applied optimizations.');
+    } else {
+      logger.log('No changes to apply or changes were discarded');
+      operationLog.push('No changes were applied (either none suggested or changes were discarded).');
+    }
+
+    // Only delete branch if shouldDeleteBranch is true and we have branch info
+    if (params.shouldDeleteBranch && params.branch) {
+      logger.log('Cleaning up temporary branch:', params.branch.id);
+      operationLog.push('Cleaning up temporary branch...');
+      
+      await handleDeleteBranch({
+        projectId: params.branch.project_id,
+        branchId: params.branch.id,
+      });
+      
+      logger.log('Successfully cleaned up temporary branch');
+      operationLog.push('Successfully cleaned up temporary branch.');
+    }
+
+    const result: CompleteTuningResult = {
+      appliedChanges: params.applyChanges && params.suggestedChanges ? params.suggestedChanges : undefined,
+      results,
+      deletedBranches: params.shouldDeleteBranch && params.branch ? [params.branch.id] : undefined,
+      message: operationLog.join('\n'),
+    };
+    
+    logger.log('Query tuning completion finished successfully:', result);
+    return result;
+    
+  } catch (error) {
+    logger.error('Error during query tuning completion:', error);
+    throw new Error(`Failed to complete query tuning: ${(error as Error).message}`);
+  }
+}
+
+// Function to extract table names from an execution plan
+function extractTableNamesFromPlan(planResult: any): string[] {
+  const tableNames = new Set<string>();
+  logger.log('Extracting table names from plan:', JSON.stringify(planResult, null, 2));
+
+  function recursivelyExtractFromNode(node: any) {
+    if (!node || typeof node !== 'object') return;
+
+    // Check if current node has relation information
+    if (node['Relation Name'] && node['Schema']) {
+      const tableName = `${node['Schema']}.${node['Relation Name']}`;
+      logger.log('Found table:', tableName);
+      tableNames.add(tableName);
+    }
+
+    // Recursively process all object properties and array elements
+    if (Array.isArray(node)) {
+      node.forEach(item => recursivelyExtractFromNode(item));
+    } else {
+      Object.values(node).forEach(value => recursivelyExtractFromNode(value));
+    }
   }
 
-  return {
-    appliedChanges: applyChanges ? tuning.suggestedChanges : undefined,
-    result,
-    deletedBranch: shouldDeleteBranch ? tuning.tuningBranch : undefined,
-    message: applyChanges ? 'Changes applied successfully.' : 'Changes discarded.',
+  try {
+    // Start with the raw plan result
+    recursivelyExtractFromNode(planResult);
+
+    // If we have content[0].text, also parse and process that
+    if (planResult?.content?.[0]?.text) {
+      try {
+        const parsedContent = JSON.parse(planResult.content[0].text);
+        recursivelyExtractFromNode(parsedContent);
+      } catch (parseError) {
+        logger.error('Error parsing content.text:', parseError);
+      }
+    }
+  } catch (error) {
+    logger.error('Error extracting table names:', error);
+  }
+
+  const result = Array.from(tableNames);
+  logger.log('Extracted table names:', result);
+  return result;
+}
+
+interface HandlerParams {
+  // ... other param types ...
+  
+  complete_query_tuning: {
+    tuningId: string;
+    shouldDeleteBranch?: boolean;
+    applyChanges?: boolean;
+    suggestedChanges?: string[];
+    branch?: Branch;
   };
 }
 
@@ -1202,7 +1365,15 @@ export const NEON_HANDLERS = {
       });
       logger.log('Table schema:', result);
       return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              raw: result.raw,
+              formatted: result.formatted
+            }, null, 2)
+          }
+        ],
       };
     } catch (error) {
       logger.error('Error in describe_table_schema:', error);
@@ -1457,34 +1628,12 @@ export const NEON_HANDLERS = {
         content: [
           {
             type: 'text',
-            text: `
-              <status>Query analysis completed in temporary branch</status>
-              <details>
-                <tuning_id>${result.tuningId}</tuning_id>
-                <temporary_branch>
-                  <name>${result.branch.name}</name>
-                  <id>${result.branch.id}</id>
-                </temporary_branch>
-                ${result.suggestedChanges ? `
-                <suggested_changes>
-                  ${result.suggestedChanges.join('\n')}
-                </suggested_changes>
-                <performance_comparison>
-                  <original_plan>${JSON.stringify(result.originalPlan, null, 2)}</original_plan>
-                  <improved_plan>${JSON.stringify(result.improvedPlan, null, 2)}</improved_plan>
-                </performance_comparison>
-                ` : `
-                <message>${result.message}</message>
-                `}
-              </details>
-
-              <next_actions>
-              You MUST:
-                1. Review the suggested changes and performance comparison
-                2. Decide whether to apply the changes
-                3. Use 'complete_query_tuning' with tuning_id: ${result.tuningId}
-              </next_actions>
-            `,
+            text: JSON.stringify({
+              branch: result.branch,
+              executionPlan: result.originalPlan,
+              tableSchemas: result.tableSchemas,
+              sql: result.sql
+            }, null, 2),
           },
         ],
       };
@@ -1494,13 +1643,15 @@ export const NEON_HANDLERS = {
     }
   },
 
-  complete_query_tuning: async ({ params }) => {
+  complete_query_tuning: async ({ params }: { params: HandlerParams['complete_query_tuning'] }) => {
     logger.log('Calling complete_query_tuning with params:', params);
     try {
       const result = await handleCompleteTuning({
         tuningId: params.tuningId,
-        shouldDeleteBranch: params.shouldDeleteBranch,
-        applyChanges: params.applyChanges,
+        shouldDeleteBranch: params.shouldDeleteBranch ?? true,
+        applyChanges: params.applyChanges ?? false,
+        suggestedChanges: params.suggestedChanges,
+        branch: params.branch,
       });
       logger.log('Query tuning completion result:', result);
       return {
