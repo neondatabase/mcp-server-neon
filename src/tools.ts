@@ -1050,14 +1050,14 @@ interface QueryTuningParams {
 }
 
 interface CompleteTuningParams {
+  suggestedSqlStatements?: string[];
+  applyChanges?: boolean;
   tuningId: string;
   databaseName: string;
   projectId: string;
   roleName?: string;
   temporaryBranch: Branch;
   shouldDeleteTemporaryBranch?: boolean;
-  applyChanges?: boolean;
-  suggestedChanges?: string[];
   branch?: Branch;
 }
 
@@ -1113,7 +1113,7 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
         sql: branchParams.sql,
         databaseName: branchParams.databaseName,
         projectId: branchParams.projectId,
-        branchId: branchParams.branchId,
+        branchId: tempBranch.id,
         roleName: branchParams.roleName || NEON_DEFAULT_ROLE_NAME,
         analyze: true,
       },
@@ -1137,7 +1137,7 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
             tableName,
             databaseName: branchParams.databaseName,
             projectId: branchParams.projectId,
-            branchId: branchParams.branchId,
+            branchId: newBranch.branch.id,
             roleName: branchParams.roleName,
           });
           return {
@@ -1334,13 +1334,14 @@ function extractTableNamesFromPlan(planResult: any): string[] {
 interface HandlerParams {
   // ... other param types ...
   complete_query_tuning: {
+    suggestedSqlStatements: string[];
+    applyChanges: boolean;
     tuningId: string;
     databaseName: string;
     projectId: string;
     roleName?: string;
     temporaryBranchId: string;
     shouldDeleteTemporaryBranch: boolean;
-    applyChanges: boolean;
     branchId?: string;
   };
 }
@@ -1355,23 +1356,16 @@ async function handleCompleteTuning(params: CompleteTuningParams): Promise<Compl
       throw new Error('Branch information is required for completing query tuning');
     }
 
-    logger.log('Starting query tuning completion with params:', {
-      shouldDeleteTemporaryBranch: params.shouldDeleteTemporaryBranch,
-      applyChanges: params.applyChanges,
-      temporaryBranch: { id: params.temporaryBranch.id, name: params.temporaryBranch.name },
-      branch: params.branch ? { id: params.branch.id, name: params.branch.name } : undefined
-    });
-
     // Only proceed with changes if we have both suggestedChanges and branch
-    if (params.applyChanges && params.suggestedChanges && params.suggestedChanges.length > 0 && params.branch) {
-      logger.log('Applying suggested changes to branch:', params.branch.name);
+    if (params.applyChanges && params.suggestedSqlStatements && params.suggestedSqlStatements.length > 0) {
+      logger.log('Applying suggested changes to main branch', params.branch);
       operationLog.push('Applying optimizations to main branch...');
       
       results = await handleRunSqlTransaction({
-        sqlStatements: params.suggestedChanges,
+        sqlStatements: params.suggestedSqlStatements,
         databaseName: params.databaseName,
         projectId: params.projectId,
-        branchId: params.branch.id,
+        branchId: params.branch?.id,
         roleName: params.roleName,
       });
       
@@ -1397,7 +1391,7 @@ async function handleCompleteTuning(params: CompleteTuningParams): Promise<Compl
     }
 
     const result: CompleteTuningResult = {
-      appliedChanges: params.applyChanges && params.suggestedChanges ? params.suggestedChanges : undefined,
+      appliedChanges: params.applyChanges && params.suggestedSqlStatements ? params.suggestedSqlStatements : undefined,
       results,
       deletedBranches: params.shouldDeleteTemporaryBranch && params.temporaryBranch ? [params.temporaryBranch.id] : undefined,
       message: operationLog.join('\n'),
@@ -1864,13 +1858,14 @@ export const NEON_HANDLERS = {
     logger.log('Calling complete_query_tuning with params:', params);
     try {
       const result = await handleCompleteTuning({
+        suggestedSqlStatements: params.suggestedSqlStatements,
+        applyChanges: params.applyChanges,
         tuningId: params.tuningId,
         databaseName: params.databaseName,
         projectId: params.projectId,
         roleName: params.roleName,
         temporaryBranch: { id: params.temporaryBranchId, project_id: params.projectId } as Branch,
         shouldDeleteTemporaryBranch: params.shouldDeleteTemporaryBranch,
-        applyChanges: params.applyChanges,
         branch: params.branchId ? { id: params.branchId, project_id: params.projectId } as Branch : undefined,
       });
 

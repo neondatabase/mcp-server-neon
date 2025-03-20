@@ -239,6 +239,8 @@ export const prepareQueryTuningInputSchema = z.object({
 });
 
 export const completeQueryTuningInputSchema = z.object({
+  suggestedSqlStatements: z.array(z.string()).describe('The SQL DDL statements to execute to improve eperformance. These statements are the result of the prior steps, for example creating additional indexes.'),
+  applyChanges: z.boolean().default(false).describe('Whether to apply the suggested changes to the main branch'),
   tuningId: z
   .string()
   .describe('The ID of the tuning to complete. This is NOT the branch ID. Remember this ID from the prior step using tool prepare_query_tuning.'),
@@ -253,7 +255,6 @@ export const completeQueryTuningInputSchema = z.object({
     .optional()
     .describe('The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.'),
   shouldDeleteTemporaryBranch: z.boolean().default(true).describe('Whether to delete the temporary branch after tuning'),
-  applyChanges: z.boolean().default(false).describe('Whether to apply the suggested changes to the main branch'),
   temporaryBranchId: z
     .string()
     .describe(
