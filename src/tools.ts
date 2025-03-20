@@ -544,10 +544,14 @@ export const NEON_TOOLS = [
     name: 'complete_query_tuning' as const,
     description: `Complete a query tuning session by either applying the changes to the main branch or discarding them. 
     <important_notes>
-        This tool is the ONLY way to apply changes suggested by the 'prepare_query_tuning' tool.
+        BEFORE RUNNING THIS TOOL: test out the changes in the temporary branch first by running 
+        - 'run_sql' with the suggested DDL statements.
+        - 'explain_sql_statement' with the original query and the temporary branch.
+        This tool is the ONLY way to finally apply changes afterthe 'prepare_query_tuning' tool to the main branch.
         You MUST NOT use 'prepare_database_migration' or other tools to apply query tuning changes.
         You MUST pass the tuning_id obtained from the 'prepare_query_tuning' tool, NOT the temporary branch ID as tuning_id to this tool.
         You MUSt pass the temporary branch ID used in the 'prepare_query_tuning' tool as TEMPORARY branchId to this tool.
+        If you have used a specific roleName before you MUST pass it again to this tool.
         The tool OPTIONALLY receives a second branch ID or name which can be used instead of the main branch to apply the changes.
         This tool MUST be called after tool 'prepare_query_tuning' even when the user rejects the changes, to ensure proper cleanup of temporary branches.
     </important_notes>    

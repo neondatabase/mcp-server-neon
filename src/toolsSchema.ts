@@ -253,7 +253,7 @@ export const completeQueryTuningInputSchema = z.object({
   roleName: z
     .string()
     .optional()
-    .describe('The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.'),
+    .describe('The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used. If you have used a specific roleName before you MUST pass it again to this tool.'),
   shouldDeleteTemporaryBranch: z.boolean().default(true).describe('Whether to delete the temporary branch after tuning'),
   temporaryBranchId: z
     .string()
