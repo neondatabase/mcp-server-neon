@@ -242,6 +242,27 @@ export const completeQueryTuningInputSchema = z.object({
   tuningId: z
   .string()
   .describe('The ID of the tuning to complete. This is NOT the branch ID. Remember this ID from the prior step using tool prepare_query_tuning.'),
-  shouldDeleteBranch: z.boolean().default(true).describe('Whether to delete the temporary branch after tuning'),
+  databaseName: z
+    .string()
+    .describe('The name of the database to execute the query against'),
+  projectId: z
+    .string()
+    .describe('The ID of the project to execute the query against'),
+  roleName: z
+    .string()
+    .optional()
+    .describe('The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.'),
+  shouldDeleteTemporaryBranch: z.boolean().default(true).describe('Whether to delete the temporary branch after tuning'),
   applyChanges: z.boolean().default(false).describe('Whether to apply the suggested changes to the main branch'),
+  temporaryBranchId: z
+    .string()
+    .describe(
+      'The ID of the temporary branch that needs to be deleted after tuning.',
+    ),
+  branchId: z
+    .string()
+    .optional()
+    .describe(
+      'The ID or name of the branch that receives the changes. If not provided, the default (main) branch will be used.',
+    ),
 });

@@ -546,13 +546,15 @@ export const NEON_TOOLS = [
     <important_notes>
         This tool is the ONLY way to apply changes suggested by the 'prepare_query_tuning' tool.
         You MUST NOT use 'prepare_database_migration' or other tools to apply query tuning changes.
-        You MUST pass the tuning_id obtained from the 'prepare_query_tuning' tool, NOT the temporary branch ID to this tool.
+        You MUST pass the tuning_id obtained from the 'prepare_query_tuning' tool, NOT the temporary branch ID as tuning_id to this tool.
+        You MUSt pass the temporary branch ID used in the 'prepare_query_tuning' tool as TEMPORARY branchId to this tool.
+        The tool OPTIONALLY receives a second branch ID or name which can be used instead of the main branch to apply the changes.
         This tool MUST be called after tool 'prepare_query_tuning' even when the user rejects the changes, to ensure proper cleanup of temporary branches.
     </important_notes>    
 
     This tool:
-    1. Applies suggested changes (like creating indexes) to the main branch if approved
-    2. Handles cleanup of temporary branches
+    1. Applies suggested changes (like creating indexes) to the main branch (or specified branch) if approved
+    2. Handles cleanup of temporary branch
     3. Must be called even when changes are rejected to ensure proper cleanup
 
     Workflow:
@@ -1048,15 +1050,23 @@ interface QueryTuningParams {
 }
 
 interface CompleteTuningParams {
-  tuningId?: string;
-  shouldDeleteBranch?: boolean;
+  tuningId: string;
+  databaseName: string;
+  projectId: string;
+  roleName?: string;
+  temporaryBranch: Branch;
+  shouldDeleteTemporaryBranch?: boolean;
   applyChanges?: boolean;
   suggestedChanges?: string[];
   branch?: Branch;
 }
 
 interface QueryTuningResult {
-  branch: Branch;
+  tuningId: string;
+  databaseName: string;
+  projectId: string;
+  roleName?: string;
+  temporaryBranch: Branch;
   originalPlan: any;
   tableSchemas: any[];
   sql: string;
@@ -1072,9 +1082,11 @@ interface CompleteTuningResult {
 
 async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuningResult> {
   let tempBranch: Branch | undefined;
+  const tuningId = crypto.randomUUID();
   
   try {
     logger.log('Starting query tuning process with params:', {
+      tuningId,
       ...params,
       sql: params.sql.substring(0, 100) + (params.sql.length > 100 ? '...' : '')
     });
@@ -1145,7 +1157,11 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
     
     // Return the information for analysis
     const result: QueryTuningResult = {
-      branch: tempBranch,
+      tuningId,
+      databaseName: params.databaseName,
+      projectId: params.projectId,
+      roleName: params.roleName,
+      temporaryBranch: tempBranch,
       originalPlan: executionPlan,
       tableSchemas,
       sql: params.sql,
@@ -1317,13 +1333,15 @@ function extractTableNamesFromPlan(planResult: any): string[] {
 
 interface HandlerParams {
   // ... other param types ...
-  
   complete_query_tuning: {
     tuningId: string;
-    shouldDeleteBranch?: boolean;
-    applyChanges?: boolean;
-    suggestedChanges?: string[];
-    branch?: Branch;
+    databaseName: string;
+    projectId: string;
+    roleName?: string;
+    temporaryBranchId: string;
+    shouldDeleteTemporaryBranch: boolean;
+    applyChanges: boolean;
+    branchId?: string;
   };
 }
 
@@ -1333,27 +1351,28 @@ async function handleCompleteTuning(params: CompleteTuningParams): Promise<Compl
   
   try {
     // Validate branch information
-    if (!params.branch) {
+    if (!params.temporaryBranch) {
       throw new Error('Branch information is required for completing query tuning');
     }
 
     logger.log('Starting query tuning completion with params:', {
-      shouldDeleteBranch: params.shouldDeleteBranch,
+      shouldDeleteTemporaryBranch: params.shouldDeleteTemporaryBranch,
       applyChanges: params.applyChanges,
-      branch: { id: params.branch.id, name: params.branch.name }
+      temporaryBranch: { id: params.temporaryBranch.id, name: params.temporaryBranch.name },
+      branch: params.branch ? { id: params.branch.id, name: params.branch.name } : undefined
     });
 
     // Only proceed with changes if we have both suggestedChanges and branch
-    if (params.applyChanges && params.suggestedChanges && params.suggestedChanges.length > 0) {
-      logger.log('Applying suggested changes to main branch:', params.branch.parent_id);
+    if (params.applyChanges && params.suggestedChanges && params.suggestedChanges.length > 0 && params.branch) {
+      logger.log('Applying suggested changes to branch:', params.branch.name);
       operationLog.push('Applying optimizations to main branch...');
       
-      // Apply changes to main branch only if requested
       results = await handleRunSqlTransaction({
         sqlStatements: params.suggestedChanges,
-        databaseName: 'neondb', // TODO: Pass this from the calling function
-        projectId: params.branch.project_id,
-        branchId: params.branch.parent_id, // Explicitly use parent branch ID
+        databaseName: params.databaseName,
+        projectId: params.projectId,
+        branchId: params.branch.id,
+        roleName: params.roleName,
       });
       
       logger.log('Successfully applied changes to main branch');
@@ -1363,14 +1382,14 @@ async function handleCompleteTuning(params: CompleteTuningParams): Promise<Compl
       operationLog.push('No changes were applied (either none suggested or changes were discarded).');
     }
 
-    // Only delete branch if shouldDeleteBranch is true
-    if (params.shouldDeleteBranch) {
-      logger.log('Cleaning up temporary branch:', params.branch.id);
+    // Only delete branch if shouldDeleteTemporaryBranch is true
+    if (params.shouldDeleteTemporaryBranch && params.temporaryBranch) {
+      logger.log('Cleaning up temporary branch:', params.temporaryBranch.id);
       operationLog.push('Cleaning up temporary branch...');
       
       await handleDeleteBranch({
-        projectId: params.branch.project_id,
-        branchId: params.branch.id,
+        projectId: params.projectId,
+        branchId: params.temporaryBranch.id,
       });
       
       logger.log('Successfully cleaned up temporary branch');
@@ -1380,7 +1399,7 @@ async function handleCompleteTuning(params: CompleteTuningParams): Promise<Compl
     const result: CompleteTuningResult = {
       appliedChanges: params.applyChanges && params.suggestedChanges ? params.suggestedChanges : undefined,
       results,
-      deletedBranches: params.shouldDeleteBranch ? [params.branch.id] : undefined,
+      deletedBranches: params.shouldDeleteTemporaryBranch && params.temporaryBranch ? [params.temporaryBranch.id] : undefined,
       message: operationLog.join('\n'),
     };
     
@@ -1823,7 +1842,11 @@ export const NEON_HANDLERS = {
           {
             type: 'text',
             text: JSON.stringify({
-              branch: result.branch,
+              tuningId: result.tuningId,
+              databaseName: result.databaseName,
+              projectId: result.projectId,
+              roleName: result.roleName,
+              temporaryBranch: result.temporaryBranch,
               executionPlan: result.originalPlan,
               tableSchemas: result.tableSchemas,
               sql: result.sql
@@ -1842,11 +1865,15 @@ export const NEON_HANDLERS = {
     try {
       const result = await handleCompleteTuning({
         tuningId: params.tuningId,
-        shouldDeleteBranch: params.shouldDeleteBranch ?? true,
-        applyChanges: params.applyChanges ?? false,
-        suggestedChanges: params.suggestedChanges,
-        branch: params.branch,
+        databaseName: params.databaseName,
+        projectId: params.projectId,
+        roleName: params.roleName,
+        temporaryBranch: { id: params.temporaryBranchId, project_id: params.projectId } as Branch,
+        shouldDeleteTemporaryBranch: params.shouldDeleteTemporaryBranch,
+        applyChanges: params.applyChanges,
+        branch: params.branchId ? { id: params.branchId, project_id: params.projectId } as Branch : undefined,
       });
+
       logger.log('Query tuning completion result:', result);
       return {
         content: [
