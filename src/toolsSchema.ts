@@ -239,7 +239,9 @@ export const prepareQueryTuningInputSchema = z.object({
 });
 
 export const completeQueryTuningInputSchema = z.object({
-  tuningId: z.string(),
+  tuningId: z
+  .string()
+  .describe('The ID of the tuning to complete. This is NOT the branch ID. Remember this ID from the prior step using tool prepare_query_tuning.'),
   shouldDeleteBranch: z.boolean().default(true).describe('Whether to delete the temporary branch after tuning'),
   applyChanges: z.boolean().default(false).describe('Whether to apply the suggested changes to the main branch'),
 });

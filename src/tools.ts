@@ -69,13 +69,32 @@ export const NEON_TOOLS = [
   },
   {
     name: 'run_sql' as const,
-    description: 'Execute a single SQL statement against a Neon database',
+    description: `
+    <use_case>
+      Use this tool to execute a single SQL statement against a Neon database.
+    </use_case>
+
+    <important_notes>
+      If you have a temporary branch from a prior step, you MUST:
+      1. Pass the branch ID to this tool unless explicitly told otherwise
+      2. Tell the user that you are using the temporary branch with ID [branch_id]
+    </important_notes>
+                 `,
     inputSchema: runSqlInputSchema,
   },
   {
     name: 'run_sql_transaction' as const,
-    description:
-      'Execute a SQL transaction against a Neon database, should be used for multiple SQL statements',
+    description: `
+    <use_case>
+      Use this tool to execute a SQL transaction against a Neon database, should be used for multiple SQL statements.
+    </use_case>
+
+    <important_notes>
+      If you have a temporary branch from a prior step, you MUST:
+      1. Pass the branch ID to this tool unless explicitly told otherwise
+      2. Tell the user that you are using the temporary branch with ID [branch_id]
+    </important_notes>
+                 `,
     inputSchema: runSqlTransactionInputSchema,
   },
   {
@@ -524,24 +543,25 @@ export const NEON_TOOLS = [
   {
     name: 'complete_query_tuning' as const,
     description: `Complete a query tuning session by either applying the changes to the main branch or discarding them. 
-    
-IMPORTANT: This tool is the ONLY way to apply changes suggested by the 'prepare_query_tuning' tool.
-DO NOT use 'prepare_database_migration' or other tools to apply query tuning changes.
+    <important_notes>
+        This tool is the ONLY way to apply changes suggested by the 'prepare_query_tuning' tool.
+        You MUST NOT use 'prepare_database_migration' or other tools to apply query tuning changes.
+        You MUST pass the tuning_id obtained from the 'prepare_query_tuning' tool, NOT the temporary branch ID to this tool.
+        This tool MUST be called after tool 'prepare_query_tuning' even when the user rejects the changes, to ensure proper cleanup of temporary branches.
+    </important_notes>    
 
-This tool:
-1. Applies suggested changes (like creating indexes) to the main branch if approved
-2. Handles cleanup of temporary branches
-3. Must be called even when changes are rejected to ensure proper cleanup
+    This tool:
+    1. Applies suggested changes (like creating indexes) to the main branch if approved
+    2. Handles cleanup of temporary branches
+    3. Must be called even when changes are rejected to ensure proper cleanup
 
-Workflow:
-1. After 'prepare_query_tuning' suggests changes
-2. User reviews and approves/rejects changes
-3. This tool is called to either:
-   - Apply approved changes to main branch and cleanup
-   - OR just cleanup if changes are rejected
-
-Note: This tool should be called even when the user rejects the changes, 
-to ensure proper cleanup of temporary branches.`,
+    Workflow:
+    1. After 'prepare_query_tuning' suggests changes
+    2. User reviews and approves/rejects changes
+    3. This tool is called to either:
+      - Apply approved changes to main branch and cleanup
+      - OR just cleanup if changes are rejected
+                 `,
     inputSchema: completeQueryTuningInputSchema,
   },
 ];
