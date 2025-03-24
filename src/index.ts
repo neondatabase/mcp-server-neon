@@ -2,6 +2,7 @@
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { NEON_HANDLERS, NEON_TOOLS, ToolHandler } from './tools.js';
+import { NEON_RESOURCES } from './resources.js';
 import { handleInit, parseArgs } from './initConfig.js';
 import { createApiClient } from '@neondatabase/api-client';
 import './polyfills.js';
@@ -15,7 +16,6 @@ const packageJson = JSON.parse(
   fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'),
 );
 
-import { NEON_RESOURCES } from './resources.js';
 const commands = ['init', 'start'] as const;
 const { command, neonApiKey, executablePath } = parseArgs();
 if (!commands.includes(command as (typeof commands)[number])) {
@@ -42,14 +42,10 @@ export const neonClient = createApiClient({
   },
 });
 
-const server = new McpServer({
-  name: 'mcp-server-neon',
-  version: packageJson.version,
-});
 const server = new McpServer(
   {
     name: 'mcp-server-neon',
-    version: '0.1.0',
+    version: packageJson.version,
   },
   {
     capabilities: {

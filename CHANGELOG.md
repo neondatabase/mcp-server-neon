@@ -1,5 +1,9 @@
 # Changelog
 
+## UNRELEASED
+
+- Add `neon-auth`, `neon-serverless`, and `neon-drizzle` resources
+
 ## [0.3.3] - 2025-03-19
 
 - Fix the API Host
@@ -11,10 +15,6 @@
 ## [0.3.1] - 2025-03-19
 
 - Add User-Agent to api calls from mcp server
-
-## UNRELEASED
-
-- Add `neon-auth`, `neon-serverless`, and `neon-drizzle` resources
 
 ## [0.3.0] - 2025-03-14
 
