@@ -13,16 +13,14 @@ let claudeConfigPath: string;
 const platform = os.platform();
 
 if (platform === 'win32') {
-  // Windows path
+  // Windows path - using %APPDATA% which is equivalent to AppData/Roaming
   claudeConfigPath = path.join(
-    os.homedir(),
-    'AppData',
-    'Roaming',
+    process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'),
     'Claude',
     'claude_desktop_config.json',
   );
-} else if (platform === 'darwin') {
-  // macOS path
+} else if (platform === 'darwin' || platform === 'linux') {
+  // macOS and Linux path (according to official docs, they use the same path)
   claudeConfigPath = path.join(
     os.homedir(),
     'Library',
@@ -31,7 +29,7 @@ if (platform === 'win32') {
     'claude_desktop_config.json',
   );
 } else {
-  // Linux and other platforms default to .config directory
+  // Fallback for other platforms
   claudeConfigPath = path.join(
     os.homedir(),
     '.config',
