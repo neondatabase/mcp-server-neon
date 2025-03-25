@@ -3,6 +3,7 @@
 ## UNRELEASED
 
 - Add `neon-auth`, `neon-serverless`, and `neon-drizzle` resources
+- Fix initialization on Windows by implementing correct platform-specific paths for Claude configuration
 
 ## [0.3.3] - 2025-03-19
 
