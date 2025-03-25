@@ -8,13 +8,37 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(
   fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'),
 );
-const claudeConfigPath = path.join(
-  os.homedir(),
-  'Library',
-  'Application Support',
-  'Claude',
-  'claude_desktop_config.json',
-);
+// Determine Claude config path based on OS platform
+let claudeConfigPath: string;
+const platform = os.platform();
+
+if (platform === 'win32') {
+  // Windows path
+  claudeConfigPath = path.join(
+    os.homedir(),
+    'AppData',
+    'Roaming',
+    'Claude',
+    'claude_desktop_config.json',
+  );
+} else if (platform === 'darwin') {
+  // macOS path
+  claudeConfigPath = path.join(
+    os.homedir(),
+    'Library',
+    'Application Support',
+    'Claude',
+    'claude_desktop_config.json',
+  );
+} else {
+  // Linux and other platforms default to .config directory
+  claudeConfigPath = path.join(
+    os.homedir(),
+    '.config',
+    'Claude',
+    'claude_desktop_config.json',
+  );
+}
 
 const MCP_NEON_SERVER = 'neon';
 
