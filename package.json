@@ -36,12 +36,15 @@
     "express": "5.0.1",
     "express-openid-connect": "2.18.0",
     "fastify": "5.2.2",
+    "morgan": "1.10.0",
     "node-fetch": "2.7.0",
+    "winston": "3.17.0",
     "zod": "3.24.1"
   },
   "devDependencies": {
     "@eslint/js": "9.21.0",
     "@types/express": "5.0.1",
+    "@types/morgan": "1.9.9",
     "@types/node": "20.17.9",
     "@types/node-fetch": "2.6.12",
     "autoevals": "0.0.111",

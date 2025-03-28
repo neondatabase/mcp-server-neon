@@ -1,14 +1,9 @@
 #!/usr/bin/env node
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { createApiClient } from '@neondatabase/api-client';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'url';
 import { NEON_RESOURCES } from '../resources.js';
 import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools.js';
-import chalk from 'chalk';
-import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { logger } from '../utils/logger.js';
 import { createNeonClient, getPackageJson } from './api.js';
 
 export const createMcpServer = async (apiKey: string) => {
@@ -27,11 +22,7 @@ export const createMcpServer = async (apiKey: string) => {
     },
   );
 
-  console.log(chalk.green('Access Token:'), apiKey);
   const neonClient = createNeonClient(apiKey);
-
-  const projects = await neonClient.listProjects({ limit: 3 });
-  console.log(chalk.green('Projects:'), projects.data.projects);
 
   // Register tools
   NEON_TOOLS.forEach((tool) => {
@@ -47,7 +38,7 @@ export const createMcpServer = async (apiKey: string) => {
       tool.description,
       { params: tool.inputSchema },
       async ({ params }, extra) => {
-        console.log(chalk.green('Tool called:'), tool.name, params);
+        logger.info('Tool called', { tool: tool.name, params });
         return await toolHandler({ params }, neonClient, extra);
       },
     );
