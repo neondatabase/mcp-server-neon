@@ -9,17 +9,13 @@ import { NEON_RESOURCES } from '../resources.js';
 import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools.js';
 import chalk from 'chalk';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const packageJson = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '../..', 'package.json'), 'utf8'),
-);
+import { createNeonClient, getPackageJson } from './api.js';
 
 export const createMcpServer = async (apiKey: string) => {
   const server = new McpServer(
     {
       name: 'mcp-server-neon',
-      version: packageJson.version,
+      version: getPackageJson().version,
     },
     {
       capabilities: {
@@ -31,14 +27,11 @@ export const createMcpServer = async (apiKey: string) => {
     },
   );
 
-  // Remove 'Bearer ' prefix if present
-  apiKey = apiKey.startsWith('Bearer ') ? apiKey.slice(7) : apiKey;
-  const neonClient = createApiClient({
-    apiKey,
-    headers: {
-      'User-Agent': `mcp-server-neon/${packageJson.version}`,
-    },
-  });
+  console.log(chalk.green('Access Token:'), apiKey);
+  const neonClient = createNeonClient(apiKey);
+
+  const projects = await neonClient.listProjects({ limit: 3 });
+  console.log(chalk.green('Projects:'), projects.data.projects);
 
   // Register tools
   NEON_TOOLS.forEach((tool) => {

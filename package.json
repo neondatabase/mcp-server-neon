@@ -34,6 +34,7 @@
     "@neondatabase/serverless": "0.10.4",
     "chalk": "5.3.0",
     "express": "5.0.1",
+    "express-openid-connect": "2.18.0",
     "fastify": "5.2.2",
     "node-fetch": "2.7.0",
     "zod": "3.24.1"
