@@ -7,13 +7,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'url';
 import { NEON_RESOURCES } from '../resources.js';
 import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools.js';
+import chalk from 'chalk';
+import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(
   fs.readFileSync(path.join(__dirname, '../..', 'package.json'), 'utf8'),
 );
 
-export const createMcpServer = (apiKey: string) => {
+export const createMcpServer = async (apiKey: string) => {
   const server = new McpServer(
     {
       name: 'mcp-server-neon',
@@ -21,12 +23,16 @@ export const createMcpServer = (apiKey: string) => {
     },
     {
       capabilities: {
-        tools: {},
+        tools: {
+          list_projects: undefined,
+        },
         resources: {},
       },
     },
   );
 
+  // Remove 'Bearer ' prefix if present
+  apiKey = apiKey.startsWith('Bearer ') ? apiKey.slice(7) : apiKey;
   const neonClient = createApiClient({
     apiKey,
     headers: {
@@ -48,6 +54,7 @@ export const createMcpServer = (apiKey: string) => {
       tool.description,
       { params: tool.inputSchema },
       async ({ params }, extra) => {
+        console.log(chalk.green('Tool called:'), tool.name, params);
         return await toolHandler({ params }, neonClient, extra);
       },
     );
@@ -65,6 +72,18 @@ export const createMcpServer = (apiKey: string) => {
       resource.handler,
     );
   });
+
+  // server.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  //   const { name, arguments: args } = request.params;
+  //   console.log(chalk.green('Tool called:'), name, args);
+  //   return {
+  //     text: 'Hello, world!',
+  //     result: 'success',
+  //   };
+  // });
+  // server.server.onerror = (error) => {
+  //   console.error(chalk.red('Server error:'), error);
+  // };
 
   return server;
 };

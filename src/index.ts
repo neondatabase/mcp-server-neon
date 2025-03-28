@@ -2,10 +2,11 @@
 
 import { handleInit, parseArgs } from './initConfig.js';
 import { createMcpServer } from './server/index.js';
+import { createSseTransport } from './transports/sse-express.js';
 import { startStdio } from './transports/stdio.js';
 import './utils/polyfills.js';
 
-const commands = ['init', 'start'] as const;
+const commands = ['init', 'start', 'start:sse'] as const;
 const { command, neonApiKey, executablePath } = parseArgs();
 if (!commands.includes(command as (typeof commands)[number])) {
   console.error(`Invalid command: ${command}`);
@@ -20,9 +21,13 @@ if (command === 'init') {
   process.exit(0);
 }
 
+if (command === 'start:sse') {
+  await createSseTransport();
+}
+
 if (command === 'start') {
   try {
-    const server = createMcpServer(neonApiKey);
+    const server = await createMcpServer(neonApiKey);
     await startStdio(server);
   } catch (error) {
     console.error('Server error:', error);

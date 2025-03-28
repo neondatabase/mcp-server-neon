@@ -42,6 +42,14 @@ export const parseArgs = () => {
     process.exit(1);
   }
 
+  if (args.length === 3 && args[2] === 'start:sse') {
+    return {
+      executablePath: args[1],
+      command: 'start:sse',
+      neonApiKey: args[3],
+    };
+  }
+
   if (args.length !== 4) {
     console.error('Invalid number of arguments');
     process.exit(1);

@@ -25,18 +25,22 @@
     "lint:fix": "npm run typecheck && eslint src --fix && prettier --w .",
     "prerelease": "npm run build",
     "prepublishOnly": "bun scripts/before-publish.ts",
-    "test": "npx braintrust eval src/tools-evaluations"
+    "test": "npx braintrust eval src/tools-evaluations",
+    "start:sse": "node dist/sse/index.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.6.0",
     "@neondatabase/api-client": "2.0.0",
     "@neondatabase/serverless": "0.10.4",
     "chalk": "5.3.0",
+    "express": "5.0.1",
+    "fastify": "5.2.2",
     "node-fetch": "2.7.0",
     "zod": "3.24.1"
   },
   "devDependencies": {
     "@eslint/js": "9.21.0",
+    "@types/express": "5.0.1",
     "@types/node": "20.17.9",
     "@types/node-fetch": "2.6.12",
     "autoevals": "0.0.111",
