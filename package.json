@@ -37,8 +37,6 @@
     "cors": "2.8.5",
     "dotenv": "16.4.7",
     "express": "5.0.1",
-    "express-oauth-server": "2.0.0",
-    "express-openid-connect": "2.18.0",
     "fastify": "5.2.2",
     "morgan": "1.10.0",
     "node-fetch": "2.7.0",
