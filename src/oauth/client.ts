@@ -6,11 +6,12 @@ import {
   authorizationCodeGrant,
   None,
 } from 'openid-client';
-
-const CLIENT_ID = 'mcpserver';
-const CLIENT_SECRET = 'mcpserversecret';
-const UPSTREAM_OAUTH_HOST = 'http://localhost:4444';
-const REDIRECT_URI = 'http://localhost:3001/callback';
+import {
+  CLIENT_ID,
+  CLIENT_SECRET,
+  UPSTREAM_OAUTH_HOST,
+  REDIRECT_URI,
+} from '../constants.js';
 
 const ALWAYS_PRESENT_SCOPES = ['openid', 'offline', 'offline_access'] as const;
 const NEONCTL_SCOPES = [

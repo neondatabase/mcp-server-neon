@@ -4,6 +4,7 @@ import { createMcpServer } from '../server/index.js';
 import { createNeonClient } from '../server/api.js';
 import { logger, morganConfig, errorHandler } from '../utils/logger.js';
 import { authRouter } from '../oauth/server.js';
+import { SERVER_PORT, SERVER_HOST } from '../constants.js';
 import {
   ensureCorsHeaders,
   extractBearerToken,
@@ -80,8 +81,8 @@ export const createSseTransport = async () => {
   }) as RequestHandler);
 
   try {
-    app.listen({ port: 3001 });
-    logger.info('Server started on port 3001');
+    app.listen({ port: SERVER_PORT });
+    logger.info(`Server started on ${SERVER_HOST}`);
   } catch (err) {
     logger.error('Failed to start server:', err);
     process.exit(1);
