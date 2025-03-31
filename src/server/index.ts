@@ -14,9 +14,7 @@ export const createMcpServer = async (apiKey: string) => {
     },
     {
       capabilities: {
-        tools: {
-          list_projects: undefined,
-        },
+        tools: {},
         resources: {},
       },
     },
@@ -36,10 +34,14 @@ export const createMcpServer = async (apiKey: string) => {
     server.tool(
       tool.name,
       tool.description,
-      { params: tool.inputSchema },
-      async ({ params }, extra) => {
-        logger.info('Tool called', { tool: tool.name, params });
-        return await toolHandler({ params }, neonClient, extra);
+      // In case of no input parameters, the tool is invoked with an empty`{}`
+      // however zod expects `{params: {}}`
+      // To workaround this, we use `optional()`
+      { params: tool.inputSchema.optional() },
+      async (args, extra) => {
+        logger.info('tool call:', { tool: tool.name, args });
+        // @ts-expect-error: Ignore zod optional
+        return await toolHandler(args, neonClient, extra);
       },
     );
   });
@@ -65,9 +67,9 @@ export const createMcpServer = async (apiKey: string) => {
   //     result: 'success',
   //   };
   // });
-  // server.server.onerror = (error) => {
-  //   console.error(chalk.red('Server error:'), error);
-  // };
+  server.server.onerror = (error) => {
+    logger.error('Server error:', { error });
+  };
 
   return server;
 };
