@@ -29,6 +29,7 @@
     "start:sse": "node dist/sse/index.js"
   },
   "dependencies": {
+    "@keyv/postgres": "2.1.2",
     "@modelcontextprotocol/sdk": "1.6.0",
     "@neondatabase/api-client": "2.0.0",
     "@neondatabase/serverless": "0.10.4",
@@ -38,6 +39,7 @@
     "dotenv": "16.4.7",
     "express": "5.0.1",
     "fastify": "5.2.2",
+    "keyv": "5.3.2",
     "morgan": "1.10.0",
     "node-fetch": "2.7.0",
     "oauth2-server": "3.1.1",
