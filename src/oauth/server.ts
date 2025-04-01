@@ -25,11 +25,7 @@ export const metadata = (req: ExpressRequest, res: ExpressResponse) => {
     response_types_supported: ['code'],
     response_modes_supported: ['query'],
     grant_types_supported: ['authorization_code', 'refresh_token'],
-    token_endpoint_auth_methods_supported: [
-      'client_secret_basic',
-      'client_secret_post',
-      'none',
-    ],
+    token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
     registration_endpoint_auth_methods_supported: ['none'],
     code_challenge_methods_supported: ['S256'],
   });
@@ -55,6 +51,8 @@ export const registerClient = async (
       redirectUris: redirect_uris,
       grants: grant_types,
       responseTypes: response_types,
+      tokenEndpointAuthMethod:
+        (req.body.token_endpoint_auth_method as string) ?? 'client_secret_post',
     };
 
     await model.saveClient(client);
@@ -82,6 +80,19 @@ export const registerClient = async (
 const authRouter = express.Router();
 authRouter.get('/.well-known/oauth-authorization-server', metadata);
 authRouter.post('/register', bodyParser.json(), registerClient);
+
+/*
+  Initiate the authorization code grant flow by redirecting to the upstream
+  authorization server.
+  
+  Step 1:
+  MCP client should invoke this endpoint with the following parameters:
+  <code>
+    /authorize?client_id=clientId&redirect_uri=mcp://callback&response_type=code&scope=scope&code_challenge=codeChallenge&code_challenge_method=S256
+  </code>
+
+  This endpoint will capture the parameters on `state` param and redirect to the upstream authorization server.
+*/
 authRouter.get(
   '/authorize',
   bodyParser.urlencoded({ extended: true }),
@@ -91,6 +102,21 @@ authRouter.get(
     res.redirect(authUrl.href);
   },
 );
+
+/*
+  Handles the callback from the upstream authorization server and completes the authorization code grant flow with downstream MCP client.
+
+  Step 2:
+  Upstream authorization server will redirect to `/callback` with the authorization code.
+  <code>
+    /callback?code=authorizationCode&state=state
+  </code>
+
+  - Exchange the upstream authorization code for an access token.
+  - Generate new authorization code and grant id.
+  - Save the authorization code and access token in the database.
+  - Redirect to the MCP client with the new authorization code.
+*/
 authRouter.get(
   '/callback',
   bodyParser.urlencoded({ extended: true }),
@@ -99,50 +125,65 @@ authRouter.get(
     const state = req.query.state as string;
     const requestParams = decodeAuthParams(state);
 
-    if (requestParams.responseType === 'code') {
-      const grantId = generateRandomString(16);
-      const secret = generateRandomString(32);
-      const authCode = `${grantId}:${secret}`;
-      const clientId = requestParams.clientId;
-
-      const neonClient = createNeonClient(tokens.access_token);
-
-      const { data: user } = await neonClient.getCurrentUserInfo();
-
-      // Save the authorization code with associated data
-      const code: AuthorizationCode = {
-        authorizationCode: authCode,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
-        redirectUri: requestParams.redirectUri,
-        scope: requestParams.scope.join(' '),
-        client: await model.getClient(clientId, ''),
-        user: {
-          id: user.id,
-          access_token: tokens.access_token,
-          refresh_token: tokens.refresh_token,
-          email: user.email,
-          name: `${user.name} ${user.last_name}`.trim(),
-        },
-      };
-
-      await model.saveAuthorizationCode(code);
-
-      // Redirect back to client with auth code
-      const redirectUrl = new URL(requestParams.redirectUri);
-      redirectUrl.searchParams.set('code', authCode);
-      redirectUrl.searchParams.set('state', requestParams.state);
-
-      res.redirect(redirectUrl.href);
-    } else {
-      res.status(401).json({
-        message: 'Callback received',
-        state,
-        requestParams,
-      });
+    // Implicit grant or `response_type=token` is not supported
+    if (requestParams.responseType !== 'code') {
+      res.status(400).json({ error: 'invalid response type' });
+      return;
     }
+
+    // Standard authorization code grant
+    const grantId = generateRandomString(16);
+    const secret = generateRandomString(32);
+    const authCode = `${grantId}:${secret}`;
+    const clientId = requestParams.clientId;
+
+    // Get the user's info from Neon
+    const neonClient = createNeonClient(tokens.access_token);
+    const { data: user } = await neonClient.getCurrentUserInfo();
+
+    // Save the authorization code with associated data
+    const code: AuthorizationCode = {
+      authorizationCode: authCode,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+      createdAt: Date.now(),
+      redirectUri: requestParams.redirectUri,
+      scope: requestParams.scope.join(' '),
+      client: await model.getClient(clientId, ''),
+      user: {
+        id: user.id,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        email: user.email,
+        name: `${user.name} ${user.last_name}`.trim(),
+      },
+    };
+
+    await model.saveAuthorizationCode(code);
+
+    // Redirect back to client with auth code
+    const redirectUrl = new URL(requestParams.redirectUri);
+    redirectUrl.searchParams.set('code', authCode);
+    if (requestParams.state) {
+      redirectUrl.searchParams.set('state', requestParams.state);
+    }
+
+    res.redirect(redirectUrl.href);
   },
 );
 
+/*
+  Handles the token exchange for `code` and `refresh_token` grant types with downstream MCP client.
+
+  Step 3:
+  MCP client should invoke this endpoint after receiving the authorization code to exchange for an access token.
+  <code>
+    /token?client_id=clientId&grant_type=code&code=authorizationCode
+  </code>
+
+  - Verify the authorization code, grant type and client
+  - Save the access token and refresh token in the database for further API requests verification
+  - Return with access token and refresh token
+*/
 authRouter.post(
   '/token',
   bodyParser.urlencoded({ extended: true }),
@@ -159,10 +200,7 @@ authRouter.post(
       return;
     }
 
-    const client = await model.getClient(
-      formData.client_id,
-      formData.client_secret,
-    );
+    const client = await model.getClient(formData.client_id, '');
     if (!client) {
       res
         .status(400)
@@ -193,6 +231,9 @@ authRouter.post(
         return;
       }
 
+      // TODO: Verify PKCE code challenge before generating tokens
+
+      // TODO: Generate fresh tokens and add mapping to database.
       const token = await model.saveToken({
         accessToken: authorizationCode.user.access_token,
         refreshToken: authorizationCode.user.refresh_token,
@@ -204,12 +245,13 @@ authRouter.post(
       await model.revokeAuthorizationCode(authorizationCode);
       res.json({
         access_token: token.accessToken,
-        token_type: 'bearer',
+        token_type: 'bearer', // TODO: Verify why non-bearer tokens are not working
         refresh_token: token.refreshToken,
         scope: authorizationCode.scope,
       });
       return;
     }
+    // TODO: Implement refresh token grant
     res.status(400).json({ error: 'invalid grant type' });
   },
 );
