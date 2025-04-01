@@ -4,13 +4,14 @@ import {
   allowInsecureRequests,
   buildAuthorizationUrl,
   authorizationCodeGrant,
-  None,
+  ClientSecretPost,
 } from 'openid-client';
 import {
   CLIENT_ID,
   CLIENT_SECRET,
   UPSTREAM_OAUTH_HOST,
   REDIRECT_URI,
+  IS_DEV,
 } from '../constants.js';
 
 const ALWAYS_PRESENT_SCOPES = ['openid', 'offline', 'offline_access'] as const;
@@ -27,6 +28,11 @@ const NEONCTL_SCOPES = [
   'urn:neoncloud:orgs:permission',
 ] as const;
 
+const options = IS_DEV
+  ? {
+      execute: [allowInsecureRequests],
+    }
+  : {};
 const getUpstreamConfig = async () => {
   const url = new URL(UPSTREAM_OAUTH_HOST);
   const config = await discovery(
@@ -35,10 +41,8 @@ const getUpstreamConfig = async () => {
     {
       client_secret: CLIENT_SECRET,
     },
-    None(),
-    {
-      execute: [allowInsecureRequests],
-    },
+    ClientSecretPost(CLIENT_SECRET),
+    options,
   );
 
   return config;
@@ -48,7 +52,7 @@ export const upstreamAuth = async (state: string) => {
   const config = await getUpstreamConfig();
   return buildAuthorizationUrl(config, {
     redirect_uri: REDIRECT_URI,
-    token_endpoint_auth_method: 'none',
+    token_endpoint_auth_method: 'client_secret_post',
     scope: NEONCTL_SCOPES.join(' '),
     response_type: 'code',
     state,
