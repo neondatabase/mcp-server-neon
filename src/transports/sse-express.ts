@@ -12,7 +12,7 @@ import {
 } from '../oauth/utils.js';
 import bodyParser from 'body-parser';
 
-export const createSseTransport = async () => {
+export const createSseTransport = () => {
   const app = express();
 
   app.use(morganConfig);
@@ -56,7 +56,7 @@ export const createSseTransport = async () => {
         transports.delete(transport.sessionId);
       });
 
-      const server = await createMcpServer(access_token);
+      const server = createMcpServer(access_token);
       await server.connect(transport);
     },
   );

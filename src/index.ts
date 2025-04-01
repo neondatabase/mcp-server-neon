@@ -22,12 +22,12 @@ if (command === 'init') {
 }
 
 if (command === 'start:sse') {
-  await createSseTransport();
+  createSseTransport();
 }
 
 if (command === 'start') {
   try {
-    const server = await createMcpServer(neonApiKey);
+    const server = createMcpServer(neonApiKey);
     await startStdio(server);
   } catch (error) {
     console.error('Server error:', error);

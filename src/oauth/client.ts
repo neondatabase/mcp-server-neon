@@ -1,17 +1,16 @@
 import { Request } from 'express';
 import {
   discovery,
-  allowInsecureRequests,
   buildAuthorizationUrl,
   authorizationCodeGrant,
   ClientSecretPost,
+  refreshTokenGrant,
 } from 'openid-client';
 import {
   CLIENT_ID,
   CLIENT_SECRET,
   UPSTREAM_OAUTH_HOST,
   REDIRECT_URI,
-  IS_DEV,
 } from '../constants.js';
 
 const ALWAYS_PRESENT_SCOPES = ['openid', 'offline', 'offline_access'] as const;
@@ -28,11 +27,6 @@ const NEONCTL_SCOPES = [
   'urn:neoncloud:orgs:permission',
 ] as const;
 
-const options = IS_DEV
-  ? {
-      execute: [allowInsecureRequests],
-    }
-  : {};
 const getUpstreamConfig = async () => {
   const url = new URL(UPSTREAM_OAUTH_HOST);
   const config = await discovery(
@@ -42,7 +36,7 @@ const getUpstreamConfig = async () => {
       client_secret: CLIENT_SECRET,
     },
     ClientSecretPost(CLIENT_SECRET),
-    options,
+    {},
   );
 
   return config;
@@ -69,4 +63,9 @@ export const exchangeCode = async (req: Request) => {
     expectedState: req.query.state as string,
     idTokenExpected: true,
   });
+};
+
+export const exchangeRefreshToken = async (token: string) => {
+  const config = await getUpstreamConfig();
+  return refreshTokenGrant(config, token);
 };

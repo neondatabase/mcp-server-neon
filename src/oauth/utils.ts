@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
+import { model } from './model.js';
 
 export const ensureCorsHeaders = () =>
   cors({
@@ -9,12 +10,24 @@ export const ensureCorsHeaders = () =>
   });
 
 export const requiresAuth =
-  () => (request: Request, response: Response, next: NextFunction) => {
+  () => async (request: Request, response: Response, next: NextFunction) => {
     const authorization = request.headers.authorization;
     if (!authorization) {
       response.status(401).json({ error: 'Unauthorized' });
       return;
     }
+
+    const token = await model.getAccessToken(extractBearerToken(authorization));
+    if (!token) {
+      response.status(401).json({ error: 'Invalid access token' });
+      return;
+    }
+
+    if (!token.expires_at || token.expires_at < Date.now()) {
+      response.status(401).json({ error: 'Access token expired' });
+      return;
+    }
+
     next();
   };
 
@@ -65,4 +78,12 @@ export const generateRandomString = (length: number): string => {
 export const extractBearerToken = (authorizationHeader: string): string => {
   if (!authorizationHeader) return '';
   return authorizationHeader.replace(/^Bearer\s+/i, '');
+};
+
+export const toSeconds = (ms: number): number => {
+  return Math.floor(ms / 1000);
+};
+
+export const toMilliseconds = (seconds: number): number => {
+  return seconds * 1000;
 };

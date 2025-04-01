@@ -6,7 +6,7 @@ import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools.js';
 import { logger } from '../utils/logger.js';
 import { createNeonClient, getPackageJson } from './api.js';
 
-export const createMcpServer = async (apiKey: string) => {
+export const createMcpServer = (apiKey: string) => {
   const server = new McpServer(
     {
       name: 'mcp-server-neon',

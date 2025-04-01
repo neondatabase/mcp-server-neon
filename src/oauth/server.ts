@@ -3,19 +3,20 @@ import {
   Response as ExpressResponse,
 } from 'express';
 import { AuthorizationCode, Client } from 'oauth2-server';
-import { Model } from './model.js';
+import { model } from './model.js';
 import { logger } from '../utils/logger.js';
 import express from 'express';
 import {
   decodeAuthParams,
   generateRandomString,
   parseAuthRequest,
+  toMilliseconds,
+  toSeconds,
 } from './utils.js';
-import { exchangeCode, upstreamAuth } from './client.js';
+import { exchangeCode, exchangeRefreshToken, upstreamAuth } from './client.js';
 import { createNeonClient } from '../server/api.js';
 import bodyParser from 'body-parser';
 
-const model = new Model();
 export const metadata = (req: ExpressRequest, res: ExpressResponse) => {
   res.json({
     issuer: 'http://localhost:3001',
@@ -26,7 +27,10 @@ export const metadata = (req: ExpressRequest, res: ExpressResponse) => {
     response_modes_supported: ['query'],
     grant_types_supported: ['authorization_code', 'refresh_token'],
     token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
-    registration_endpoint_auth_methods_supported: ['none'],
+    registration_endpoint_auth_methods_supported: [
+      'none',
+      'client_secret_post',
+    ],
     code_challenge_methods_supported: ['S256'],
   });
 };
@@ -131,16 +135,22 @@ authRouter.get(
       return;
     }
 
+    const clientId = requestParams.clientId;
+    const client = await model.getClient(clientId, '');
+    if (!client) {
+      res.status(400).json({ error: 'invalid client_id' });
+      return;
+    }
+
     // Standard authorization code grant
     const grantId = generateRandomString(16);
     const secret = generateRandomString(32);
     const authCode = `${grantId}:${secret}`;
-    const clientId = requestParams.clientId;
 
     // Get the user's info from Neon
     const neonClient = createNeonClient(tokens.access_token);
     const { data: user } = await neonClient.getCurrentUserInfo();
-
+    const expiresAt = Date.now() + toMilliseconds(tokens.expiresIn() ?? 0);
     // Save the authorization code with associated data
     const code: AuthorizationCode = {
       authorizationCode: authCode,
@@ -148,13 +158,17 @@ authRouter.get(
       createdAt: Date.now(),
       redirectUri: requestParams.redirectUri,
       scope: requestParams.scope.join(' '),
-      client: await model.getClient(clientId, ''),
+      client: client,
       user: {
         id: user.id,
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
         email: user.email,
         name: `${user.name} ${user.last_name}`.trim(),
+      },
+      token: {
+        access_token: tokens.access_token,
+        access_token_expires_at: expiresAt,
+        refresh_token: tokens.refresh_token,
+        id_token: tokens.id_token,
       },
     };
 
@@ -215,13 +229,12 @@ authRouter.post(
     }
 
     if (formData.grant_type === 'authorization_code') {
-      const code = await model.getAuthorizationCode(formData.code);
-      if (!code) {
+      const authorizationCode = await model.getAuthorizationCode(formData.code);
+      if (!authorizationCode) {
         res.status(400).json({ error: `invalid authorization code` });
         return;
       }
 
-      const authorizationCode = await model.getAuthorizationCode(formData.code);
       if (authorizationCode.client.id !== client.id) {
         res.status(400).json({ error: `invalid authorization code` });
         return;
@@ -231,27 +244,87 @@ authRouter.post(
         return;
       }
 
-      // TODO: Verify PKCE code challenge before generating tokens
-
       // TODO: Generate fresh tokens and add mapping to database.
       const token = await model.saveToken({
-        accessToken: authorizationCode.user.access_token,
-        refreshToken: authorizationCode.user.refresh_token,
+        accessToken: authorizationCode.token.access_token,
+        refreshToken: authorizationCode.token.refresh_token,
+        expires_at: authorizationCode.token.access_token_expires_at,
         client: client,
         user: authorizationCode.user,
+      });
+
+      await model.saveRefreshToken({
+        refreshToken: token.refreshToken ?? '',
+        accessToken: token.accessToken,
       });
 
       // Revoke the authorization code, it can only be used once
       await model.revokeAuthorizationCode(authorizationCode);
       res.json({
         access_token: token.accessToken,
+        expires_in: toSeconds(token.expires_at - Date.now()),
         token_type: 'bearer', // TODO: Verify why non-bearer tokens are not working
         refresh_token: token.refreshToken,
         scope: authorizationCode.scope,
       });
       return;
+    } else if (formData.grant_type === 'refresh_token') {
+      const providedRefreshToken = await model.getRefreshToken(
+        formData.refresh_token,
+      );
+      if (!providedRefreshToken) {
+        res.status(400).json({ error: 'invalid refresh token' });
+        return;
+      }
+
+      const refreshToken = await model.getRefreshToken(formData.refresh_token);
+      if (!refreshToken) {
+        res.status(400).json({ error: 'invalid refresh token' });
+        return;
+      }
+
+      const oldToken = await model.getAccessToken(refreshToken.accessToken);
+      if (!oldToken) {
+        // Refresh token is missing it counter access token, delete it
+        await model.deleteRefreshToken(refreshToken);
+        res.status(400).json({ error: 'invalid refresh token' });
+        return;
+      }
+
+      if (oldToken.client.id !== client.id) {
+        res.status(400).json({ error: 'invalid refresh token' });
+        return;
+      }
+
+      const upstreamToken = await exchangeRefreshToken(
+        refreshToken.refreshToken,
+      );
+      const now = Date.now();
+      const expiresAt = now + toMilliseconds(upstreamToken.expiresIn() ?? 0);
+      const token = await model.saveToken({
+        accessToken: upstreamToken.access_token,
+        refreshToken: upstreamToken.refresh_token ?? '',
+        expires_at: expiresAt,
+        client: client,
+        user: oldToken.user,
+      });
+      await model.saveRefreshToken({
+        refreshToken: token.refresh_token ?? '',
+        accessToken: token.access_token,
+      });
+
+      // Delete the old tokens
+      await model.deleteToken(oldToken);
+      await model.deleteRefreshToken(refreshToken);
+
+      res.json({
+        access_token: token.accessToken,
+        expires_in: toSeconds(expiresAt - now),
+        token_type: 'bearer',
+        refresh_token: token.refreshToken,
+        scope: oldToken.scope,
+      });
     }
-    // TODO: Implement refresh token grant
     res.status(400).json({ error: 'invalid grant type' });
   },
 );
