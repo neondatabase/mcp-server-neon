@@ -26,7 +26,7 @@
     "prerelease": "npm run build",
     "prepublishOnly": "bun scripts/before-publish.ts",
     "test": "npx braintrust eval src/tools-evaluations",
-    "start:sse": "node dist/sse/index.js"
+    "start": "node dist/index.js start:sse"
   },
   "dependencies": {
     "@keyv/postgres": "2.1.2",
