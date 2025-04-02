@@ -16,13 +16,14 @@ import {
 import { exchangeCode, exchangeRefreshToken, upstreamAuth } from './client.js';
 import { createNeonClient } from '../server/api.js';
 import bodyParser from 'body-parser';
+import { SERVER_HOST } from '../constants.js';
 
 export const metadata = (req: ExpressRequest, res: ExpressResponse) => {
   res.json({
-    issuer: 'http://localhost:3001',
-    authorization_endpoint: 'http://localhost:3001/authorize',
-    token_endpoint: 'http://localhost:3001/token',
-    registration_endpoint: 'http://localhost:3001/register',
+    issuer: SERVER_HOST,
+    authorization_endpoint: `${SERVER_HOST}/authorize`,
+    token_endpoint: `${SERVER_HOST}/token`,
+    registration_endpoint: `${SERVER_HOST}/register`,
     response_types_supported: ['code'],
     response_modes_supported: ['query'],
     grant_types_supported: ['authorization_code', 'refresh_token'],
@@ -72,9 +73,9 @@ export const registerClient = async (
       client_name,
       redirect_uris,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('failed to register client:', {
-      error,
+      error: error instanceof Error ? error.message : 'Unknown error',
       client: req.body.client_name,
     });
     res.status(400).json({ error: 'Invalid request' });

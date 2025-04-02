@@ -2,19 +2,19 @@ import winston from 'winston';
 import morgan from 'morgan';
 import { Request, Response, NextFunction } from 'express';
 
+const loggerFormat = winston.format.combine(
+  winston.format.timestamp(),
+  winston.format.json(),
+  winston.format.errors({ stack: true }),
+  winston.format.prettyPrint({ colorize: true }),
+);
 // Configure Winston logger
 export const logger = winston.createLogger({
   level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json(),
-  ),
+  format: loggerFormat,
   transports: [
     new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple(),
-      ),
+      format: loggerFormat,
     }),
   ],
 });

@@ -11,7 +11,9 @@ import {
   CLIENT_SECRET,
   UPSTREAM_OAUTH_HOST,
   REDIRECT_URI,
+  SERVER_HOST,
 } from '../constants.js';
+import { logger } from '../utils/logger.js';
 
 const ALWAYS_PRESENT_SCOPES = ['openid', 'offline', 'offline_access'] as const;
 const NEONCTL_SCOPES = [
@@ -54,15 +56,20 @@ export const upstreamAuth = async (state: string) => {
 };
 
 export const exchangeCode = async (req: Request) => {
-  const config = await getUpstreamConfig();
-  const currentUrl = new URL(
-    req.originalUrl,
-    `${req.protocol}://${req.get('host')}`,
-  );
-  return authorizationCodeGrant(config, currentUrl, {
-    expectedState: req.query.state as string,
-    idTokenExpected: true,
-  });
+  try {
+    const config = await getUpstreamConfig();
+    const currentUrl = new URL(req.originalUrl, SERVER_HOST);
+    return await authorizationCodeGrant(config, currentUrl, {
+      expectedState: req.query.state as string,
+      idTokenExpected: true,
+    });
+  } catch (error: unknown) {
+    logger.error('failed to exchange code:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      error,
+    });
+    throw error;
+  }
 };
 
 export const exchangeRefreshToken = async (token: string) => {

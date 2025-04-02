@@ -56,8 +56,15 @@ export const createSseTransport = () => {
         transports.delete(transport.sessionId);
       });
 
-      const server = createMcpServer(access_token);
-      await server.connect(transport);
+      try {
+        const server = createMcpServer(access_token);
+        await server.connect(transport);
+      } catch (error: unknown) {
+        logger.error('Failed to connect to MCP server:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          error,
+        });
+      }
     },
   );
 
@@ -72,19 +79,28 @@ export const createSseTransport = () => {
       hasTransport: Boolean(transport),
     });
 
-    if (transport) {
-      await transport.handlePostMessage(request, response);
-    } else {
-      logger.warn('No transport found for sessionId', { sessionId });
-      response.status(400).send('No transport found for sessionId');
+    try {
+      if (transport) {
+        await transport.handlePostMessage(request, response);
+      } else {
+        logger.warn('No transport found for sessionId', { sessionId });
+        response.status(400).send('No transport found for sessionId');
+      }
+    } catch (error: unknown) {
+      logger.error('Failed to handle post message:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        error,
+      });
     }
   }) as RequestHandler);
 
   try {
     app.listen({ port: SERVER_PORT });
     logger.info(`Server started on ${SERVER_HOST}`);
-  } catch (err) {
-    logger.error('Failed to start server:', err);
+  } catch (err: unknown) {
+    logger.error('Failed to start server:', {
+      error: err instanceof Error ? err.message : 'Unknown error',
+    });
     process.exit(1);
   }
 };
