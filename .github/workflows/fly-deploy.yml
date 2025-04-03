@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - shridhar/mcp-sse
 jobs:
   deploy:
     name: Deploy app
