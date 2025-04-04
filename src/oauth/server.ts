@@ -132,14 +132,18 @@ authRouter.get(
 
     // Implicit grant or `response_type=token` is not supported
     if (requestParams.responseType !== 'code') {
-      res.status(400).json({ error: 'invalid response type' });
+      res
+        .status(400)
+        .json({ code: 'invalid_request', error: 'invalid response type' });
       return;
     }
 
     const clientId = requestParams.clientId;
     const client = await model.getClient(clientId, '');
     if (!client) {
-      res.status(400).json({ error: 'invalid client_id' });
+      res
+        .status(400)
+        .json({ code: 'invalid_request', error: 'invalid client id' });
       return;
     }
 
@@ -205,13 +209,17 @@ authRouter.post(
   async (req: ExpressRequest, res: ExpressResponse) => {
     const contentType = req.headers['content-type'] as string;
     if (contentType !== 'application/x-www-form-urlencoded') {
-      res.status(400).json({ error: `invalid content type: ${contentType}` });
+      res
+        .status(415)
+        .json({ code: 'invalid_request', error: 'invalid content type' });
       return;
     }
 
     const formData = req.body;
     if (!formData.client_id) {
-      res.status(400).json({ error: 'client_id is required' });
+      res
+        .status(400)
+        .json({ code: 'invalid_request', error: 'client_id is required' });
       return;
     }
 
@@ -219,29 +227,40 @@ authRouter.post(
     if (!client) {
       res
         .status(400)
-        .json({ error: `client not found: ${formData.client_id}` });
+        .json({ code: 'invalid_request', error: 'invalid client' });
       return;
     }
 
     if (client.secret !== formData.client_secret) {
       // For security reasons, do not leak whether a client exists or not.
-      res.status(400).json({ error: 'invalid client_secret' });
+      res
+        .status(400)
+        .json({ code: 'invalid_request', error: 'invalid client' });
       return;
     }
 
     if (formData.grant_type === 'authorization_code') {
       const authorizationCode = await model.getAuthorizationCode(formData.code);
       if (!authorizationCode) {
-        res.status(400).json({ error: `invalid authorization code` });
+        res.status(400).json({
+          code: 'invalid_request',
+          error: 'invalid authorization code',
+        });
         return;
       }
 
       if (authorizationCode.client.id !== client.id) {
-        res.status(400).json({ error: `invalid authorization code` });
+        res.status(400).json({
+          code: 'invalid_request',
+          error: 'invalid authorization code',
+        });
         return;
       }
       if (authorizationCode.expiresAt < new Date()) {
-        res.status(400).json({ error: 'authorization code expired' });
+        res.status(400).json({
+          code: 'invalid_request',
+          error: 'authorization code expired',
+        });
         return;
       }
 
@@ -274,31 +293,33 @@ authRouter.post(
         formData.refresh_token,
       );
       if (!providedRefreshToken) {
-        res.status(400).json({ error: 'invalid refresh token' });
+        res
+          .status(400)
+          .json({ code: 'invalid_request', error: 'invalid refresh token' });
         return;
       }
 
-      const refreshToken = await model.getRefreshToken(formData.refresh_token);
-      if (!refreshToken) {
-        res.status(400).json({ error: 'invalid refresh token' });
-        return;
-      }
-
-      const oldToken = await model.getAccessToken(refreshToken.accessToken);
+      const oldToken = await model.getAccessToken(
+        providedRefreshToken.accessToken,
+      );
       if (!oldToken) {
         // Refresh token is missing it counter access token, delete it
-        await model.deleteRefreshToken(refreshToken);
-        res.status(400).json({ error: 'invalid refresh token' });
+        await model.deleteRefreshToken(providedRefreshToken);
+        res
+          .status(400)
+          .json({ code: 'invalid_request', error: 'invalid refresh token' });
         return;
       }
 
       if (oldToken.client.id !== client.id) {
-        res.status(400).json({ error: 'invalid refresh token' });
+        res
+          .status(400)
+          .json({ code: 'invalid_request', error: 'invalid refresh token' });
         return;
       }
 
       const upstreamToken = await exchangeRefreshToken(
-        refreshToken.refreshToken,
+        providedRefreshToken.refreshToken,
       );
       const now = Date.now();
       const expiresAt = now + toMilliseconds(upstreamToken.expiresIn() ?? 0);
@@ -316,7 +337,7 @@ authRouter.post(
 
       // Delete the old tokens
       await model.deleteToken(oldToken);
-      await model.deleteRefreshToken(refreshToken);
+      await model.deleteRefreshToken(providedRefreshToken);
 
       res.json({
         access_token: token.accessToken,
@@ -326,7 +347,9 @@ authRouter.post(
         scope: oldToken.scope,
       });
     }
-    res.status(400).json({ error: 'invalid grant type' });
+    res
+      .status(400)
+      .json({ code: 'invalid_request', error: 'invalid grant type' });
   },
 );
 

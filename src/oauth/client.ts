@@ -16,7 +16,7 @@ import {
 import { logger } from '../utils/logger.js';
 
 const ALWAYS_PRESENT_SCOPES = ['openid', 'offline', 'offline_access'] as const;
-const NEONCTL_SCOPES = [
+const NEON_MCP_SCOPES = [
   ...ALWAYS_PRESENT_SCOPES,
   'urn:neoncloud:projects:create',
   'urn:neoncloud:projects:read',
@@ -49,7 +49,7 @@ export const upstreamAuth = async (state: string) => {
   return buildAuthorizationUrl(config, {
     redirect_uri: REDIRECT_URI,
     token_endpoint_auth_method: 'client_secret_post',
-    scope: NEONCTL_SCOPES.join(' '),
+    scope: NEON_MCP_SCOPES.join(' '),
     response_type: 'code',
     state,
   });
