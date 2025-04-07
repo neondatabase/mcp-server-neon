@@ -15,9 +15,10 @@ import {
 } from '../constants.js';
 import { logger } from '../utils/logger.js';
 
-const ALWAYS_PRESENT_SCOPES = ['openid', 'offline', 'offline_access'] as const;
 const NEON_MCP_SCOPES = [
-  ...ALWAYS_PRESENT_SCOPES,
+  'openid',
+  'offline',
+  'offline_access',
   'urn:neoncloud:projects:create',
   'urn:neoncloud:projects:read',
   'urn:neoncloud:projects:update',

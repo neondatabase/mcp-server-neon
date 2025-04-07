@@ -18,32 +18,29 @@ class Model implements AuthorizationCodeModel {
     clientId: string,
     clientSecret: string,
   ) => Promise<Client | undefined> = async (clientId) => {
-    const client = await clients.get(clientId);
-    return Promise.resolve(client);
+    return clients.get(clientId);
   };
   saveClient: (client: Client) => Promise<Client> = async (client) => {
     await clients.set(client.id, client);
-    return Promise.resolve(client);
+    return client;
   };
   saveToken: (token: Token) => Promise<Token> = async (token) => {
     await tokens.set(token.accessToken, token);
-    return Promise.resolve(token);
+    return token;
   };
   deleteToken: (token: Token) => Promise<boolean> = async (token) => {
-    await tokens.delete(token.accessToken);
-    return Promise.resolve(true);
+    return tokens.delete(token.accessToken);
   };
   saveRefreshToken: (token: RefreshToken) => Promise<RefreshToken> = async (
     token,
   ) => {
     await refreshTokens.set(token.refreshToken, token);
-    return Promise.resolve(token);
+    return token;
   };
   deleteRefreshToken: (token: RefreshToken) => Promise<boolean> = async (
     token,
   ) => {
-    await refreshTokens.delete(token.refreshToken);
-    return Promise.resolve(true);
+    return refreshTokens.delete(token.refreshToken);
   };
 
   validateScope: (
@@ -62,29 +59,26 @@ class Model implements AuthorizationCodeModel {
     accessToken,
   ) => {
     const token = await tokens.get(accessToken);
-    return Promise.resolve(token);
+    return token;
   };
   getRefreshToken: (refreshToken: string) => Promise<RefreshToken | undefined> =
     async (refreshToken) => {
-      const token = await refreshTokens.get(refreshToken);
-      return Promise.resolve(token);
+      return refreshTokens.get(refreshToken);
     };
   saveAuthorizationCode: (
     code: AuthorizationCode,
   ) => Promise<AuthorizationCode> = async (code) => {
     await authorizationCodes.set(code.authorizationCode, code);
-    return Promise.resolve(code);
+    return code;
   };
   getAuthorizationCode: (
     code: string,
   ) => Promise<AuthorizationCode | undefined> = async (code) => {
-    const authCode = await authorizationCodes.get(code);
-    return Promise.resolve(authCode);
+    return authorizationCodes.get(code);
   };
   revokeAuthorizationCode: (code: AuthorizationCode) => Promise<boolean> =
     async (code) => {
-      await authorizationCodes.delete(code.authorizationCode);
-      return Promise.resolve(true);
+      return authorizationCodes.delete(code.authorizationCode);
     };
 }
 

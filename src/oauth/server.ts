@@ -18,21 +18,24 @@ import { createNeonClient } from '../server/api.js';
 import bodyParser from 'body-parser';
 import { SERVER_HOST } from '../constants.js';
 
+import {} from '@modelcontextprotocol/sdk/server/auth/clients.js';
+
+const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
+const SUPPORTED_RESPONSE_TYPES = ['code'];
+const SUPPORTED_AUTH_METHODS = ['client_secret_post', 'none'];
+const SUPPORTED_CODE_CHALLENGE_METHODS = ['S256'];
 export const metadata = (req: ExpressRequest, res: ExpressResponse) => {
   res.json({
     issuer: SERVER_HOST,
     authorization_endpoint: `${SERVER_HOST}/authorize`,
     token_endpoint: `${SERVER_HOST}/token`,
     registration_endpoint: `${SERVER_HOST}/register`,
-    response_types_supported: ['code'],
+    response_types_supported: SUPPORTED_RESPONSE_TYPES,
     response_modes_supported: ['query'],
-    grant_types_supported: ['authorization_code', 'refresh_token'],
-    token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
-    registration_endpoint_auth_methods_supported: [
-      'none',
-      'client_secret_post',
-    ],
-    code_challenge_methods_supported: ['S256'],
+    grant_types_supported: SUPPORTED_GRANT_TYPES,
+    token_endpoint_auth_methods_supported: SUPPORTED_AUTH_METHODS,
+    registration_endpoint_auth_methods_supported: SUPPORTED_AUTH_METHODS,
+    code_challenge_methods_supported: SUPPORTED_CODE_CHALLENGE_METHODS,
   });
 };
 
@@ -40,22 +43,60 @@ export const registerClient = async (
   req: ExpressRequest,
   res: ExpressResponse,
 ) => {
-  try {
-    logger.info('request to register client: ', {
-      name: req.body.client_name,
+  const payload = req.body;
+  logger.info('request to register client: ', {
+    name: payload.client_name,
+  });
+
+  if (payload.client_name === undefined) {
+    res
+      .status(400)
+      .json({ code: 'invalid_request', error: 'client_name is required' });
+    return;
+  }
+
+  if (payload.redirect_uris === undefined) {
+    res
+      .status(400)
+      .json({ code: 'invalid_request', error: 'redirect_uris is required' });
+    return;
+  }
+
+  if (
+    payload.grant_types === undefined ||
+    !payload.grant_types.every((grant: string) =>
+      SUPPORTED_GRANT_TYPES.includes(grant),
+    )
+  ) {
+    res.status(400).json({
+      code: 'invalid_request',
+      error:
+        'grant_types is required and must only include supported grant types',
     });
-    const { client_name, redirect_uris, grant_types, response_types } =
-      req.body;
+    return;
+  }
+
+  if (
+    payload.response_types === undefined ||
+    !payload.response_types.every((responseType: string) =>
+      SUPPORTED_RESPONSE_TYPES.includes(responseType),
+    )
+  ) {
+    res.status(400).json({
+      code: 'invalid_request',
+      error:
+        'response_types is required and must only include supported response types',
+    });
+    return;
+  }
+
+  try {
     const clientId = generateRandomString(8);
     const clientSecret = generateRandomString(32);
-
     const client: Client = {
+      ...payload,
       id: clientId,
       secret: clientSecret,
-      name: client_name,
-      redirectUris: redirect_uris,
-      grants: grant_types,
-      responseTypes: response_types,
       tokenEndpointAuthMethod:
         (req.body.token_endpoint_auth_method as string) ?? 'client_secret_post',
     };
@@ -63,22 +104,24 @@ export const registerClient = async (
     await model.saveClient(client);
     logger.info('new client registered', {
       clientId,
-      client_name,
-      redirect_uris,
+      client_name: payload.client_name,
+      redirect_uris: payload.redirect_uris,
     });
 
     res.json({
       client_id: clientId,
       client_secret: clientSecret,
-      client_name,
-      redirect_uris,
+      client_name: payload.client_name,
+      redirect_uris: payload.redirect_uris,
     });
   } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     logger.error('failed to register client:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      client: req.body.client_name,
+      message,
+      error,
+      client: payload.client_name,
     });
-    res.status(400).json({ error: 'Invalid request' });
+    res.status(500).json({ code: 'server_error', error, message });
   }
 };
 
@@ -87,8 +130,7 @@ authRouter.get('/.well-known/oauth-authorization-server', metadata);
 authRouter.post('/register', bodyParser.json(), registerClient);
 
 /*
-  Initiate the authorization code grant flow by redirecting to the upstream
-  authorization server.
+  Initiate the authorization code grant flow by validating the request parameters and then redirecting to the upstream authorization server.
   
   Step 1:
   MCP client should invoke this endpoint with the following parameters:
@@ -96,13 +138,43 @@ authRouter.post('/register', bodyParser.json(), registerClient);
     /authorize?client_id=clientId&redirect_uri=mcp://callback&response_type=code&scope=scope&code_challenge=codeChallenge&code_challenge_method=S256
   </code>
 
-  This endpoint will capture the parameters on `state` param and redirect to the upstream authorization server.
+  This endpoint will validate the `client_id` and other request parameters and then capture the parameters on `state` param and redirect to the upstream authorization server.
 */
 authRouter.get(
   '/authorize',
   bodyParser.urlencoded({ extended: true }),
   async (req: ExpressRequest, res: ExpressResponse) => {
     const requestParams = parseAuthRequest(req);
+
+    const clientId = requestParams.clientId;
+    const client = await model.getClient(clientId, '');
+    if (!client) {
+      res
+        .status(400)
+        .json({ code: 'invalid_request', error: 'invalid client id' });
+      return;
+    }
+
+    if (
+      requestParams.responseType == undefined ||
+      !client.response_types.includes(requestParams.responseType)
+    ) {
+      res
+        .status(400)
+        .json({ code: 'invalid_request', error: 'invalid response type' });
+      return;
+    }
+
+    if (
+      requestParams.redirectUri == undefined ||
+      !client.redirect_uris.includes(requestParams.redirectUri)
+    ) {
+      res
+        .status(400)
+        .json({ code: 'invalid_request', error: 'invalid redirect uri' });
+      return;
+    }
+
     const authUrl = await upstreamAuth(btoa(JSON.stringify(requestParams)));
     res.redirect(authUrl.href);
   },
@@ -129,14 +201,6 @@ authRouter.get(
     const tokens = await exchangeCode(req);
     const state = req.query.state as string;
     const requestParams = decodeAuthParams(state);
-
-    // Implicit grant or `response_type=token` is not supported
-    if (requestParams.responseType !== 'code') {
-      res
-        .status(400)
-        .json({ code: 'invalid_request', error: 'invalid response type' });
-      return;
-    }
 
     const clientId = requestParams.clientId;
     const client = await model.getClient(clientId, '');
