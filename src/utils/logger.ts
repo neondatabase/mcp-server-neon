@@ -4,9 +4,10 @@ import { Request, Response, NextFunction } from 'express';
 
 const loggerFormat = winston.format.combine(
   winston.format.timestamp(),
-  winston.format.json(),
+  winston.format.simple(),
   winston.format.errors({ stack: true }),
-  winston.format.prettyPrint({ colorize: true }),
+  winston.format.align(),
+  winston.format.colorize(),
 );
 // Configure Winston logger
 export const logger = winston.createLogger({
