@@ -7,7 +7,7 @@ on:
 env:
   FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
   FLY_REGION: ams
-
+  HOST_NAME: pr-${{ github.event.number }}-mcp-server-neon
 jobs:
   preview:
     runs-on: ubuntu-latest
@@ -20,7 +20,7 @@ jobs:
     # Deploying apps with this "preview" environment allows the URL for the app to be displayed in the PR UI.
     # Feel free to change the name of this environment.
     environment:
-      name: preview
+      name: pr-${{ github.event.number }}
       url: ${{ steps.deploy.outputs.url }}
     steps:
       - name: Get code
@@ -30,5 +30,6 @@ jobs:
         id: deploy
         uses: superfly/fly-pr-review-apps@1.2.1
         with:
-          name: mcp-neon-pr-${{ github.event.number }}
+          name: ${{ env.HOST_NAME }}
           config: fly.preview.toml
+          secrets: 'CLIENT_ID=${{secrets.CLIENT_ID}} CLIENT_SECRET=${{secrets.CLIENT_SECRET}} OAUTH_DATABASE_URL=${{secrets.PREVIEW_OAUTH_DATABASE_URL}} SERVER_HOST=https://${{env.HOST_NAME}}.fly.dev'

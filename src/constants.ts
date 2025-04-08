@@ -13,6 +13,6 @@ export const CLIENT_ID = process.env.CLIENT_ID ?? '';
 export const CLIENT_SECRET = process.env.CLIENT_SECRET ?? '';
 export const UPSTREAM_OAUTH_HOST =
   process.env.UPSTREAM_OAUTH_HOST ?? 'https://oauth2.neon.tech';
-export const REDIRECT_URI =
-  process.env.REDIRECT_URI ?? `${SERVER_HOST}/callback`;
-export const NEON_API_HOST = process.env.NEON_API_HOST ?? '';
+export const REDIRECT_URI = `${SERVER_HOST}/callback`;
+export const NEON_API_HOST =
+  process.env.NEON_API_HOST ?? 'https://console.neon.tech/api/v2';
