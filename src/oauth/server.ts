@@ -213,8 +213,8 @@ authRouter.get(
 
     // Standard authorization code grant
     const grantId = generateRandomString(16);
-    const secret = generateRandomString(32);
-    const authCode = `${grantId}:${secret}`;
+    const nonce = generateRandomString(32);
+    const authCode = `${grantId}:${nonce}`;
 
     // Get the user's info from Neon
     const neonClient = createNeonClient(tokens.access_token);
@@ -410,6 +410,7 @@ authRouter.post(
         refresh_token: token.refreshToken,
         scope: oldToken.scope,
       });
+      return;
     }
     res
       .status(400)

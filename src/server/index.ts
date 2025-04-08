@@ -59,16 +59,11 @@ export const createMcpServer = (apiKey: string) => {
     );
   });
 
-  // server.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  //   const { name, arguments: args } = request.params;
-  //   console.log(chalk.green('Tool called:'), name, args);
-  //   return {
-  //     text: 'Hello, world!',
-  //     result: 'success',
-  //   };
-  // });
-  server.server.onerror = (error) => {
-    logger.error('Server error:', { error });
+  server.server.onerror = (error: unknown) => {
+    logger.error('Server error:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      error,
+    });
   };
 
   return server;
