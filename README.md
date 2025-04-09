@@ -79,7 +79,7 @@ Run the Neon MCP server on your local machine.
 **Setup via Smithery:**
 
 ```bash
-npx -y @smithery/cli@latest install neon --client <client_name>"
+npx -y @smithery/cli@latest install neon --client <client_name>
 ```
 
 You will be prompted to enter your Neon API key. Enter the API key which you obtained from the [prerequisites](#prerequisites) section
