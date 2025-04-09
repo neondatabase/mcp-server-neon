@@ -111,7 +111,15 @@ Add the following JSON configuration within the `mcpServers` section of your cli
 }
 ```
 
-### Troubleshooting on Windows
+### Troubleshooting
+
+If your client does not use `JSON` for configuration of MCP servers (such as older versions of Cursor), you can use the following command when prompted:
+
+```bash
+npx -y @neondatabase/mcp-server-neon start <YOUR_NEON_API_KEY>
+```
+
+#### Troubleshooting on Windows
 
 If you are using Windows and encounter issues while adding the MCP server, you might need to use the Command Prompt (`cmd`) or Windows Subsystem for Linux (`wsl`) to run the necessary commands. Your configuration setup may resemble the following:
 
@@ -136,14 +144,6 @@ If you are using Windows and encounter issues while adding the MCP server, you m
     }
   }
 }
-```
-
-### Troubleshooting
-
-If your client does not use `JSON` for configuration of MCP servers (such as older versions of Cursor), you can use the following command when prompted:
-
-```bash
-npx -y @neondatabase/mcp-server-neon start <YOUR_NEON_API_KEY>
 ```
 
 ## Guides
