@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
+import crypto from 'crypto';
 import { model } from './model.js';
 
 export const ensureCorsHeaders = () =>
@@ -86,4 +87,28 @@ export const toSeconds = (ms: number): number => {
 
 export const toMilliseconds = (seconds: number): number => {
   return seconds * 1000;
+};
+
+export const verifyPKCE = (
+  codeChallenge: string,
+  codeChallengeMethod: string,
+  codeVerifier: string,
+): boolean => {
+  if (!codeChallenge || !codeChallengeMethod || !codeVerifier) {
+    return false;
+  }
+
+  if (codeChallengeMethod === 'S256') {
+    const hash = crypto
+      .createHash('sha256')
+      .update(codeVerifier)
+      .digest('base64url');
+    return codeChallenge === hash;
+  }
+
+  if (codeChallengeMethod === 'plain') {
+    return codeChallenge === codeVerifier;
+  }
+
+  return false;
 };

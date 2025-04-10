@@ -12,6 +12,7 @@ import {
   parseAuthRequest,
   toMilliseconds,
   toSeconds,
+  verifyPKCE,
 } from './utils.js';
 import { exchangeCode, exchangeRefreshToken, upstreamAuth } from './client.js';
 import { createNeonClient } from '../server/api.js';
@@ -239,6 +240,8 @@ authRouter.get(
         refresh_token: tokens.refresh_token,
         id_token: tokens.id_token,
       },
+      code_challenge: requestParams.codeChallenge,
+      code_challenge_method: requestParams.codeChallengeMethod,
     };
 
     await model.saveAuthorizationCode(code);
@@ -320,10 +323,25 @@ authRouter.post(
         });
         return;
       }
+
       if (authorizationCode.expiresAt < new Date()) {
         res.status(400).json({
           code: 'invalid_request',
           error: 'authorization code expired',
+        });
+        return;
+      }
+
+      if (
+        !verifyPKCE(
+          authorizationCode.code_challenge,
+          authorizationCode.code_challenge_method,
+          formData.code_verifier,
+        )
+      ) {
+        res.status(400).json({
+          code: 'invalid_request',
+          error: 'invalid code verifier',
         });
         return;
       }
