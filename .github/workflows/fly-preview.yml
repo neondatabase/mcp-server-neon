@@ -1,35 +1,22 @@
-name: Deploy Review App
+name: Deploy Preview App
 on:
   # Run this workflow on every PR event. Existing review apps will be updated when the PR is updated.
   pull_request:
     types: [opened, reopened, synchronize, closed]
 
-env:
-  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-  FLY_REGION: ams
-  HOST_NAME: pr-${{ github.event.number }}-mcp-server-neon
 jobs:
   preview:
+    if: contains(github.event.pull_request.labels.*.name, 'deploy-preview')
+    name: Deploy Preview
     runs-on: ubuntu-latest
-    outputs:
-      url: ${{ steps.deploy.outputs.url }}
-    # Only run one deployment at a time per PR.
-    concurrency:
-      group: pr-${{ github.event.number }}
-
-    # Deploying apps with this "preview" environment allows the URL for the app to be displayed in the PR UI.
-    # Feel free to change the name of this environment.
-    environment:
-      name: pr-${{ github.event.number }}
-      url: ${{ steps.deploy.outputs.url }}
+    concurrency: deploy-group # optional: ensure only one action runs at a time
     steps:
-      - name: Get code
-        uses: actions/checkout@v4
-
-      - name: Deploy PR app to Fly.io
-        id: deploy
-        uses: superfly/fly-pr-review-apps@1.2.1
-        with:
-          name: ${{ env.HOST_NAME }}
-          config: fly.preview.toml
-          secrets: 'CLIENT_ID=${{secrets.CLIENT_ID}} CLIENT_SECRET=${{secrets.CLIENT_SECRET}} OAUTH_DATABASE_URL=${{secrets.PREVIEW_OAUTH_DATABASE_URL}} SERVER_HOST=https://${{env.HOST_NAME}}.fly.dev'
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          CLIENT_ID: ${{secrets.CLIENT_ID}}
+          CLIENT_SECRET: ${{secrets.CLIENT_SECRET}}
+          OAUTH_DATABASE_URL: ${{secrets.PREVIEW_OAUTH_DATABASE_URL}}
+          SERVER_HOST: https://preview-mcp-server-neon.fly.dev

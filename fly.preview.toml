@@ -1,4 +1,4 @@
-app = 'mcp-server-neon'
+app = 'preview-mcp-server-neon'
 primary_region = 'ams'
 
 [build]
