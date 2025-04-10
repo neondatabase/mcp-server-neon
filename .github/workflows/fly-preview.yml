@@ -2,7 +2,7 @@ name: Deploy Preview App
 on:
   # Run this workflow on every PR event. Existing review apps will be updated when the PR is updated.
   pull_request:
-    types: [opened, reopened, synchronize, closed]
+    types: [opened, reopened, synchronize, closed, labeled]
 
 jobs:
   preview:
