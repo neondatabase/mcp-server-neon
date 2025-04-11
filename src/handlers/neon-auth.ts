@@ -3,6 +3,7 @@ import { neonClient } from '../index.js';
 import { NeonAuthSupportedAuthProvider } from '@neondatabase/api-client';
 import { provisionNeonAuthInputSchema } from '../toolsSchema.js';
 import { z } from 'zod';
+import { getDefaultDatabase } from '../utils.js';
 
 type Props = z.infer<typeof provisionNeonAuthInputSchema>;
 export async function handleProvisionNeonAuth({
@@ -27,11 +28,19 @@ export async function handleProvisionNeonAuth({
       ],
     };
   }
-  const {
-    data: { databases },
-  } = await neonClient.listProjectBranchDatabases(projectId, defaultBranch.id);
-  const defaultDatabase =
-    databases.find((db) => db.name === database) ?? databases[0];
+  const databaseName = await getDefaultDatabase({
+    projectId,
+    branchId: defaultBranch.id,
+    databaseName: database,
+  });
+
+  const { data } = await neonClient.getProjectBranchDatabase(
+    projectId,
+    defaultBranch.id,
+    databaseName,
+  );
+
+  const defaultDatabase = data.database;
 
   if (!defaultDatabase) {
     return {

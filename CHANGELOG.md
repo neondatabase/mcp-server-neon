@@ -2,6 +2,8 @@
 
 ## UNRELEASED
 
+- Extract utility function for getting the default database
+
 ## [0.3.4] - 2025-03-26
 
 - Add `neon-auth`, `neon-serverless`, and `neon-drizzle` resources
