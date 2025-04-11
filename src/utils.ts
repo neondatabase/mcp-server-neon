@@ -94,3 +94,39 @@ $$ LANGUAGE plpgsql;
 SELECT * FROM show_db_tree();
 `,
 ];
+
+import { neonClient } from './index.js';
+import { NEON_DEFAULT_DATABASE_NAME } from './constants.js';
+
+/**
+ * Returns the default database for a project branch
+ * If a database name is provided, it returns that name
+ * Otherwise, it looks for a database named 'neondb' and returns that
+ * If 'neondb' doesn't exist, it returns the first available database
+ * Throws an error if no databases are found
+ */
+export async function getDefaultDatabase({
+  projectId,
+  branchId,
+  databaseName,
+}: {
+  projectId: string;
+  branchId: string;
+  databaseName?: string;
+}): Promise<string> {
+  if (databaseName) return databaseName;
+
+  const { data } = await neonClient.listProjectBranchDatabases(
+    projectId,
+    branchId,
+  );
+  const databases = data.databases;
+  if (databases.length === 0) {
+    throw new Error('No databases found in your project branch');
+  }
+
+  const defaultDatabase = databases.find(
+    (db) => db.name === NEON_DEFAULT_DATABASE_NAME,
+  );
+  return defaultDatabase ? defaultDatabase.name : databases[0].name;
+}

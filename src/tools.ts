@@ -3,7 +3,11 @@ import { neonClient } from './index.js';
 import crypto from 'crypto';
 import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
 import { EndpointType, ListProjectsParams } from '@neondatabase/api-client';
-import { DESCRIBE_DATABASE_STATEMENTS, splitSqlStatements } from './utils.js';
+import {
+  DESCRIBE_DATABASE_STATEMENTS,
+  splitSqlStatements,
+  getDefaultDatabase,
+} from './utils.js';
 import {
   listProjectsInputSchema,
   nodeVersionInputSchema,
@@ -601,31 +605,39 @@ async function handleGetConnectionString({
 
   // If databaseName is not provided, use default `neondb` or first database
   if (!databaseName) {
-    const { data } = await neonClient.listProjectBranchDatabases(
+    databaseName = await getDefaultDatabase({
       projectId,
       branchId,
-    );
-    const databases = data.databases;
-    if (databases.length === 0) {
-      throw new Error('No databases found in your project branch');
+      databaseName,
+    });
+
+    if (!roleName) {
+      if (!databaseName) {
+        throw new Error('Database name is required');
+      }
+      const { data } = await neonClient.getProjectBranchDatabase(
+        projectId,
+        branchId,
+        databaseName,
+      );
+      roleName = data.database.owner_name;
     }
-
-    const defaultDatabase = databases.find(
-      (db) => db.name === NEON_DEFAULT_DATABASE_NAME,
-    );
-    const database = defaultDatabase ? defaultDatabase : databases[0];
-    databaseName = database.name;
-    roleName = roleName ?? database.owner_name;
-  }
-
-  // If roleName is not provided, use the database owner name
-  if (!roleName) {
+  } else if (!roleName) {
+    if (!databaseName) {
+      throw new Error('Database name is required');
+    }
     const { data } = await neonClient.getProjectBranchDatabase(
       projectId,
       branchId,
       databaseName,
     );
     roleName = data.database.owner_name;
+  }
+
+  if (!roleName || !databaseName) {
+    throw new Error(
+      'Role name and database name are required for connection string',
+    );
   }
 
   // Get connection URI with the provided parameters
@@ -659,18 +671,11 @@ async function handleSchemaMigration({
   const newBranch = await handleCreateBranch({ projectId });
 
   if (!databaseName) {
-    const { data } = await neonClient.listProjectBranchDatabases(
+    databaseName = await getDefaultDatabase({
       projectId,
-      newBranch.branch.id,
-    );
-    const databases = data.databases;
-    if (databases.length === 0) {
-      throw new Error('No databases found in your project branch');
-    }
-    const database = databases.find(
-      (db) => db.name === NEON_DEFAULT_DATABASE_NAME,
-    );
-    databaseName = database ? database.name : databases[0].name;
+      branchId: newBranch.branch.id,
+      databaseName,
+    });
   }
 
   const result = await handleRunSqlTransaction({
@@ -681,6 +686,10 @@ async function handleSchemaMigration({
   });
 
   const migrationId = crypto.randomUUID();
+  if (!databaseName) {
+    throw new Error('Database name is required for migration');
+  }
+
   persistMigrationToMemory(migrationId, {
     migrationSql,
     databaseName,
