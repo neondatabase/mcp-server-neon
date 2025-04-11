@@ -28,19 +28,11 @@ export async function handleProvisionNeonAuth({
       ],
     };
   }
-  const databaseName = await getDefaultDatabase({
+  const defaultDatabase = await getDefaultDatabase({
     projectId,
     branchId: defaultBranch.id,
     databaseName: database,
   });
-
-  const { data } = await neonClient.getProjectBranchDatabase(
-    projectId,
-    defaultBranch.id,
-    databaseName,
-  );
-
-  const defaultDatabase = data.database;
 
   if (!defaultDatabase) {
     return {

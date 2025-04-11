@@ -2,7 +2,7 @@
 
 ## UNRELEASED
 
-- Improve database selection by standardizing how default databases are identified and used
+- Fix database name assumption
 
 ## [0.3.4] - 2025-03-26
 

@@ -604,20 +604,17 @@ async function handleGetConnectionString({
   }
 
   // If databaseName is not provided, use default `neondb` or first database
+  let dbObject;
   if (!databaseName) {
-    databaseName = await getDefaultDatabase({
+    dbObject = await getDefaultDatabase({
       projectId,
       branchId,
       databaseName,
     });
+    databaseName = dbObject.name;
 
     if (!roleName) {
-      const { data } = await neonClient.getProjectBranchDatabase(
-        projectId,
-        branchId,
-        databaseName,
-      );
-      roleName = data.database.owner_name;
+      roleName = dbObject.owner_name;
     }
   } else if (!roleName) {
     const { data } = await neonClient.getProjectBranchDatabase(
@@ -665,11 +662,12 @@ async function handleSchemaMigration({
   const newBranch = await handleCreateBranch({ projectId });
 
   if (!databaseName) {
-    databaseName = await getDefaultDatabase({
+    const dbObject = await getDefaultDatabase({
       projectId,
       branchId: newBranch.branch.id,
       databaseName,
     });
+    databaseName = dbObject.name;
   }
 
   const result = await handleRunSqlTransaction({
@@ -680,6 +678,10 @@ async function handleSchemaMigration({
   });
 
   const migrationId = crypto.randomUUID();
+  if (!databaseName) {
+    throw new Error('Database name is required for migration');
+  }
+
   persistMigrationToMemory(migrationId, {
     migrationSql,
     databaseName,
