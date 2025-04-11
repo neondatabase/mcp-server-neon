@@ -2,7 +2,7 @@
 
 ## UNRELEASED
 
-- Fix database name assumption
+- Fix default database name or role name assumptions.
 
 ## [0.3.4] - 2025-03-26
 

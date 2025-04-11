@@ -625,12 +625,6 @@ async function handleGetConnectionString({
     roleName = data.database.owner_name;
   }
 
-  if (!roleName || !databaseName) {
-    throw new Error(
-      'Role name and database name are required for connection string',
-    );
-  }
-
   // Get connection URI with the provided parameters
   const connectionString = await neonClient.getConnectionUri({
     projectId,
@@ -678,10 +672,6 @@ async function handleSchemaMigration({
   });
 
   const migrationId = crypto.randomUUID();
-  if (!databaseName) {
-    throw new Error('Database name is required for migration');
-  }
-
   persistMigrationToMemory(migrationId, {
     migrationSql,
     databaseName,
