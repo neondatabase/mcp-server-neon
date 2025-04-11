@@ -2,7 +2,7 @@
 
 ## UNRELEASED
 
-- Extract utility function for getting the default database
+- Improve database selection by standardizing how default databases are identified and used
 
 ## [0.3.4] - 2025-03-26
 

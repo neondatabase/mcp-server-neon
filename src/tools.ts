@@ -612,9 +612,6 @@ async function handleGetConnectionString({
     });
 
     if (!roleName) {
-      if (!databaseName) {
-        throw new Error('Database name is required');
-      }
       const { data } = await neonClient.getProjectBranchDatabase(
         projectId,
         branchId,
@@ -623,9 +620,6 @@ async function handleGetConnectionString({
       roleName = data.database.owner_name;
     }
   } else if (!roleName) {
-    if (!databaseName) {
-      throw new Error('Database name is required');
-    }
     const { data } = await neonClient.getProjectBranchDatabase(
       projectId,
       branchId,
@@ -686,10 +680,6 @@ async function handleSchemaMigration({
   });
 
   const migrationId = crypto.randomUUID();
-  if (!databaseName) {
-    throw new Error('Database name is required for migration');
-  }
-
   persistMigrationToMemory(migrationId, {
     migrationSql,
     databaseName,
