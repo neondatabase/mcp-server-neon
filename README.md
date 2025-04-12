@@ -154,6 +154,7 @@ If you are using Windows and encounter issues while adding the MCP server, you m
 - [Claude Desktop with Neon MCP Server](https://neon.tech/guides/neon-mcp-server)
 - [Cline with Neon MCP Server](https://neon.tech/guides/cline-mcp-neon)
 - [Windsurf with Neon MCP Server](https://neon.tech/guides/windsurf-mcp-neon)
+- [Zed with Neon MCP Server](https://neon.tech/guides/zed-mcp-neon)
 
 # Features
 
