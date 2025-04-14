@@ -19,4 +19,4 @@ jobs:
           CLIENT_ID: ${{secrets.CLIENT_ID}}
           CLIENT_SECRET: ${{secrets.CLIENT_SECRET}}
           OAUTH_DATABASE_URL: ${{secrets.PREVIEW_OAUTH_DATABASE_URL}}
-          SERVER_HOST: https://preview-mcp-server-neon.fly.dev
+          SERVER_HOST: ${{vars.PREVIEW_SERVER_HOST}}
