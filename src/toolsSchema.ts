@@ -4,6 +4,8 @@ import { NEON_DEFAULT_DATABASE_NAME } from './constants.js';
 
 type ZodObjectParams<T> = z.ZodObject<{ [key in keyof T]: z.ZodType<T[key]> }>;
 
+const DATABASE_NAME_DESCRIPTION = `The name of the database. If not provided, the default ${NEON_DEFAULT_DATABASE_NAME} or first available database is used.`;
+
 export const nodeVersionInputSchema = z.object({});
 
 export const listProjectsInputSchema = z.object({
@@ -45,50 +47,54 @@ export const describeProjectInputSchema = z.object({
 
 export const runSqlInputSchema = z.object({
   sql: z.string().describe('The SQL query to execute'),
-  databaseName: z
-    .string()
-    .describe('The name of the database to execute the query against'),
   projectId: z
     .string()
     .describe('The ID of the project to execute the query against'),
   branchId: z
     .string()
     .optional()
-    .describe('An optional ID of the branch to execute the query against'),
+    .describe(
+      'An optional ID of the branch to execute the query against. If not provided the default branch is used.',
+    ),
+  databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
 });
 
 export const runSqlTransactionInputSchema = z.object({
   sqlStatements: z.array(z.string()).describe('The SQL statements to execute'),
-  databaseName: z
-    .string()
-    .describe('The name of the database to execute the query against'),
   projectId: z
     .string()
     .describe('The ID of the project to execute the query against'),
   branchId: z
     .string()
     .optional()
-    .describe('An optional ID of the branch to execute the query against'),
+    .describe(
+      'An optional ID of the branch to execute the query against. If not provided the default branch is used.',
+    ),
+  databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
 });
-
 export const describeTableSchemaInputSchema = z.object({
   tableName: z.string().describe('The name of the table'),
-  databaseName: z
-    .string()
-    .describe('The name of the database to get the table schema from'),
   projectId: z
     .string()
     .describe('The ID of the project to execute the query against'),
   branchId: z
     .string()
     .optional()
-    .describe('An optional ID of the branch to execute the query against'),
+    .describe(
+      'An optional ID of the branch to execute the query against. If not provided the default branch is used.',
+    ),
+  databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
 });
 
 export const getDatabaseTablesInputSchema = z.object({
   projectId: z.string().describe('The ID of the project'),
-  branchId: z.string().optional().describe('An optional ID of the branch'),
-  databaseName: z.string().describe('The name of the database'),
+  branchId: z
+    .string()
+    .optional()
+    .describe(
+      'An optional ID of the branch. If not provided the default branch is used.',
+    ),
+  databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
 });
 
 export const createBranchInputSchema = z.object({
@@ -102,12 +108,10 @@ export const prepareDatabaseMigrationInputSchema = z.object({
   migrationSql: z
     .string()
     .describe('The SQL to execute to create the migration'),
-  databaseName: z
-    .string()
-    .describe('The name of the database to execute the query against'),
   projectId: z
     .string()
     .describe('The ID of the project to execute the query against'),
+  databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
 });
 
 export const completeDatabaseMigrationInputSchema = z.object({
@@ -117,7 +121,7 @@ export const completeDatabaseMigrationInputSchema = z.object({
 export const describeBranchInputSchema = z.object({
   projectId: z.string().describe('The ID of the project'),
   branchId: z.string().describe('An ID of the branch to describe'),
-  databaseName: z.string().describe('The name of the database'),
+  databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
 });
 
 export const deleteBranchInputSchema = z.object({
@@ -143,17 +147,12 @@ export const getConnectionStringInputSchema = z.object({
     .describe(
       'The ID of the compute/endpoint. If not provided, the only available compute will be used.',
     ),
-  databaseName: z
-    .string()
-    .optional()
-    .describe(
-      'The name of the database. If not provided, the default database (usually "neondb") will be used.',
-    ),
+  databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
   roleName: z
     .string()
     .optional()
     .describe(
-      'The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.',
+      'The name of the role to connect with. If not provided, the database owner name will be used.',
     ),
 });
 
@@ -161,11 +160,5 @@ export const provisionNeonAuthInputSchema = z.object({
   projectId: z
     .string()
     .describe('The ID of the project to provision Neon Auth for'),
-  database: z
-    .string()
-    .optional()
-    .describe(
-      `The database name to setup Neon Auth for. Defaults to '${NEON_DEFAULT_DATABASE_NAME}'`,
-    )
-    .default(NEON_DEFAULT_DATABASE_NAME),
+  database: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
 });

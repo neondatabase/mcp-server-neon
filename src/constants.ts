@@ -2,7 +2,6 @@ import { config } from 'dotenv';
 
 config();
 
-export const NEON_DEFAULT_ROLE_NAME = 'neondb_owner';
 export const NEON_DEFAULT_DATABASE_NAME = 'neondb';
 
 export const IS_DEV = process.env.NODE_ENV === 'development';

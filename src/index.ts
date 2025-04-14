@@ -6,28 +6,24 @@ import { createSseTransport } from './transports/sse-express.js';
 import { startStdio } from './transports/stdio.js';
 import './utils/polyfills.js';
 
-const commands = ['init', 'start', 'start:sse'] as const;
-const { command, neonApiKey, executablePath } = parseArgs();
-if (!commands.includes(command as (typeof commands)[number])) {
-  console.error(`Invalid command: ${command}`);
-  process.exit(1);
-}
-if (command === 'init') {
+const args = parseArgs();
+
+if (args.command === 'init') {
   // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression, @typescript-eslint/await-thenable
   await handleInit({
-    executablePath,
-    neonApiKey,
+    executablePath: args.executablePath,
+    neonApiKey: args.neonApiKey,
   });
   process.exit(0);
 }
 
-if (command === 'start:sse') {
+if (args.command === 'start:sse') {
   createSseTransport();
 }
 
-if (command === 'start') {
+if (args.command === 'start') {
   try {
-    const server = createMcpServer(neonApiKey);
+    const server = createMcpServer(args.neonApiKey);
     await startStdio(server);
   } catch (error) {
     console.error('Server error:', error);
