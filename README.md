@@ -45,7 +45,7 @@ You have two options for connecting your MCP client to Neon:
 - A [Neon account](https://console.neon.tech/signup).
 - **Node.js (>= v18.0.0) and npm:** Download from [nodejs.org](https://nodejs.org).
 
-For Local MCP Server setup, you also need a Neon API key. See [Neon API Keys documentation](/docs/manage/api-keys#creating-api-keys) for instructions on generating one.
+For Local MCP Server setup, you also need a Neon API key. See [Neon API Keys documentation](https://neon.tech/docs/manage/api-keys) for instructions on generating one.
 
 ### Option 1. Remote Hosted MCP Server (Preview)
 

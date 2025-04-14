@@ -3,6 +3,7 @@
 ## UNRELEASED
 
 - Fix default database name or role name assumptions.
+- Fix broken link to Neon API Keys documentation in README.md.
 
 ## [0.3.4] - 2025-03-26
 
