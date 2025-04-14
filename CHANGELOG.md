@@ -2,6 +2,8 @@
 
 ## UNRELEASED
 
+- Fix default database name or role name assumptions.
+
 ## [0.3.4] - 2025-03-26
 
 - Add `neon-auth`, `neon-serverless`, and `neon-drizzle` resources

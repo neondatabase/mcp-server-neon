@@ -3,7 +3,11 @@ import { neonClient } from './index.js';
 import crypto from 'crypto';
 import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
 import { EndpointType, ListProjectsParams } from '@neondatabase/api-client';
-import { DESCRIBE_DATABASE_STATEMENTS, splitSqlStatements } from './utils.js';
+import {
+  DESCRIBE_DATABASE_STATEMENTS,
+  splitSqlStatements,
+  getDefaultDatabase,
+} from './utils.js';
 import {
   listProjectsInputSchema,
   nodeVersionInputSchema,
@@ -25,11 +29,8 @@ import {
 } from './toolsSchema.js';
 import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
-import {
-  NEON_DEFAULT_ROLE_NAME,
-  NEON_DEFAULT_DATABASE_NAME,
-} from './constants.js';
 import { handleImportCsvData } from './handlers/csv/import-csv.js';
+import { NEON_DEFAULT_DATABASE_NAME } from './constants.js';
 
 // Define the tools with their configurations
 export const NEON_TOOLS = [
@@ -115,7 +116,7 @@ export const NEON_TOOLS = [
     4. Verify the changes before applying to main branch
 
     Project ID and database name will be automatically extracted from your request.
-    Default database is ${NEON_DEFAULT_DATABASE_NAME} if not specified.
+    If the database name is not provided, the default ${NEON_DEFAULT_DATABASE_NAME} or first available database is used.
   </use_case>
 
   <workflow>
@@ -244,7 +245,7 @@ export const NEON_TOOLS = [
 
     Parameters:
     - <project_id>: The Project ID of the Neon project to provision authentication for.
-    - [database]: The database name to setup Neon Auth for. Defaults to '${NEON_DEFAULT_DATABASE_NAME}'.
+    - [database]: The database name to setup Neon Auth for. If not provided, the default ${NEON_DEFAULT_DATABASE_NAME} or first available database is used.
     
     The tool will:
       1. Establish a connection between your Neon Auth project and Stack Auth
@@ -463,17 +464,16 @@ async function handleRunSql({
   branchId,
 }: {
   sql: string;
-  databaseName: string;
+  databaseName?: string;
   projectId: string;
   branchId?: string;
 }) {
-  const connectionString = await neonClient.getConnectionUri({
+  const connectionString = await handleGetConnectionString({
     projectId,
-    role_name: NEON_DEFAULT_ROLE_NAME,
-    database_name: databaseName,
-    branch_id: branchId,
+    branchId,
+    databaseName,
   });
-  const runQuery = neon(connectionString.data.uri);
+  const runQuery = neon(connectionString.uri);
   const response = await runQuery(sql);
 
   return response;
@@ -486,17 +486,16 @@ async function handleRunSqlTransaction({
   branchId,
 }: {
   sqlStatements: string[];
-  databaseName: string;
+  databaseName?: string;
   projectId: string;
   branchId?: string;
 }) {
-  const connectionString = await neonClient.getConnectionUri({
+  const connectionString = await handleGetConnectionString({
     projectId,
-    role_name: NEON_DEFAULT_ROLE_NAME,
-    database_name: databaseName,
-    branch_id: branchId,
+    branchId,
+    databaseName,
   });
-  const runQuery = neon(connectionString.data.uri);
+  const runQuery = neon(connectionString.uri);
   const response = await runQuery.transaction(
     sqlStatements.map((sql) => runQuery(sql)),
   );
@@ -510,17 +509,15 @@ async function handleGetDatabaseTables({
   branchId,
 }: {
   projectId: string;
-  databaseName: string;
+  databaseName?: string;
   branchId?: string;
 }) {
-  const connectionString = await neonClient.getConnectionUri({
+  const connectionString = await handleGetConnectionString({
     projectId,
-    role_name: NEON_DEFAULT_ROLE_NAME,
-    database_name: databaseName,
-    branch_id: branchId,
+    branchId,
+    databaseName,
   });
-
-  const runQuery = neon(connectionString.data.uri);
+  const runQuery = neon(connectionString.uri);
   const query = `
     SELECT 
       table_schema,
@@ -542,7 +539,7 @@ async function handleDescribeTableSchema({
   tableName,
 }: {
   projectId: string;
-  databaseName: string;
+  databaseName?: string;
   branchId?: string;
   tableName: string;
 }) {
@@ -626,14 +623,40 @@ async function handleGetConnectionString({
     }
   }
 
-  // If databaseName is not provided, use the default
-  if (!databaseName) {
-    databaseName = NEON_DEFAULT_DATABASE_NAME;
+  if (!branchId) {
+    const branches = await neonClient.listProjectBranches({
+      projectId,
+    });
+    const defaultBranch = branches.data.branches.find(
+      (branch) => branch.default,
+    );
+    if (defaultBranch) {
+      branchId = defaultBranch.id;
+    } else {
+      throw new Error('No default branch found in your project');
+    }
   }
 
-  // If roleName is not provided, use the default
-  if (!roleName) {
-    roleName = NEON_DEFAULT_ROLE_NAME;
+  // If databaseName is not provided, use default `neondb` or first database
+  let dbObject;
+  if (!databaseName) {
+    dbObject = await getDefaultDatabase({
+      projectId,
+      branchId,
+      databaseName,
+    });
+    databaseName = dbObject.name;
+
+    if (!roleName) {
+      roleName = dbObject.owner_name;
+    }
+  } else if (!roleName) {
+    const { data } = await neonClient.getProjectBranchDatabase(
+      projectId,
+      branchId,
+      databaseName,
+    );
+    roleName = data.database.owner_name;
   }
 
   // Get connection URI with the provided parameters
@@ -660,11 +683,20 @@ async function handleSchemaMigration({
   databaseName,
   projectId,
 }: {
-  databaseName: string;
+  databaseName?: string;
   projectId: string;
   migrationSql: string;
 }) {
   const newBranch = await handleCreateBranch({ projectId });
+
+  if (!databaseName) {
+    const dbObject = await getDefaultDatabase({
+      projectId,
+      branchId: newBranch.branch.id,
+      databaseName,
+    });
+    databaseName = dbObject.name;
+  }
 
   const result = await handleRunSqlTransaction({
     sqlStatements: splitSqlStatements(migrationSql),
@@ -717,16 +749,15 @@ async function handleDescribeBranch({
   branchId,
 }: {
   projectId: string;
-  databaseName: string;
+  databaseName?: string;
   branchId?: string;
 }) {
-  const connectionString = await neonClient.getConnectionUri({
+  const connectionString = await handleGetConnectionString({
     projectId,
-    role_name: NEON_DEFAULT_ROLE_NAME,
-    database_name: databaseName,
-    branch_id: branchId,
+    branchId,
+    databaseName,
   });
-  const runQuery = neon(connectionString.data.uri);
+  const runQuery = neon(connectionString.uri);
   const response = await runQuery.transaction(
     DESCRIBE_DATABASE_STATEMENTS.map((sql) => runQuery(sql)),
   );
