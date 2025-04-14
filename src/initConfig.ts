@@ -46,7 +46,6 @@ export const parseArgs = () => {
     return {
       executablePath: args[1],
       command: 'start:sse',
-      neonApiKey: args[3],
     };
   }
 

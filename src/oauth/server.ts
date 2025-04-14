@@ -19,8 +19,6 @@ import { createNeonClient } from '../server/api.js';
 import bodyParser from 'body-parser';
 import { SERVER_HOST } from '../constants.js';
 
-import {} from '@modelcontextprotocol/sdk/server/auth/clients.js';
-
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
 const SUPPORTED_AUTH_METHODS = ['client_secret_post', 'none'];
