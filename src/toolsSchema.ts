@@ -169,3 +169,52 @@ export const provisionNeonAuthInputSchema = z.object({
     )
     .default(NEON_DEFAULT_DATABASE_NAME),
 });
+
+export const importCsvDataInputSchema = z.object({
+  projectId: z.string().describe('The ID of the project'),
+  databaseName: z
+    .string()
+    .describe('The name of the database to import data into'),
+  tableName: z
+    .string()
+    .describe(
+      "The name of the target table (will be created if it doesn't exist)",
+    ),
+  branchId: z
+    .string()
+    .optional()
+    .describe('Optional branch ID (uses default if not provided)'),
+  csvSource: z
+    .union([
+      z.object({
+        type: z.literal('direct'),
+        data: z.string().describe('The CSV data as a string'),
+      }),
+      z.object({
+        type: z.literal('upload'),
+        uploadId: z
+          .string()
+          .describe('The ID of a previously uploaded CSV file'),
+      }),
+    ])
+    .describe('The source of CSV data (direct string or uploaded file)'),
+  options: z
+    .object({
+      hasHeaderRow: z.boolean().optional().default(true),
+      delimiter: z.string().optional().default(','),
+      quoteChar: z.string().optional().default('"'),
+      escapeChar: z.string().optional().default('"'),
+      newline: z.string().optional().default('\n'),
+      columnMapping: z.record(z.string()).optional(),
+      onConflict: z
+        .enum(['skip', 'update', 'replace'])
+        .optional()
+        .default('skip'),
+      batchSize: z.number().optional().default(1000),
+      dryRun: z.boolean().optional().default(false),
+      autoCreateTable: z.boolean().optional().default(false),
+      createOnly: z.boolean().optional().default(false),
+    })
+    .optional()
+    .default({}),
+});

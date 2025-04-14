@@ -1,5 +1,6 @@
 import { ReadResourceCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Resource } from '@modelcontextprotocol/sdk/types.js';
+import { handleCsvUpload } from './handlers/csv/import-csv.js';
 
 async function fetchRawGithubContent(rawPath: string) {
   const path = rawPath.replace('/blob', '');
@@ -69,5 +70,12 @@ export const NEON_RESOURCES = [
         ],
       };
     },
+  },
+  {
+    name: 'csv_upload',
+    uri: 'resource://csv-upload',
+    description: 'Upload a CSV file for importing into Neon database',
+    mimeType: 'text/csv',
+    handler: handleCsvUpload,
   },
 ] satisfies (Resource & { handler: ReadResourceCallback })[];

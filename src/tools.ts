@@ -21,6 +21,7 @@ import {
   deleteBranchInputSchema,
   getConnectionStringInputSchema,
   provisionNeonAuthInputSchema,
+  importCsvDataInputSchema
 } from './toolsSchema.js';
 import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
@@ -28,6 +29,7 @@ import {
   NEON_DEFAULT_ROLE_NAME,
   NEON_DEFAULT_DATABASE_NAME,
 } from './constants.js';
+import { handleImportCsvData } from './handlers/csv/import-csv.js';
 
 // Define the tools with their configurations
 export const NEON_TOOLS = [
@@ -363,6 +365,38 @@ export const NEON_TOOLS = [
       \`\`\`
         `,
   },
+  {
+    name: 'import_csv_data' as const,
+    description: `
+      Import data from a CSV file into a Neon database table.
+      
+      <workflow>
+        1. Analyzes CSV structure and intelligently infers data types
+        2. Creates table automatically if it doesn't exist (optional)
+        3. Maps CSV columns to database columns (automatic or manual mapping)
+        4. Validates data types and constraints before import
+        5. Imports data in configurable batches with transaction support
+        6. Returns detailed import summary with success/failure statistics
+      </workflow>
+      
+      <options>
+        - Header handling: Specify if first row contains column names
+        - Delimiter customization: Use custom field separators
+        - Column mapping: Match CSV columns to database fields
+        - Conflict handling: Choose how to handle existing records (skip/update/replace)
+        - Batch size: Control performance and memory usage
+        - Dry run: Preview the import without making changes
+        - Auto-create table: Automatically create a table based on CSV structure
+      </options>
+  
+      <examples>
+        - Import with auto-created table: \`{"projectId": "...", "databaseName": "...", "tableName": "new_table", "csvSource": {"type": "direct", "data": "..."}, "options": {"autoCreateTable": true}}\`
+        - Import with custom mapping: \`{"projectId": "...", "databaseName": "...", "tableName": "existing_table", "csvSource": {"type": "direct", "data": "..."}, "options": {"columnMapping": {"csv_col1": "db_col1", "csv_col2": "db_col2"}}}\`
+        - Dry run mode: \`{"projectId": "...", "databaseName": "...", "tableName": "existing_table", "csvSource": {"type": "direct", "data": "..."}, "options": {"dryRun": true}}\`
+      </examples>
+    `,
+    inputSchema: importCsvDataInputSchema,
+  }
 ];
 
 // Extract the tool names as a union type
@@ -997,5 +1031,8 @@ export const NEON_HANDLERS = {
       projectId: params.projectId,
       database: params.database,
     });
+  },
+  import_csv_data: async ({ params }) => {
+    return await handleImportCsvData(params);
   },
 } satisfies ToolHandlers;
