@@ -36,7 +36,6 @@ import {
   NEON_DEFAULT_ROLE_NAME,
   NEON_DEFAULT_DATABASE_NAME,
 } from './constants.js';
-import { logger } from './logger.js';
 import { describeTable, formatTableDescription } from './describeUtils.js';
 
 // Define the tools with their configurations
@@ -738,7 +737,6 @@ async function handleDescribeTableSchema({
   const tableNameParts = tableName.split('.');
   const simpleTableName = tableNameParts[tableNameParts.length - 1];
   
-  logger.log('Describing table:', { fullName: tableName, simpleTableName });
   const description = await describeTable(connectionString.data.uri, simpleTableName);
   return {
     raw: description,
@@ -940,7 +938,6 @@ async function handleExplainSqlStatement({
     : 'EXPLAIN (VERBOSE, FORMAT JSON)';
   
   const explainSql = `${explainPrefix} ${params.sql}`;
-  logger.log('Executing EXPLAIN SQL:', explainSql);
   
   const result = await handleRunSql({
     sql: explainSql,
@@ -949,8 +946,6 @@ async function handleExplainSqlStatement({
     branchId: params.branchId,
     roleName: params.roleName,
   });
-
-  logger.log('Raw EXPLAIN result:', JSON.stringify(result, null, 2));
 
   return {
     content: [
@@ -985,7 +980,6 @@ async function explainQueryAndGetSchemaInformation({
 }) {
   try {
     // Get the execution plan
-    logger.log('Getting execution plan for query:', sql);
     const executionPlan = await handleExplainSqlStatement({
       params: {
         sql,
@@ -996,21 +990,16 @@ async function explainQueryAndGetSchemaInformation({
         analyze: true,
       },
     });
-    logger.log('Retrieved execution plan');
 
     // Extract table names from the plan
-    logger.log('Extracting table names from execution plan');
     const tableNames = extractTableNamesFromPlan(executionPlan);
-    logger.log('Found tables:', tableNames);
     
     if (tableNames.length === 0) {
       const error = new Error('No tables found in execution plan. Cannot proceed with optimization.');
-      logger.error('Table extraction failed:', error);
       throw error;
     }
 
     // Get schema information for all referenced tables
-    logger.log('Getting schema information for tables:', tableNames);
     const tableSchemas = await Promise.all(
       tableNames.map(async tableName => {
         try {
@@ -1021,19 +1010,16 @@ async function explainQueryAndGetSchemaInformation({
             branchId,
             roleName,
           });
-          logger.log(`Retrieved schema for table ${tableName}`);
           return {
             tableName,
             schema: schema.raw,
             formatted: schema.formatted
           };
         } catch (error) {
-          logger.error(`Failed to get schema for table ${tableName}:`, error);
           throw new Error(`Failed to get schema for table ${tableName}: ${(error as Error).message}`);
         }
       })
     );
-    logger.log('Retrieved schema information for all tables');
 
     return {
       executionPlan,
@@ -1041,7 +1027,6 @@ async function explainQueryAndGetSchemaInformation({
       sql
     };
   } catch (error) {
-    logger.error('Error in explainQueryAndGetSchemaInformation:', error);
     throw error;
   }
 }
@@ -1089,20 +1074,12 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
   const tuningId = crypto.randomUUID();
   
   try {
-    logger.log('Starting query tuning process with params:', {
-      tuningId,
-      ...params,
-      sql: params.sql.substring(0, 100) + (params.sql.length > 100 ? '...' : '')
-    });
-
     // Create temporary branch
-    logger.log('Creating temporary branch for query tuning');
     const newBranch = await createTemporaryBranch(params.projectId);
     if (!newBranch.branch) {
       throw new Error('Failed to create temporary branch: branch is undefined');
     }
     tempBranch = newBranch.branch;
-    logger.log('Created temporary branch:', { id: tempBranch.id, name: tempBranch.name });
 
     // Ensure all operations use the temporary branch
     const branchParams = {
@@ -1111,7 +1088,6 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
     };
 
     // First, get the execution plan with table information
-    logger.log('Getting execution plan on temporary branch:', tempBranch.id);
     const executionPlan = await handleExplainSqlStatement({
       params: {
         sql: branchParams.sql,
@@ -1124,16 +1100,13 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
     });
 
     // Extract table names from the plan
-    logger.log('Extracting table names from execution plan');
     const tableNames = extractTableNamesFromPlan(executionPlan);
-    logger.log('Found tables:', tableNames);
-
+    
     if (tableNames.length === 0) {
       throw new Error('No tables found in execution plan. Cannot proceed with optimization.');
     }
 
     // Get schema information for all referenced tables in parallel
-    logger.log('Getting schema information for tables on branch:', tempBranch.id);
     const tableSchemas = await Promise.all(
       tableNames.map(async tableName => {
         try {
@@ -1150,7 +1123,6 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
             formatted: schema.formatted
           };
         } catch (error) {
-          logger.error(`Failed to get schema for table ${tableName}:`, error);
           throw new Error(`Failed to get schema for table ${tableName}: ${(error as Error).message}`);
         }
       })
@@ -1172,27 +1144,22 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
       baselineMetrics,
     };
     
-    logger.log('Query tuning analysis completed successfully on branch:', tempBranch.id);
     return result;
 
   } catch (error) {
-    logger.error('Error during query tuning:', error);
-    
     // Always attempt to clean up the temporary branch if it was created
     if (tempBranch) {
       try {
-        logger.log('Cleaning up temporary branch after error:', tempBranch.id);
         await handleDeleteBranch({
           projectId: params.projectId,
           branchId: tempBranch.id,
         });
-        logger.log('Successfully cleaned up temporary branch');
       } catch (cleanupError) {
-        logger.error('Failed to clean up temporary branch:', cleanupError);
+        // No need to handle cleanup error
       }
     }
     
-    throw new Error(`Query tuning failed: ${(error as Error).message}`);
+    throw error;
   }
 }
 
@@ -1257,7 +1224,6 @@ function extractExecutionMetrics(plan: any): QueryMetrics {
 
     return metrics;
   } catch (error) {
-    logger.error('Error extracting execution metrics:', error);
     return {
       executionTime: 0,
       planningTime: 0,
@@ -1293,15 +1259,13 @@ interface QueryMetrics {
 // Function to extract table names from an execution plan
 function extractTableNamesFromPlan(planResult: any): string[] {
   const tableNames = new Set<string>();
-  logger.log('Extracting table names from plan:', JSON.stringify(planResult, null, 2));
-
+  
   function recursivelyExtractFromNode(node: any) {
     if (!node || typeof node !== 'object') return;
 
     // Check if current node has relation information
     if (node['Relation Name'] && node['Schema']) {
       const tableName = `${node['Schema']}.${node['Relation Name']}`;
-      logger.log('Found table:', tableName);
       tableNames.add(tableName);
     }
 
@@ -1323,15 +1287,14 @@ function extractTableNamesFromPlan(planResult: any): string[] {
         const parsedContent = JSON.parse(planResult.content[0].text);
         recursivelyExtractFromNode(parsedContent);
       } catch (parseError) {
-        logger.error('Error parsing content.text:', parseError);
+        // No need to handle parse error
       }
     }
   } catch (error) {
-    logger.error('Error extracting table names:', error);
+    // No need to handle extraction error
   }
 
   const result = Array.from(tableNames);
-  logger.log('Extracted table names:', result);
   return result;
 }
 
@@ -1362,7 +1325,6 @@ async function handleCompleteTuning(params: CompleteTuningParams): Promise<Compl
 
     // Only proceed with changes if we have both suggestedChanges and branch
     if (params.applyChanges && params.suggestedSqlStatements && params.suggestedSqlStatements.length > 0) {
-      logger.log('Applying suggested changes to main branch', params.branch);
       operationLog.push('Applying optimizations to main branch...');
       
       results = await handleRunSqlTransaction({
@@ -1373,16 +1335,13 @@ async function handleCompleteTuning(params: CompleteTuningParams): Promise<Compl
         roleName: params.roleName,
       });
       
-      logger.log('Successfully applied changes to main branch');
       operationLog.push('Successfully applied optimizations to main branch.');
     } else {
-      logger.log('No changes to apply or changes were discarded');
       operationLog.push('No changes were applied (either none suggested or changes were discarded).');
     }
 
     // Only delete branch if shouldDeleteTemporaryBranch is true
     if (params.shouldDeleteTemporaryBranch && params.temporaryBranch) {
-      logger.log('Cleaning up temporary branch:', params.temporaryBranch.id);
       operationLog.push('Cleaning up temporary branch...');
       
       await handleDeleteBranch({
@@ -1390,7 +1349,6 @@ async function handleCompleteTuning(params: CompleteTuningParams): Promise<Compl
         branchId: params.temporaryBranch.id,
       });
       
-      logger.log('Successfully cleaned up temporary branch');
       operationLog.push('Successfully cleaned up temporary branch.');
     }
 
@@ -1401,11 +1359,9 @@ async function handleCompleteTuning(params: CompleteTuningParams): Promise<Compl
       message: operationLog.join('\n'),
     };
     
-    logger.log('Query tuning completion finished successfully:', result);
     return result;
     
   } catch (error) {
-    logger.error('Error during query tuning completion:', error);
     throw new Error(`Failed to complete query tuning: ${(error as Error).message}`);
   }
 }
@@ -1417,24 +1373,19 @@ export const NEON_HANDLERS = {
   }),
 
   list_projects: async ({ params }) => {
-    logger.log('Calling list_projects with params:', params);
     try {
       const projects = await handleListProjects(params);
-      logger.log('Projects response:', projects);
       return {
         content: [{ type: 'text', text: JSON.stringify(projects, null, 2) }],
       };
     } catch (error) {
-      logger.error('Error in list_projects:', error);
       throw error;
     }
   },
 
   create_project: async ({ params }) => {
-    logger.log('Calling create_project with params:', params);
     try {
       const result = await handleCreateProject(params.name);
-      logger.log('Project creation response:', result);
 
       // Get the connection string for the newly created project
       const connectionString = await handleGetConnectionString({
@@ -1442,7 +1393,6 @@ export const NEON_HANDLERS = {
         branchId: result.branch.id,
         databaseName: result.databases[0].name,
       });
-      logger.log('Connection string response:', connectionString);
 
       return {
         content: [
@@ -1470,16 +1420,13 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      logger.error('Error in create_project:', error);
       throw error;
     }
   },
 
   delete_project: async ({ params }) => {
-    logger.log('Calling delete_project with params:', params);
     try {
       await handleDeleteProject(params.projectId);
-      logger.log('Project deleted successfully');
       return {
         content: [
           {
@@ -1492,16 +1439,13 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      logger.error('Error in delete_project:', error);
       throw error;
     }
   },
 
   describe_project: async ({ params }) => {
-    logger.log('Calling describe_project with params:', params);
     try {
       const result = await handleDescribeProject(params.projectId);
-      logger.log('Project details:', result);
       return {
         content: [
           {
@@ -1519,13 +1463,11 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      logger.error('Error in describe_project:', error);
       throw error;
     }
   },
 
   run_sql: async ({ params }) => {
-    logger.log('Calling run_sql with params:', params);
     try {
       const result = await handleRunSql({
         sql: params.sql,
@@ -1534,18 +1476,15 @@ export const NEON_HANDLERS = {
         branchId: params.branchId,
         roleName: params.roleName,
       });
-      logger.log('SQL execution result:', result);
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     } catch (error) {
-      logger.error('Error in run_sql:', error);
       throw error;
     }
   },
 
   run_sql_transaction: async ({ params }) => {
-    logger.log('Calling run_sql_transaction with params:', params);
     try {
       const result = await handleRunSqlTransaction({
         sqlStatements: params.sqlStatements,
@@ -1554,18 +1493,15 @@ export const NEON_HANDLERS = {
         branchId: params.branchId,
         roleName: params.roleName,
       });
-      logger.log('SQL transaction result:', result);
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     } catch (error) {
-      logger.error('Error in run_sql_transaction:', error);
       throw error;
     }
   },
 
   describe_table_schema: async ({ params }) => {
-    logger.log('Calling describe_table_schema with params:', params);
     try {
       const result = await handleDescribeTableSchema({
         tableName: params.tableName,
@@ -1574,7 +1510,6 @@ export const NEON_HANDLERS = {
         branchId: params.branchId,
         roleName: params.roleName,
       });
-      logger.log('Table schema:', result);
       return {
         content: [
           {
@@ -1587,13 +1522,11 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      logger.error('Error in describe_table_schema:', error);
       throw error;
     }
   },
 
   get_database_tables: async ({ params }) => {
-    logger.log('Calling get_database_tables with params:', params);
     try {
       const result = await handleGetDatabaseTables({
         projectId: params.projectId,
@@ -1601,7 +1534,6 @@ export const NEON_HANDLERS = {
         databaseName: params.databaseName,
         roleName: params.roleName,
       });
-      logger.log('Database tables:', result);
       return {
         content: [
           {
@@ -1611,19 +1543,16 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      logger.error('Error in get_database_tables:', error);
       throw error;
     }
   },
 
   create_branch: async ({ params }) => {
-    logger.log('Calling create_branch with params:', params);
     try {
       const result = await handleCreateBranch({
         projectId: params.projectId,
         branchName: params.branchName,
       });
-      logger.log('Branch creation result:', result);
       return {
         content: [
           {
@@ -1639,13 +1568,11 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      logger.error('Error in create_branch:', error);
       throw error;
     }
   },
 
   prepare_database_migration: async ({ params }) => {
-    logger.log('Calling prepare_database_migration with params:', params);
     try {
       const result = await handleSchemaMigration({
         migrationSql: params.migrationSql,
@@ -1653,7 +1580,6 @@ export const NEON_HANDLERS = {
         projectId: params.projectId,
         roleName: params.roleName,
       });
-      logger.log('Migration preparation result:', result);
       return {
         content: [
           {
@@ -1680,18 +1606,15 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      logger.error('Error in prepare_database_migration:', error);
       throw error;
     }
   },
 
   complete_database_migration: async ({ params }) => {
-    logger.log('Calling complete_database_migration with params:', params);
     try {
       const result = await handleCommitMigration({
         migrationId: params.migrationId,
       });
-      logger.log('Migration completion result:', result);
       return {
         content: [
           {
@@ -1708,13 +1631,11 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      logger.error('Error in complete_database_migration:', error);
       throw error;
     }
   },
 
   describe_branch: async ({ params }) => {
-    logger.log('Calling describe_branch with params:', params);
     try {
       const result = await handleDescribeBranch({
         projectId: params.projectId,
@@ -1722,7 +1643,6 @@ export const NEON_HANDLERS = {
         databaseName: params.databaseName,
         roleName: params.roleName,
       });
-      logger.log('Branch description:', result);
       return {
         content: [
           {
@@ -1732,19 +1652,16 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      logger.error('Error in describe_branch:', error);
       throw error;
     }
   },
 
   delete_branch: async ({ params }) => {
-    logger.log('Calling delete_branch with params:', params);
     try {
       await handleDeleteBranch({
         projectId: params.projectId,
         branchId: params.branchId,
       });
-      logger.log('Branch deleted successfully');
       return {
         content: [
           {
@@ -1758,13 +1675,11 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      logger.error('Error in delete_branch:', error);
       throw error;
     }
   },
 
   get_connection_string: async ({ params }) => {
-    logger.log('Calling get_connection_string with params:', params);
     try {
       const result = await handleGetConnectionString({
         projectId: params.projectId,
@@ -1773,7 +1688,6 @@ export const NEON_HANDLERS = {
         databaseName: params.databaseName,
         roleName: params.roleName,
       });
-      logger.log('Connection string result:', result);
       return {
         content: [
           {
@@ -1793,40 +1707,32 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      logger.error('Error in get_connection_string:', error);
       throw error;
     }
   },
 
   provision_neon_auth: async ({ params }) => {
-    logger.log('Calling provision_neon_auth with params:', params);
     try {
       const result = await handleProvisionNeonAuth({
         projectId: params.projectId,
         database: params.database,
       });
-      logger.log('Neon Auth provisioning result:', result);
       return result;
     } catch (error) {
-      logger.error('Error in provision_neon_auth:', error);
       throw error;
     }
   },
 
   explain_sql_statement: async ({ params }) => {
-    logger.log('Calling explain_sql_statement with params:', params);
     try {
       const result = await handleExplainSqlStatement({ params });
-      logger.log('Explain result:', result);
       return result;
     } catch (error) {
-      logger.error('Error in explain_sql_statement:', error);
       throw error;
     }
   },
 
   prepare_query_tuning: async ({ params }) => {
-    logger.log('Calling prepare_query_tuning with params:', params);
     try {
       const result = await handleQueryTuning({
         sql: params.sql,
@@ -1834,7 +1740,6 @@ export const NEON_HANDLERS = {
         projectId: params.projectId,
         roleName: params.roleName,
       });
-      logger.log('Query tuning preparation result:', result);
       return {
         content: [
           {
@@ -1853,13 +1758,11 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      logger.error('Error in prepare_query_tuning:', error);
       throw error;
     }
   },
 
   complete_query_tuning: async ({ params }: { params: HandlerParams['complete_query_tuning'] }) => {
-    logger.log('Calling complete_query_tuning with params:', params);
     try {
       const result = await handleCompleteTuning({
         suggestedSqlStatements: params.suggestedSqlStatements,
@@ -1873,7 +1776,6 @@ export const NEON_HANDLERS = {
         branch: params.branchId ? { id: params.branchId, project_id: params.projectId } as Branch : undefined,
       });
 
-      logger.log('Query tuning completion result:', result);
       return {
         content: [
           {
@@ -1883,7 +1785,6 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      logger.error('Error in complete_query_tuning:', error);
       throw error;
     }
   },

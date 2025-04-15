@@ -27,7 +27,8 @@ if (command === 'init') {
 // ----------------------------
 export const neonClient = createApiClient({
   apiKey: neonApiKey,
-// activate this line for Neon dev environment   baseURL: 'https://console-stage.neon.build/api/v2',
+  // activate the following line for Neon dev environment
+  // baseURL: 'https://console-stage.neon.build/api/v2',
 });
 
 const server = new McpServer({
