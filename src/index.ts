@@ -2,10 +2,19 @@
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { NEON_HANDLERS, NEON_TOOLS, ToolHandler } from './tools.js';
+import { NEON_RESOURCES } from './resources.js';
 import { handleInit, parseArgs } from './initConfig.js';
 import { createApiClient } from '@neondatabase/api-client';
 import './polyfills.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const packageJson = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'),
+);
 
 const commands = ['init', 'start'] as const;
 const { command, neonApiKey, executablePath } = parseArgs();
@@ -25,17 +34,30 @@ if (command === 'init') {
 
 // "start" command from here
 // ----------------------------
+
 export const neonClient = createApiClient({
   apiKey: neonApiKey,
   // activate the following line for Neon dev environment
-  // baseURL: 'https://console-stage.neon.build/api/v2',
+  baseURL: 'https://console-stage.neon.build/api/v2',
+  headers: {
+    'User-Agent': `mcp-server-neon/${packageJson.version}`,
+  },
 });
 
-const server = new McpServer({
-  name: 'mcp-server-neon',
-  version: '0.1.0',
-});
+const server = new McpServer(
+  {
+    name: 'mcp-server-neon',
+    version: packageJson.version,
+  },
+  {
+    capabilities: {
+      tools: {},
+      resources: {},
+    },
+  },
+);
 
+// Register tools
 NEON_TOOLS.forEach((tool) => {
   const handler = NEON_HANDLERS[tool.name];
   if (!handler) {
@@ -47,6 +69,19 @@ NEON_TOOLS.forEach((tool) => {
     tool.description,
     { params: tool.inputSchema },
     handler as ToolHandler<typeof tool.name>,
+  );
+});
+
+// Register resources
+NEON_RESOURCES.forEach((resource) => {
+  server.resource(
+    resource.name,
+    resource.uri,
+    {
+      description: resource.description,
+      mimeType: resource.mimeType,
+    },
+    resource.handler,
   );
 });
 

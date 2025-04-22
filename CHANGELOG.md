@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.3.6] - 2025-04-20
+
+- Bumps the Neon serverless driver to 1.0.0
+
+## [0.3.5] - 2025-04-19
+
+- Fix default database name or role name assumptions.
+- Adds better error message for project creations.
+
+## [0.3.4] - 2025-03-26
+
+- Add `neon-auth`, `neon-serverless`, and `neon-drizzle` resources
+- Fix initialization on Windows by implementing correct platform-specific paths for Claude configuration
+
+## [0.3.3] - 2025-03-19
+
+- Fix the API Host
+
+## [0.3.2] - 2025-03-19
+
+- Add User-Agent to api calls from mcp server
+
+## [0.3.1] - 2025-03-19
+
+- Add User-Agent to api calls from mcp server
+
+## [0.3.0] - 2025-03-14
+
+- Add `provision_neon_auth` tool
+
 ## [0.2.3] - 2025-03-06
 
 - Adds `get_connection_string` tool

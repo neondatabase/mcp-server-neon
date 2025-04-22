@@ -1,14 +1,13 @@
 import { neon } from '@neondatabase/serverless';
 import { neonClient } from './index.js';
 import crypto from 'crypto';
-import {
-  getMigrationFromMemory,
-  persistMigrationToMemory,
-  getTuningFromMemory,
-  persistTuningToMemory,
-} from './state.js';
+import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
 import { EndpointType, ListProjectsParams, Branch } from '@neondatabase/api-client';
-import { DESCRIBE_DATABASE_STATEMENTS, splitSqlStatements } from './utils.js';
+import {
+  DESCRIBE_DATABASE_STATEMENTS,
+  splitSqlStatements,
+  getDefaultDatabase,
+} from './utils.js';
 import {
   listProjectsInputSchema,
   nodeVersionInputSchema,
@@ -33,11 +32,10 @@ import {
 import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
 import {
-  NEON_DEFAULT_ROLE_NAME,
   NEON_DEFAULT_DATABASE_NAME,
 } from './constants.js';
 import { describeTable, formatTableDescription } from './describeUtils.js';
-
+import { AxiosError } from 'axios';
 // Define the tools with their configurations
 export const NEON_TOOLS = [
   {
@@ -141,7 +139,7 @@ export const NEON_TOOLS = [
     4. Verify the changes before applying to main branch
 
     Project ID and database name will be automatically extracted from your request.
-    Default database is ${NEON_DEFAULT_DATABASE_NAME} if not specified.
+    If the database name is not provided, the default ${NEON_DEFAULT_DATABASE_NAME} or first available database is used.
   </use_case>
 
   <workflow>
@@ -270,7 +268,7 @@ export const NEON_TOOLS = [
 
     Parameters:
     - <project_id>: The Project ID of the Neon project to provision authentication for.
-    - [database]: The database name to setup Neon Auth for. Defaults to '${NEON_DEFAULT_DATABASE_NAME}'.
+    - [database]: The database name to setup Neon Auth for. If not provided, the default ${NEON_DEFAULT_DATABASE_NAME} or first available database is used.
     
     The tool will:
       1. Establish a connection between your Neon Auth project and Stack Auth
@@ -411,14 +409,16 @@ export const NEON_TOOLS = [
       - Adding or modifying indexes based on table schemas and query patterns
       - Query structure modifications
       - Identifying potential performance bottlenecks
-    6. Compare performance before and after changes (but ONLY on the temporary branch passing branch ID to all tools)
+    6. Apply the changes to the temporary branch using run_sql
+    7. Compare performance before and after changes (but ONLY on the temporary branch passing branch ID to all tools)
+    8. Continue with next steps using complete_query_tuning tool (on main branch)
     
     Project ID and database name will be automatically extracted from your request.
     The temporary branch ID will be added when invoking other tools.
     Default database is ${NEON_DEFAULT_DATABASE_NAME} if not specified.
 
-    IMPORTANT: This tool is part of the query tuning workflow. Any suggested changes (like creating indexes)
-    must be applied using the 'complete_query_tuning' tool, NOT the 'prepare_database_migration' tool. 
+    IMPORTANT: This tool is part of the query tuning workflow. Any suggested changes (like creating indexes) must first be applied to the temporary branch using the 'run_sql' tool.
+    and then to the main branch using the 'complete_query_tuning' tool, NOT the 'prepare_database_migration' tool. 
     To apply using the 'complete_query_tuning' tool, you must pass the tuning_id, NOT the temporary branch ID to it.
   </use_case>
 
@@ -432,9 +432,9 @@ export const NEON_TOOLS = [
   <important_notes>
     After executing this tool, you MUST:
     1. Review the suggested changes
-    2. Verify the performance improvements
+    2. Verify the performance improvements on temporary branch - by applying the changes with run_sql and running explain_sql_statement again)
     3. Decide whether to keep or discard the changes
-    4. Use 'complete_query_tuning' tool to apply or discard changes
+    4. Use 'complete_query_tuning' tool to apply or discard changes to the main branch
     
     DO NOT use 'prepare_database_migration' tool for applying query tuning changes.
     Always use 'complete_query_tuning' to ensure changes are properly tracked and applied.
@@ -461,8 +461,9 @@ export const NEON_TOOLS = [
     4. Suggest improvements like:
        - Creating a composite index on orders(status, created_at)
        - Optimizing the join conditions
+    5. If confirmed, apply the suggested changes to the temporary branch using run_sql
+    6. Compare execution plans and performance before and after changes (but ONLY on the temporary branch passing branch ID to all tools)
     
-    You can then compare the execution plans before and after these changes.
   </example>
 
   <next_steps>
@@ -472,7 +473,7 @@ export const NEON_TOOLS = [
 
       <response_instructions>
         <instructions>
-          Provide a brief summary of the performance analysis and ask for approval to apply changes.
+          Provide a brief summary of the performance analysis and ask for approval to apply changes on the temporary branch.
 
           You MUST include ALL of the following fields in your response:
           - Tuning ID (this is required for completion)
@@ -550,7 +551,6 @@ export const NEON_TOOLS = [
         You MUST NOT use 'prepare_database_migration' or other tools to apply query tuning changes.
         You MUST pass the tuning_id obtained from the 'prepare_query_tuning' tool, NOT the temporary branch ID as tuning_id to this tool.
         You MUSt pass the temporary branch ID used in the 'prepare_query_tuning' tool as TEMPORARY branchId to this tool.
-        If you have used a specific roleName before you MUST pass it again to this tool.
         The tool OPTIONALLY receives a second branch ID or name which can be used instead of the main branch to apply the changes.
         This tool MUST be called after tool 'prepare_query_tuning' even when the user rejects the changes, to ensure proper cleanup of temporary branches.
     </important_notes>    
@@ -596,9 +596,25 @@ async function handleCreateProject(name?: string) {
     project: { name },
   });
   if (response.status !== 201) {
-    throw new Error(`Failed to create project: ${response.statusText}`);
+    throw new Error(`Failed to create project: ${JSON.stringify(response)}`);
   }
   return response.data;
+  /*try {
+    const response = await neonClient.createProject({
+      project: { name },
+    });
+    
+    return response.data;
+  } catch (error) {
+    
+    if (error instanceof Object && "status" in error && error.status === 422) {
+      throw new Error(
+        `You have reached the Neon project limit. Please upgrade your account in this link: https://console.neon.tech/app/billing`,
+      );
+    }
+
+    throw new Error(`Failed to create project: ${error}`);
+  }*/
 }
 
 async function handleDeleteProject(projectId: string) {
@@ -633,22 +649,19 @@ async function handleRunSql({
   databaseName,
   projectId,
   branchId,
-  roleName,
 }: {
   sql: string;
-  databaseName: string;
+  databaseName?: string;
   projectId: string;
   branchId?: string;
-  roleName?: string;
 }) {
-  const connectionString = await neonClient.getConnectionUri({
+  const connectionString = await handleGetConnectionString({
     projectId,
-    role_name: roleName || NEON_DEFAULT_ROLE_NAME,
-    database_name: databaseName,
-    branch_id: branchId,
+    branchId,
+    databaseName,
   });
-  const runQuery = neon(connectionString.data.uri);
-  const response = await runQuery(sql);
+  const runQuery = neon(connectionString.uri);
+  const response = await runQuery.query(sql);
 
   return response;
 }
@@ -658,23 +671,20 @@ async function handleRunSqlTransaction({
   databaseName,
   projectId,
   branchId,
-  roleName,
 }: {
   sqlStatements: string[];
-  databaseName: string;
+  databaseName?: string;
   projectId: string;
   branchId?: string;
-  roleName?: string;
 }) {
-  const connectionString = await neonClient.getConnectionUri({
+  const connectionString = await handleGetConnectionString({
     projectId,
-    role_name: roleName || NEON_DEFAULT_ROLE_NAME,
-    database_name: databaseName,
-    branch_id: branchId,
+    branchId,
+    databaseName,
   });
-  const runQuery = neon(connectionString.data.uri);
+  const runQuery = neon(connectionString.uri);
   const response = await runQuery.transaction(
-    sqlStatements.map((sql) => runQuery(sql)),
+    sqlStatements.map((sql) => runQuery.query(sql)),
   );
 
   return response;
@@ -684,21 +694,17 @@ async function handleGetDatabaseTables({
   projectId,
   databaseName,
   branchId,
-  roleName,
 }: {
   projectId: string;
-  databaseName: string;
+  databaseName?: string;
   branchId?: string;
-  roleName?: string;
 }) {
-  const connectionString = await neonClient.getConnectionUri({
+  const connectionString = await handleGetConnectionString({
     projectId,
-    role_name: roleName || NEON_DEFAULT_ROLE_NAME,
-    database_name: databaseName,
-    branch_id: branchId,
+    branchId,
+    databaseName,
   });
-
-  const runQuery = neon(connectionString.data.uri);
+  const runQuery = neon(connectionString.uri);
   const query = `
     SELECT 
       table_schema,
@@ -709,7 +715,7 @@ async function handleGetDatabaseTables({
     ORDER BY table_schema, table_name;
   `;
 
-  const tables = await runQuery(query);
+  const tables = await runQuery.query(query);
   return tables;
 }
 
@@ -718,26 +724,23 @@ async function handleDescribeTableSchema({
   databaseName,
   branchId,
   tableName,
-  roleName,
 }: {
   projectId: string;
-  databaseName: string;
+  databaseName?: string;
   branchId?: string;
   tableName: string;
-  roleName?: string;
 }) {
-  const connectionString = await neonClient.getConnectionUri({
+  const connectionString = await handleGetConnectionString({
     projectId,
-    role_name: roleName || NEON_DEFAULT_ROLE_NAME,
-    database_name: databaseName,
-    branch_id: branchId,
+    branchId,
+    databaseName,
   });
 
   // Extract table name without schema if schema-qualified
   const tableNameParts = tableName.split('.');
   const simpleTableName = tableNameParts[tableNameParts.length - 1];
   
-  const description = await describeTable(connectionString.data.uri, simpleTableName);
+  const description = await describeTable(connectionString.uri, simpleTableName);
   return {
     raw: description,
     formatted: formatTableDescription(description)
@@ -806,14 +809,40 @@ async function handleGetConnectionString({
     }
   }
 
-  // If databaseName is not provided, use the default
-  if (!databaseName) {
-    databaseName = NEON_DEFAULT_DATABASE_NAME;
+  if (!branchId) {
+    const branches = await neonClient.listProjectBranches({
+      projectId,
+    });
+    const defaultBranch = branches.data.branches.find(
+      (branch) => branch.default,
+    );
+    if (defaultBranch) {
+      branchId = defaultBranch.id;
+    } else {
+      throw new Error('No default branch found in your project');
+    }
   }
 
-  // If roleName is not provided, use the default
-  if (!roleName) {
-    roleName = NEON_DEFAULT_ROLE_NAME;
+  // If databaseName is not provided, use default `neondb` or first database
+  let dbObject;
+  if (!databaseName) {
+    dbObject = await getDefaultDatabase({
+      projectId,
+      branchId,
+      databaseName,
+    });
+    databaseName = dbObject.name;
+
+    if (!roleName) {
+      roleName = dbObject.owner_name;
+    }
+  } else if (!roleName) {
+    const { data } = await neonClient.getProjectBranchDatabase(
+      projectId,
+      branchId,
+      databaseName,
+    );
+    roleName = data.database.owner_name;
   }
 
   // Get connection URI with the provided parameters
@@ -839,21 +868,27 @@ async function handleSchemaMigration({
   migrationSql,
   databaseName,
   projectId,
-  roleName,
 }: {
-  databaseName: string;
+  databaseName?: string;
   projectId: string;
   migrationSql: string;
-  roleName?: string;
 }) {
   const newBranch = await handleCreateBranch({ projectId });
+
+  if (!databaseName) {
+    const dbObject = await getDefaultDatabase({
+      projectId,
+      branchId: newBranch.branch.id,
+      databaseName,
+    });
+    databaseName = dbObject.name;
+  }
 
   const result = await handleRunSqlTransaction({
     sqlStatements: splitSqlStatements(migrationSql),
     databaseName,
     projectId,
     branchId: newBranch.branch.id,
-    roleName,
   });
 
   const migrationId = crypto.randomUUID();
@@ -861,7 +896,6 @@ async function handleSchemaMigration({
     migrationSql,
     databaseName,
     appliedBranch: newBranch.branch,
-    roleName,
   });
 
   return {
@@ -882,7 +916,6 @@ async function handleCommitMigration({ migrationId }: { migrationId: string }) {
     databaseName: migration.databaseName,
     projectId: migration.appliedBranch.project_id,
     branchId: migration.appliedBranch.parent_id,
-    roleName: migration.roleName,
   });
 
   await handleDeleteBranch({
@@ -900,22 +933,19 @@ async function handleDescribeBranch({
   projectId,
   databaseName,
   branchId,
-  roleName,
 }: {
   projectId: string;
-  databaseName: string;
+  databaseName?: string;
   branchId?: string;
-  roleName?: string;
 }) {
-  const connectionString = await neonClient.getConnectionUri({
+  const connectionString = await handleGetConnectionString({
     projectId,
-    role_name: roleName || NEON_DEFAULT_ROLE_NAME,
-    database_name: databaseName,
-    branch_id: branchId,
+    branchId,
+    databaseName,
   });
-  const runQuery = neon(connectionString.data.uri);
+  const runQuery = neon(connectionString.uri);
   const response = await runQuery.transaction(
-    DESCRIBE_DATABASE_STATEMENTS.map((sql) => runQuery(sql)),
+    DESCRIBE_DATABASE_STATEMENTS.map((sql) => runQuery.query(sql)),
   );
 
   return response;
@@ -926,10 +956,9 @@ async function handleExplainSqlStatement({
 }: {
   params: {
     sql: string;
-    databaseName: string;
+    databaseName?: string;
     projectId: string;
-    branchId: string;
-    roleName: string;
+    branchId?: string;
     analyze: boolean;
   };
 }) {
@@ -944,7 +973,6 @@ async function handleExplainSqlStatement({
     databaseName: params.databaseName,
     projectId: params.projectId,
     branchId: params.branchId,
-    roleName: params.roleName,
   });
 
   return {
@@ -970,13 +998,11 @@ async function explainQueryAndGetSchemaInformation({
   databaseName,
   projectId,
   branchId,
-  roleName,
 }: {
   sql: string;
   databaseName: string;
   projectId: string;
   branchId?: string;
-  roleName?: string;
 }) {
   try {
     // Get the execution plan
@@ -986,7 +1012,6 @@ async function explainQueryAndGetSchemaInformation({
         databaseName,
         projectId,
         branchId: branchId || '',
-        roleName: roleName || NEON_DEFAULT_ROLE_NAME,
         analyze: true,
       },
     });
@@ -1008,7 +1033,6 @@ async function explainQueryAndGetSchemaInformation({
             databaseName,
             projectId,
             branchId,
-            roleName,
           });
           return {
             tableName,
@@ -1035,7 +1059,6 @@ interface QueryTuningParams {
   sql: string;
   databaseName: string;
   projectId: string;
-  roleName?: string;
 }
 
 interface CompleteTuningParams {
@@ -1044,7 +1067,6 @@ interface CompleteTuningParams {
   tuningId: string;
   databaseName: string;
   projectId: string;
-  roleName?: string;
   temporaryBranch: Branch;
   shouldDeleteTemporaryBranch?: boolean;
   branch?: Branch;
@@ -1054,7 +1076,6 @@ interface QueryTuningResult {
   tuningId: string;
   databaseName: string;
   projectId: string;
-  roleName?: string;
   temporaryBranch: Branch;
   originalPlan: any;
   tableSchemas: any[];
@@ -1094,7 +1115,6 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
         databaseName: branchParams.databaseName,
         projectId: branchParams.projectId,
         branchId: tempBranch.id,
-        roleName: branchParams.roleName || NEON_DEFAULT_ROLE_NAME,
         analyze: true,
       },
     });
@@ -1115,7 +1135,6 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
             databaseName: branchParams.databaseName,
             projectId: branchParams.projectId,
             branchId: newBranch.branch.id,
-            roleName: branchParams.roleName,
           });
           return {
             tableName,
@@ -1136,7 +1155,6 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
       tuningId,
       databaseName: params.databaseName,
       projectId: params.projectId,
-      roleName: params.roleName,
       temporaryBranch: tempBranch,
       originalPlan: executionPlan,
       tableSchemas,
@@ -1306,7 +1324,6 @@ interface HandlerParams {
     tuningId: string;
     databaseName: string;
     projectId: string;
-    roleName?: string;
     temporaryBranchId: string;
     shouldDeleteTemporaryBranch: boolean;
     branchId?: string;
@@ -1332,7 +1349,6 @@ async function handleCompleteTuning(params: CompleteTuningParams): Promise<Compl
         databaseName: params.databaseName,
         projectId: params.projectId,
         branchId: params.branch?.id,
-        roleName: params.roleName,
       });
       
       operationLog.push('Successfully applied optimizations to main branch.');
@@ -1420,7 +1436,19 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
-      throw error;
+      return {
+        content: [
+          {
+            type: 'text',
+            text: [
+              'An error occurred while creating the project.',
+              'Error details:',
+              `${error}`,
+              'If you have reached the Neon project limit, please upgrade your account in this link: https://console.neon.tech/app/billing',
+            ].join('\n'),
+          },
+        ],
+      };
     }
   },
 
@@ -1474,7 +1502,6 @@ export const NEON_HANDLERS = {
         databaseName: params.databaseName,
         projectId: params.projectId,
         branchId: params.branchId,
-        roleName: params.roleName,
       });
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -1491,7 +1518,6 @@ export const NEON_HANDLERS = {
         databaseName: params.databaseName,
         projectId: params.projectId,
         branchId: params.branchId,
-        roleName: params.roleName,
       });
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -1502,28 +1528,15 @@ export const NEON_HANDLERS = {
   },
 
   describe_table_schema: async ({ params }) => {
-    try {
-      const result = await handleDescribeTableSchema({
-        tableName: params.tableName,
-        databaseName: params.databaseName,
-        projectId: params.projectId,
-        branchId: params.branchId,
-        roleName: params.roleName,
-      });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              raw: result.raw,
-              formatted: result.formatted
-            }, null, 2)
-          }
-        ],
-      };
-    } catch (error) {
-      throw error;
-    }
+    const result = await handleDescribeTableSchema({
+      tableName: params.tableName,
+      databaseName: params.databaseName,
+      projectId: params.projectId,
+      branchId: params.branchId,
+    });
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
   },
 
   get_database_tables: async ({ params }) => {
@@ -1532,7 +1545,6 @@ export const NEON_HANDLERS = {
         projectId: params.projectId,
         branchId: params.branchId,
         databaseName: params.databaseName,
-        roleName: params.roleName,
       });
       return {
         content: [
@@ -1578,7 +1590,6 @@ export const NEON_HANDLERS = {
         migrationSql: params.migrationSql,
         databaseName: params.databaseName,
         projectId: params.projectId,
-        roleName: params.roleName,
       });
       return {
         content: [
@@ -1641,7 +1652,6 @@ export const NEON_HANDLERS = {
         projectId: params.projectId,
         branchId: params.branchId,
         databaseName: params.databaseName,
-        roleName: params.roleName,
       });
       return {
         content: [
@@ -1738,7 +1748,6 @@ export const NEON_HANDLERS = {
         sql: params.sql,
         databaseName: params.databaseName,
         projectId: params.projectId,
-        roleName: params.roleName,
       });
       return {
         content: [
@@ -1748,7 +1757,6 @@ export const NEON_HANDLERS = {
               tuningId: result.tuningId,
               databaseName: result.databaseName,
               projectId: result.projectId,
-              roleName: result.roleName,
               temporaryBranch: result.temporaryBranch,
               executionPlan: result.originalPlan,
               tableSchemas: result.tableSchemas,
@@ -1770,7 +1778,6 @@ export const NEON_HANDLERS = {
         tuningId: params.tuningId,
         databaseName: params.databaseName,
         projectId: params.projectId,
-        roleName: params.roleName,
         temporaryBranch: { id: params.temporaryBranchId, project_id: params.projectId } as Branch,
         shouldDeleteTemporaryBranch: params.shouldDeleteTemporaryBranch,
         branch: params.branchId ? { id: params.branchId, project_id: params.projectId } as Branch : undefined,
