@@ -90,10 +90,10 @@ export async function describeTable(
 
   // Execute all queries in parallel
   const [columns, indexes, constraints, sizes] = await Promise.all([
-    sql(DESCRIBE_TABLE_STATEMENTS[0], [tableName]),
-    sql(DESCRIBE_TABLE_STATEMENTS[1], [tableName]),
-    sql(DESCRIBE_TABLE_STATEMENTS[2], [tableName]),
-    sql(DESCRIBE_TABLE_STATEMENTS[3], [tableName])
+    sql.query(DESCRIBE_TABLE_STATEMENTS[0], [tableName]),
+    sql.query(DESCRIBE_TABLE_STATEMENTS[1], [tableName]),
+    sql.query(DESCRIBE_TABLE_STATEMENTS[2], [tableName]),
+    sql.query(DESCRIBE_TABLE_STATEMENTS[3], [tableName])
   ]);
 
   return {
