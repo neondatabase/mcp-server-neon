@@ -197,7 +197,7 @@ export const prepareQueryTuningInputSchema = z.object({
 });
 
 export const completeQueryTuningInputSchema = z.object({
-  suggestedSqlStatements: z.array(z.string()).describe('The SQL DDL statements to execute to improve eperformance. These statements are the result of the prior steps, for example creating additional indexes.'),
+  suggestedSqlStatements: z.array(z.string()).describe('The SQL DDL statements to execute to improve performance. These statements are the result of the prior steps, for example creating additional indexes.'),
   applyChanges: z.boolean().default(false).describe('Whether to apply the suggested changes to the main branch'),
   tuningId: z
   .string()
