@@ -2,7 +2,11 @@ import { neon } from '@neondatabase/serverless';
 import { neonClient } from './index.js';
 import crypto from 'crypto';
 import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
-import { EndpointType, ListProjectsParams, Branch } from '@neondatabase/api-client';
+import {
+  EndpointType,
+  ListProjectsParams,
+  Branch,
+} from '@neondatabase/api-client';
 import {
   DESCRIBE_DATABASE_STATEMENTS,
   splitSqlStatements,
@@ -28,12 +32,11 @@ import {
   explainSqlStatementInputSchema,
   prepareQueryTuningInputSchema,
   completeQueryTuningInputSchema,
+  listSlowQueriesInputSchema,
 } from './toolsSchema.js';
 import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
-import {
-  NEON_DEFAULT_DATABASE_NAME,
-} from './constants.js';
+import { NEON_DEFAULT_DATABASE_NAME } from './constants.js';
 import { describeTable, formatTableDescription } from './describeUtils.js';
 import { AxiosError } from 'axios';
 // Define the tools with their configurations
@@ -391,7 +394,8 @@ export const NEON_TOOLS = [
   },
   {
     name: 'explain_sql_statement' as const,
-    description: 'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
+    description:
+      'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
     inputSchema: explainSqlStatementInputSchema,
   },
   {
@@ -569,6 +573,20 @@ export const NEON_TOOLS = [
                  `,
     inputSchema: completeQueryTuningInputSchema,
   },
+  {
+    name: 'list_slow_queries' as const,
+    description: `
+    <use_case>
+      Use this tool to list slow queries from your Neon database.
+    </use_case>
+
+    <important_notes>
+      This tool queries the pg_stat_statements extension to find queries that are taking longer than expected.
+      The tool will return queries sorted by execution time, with the slowest queries first.
+    </important_notes>
+                 `,
+    inputSchema: listSlowQueriesInputSchema,
+  },
 ];
 
 // Extract the tool names as a union type
@@ -739,11 +757,14 @@ async function handleDescribeTableSchema({
   // Extract table name without schema if schema-qualified
   const tableNameParts = tableName.split('.');
   const simpleTableName = tableNameParts[tableNameParts.length - 1];
-  
-  const description = await describeTable(connectionString.uri, simpleTableName);
+
+  const description = await describeTable(
+    connectionString.uri,
+    simpleTableName,
+  );
   return {
     raw: description,
-    formatted: formatTableDescription(description)
+    formatted: formatTableDescription(description),
   };
 }
 
@@ -965,9 +986,9 @@ async function handleExplainSqlStatement({
   const explainPrefix = params.analyze
     ? 'EXPLAIN (ANALYZE, VERBOSE, BUFFERS, FILECACHE, FORMAT JSON)'
     : 'EXPLAIN (VERBOSE, FORMAT JSON)';
-  
+
   const explainSql = `${explainPrefix} ${params.sql}`;
-  
+
   const result = await handleRunSql({
     sql: explainSql,
     databaseName: params.databaseName,
@@ -985,7 +1006,9 @@ async function handleExplainSqlStatement({
   };
 }
 
-async function createTemporaryBranch(projectId: string): Promise<{ branch: Branch }> {
+async function createTemporaryBranch(
+  projectId: string,
+): Promise<{ branch: Branch }> {
   const result = await handleCreateBranch({ projectId });
   if (!result?.branch) {
     throw new Error('Failed to create temporary branch');
@@ -1018,15 +1041,17 @@ async function explainQueryAndGetSchemaInformation({
 
     // Extract table names from the plan
     const tableNames = extractTableNamesFromPlan(executionPlan);
-    
+
     if (tableNames.length === 0) {
-      const error = new Error('No tables found in execution plan. Cannot proceed with optimization.');
+      const error = new Error(
+        'No tables found in execution plan. Cannot proceed with optimization.',
+      );
       throw error;
     }
 
     // Get schema information for all referenced tables
     const tableSchemas = await Promise.all(
-      tableNames.map(async tableName => {
+      tableNames.map(async (tableName) => {
         try {
           const schema = await handleDescribeTableSchema({
             tableName,
@@ -1037,18 +1062,20 @@ async function explainQueryAndGetSchemaInformation({
           return {
             tableName,
             schema: schema.raw,
-            formatted: schema.formatted
+            formatted: schema.formatted,
           };
         } catch (error) {
-          throw new Error(`Failed to get schema for table ${tableName}: ${(error as Error).message}`);
+          throw new Error(
+            `Failed to get schema for table ${tableName}: ${(error as Error).message}`,
+          );
         }
-      })
+      }),
     );
 
     return {
       executionPlan,
       tableSchemas,
-      sql
+      sql,
     };
   } catch (error) {
     throw error;
@@ -1090,10 +1117,12 @@ interface CompleteTuningResult {
   message: string;
 }
 
-async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuningResult> {
+async function handleQueryTuning(
+  params: QueryTuningParams,
+): Promise<QueryTuningResult> {
   let tempBranch: Branch | undefined;
   const tuningId = crypto.randomUUID();
-  
+
   try {
     // Create temporary branch
     const newBranch = await createTemporaryBranch(params.projectId);
@@ -1105,7 +1134,7 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
     // Ensure all operations use the temporary branch
     const branchParams = {
       ...params,
-      branchId: tempBranch.id
+      branchId: tempBranch.id,
     };
 
     // First, get the execution plan with table information
@@ -1121,14 +1150,16 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
 
     // Extract table names from the plan
     const tableNames = extractTableNamesFromPlan(executionPlan);
-    
+
     if (tableNames.length === 0) {
-      throw new Error('No tables found in execution plan. Cannot proceed with optimization.');
+      throw new Error(
+        'No tables found in execution plan. Cannot proceed with optimization.',
+      );
     }
 
     // Get schema information for all referenced tables in parallel
     const tableSchemas = await Promise.all(
-      tableNames.map(async tableName => {
+      tableNames.map(async (tableName) => {
         try {
           const schema = await handleDescribeTableSchema({
             tableName,
@@ -1139,17 +1170,19 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
           return {
             tableName,
             schema: schema.raw,
-            formatted: schema.formatted
+            formatted: schema.formatted,
           };
         } catch (error) {
-          throw new Error(`Failed to get schema for table ${tableName}: ${(error as Error).message}`);
+          throw new Error(
+            `Failed to get schema for table ${tableName}: ${(error as Error).message}`,
+          );
         }
-      })
+      }),
     );
 
     // Get the baseline execution metrics
     const baselineMetrics = extractExecutionMetrics(executionPlan);
-    
+
     // Return the information for analysis
     const result: QueryTuningResult = {
       tuningId,
@@ -1161,9 +1194,8 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
       sql: params.sql,
       baselineMetrics,
     };
-    
-    return result;
 
+    return result;
   } catch (error) {
     // Always attempt to clean up the temporary branch if it was created
     if (tempBranch) {
@@ -1176,7 +1208,7 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
         // No need to handle cleanup error
       }
     }
-    
+
     throw error;
   }
 }
@@ -1184,9 +1216,10 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
 // Helper function to extract execution metrics from EXPLAIN output
 function extractExecutionMetrics(plan: any): QueryMetrics {
   try {
-    const planJson = typeof plan.content?.[0]?.text === 'string' 
-      ? JSON.parse(plan.content[0].text)
-      : plan;
+    const planJson =
+      typeof plan.content?.[0]?.text === 'string'
+        ? JSON.parse(plan.content[0].text)
+        : plan;
 
     const metrics: QueryMetrics = {
       executionTime: 0,
@@ -1196,7 +1229,7 @@ function extractExecutionMetrics(plan: any): QueryMetrics {
       bufferUsage: {
         shared: { hit: 0, read: 0, written: 0, dirtied: 0 },
         local: { hit: 0, read: 0, written: 0, dirtied: 0 },
-      }
+      },
     };
 
     // Extract planning and execution time if available
@@ -1220,15 +1253,23 @@ function extractExecutionMetrics(plan: any): QueryMetrics {
       }
 
       // Accumulate buffer usage
-      if (node['Shared Hit Blocks']) metrics.bufferUsage.shared.hit += node['Shared Hit Blocks'];
-      if (node['Shared Read Blocks']) metrics.bufferUsage.shared.read += node['Shared Read Blocks'];
-      if (node['Shared Written Blocks']) metrics.bufferUsage.shared.written += node['Shared Written Blocks'];
-      if (node['Shared Dirtied Blocks']) metrics.bufferUsage.shared.dirtied += node['Shared Dirtied Blocks'];
-      
-      if (node['Local Hit Blocks']) metrics.bufferUsage.local.hit += node['Local Hit Blocks'];
-      if (node['Local Read Blocks']) metrics.bufferUsage.local.read += node['Local Read Blocks'];
-      if (node['Local Written Blocks']) metrics.bufferUsage.local.written += node['Local Written Blocks'];
-      if (node['Local Dirtied Blocks']) metrics.bufferUsage.local.dirtied += node['Local Dirtied Blocks'];
+      if (node['Shared Hit Blocks'])
+        metrics.bufferUsage.shared.hit += node['Shared Hit Blocks'];
+      if (node['Shared Read Blocks'])
+        metrics.bufferUsage.shared.read += node['Shared Read Blocks'];
+      if (node['Shared Written Blocks'])
+        metrics.bufferUsage.shared.written += node['Shared Written Blocks'];
+      if (node['Shared Dirtied Blocks'])
+        metrics.bufferUsage.shared.dirtied += node['Shared Dirtied Blocks'];
+
+      if (node['Local Hit Blocks'])
+        metrics.bufferUsage.local.hit += node['Local Hit Blocks'];
+      if (node['Local Read Blocks'])
+        metrics.bufferUsage.local.read += node['Local Read Blocks'];
+      if (node['Local Written Blocks'])
+        metrics.bufferUsage.local.written += node['Local Written Blocks'];
+      if (node['Local Dirtied Blocks'])
+        metrics.bufferUsage.local.dirtied += node['Local Dirtied Blocks'];
 
       // Process child nodes
       if (Array.isArray(node['Plans'])) {
@@ -1250,7 +1291,7 @@ function extractExecutionMetrics(plan: any): QueryMetrics {
       bufferUsage: {
         shared: { hit: 0, read: 0, written: 0, dirtied: 0 },
         local: { hit: 0, read: 0, written: 0, dirtied: 0 },
-      }
+      },
     };
   }
 }
@@ -1277,7 +1318,7 @@ interface QueryMetrics {
 // Function to extract table names from an execution plan
 function extractTableNamesFromPlan(planResult: any): string[] {
   const tableNames = new Set<string>();
-  
+
   function recursivelyExtractFromNode(node: any) {
     if (!node || typeof node !== 'object') return;
 
@@ -1289,9 +1330,9 @@ function extractTableNamesFromPlan(planResult: any): string[] {
 
     // Recursively process all object properties and array elements
     if (Array.isArray(node)) {
-      node.forEach(item => recursivelyExtractFromNode(item));
+      node.forEach((item) => recursivelyExtractFromNode(item));
     } else {
-      Object.values(node).forEach(value => recursivelyExtractFromNode(value));
+      Object.values(node).forEach((value) => recursivelyExtractFromNode(value));
     }
   }
 
@@ -1330,56 +1371,201 @@ interface HandlerParams {
   };
 }
 
-async function handleCompleteTuning(params: CompleteTuningParams): Promise<CompleteTuningResult> {
+async function handleCompleteTuning(
+  params: CompleteTuningParams,
+): Promise<CompleteTuningResult> {
   let results;
   const operationLog: string[] = [];
-  
+
   try {
     // Validate branch information
     if (!params.temporaryBranch) {
-      throw new Error('Branch information is required for completing query tuning');
+      throw new Error(
+        'Branch information is required for completing query tuning',
+      );
     }
 
     // Only proceed with changes if we have both suggestedChanges and branch
-    if (params.applyChanges && params.suggestedSqlStatements && params.suggestedSqlStatements.length > 0) {
+    if (
+      params.applyChanges &&
+      params.suggestedSqlStatements &&
+      params.suggestedSqlStatements.length > 0
+    ) {
       operationLog.push('Applying optimizations to main branch...');
-      
+
       results = await handleRunSqlTransaction({
         sqlStatements: params.suggestedSqlStatements,
         databaseName: params.databaseName,
         projectId: params.projectId,
         branchId: params.branch?.id,
       });
-      
+
       operationLog.push('Successfully applied optimizations to main branch.');
     } else {
-      operationLog.push('No changes were applied (either none suggested or changes were discarded).');
+      operationLog.push(
+        'No changes were applied (either none suggested or changes were discarded).',
+      );
     }
 
     // Only delete branch if shouldDeleteTemporaryBranch is true
     if (params.shouldDeleteTemporaryBranch && params.temporaryBranch) {
       operationLog.push('Cleaning up temporary branch...');
-      
+
       await handleDeleteBranch({
         projectId: params.projectId,
         branchId: params.temporaryBranch.id,
       });
-      
+
       operationLog.push('Successfully cleaned up temporary branch.');
     }
 
     const result: CompleteTuningResult = {
-      appliedChanges: params.applyChanges && params.suggestedSqlStatements ? params.suggestedSqlStatements : undefined,
+      appliedChanges:
+        params.applyChanges && params.suggestedSqlStatements
+          ? params.suggestedSqlStatements
+          : undefined,
       results,
-      deletedBranches: params.shouldDeleteTemporaryBranch && params.temporaryBranch ? [params.temporaryBranch.id] : undefined,
+      deletedBranches:
+        params.shouldDeleteTemporaryBranch && params.temporaryBranch
+          ? [params.temporaryBranch.id]
+          : undefined,
       message: operationLog.join('\n'),
     };
-    
+
     return result;
-    
   } catch (error) {
-    throw new Error(`Failed to complete query tuning: ${(error as Error).message}`);
+    throw new Error(
+      `Failed to complete query tuning: ${(error as Error).message}`,
+    );
   }
+}
+
+async function handleListSlowQueries({
+  projectId,
+  branchId,
+  databaseName,
+  limit = 10,
+  minExecutionTime = 1000,
+  timeRange = '1h',
+}: {
+  projectId: string;
+  branchId?: string;
+  databaseName?: string;
+  limit?: number;
+  minExecutionTime?: number;
+  timeRange?: string;
+}) {
+  // Get connection string
+  const connectionString = await handleGetConnectionString({
+    projectId,
+    branchId,
+    databaseName,
+  });
+
+  // Connect to the database
+  const sql = neon(connectionString.uri);
+
+  // First, check if pg_stat_statements extension is installed
+  const checkExtensionQuery = `
+    SELECT EXISTS (
+      SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'
+    ) as extension_exists;
+  `;
+
+  const extensionCheck = await sql.query(checkExtensionQuery);
+  const extensionExists = extensionCheck[0]?.extension_exists;
+
+  if (!extensionExists) {
+    // If extension doesn't exist, try to install it
+    try {
+      await sql.query('CREATE EXTENSION IF NOT EXISTS pg_stat_statements;');
+    } catch (error) {
+      throw new Error(
+        `Failed to install pg_stat_statements extension: ${error}`,
+      );
+    }
+  }
+
+  // Parse time range to get the interval
+  let interval;
+  if (timeRange.endsWith('h')) {
+    interval = `${timeRange.slice(0, -1)} hours`;
+  } else if (timeRange.endsWith('d')) {
+    interval = `${timeRange.slice(0, -1)} days`;
+  } else if (timeRange.endsWith('w')) {
+    interval = `${timeRange.slice(0, -1)} weeks`;
+  } else {
+    interval = '1 hour'; // Default to 1 hour
+  }
+
+  // Query to get slow queries
+  const slowQueriesQuery = `
+    SELECT 
+      query,
+      calls,
+      total_exec_time,
+      mean_exec_time,
+      rows,
+      shared_blks_hit,
+      shared_blks_read,
+      shared_blks_written,
+      shared_blks_dirtied,
+      temp_blks_read,
+      temp_blks_written,
+      blk_read_time,
+      blk_write_time,
+      wal_records,
+      wal_fpi,
+      wal_bytes
+    FROM pg_stat_statements
+    WHERE mean_exec_time >= $1
+    AND query NOT LIKE '%pg_stat_statements%'
+    AND query NOT LIKE '%EXPLAIN%'
+    ORDER BY mean_exec_time DESC
+    LIMIT $2;
+  `;
+
+  const slowQueries = await sql.query(slowQueriesQuery, [
+    minExecutionTime,
+    limit,
+  ]);
+
+  // Format the results
+  const formattedQueries = slowQueries.map((query: any) => {
+    return {
+      query: query.query,
+      calls: query.calls,
+      total_exec_time_ms: query.total_exec_time,
+      mean_exec_time_ms: query.mean_exec_time,
+      rows: query.rows,
+      shared_blocks: {
+        hit: query.shared_blks_hit,
+        read: query.shared_blks_read,
+        written: query.shared_blks_written,
+        dirtied: query.shared_blks_dirtied,
+      },
+      temp_blocks: {
+        read: query.temp_blks_read,
+        written: query.temp_blks_written,
+      },
+      io_time: {
+        read_ms: query.blk_read_time,
+        write_ms: query.blk_write_time,
+      },
+      wal: {
+        records: query.wal_records,
+        full_page_images: query.wal_fpi,
+        bytes: query.wal_bytes,
+      },
+    };
+  });
+
+  return {
+    slow_queries: formattedQueries,
+    time_range: interval,
+    min_execution_time_ms: minExecutionTime,
+    total_queries_found: formattedQueries.length,
+  };
 }
 
 export const NEON_HANDLERS = {
@@ -1657,7 +1843,9 @@ export const NEON_HANDLERS = {
         content: [
           {
             type: 'text',
-            text: ['Database Structure:', JSON.stringify(result, null, 2)].join('\n'),
+            text: ['Database Structure:', JSON.stringify(result, null, 2)].join(
+              '\n',
+            ),
           },
         ],
       };
@@ -1708,8 +1896,12 @@ export const NEON_HANDLERS = {
               `Project ID: ${result.projectId}`,
               `Database: ${result.databaseName}`,
               `Role: ${result.roleName}`,
-              result.branchId ? `Branch ID: ${result.branchId}` : 'Using default branch',
-              result.computeId ? `Compute ID: ${result.computeId}` : 'Using default compute',
+              result.branchId
+                ? `Branch ID: ${result.branchId}`
+                : 'Using default branch',
+              result.computeId
+                ? `Compute ID: ${result.computeId}`
+                : 'Using default compute',
               '',
               'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
             ].join('\n'),
@@ -1753,15 +1945,19 @@ export const NEON_HANDLERS = {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({
-              tuningId: result.tuningId,
-              databaseName: result.databaseName,
-              projectId: result.projectId,
-              temporaryBranch: result.temporaryBranch,
-              executionPlan: result.originalPlan,
-              tableSchemas: result.tableSchemas,
-              sql: result.sql
-            }, null, 2),
+            text: JSON.stringify(
+              {
+                tuningId: result.tuningId,
+                databaseName: result.databaseName,
+                projectId: result.projectId,
+                temporaryBranch: result.temporaryBranch,
+                executionPlan: result.originalPlan,
+                tableSchemas: result.tableSchemas,
+                sql: result.sql,
+              },
+              null,
+              2,
+            ),
           },
         ],
       };
@@ -1770,7 +1966,11 @@ export const NEON_HANDLERS = {
     }
   },
 
-  complete_query_tuning: async ({ params }: { params: HandlerParams['complete_query_tuning'] }) => {
+  complete_query_tuning: async ({
+    params,
+  }: {
+    params: HandlerParams['complete_query_tuning'];
+  }) => {
     try {
       const result = await handleCompleteTuning({
         suggestedSqlStatements: params.suggestedSqlStatements,
@@ -1778,11 +1978,39 @@ export const NEON_HANDLERS = {
         tuningId: params.tuningId,
         databaseName: params.databaseName,
         projectId: params.projectId,
-        temporaryBranch: { id: params.temporaryBranchId, project_id: params.projectId } as Branch,
+        temporaryBranch: {
+          id: params.temporaryBranchId,
+          project_id: params.projectId,
+        } as Branch,
         shouldDeleteTemporaryBranch: params.shouldDeleteTemporaryBranch,
-        branch: params.branchId ? { id: params.branchId, project_id: params.projectId } as Branch : undefined,
+        branch: params.branchId
+          ? ({ id: params.branchId, project_id: params.projectId } as Branch)
+          : undefined,
       });
 
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  list_slow_queries: async ({ params }) => {
+    try {
+      const result = await handleListSlowQueries({
+        projectId: params.projectId,
+        branchId: params.branchId,
+        databaseName: params.databaseName,
+        limit: params.limit,
+        minExecutionTime: params.minExecutionTime,
+        timeRange: params.timeRange,
+      });
       return {
         content: [
           {
