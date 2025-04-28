@@ -5,34 +5,34 @@
 
 import { neon } from '@neondatabase/serverless';
 
-export interface TableDescription {
+export type TableDescription = {
   columns: ColumnDescription[];
   indexes: IndexDescription[];
   constraints: ConstraintDescription[];
   tableSize: string;
   indexSize: string;
   totalSize: string;
-}
+};
 
-export interface ColumnDescription {
+export type ColumnDescription = {
   name: string;
   type: string;
   nullable: boolean;
   default: string | null;
   description: string | null;
-}
+};
 
-export interface IndexDescription {
+export type IndexDescription = {
   name: string;
   definition: string;
   size: string;
-}
+};
 
-export interface ConstraintDescription {
+export type ConstraintDescription = {
   name: string;
   type: string;
   definition: string;
-}
+};
 
 export const DESCRIBE_TABLE_STATEMENTS = [
   // Get column information
@@ -79,12 +79,12 @@ export const DESCRIBE_TABLE_STATEMENTS = [
     pg_size_pretty(pg_total_relation_size($1)) as total_size,
     pg_size_pretty(pg_relation_size($1)) as table_size,
     pg_size_pretty(pg_total_relation_size($1) - pg_relation_size($1)) as index_size;
-  `
+  `,
 ];
 
 export async function describeTable(
   connectionString: string,
-  tableName: string
+  tableName: string,
 ): Promise<TableDescription> {
   const sql = neon(connectionString);
 
@@ -93,30 +93,30 @@ export async function describeTable(
     sql.query(DESCRIBE_TABLE_STATEMENTS[0], [tableName]),
     sql.query(DESCRIBE_TABLE_STATEMENTS[1], [tableName]),
     sql.query(DESCRIBE_TABLE_STATEMENTS[2], [tableName]),
-    sql.query(DESCRIBE_TABLE_STATEMENTS[3], [tableName])
+    sql.query(DESCRIBE_TABLE_STATEMENTS[3], [tableName]),
   ]);
 
   return {
-    columns: columns.map(col => ({
+    columns: columns.map((col) => ({
       name: col.name,
       type: col.type,
       nullable: col.nullable,
       default: col.default,
-      description: col.description
+      description: col.description,
     })),
-    indexes: indexes.map(idx => ({
+    indexes: indexes.map((idx) => ({
       name: idx.name,
       definition: idx.definition,
-      size: idx.size
+      size: idx.size,
     })),
-    constraints: constraints.map(con => ({
+    constraints: constraints.map((con) => ({
       name: con.name,
       type: con.type,
-      definition: con.definition
+      definition: con.definition,
     })),
     tableSize: sizes[0].table_size,
     indexSize: sizes[0].index_size,
-    totalSize: sizes[0].total_size
+    totalSize: sizes[0].total_size,
   };
 }
 
@@ -131,7 +131,7 @@ export function formatTableDescription(desc: TableDescription): string {
 
   // Add columns
   lines.push('Columns:');
-  desc.columns.forEach(col => {
+  desc.columns.forEach((col) => {
     const nullable = col.nullable ? 'NULL' : 'NOT NULL';
     const defaultStr = col.default ? ` DEFAULT ${col.default}` : '';
     const descStr = col.description ? `\n    ${col.description}` : '';
@@ -142,7 +142,7 @@ export function formatTableDescription(desc: TableDescription): string {
   // Add indexes
   if (desc.indexes.length > 0) {
     lines.push('Indexes:');
-    desc.indexes.forEach(idx => {
+    desc.indexes.forEach((idx) => {
       lines.push(`  ${idx.name} (${idx.size})`);
       lines.push(`    ${idx.definition}`);
     });
@@ -152,11 +152,11 @@ export function formatTableDescription(desc: TableDescription): string {
   // Add constraints
   if (desc.constraints.length > 0) {
     lines.push('Constraints:');
-    desc.constraints.forEach(con => {
+    desc.constraints.forEach((con) => {
       lines.push(`  ${con.name} (${con.type})`);
       lines.push(`    ${con.definition}`);
     });
   }
 
   return lines.join('\n');
-} 
+}

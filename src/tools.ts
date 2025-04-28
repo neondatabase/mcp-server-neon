@@ -1,41 +1,42 @@
+import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
+import {
+  Branch,
+  EndpointType,
+  ListProjectsParams,
+} from '@neondatabase/api-client';
 import { neon } from '@neondatabase/serverless';
-import { neonClient } from './index.js';
 import crypto from 'crypto';
+import { NEON_DEFAULT_DATABASE_NAME } from './constants.js';
+import { describeTable, formatTableDescription } from './describeUtils.js';
+import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
+import { neonClient } from './index.js';
 import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
-import { EndpointType, ListProjectsParams, Branch } from '@neondatabase/api-client';
 import {
-  DESCRIBE_DATABASE_STATEMENTS,
-  splitSqlStatements,
-  getDefaultDatabase,
-} from './utils.js';
-import {
+  completeDatabaseMigrationInputSchema,
+  completeQueryTuningInputSchema,
+  createBranchInputSchema,
+  createProjectInputSchema,
+  deleteBranchInputSchema,
+  deleteProjectInputSchema,
+  describeBranchInputSchema,
+  describeProjectInputSchema,
+  describeTableSchemaInputSchema,
+  explainSqlStatementInputSchema,
+  getConnectionStringInputSchema,
+  getDatabaseTablesInputSchema,
   listProjectsInputSchema,
   nodeVersionInputSchema,
-  createProjectInputSchema,
-  deleteProjectInputSchema,
-  describeProjectInputSchema,
+  prepareDatabaseMigrationInputSchema,
+  prepareQueryTuningInputSchema,
+  provisionNeonAuthInputSchema,
   runSqlInputSchema,
   runSqlTransactionInputSchema,
-  describeTableSchemaInputSchema,
-  getDatabaseTablesInputSchema,
-  createBranchInputSchema,
-  prepareDatabaseMigrationInputSchema,
-  completeDatabaseMigrationInputSchema,
-  describeBranchInputSchema,
-  deleteBranchInputSchema,
-  getConnectionStringInputSchema,
-  provisionNeonAuthInputSchema,
-  explainSqlStatementInputSchema,
-  prepareQueryTuningInputSchema,
-  completeQueryTuningInputSchema,
 } from './toolsSchema.js';
-import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
 import {
-  NEON_DEFAULT_DATABASE_NAME,
-} from './constants.js';
-import { describeTable, formatTableDescription } from './describeUtils.js';
-import { AxiosError } from 'axios';
+  DESCRIBE_DATABASE_STATEMENTS,
+  getDefaultDatabase,
+  splitSqlStatements,
+} from './utils.js';
 // Define the tools with their configurations
 export const NEON_TOOLS = [
   {
@@ -391,7 +392,8 @@ export const NEON_TOOLS = [
   },
   {
     name: 'explain_sql_statement' as const,
-    description: 'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
+    description:
+      'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
     inputSchema: explainSqlStatementInputSchema,
   },
   {
@@ -739,11 +741,14 @@ async function handleDescribeTableSchema({
   // Extract table name without schema if schema-qualified
   const tableNameParts = tableName.split('.');
   const simpleTableName = tableNameParts[tableNameParts.length - 1];
-  
-  const description = await describeTable(connectionString.uri, simpleTableName);
+
+  const description = await describeTable(
+    connectionString.uri,
+    simpleTableName,
+  );
   return {
     raw: description,
-    formatted: formatTableDescription(description)
+    formatted: formatTableDescription(description),
   };
 }
 
@@ -965,9 +970,9 @@ async function handleExplainSqlStatement({
   const explainPrefix = params.analyze
     ? 'EXPLAIN (ANALYZE, VERBOSE, BUFFERS, FILECACHE, FORMAT JSON)'
     : 'EXPLAIN (VERBOSE, FORMAT JSON)';
-  
+
   const explainSql = `${explainPrefix} ${params.sql}`;
-  
+
   const result = await handleRunSql({
     sql: explainSql,
     databaseName: params.databaseName,
@@ -985,7 +990,9 @@ async function handleExplainSqlStatement({
   };
 }
 
-async function createTemporaryBranch(projectId: string): Promise<{ branch: Branch }> {
+async function createTemporaryBranch(
+  projectId: string,
+): Promise<{ branch: Branch }> {
   const result = await handleCreateBranch({ projectId });
   if (!result?.branch) {
     throw new Error('Failed to create temporary branch');
@@ -993,75 +1000,13 @@ async function createTemporaryBranch(projectId: string): Promise<{ branch: Branc
   return result;
 }
 
-async function explainQueryAndGetSchemaInformation({
-  sql,
-  databaseName,
-  projectId,
-  branchId,
-}: {
+type QueryTuningParams = {
   sql: string;
   databaseName: string;
   projectId: string;
-  branchId?: string;
-}) {
-  try {
-    // Get the execution plan
-    const executionPlan = await handleExplainSqlStatement({
-      params: {
-        sql,
-        databaseName,
-        projectId,
-        branchId: branchId || '',
-        analyze: true,
-      },
-    });
+};
 
-    // Extract table names from the plan
-    const tableNames = extractTableNamesFromPlan(executionPlan);
-    
-    if (tableNames.length === 0) {
-      const error = new Error('No tables found in execution plan. Cannot proceed with optimization.');
-      throw error;
-    }
-
-    // Get schema information for all referenced tables
-    const tableSchemas = await Promise.all(
-      tableNames.map(async tableName => {
-        try {
-          const schema = await handleDescribeTableSchema({
-            tableName,
-            databaseName,
-            projectId,
-            branchId,
-          });
-          return {
-            tableName,
-            schema: schema.raw,
-            formatted: schema.formatted
-          };
-        } catch (error) {
-          throw new Error(`Failed to get schema for table ${tableName}: ${(error as Error).message}`);
-        }
-      })
-    );
-
-    return {
-      executionPlan,
-      tableSchemas,
-      sql
-    };
-  } catch (error) {
-    throw error;
-  }
-}
-
-interface QueryTuningParams {
-  sql: string;
-  databaseName: string;
-  projectId: string;
-}
-
-interface CompleteTuningParams {
+type CompleteTuningParams = {
   suggestedSqlStatements?: string[];
   applyChanges?: boolean;
   tuningId: string;
@@ -1070,9 +1015,9 @@ interface CompleteTuningParams {
   temporaryBranch: Branch;
   shouldDeleteTemporaryBranch?: boolean;
   branch?: Branch;
-}
+};
 
-interface QueryTuningResult {
+type QueryTuningResult = {
   tuningId: string;
   databaseName: string;
   projectId: string;
@@ -1081,19 +1026,21 @@ interface QueryTuningResult {
   tableSchemas: any[];
   sql: string;
   baselineMetrics: QueryMetrics;
-}
+};
 
-interface CompleteTuningResult {
+type CompleteTuningResult = {
   appliedChanges?: string[];
   results?: any;
   deletedBranches?: string[];
   message: string;
-}
+};
 
-async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuningResult> {
+async function handleQueryTuning(
+  params: QueryTuningParams,
+): Promise<QueryTuningResult> {
   let tempBranch: Branch | undefined;
   const tuningId = crypto.randomUUID();
-  
+
   try {
     // Create temporary branch
     const newBranch = await createTemporaryBranch(params.projectId);
@@ -1105,7 +1052,7 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
     // Ensure all operations use the temporary branch
     const branchParams = {
       ...params,
-      branchId: tempBranch.id
+      branchId: tempBranch.id,
     };
 
     // First, get the execution plan with table information
@@ -1121,14 +1068,16 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
 
     // Extract table names from the plan
     const tableNames = extractTableNamesFromPlan(executionPlan);
-    
+
     if (tableNames.length === 0) {
-      throw new Error('No tables found in execution plan. Cannot proceed with optimization.');
+      throw new Error(
+        'No tables found in execution plan. Cannot proceed with optimization.',
+      );
     }
 
     // Get schema information for all referenced tables in parallel
     const tableSchemas = await Promise.all(
-      tableNames.map(async tableName => {
+      tableNames.map(async (tableName) => {
         try {
           const schema = await handleDescribeTableSchema({
             tableName,
@@ -1139,17 +1088,19 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
           return {
             tableName,
             schema: schema.raw,
-            formatted: schema.formatted
+            formatted: schema.formatted,
           };
         } catch (error) {
-          throw new Error(`Failed to get schema for table ${tableName}: ${(error as Error).message}`);
+          throw new Error(
+            `Failed to get schema for table ${tableName}: ${(error as Error).message}`,
+          );
         }
-      })
+      }),
     );
 
     // Get the baseline execution metrics
     const baselineMetrics = extractExecutionMetrics(executionPlan);
-    
+
     // Return the information for analysis
     const result: QueryTuningResult = {
       tuningId,
@@ -1161,9 +1112,8 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
       sql: params.sql,
       baselineMetrics,
     };
-    
-    return result;
 
+    return result;
   } catch (error) {
     // Always attempt to clean up the temporary branch if it was created
     if (tempBranch) {
@@ -1172,11 +1122,11 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
           projectId: params.projectId,
           branchId: tempBranch.id,
         });
-      } catch (cleanupError) {
+      } catch {
         // No need to handle cleanup error
       }
     }
-    
+
     throw error;
   }
 }
@@ -1184,9 +1134,10 @@ async function handleQueryTuning(params: QueryTuningParams): Promise<QueryTuning
 // Helper function to extract execution metrics from EXPLAIN output
 function extractExecutionMetrics(plan: any): QueryMetrics {
   try {
-    const planJson = typeof plan.content?.[0]?.text === 'string' 
-      ? JSON.parse(plan.content[0].text)
-      : plan;
+    const planJson =
+      typeof plan.content?.[0]?.text === 'string'
+        ? JSON.parse(plan.content[0].text)
+        : plan;
 
     const metrics: QueryMetrics = {
       executionTime: 0,
@@ -1196,7 +1147,7 @@ function extractExecutionMetrics(plan: any): QueryMetrics {
       bufferUsage: {
         shared: { hit: 0, read: 0, written: 0, dirtied: 0 },
         local: { hit: 0, read: 0, written: 0, dirtied: 0 },
-      }
+      },
     };
 
     // Extract planning and execution time if available
@@ -1216,23 +1167,39 @@ function extractExecutionMetrics(plan: any): QueryMetrics {
         metrics.totalCost = Math.max(metrics.totalCost, node['Total Cost']);
       }
       if (node['Actual Rows']) {
+        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
         metrics.actualRows += node['Actual Rows'];
       }
 
-      // Accumulate buffer usage
-      if (node['Shared Hit Blocks']) metrics.bufferUsage.shared.hit += node['Shared Hit Blocks'];
-      if (node['Shared Read Blocks']) metrics.bufferUsage.shared.read += node['Shared Read Blocks'];
-      if (node['Shared Written Blocks']) metrics.bufferUsage.shared.written += node['Shared Written Blocks'];
-      if (node['Shared Dirtied Blocks']) metrics.bufferUsage.shared.dirtied += node['Shared Dirtied Blocks'];
-      
-      if (node['Local Hit Blocks']) metrics.bufferUsage.local.hit += node['Local Hit Blocks'];
-      if (node['Local Read Blocks']) metrics.bufferUsage.local.read += node['Local Read Blocks'];
-      if (node['Local Written Blocks']) metrics.bufferUsage.local.written += node['Local Written Blocks'];
-      if (node['Local Dirtied Blocks']) metrics.bufferUsage.local.dirtied += node['Local Dirtied Blocks'];
+      if (node['Shared Hit Blocks'])
+        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+        metrics.bufferUsage.shared.hit += node['Shared Hit Blocks'];
+      if (node['Shared Read Blocks'])
+        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+        metrics.bufferUsage.shared.read += node['Shared Read Blocks'];
+      if (node['Shared Written Blocks'])
+        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+        metrics.bufferUsage.shared.written += node['Shared Written Blocks'];
+      if (node['Shared Dirtied Blocks'])
+        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+        metrics.bufferUsage.shared.dirtied += node['Shared Dirtied Blocks'];
+
+      if (node['Local Hit Blocks'])
+        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+        metrics.bufferUsage.local.hit += node['Local Hit Blocks'];
+      if (node['Local Read Blocks'])
+        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+        metrics.bufferUsage.local.read += node['Local Read Blocks'];
+      if (node['Local Written Blocks'])
+        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+        metrics.bufferUsage.local.written += node['Local Written Blocks'];
+      if (node['Local Dirtied Blocks'])
+        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+        metrics.bufferUsage.local.dirtied += node['Local Dirtied Blocks'];
 
       // Process child nodes
-      if (Array.isArray(node['Plans'])) {
-        node['Plans'].forEach(processNode);
+      if (Array.isArray(node.Plans)) {
+        node.Plans.forEach(processNode);
       }
     }
 
@@ -1241,7 +1208,7 @@ function extractExecutionMetrics(plan: any): QueryMetrics {
     }
 
     return metrics;
-  } catch (error) {
+  } catch {
     return {
       executionTime: 0,
       planningTime: 0,
@@ -1250,20 +1217,20 @@ function extractExecutionMetrics(plan: any): QueryMetrics {
       bufferUsage: {
         shared: { hit: 0, read: 0, written: 0, dirtied: 0 },
         local: { hit: 0, read: 0, written: 0, dirtied: 0 },
-      }
+      },
     };
   }
 }
 
 // Types for query metrics
-interface BufferMetrics {
+type BufferMetrics = {
   hit: number;
   read: number;
   written: number;
   dirtied: number;
-}
+};
 
-interface QueryMetrics {
+type QueryMetrics = {
   executionTime: number;
   planningTime: number;
   totalCost: number;
@@ -1272,26 +1239,30 @@ interface QueryMetrics {
     shared: BufferMetrics;
     local: BufferMetrics;
   };
-}
+};
 
 // Function to extract table names from an execution plan
 function extractTableNamesFromPlan(planResult: any): string[] {
   const tableNames = new Set<string>();
-  
+
   function recursivelyExtractFromNode(node: any) {
     if (!node || typeof node !== 'object') return;
 
     // Check if current node has relation information
-    if (node['Relation Name'] && node['Schema']) {
-      const tableName = `${node['Schema']}.${node['Relation Name']}`;
+    if (node['Relation Name'] && node.Schema) {
+      const tableName = `${node.Schema}.${node['Relation Name']}`;
       tableNames.add(tableName);
     }
 
     // Recursively process all object properties and array elements
     if (Array.isArray(node)) {
-      node.forEach(item => recursivelyExtractFromNode(item));
+      node.forEach((item) => {
+        recursivelyExtractFromNode(item);
+      });
     } else {
-      Object.values(node).forEach(value => recursivelyExtractFromNode(value));
+      Object.values(node).forEach((value) => {
+        recursivelyExtractFromNode(value);
+      });
     }
   }
 
@@ -1304,11 +1275,11 @@ function extractTableNamesFromPlan(planResult: any): string[] {
       try {
         const parsedContent = JSON.parse(planResult.content[0].text);
         recursivelyExtractFromNode(parsedContent);
-      } catch (parseError) {
+      } catch {
         // No need to handle parse error
       }
     }
-  } catch (error) {
+  } catch {
     // No need to handle extraction error
   }
 
@@ -1316,7 +1287,7 @@ function extractTableNamesFromPlan(planResult: any): string[] {
   return result;
 }
 
-interface HandlerParams {
+type HandlerParams = {
   // ... other param types ...
   complete_query_tuning: {
     suggestedSqlStatements: string[];
@@ -1328,57 +1299,74 @@ interface HandlerParams {
     shouldDeleteTemporaryBranch: boolean;
     branchId?: string;
   };
-}
+};
 
-async function handleCompleteTuning(params: CompleteTuningParams): Promise<CompleteTuningResult> {
+async function handleCompleteTuning(
+  params: CompleteTuningParams,
+): Promise<CompleteTuningResult> {
   let results;
   const operationLog: string[] = [];
-  
+
   try {
     // Validate branch information
     if (!params.temporaryBranch) {
-      throw new Error('Branch information is required for completing query tuning');
+      throw new Error(
+        'Branch information is required for completing query tuning',
+      );
     }
 
     // Only proceed with changes if we have both suggestedChanges and branch
-    if (params.applyChanges && params.suggestedSqlStatements && params.suggestedSqlStatements.length > 0) {
+    if (
+      params.applyChanges &&
+      params.suggestedSqlStatements &&
+      params.suggestedSqlStatements.length > 0
+    ) {
       operationLog.push('Applying optimizations to main branch...');
-      
+
       results = await handleRunSqlTransaction({
         sqlStatements: params.suggestedSqlStatements,
         databaseName: params.databaseName,
         projectId: params.projectId,
         branchId: params.branch?.id,
       });
-      
+
       operationLog.push('Successfully applied optimizations to main branch.');
     } else {
-      operationLog.push('No changes were applied (either none suggested or changes were discarded).');
+      operationLog.push(
+        'No changes were applied (either none suggested or changes were discarded).',
+      );
     }
 
     // Only delete branch if shouldDeleteTemporaryBranch is true
     if (params.shouldDeleteTemporaryBranch && params.temporaryBranch) {
       operationLog.push('Cleaning up temporary branch...');
-      
+
       await handleDeleteBranch({
         projectId: params.projectId,
         branchId: params.temporaryBranch.id,
       });
-      
+
       operationLog.push('Successfully cleaned up temporary branch.');
     }
 
     const result: CompleteTuningResult = {
-      appliedChanges: params.applyChanges && params.suggestedSqlStatements ? params.suggestedSqlStatements : undefined,
+      appliedChanges:
+        params.applyChanges && params.suggestedSqlStatements
+          ? params.suggestedSqlStatements
+          : undefined,
       results,
-      deletedBranches: params.shouldDeleteTemporaryBranch && params.temporaryBranch ? [params.temporaryBranch.id] : undefined,
+      deletedBranches:
+        params.shouldDeleteTemporaryBranch && params.temporaryBranch
+          ? [params.temporaryBranch.id]
+          : undefined,
       message: operationLog.join('\n'),
     };
-    
+
     return result;
-    
   } catch (error) {
-    throw new Error(`Failed to complete query tuning: ${(error as Error).message}`);
+    throw new Error(
+      `Failed to complete query tuning: ${(error as Error).message}`,
+    );
   }
 }
 
@@ -1389,14 +1377,10 @@ export const NEON_HANDLERS = {
   }),
 
   list_projects: async ({ params }) => {
-    try {
-      const projects = await handleListProjects(params);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(projects, null, 2) }],
-      };
-    } catch (error) {
-      throw error;
-    }
+    const projects = await handleListProjects(params);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(projects, null, 2) }],
+    };
   },
 
   create_project: async ({ params }) => {
@@ -1436,6 +1420,7 @@ export const NEON_HANDLERS = {
         ],
       };
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
       return {
         content: [
           {
@@ -1443,7 +1428,7 @@ export const NEON_HANDLERS = {
             text: [
               'An error occurred while creating the project.',
               'Error details:',
-              `${error}`,
+              message,
               'If you have reached the Neon project limit, please upgrade your account in this link: https://console.neon.tech/app/billing',
             ].join('\n'),
           },
@@ -1451,80 +1436,63 @@ export const NEON_HANDLERS = {
       };
     }
   },
-
   delete_project: async ({ params }) => {
-    try {
-      await handleDeleteProject(params.projectId);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: [
-              'Project deleted successfully.',
-              `Project ID: ${params.projectId}`,
-            ].join('\n'),
-          },
-        ],
-      };
-    } catch (error) {
-      throw error;
-    }
+    await handleDeleteProject(params.projectId);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: [
+            'Project deleted successfully.',
+            `Project ID: ${params.projectId}`,
+          ].join('\n'),
+        },
+      ],
+    };
   },
 
   describe_project: async ({ params }) => {
-    try {
-      const result = await handleDescribeProject(params.projectId);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `This project is called ${result.project.project.name}.`,
-          },
-          {
-            type: 'text',
-            text: `It contains the following branches (use the describe branch tool to learn more about each branch): ${JSON.stringify(
-              result.branches,
-              null,
-              2,
-            )}`,
-          },
-        ],
-      };
-    } catch (error) {
-      throw error;
-    }
+    const result = await handleDescribeProject(params.projectId);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `This project is called ${result.project.project.name}.`,
+        },
+        {
+          type: 'text',
+          text: `It contains the following branches (use the describe branch tool to learn more about each branch): ${JSON.stringify(
+            result.branches,
+            null,
+            2,
+          )}`,
+        },
+      ],
+    };
   },
 
   run_sql: async ({ params }) => {
-    try {
-      const result = await handleRunSql({
-        sql: params.sql,
-        databaseName: params.databaseName,
-        projectId: params.projectId,
-        branchId: params.branchId,
-      });
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
-    } catch (error) {
-      throw error;
-    }
+    const result = await handleRunSql({
+      sql: params.sql,
+      databaseName: params.databaseName,
+      projectId: params.projectId,
+      branchId: params.branchId,
+    });
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
   },
 
   run_sql_transaction: async ({ params }) => {
-    try {
-      const result = await handleRunSqlTransaction({
-        sqlStatements: params.sqlStatements,
-        databaseName: params.databaseName,
-        projectId: params.projectId,
-        branchId: params.branchId,
-      });
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
-    } catch (error) {
-      throw error;
-    }
+    const result = await handleRunSqlTransaction({
+      sqlStatements: params.sqlStatements,
+      databaseName: params.databaseName,
+      projectId: params.projectId,
+      branchId: params.branchId,
+    });
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
   },
 
   describe_table_schema: async ({ params }) => {
@@ -1540,62 +1508,53 @@ export const NEON_HANDLERS = {
   },
 
   get_database_tables: async ({ params }) => {
-    try {
-      const result = await handleGetDatabaseTables({
-        projectId: params.projectId,
-        branchId: params.branchId,
-        databaseName: params.databaseName,
-      });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
-    } catch (error) {
-      throw error;
-    }
+    const result = await handleGetDatabaseTables({
+      projectId: params.projectId,
+      branchId: params.branchId,
+      databaseName: params.databaseName,
+    });
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
   },
 
   create_branch: async ({ params }) => {
-    try {
-      const result = await handleCreateBranch({
-        projectId: params.projectId,
-        branchName: params.branchName,
-      });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: [
-              'Branch created successfully.',
-              `Project ID: ${result.branch.project_id}`,
-              `Branch ID: ${result.branch.id}`,
-              `Branch name: ${result.branch.name}`,
-              `Parent branch: ${result.branch.parent_id}`,
-            ].join('\n'),
-          },
-        ],
-      };
-    } catch (error) {
-      throw error;
-    }
+    const result = await handleCreateBranch({
+      projectId: params.projectId,
+      branchName: params.branchName,
+    });
+    return {
+      content: [
+        {
+          type: 'text',
+          text: [
+            'Branch created successfully.',
+            `Project ID: ${result.branch.project_id}`,
+            `Branch ID: ${result.branch.id}`,
+            `Branch name: ${result.branch.name}`,
+            `Parent branch: ${result.branch.parent_id}`,
+          ].join('\n'),
+        },
+      ],
+    };
   },
 
   prepare_database_migration: async ({ params }) => {
-    try {
-      const result = await handleSchemaMigration({
-        migrationSql: params.migrationSql,
-        databaseName: params.databaseName,
-        projectId: params.projectId,
-      });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `
+    const result = await handleSchemaMigration({
+      migrationSql: params.migrationSql,
+      databaseName: params.databaseName,
+      projectId: params.projectId,
+    });
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `
               <status>Migration created successfully in temporary branch</status>
               <details>
                 <migration_id>${result.migrationId}</migration_id>
@@ -1613,186 +1572,170 @@ export const NEON_HANDLERS = {
                 3. If satisfied, use 'complete_database_migration' with migration_id: ${result.migrationId}
               </next_actions>
             `,
-          },
-        ],
-      };
-    } catch (error) {
-      throw error;
-    }
+        },
+      ],
+    };
   },
 
   complete_database_migration: async ({ params }) => {
-    try {
-      const result = await handleCommitMigration({
-        migrationId: params.migrationId,
-      });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Result: ${JSON.stringify(
-              {
-                deletedBranch: result.deletedBranch,
-                migrationResult: result.migrationResult,
-              },
-              null,
-              2,
-            )}`,
-          },
-        ],
-      };
-    } catch (error) {
-      throw error;
-    }
+    const result = await handleCommitMigration({
+      migrationId: params.migrationId,
+    });
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Result: ${JSON.stringify(
+            {
+              deletedBranch: result.deletedBranch,
+              migrationResult: result.migrationResult,
+            },
+            null,
+            2,
+          )}`,
+        },
+      ],
+    };
   },
 
   describe_branch: async ({ params }) => {
-    try {
-      const result = await handleDescribeBranch({
-        projectId: params.projectId,
-        branchId: params.branchId,
-        databaseName: params.databaseName,
-      });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: ['Database Structure:', JSON.stringify(result, null, 2)].join('\n'),
-          },
-        ],
-      };
-    } catch (error) {
-      throw error;
-    }
+    const result = await handleDescribeBranch({
+      projectId: params.projectId,
+      branchId: params.branchId,
+      databaseName: params.databaseName,
+    });
+    return {
+      content: [
+        {
+          type: 'text',
+          text: ['Database Structure:', JSON.stringify(result, null, 2)].join(
+            '\n',
+          ),
+        },
+      ],
+    };
   },
 
   delete_branch: async ({ params }) => {
-    try {
-      await handleDeleteBranch({
-        projectId: params.projectId,
-        branchId: params.branchId,
-      });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: [
-              'Branch deleted successfully.',
-              `Project ID: ${params.projectId}`,
-              `Branch ID: ${params.branchId}`,
-            ].join('\n'),
-          },
-        ],
-      };
-    } catch (error) {
-      throw error;
-    }
+    await handleDeleteBranch({
+      projectId: params.projectId,
+      branchId: params.branchId,
+    });
+    return {
+      content: [
+        {
+          type: 'text',
+          text: [
+            'Branch deleted successfully.',
+            `Project ID: ${params.projectId}`,
+            `Branch ID: ${params.branchId}`,
+          ].join('\n'),
+        },
+      ],
+    };
   },
 
   get_connection_string: async ({ params }) => {
-    try {
-      const result = await handleGetConnectionString({
-        projectId: params.projectId,
-        branchId: params.branchId,
-        computeId: params.computeId,
-        databaseName: params.databaseName,
-        roleName: params.roleName,
-      });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: [
-              'Connection string details:',
-              `URI: ${result.uri}`,
-              `Project ID: ${result.projectId}`,
-              `Database: ${result.databaseName}`,
-              `Role: ${result.roleName}`,
-              result.branchId ? `Branch ID: ${result.branchId}` : 'Using default branch',
-              result.computeId ? `Compute ID: ${result.computeId}` : 'Using default compute',
-              '',
-              'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
-            ].join('\n'),
-          },
-        ],
-      };
-    } catch (error) {
-      throw error;
-    }
+    const result = await handleGetConnectionString({
+      projectId: params.projectId,
+      branchId: params.branchId,
+      computeId: params.computeId,
+      databaseName: params.databaseName,
+      roleName: params.roleName,
+    });
+    return {
+      content: [
+        {
+          type: 'text',
+          text: [
+            'Connection string details:',
+            `URI: ${result.uri}`,
+            `Project ID: ${result.projectId}`,
+            `Database: ${result.databaseName}`,
+            `Role: ${result.roleName}`,
+            result.branchId
+              ? `Branch ID: ${result.branchId}`
+              : 'Using default branch',
+            result.computeId
+              ? `Compute ID: ${result.computeId}`
+              : 'Using default compute',
+            '',
+            'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
+          ].join('\n'),
+        },
+      ],
+    };
   },
 
   provision_neon_auth: async ({ params }) => {
-    try {
-      const result = await handleProvisionNeonAuth({
-        projectId: params.projectId,
-        database: params.database,
-      });
-      return result;
-    } catch (error) {
-      throw error;
-    }
+    const result = await handleProvisionNeonAuth({
+      projectId: params.projectId,
+      database: params.database,
+    });
+    return result;
   },
 
   explain_sql_statement: async ({ params }) => {
-    try {
-      const result = await handleExplainSqlStatement({ params });
-      return result;
-    } catch (error) {
-      throw error;
-    }
+    const result = await handleExplainSqlStatement({ params });
+    return result;
   },
 
   prepare_query_tuning: async ({ params }) => {
-    try {
-      const result = await handleQueryTuning({
-        sql: params.sql,
-        databaseName: params.databaseName,
-        projectId: params.projectId,
-      });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
+    const result = await handleQueryTuning({
+      sql: params.sql,
+      databaseName: params.databaseName,
+      projectId: params.projectId,
+    });
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
               tuningId: result.tuningId,
               databaseName: result.databaseName,
               projectId: result.projectId,
               temporaryBranch: result.temporaryBranch,
               executionPlan: result.originalPlan,
               tableSchemas: result.tableSchemas,
-              sql: result.sql
-            }, null, 2),
-          },
-        ],
-      };
-    } catch (error) {
-      throw error;
-    }
+              sql: result.sql,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
   },
 
-  complete_query_tuning: async ({ params }: { params: HandlerParams['complete_query_tuning'] }) => {
-    try {
-      const result = await handleCompleteTuning({
-        suggestedSqlStatements: params.suggestedSqlStatements,
-        applyChanges: params.applyChanges,
-        tuningId: params.tuningId,
-        databaseName: params.databaseName,
-        projectId: params.projectId,
-        temporaryBranch: { id: params.temporaryBranchId, project_id: params.projectId } as Branch,
-        shouldDeleteTemporaryBranch: params.shouldDeleteTemporaryBranch,
-        branch: params.branchId ? { id: params.branchId, project_id: params.projectId } as Branch : undefined,
-      });
+  complete_query_tuning: async ({
+    params,
+  }: {
+    params: HandlerParams['complete_query_tuning'];
+  }) => {
+    const result = await handleCompleteTuning({
+      suggestedSqlStatements: params.suggestedSqlStatements,
+      applyChanges: params.applyChanges,
+      tuningId: params.tuningId,
+      databaseName: params.databaseName,
+      projectId: params.projectId,
+      temporaryBranch: {
+        id: params.temporaryBranchId,
+        project_id: params.projectId,
+      } as Branch,
+      shouldDeleteTemporaryBranch: params.shouldDeleteTemporaryBranch,
+      branch: params.branchId
+        ? ({ id: params.branchId, project_id: params.projectId } as Branch)
+        : undefined,
+    });
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
-    } catch (error) {
-      throw error;
-    }
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
   },
 } satisfies ToolHandlers;
