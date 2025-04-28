@@ -2,8 +2,20 @@
 
 ## UNRELEASED
 
-- Fix default database name or role name assumptions.
 - Feature: Support for remote MCP with OAuth flow.
+
+## [0.3.7] - 2025-04-23
+
+- Fixes Neon Auth instructions to install latest version of the SDK
+
+## [0.3.6] - 2025-04-20
+
+- Bumps the Neon serverless driver to 1.0.0
+
+## [0.3.5] - 2025-04-19
+
+- Fix default database name or role name assumptions.
+- Adds better error message for project creations.
 
 ## [0.3.4] - 2025-03-26
 

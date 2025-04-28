@@ -17,7 +17,6 @@ Some of the key features of the Neon MCP server include:
 
 - **Natural language interaction:** Manage Neon databases using intuitive, conversational commands.
 - **Simplified database management:** Perform complex actions without writing SQL or directly using the Neon API.
-- **Enhanced Productivity:** Streamline workflows for database administration and development.
 - **Accessibility for non-developers:** Empower users with varying technical backgrounds to interact with Neon databases.
 - **Database migration support:** Leverage Neon's branching capabilities for database schema changes initiated via natural language.
 
