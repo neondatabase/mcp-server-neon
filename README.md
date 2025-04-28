@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/mseep-audited.png)](https://mseep.ai/app/neondatabase-labs-mcp-server-neon)
+
 <img width="250px" src="https://neon.tech/brand/neon-logo-dark-color.svg" />
 
 # Neon MCP Server
