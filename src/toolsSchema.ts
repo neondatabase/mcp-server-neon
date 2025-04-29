@@ -89,7 +89,6 @@ export const explainSqlStatementInputSchema = z.object({
     .boolean()
     .default(true)
     .describe('Whether to include ANALYZE in the EXPLAIN command'),
-  
 });
 export const describeTableSchemaInputSchema = z.object({
   tableName: z.string().describe('The name of the table'),
@@ -193,15 +192,26 @@ export const prepareQueryTuningInputSchema = z.object({
   roleName: z
     .string()
     .optional()
-    .describe('The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.'),
+    .describe(
+      'The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.',
+    ),
 });
 
 export const completeQueryTuningInputSchema = z.object({
-  suggestedSqlStatements: z.array(z.string()).describe('The SQL DDL statements to execute to improve performance. These statements are the result of the prior steps, for example creating additional indexes.'),
-  applyChanges: z.boolean().default(false).describe('Whether to apply the suggested changes to the main branch'),
+  suggestedSqlStatements: z
+    .array(z.string())
+    .describe(
+      'The SQL DDL statements to execute to improve performance. These statements are the result of the prior steps, for example creating additional indexes.',
+    ),
+  applyChanges: z
+    .boolean()
+    .default(false)
+    .describe('Whether to apply the suggested changes to the main branch'),
   tuningId: z
-  .string()
-  .describe('The ID of the tuning to complete. This is NOT the branch ID. Remember this ID from the prior step using tool prepare_query_tuning.'),
+    .string()
+    .describe(
+      'The ID of the tuning to complete. This is NOT the branch ID. Remember this ID from the prior step using tool prepare_query_tuning.',
+    ),
   databaseName: z
     .string()
     .describe('The name of the database to execute the query against'),
@@ -211,8 +221,13 @@ export const completeQueryTuningInputSchema = z.object({
   roleName: z
     .string()
     .optional()
-    .describe('The name of the role to connect with. If you have used a specific role in prepare_query_tuning you MUST pass the same role again to this tool. If not provided, the default role (usually "neondb_owner") will be used.'),
-  shouldDeleteTemporaryBranch: z.boolean().default(true).describe('Whether to delete the temporary branch after tuning'),
+    .describe(
+      'The name of the role to connect with. If you have used a specific role in prepare_query_tuning you MUST pass the same role again to this tool. If not provided, the default role (usually "neondb_owner") will be used.',
+    ),
+  shouldDeleteTemporaryBranch: z
+    .boolean()
+    .default(true)
+    .describe('Whether to delete the temporary branch after tuning'),
   temporaryBranchId: z
     .string()
     .describe(
