@@ -1510,16 +1510,14 @@ async function handleListSlowQueries({
       shared_blks_dirtied,
       temp_blks_read,
       temp_blks_written,
-      blk_read_time,
-      blk_write_time,
       wal_records,
       wal_fpi,
       wal_bytes
     FROM pg_stat_statements
-    AND query NOT LIKE '%pg_stat_statements%'
+    WHERE query NOT LIKE '%pg_stat_statements%'
     AND query NOT LIKE '%EXPLAIN%'
     ORDER BY mean_exec_time DESC
-    LIMIT $2;
+    LIMIT $1;
   `;
 
   const slowQueries = await sql.query(slowQueriesQuery, [
