@@ -47,7 +47,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'list_projects' as const,
-    description: `List all Neon projects in your account.`,
+    description: `Lists the first 10 Neon projects in your account. If you can't find the project, increase the limit by passing a higher value to the \`limit\` parameter.`,
     inputSchema: listProjectsInputSchema,
   },
   {
