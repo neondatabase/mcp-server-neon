@@ -1444,6 +1444,7 @@ async function handleListSlowQueries({
   projectId,
   branchId,
   databaseName,
+  computeId,
   limit = 10,
   minExecutionTime = 1000,
   timeRange = '1h',
@@ -1451,6 +1452,7 @@ async function handleListSlowQueries({
   projectId: string;
   branchId?: string;
   databaseName?: string;
+  computeId?: string;
   limit?: number;
   minExecutionTime?: number;
   timeRange?: string;
@@ -1459,6 +1461,7 @@ async function handleListSlowQueries({
   const connectionString = await handleGetConnectionString({
     projectId,
     branchId,
+    computeId,
     databaseName,
   });
 
@@ -1476,14 +1479,9 @@ async function handleListSlowQueries({
   const extensionExists = extensionCheck[0]?.extension_exists;
 
   if (!extensionExists) {
-    // If extension doesn't exist, try to install it
-    try {
-      await sql.query('CREATE EXTENSION IF NOT EXISTS pg_stat_statements;');
-    } catch (error) {
-      throw new Error(
-        `Failed to install pg_stat_statements extension: ${error}`,
-      );
-    }
+    throw new Error(
+      `pg_stat_statements extension is not installed on the database. Please install it using the following command: CREATE EXTENSION pg_stat_statements;`,
+    );
   }
 
   // Parse time range to get the interval
@@ -1518,7 +1516,6 @@ async function handleListSlowQueries({
       wal_fpi,
       wal_bytes
     FROM pg_stat_statements
-    WHERE mean_exec_time >= $1
     AND query NOT LIKE '%pg_stat_statements%'
     AND query NOT LIKE '%EXPLAIN%'
     ORDER BY mean_exec_time DESC
@@ -1526,7 +1523,6 @@ async function handleListSlowQueries({
   `;
 
   const slowQueries = await sql.query(slowQueriesQuery, [
-    minExecutionTime,
     limit,
   ]);
 
