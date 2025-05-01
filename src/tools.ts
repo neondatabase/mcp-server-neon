@@ -617,22 +617,6 @@ async function handleCreateProject(name?: string) {
     throw new Error(`Failed to create project: ${JSON.stringify(response)}`);
   }
   return response.data;
-  /*try {
-    const response = await neonClient.createProject({
-      project: { name },
-    });
-    
-    return response.data;
-  } catch (error) {
-    
-    if (error instanceof Object && "status" in error && error.status === 422) {
-      throw new Error(
-        `You have reached the Neon project limit. Please upgrade your account in this link: https://console.neon.tech/app/billing`,
-      );
-    }
-
-    throw new Error(`Failed to create project: ${error}`);
-  }*/
 }
 
 async function handleDeleteProject(projectId: string) {
@@ -1446,7 +1430,6 @@ async function handleListSlowQueries({
   databaseName,
   computeId,
   limit = 10,
-  minExecutionTime = 1000,
   timeRange = '1h',
 }: {
   projectId: string;
@@ -1454,7 +1437,6 @@ async function handleListSlowQueries({
   databaseName?: string;
   computeId?: string;
   limit?: number;
-  minExecutionTime?: number;
   timeRange?: string;
 }) {
   // Get connection string
@@ -1557,7 +1539,6 @@ async function handleListSlowQueries({
   return {
     slow_queries: formattedQueries,
     time_range: interval,
-    min_execution_time_ms: minExecutionTime,
     total_queries_found: formattedQueries.length,
   };
 }
@@ -2002,7 +1983,6 @@ export const NEON_HANDLERS = {
         branchId: params.branchId,
         databaseName: params.databaseName,
         limit: params.limit,
-        minExecutionTime: params.minExecutionTime,
         timeRange: params.timeRange,
       });
       return {
