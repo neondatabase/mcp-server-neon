@@ -26,7 +26,6 @@ import {
   getConnectionStringInputSchema,
   getDatabaseTablesInputSchema,
   listProjectsInputSchema,
-  nodeVersionInputSchema,
   prepareDatabaseMigrationInputSchema,
   prepareQueryTuningInputSchema,
   provisionNeonAuthInputSchema,
@@ -40,11 +39,6 @@ import {
 } from './utils.js';
 // Define the tools with their configurations
 export const NEON_TOOLS = [
-  {
-    name: '__node_version' as const,
-    description: `Get the Node.js version used by the MCP server`,
-    inputSchema: nodeVersionInputSchema,
-  },
   {
     name: 'list_projects' as const,
     description: `List all Neon projects in your account.`,
@@ -1477,11 +1471,6 @@ async function handleCompleteTuning(
 }
 
 export const NEON_HANDLERS = {
-  // for debugging reasons.
-  __node_version: () => ({
-    content: [{ type: 'text', text: process.version }],
-  }),
-
   list_projects: async ({ params }, neonClient) => {
     const projects = await handleListProjects(params, neonClient);
     return {

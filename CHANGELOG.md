@@ -3,6 +3,7 @@
 ## UNRELEASED
 
 - Feature: Support for remote MCP with OAuth flow.
+- Remove `__node_version` tool
 
 ## [0.3.7] - 2025-04-23
 

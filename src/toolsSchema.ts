@@ -6,8 +6,6 @@ type ZodObjectParams<T> = z.ZodObject<{ [key in keyof T]: z.ZodType<T[key]> }>;
 
 const DATABASE_NAME_DESCRIPTION = `The name of the database. If not provided, the default ${NEON_DEFAULT_DATABASE_NAME} or first available database is used.`;
 
-export const nodeVersionInputSchema = z.object({});
-
 export const listProjectsInputSchema = z.object({
   cursor: z
     .string()
