@@ -1,3 +1,6 @@
+import { NEON_DEFAULT_DATABASE_NAME } from './constants.js';
+import { Api } from '@neondatabase/api-client';
+
 export const splitSqlStatements = (sql: string) => {
   return sql.split(';').filter(Boolean);
 };
@@ -95,9 +98,6 @@ SELECT * FROM show_db_tree();
 `,
 ];
 
-import { neonClient } from './index.js';
-import { NEON_DEFAULT_DATABASE_NAME } from './constants.js';
-
 /**
  * Returns the default database for a project branch
  * If a database name is provided, it fetches and returns that database
@@ -105,15 +105,18 @@ import { NEON_DEFAULT_DATABASE_NAME } from './constants.js';
  * If 'neondb' doesn't exist, it returns the first available database
  * Throws an error if no databases are found
  */
-export async function getDefaultDatabase({
-  projectId,
-  branchId,
-  databaseName,
-}: {
-  projectId: string;
-  branchId: string;
-  databaseName?: string;
-}) {
+export async function getDefaultDatabase(
+  {
+    projectId,
+    branchId,
+    databaseName,
+  }: {
+    projectId: string;
+    branchId: string;
+    databaseName?: string;
+  },
+  neonClient: Api<unknown>,
+) {
   const { data } = await neonClient.listProjectBranchDatabases(
     projectId,
     branchId,

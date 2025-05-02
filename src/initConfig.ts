@@ -33,9 +33,41 @@ if (platform === 'win32') {
 
 const MCP_NEON_SERVER = 'neon';
 
-export const parseArgs = () => {
+type Args =
+  | {
+      command: 'start:sse';
+    }
+  | {
+      command: 'start';
+      neonApiKey: string;
+    }
+  | {
+      command: 'init';
+      executablePath: string;
+      neonApiKey: string;
+    };
+
+const commands = ['init', 'start', 'start:sse'] as const;
+export const parseArgs = (): Args => {
   const args = process.argv;
-  if (args.length === 0) {
+  if (args.length < 3) {
+    console.error('Invalid number of arguments');
+    process.exit(1);
+  }
+
+  if (args.length === 3 && args[2] === 'start:sse') {
+    return {
+      command: 'start:sse',
+    };
+  }
+
+  const command = args[2];
+  if (!commands.includes(command as (typeof commands)[number])) {
+    console.error(`Invalid command: ${command}`);
+    process.exit(1);
+  }
+
+  if (args.length < 3) {
     console.error(
       'Please provide a NEON_API_KEY as a command-line argument - you can get one through the Neon console: https://neon.tech/docs/manage/api-keys',
     );
@@ -49,7 +81,7 @@ export const parseArgs = () => {
 
   return {
     executablePath: args[1],
-    command: args[2],
+    command: args[2] as 'start' | 'init',
     neonApiKey: args[3],
   };
 };

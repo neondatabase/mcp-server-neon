@@ -6,8 +6,6 @@ type ZodObjectParams<T> = z.ZodObject<{ [key in keyof T]: z.ZodType<T[key]> }>;
 
 const DATABASE_NAME_DESCRIPTION = `The name of the database. If not provided, the default ${NEON_DEFAULT_DATABASE_NAME} or first available database is used.`;
 
-export const nodeVersionInputSchema = z.object({});
-
 export const listProjectsInputSchema = z.object({
   cursor: z
     .string()
@@ -17,7 +15,7 @@ export const listProjectsInputSchema = z.object({
     ),
   limit: z
     .number()
-    .optional()
+    .default(10)
     .describe(
       'Specify a value from 1 to 400 to limit number of projects in the response.',
     ),

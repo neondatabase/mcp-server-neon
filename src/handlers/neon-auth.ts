@@ -1,15 +1,15 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { neonClient } from '../index.js';
-import { NeonAuthSupportedAuthProvider } from '@neondatabase/api-client';
+
+import { Api, NeonAuthSupportedAuthProvider } from '@neondatabase/api-client';
 import { provisionNeonAuthInputSchema } from '../toolsSchema.js';
 import { z } from 'zod';
 import { getDefaultDatabase } from '../utils.js';
 
 type Props = z.infer<typeof provisionNeonAuthInputSchema>;
-export async function handleProvisionNeonAuth({
-  projectId,
-  database,
-}: Props): Promise<CallToolResult> {
+export async function handleProvisionNeonAuth(
+  { projectId, database }: Props,
+  neonClient: Api<unknown>,
+): Promise<CallToolResult> {
   const {
     data: { branches },
   } = await neonClient.listProjectBranches({
@@ -28,11 +28,14 @@ export async function handleProvisionNeonAuth({
       ],
     };
   }
-  const defaultDatabase = await getDefaultDatabase({
-    projectId,
-    branchId: defaultBranch.id,
-    databaseName: database,
-  });
+  const defaultDatabase = await getDefaultDatabase(
+    {
+      projectId,
+      branchId: defaultBranch.id,
+      databaseName: database,
+    },
+    neonClient,
+  );
 
   if (!defaultDatabase) {
     return {

@@ -5,34 +5,34 @@
 
 import { neon } from '@neondatabase/serverless';
 
-export interface TableDescription {
+export type TableDescription = {
   columns: ColumnDescription[];
   indexes: IndexDescription[];
   constraints: ConstraintDescription[];
   tableSize: string;
   indexSize: string;
   totalSize: string;
-}
+};
 
-export interface ColumnDescription {
+export type ColumnDescription = {
   name: string;
   type: string;
   nullable: boolean;
   default: string | null;
   description: string | null;
-}
+};
 
-export interface IndexDescription {
+export type IndexDescription = {
   name: string;
   definition: string;
   size: string;
-}
+};
 
-export interface ConstraintDescription {
+export type ConstraintDescription = {
   name: string;
   type: string;
   definition: string;
-}
+};
 
 export const DESCRIBE_TABLE_STATEMENTS = [
   // Get column information

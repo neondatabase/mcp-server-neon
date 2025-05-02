@@ -1,0 +1,9 @@
+# flyctl launch added from .gitignore
+**/node_modules
+**/*.log
+**/.env
+**/dist
+**/build
+# VS Code history extension
+**/.history 
+fly.toml

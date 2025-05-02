@@ -1,0 +1,22 @@
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'mcp-server-neon'
+primary_region = 'ams'
+
+[build]
+  dockerfile = 'Dockerfile.fly'
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+[[vm]]
+  memory = '2gb'
+  cpu_kind = 'performance'
+  cpus = 1

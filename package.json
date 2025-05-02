@@ -25,20 +25,35 @@
     "lint:fix": "npm run typecheck && eslint src --fix && prettier --w .",
     "prerelease": "npm run build",
     "prepublishOnly": "bun scripts/before-publish.ts",
-    "test": "npx braintrust eval src/tools-evaluations"
+    "test": "npx braintrust eval src/tools-evaluations",
+    "start": "node dist/index.js start:sse"
   },
   "dependencies": {
+    "@keyv/postgres": "2.1.2",
     "@modelcontextprotocol/sdk": "1.6.0",
     "@neondatabase/api-client": "2.0.0",
     "@neondatabase/serverless": "1.0.0",
+    "body-parser": "2.2.0",
     "chalk": "5.3.0",
+    "cors": "2.8.5",
+    "dotenv": "16.4.7",
+    "express": "5.0.1",
+    "keyv": "5.3.2",
+    "morgan": "1.10.0",
     "node-fetch": "2.7.0",
+    "oauth2-server": "3.1.1",
+    "openid-client": "6.3.4",
+    "winston": "3.17.0",
     "zod": "3.24.1"
   },
   "devDependencies": {
     "@eslint/js": "9.21.0",
+    "@types/cors": "2.8.17",
+    "@types/express": "5.0.1",
+    "@types/morgan": "1.9.9",
     "@types/node": "20.17.9",
     "@types/node-fetch": "2.6.12",
+    "@types/oauth2-server": "3.0.18",
     "autoevals": "0.0.111",
     "braintrust": "0.0.177",
     "bun": "1.1.40",
@@ -50,6 +65,6 @@
     "typescript-eslint": "v8.25.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   }
 }
