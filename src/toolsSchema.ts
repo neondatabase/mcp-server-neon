@@ -269,3 +269,18 @@ export const listSlowQueriesInputSchema = z.object({
       'Minimum execution time in milliseconds to consider a query as slow',
     ),
 });
+
+export const listBranchComputesInputSchema = z.object({
+  projectId: z
+    .string()
+    .optional()
+    .describe(
+      'The ID of the project. If not provided, the only available project will be used.',
+    ),
+  branchId: z
+    .string()
+    .optional()
+    .describe(
+      'The ID of the branch. If provided, endpoints for this specific branch will be listed.',
+    ),
+});

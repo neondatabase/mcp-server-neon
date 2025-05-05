@@ -25,6 +25,7 @@ import {
   explainSqlStatementInputSchema,
   getConnectionStringInputSchema,
   getDatabaseTablesInputSchema,
+  listBranchComputesInputSchema,
   listProjectsInputSchema,
   prepareDatabaseMigrationInputSchema,
   prepareQueryTuningInputSchema,
@@ -582,6 +583,11 @@ export const NEON_TOOLS = [
     </important_notes>
                  `,
     inputSchema: listSlowQueriesInputSchema,
+  },
+  {
+    name: 'list_branch_computes' as const,
+    description: 'Lists compute endpoints for a project or specific branch',
+    inputSchema: listBranchComputesInputSchema,
   },
 ];
 
@@ -1579,6 +1585,52 @@ async function handleListSlowQueries(
   };
 }
 
+async function handleListBranchComputes(
+  {
+    projectId,
+    branchId,
+  }: {
+    projectId?: string;
+    branchId?: string;
+  },
+  neonClient: Api<unknown>,
+) {
+  // If projectId is not provided, get the first project but only if there is only one project
+  if (!projectId) {
+    const projects = await handleListProjects({}, neonClient);
+    if (projects.length === 1) {
+      projectId = projects[0].id;
+    } else {
+      throw new Error(
+        'Please provide a project ID or ensure you have only one project.',
+      );
+    }
+  }
+
+  let endpoints;
+  if (branchId) {
+    const response = await neonClient.listProjectBranchEndpoints(
+      projectId,
+      branchId,
+    );
+    endpoints = response.data.endpoints;
+  } else {
+    const response = await neonClient.listProjectEndpoints(projectId);
+    endpoints = response.data.endpoints;
+  }
+
+  return endpoints.map((endpoint) => ({
+    compute_id: endpoint.id,
+    compute_type: endpoint.type,
+    compute_size:
+      endpoint.autoscaling_limit_min_cu !== endpoint.autoscaling_limit_max_cu
+        ? `${endpoint.autoscaling_limit_min_cu}-${endpoint.autoscaling_limit_max_cu}`
+        : endpoint.autoscaling_limit_min_cu,
+    last_active: endpoint.last_active,
+    ...endpoint,
+  }));
+}
+
 export const NEON_HANDLERS = {
   list_projects: async ({ params }, neonClient) => {
     const projects = await handleListProjects(params, neonClient);
@@ -2007,6 +2059,19 @@ export const NEON_HANDLERS = {
           text: JSON.stringify(result, null, 2),
         },
       ],
+    };
+  },
+
+  list_branch_computes: async ({ params }, neonClient) => {
+    const result = await handleListBranchComputes(
+      {
+        projectId: params.projectId,
+        branchId: params.branchId,
+      },
+      neonClient,
+    );
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
   },
 } satisfies ToolHandlers;

@@ -5,6 +5,7 @@
 - Feature: Support for remote MCP with OAuth flow.
 - Remove `__node_version` tool
 - Feature: Add `list_slow_queries` tool for monitoring database performance
+- Add `list_branch_computes` tool to list compute endpoints for a project or specific branch
 
 ## [0.3.7] - 2025-04-23
 
