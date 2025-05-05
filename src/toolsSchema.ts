@@ -161,7 +161,7 @@ export const getConnectionStringInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'The ID of the compute/endpoint. If not provided, the only available compute will be used.',
+      'The ID of the compute/endpoint. If not provided, the read-write compute associated with the branch will be used.',
     ),
   databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
   roleName: z
@@ -250,6 +250,12 @@ export const listSlowQueriesInputSchema = z.object({
       'An optional ID of the branch. If not provided the default branch is used.',
     ),
   databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
+  computeId: z
+    .string()
+    .optional()
+    .describe(
+      'The ID of the compute/endpoint. If not provided, the read-write compute associated with the branch will be used.',
+    ),
   limit: z
     .number()
     .optional()

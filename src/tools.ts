@@ -2010,6 +2010,7 @@ export const NEON_HANDLERS = {
         projectId: params.projectId,
         branchId: params.branchId,
         databaseName: params.databaseName,
+        computeId: params.computeId,
         limit: params.limit,
         timeRange: params.timeRange,
       },
