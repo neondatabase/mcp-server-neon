@@ -1478,14 +1478,12 @@ async function handleListSlowQueries(
     databaseName,
     computeId,
     limit = 10,
-    timeRange = '1h',
   }: {
     projectId: string;
     branchId?: string;
     databaseName?: string;
     computeId?: string;
     limit?: number;
-    timeRange?: string;
   },
   neonClient: Api<unknown>,
 ) {
@@ -1517,18 +1515,6 @@ async function handleListSlowQueries(
     throw new Error(
       `pg_stat_statements extension is not installed on the database. Please install it using the following command: CREATE EXTENSION pg_stat_statements;`,
     );
-  }
-
-  // Parse time range to get the interval
-  let interval;
-  if (timeRange.endsWith('h')) {
-    interval = `${timeRange.slice(0, -1)} hours`;
-  } else if (timeRange.endsWith('d')) {
-    interval = `${timeRange.slice(0, -1)} days`;
-  } else if (timeRange.endsWith('w')) {
-    interval = `${timeRange.slice(0, -1)} weeks`;
-  } else {
-    interval = '1 hour'; // Default to 1 hour
   }
 
   // Query to get slow queries
@@ -1589,7 +1575,6 @@ async function handleListSlowQueries(
 
   return {
     slow_queries: formattedQueries,
-    time_range: interval,
     total_queries_found: formattedQueries.length,
   };
 }
@@ -2012,7 +1997,6 @@ export const NEON_HANDLERS = {
         databaseName: params.databaseName,
         computeId: params.computeId,
         limit: params.limit,
-        timeRange: params.timeRange,
       },
       neonClient,
     );

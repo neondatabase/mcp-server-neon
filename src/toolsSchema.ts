@@ -268,9 +268,4 @@ export const listSlowQueriesInputSchema = z.object({
     .describe(
       'Minimum execution time in milliseconds to consider a query as slow',
     ),
-  timeRange: z
-    .string()
-    .optional()
-    .default('1h')
-    .describe('Time range to look for slow queries (e.g., 1h, 1d, 1w)'),
 });
