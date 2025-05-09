@@ -1,5 +1,10 @@
 # Changelog
 
+## UNRELEASED
+
+- Documentation: Updated README with new tools and features
+- Documentation: Improved clarity and consistency in README
+
 ## [0.4.0] - 2025-05-08
 
 - Feature: Support for remote MCP with OAuth flow.
