@@ -176,7 +176,7 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 
 **Project Management:**
 
-- **`list_projects`**: Retrieves a list of your Neon projects, providing a summary of each project associated with your Neon account.
+- **`list_projects`**: Retrieves a list of your Neon projects, providing a summary of each project associated with your Neon account. Supports limiting the number of projects returned (default: 10).
 - **`describe_project`**: Fetches detailed information about a specific Neon project, including its ID, name, and associated branches and databases.
 - **`create_project`**: Creates a new Neon project in your Neon account. A project acts as a container for branches, databases, roles, and computes.
 - **`delete_project`**: Deletes an existing Neon project and all its associated resources.
@@ -186,6 +186,7 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 - **`create_branch`**: Creates a new branch within a specified Neon project. Leverages [Neon's branching](/docs/introduction/branching) feature for development, testing, or migrations.
 - **`delete_branch`**: Deletes an existing branch from a Neon project.
 - **`describe_branch`**: Retrieves details about a specific branch, such as its name, ID, and parent branch.
+- **`list_branch_computes`**: Lists compute endpoints for a project or specific branch, including compute ID, type, size, and autoscaling information.
 
 **SQL Query Execution:**
 
@@ -194,15 +195,22 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 - **`run_sql_transaction`**: Executes a series of SQL queries within a single transaction against a Neon database.
 - **`get_database_tables`**: Lists all tables within a specified Neon database.
 - **`describe_table_schema`**: Retrieves the schema definition of a specific table, detailing columns, data types, and constraints.
+- **`list_slow_queries`**: Identifies performance bottlenecks by finding the slowest queries in a database. Requires the pg_stat_statements extension.
 
 **Database Migrations (Schema Changes):**
 
 - **`prepare_database_migration`**: Initiates a database migration process. Critically, it creates a temporary branch to apply and test the migration safely before affecting the main branch.
 - **`complete_database_migration`**: Finalizes and applies a prepared database migration to the main branch. This action merges changes from the temporary migration branch and cleans up temporary resources.
 
+**Query Performance Tuning:**
+
+- **`explain_sql_statement`**: Analyzes a SQL query and returns detailed execution plan information to help understand query performance.
+- **`prepare_query_tuning`**: Identifies potential performance issues in a SQL query and suggests optimizations. Creates a temporary branch for testing improvements.
+- **`complete_query_tuning`**: Finalizes and applies query optimizations after testing. Merges changes from the temporary tuning branch to the main branch.
+
 **Neon Auth:**
 
-- `provision_neon_auth`: Action to provision Neon Auth for a Neon project. It allows developers to easily setup authentication infrastructure by creating a integration with Stack Auth (`@stackframe/stack`).
+- **`provision_neon_auth`**: Action to provision Neon Auth for a Neon project. It allows developers to easily setup authentication infrastructure by creating a integration with Stack Auth (`@stackframe/stack`).
 
 ## Migrations
 
