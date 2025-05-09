@@ -1,5 +1,14 @@
 # Changelog
 
+## UNRELEASED
+
+- Improved `list_projects` tool with better hints and a default limit of 10 projects for more manageable output
+- Implemented comprehensive query performance tuning system with:
+  - `explain_sql_statement` tool for analyzing query execution plans
+  - `prepare_query_tuning` for suggesting performance optimizations
+  - `complete_query_tuning` for applying or discarding optimizations
+  - Enhanced table description system with detailed metadata about columns, indexes, and constraints
+
 ## [0.4.0] - 2025-05-08
 
 - Feature: Support for remote MCP with OAuth flow.
