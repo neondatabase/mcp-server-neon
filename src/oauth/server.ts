@@ -182,15 +182,15 @@ authRouter.get(
     }
 
     if (await isClientAlreadyApproved(req, client.id, COOKIE_SECRET)) {
-      res.render('approval-dialog', {
-        client,
-        state: btoa(JSON.stringify(requestParams)),
-      });
+      const authUrl = await upstreamAuth(btoa(JSON.stringify(requestParams)));
+      res.redirect(authUrl.href);
       return;
     }
 
-    const authUrl = await upstreamAuth(btoa(JSON.stringify(requestParams)));
-    res.redirect(authUrl.href);
+    res.render('approval-dialog', {
+      client,
+      state: btoa(JSON.stringify(requestParams)),
+    });
   },
 );
 
