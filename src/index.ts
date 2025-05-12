@@ -25,6 +25,8 @@ if (args.command === 'start:sse') {
 if (args.command === 'start') {
   try {
     const server = createMcpServer(args.neonApiKey);
+    // Turn off logger in stdio mode to avoid capturing stderr in wrong format by host application (Claude Desktop)
+    logger.silent = true;
     await startStdio(server);
   } catch (error) {
     logger.error('Server error:', error);
