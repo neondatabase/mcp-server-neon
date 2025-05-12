@@ -3,6 +3,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import chalk from 'chalk';
 import { fileURLToPath } from 'url';
+import { logger } from './utils/logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(
@@ -51,7 +52,7 @@ const commands = ['init', 'start', 'start:sse'] as const;
 export const parseArgs = (): Args => {
   const args = process.argv;
   if (args.length < 3) {
-    console.error('Invalid number of arguments');
+    logger.error('Invalid number of arguments');
     process.exit(1);
   }
 
@@ -63,19 +64,19 @@ export const parseArgs = (): Args => {
 
   const command = args[2];
   if (!commands.includes(command as (typeof commands)[number])) {
-    console.error(`Invalid command: ${command}`);
+    logger.error(`Invalid command: ${command}`);
     process.exit(1);
   }
 
   if (args.length < 3) {
-    console.error(
+    logger.error(
       'Please provide a NEON_API_KEY as a command-line argument - you can get one through the Neon console: https://neon.tech/docs/manage/api-keys',
     );
     process.exit(1);
   }
 
   if (args.length !== 4) {
-    console.error('Invalid number of arguments');
+    logger.error('Invalid number of arguments');
     process.exit(1);
   }
 
