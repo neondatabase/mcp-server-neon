@@ -11,13 +11,18 @@ import {
   requiresAuth,
 } from '../oauth/utils.js';
 import bodyParser from 'body-parser';
+import cookieParser from 'cookie-parser';
 
 export const createSseTransport = () => {
   const app = express();
 
   app.use(morganConfig);
   app.use(errorHandler);
+  app.use(cookieParser());
   app.use(ensureCorsHeaders());
+  app.use(express.static('public'));
+  app.set('view engine', 'pug');
+  app.set('views', 'src/views');
   app.use('/', authRouter);
 
   // to support multiple simultaneous connections we have a lookup object from
