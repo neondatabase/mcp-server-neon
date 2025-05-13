@@ -420,7 +420,7 @@ authRouter.post(
         providedRefreshToken.accessToken,
       );
       if (!oldToken) {
-        // Refresh token is missing it counter access token, delete it
+        // Refresh token is missing its counter access token, delete it
         await model.deleteRefreshToken(providedRefreshToken);
         res
           .status(400)
@@ -448,8 +448,8 @@ authRouter.post(
         user: oldToken.user,
       });
       await model.saveRefreshToken({
-        refreshToken: token.refresh_token ?? '',
-        accessToken: token.access_token,
+        refreshToken: token.refreshToken ?? '',
+        accessToken: token.accessToken,
       });
 
       // Delete the old tokens
