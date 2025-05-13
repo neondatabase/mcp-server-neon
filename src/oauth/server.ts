@@ -17,7 +17,11 @@ import {
 import { exchangeCode, exchangeRefreshToken, upstreamAuth } from './client.js';
 import { createNeonClient } from '../server/api.js';
 import bodyParser from 'body-parser';
-import { SERVER_HOST } from '../constants.js';
+import { SERVER_HOST, COOKIE_SECRET } from '../constants.js';
+import {
+  isClientAlreadyApproved,
+  updateApprovedClientsCookie,
+} from './cookies.js';
 
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
@@ -45,6 +49,7 @@ export const registerClient = async (
   const payload = req.body;
   logger.info('request to register client: ', {
     name: payload.client_name,
+    client_uri: payload.client_uri,
   });
 
   if (payload.client_name === undefined) {
@@ -105,6 +110,7 @@ export const registerClient = async (
       clientId,
       client_name: payload.client_name,
       redirect_uris: payload.redirect_uris,
+      client_uri: payload.client_uri,
     });
 
     res.json({
@@ -119,6 +125,7 @@ export const registerClient = async (
       message,
       error,
       client: payload.client_name,
+      client_uri: payload.client_uri,
     });
     res.status(500).json({ code: 'server_error', error, message });
   }
@@ -174,7 +181,37 @@ authRouter.get(
       return;
     }
 
-    const authUrl = await upstreamAuth(btoa(JSON.stringify(requestParams)));
+    if (await isClientAlreadyApproved(req, client.id, COOKIE_SECRET)) {
+      const authUrl = await upstreamAuth(btoa(JSON.stringify(requestParams)));
+      res.redirect(authUrl.href);
+      return;
+    }
+
+    res.render('approval-dialog', {
+      client,
+      state: btoa(JSON.stringify(requestParams)),
+    });
+  },
+);
+
+authRouter.post(
+  '/authorize',
+  bodyParser.urlencoded({ extended: true }),
+  async (req: ExpressRequest, res: ExpressResponse) => {
+    const state = req.body.state as string;
+    if (!state) {
+      res.status(400).json({ code: 'invalid_request', error: 'invalid state' });
+      return;
+    }
+
+    const requestParams = JSON.parse(atob(state));
+    await updateApprovedClientsCookie(
+      req,
+      res,
+      requestParams.clientId,
+      COOKIE_SECRET,
+    );
+    const authUrl = await upstreamAuth(state);
     res.redirect(authUrl.href);
   },
 );
