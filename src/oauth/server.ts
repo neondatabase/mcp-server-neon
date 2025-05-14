@@ -23,6 +23,7 @@ import {
   isClientAlreadyApproved,
   updateApprovedClientsCookie,
 } from './cookies.js';
+import { identify } from '../analytics/analytics.js';
 
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
@@ -421,6 +422,20 @@ authRouter.post(
       await model.saveRefreshToken({
         refreshToken: token.refreshToken ?? '',
         accessToken: token.accessToken,
+      });
+
+      identify({
+        userId: authorizationCode.user.id,
+        traits: {
+          name: authorizationCode.user.name,
+          email: authorizationCode.user.email,
+        },
+        context: {
+          client: {
+            id: client.id,
+            name: client.client_name,
+          },
+        },
       });
 
       // Revoke the authorization code, it can only be used once

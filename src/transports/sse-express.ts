@@ -1,19 +1,16 @@
 import express, { Request, Response, RequestHandler } from 'express';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { createMcpServer } from '../server/index.js';
+import { AppContext, createMcpServer } from '../server/index.js';
 import { createNeonClient } from '../server/api.js';
 import { logger, morganConfig, errorHandler } from '../utils/logger.js';
 import { authRouter } from '../oauth/server.js';
 import { SERVER_PORT, SERVER_HOST } from '../constants.js';
-import {
-  ensureCorsHeaders,
-  extractBearerToken,
-  requiresAuth,
-} from '../oauth/utils.js';
+import { ensureCorsHeaders, requiresAuth } from '../oauth/utils.js';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
+import { track } from '../analytics/analytics.js';
 
-export const createSseTransport = () => {
+export const createSseTransport = (appContext: AppContext) => {
   const app = express();
 
   app.use(morganConfig);
@@ -30,10 +27,13 @@ export const createSseTransport = () => {
   const transports = new Map<string, SSEServerTransport>();
 
   app.get('/', (async (req: Request, res: Response) => {
-    const access_token = extractBearerToken(
-      req.headers.authorization as string,
-    );
-    const neonClient = createNeonClient(access_token);
+    const auth = req.auth;
+    if (!auth) {
+      res.status(401).send('Unauthorized');
+      return;
+    }
+
+    const neonClient = createNeonClient(auth.accessToken);
     const user = await neonClient.getCurrentUserInfo();
     res.send({
       hello: `${user.data.name} ${user.data.last_name}`.trim(),
@@ -45,41 +45,81 @@ export const createSseTransport = () => {
     bodyParser.raw(),
     requiresAuth(),
     async (req: Request, res: Response) => {
-      const access_token = extractBearerToken(
-        req.headers.authorization as string,
-      );
+      const auth = req.auth;
+      if (!auth) {
+        res.status(401).send('Unauthorized');
+        return;
+      }
       const transport = new SSEServerTransport('/messages', res);
       transports.set(transport.sessionId, transport);
       logger.info('new sse connection', {
         sessionId: transport.sessionId,
       });
 
+      track({
+        userId: auth.user.id,
+        event: 'sse_connection',
+        properties: { sessionId: transport.sessionId },
+        context: {
+          app: appContext,
+          client: auth.client,
+        },
+      });
+
       res.on('close', () => {
         logger.info('SSE connection closed', {
           sessionId: transport.sessionId,
+        });
+        track({
+          userId: auth.user.id,
+          event: 'sse_connection_closed',
+          properties: { sessionId: transport.sessionId },
+          context: {
+            app: appContext,
+            client: auth.client,
+          },
         });
         transports.delete(transport.sessionId);
       });
 
       try {
-        const server = createMcpServer(access_token);
+        const server = createMcpServer({
+          apiKey: auth.accessToken,
+          client: auth.client,
+          user: auth.user,
+          app: appContext,
+        });
         await server.connect(transport);
       } catch (error: unknown) {
         logger.error('Failed to connect to MCP server:', {
           message: error instanceof Error ? error.message : 'Unknown error',
           error,
         });
+        track({
+          userId: auth.user.id,
+          event: 'sse_connection_errored',
+          properties: { error },
+          context: {
+            app: appContext,
+            client: auth.client,
+          },
+        });
       }
     },
   );
 
-  app.post('/messages', bodyParser.raw(), (async (
+  app.post('/messages', bodyParser.raw(), requiresAuth(), (async (
     request: Request,
     response: Response,
   ) => {
+    const auth = request.auth;
+    if (!auth) {
+      response.status(401).send('Unauthorized');
+      return;
+    }
     const sessionId = request.query.sessionId as string;
     const transport = transports.get(sessionId);
-    logger.info('Received message', {
+    logger.info('transport message received', {
       sessionId,
       hasTransport: Boolean(transport),
     });
@@ -95,6 +135,12 @@ export const createSseTransport = () => {
       logger.error('Failed to handle post message:', {
         message: error instanceof Error ? error.message : 'Unknown error',
         error,
+      });
+      track({
+        userId: auth.user.id,
+        event: 'transport_message_errored',
+        properties: { error },
+        context: { app: appContext, client: auth.client },
       });
     }
   }) as RequestHandler);

@@ -29,6 +29,19 @@ export const requiresAuth =
       return;
     }
 
+    request.auth = {
+      accessToken: token.accessToken,
+      user: {
+        id: token.user.id,
+        name: token.user.name,
+        email: token.user.email,
+      },
+      client: {
+        id: token.client.id,
+        name: token.client.client_name,
+      },
+    };
+
     next();
   };
 

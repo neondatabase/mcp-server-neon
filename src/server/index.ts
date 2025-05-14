@@ -5,8 +5,24 @@ import { NEON_RESOURCES } from '../resources.js';
 import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools.js';
 import { logger } from '../utils/logger.js';
 import { createNeonClient, getPackageJson } from './api.js';
+import { track } from '../analytics/analytics.js';
+import { AuthContext } from '../types/auth.js';
 
-export const createMcpServer = (apiKey: string) => {
+export type AppContext = {
+  name: string;
+  transport: 'sse' | 'stdio';
+  environment: 'development' | 'production';
+  version: string;
+};
+
+type Context = {
+  apiKey: string;
+  client?: AuthContext['client'];
+  user: AuthContext['user'];
+  app: AppContext;
+};
+
+export const createMcpServer = (context: Context) => {
   const server = new McpServer(
     {
       name: 'mcp-server-neon',
@@ -20,7 +36,7 @@ export const createMcpServer = (apiKey: string) => {
     },
   );
 
-  const neonClient = createNeonClient(apiKey);
+  const neonClient = createNeonClient(context.apiKey);
 
   // Register tools
   NEON_TOOLS.forEach((tool) => {
@@ -40,6 +56,18 @@ export const createMcpServer = (apiKey: string) => {
       { params: tool.inputSchema.optional() },
       async (args, extra) => {
         logger.info('tool call:', { tool: tool.name, args });
+        track({
+          userId: context.user.id,
+          event: 'tool_call',
+          properties: {
+            tool: tool.name,
+            args,
+          },
+          context: {
+            client: context.client,
+            app: context.app,
+          },
+        });
         // @ts-expect-error: Ignore zod optional
         return await toolHandler(args, neonClient, extra);
       },
@@ -55,14 +83,32 @@ export const createMcpServer = (apiKey: string) => {
         description: resource.description,
         mimeType: resource.mimeType,
       },
-      resource.handler,
+      async (url) => {
+        track({
+          userId: context.user.id,
+          event: 'resource_call',
+          properties: { resource: resource.name, url },
+          context: { client: context.client, app: context.app },
+        });
+        return await resource.handler(url);
+      },
     );
   });
 
   server.server.onerror = (error: unknown) => {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Server error:', {
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message,
       error,
+    });
+    track({
+      userId: context.user.id,
+      event: 'server_error',
+      properties: { message, error },
+      context: {
+        client: context.client,
+        app: context.app,
+      },
     });
   };
 

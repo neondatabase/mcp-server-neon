@@ -16,3 +16,4 @@ export const REDIRECT_URI = `${SERVER_HOST}/callback`;
 export const NEON_API_HOST =
   process.env.NEON_API_HOST ?? 'https://console.neon.tech/api/v2';
 export const COOKIE_SECRET = process.env.COOKIE_SECRET ?? '';
+export const ANALYTICS_WRITE_KEY = process.env.ANALYTICS_WRITE_KEY ?? '';

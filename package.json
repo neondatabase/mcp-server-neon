@@ -34,6 +34,7 @@
     "@modelcontextprotocol/sdk": "1.11.2",
     "@neondatabase/api-client": "2.0.0",
     "@neondatabase/serverless": "1.0.0",
+    "@segment/analytics-node": "2.2.1",
     "body-parser": "2.2.0",
     "chalk": "5.3.0",
     "cookie-parser": "1.4.7",
