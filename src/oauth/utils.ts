@@ -81,6 +81,20 @@ export const extractBearerToken = (authorizationHeader: string): string => {
   return authorizationHeader.replace(/^Bearer\s+/i, '');
 };
 
+export const extractClientCredentials = (request: Request) => {
+  const authorization = request.headers.authorization;
+  if (authorization?.startsWith('Basic ')) {
+    const credentials = atob(authorization.replace(/^Basic\s+/i, ''));
+    const [clientId, clientSecret] = credentials.split(':');
+    return { clientId, clientSecret };
+  }
+
+  return {
+    clientId: request.body.client_id,
+    clientSecret: request.body.client_secret,
+  };
+};
+
 export const toSeconds = (ms: number): number => {
   return Math.floor(ms / 1000);
 };
