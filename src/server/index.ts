@@ -6,23 +6,9 @@ import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools.js';
 import { logger } from '../utils/logger.js';
 import { createNeonClient, getPackageJson } from './api.js';
 import { track } from '../analytics/analytics.js';
-import { AuthContext } from '../types/auth.js';
+import { ServerContext } from '../types/context.js';
 
-export type AppContext = {
-  name: string;
-  transport: 'sse' | 'stdio';
-  environment: 'development' | 'production';
-  version: string;
-};
-
-type Context = {
-  apiKey: string;
-  client?: AuthContext['client'];
-  user: AuthContext['user'];
-  app: AppContext;
-};
-
-export const createMcpServer = (context: Context) => {
+export const createMcpServer = (context: ServerContext) => {
   const server = new McpServer(
     {
       name: 'mcp-server-neon',

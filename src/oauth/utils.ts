@@ -30,15 +30,21 @@ export const requiresAuth =
     }
 
     request.auth = {
-      accessToken: token.accessToken,
-      user: {
-        id: token.user.id,
-        name: token.user.name,
-        email: token.user.email,
-      },
-      client: {
-        id: token.client.id,
-        name: token.client.client_name,
+      token: token.accessToken,
+      clientId: token.client.id,
+      scopes: Array.isArray(token.scope)
+        ? token.scope
+        : (token.scope?.split(' ') ?? []),
+      extra: {
+        user: {
+          id: token.user.id,
+          name: token.user.name,
+          email: token.user.email,
+        },
+        client: {
+          id: token.client.id,
+          name: token.client.client_name,
+        },
       },
     };
 

@@ -1,6 +1,6 @@
 import express, { Request, Response, RequestHandler } from 'express';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { AppContext, createMcpServer } from '../server/index.js';
+import { createMcpServer } from '../server/index.js';
 import { createNeonClient } from '../server/api.js';
 import { logger, morganConfig, errorHandler } from '../utils/logger.js';
 import { authRouter } from '../oauth/server.js';
@@ -9,6 +9,7 @@ import { ensureCorsHeaders, requiresAuth } from '../oauth/utils.js';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import { track } from '../analytics/analytics.js';
+import { AppContext } from '../types/context.js';
 
 export const createSseTransport = (appContext: AppContext) => {
   const app = express();
@@ -33,7 +34,7 @@ export const createSseTransport = (appContext: AppContext) => {
       return;
     }
 
-    const neonClient = createNeonClient(auth.accessToken);
+    const neonClient = createNeonClient(auth.token);
     const user = await neonClient.getCurrentUserInfo();
     res.send({
       hello: `${user.data.name} ${user.data.last_name}`.trim(),
@@ -57,12 +58,12 @@ export const createSseTransport = (appContext: AppContext) => {
       });
 
       track({
-        userId: auth.user.id,
+        userId: auth.extra.user.id,
         event: 'sse_connection',
         properties: { sessionId: transport.sessionId },
         context: {
           app: appContext,
-          client: auth.client,
+          client: auth.extra.client,
         },
       });
 
@@ -71,12 +72,12 @@ export const createSseTransport = (appContext: AppContext) => {
           sessionId: transport.sessionId,
         });
         track({
-          userId: auth.user.id,
+          userId: auth.extra.user.id,
           event: 'sse_connection_closed',
           properties: { sessionId: transport.sessionId },
           context: {
             app: appContext,
-            client: auth.client,
+            client: auth.extra.client,
           },
         });
         transports.delete(transport.sessionId);
@@ -84,9 +85,9 @@ export const createSseTransport = (appContext: AppContext) => {
 
       try {
         const server = createMcpServer({
-          apiKey: auth.accessToken,
-          client: auth.client,
-          user: auth.user,
+          apiKey: auth.token,
+          client: auth.extra.client,
+          user: auth.extra.user,
           app: appContext,
         });
         await server.connect(transport);
@@ -96,12 +97,12 @@ export const createSseTransport = (appContext: AppContext) => {
           error,
         });
         track({
-          userId: auth.user.id,
+          userId: auth.extra.user.id,
           event: 'sse_connection_errored',
           properties: { error },
           context: {
             app: appContext,
-            client: auth.client,
+            client: auth.extra.client,
           },
         });
       }
@@ -137,10 +138,10 @@ export const createSseTransport = (appContext: AppContext) => {
         error,
       });
       track({
-        userId: auth.user.id,
+        userId: auth.extra.user.id,
         event: 'transport_message_errored',
         properties: { error },
-        context: { app: appContext, client: auth.client },
+        context: { app: appContext, client: auth.extra.client },
       });
     }
   }) as RequestHandler);

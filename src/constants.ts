@@ -2,9 +2,11 @@ import { config } from 'dotenv';
 
 config();
 
+export type Environment = 'development' | 'production' | 'preview';
 export const NEON_DEFAULT_DATABASE_NAME = 'neondb';
 
-export const IS_DEV = process.env.NODE_ENV === 'development';
+export const NODE_ENV = (process.env.NODE_ENV ?? 'production') as Environment;
+export const IS_DEV = NODE_ENV === 'development';
 export const SERVER_PORT = 3001;
 export const SERVER_HOST =
   process.env.SERVER_HOST ?? `http://localhost:${SERVER_PORT}`;
@@ -16,4 +18,4 @@ export const REDIRECT_URI = `${SERVER_HOST}/callback`;
 export const NEON_API_HOST =
   process.env.NEON_API_HOST ?? 'https://console.neon.tech/api/v2';
 export const COOKIE_SECRET = process.env.COOKIE_SECRET ?? '';
-export const ANALYTICS_WRITE_KEY = process.env.ANALYTICS_WRITE_KEY ?? '';
+export const ANALYTICS_WRITE_KEY = process.env.ANALYTICS_WRITE_KEY;

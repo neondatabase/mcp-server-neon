@@ -424,19 +424,21 @@ authRouter.post(
         accessToken: token.accessToken,
       });
 
-      identify({
-        userId: authorizationCode.user.id,
-        traits: {
+      identify(
+        {
+          id: authorizationCode.user.id,
           name: authorizationCode.user.name,
           email: authorizationCode.user.email,
         },
-        context: {
-          client: {
-            id: client.id,
-            name: client.client_name,
+        {
+          context: {
+            client: {
+              id: client.id,
+              name: client.client_name,
+            },
           },
         },
-      });
+      );
 
       // Revoke the authorization code, it can only be used once
       await model.revokeAuthorizationCode(authorizationCode);
