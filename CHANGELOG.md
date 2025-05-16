@@ -1,6 +1,6 @@
 # Changelog
 
-## UNRELEASED
+## [0.4.1] - 2025-05-08
 
 - fix the `npx start` command to start server in stdio transport mode
 - fix issue with unexpected tokens in stdio transport mode
