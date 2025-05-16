@@ -1,5 +1,10 @@
 # Changelog
 
+## UNRELEASED
+
+- fix the `npx start` command to start server in stdio transport mode
+- fix issue with unexpected tokens in stdio transport mode
+
 ## [0.4.0] - 2025-05-08
 
 - Feature: Support for remote MCP with OAuth flow.

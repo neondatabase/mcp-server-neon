@@ -26,11 +26,12 @@
     "prerelease": "npm run build",
     "prepublishOnly": "bun scripts/before-publish.ts",
     "test": "npx braintrust eval src/tools-evaluations",
-    "start": "node dist/index.js start:sse"
+    "start": "node dist/index.js start",
+    "start:sse": "node dist/index.js start:sse"
   },
   "dependencies": {
     "@keyv/postgres": "2.1.2",
-    "@modelcontextprotocol/sdk": "1.6.0",
+    "@modelcontextprotocol/sdk": "1.11.2",
     "@neondatabase/api-client": "2.0.0",
     "@neondatabase/serverless": "1.0.0",
     "body-parser": "2.2.0",
