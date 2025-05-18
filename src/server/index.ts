@@ -47,7 +47,6 @@ export const createMcpServer = (context: ServerContext) => {
           event: 'tool_call',
           properties: {
             tool: tool.name,
-            args,
           },
           context: {
             client: context.client,
@@ -73,7 +72,7 @@ export const createMcpServer = (context: ServerContext) => {
         track({
           userId: context.user.id,
           event: 'resource_call',
-          properties: { resource: resource.name, url },
+          properties: { resource: resource.name },
           context: { client: context.client, app: context.app },
         });
         return await resource.handler(url);
