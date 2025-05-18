@@ -620,7 +620,7 @@ async function handleListProjects(
   neonClient: Api<unknown>,
 ) {
   const response = await neonClient.listProjects(params);
-  if (response.status !== 200) {
+  if (response.status == 200) {
     throw new Error(`Failed to list projects: ${response.statusText}`);
   }
   return response.data.projects;

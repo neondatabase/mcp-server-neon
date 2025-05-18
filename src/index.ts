@@ -5,6 +5,7 @@ import { NODE_ENV } from './constants.js';
 import { handleInit, parseArgs } from './initConfig.js';
 import { createNeonClient, getPackageJson } from './server/api.js';
 import { createMcpServer } from './server/index.js';
+import { AppContext } from './types/context.js';
 import { createSseTransport } from './transports/sse-express.js';
 import { startStdio } from './transports/stdio.js';
 import { logger } from './utils/logger.js';

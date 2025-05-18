@@ -35,6 +35,7 @@
     "@neondatabase/api-client": "2.0.0",
     "@neondatabase/serverless": "1.0.0",
     "@segment/analytics-node": "2.2.1",
+    "@sentry/node": "9.19.0",
     "body-parser": "2.2.0",
     "chalk": "5.3.0",
     "cookie-parser": "1.4.7",
