@@ -14,9 +14,33 @@ const BG_COLORS_PER_DESCRIPTION_TYPE: Partial<
   error_handling: 'bg-error-handling',
 };
 
+export const TextBlock = ({
+  type,
+  content,
+}: {
+  type: 'text' | 'code';
+  content: string;
+}) => {
+  if (type === 'text') {
+    return <div>{content}</div>;
+  }
+
+  return (
+    <div className="whitespace-pre-wrap bg-zinc-100 px-2 py-1 my-2 border-l-4">
+      {content}
+    </div>
+  );
+};
+
 export const DescriptionItemBlock = ({ type, content }: DescriptionItem) => {
   if (type === 'text') {
-    return <div className="whitespace-pre-line">{content}</div>;
+    return (
+      <div className="whitespace-pre-line">
+        {content.map((item, index) => (
+          <TextBlock key={index} {...item} />
+        ))}
+      </div>
+    );
   }
 
   return (

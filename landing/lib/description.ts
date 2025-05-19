@@ -15,20 +15,65 @@ export type DescriptionItemType = (typeof POSSIBLE_TYPES)[number];
 export type DescriptionItem =
   | {
       type: 'text';
-      content: string;
+      content: TextBlock[];
     }
   | {
       type: DescriptionItemType;
       content: DescriptionItem[];
     };
 
+export type TextBlock =
+  | {
+      type: 'text';
+      content: string;
+    }
+  | {
+      type: 'code';
+      syntax?: string;
+      content: string;
+    };
+
 function isValidType(string: string): string is DescriptionItemType {
   return POSSIBLE_TYPES.includes(string as DescriptionItemType);
 }
 
+function highlightCodeBlocks(description: string): TextBlock[] {
+  const parts: TextBlock[] = [];
+  let rest = description.trim();
+
+  while (rest.length > 0) {
+    const match = rest.match(/```([^\n]*?)\n(.*?)\n\s*?```/s);
+
+    if (!match) {
+      parts.push({
+        type: 'text',
+        content: rest,
+      });
+      break;
+    }
+
+    if ((match.index ?? 0) > 0) {
+      parts.push({
+        type: 'text',
+        content: rest.slice(0, match.index).trim(),
+      });
+    }
+
+    parts.push({
+      type: 'code',
+      syntax: match[1].trim() || undefined,
+      content: match[2],
+    });
+
+    rest = rest.substring((match.index ?? 0) + match[0].length).trim();
+  }
+
+  return parts;
+}
+
 export function parseDescription(description: string): DescriptionItem[] {
   const parts: DescriptionItem[] = [];
-  let rest = description;
+  let rest = description.trim();
 
   while (rest.length > 0) {
     const match = rest.match(
@@ -38,7 +83,7 @@ export function parseDescription(description: string): DescriptionItem[] {
     if (!match) {
       parts.push({
         type: 'text',
-        content: rest,
+        content: highlightCodeBlocks(rest),
       });
       break;
     }
@@ -52,7 +97,7 @@ export function parseDescription(description: string): DescriptionItem[] {
     if ((match.index ?? 0) > 0) {
       parts.push({
         type: 'text',
-        content: rest.slice(0, match.index).trim(),
+        content: highlightCodeBlocks(rest.slice(0, match.index).trim()),
       });
     }
 
