@@ -17,7 +17,8 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc && node -e \"require('fs').chmodSync('dist/index.js', '755')\" && npm run build:landing",
+    "build": "tsc && npm run build:chmod && npm run export-tools && npm run build:landing",
+    "build:chmod": "node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
     "build:landing": "cd landing/ && npm run build && cp -r out/* ../public",
     "watch": "tsc-watch --onSuccess \"chmod 755 dist/index.js\"",
     "inspector": "npx @modelcontextprotocol/inspector dist/index.js",
@@ -28,7 +29,8 @@
     "prepublishOnly": "bun scripts/before-publish.ts",
     "test": "npx braintrust eval src/tools-evaluations",
     "start": "node dist/index.js start",
-    "start:sse": "node dist/index.js start:sse"
+    "start:sse": "node dist/index.js start:sse",
+    "export-tools": "node dist/index.js export-tools > landing/tools.json"
   },
   "dependencies": {
     "@keyv/postgres": "2.1.2",

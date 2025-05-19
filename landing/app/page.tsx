@@ -1,15 +1,15 @@
+import fs from 'fs/promises';
 // import Image from 'next/image';
 
 export default async function Home() {
-  const list = await new Promise<number[]>((resolve) =>
-    setTimeout(() => {
-      resolve([1, 2, 3]);
-    }, 1000),
-  );
+  const file = await fs.readFile('./tools.json', 'utf-8');
+  const parsed = JSON.parse(file);
 
   return (
     <div>
-      <main>{list.join(', ')}</main>
+      <main>
+        <pre>{JSON.stringify(parsed, null, 2)}</pre>
+      </main>
       <footer>Footer</footer>
     </div>
   );

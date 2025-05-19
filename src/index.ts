@@ -9,11 +9,23 @@ import { createSseTransport } from './transports/sse-express.js';
 import { startStdio } from './transports/stdio.js';
 import { logger } from './utils/logger.js';
 import { AppContext } from './types/context.js';
+import { NEON_TOOLS } from './tools.js';
 import './utils/polyfills.js';
 
 const args = parseArgs();
 const appVersion = getPackageJson().version;
 const appName = getPackageJson().name;
+
+if (args.command === 'export-tools') {
+  console.log(
+    JSON.stringify(
+      NEON_TOOLS.map((item) => ({ ...item, inputSchema: undefined })),
+      null,
+      2,
+    ),
+  );
+  process.exit(0);
+}
 
 const appContext: AppContext = {
   environment: NODE_ENV,
