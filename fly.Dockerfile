@@ -2,8 +2,8 @@
 # Use the imbios/bun-node image as the base image with Node and Bun
 # Keep bun and node version in sync with package.json
 ARG NODE_VERSION=22.0.0
-ARG BUN_VERSION=1.1.38
-FROM imbios/bun-node:1.1.38-22-slim AS base
+ARG BUN_VERSION=1.2.13
+FROM imbios/bun-node:1.2.13-22-slim AS base
 
 LABEL fly_launch_runtime="Node.js"
 
@@ -14,7 +14,7 @@ WORKDIR /app
 ENV NODE_ENV="production"
 
 # Throw-away build stage to reduce size of final image
-From base As builder
+FROM base As builder
 
 # Install packages needed to build node modules
 RUN apt-get update -qq && \
@@ -22,6 +22,15 @@ RUN apt-get update -qq && \
 
 # Copy package.json and package-lock.json
 COPY package.json package-lock.json ./
+
+# Install the root dependencies and devDependencies
+RUN npm install
+
+# Copy landing package.json and package-lock.json
+COPY landing/package.json landing/package-lock.json ./landing/
+
+# Install the landing dependencies and devDependencies
+RUN cd landing && npm install --include dev
 
 # Copy the entire project to the working directory
 COPY . .
@@ -34,6 +43,9 @@ RUN npm run build
 
 # Remove development dependencies
 RUN npm prune --omit=dev
+
+# We don't need Next.js dependencies since landing is statically exported during build step.
+RUN rm -rf landing/node_modules
 
 # Final stage for app image
 FROM base
