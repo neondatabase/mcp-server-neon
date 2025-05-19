@@ -10,6 +10,8 @@ import {
 import { Button } from '@/components/ui/button';
 
 import githubSvg from './github.svg';
+import { DescriptionItem, parseDescription } from '@/lib/description';
+import { DescriptionItemBlock } from '@/components/DescriptionItem';
 
 type ToolDescription = {
   name: string;
@@ -18,23 +20,33 @@ type ToolDescription = {
 
 export default async function Home() {
   let packageVersion: number | undefined;
-  let tools: ToolDescription[] | undefined;
+  let tools:
+    | {
+        name: string;
+        description: DescriptionItem[];
+      }[]
+    | undefined;
 
   try {
     const packageJson = await fs.readFile('../package.json', 'utf-8');
     packageVersion = JSON.parse(packageJson).version;
 
     const toolsJson = await fs.readFile('./tools.json', 'utf-8');
-    tools = JSON.parse(toolsJson) as ToolDescription[];
+    const rawTools = JSON.parse(toolsJson) as ToolDescription[];
+
+    tools = rawTools.map(({ description, ...data }) => ({
+      ...data,
+      description: parseDescription(description),
+    }));
   } catch (error) {
     console.error(error);
   }
 
   return (
-    <div className="flex flex-col items-center min-h-screen p-4 sm:p-8">
+    <div className="flex flex-col items-center min-h-screen p-4 pb-0 sm:p-8 sm:pb-0">
       <main className="w-full max-w-3xl">
         <article>
-          <header className="flex items-center justify-between gap-2 mb-8">
+          <header className="flex items-center justify-between gap-2 mb-12">
             <div className="flex items-baseline gap-2">
               <h1 className="text-3xl font-bold whitespace-nowrap">Neon MCP</h1>{' '}
               version: {packageVersion}
@@ -42,6 +54,7 @@ export default async function Home() {
             <Button asChild>
               <a
                 href="https://github.com/neondatabase-labs/mcp-server-neon?tab=readme-ov-file"
+                target="_blank"
                 rel="noopener noreferrer"
               >
                 <Image
@@ -72,7 +85,11 @@ export default async function Home() {
                             {name}
                           </h3>
                         </AccordionTrigger>
-                        <AccordionContent>{description}</AccordionContent>
+                        <AccordionContent>
+                          {description.map((item, index) => (
+                            <DescriptionItemBlock key={index} {...item} />
+                          ))}
+                        </AccordionContent>
                       </li>
                     </AccordionItem>
                   ))}
@@ -82,7 +99,7 @@ export default async function Home() {
           </section>
         </article>
       </main>
-      <footer>Footer</footer>
+      <footer className="text-center w-full p-4 mt-10">Neon Inc. 2025</footer>
     </div>
   );
 }
