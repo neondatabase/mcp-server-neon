@@ -16,7 +16,7 @@ RUN npm install
 COPY landing/package.json landing/package-lock.json ./landing/
 
 # Install the landing dependencies and devDependencies
-RUN cd landing/ && npm install
+RUN cd landing/ && npm install --include=dev
 
 # Copy the entire project to the working directory
 COPY . .

@@ -24,19 +24,16 @@ RUN apt-get update -qq && \
 COPY package.json package-lock.json ./
 
 # Install the root dependencies and devDependencies
-RUN npm install
+RUN npm ci --include=dev
 
-# Copy landing package.json and package-lock.json
+# Copy landing's package.json and package-lock.json
 COPY landing/package.json landing/package-lock.json ./landing/
 
 # Install the landing dependencies and devDependencies
-RUN cd landing && npm install --include dev
+RUN cd landing/ && npm ci --include=dev
 
 # Copy the entire project to the working directory
 COPY . .
-
-# Install the dependencies and devDependencies
-RUN npm ci --include=dev
 
 # Build the project
 RUN npm run build
