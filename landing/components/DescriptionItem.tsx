@@ -5,13 +5,13 @@ const BG_COLORS_PER_DESCRIPTION_TYPE: Partial<
 > = {
   use_case: 'bg-accent',
   next_steps: 'bg-accent',
-  important_notes: 'bg-orange-100',
+  important_notes: 'bg-important-notes',
   workflow: 'bg-accent',
   instructions: 'bg-accent',
   response_instructions: 'bg-accent',
   example: 'bg-accent',
-  do_not_include: 'bg-red-300',
-  error_handling: 'bg-red-100',
+  do_not_include: 'bg-do-not-include',
+  error_handling: 'bg-error-handling',
 };
 
 export const DescriptionItemBlock = ({ type, content }: DescriptionItem) => {
