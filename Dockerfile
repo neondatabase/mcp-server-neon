@@ -9,11 +9,17 @@ WORKDIR /app
 # Copy package.json and package-lock.json
 COPY package.json package-lock.json ./
 
+# Install the root dependencies and devDependencies
+RUN npm install
+
+# Copy landing package.json and package-lock.json
+COPY landing/package.json landing/package-lock.json ./landing/
+
+# Install the landing dependencies and devDependencies
+RUN cd landing/ && npm install
+
 # Copy the entire project to the working directory
 COPY . .
-
-# Install the dependencies and devDependencies
-RUN npm install
 
 # Build the project
 RUN npm run build
