@@ -17,7 +17,8 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
+    "build": "tsc && node -e \"require('fs').chmodSync('dist/index.js', '755')\" && npm run build:landing",
+    "build:landing": "cd landing && npm run build && cp -r out/* ../public",
     "watch": "tsc-watch --onSuccess \"chmod 755 dist/index.js\"",
     "inspector": "npx @modelcontextprotocol/inspector dist/index.js",
     "format": "prettier --write .",
