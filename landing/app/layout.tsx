@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
+import Head from 'next/head';
 import { Geist, Geist_Mono } from 'next/font/google';
 
 import './globals.css';
@@ -22,6 +23,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
+      <Head>
+        <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+      </Head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
