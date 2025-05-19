@@ -6,7 +6,7 @@ import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools.js';
 import { logger } from '../utils/logger.js';
 import { createNeonClient, getPackageJson } from './api.js';
 import { track } from '../analytics/analytics.js';
-import { captureException } from '@sentry/node';
+import { captureException, startNewTrace, startSpan } from '@sentry/node';
 import { ServerContext } from '../types/context.js';
 import { setSentryTags } from '../sentry/utils.js';
 
@@ -43,24 +43,39 @@ export const createMcpServer = (context: ServerContext) => {
       // To workaround this, we use `optional()`
       { params: tool.inputSchema.optional() },
       async (args, extra) => {
-        const properties = { tool_name: tool.name };
-        logger.info('tool call:', properties);
-        setSentryTags(context);
-        track({
-          userId: context.user.id,
-          event: 'tool_call',
-          properties,
-          context: { client: context.client, app: context.app },
+        return await startNewTrace(async () => {
+          return await startSpan(
+            {
+              name: 'tool_call',
+              attributes: {
+                tool_name: tool.name,
+              },
+            },
+            async (span) => {
+              const properties = { tool_name: tool.name };
+              logger.info('tool call:', properties);
+              setSentryTags(context);
+              track({
+                userId: context.user.id,
+                event: 'tool_call',
+                properties,
+                context: { client: context.client, app: context.app },
+              });
+              try {
+                // @ts-expect-error: Ignore zod optional
+                return await toolHandler(args, neonClient, extra);
+              } catch (error) {
+                span.setStatus({
+                  code: 2,
+                });
+                captureException(error, {
+                  extra: properties,
+                });
+                throw error;
+              }
+            },
+          );
         });
-        try {
-          // @ts-expect-error: Ignore zod optional
-          return await toolHandler(args, neonClient, extra);
-        } catch (error) {
-          captureException(error, {
-            extra: properties,
-          });
-          throw error;
-        }
       },
     );
   });

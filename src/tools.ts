@@ -40,6 +40,7 @@ import {
   getDefaultDatabase,
   splitSqlStatements,
 } from './utils.js';
+import { startSpan } from '@sentry/node';
 
 // Define the tools with their configurations
 export const NEON_TOOLS = [
@@ -683,18 +684,20 @@ async function handleRunSql(
   },
   neonClient: Api<unknown>,
 ) {
-  const connectionString = await handleGetConnectionString(
-    {
-      projectId,
-      branchId,
-      databaseName,
-    },
-    neonClient,
-  );
-  const runQuery = neon(connectionString.uri);
-  const response = await runQuery.query(sql);
+  return await startSpan({ name: 'run_sql' }, async () => {
+    const connectionString = await handleGetConnectionString(
+      {
+        projectId,
+        branchId,
+        databaseName,
+      },
+      neonClient,
+    );
+    const runQuery = neon(connectionString.uri);
+    const response = await runQuery.query(sql);
 
-  return response;
+    return response;
+  });
 }
 
 async function handleRunSqlTransaction(
@@ -860,72 +863,79 @@ async function handleGetConnectionString(
   },
   neonClient: Api<unknown>,
 ) {
-  // If projectId is not provided, get the first project but only if there is only one project
-  if (!projectId) {
-    const projects = await handleListProjects({}, neonClient);
-    if (projects.length === 1) {
-      projectId = projects[0].id;
-    } else {
-      throw new Error('No projects found in your account');
-    }
-  }
+  return await startSpan(
+    {
+      name: 'get_connection_string',
+    },
+    async () => {
+      // If projectId is not provided, get the first project but only if there is only one project
+      if (!projectId) {
+        const projects = await handleListProjects({}, neonClient);
+        if (projects.length === 1) {
+          projectId = projects[0].id;
+        } else {
+          throw new Error('No projects found in your account');
+        }
+      }
 
-  if (!branchId) {
-    const branches = await neonClient.listProjectBranches({
-      projectId,
-    });
-    const defaultBranch = branches.data.branches.find(
-      (branch) => branch.default,
-    );
-    if (defaultBranch) {
-      branchId = defaultBranch.id;
-    } else {
-      throw new Error('No default branch found in your project');
-    }
-  }
+      if (!branchId) {
+        const branches = await neonClient.listProjectBranches({
+          projectId,
+        });
+        const defaultBranch = branches.data.branches.find(
+          (branch) => branch.default,
+        );
+        if (defaultBranch) {
+          branchId = defaultBranch.id;
+        } else {
+          throw new Error('No default branch found in your project');
+        }
+      }
 
-  // If databaseName is not provided, use default `neondb` or first database
-  let dbObject;
-  if (!databaseName) {
-    dbObject = await getDefaultDatabase(
-      {
+      // If databaseName is not provided, use default `neondb` or first database
+      let dbObject;
+      if (!databaseName) {
+        dbObject = await getDefaultDatabase(
+          {
+            projectId,
+            branchId,
+            databaseName,
+          },
+          neonClient,
+        );
+        databaseName = dbObject.name;
+
+        if (!roleName) {
+          roleName = dbObject.owner_name;
+        }
+      } else if (!roleName) {
+        const { data } = await neonClient.getProjectBranchDatabase(
+          projectId,
+          branchId,
+          databaseName,
+        );
+        roleName = data.database.owner_name;
+      }
+
+      // Get connection URI with the provided parameters
+      const connectionString = await neonClient.getConnectionUri({
+        projectId,
+        role_name: roleName,
+        database_name: databaseName,
+        branch_id: branchId,
+        endpoint_id: computeId,
+      });
+
+      return {
+        uri: connectionString.data.uri,
         projectId,
         branchId,
         databaseName,
-      },
-      neonClient,
-    );
-    databaseName = dbObject.name;
-
-    if (!roleName) {
-      roleName = dbObject.owner_name;
-    }
-  } else if (!roleName) {
-    const { data } = await neonClient.getProjectBranchDatabase(
-      projectId,
-      branchId,
-      databaseName,
-    );
-    roleName = data.database.owner_name;
-  }
-
-  // Get connection URI with the provided parameters
-  const connectionString = await neonClient.getConnectionUri({
-    projectId,
-    role_name: roleName,
-    database_name: databaseName,
-    branch_id: branchId,
-    endpoint_id: computeId,
-  });
-
-  return {
-    uri: connectionString.data.uri,
-    projectId,
-    branchId,
-    databaseName,
-    roleName,
-    computeId,
-  };
+        roleName,
+        computeId,
+      };
+    },
+  );
 }
 
 async function handleSchemaMigration(
@@ -940,75 +950,89 @@ async function handleSchemaMigration(
   },
   neonClient: Api<unknown>,
 ) {
-  const newBranch = await handleCreateBranch({ projectId }, neonClient);
+  return await startSpan({ name: 'prepare_schema_migration' }, async (span) => {
+    const newBranch = await handleCreateBranch({ projectId }, neonClient);
 
-  if (!databaseName) {
-    const dbObject = await getDefaultDatabase(
+    if (!databaseName) {
+      const dbObject = await getDefaultDatabase(
+        {
+          projectId,
+          branchId: newBranch.branch.id,
+          databaseName,
+        },
+        neonClient,
+      );
+      databaseName = dbObject.name;
+    }
+
+    const result = await handleRunSqlTransaction(
       {
+        sqlStatements: splitSqlStatements(migrationSql),
+        databaseName,
         projectId,
         branchId: newBranch.branch.id,
-        databaseName,
       },
       neonClient,
     );
-    databaseName = dbObject.name;
-  }
 
-  const result = await handleRunSqlTransaction(
-    {
-      sqlStatements: splitSqlStatements(migrationSql),
-      databaseName,
+    const migrationId = crypto.randomUUID();
+    span.setAttributes({
       projectId,
-      branchId: newBranch.branch.id,
-    },
-    neonClient,
-  );
+      migrationId,
+    });
+    persistMigrationToMemory(migrationId, {
+      migrationSql,
+      databaseName,
+      appliedBranch: newBranch.branch,
+    });
 
-  const migrationId = crypto.randomUUID();
-  persistMigrationToMemory(migrationId, {
-    migrationSql,
-    databaseName,
-    appliedBranch: newBranch.branch,
+    return {
+      branch: newBranch.branch,
+      migrationId,
+      migrationResult: result,
+    };
   });
-
-  return {
-    branch: newBranch.branch,
-    migrationId,
-    migrationResult: result,
-  };
 }
 
 async function handleCommitMigration(
   { migrationId }: { migrationId: string },
   neonClient: Api<unknown>,
 ) {
-  const migration = getMigrationFromMemory(migrationId);
-  if (!migration) {
-    throw new Error(`Migration not found: ${migrationId}`);
-  }
+  return await startSpan({ name: 'commit_schema_migration' }, async (span) => {
+    span.setAttributes({
+      migrationId,
+    });
+    const migration = getMigrationFromMemory(migrationId);
+    if (!migration) {
+      throw new Error(`Migration not found: ${migrationId}`);
+    }
 
-  const result = await handleRunSqlTransaction(
-    {
-      sqlStatements: splitSqlStatements(migration.migrationSql),
-      databaseName: migration.databaseName,
+    span.setAttributes({
       projectId: migration.appliedBranch.project_id,
-      branchId: migration.appliedBranch.parent_id,
-    },
-    neonClient,
-  );
+    });
+    const result = await handleRunSqlTransaction(
+      {
+        sqlStatements: splitSqlStatements(migration.migrationSql),
+        databaseName: migration.databaseName,
+        projectId: migration.appliedBranch.project_id,
+        branchId: migration.appliedBranch.parent_id,
+      },
+      neonClient,
+    );
 
-  await handleDeleteBranch(
-    {
-      projectId: migration.appliedBranch.project_id,
-      branchId: migration.appliedBranch.id,
-    },
-    neonClient,
-  );
+    await handleDeleteBranch(
+      {
+        projectId: migration.appliedBranch.project_id,
+        branchId: migration.appliedBranch.id,
+      },
+      neonClient,
+    );
 
-  return {
-    deletedBranch: migration.appliedBranch,
-    migrationResult: result,
-  };
+    return {
+      deletedBranch: migration.appliedBranch,
+      migrationResult: result,
+    };
+  });
 }
 
 async function handleDescribeBranch(
