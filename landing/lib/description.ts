@@ -1,3 +1,5 @@
+import { min } from 'lodash';
+
 const POSSIBLE_TYPES = [
   'use_case',
   'workflow',
@@ -37,6 +39,18 @@ function isValidType(string: string): string is DescriptionItemType {
   return POSSIBLE_TYPES.includes(string as DescriptionItemType);
 }
 
+function removeRedundantIndentation(text: string): string {
+  const lines = text.split('\n');
+  const minIndent = min(
+    lines.map((line) => line.match(/^\s+/)?.[0].length ?? 0),
+  );
+  if (!minIndent) {
+    return text;
+  }
+
+  return lines.map((line) => line.substring(minIndent)).join('\n');
+}
+
 function highlightCodeBlocks(description: string): TextBlock[] {
   const parts: TextBlock[] = [];
   let rest = description.trim();
@@ -62,7 +76,7 @@ function highlightCodeBlocks(description: string): TextBlock[] {
     parts.push({
       type: 'code',
       syntax: match[1].trim() || undefined,
-      content: match[2],
+      content: removeRedundantIndentation(match[2]),
     });
 
     rest = rest.substring((match.index ?? 0) + match[0].length).trim();

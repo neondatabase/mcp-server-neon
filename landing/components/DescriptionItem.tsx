@@ -26,7 +26,7 @@ export const TextBlock = ({
   }
 
   return (
-    <div className="whitespace-pre-wrap bg-zinc-100 px-2 py-1 my-2 border-l-4">
+    <div className="monospaced whitespace-pre-wrap bg-zinc-100 px-2 py-1 my-2 border-l-4">
       {content}
     </div>
   );
