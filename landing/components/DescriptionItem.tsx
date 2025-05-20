@@ -10,7 +10,7 @@ import {
   AlertTitle,
   AlertVariant,
 } from '@/components/ui/alert';
-import { Terminal } from 'lucide-react';
+import { Terminal, CircleAlert } from 'lucide-react';
 
 const ALERT_VARIANT_PER_DESCRIPTION_TYPE: Record<
   DescriptionItemType,
@@ -60,7 +60,11 @@ export const DescriptionItemUi = ({ type, content }: DescriptionItem) => {
 
   return (
     <Alert variant={ALERT_VARIANT_PER_DESCRIPTION_TYPE[type]} className="my-2">
-      <Terminal className="w-4 h-4" />
+      {['important_notes', 'do_not_include'].includes(type) ? (
+        <CircleAlert className="w-4 h-4" />
+      ) : (
+        <Terminal className="w-4 h-4" />
+      )}
       <AlertTitle className="first-letter:capitalize font-semibold">
         {type.replaceAll('_', ' ')}
       </AlertTitle>
