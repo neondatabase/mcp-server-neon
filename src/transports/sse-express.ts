@@ -57,28 +57,9 @@ export const createSseTransport = (appContext: AppContext) => {
         sessionId: transport.sessionId,
       });
 
-      track({
-        userId: auth.extra.user.id,
-        event: 'sse_connection',
-        properties: { sessionId: transport.sessionId },
-        context: {
-          app: appContext,
-          client: auth.extra.client,
-        },
-      });
-
       res.on('close', () => {
         logger.info('SSE connection closed', {
           sessionId: transport.sessionId,
-        });
-        track({
-          userId: auth.extra.user.id,
-          event: 'sse_connection_closed',
-          properties: { sessionId: transport.sessionId },
-          context: {
-            app: appContext,
-            client: auth.extra.client,
-          },
         });
         transports.delete(transport.sessionId);
       });
