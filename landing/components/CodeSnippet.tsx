@@ -34,6 +34,7 @@ export const CodeSnippet = ({ type, children }: Props) => {
       >
         <SyntaxHighlighter
           language={type}
+          wrapLongLines
           style={theme === 'light' ? docco : stackoverflowDark}
         >
           {children}

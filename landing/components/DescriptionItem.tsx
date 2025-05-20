@@ -40,7 +40,7 @@ const ALERT_VARIANT_PER_DESCRIPTION_TYPE: Record<
 export const TextBlockUi = (block: TextBlock) => {
   if (block.type === 'text') {
     return (
-      <div>
+      <div className="text-sm/[24px]">
         {block.content.map((item, index) =>
           item.type === 'text' ? (
             item.content
@@ -57,27 +57,42 @@ export const TextBlockUi = (block: TextBlock) => {
   return <CodeSnippet type={block.syntax}>{block.content}</CodeSnippet>;
 };
 
-export const DescriptionItemUi = ({ type, content }: DescriptionItem) => {
-  if (type === 'text') {
+export const DescriptionItemUi = (item: DescriptionItem) => {
+  if (item.type === 'text') {
     return (
       <div className="whitespace-pre-line">
-        {content.map((item, index) => (
-          <TextBlockUi key={index} {...item} />
+        {item.content.map((childItem, index) => (
+          <TextBlockUi key={index} {...childItem} />
         ))}
       </div>
     );
   }
 
-  const { variant, icon: Icon1 } = ALERT_VARIANT_PER_DESCRIPTION_TYPE[type];
+  // If an example section contains only code snippet then render snippet
+  // without a section wrapper. An extra wrapper makes the code less readable.
+  if (
+    item.type === 'example' &&
+    item.content.length === 1 &&
+    item.content[0].type === 'text' &&
+    item.content[0].content.length === 1 &&
+    item.content[0].content[0].type === 'code'
+  ) {
+    const snippet = item.content[0].content[0];
+
+    return <CodeSnippet type={snippet.syntax}>{snippet.content}</CodeSnippet>;
+  }
+
+  const { variant, icon: IconComp } =
+    ALERT_VARIANT_PER_DESCRIPTION_TYPE[item.type];
 
   return (
     <Alert variant={variant} className="my-2">
-      <Icon1 className="w-4 h-4" />
+      <IconComp className="w-4 h-4" />
       <AlertTitle className="first-letter:capitalize font-semibold">
-        {type.replaceAll('_', ' ')}
+        {item.type.replaceAll('_', ' ')}
       </AlertTitle>
       <AlertDescription className="whitespace-pre-line">
-        <DescriptionItemsUi description={content} />
+        <DescriptionItemsUi description={item.content} />
       </AlertDescription>
     </Alert>
   );
