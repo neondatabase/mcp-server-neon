@@ -46,11 +46,16 @@ export default async function Home() {
   return (
     <div className="flex flex-col items-center min-h-screen p-4 pb-0 sm:p-8 sm:pb-0">
       <main className="w-full max-w-3xl">
-        <article className="flex flex-col gap-12">
+        <article className="flex flex-col gap-10">
           <header className="flex items-center justify-between gap-2">
-            <div className="flex items-baseline gap-2">
-              <h1 className="text-3xl font-bold whitespace-nowrap">Neon MCP</h1>{' '}
-              version: {packageVersion}
+            <div className="flex items-center gap-3">
+              <Image src="/neon.svg" width={30} height={30} alt="Neon logo" />
+              <div className="flex items-baseline gap-2">
+                <h1 className="text-3xl font-bold whitespace-nowrap">
+                  Neon MCP
+                </h1>{' '}
+                version: {packageVersion}
+              </div>
             </div>
             <Button asChild>
               <a
