@@ -4,19 +4,27 @@ import {
   TextBlock,
 } from '@/lib/description';
 import { CodeSnippet } from '@/components/CodeSnippet';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  AlertVariant,
+} from '@/components/ui/alert';
+import { Terminal } from 'lucide-react';
 
-const BG_COLORS_PER_DESCRIPTION_TYPE: Partial<
-  Record<DescriptionItemType, string>
+const ALERT_VARIANT_PER_DESCRIPTION_TYPE: Record<
+  DescriptionItemType,
+  AlertVariant
 > = {
-  use_case: 'bg-accent',
-  next_steps: 'bg-accent',
-  important_notes: 'bg-important-notes',
-  workflow: 'bg-accent',
-  instructions: 'bg-accent',
-  response_instructions: 'bg-accent',
-  example: 'bg-accent',
-  do_not_include: 'bg-do-not-include',
-  error_handling: 'bg-error-handling',
+  use_case: 'default',
+  next_steps: 'default',
+  important_notes: 'important',
+  workflow: 'default',
+  instructions: 'default',
+  response_instructions: 'default',
+  example: 'default',
+  do_not_include: 'destructive',
+  error_handling: 'destructive',
 };
 
 export const TextBlockUi = (block: TextBlock) => {
@@ -51,15 +59,26 @@ export const DescriptionItemUi = ({ type, content }: DescriptionItem) => {
   }
 
   return (
-    <div
-      className={`my-2 px-3 py-2 rounded-md ${BG_COLORS_PER_DESCRIPTION_TYPE[type]}`}
-    >
-      <div className="uppercase font-bold">[{type.replaceAll('_', ' ')}]</div>
-      <div className="whitespace-pre-line">
-        {content.map((item, index) => (
-          <DescriptionItemUi key={index} {...item} />
-        ))}
-      </div>
-    </div>
+    <Alert variant={ALERT_VARIANT_PER_DESCRIPTION_TYPE[type]} className="my-2">
+      <Terminal className="w-4 h-4" />
+      <AlertTitle className="first-letter:capitalize font-semibold">
+        {type.replaceAll('_', ' ')}
+      </AlertTitle>
+      <AlertDescription className="whitespace-pre-line">
+        <DescriptionItemsUi description={content} />
+      </AlertDescription>
+    </Alert>
   );
 };
+
+export const DescriptionItemsUi = ({
+  description,
+}: {
+  description: DescriptionItem[];
+}) => (
+  <div className="flex flex-col gap-1">
+    {description.map((item, index) => (
+      <DescriptionItemUi key={index} {...item} />
+    ))}
+  </div>
+);

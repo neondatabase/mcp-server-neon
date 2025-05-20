@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 
 import githubSvg from './github.svg';
 import { DescriptionItem, parseDescription } from '@/lib/description';
-import { DescriptionItemUi } from '@/components/DescriptionItem';
+import { DescriptionItemsUi } from '@/components/DescriptionItem';
 import { Introduction } from '@/components/Introduction';
 
 type ToolDescription = {
@@ -93,9 +93,7 @@ export default async function Home() {
                           </h3>
                         </AccordionTrigger>
                         <AccordionContent>
-                          {description.map((item, index) => (
-                            <DescriptionItemUi key={index} {...item} />
-                          ))}
+                          <DescriptionItemsUi description={description} />
                         </AccordionContent>
                       </li>
                     </AccordionItem>
