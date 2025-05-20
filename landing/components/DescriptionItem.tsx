@@ -3,6 +3,7 @@ import {
   DescriptionItemType,
   TextBlock,
 } from '@/lib/description';
+import { CodeSnippet } from '@/components/CodeSnippet';
 
 const BG_COLORS_PER_DESCRIPTION_TYPE: Partial<
   Record<DescriptionItemType, string>
@@ -18,11 +19,11 @@ const BG_COLORS_PER_DESCRIPTION_TYPE: Partial<
   error_handling: 'bg-error-handling',
 };
 
-export const TextBlockUi = ({ type, content }: TextBlock) => {
-  if (type === 'text') {
+export const TextBlockUi = (block: TextBlock) => {
+  if (block.type === 'text') {
     return (
       <div>
-        {content.map((item, index) =>
+        {block.content.map((item, index) =>
           item.type === 'text' ? (
             item.content
           ) : (
@@ -35,11 +36,7 @@ export const TextBlockUi = ({ type, content }: TextBlock) => {
     );
   }
 
-  return (
-    <div className="monospaced whitespace-pre-wrap bg-secondary px-2 py-1 my-2 border-l-4">
-      {content}
-    </div>
-  );
+  return <CodeSnippet type={block.syntax}>{block.content}</CodeSnippet>;
 };
 
 export const DescriptionItemUi = ({ type, content }: DescriptionItem) => {
