@@ -9,8 +9,13 @@ export const Introduction = ({ className }: { className?: string }) => (
     </desc>
     <div>
       The <strong className="font-semibold">Neon MCP Server</strong> is an
-      open-source tool that lets you interact with your Neon Postgres databases
-      in natural language.
+      open-source tool that lets AI agents and dev tools like Cursor interact
+      with Neon Postgres using natural language. It translates plain English
+      into Neon API actions, making it easy to manage database, run queries, and
+      handle schema changes—no code needed. <br />
+      <ExternalLink href="https://neon.tech/docs/ai/neon-mcp-server">
+        Learn more in the docs
+      </ExternalLink>
     </div>
     <div>
       Imagine you want to create a new database. Instead of using the Neon
