@@ -1,4 +1,8 @@
-import { DescriptionItem, DescriptionItemType } from '@/lib/description';
+import {
+  DescriptionItem,
+  DescriptionItemType,
+  TextBlock,
+} from '@/lib/description';
 
 const BG_COLORS_PER_DESCRIPTION_TYPE: Partial<
   Record<DescriptionItemType, string>
@@ -14,30 +18,36 @@ const BG_COLORS_PER_DESCRIPTION_TYPE: Partial<
   error_handling: 'bg-error-handling',
 };
 
-export const TextBlock = ({
-  type,
-  content,
-}: {
-  type: 'text' | 'code';
-  content: string;
-}) => {
+export const TextBlockUi = ({ type, content }: TextBlock) => {
   if (type === 'text') {
-    return <div>{content}</div>;
+    return (
+      <div>
+        {content.map((item, index) =>
+          item.type === 'text' ? (
+            item.content
+          ) : (
+            <span key={index} className="monospaced bg-secondary p-1">
+              {item.content}
+            </span>
+          ),
+        )}
+      </div>
+    );
   }
 
   return (
-    <div className="monospaced whitespace-pre-wrap bg-zinc-100 px-2 py-1 my-2 border-l-4">
+    <div className="monospaced whitespace-pre-wrap bg-secondary px-2 py-1 my-2 border-l-4">
       {content}
     </div>
   );
 };
 
-export const DescriptionItemBlock = ({ type, content }: DescriptionItem) => {
+export const DescriptionItemUi = ({ type, content }: DescriptionItem) => {
   if (type === 'text') {
     return (
       <div className="whitespace-pre-line">
         {content.map((item, index) => (
-          <TextBlock key={index} {...item} />
+          <TextBlockUi key={index} {...item} />
         ))}
       </div>
     );
@@ -50,7 +60,7 @@ export const DescriptionItemBlock = ({ type, content }: DescriptionItem) => {
       <div className="uppercase font-bold">[{type.replaceAll('_', ' ')}]</div>
       <div className="whitespace-pre-line">
         {content.map((item, index) => (
-          <DescriptionItemBlock key={index} {...item} />
+          <DescriptionItemUi key={index} {...item} />
         ))}
       </div>
     </div>

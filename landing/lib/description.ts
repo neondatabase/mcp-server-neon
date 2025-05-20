@@ -27,7 +27,7 @@ export type DescriptionItem =
 export type TextBlock =
   | {
       type: 'text';
-      content: string;
+      content: TextSpan[];
     }
   | {
       type: 'code';
@@ -35,8 +35,51 @@ export type TextBlock =
       content: string;
     };
 
+export type TextSpan =
+  | {
+      type: 'text';
+      content: string;
+    }
+  | {
+      type: 'code';
+      content: string;
+    };
+
 function isValidType(string: string): string is DescriptionItemType {
   return POSSIBLE_TYPES.includes(string as DescriptionItemType);
+}
+
+function highlightCodeSpans(text: string): TextSpan[] {
+  const items: TextSpan[] = [];
+  let rest = text.trim();
+
+  while (rest.length > 0) {
+    const match = rest.match(/`([^`]*)?`/);
+
+    if (!match) {
+      items.push({
+        type: 'text',
+        content: rest,
+      });
+      break;
+    }
+
+    if ((match.index ?? 0) !== 0) {
+      items.push({
+        type: 'text',
+        content: rest.substring(0, match.index),
+      });
+    }
+
+    items.push({
+      type: 'code',
+      content: match[1].trim(),
+    });
+
+    rest = rest.substring((match.index ?? 0) + match[0].length);
+  }
+
+  return items;
 }
 
 function removeRedundantIndentation(text: string): string {
@@ -61,7 +104,7 @@ function highlightCodeBlocks(description: string): TextBlock[] {
     if (!match) {
       parts.push({
         type: 'text',
-        content: rest,
+        content: highlightCodeSpans(rest),
       });
       break;
     }
@@ -69,7 +112,7 @@ function highlightCodeBlocks(description: string): TextBlock[] {
     if ((match.index ?? 0) > 0) {
       parts.push({
         type: 'text',
-        content: rest.slice(0, match.index).trim(),
+        content: highlightCodeSpans(rest.slice(0, match.index).trim()),
       });
     }
 
