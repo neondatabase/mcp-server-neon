@@ -43,9 +43,7 @@
   --font-mono: var(--font-geist-mono);
 
   /* user defined */
-  --color-do-not-include: var(--do-not-include);
   --color-important-notes: var(--important-notes);
-  --color-error-handling: var(--error-handling);
   --color-link: var(--link);
 }
 
@@ -84,9 +82,7 @@
   --sidebar-ring: oklch(0.704 0.04 256.788);
 
   /* user defined */
-  --do-not-include: var(--color-red-300);
-  --important-notes: var(--color-orange-100);
-  --error-handling: var(--color-red-100);
+  --important-notes: var(--color-orange-800);
   --link: oklch(0.64 0.14 160.38);
 }
 
@@ -125,9 +121,7 @@
     --sidebar-ring: oklch(0.551 0.027 264.364);
 
     /* user defined */
-    --do-not-include: var(--color-red-700);
-    --important-notes: var(--color-orange-800);
-    --error-handling: var(--color-red-800);
+    --important-notes: var(--color-orange-100);
     --link: oklch(0.81 0.18 160.37);
   }
 }

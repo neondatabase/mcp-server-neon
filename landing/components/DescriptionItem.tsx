@@ -10,21 +10,31 @@ import {
   AlertTitle,
   AlertVariant,
 } from '@/components/ui/alert';
-import { Terminal, CircleAlert } from 'lucide-react';
+import {
+  Terminal,
+  CircleAlert,
+  Workflow,
+  SquareArrowRight,
+  Component,
+  BookOpenCheck,
+} from 'lucide-react';
 
 const ALERT_VARIANT_PER_DESCRIPTION_TYPE: Record<
   DescriptionItemType,
-  AlertVariant
+  {
+    variant: AlertVariant;
+    icon: typeof Component;
+  }
 > = {
-  use_case: 'default',
-  next_steps: 'default',
-  important_notes: 'important',
-  workflow: 'default',
-  instructions: 'default',
-  response_instructions: 'default',
-  example: 'default',
-  do_not_include: 'destructive',
-  error_handling: 'destructive',
+  use_case: { variant: 'default', icon: BookOpenCheck },
+  next_steps: { variant: 'default', icon: SquareArrowRight },
+  important_notes: { variant: 'important', icon: CircleAlert },
+  workflow: { variant: 'default', icon: Workflow },
+  instructions: { variant: 'default', icon: Terminal },
+  response_instructions: { variant: 'default', icon: Terminal },
+  example: { variant: 'default', icon: Terminal },
+  do_not_include: { variant: 'destructive', icon: CircleAlert },
+  error_handling: { variant: 'destructive', icon: CircleAlert },
 };
 
 export const TextBlockUi = (block: TextBlock) => {
@@ -58,13 +68,11 @@ export const DescriptionItemUi = ({ type, content }: DescriptionItem) => {
     );
   }
 
+  const { variant, icon: Icon1 } = ALERT_VARIANT_PER_DESCRIPTION_TYPE[type];
+
   return (
-    <Alert variant={ALERT_VARIANT_PER_DESCRIPTION_TYPE[type]} className="my-2">
-      {['important_notes', 'do_not_include'].includes(type) ? (
-        <CircleAlert className="w-4 h-4" />
-      ) : (
-        <Terminal className="w-4 h-4" />
-      )}
+    <Alert variant={variant} className="my-2">
+      <Icon1 className="w-4 h-4" />
       <AlertTitle className="first-letter:capitalize font-semibold">
         {type.replaceAll('_', ' ')}
       </AlertTitle>
@@ -80,7 +88,7 @@ export const DescriptionItemsUi = ({
 }: {
   description: DescriptionItem[];
 }) => (
-  <div className="flex flex-col gap-1">
+  <div className="flex flex-col">
     {description.map((item, index) => (
       <DescriptionItemUi key={index} {...item} />
     ))}
