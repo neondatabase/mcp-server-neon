@@ -46,6 +46,7 @@
   --color-do-not-include: var(--do-not-include);
   --color-important-notes: var(--important-notes);
   --color-error-handling: var(--error-handling);
+  --color-link: var(--link);
 }
 
 :root {
@@ -86,6 +87,7 @@
   --do-not-include: var(--color-red-300);
   --important-notes: var(--color-orange-100);
   --error-handling: var(--color-red-100);
+  --link: oklch(0.64 0.14 160.38);
 }
 
 @variant dark {
@@ -126,6 +128,7 @@
     --do-not-include: var(--color-red-700);
     --important-notes: var(--color-orange-800);
     --error-handling: var(--color-red-800);
+    --link: oklch(0.81 0.18 160.37);
   }
 }
 
@@ -141,5 +144,15 @@
   body {
     @apply bg-background text-foreground;
     /*font-family: Arial, Helvetica, sans-serif;*/
+  }
+}
+
+@layer page {
+  .external-link {
+    @apply text-link;
+    @apply font-semibold;
+    @apply border-b;
+    @apply border-transparent;
+    @apply hover:border-current;
   }
 }

@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import githubSvg from './github.svg';
 import { DescriptionItem, parseDescription } from '@/lib/description';
 import { DescriptionItemUi } from '@/components/DescriptionItem';
+import { Introduction } from '@/components/Introduction';
 
 type ToolDescription = {
   name: string;
@@ -45,8 +46,8 @@ export default async function Home() {
   return (
     <div className="flex flex-col items-center min-h-screen p-4 pb-0 sm:p-8 sm:pb-0">
       <main className="w-full max-w-3xl">
-        <article>
-          <header className="flex items-center justify-between gap-2 mb-12">
+        <article className="flex flex-col gap-12">
+          <header className="flex items-center justify-between gap-2">
             <div className="flex items-baseline gap-2">
               <h1 className="text-3xl font-bold whitespace-nowrap">Neon MCP</h1>{' '}
               version: {packageVersion}
@@ -68,6 +69,7 @@ export default async function Home() {
               </a>
             </Button>
           </header>
+          <Introduction />
           <section id="tools">
             <h2 className="text-2xl font-bold mb-2 border-b-3 border-b-emerald-600">
               Available Tools
