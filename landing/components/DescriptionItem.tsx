@@ -45,7 +45,7 @@ export const TextBlockUi = (block: TextBlock) => {
           item.type === 'text' ? (
             item.content
           ) : (
-            <span key={index} className="monospaced bg-secondary p-1">
+            <span key={index} className="monospaced bg-secondary p-1 py-0.25">
               {item.content}
             </span>
           ),
