@@ -29,7 +29,7 @@ export const createSseTransport = (appContext: AppContext) => {
   // sessionId to transport
   const transports = new Map<string, SSEServerTransport>();
 
-  app.get('/', (async (req: Request, res: Response) => {
+  app.get('/auth-check', (async (req: Request, res: Response) => {
     const auth = req.auth;
     if (!auth) {
       res.status(401).send('Unauthorized');
