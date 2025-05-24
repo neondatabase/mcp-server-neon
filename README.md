@@ -85,7 +85,7 @@ Replace `<client_name>` with the name of your MCP client application. Supported 
 - `roo-cline` for [Roo Cline VS Code extension](https://github.com/RooVetGit/Roo-Code)
 - `witsy` for [Witsy](https://witsyai.com/)
 - `enconvo` for [Enconvo](https://www.enconvo.com/)
-- `vscode` for [Visual Studio Code (Preview)](https://code.visualstudio.com/docs/copilot/chat/mcp-servers)
+- `vscode` for [Visual Studio Code](https://code.visualstudio.com/docs/copilot/chat/mcp-servers)
 
 Restart your MCP client after installation.
 
