@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Tracking tool calls and errors with Segment
+- Capture exections with Sentry
+- Add tracing with sentry
+
 ## [0.4.1] - 2025-05-08
 
 - fix the `npx start` command to start server in stdio transport mode
