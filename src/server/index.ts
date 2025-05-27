@@ -6,7 +6,9 @@ import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools.js';
 import { logger } from '../utils/logger.js';
 import { createNeonClient, getPackageJson } from './api.js';
 import { track } from '../analytics/analytics.js';
+import { captureException, startNewTrace, startSpan } from '@sentry/node';
 import { ServerContext } from '../types/context.js';
+import { setSentryTags } from '../sentry/utils.js';
 
 export const createMcpServer = (context: ServerContext) => {
   const server = new McpServer(
@@ -41,20 +43,39 @@ export const createMcpServer = (context: ServerContext) => {
       // To workaround this, we use `optional()`
       { params: tool.inputSchema.optional() },
       async (args, extra) => {
-        logger.info('tool call:', { tool: tool.name, args });
-        track({
-          userId: context.user.id,
-          event: 'tool_call',
-          properties: {
-            tool: tool.name,
-          },
-          context: {
-            client: context.client,
-            app: context.app,
-          },
+        return await startNewTrace(async () => {
+          return await startSpan(
+            {
+              name: 'tool_call',
+              attributes: {
+                tool_name: tool.name,
+              },
+            },
+            async (span) => {
+              const properties = { tool_name: tool.name };
+              logger.info('tool call:', properties);
+              setSentryTags(context);
+              track({
+                userId: context.user.id,
+                event: 'tool_call',
+                properties,
+                context: { client: context.client, app: context.app },
+              });
+              try {
+                // @ts-expect-error: Ignore zod optional
+                return await toolHandler(args, neonClient, extra);
+              } catch (error) {
+                span.setStatus({
+                  code: 2,
+                });
+                captureException(error, {
+                  extra: properties,
+                });
+                throw error;
+              }
+            },
+          );
         });
-        // @ts-expect-error: Ignore zod optional
-        return await toolHandler(args, neonClient, extra);
       },
     );
   });
@@ -69,13 +90,23 @@ export const createMcpServer = (context: ServerContext) => {
         mimeType: resource.mimeType,
       },
       async (url) => {
+        const properties = { resource_name: resource.name };
+        logger.info('resource call:', properties);
+        setSentryTags(context);
         track({
           userId: context.user.id,
           event: 'resource_call',
-          properties: { resource: resource.name },
+          properties,
           context: { client: context.client, app: context.app },
         });
-        return await resource.handler(url);
+        try {
+          return await resource.handler(url);
+        } catch (error) {
+          captureException(error, {
+            extra: properties,
+          });
+          throw error;
+        }
       },
     );
   });
@@ -86,14 +117,16 @@ export const createMcpServer = (context: ServerContext) => {
       message,
       error,
     });
+    const contexts = { app: context.app, client: context.client };
+    const eventId = captureException(error, {
+      user: { id: context.user.id },
+      contexts: contexts,
+    });
     track({
       userId: context.user.id,
       event: 'server_error',
-      properties: { message, error },
-      context: {
-        client: context.client,
-        app: context.app,
-      },
+      properties: { message, error, eventId },
+      context: contexts,
     });
   };
 

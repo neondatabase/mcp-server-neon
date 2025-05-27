@@ -1,3 +1,5 @@
+import '../sentry/instrument.js';
+import { setupExpressErrorHandler } from '@sentry/node';
 import express, { Request, Response, RequestHandler } from 'express';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { createMcpServer } from '../server/index.js';
@@ -126,6 +128,8 @@ export const createSseTransport = (appContext: AppContext) => {
       });
     }
   }) as RequestHandler);
+
+  setupExpressErrorHandler(app);
 
   try {
     app.listen({ port: SERVER_PORT });

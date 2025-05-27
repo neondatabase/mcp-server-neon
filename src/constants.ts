@@ -20,3 +20,6 @@ export const NEON_API_HOST =
 export const COOKIE_SECRET = process.env.COOKIE_SECRET ?? '';
 export const ANALYTICS_WRITE_KEY =
   process.env.ANALYTICS_WRITE_KEY ?? 'gFVzt8ozOp6AZRXoD0g0Lv6UQ6aaoS7O';
+export const SENTRY_DSN =
+  process.env.SENTRY_DSN ??
+  'https://b3564134667aa2dfeaa3992a12d9c12f@o1373725.ingest.us.sentry.io/4509328350380033';
