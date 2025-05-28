@@ -4,6 +4,7 @@ import {
   Branch,
   EndpointType,
   ListProjectsParams,
+  ProjectCreateRequest,
 } from '@neondatabase/api-client';
 import { neon } from '@neondatabase/serverless';
 import crypto from 'crypto';
@@ -39,6 +40,7 @@ import {
   DESCRIBE_DATABASE_STATEMENTS,
   getDefaultDatabase,
   splitSqlStatements,
+  getOrgIdForNewUsers,
 } from './utils.js';
 import { startSpan } from '@sentry/node';
 
@@ -620,17 +622,23 @@ async function handleListProjects(
   params: ListProjectsParams,
   neonClient: Api<unknown>,
 ) {
-  const response = await neonClient.listProjects(params);
+  const organization = await getOrgIdForNewUsers(params, neonClient);
+
+  const response = await neonClient.listProjects({
+    ...params,
+    org_id: organization?.id,
+  });
   if (response.status !== 200) {
     throw new Error(`Failed to list projects: ${response.statusText}`);
   }
   return response.data.projects;
 }
 
-async function handleCreateProject(neonClient: Api<unknown>, name?: string) {
-  const response = await neonClient.createProject({
-    project: { name },
-  });
+async function handleCreateProject(
+  params: ProjectCreateRequest,
+  neonClient: Api<unknown>,
+) {
+  const response = await neonClient.createProject(params);
   if (response.status !== 201) {
     throw new Error(`Failed to create project: ${JSON.stringify(response)}`);
   }
@@ -1657,15 +1665,41 @@ async function handleListBranchComputes(
 
 export const NEON_HANDLERS = {
   list_projects: async ({ params }, neonClient) => {
-    const projects = await handleListProjects(params, neonClient);
+    const organization = await getOrgIdForNewUsers(params, neonClient);
+
+    const projects = await handleListProjects(
+      { ...params, org_id: organization?.id },
+      neonClient,
+    );
     return {
-      content: [{ type: 'text', text: JSON.stringify(projects, null, 2) }],
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              organization: organization
+                ? {
+                    name: organization.name,
+                    id: organization.id,
+                  }
+                : undefined,
+              projects,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
     };
   },
 
   create_project: async ({ params }, neonClient) => {
     try {
-      const result = await handleCreateProject(neonClient, params.name);
+      const organization = await getOrgIdForNewUsers(params, neonClient);
+      const result = await handleCreateProject(
+        { project: { name: params.name, org_id: organization?.id } },
+        neonClient,
+      );
 
       // Get the connection string for the newly created project
       const connectionString = await handleGetConnectionString(
@@ -1682,7 +1716,7 @@ export const NEON_HANDLERS = {
           {
             type: 'text',
             text: [
-              'Your Neon project is ready.',
+              `Your Neon project is created ${organization ? `in organization "${organization.name}"` : ''} and is ready.`,
               `The project_id is "${result.project.id}"`,
               `The branch name is "${result.branch.name}" (ID: ${result.branch.id})`,
               `There is one database available on this branch, called "${result.databases[0].name}",`,
@@ -1705,6 +1739,7 @@ export const NEON_HANDLERS = {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       return {
+        isError: true,
         content: [
           {
             type: 'text',

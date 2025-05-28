@@ -33,6 +33,10 @@ export const createProjectInputSchema = z.object({
     .string()
     .optional()
     .describe('An optional name of the project to create.'),
+  org_id: z
+    .string()
+    .optional()
+    .describe('Create project in a specific organization.'),
 });
 
 export const deleteProjectInputSchema = z.object({

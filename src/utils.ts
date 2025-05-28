@@ -1,5 +1,5 @@
 import { NEON_DEFAULT_DATABASE_NAME } from './constants.js';
-import { Api } from '@neondatabase/api-client';
+import { Api, Organization } from '@neondatabase/api-client';
 
 export const splitSqlStatements = (sql: string) => {
   return sql.split(';').filter(Boolean);
@@ -137,4 +137,51 @@ export async function getDefaultDatabase(
     (db) => db.name === NEON_DEFAULT_DATABASE_NAME,
   );
   return defaultDatabase || databases[0];
+}
+
+/**
+ * Resolves the organization ID for API calls that require org_id parameter.
+ *
+ * For new users (those without billing_account), this function fetches user's organizations and auto-selects only organization managed by console. If there are multiple organizations managed by console, it throws an error asking user to specify org_id.
+ *
+ * For existing users (with billing_account), returns undefined to use default behavior.
+ *
+ * @param params - The parameters object that may contain org_id
+ * @param neonClient - The Neon API client
+ * @returns The organization to use, or undefined for default behavior
+ */
+export async function getOrgIdForNewUsers(
+  params: { org_id?: string },
+  neonClient: Api<unknown>,
+): Promise<Organization | undefined> {
+  if (params.org_id) {
+    const { data } = await neonClient.getOrganization(params.org_id);
+    return data;
+  }
+
+  const { data: user } = await neonClient.getCurrentUserInfo();
+  if (user.billing_account) {
+    return undefined;
+  }
+
+  const { data: response } = await neonClient.getCurrentUserOrganizations();
+  const organizations = response.organizations || [];
+  const consoleOrganizations = organizations.filter(
+    (org) => org.managed_by === 'console',
+  );
+
+  if (consoleOrganizations.length === 0) {
+    throw new Error('No organizations found for this user');
+  }
+
+  if (consoleOrganizations.length === 1) {
+    return consoleOrganizations[0];
+  } else {
+    const orgList = consoleOrganizations
+      .map((org) => `- ${org.name} (ID: ${org.id})`)
+      .join('\n');
+    throw new Error(
+      `Multiple organizations found. Please specify the org_id parameter with one of the following organization IDs:\n${orgList}`,
+    );
+  }
 }
