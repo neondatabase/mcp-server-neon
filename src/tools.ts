@@ -40,7 +40,7 @@ import {
   DESCRIBE_DATABASE_STATEMENTS,
   getDefaultDatabase,
   splitSqlStatements,
-  getOrgIdForNewUsers,
+  getOrgByOrgIdOrDefault,
 } from './utils.js';
 import { startSpan } from '@sentry/node';
 
@@ -643,7 +643,7 @@ async function handleListProjects(
   params: ListProjectsParams,
   neonClient: Api<unknown>,
 ) {
-  const organization = await getOrgIdForNewUsers(params, neonClient);
+  const organization = await getOrgByOrgIdOrDefault(params, neonClient);
 
   const response = await neonClient.listProjects({
     ...params,
@@ -1686,7 +1686,7 @@ async function handleListBranchComputes(
 
 export const NEON_HANDLERS = {
   list_projects: async ({ params }, neonClient) => {
-    const organization = await getOrgIdForNewUsers(params, neonClient);
+    const organization = await getOrgByOrgIdOrDefault(params, neonClient);
 
     const projects = await handleListProjects(
       { ...params, org_id: organization?.id },
@@ -1716,7 +1716,7 @@ export const NEON_HANDLERS = {
 
   create_project: async ({ params }, neonClient) => {
     try {
-      const organization = await getOrgIdForNewUsers(params, neonClient);
+      const organization = await getOrgByOrgIdOrDefault(params, neonClient);
       const result = await handleCreateProject(
         { project: { name: params.name, org_id: organization?.id } },
         neonClient,

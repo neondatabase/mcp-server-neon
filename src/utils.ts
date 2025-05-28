@@ -150,7 +150,7 @@ export async function getDefaultDatabase(
  * @param neonClient - The Neon API client
  * @returns The organization to use, or undefined for default behavior
  */
-export async function getOrgIdForNewUsers(
+export async function getOrgByOrgIdOrDefault(
   params: { org_id?: string },
   neonClient: Api<unknown>,
 ): Promise<Organization | undefined> {
