@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.5.0] 2025-05-28
 
 - Tracking tool calls and errors with Segment
 - Capture exections with Sentry
