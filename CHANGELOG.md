@@ -5,6 +5,7 @@
 - Tracking tool calls and errors with Segment
 - Capture exections with Sentry
 - Add tracing with sentry
+- Support new org-only accounts
 
 ## [0.4.1] - 2025-05-08
 
