@@ -3,7 +3,6 @@ import { setupExpressErrorHandler } from '@sentry/node';
 import express, { Request, Response, RequestHandler } from 'express';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { createMcpServer } from '../server/index.js';
-import { createNeonClient } from '../server/api.js';
 import { logger, morganConfig, errorHandler } from '../utils/logger.js';
 import { authRouter } from '../oauth/server.js';
 import { SERVER_PORT, SERVER_HOST } from '../constants.js';
@@ -28,20 +27,6 @@ export const createSseTransport = (appContext: AppContext) => {
   // to support multiple simultaneous connections we have a lookup object from
   // sessionId to transport
   const transports = new Map<string, SSEServerTransport>();
-
-  app.get('/auth-check', (async (req: Request, res: Response) => {
-    const auth = req.auth;
-    if (!auth) {
-      res.status(401).send('Unauthorized');
-      return;
-    }
-
-    const neonClient = createNeonClient(auth.token);
-    const user = await neonClient.getCurrentUserInfo();
-    res.send({
-      hello: `${user.data.name} ${user.data.last_name}`.trim(),
-    });
-  }) as RequestHandler);
 
   app.get(
     '/sse',
