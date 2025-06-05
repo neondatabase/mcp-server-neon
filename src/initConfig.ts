@@ -49,9 +49,13 @@ type Args =
       executablePath: string;
       neonApiKey: string;
       analytics: boolean;
+    }
+  | {
+      command: 'export-tools';
     };
 
-const commands = ['init', 'start', 'start:sse'] as const;
+const commands = ['init', 'start', 'start:sse', 'export-tools'] as const;
+
 export const parseArgs = (): Args => {
   const args = process.argv;
 
@@ -67,10 +71,23 @@ export const parseArgs = (): Args => {
     };
   }
 
+  if (args.length === 3 && args[2] === 'export-tools') {
+    return {
+      command: 'export-tools',
+    };
+  }
+
   const command = args[2];
+
   if (!commands.includes(command as (typeof commands)[number])) {
     logger.error(`Invalid command: ${command}`);
     process.exit(1);
+  }
+
+  if (command === 'export-tools') {
+    return {
+      command: 'export-tools',
+    };
   }
 
   if (args.length < 3) {

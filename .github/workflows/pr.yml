@@ -19,7 +19,10 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
-      - name: Install
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+      - name: Install landing dependencies
+        working-directory: landing
         run: bun install --frozen-lockfile
       - name: Lint
         run: bun run lint

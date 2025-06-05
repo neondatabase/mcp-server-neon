@@ -6,7 +6,13 @@ import prettierConfig from 'eslint-config-prettier';
 export default ts.config(
   {
     files: ['**/*.ts', '**/*.cts', '**.*.mts'],
-    ignores: ['**/*.js', '**/*.gen.ts'],
+    ignores: [
+      '**/*.js',
+      '**/*.gen.ts',
+      // see https://eslint.org/docs/latest/use/configure/configuration-files#globally-ignoring-files-with-ignores
+      'src/tools-evaluations/**/*',
+      'landing/**/*',
+    ],
     rules: {
       'no-console': 'off',
       '@typescript-eslint/consistent-type-definitions': ['error', 'type'],
@@ -41,8 +47,6 @@ export default ts.config(
       ...ts.configs.strictTypeChecked,
       ...ts.configs.stylisticTypeChecked,
     ],
-    // see https://eslint.org/docs/latest/use/configure/configuration-files#globally-ignoring-files-with-ignores
-    ignores: ['src/tools-evaluations/**/*'],
   },
   prettierConfig,
 );

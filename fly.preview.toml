@@ -6,7 +6,7 @@ app = 'preview-mcp-server-neon'
 primary_region = 'fra'
 
 [build]
-  dockerfile = 'Dockerfile.fly'
+  dockerfile = 'fly.Dockerfile'
 
 [http_service]
   internal_port = 3001
