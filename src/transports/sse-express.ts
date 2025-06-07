@@ -11,6 +11,7 @@ import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import { track } from '../analytics/analytics.js';
 import { AppContext } from '../types/context.js';
+import { createStreamTransport } from './stream.js';
 
 export const createSseTransport = (appContext: AppContext) => {
   const app = express();
@@ -22,6 +23,11 @@ export const createSseTransport = (appContext: AppContext) => {
   app.use(express.static('public'));
   app.set('view engine', 'pug');
   app.set('views', 'src/views');
+  const streamHandler = createStreamTransport({
+    ...appContext,
+    transport: 'stream',
+  });
+  app.use('/mcp', streamHandler);
   app.use('/', authRouter);
 
   // to support multiple simultaneous connections we have a lookup object from
