@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { identify, initAnalytics, track } from './analytics/analytics.js';
+import { identifyApiKey, initAnalytics, track } from './analytics/analytics.js';
 import { NODE_ENV } from './constants.js';
 import { handleInit, parseArgs } from './initConfig.js';
 import { createNeonClient, getPackageJson } from './server/api.js';
@@ -49,14 +49,16 @@ if (args.command === 'start:sse') {
 
   try {
     const neonClient = createNeonClient(args.neonApiKey);
-    const { data: user } = await neonClient.getCurrentUserInfo();
-    identify(user, {
+    const { data } = await neonClient.getAuthDetails();
+    const accountId = data.account_id;
+
+    const user = await identifyApiKey(data, neonClient, {
       context: appContext,
     });
 
     if (args.command === 'init') {
       track({
-        userId: user.id,
+        userId: accountId,
         event: 'init_stdio',
         context: appContext,
       });
@@ -70,17 +72,13 @@ if (args.command === 'start:sse') {
 
     if (args.command === 'start') {
       track({
-        userId: user.id,
+        userId: accountId,
         event: 'start_stdio',
         context: appContext,
       });
       const server = createMcpServer({
         apiKey: args.neonApiKey,
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-        },
+        user,
         app: appContext,
       });
       await startStdio(server);
