@@ -52,7 +52,7 @@ if (args.command === 'start:sse') {
     const { data } = await neonClient.getAuthDetails();
     const accountId = data.account_id;
 
-    const user = await identifyApiKey(data, neonClient, {
+    const account = await identifyApiKey(data, neonClient, {
       context: appContext,
     });
 
@@ -78,7 +78,7 @@ if (args.command === 'start:sse') {
       });
       const server = createMcpServer({
         apiKey: args.neonApiKey,
-        user,
+        account,
         app: appContext,
       });
       await startStdio(server);

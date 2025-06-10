@@ -11,6 +11,6 @@ export type AppContext = {
 export type ServerContext = {
   apiKey: string;
   client?: AuthContext['extra']['client'];
-  user: AuthContext['extra']['user'];
+  account: AuthContext['extra']['account'];
   app: AppContext;
 };

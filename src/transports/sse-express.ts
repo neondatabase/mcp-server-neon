@@ -55,7 +55,7 @@ export const createSseTransport = (appContext: AppContext) => {
         const server = createMcpServer({
           apiKey: auth.token,
           client: auth.extra.client,
-          user: auth.extra.user,
+          account: auth.extra.account,
           app: appContext,
         });
         await server.connect(transport);
@@ -65,7 +65,7 @@ export const createSseTransport = (appContext: AppContext) => {
           error,
         });
         track({
-          userId: auth.extra.user.id,
+          userId: auth.extra.account.id,
           event: 'sse_connection_errored',
           properties: { error },
           context: {
@@ -106,7 +106,7 @@ export const createSseTransport = (appContext: AppContext) => {
         error,
       });
       track({
-        userId: auth.extra.user.id,
+        userId: auth.extra.account.id,
         event: 'transport_message_errored',
         properties: { error },
         context: { app: appContext, client: auth.extra.client },

@@ -1,13 +1,10 @@
 import { Analytics } from '@segment/analytics-node';
 import { ANALYTICS_WRITE_KEY } from '../constants.js';
-import {
-  Api,
-  AuthDetailsResponse,
-  CurrentUserInfoResponse,
-} from '@neondatabase/api-client';
+import { Api, AuthDetailsResponse } from '@neondatabase/api-client';
+import { AuthContext } from '../types/auth.js';
 
 let analytics: Analytics | undefined;
-export type User = Pick<CurrentUserInfoResponse, 'id' | 'name' | 'email'>;
+type Account = AuthContext['extra']['account'];
 export const initAnalytics = () => {
   if (ANALYTICS_WRITE_KEY) {
     analytics = new Analytics({
@@ -18,16 +15,17 @@ export const initAnalytics = () => {
 };
 
 export const identify = (
-  user: User | null,
+  account: Account | null,
   params: Omit<Parameters<Analytics['identify']>[0], 'userId' | 'anonymousId'>,
 ) => {
-  if (user) {
+  if (account) {
     analytics?.identify({
       ...params,
-      userId: user.id,
+      userId: account.id,
       traits: {
-        name: user.name,
-        email: user.email,
+        name: account.name,
+        email: account.email,
+        isOrg: account.isOrg,
       },
     });
   } else {
@@ -52,15 +50,21 @@ export const identifyApiKey = async (
 ) => {
   if (auth.auth_method === 'api_key_org') {
     const { data: org } = await neonClient.getOrganization(auth.account_id);
-    const user = {
+    const account = {
       id: auth.account_id,
       name: org.name,
-      email: '',
+      isOrg: true,
     };
-    identify(user, params);
-    return user;
+    identify(account, params);
+    return account;
   }
   const { data: user } = await neonClient.getCurrentUserInfo();
-  identify(user, params);
-  return user;
+  const account = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    isOrg: false,
+  };
+  identify(account, params);
+  return account;
 };

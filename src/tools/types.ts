@@ -2,6 +2,7 @@ import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Api } from '@neondatabase/api-client';
 
 import { NEON_TOOLS } from './definitions.js';
+import { AuthContext } from '../types/auth.js';
 
 // Extract the tool names as a union type
 type NeonToolName = (typeof NEON_TOOLS)[number]['name'];
@@ -14,7 +15,9 @@ export type ToolHandler<T extends NeonToolName> = ToolCallback<{
   params: ToolParams<T>;
 }>;
 
-export type ToolHandlerExtraParams = Parameters<ToolHandler<NeonToolName>>['1'];
+export type ToolHandlerExtraParams = Parameters<
+  ToolHandler<NeonToolName>
+>['1'] & { account: AuthContext['extra']['account'] };
 
 export type ToolHandlerExtended<T extends NeonToolName> = (
   ...args: [
