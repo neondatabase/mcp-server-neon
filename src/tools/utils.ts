@@ -159,6 +159,12 @@ export async function getOrgByOrgIdOrDefault(
     return data;
   }
 
+  const { data: account } = await neonClient.getAuthDetails();
+  if (account.auth_method == 'api_key_org') {
+    const { data } = await neonClient.getOrganization(account.account_id);
+    return data;
+  }
+
   const { data: user } = await neonClient.getCurrentUserInfo();
   if (user.billing_account) {
     return undefined;
