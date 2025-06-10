@@ -2,7 +2,11 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { NEON_RESOURCES } from '../resources.js';
-import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools.js';
+import {
+  NEON_HANDLERS,
+  NEON_TOOLS,
+  ToolHandlerExtended,
+} from '../tools/index.js';
 import { logger } from '../utils/logger.js';
 import { createNeonClient, getPackageJson } from './api.js';
 import { track } from '../analytics/analytics.js';

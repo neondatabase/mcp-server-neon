@@ -1,6 +1,6 @@
 import { ListProjectsParams } from '@neondatabase/api-client';
 import { z } from 'zod';
-import { NEON_DEFAULT_DATABASE_NAME } from './constants.js';
+import { NEON_DEFAULT_DATABASE_NAME } from '../constants.js';
 
 type ZodObjectParams<T> = z.ZodObject<{ [key in keyof T]: z.ZodType<T[key]> }>;
 
