@@ -66,10 +66,10 @@ export const createMcpServer = (context: ServerContext) => {
                 properties,
                 context: { client: context.client, app: context.app },
               });
-              const extraArgs = {
+              const extraArgs: ToolHandlerExtraParams = {
                 ...extra,
                 account: context.account,
-              } satisfies ToolHandlerExtraParams;
+              };
               try {
                 // @ts-expect-error: Ignore zod optional
                 return await toolHandler(args, neonClient, extraArgs);
