@@ -1,4 +1,4 @@
-import { NEON_DEFAULT_DATABASE_NAME } from './constants.js';
+import { NEON_DEFAULT_DATABASE_NAME } from '../constants.js';
 import { Api, Organization } from '@neondatabase/api-client';
 
 export const splitSqlStatements = (sql: string) => {

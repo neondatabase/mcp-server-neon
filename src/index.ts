@@ -9,7 +9,7 @@ import { createSseTransport } from './transports/sse-express.js';
 import { startStdio } from './transports/stdio.js';
 import { logger } from './utils/logger.js';
 import { AppContext } from './types/context.js';
-import { NEON_TOOLS } from './tools.js';
+import { NEON_TOOLS } from './tools/index.js';
 import './utils/polyfills.js';
 
 const args = parseArgs();
