@@ -3,7 +3,7 @@ import { AuthContext } from './auth.js';
 
 export type AppContext = {
   name: string;
-  transport: 'sse' | 'stdio';
+  transport: 'sse' | 'stdio' | 'stream';
   environment: Environment;
   version: string;
 };

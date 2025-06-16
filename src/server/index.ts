@@ -74,6 +74,11 @@ export const createMcpServer = (context: ServerContext) => {
                 // @ts-expect-error: Ignore zod optional
                 return await toolHandler(args, neonClient, extraArgs);
               } catch (error) {
+                logger.error('Tool call error:', {
+                  error:
+                    error instanceof Error ? error.message : 'Unknown error',
+                  properties,
+                });
                 span.setStatus({
                   code: 2,
                 });
