@@ -20,7 +20,7 @@ export const createStreamTransport = (appContext: AppContext) => {
       const server = createMcpServer({
         apiKey: auth.token,
         client: auth.extra.client,
-        user: auth.extra.user,
+        account: auth.extra.account,
         app: appContext,
       });
 
@@ -39,7 +39,7 @@ export const createStreamTransport = (appContext: AppContext) => {
         error,
       });
       track({
-        userId: auth.extra.user.id,
+        userId: auth.extra.account.id,
         event: 'stream_connection_errored',
         properties: { error },
         context: {
