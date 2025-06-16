@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fix: Issue with ORG API keys in local mode
+- Refc: Tools into smaller manageable modules
+- Feat: New landing page with details of supported tools
+
 ## [0.5.0] 2025-05-28
 
 - Tracking tool calls and errors with Segment

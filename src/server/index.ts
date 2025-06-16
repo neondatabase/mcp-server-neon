@@ -13,6 +13,7 @@ import { track } from '../analytics/analytics.js';
 import { captureException, startNewTrace, startSpan } from '@sentry/node';
 import { ServerContext } from '../types/context.js';
 import { setSentryTags } from '../sentry/utils.js';
+import { ToolHandlerExtraParams } from '../tools/types.js';
 
 export const createMcpServer = (context: ServerContext) => {
   const server = new McpServer(
@@ -60,14 +61,18 @@ export const createMcpServer = (context: ServerContext) => {
               logger.info('tool call:', properties);
               setSentryTags(context);
               track({
-                userId: context.user.id,
+                userId: context.account.id,
                 event: 'tool_call',
                 properties,
                 context: { client: context.client, app: context.app },
               });
+              const extraArgs: ToolHandlerExtraParams = {
+                ...extra,
+                account: context.account,
+              };
               try {
                 // @ts-expect-error: Ignore zod optional
-                return await toolHandler(args, neonClient, extra);
+                return await toolHandler(args, neonClient, extraArgs);
               } catch (error) {
                 logger.error('Tool call error:', {
                   error:
@@ -103,7 +108,7 @@ export const createMcpServer = (context: ServerContext) => {
         logger.info('resource call:', properties);
         setSentryTags(context);
         track({
-          userId: context.user.id,
+          userId: context.account.id,
           event: 'resource_call',
           properties,
           context: { client: context.client, app: context.app },
@@ -128,11 +133,11 @@ export const createMcpServer = (context: ServerContext) => {
     });
     const contexts = { app: context.app, client: context.client };
     const eventId = captureException(error, {
-      user: { id: context.user.id },
+      user: { id: context.account.id },
       contexts: contexts,
     });
     track({
-      userId: context.user.id,
+      userId: context.account.id,
       event: 'server_error',
       properties: { message, error, eventId },
       context: contexts,

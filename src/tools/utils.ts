@@ -1,5 +1,6 @@
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants.js';
 import { Api, Organization } from '@neondatabase/api-client';
+import { ToolHandlerExtraParams } from './types.js';
 
 export const splitSqlStatements = (sql: string) => {
   return sql.split(';').filter(Boolean);
@@ -153,9 +154,13 @@ export async function getDefaultDatabase(
 export async function getOrgByOrgIdOrDefault(
   params: { org_id?: string },
   neonClient: Api<unknown>,
+  extra: ToolHandlerExtraParams,
 ): Promise<Organization | undefined> {
-  if (params.org_id) {
-    const { data } = await neonClient.getOrganization(params.org_id);
+  // 1. If org_id is provided use it
+  // 2. If using Org API key, use the account id
+  if (params.org_id || extra.account.isOrg) {
+    const orgId = params.org_id || extra.account.id;
+    const { data } = await neonClient.getOrganization(orgId);
     return data;
   }
 

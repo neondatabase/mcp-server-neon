@@ -2,10 +2,11 @@ import { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 
 export type AuthContext = {
   extra: {
-    user: {
+    account: {
       id: string;
       name: string;
-      email: string;
+      email?: string;
+      isOrg?: boolean; // For STDIO mode with org API key
     };
     client: {
       id: string;

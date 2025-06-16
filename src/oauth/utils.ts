@@ -36,10 +36,11 @@ export const requiresAuth =
         ? token.scope
         : (token.scope?.split(' ') ?? []),
       extra: {
-        user: {
+        account: {
           id: token.user.id,
           name: token.user.name,
           email: token.user.email,
+          isOrg: false,
         },
         client: {
           id: token.client.id,

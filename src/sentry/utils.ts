@@ -3,7 +3,7 @@ import { ServerContext } from '../types/context.js';
 
 export const setSentryTags = (context: ServerContext) => {
   setUser({
-    id: context.user.id,
+    id: context.account.id,
   });
   setTags({
     'app.name': context.app.name,
