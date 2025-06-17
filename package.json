@@ -71,6 +71,7 @@
     "@types/node-fetch": "2.6.12",
     "@types/oauth2-server": "3.0.18",
     "@types/react": "19.1.8",
+    "@types/react-syntax-highlighter": "15.5.13",
     "autoevals": "0.0.111",
     "braintrust": "0.0.177",
     "bun": "1.1.40",
