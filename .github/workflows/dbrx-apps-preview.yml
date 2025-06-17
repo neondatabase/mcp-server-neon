@@ -1,0 +1,15 @@
+name: Deploy Preview App to Databricks
+on:
+  # Run this workflow on every PR event. Existing review apps will be updated when the PR is updated.
+  pull_request:
+    types: [opened, reopened, synchronize, closed, labeled]
+
+jobs:
+  preview:
+    if: contains(github.event.pull_request.labels.*.name, 'deploy-preview')
+    name: Deploy Preview
+    runs-on: ubuntu-latest
+    concurrency: deploy-group # optional: ensure only one action runs at a time
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo 'Hello World'

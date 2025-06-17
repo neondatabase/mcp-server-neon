@@ -1,0 +1,27 @@
+bundle:
+  name: neon-mcp-server-preview
+
+resources:
+  apps:
+    neon-mcp-server-preview:
+      name: neon-mcp-server-preview
+      source_code_path: ./
+
+targets:
+  preview:
+    mode: development
+    default: true
+    workspace:
+      host: e2-spog.staging.cloud.databricks.com
+    resources:
+      apps:
+        neon-mcp-server-preview:
+          name: "neon-mcp-server-preview"
+  production:
+    mode: production
+    workspace:
+      host: e2-spog.staging.cloud.databricks.com
+      root_path: /Workspace/Users/david.gomes@databricks.com/.bundle/neon-mcp-server-preview/preview/files
+    permissions:
+      - user_name: david.gomes@databricks.com
+        level: CAN_MANAGE
