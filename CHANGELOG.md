@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## [0.6.0] 2025-06-16
 
 - Fix: Issue with ORG API keys in local mode
 - Refc: Tools into smaller manageable modules
 - Feat: New landing page with details of supported tools
+- Feat: Streamable HTTP support
 
 ## [0.5.0] 2025-05-28
 
