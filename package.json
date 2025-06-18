@@ -66,6 +66,7 @@
     "@types/cookie-parser": "1.4.8",
     "@types/cors": "2.8.17",
     "@types/express": "5.0.1",
+    "@types/lodash": "4.17.18",
     "@types/morgan": "1.9.9",
     "@types/node": "20.17.9",
     "@types/node-fetch": "2.6.12",
