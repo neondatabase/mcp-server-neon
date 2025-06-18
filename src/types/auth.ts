@@ -8,7 +8,7 @@ export type AuthContext = {
       email?: string;
       isOrg?: boolean; // For STDIO mode with org API key
     };
-    client: {
+    client?: {
       id: string;
       name: string;
     };

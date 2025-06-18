@@ -2,6 +2,9 @@ import { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import { model } from './model.js';
+import { ApiKeyRecord, apiKeys } from './kv-store.js';
+import { createNeonClient } from '../server/api.js';
+import { identify } from '../analytics/analytics.js';
 
 export const ensureCorsHeaders = () =>
   cors({
@@ -9,6 +12,51 @@ export const ensureCorsHeaders = () =>
     methods: '*',
     allowedHeaders: 'Authorization, Origin, Content-Type, Accept, *',
   });
+
+const fetchAccountDetails = async (
+  accessToken: string,
+): Promise<ApiKeyRecord | null> => {
+  const apiKeyRecord = await apiKeys.get(accessToken);
+  if (apiKeyRecord) {
+    return apiKeyRecord;
+  }
+
+  try {
+    const neonClient = createNeonClient(accessToken);
+    const { data: auth } = await neonClient.getAuthDetails();
+    if (auth.auth_method === 'api_key_org') {
+      const { data: org } = await neonClient.getOrganization(auth.account_id);
+      const record = {
+        apiKey: accessToken,
+        authMethod: auth.auth_method,
+        account: {
+          id: auth.account_id,
+          name: org.name,
+          isOrg: true,
+        },
+      };
+      identify(record.account, { context: { authMethod: record.authMethod } });
+      await apiKeys.set(accessToken, record);
+      return record;
+    }
+    const { data: user } = await neonClient.getCurrentUserInfo();
+    const record = {
+      apiKey: accessToken,
+      authMethod: auth.auth_method,
+      account: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        isOrg: false,
+      },
+    };
+    identify(record.account, { context: { authMethod: record.authMethod } });
+    await apiKeys.set(accessToken, record);
+    return record;
+  } catch {
+    return null;
+  }
+};
 
 export const requiresAuth =
   () => async (request: Request, response: Response, next: NextFunction) => {
@@ -18,38 +66,54 @@ export const requiresAuth =
       return;
     }
 
-    const token = await model.getAccessToken(extractBearerToken(authorization));
-    if (!token) {
+    const accessToken = extractBearerToken(authorization);
+    const token = await model.getAccessToken(accessToken);
+    if (token) {
+      if (!token.expires_at || token.expires_at < Date.now()) {
+        response.status(401).json({ error: 'Access token expired' });
+        return;
+      }
+
+      request.auth = {
+        token: token.accessToken,
+        clientId: token.client.id,
+        scopes: Array.isArray(token.scope)
+          ? token.scope
+          : (token.scope?.split(' ') ?? []),
+        extra: {
+          account: {
+            id: token.user.id,
+            name: token.user.name,
+            email: token.user.email,
+            isOrg: false,
+          },
+          client: {
+            id: token.client.id,
+            name: token.client.client_name,
+          },
+        },
+      };
+
+      next();
+      return;
+    }
+
+    // If the token is not found, try to resolve the auth headers with Neon for other means of authentication.
+    const apiKeyRecord = await fetchAccountDetails(accessToken);
+    if (!apiKeyRecord) {
       response.status(401).json({ error: 'Invalid access token' });
       return;
     }
-
-    if (!token.expires_at || token.expires_at < Date.now()) {
-      response.status(401).json({ error: 'Access token expired' });
-      return;
-    }
-
     request.auth = {
-      token: token.accessToken,
-      clientId: token.client.id,
-      scopes: Array.isArray(token.scope)
-        ? token.scope
-        : (token.scope?.split(' ') ?? []),
+      token: accessToken,
+      clientId: 'api-key',
+      scopes: ['*'],
       extra: {
-        account: {
-          id: token.user.id,
-          name: token.user.name,
-          email: token.user.email,
-          isOrg: false,
-        },
-        client: {
-          id: token.client.id,
-          name: token.client.client_name,
-        },
+        account: apiKeyRecord.account,
       },
     };
-
     next();
+    return;
   };
 
 export type DownstreamAuthRequest = {
