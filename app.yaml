@@ -1,0 +1,4 @@
+command:
+  - npm
+  - run
+  - start:sse

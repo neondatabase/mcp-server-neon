@@ -17,10 +17,6 @@ targets:
       apps:
         neon-mcp-server-preview:
           name: "neon-mcp-server-preview"
-          command:
-            - npm
-            - run
-            - start:sse
   production:
     mode: production
     workspace:
