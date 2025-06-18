@@ -1,7 +1,7 @@
 command:
-  - /bin/sh
-  - -c
-  - npm install && npm run start:sse
+  - npm
+  - run
+  - start:sse
 env:
   - name: ANALYTICS_WRITE_KEY
     valueFrom: ANALYTICS_WRITE_KEY
