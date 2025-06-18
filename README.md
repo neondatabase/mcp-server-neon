@@ -215,7 +215,7 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 
 **Neon Auth:**
 
-- # **`provision_neon_auth`**: Provisions Neon Auth for a Neon project. It allows developers to easily set up authentication infrastructure by creating an integration with Stack Auth (`@stackframe/stack`).
+- **`provision_neon_auth`**: Provisions Neon Auth for a Neon project. It allows developers to easily set up authentication infrastructure by creating an integration with Stack Auth (`@stackframe/stack`).
 
   **Query Performance Tuning:**
 
