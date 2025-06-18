@@ -215,9 +215,9 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 
 **Neon Auth:**
 
-- **`provision_neon_auth`**: Provisions Neon Auth for a Neon project. It allows developers to easily set up authentication infrastructure by creating an integration with Stack Auth (`@stackframe/stack`).
-=======
-**Query Performance Tuning:**
+- # **`provision_neon_auth`**: Provisions Neon Auth for a Neon project. It allows developers to easily set up authentication infrastructure by creating an integration with Stack Auth (`@stackframe/stack`).
+
+  **Query Performance Tuning:**
 
 - **`explain_sql_statement`**: Analyzes a SQL query and returns detailed execution plan information to help understand query performance.
 - **`prepare_query_tuning`**: Identifies potential performance issues in a SQL query and suggests optimizations. Creates a temporary branch for testing improvements.

@@ -3,8 +3,8 @@
 ## UNRELEASED
 
 - Documentation: Updated README with new tools and features
-- Documentation: Improved clarity and consistency in README
-=======
+- # Documentation: Improved clarity and consistency in README
+
 ## [0.6.0] 2025-06-16
 
 - Fix: Issue with ORG API keys in local mode
