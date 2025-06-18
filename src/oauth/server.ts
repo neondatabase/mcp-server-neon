@@ -8,6 +8,7 @@ import { logger } from '../utils/logger.js';
 import express from 'express';
 import {
   decodeAuthParams,
+  extractClientCredentials,
   generateRandomString,
   parseAuthRequest,
   toMilliseconds,
@@ -17,11 +18,20 @@ import {
 import { exchangeCode, exchangeRefreshToken, upstreamAuth } from './client.js';
 import { createNeonClient } from '../server/api.js';
 import bodyParser from 'body-parser';
-import { SERVER_HOST } from '../constants.js';
+import { SERVER_HOST, COOKIE_SECRET } from '../constants.js';
+import {
+  isClientAlreadyApproved,
+  updateApprovedClientsCookie,
+} from './cookies.js';
+import { identify } from '../analytics/analytics.js';
 
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
-const SUPPORTED_AUTH_METHODS = ['client_secret_post', 'none'];
+const SUPPORTED_AUTH_METHODS = [
+  'client_secret_post',
+  'client_secret_basic',
+  'none',
+];
 const SUPPORTED_CODE_CHALLENGE_METHODS = ['S256'];
 export const metadata = (req: ExpressRequest, res: ExpressResponse) => {
   res.json({
@@ -45,6 +55,7 @@ export const registerClient = async (
   const payload = req.body;
   logger.info('request to register client: ', {
     name: payload.client_name,
+    client_uri: payload.client_uri,
   });
 
   if (payload.client_name === undefined) {
@@ -98,6 +109,7 @@ export const registerClient = async (
       secret: clientSecret,
       tokenEndpointAuthMethod:
         (req.body.token_endpoint_auth_method as string) ?? 'client_secret_post',
+      registrationDate: Math.floor(Date.now() / 1000),
     };
 
     await model.saveClient(client);
@@ -105,6 +117,7 @@ export const registerClient = async (
       clientId,
       client_name: payload.client_name,
       redirect_uris: payload.redirect_uris,
+      client_uri: payload.client_uri,
     });
 
     res.json({
@@ -112,6 +125,7 @@ export const registerClient = async (
       client_secret: clientSecret,
       client_name: payload.client_name,
       redirect_uris: payload.redirect_uris,
+      token_endpoint_auth_method: client.tokenEndpointAuthMethod,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -119,6 +133,7 @@ export const registerClient = async (
       message,
       error,
       client: payload.client_name,
+      client_uri: payload.client_uri,
     });
     res.status(500).json({ code: 'server_error', error, message });
   }
@@ -174,7 +189,37 @@ authRouter.get(
       return;
     }
 
-    const authUrl = await upstreamAuth(btoa(JSON.stringify(requestParams)));
+    if (await isClientAlreadyApproved(req, client.id, COOKIE_SECRET)) {
+      const authUrl = await upstreamAuth(btoa(JSON.stringify(requestParams)));
+      res.redirect(authUrl.href);
+      return;
+    }
+
+    res.render('approval-dialog', {
+      client,
+      state: btoa(JSON.stringify(requestParams)),
+    });
+  },
+);
+
+authRouter.post(
+  '/authorize',
+  bodyParser.urlencoded({ extended: true }),
+  async (req: ExpressRequest, res: ExpressResponse) => {
+    const state = req.body.state as string;
+    if (!state) {
+      res.status(400).json({ code: 'invalid_request', error: 'invalid state' });
+      return;
+    }
+
+    const requestParams = JSON.parse(atob(state));
+    await updateApprovedClientsCookie(
+      req,
+      res,
+      requestParams.clientId,
+      COOKIE_SECRET,
+    );
+    const authUrl = await upstreamAuth(state);
     res.redirect(authUrl.href);
   },
 );
@@ -279,31 +324,33 @@ authRouter.post(
         .json({ code: 'invalid_request', error: 'invalid content type' });
       return;
     }
-
-    const formData = req.body;
-    if (!formData.client_id) {
+    const { clientId, clientSecret } = extractClientCredentials(req);
+    if (!clientId) {
       res
         .status(400)
         .json({ code: 'invalid_request', error: 'client_id is required' });
       return;
     }
 
-    const client = await model.getClient(formData.client_id, '');
+    const error = {
+      error: 'invalid_client',
+      error_description: 'client not found or invalid client credentials',
+    };
+    const client = await model.getClient(clientId, '');
     if (!client) {
-      res
-        .status(400)
-        .json({ code: 'invalid_request', error: 'invalid client' });
+      res.status(400).json({ code: 'invalid_request', ...error });
       return;
     }
 
-    if (client.secret !== formData.client_secret) {
-      // For security reasons, do not leak whether a client exists or not.
-      res
-        .status(400)
-        .json({ code: 'invalid_request', error: 'invalid client' });
-      return;
+    const isPublicClient = client.tokenEndpointAuthMethod === 'none';
+    if (!isPublicClient) {
+      if (clientSecret !== client.secret) {
+        res.status(400).json({ code: 'invalid_request', ...error });
+        return;
+      }
     }
 
+    const formData = req.body;
     if (formData.grant_type === 'authorization_code') {
       const authorizationCode = await model.getAuthorizationCode(formData.code);
       if (!authorizationCode) {
@@ -330,7 +377,9 @@ authRouter.post(
         return;
       }
 
+      const isPkceEnabled = authorizationCode.code_challenge !== undefined;
       if (
+        isPkceEnabled &&
         !verifyPKCE(
           authorizationCode.code_challenge,
           authorizationCode.code_challenge_method,
@@ -338,8 +387,25 @@ authRouter.post(
         )
       ) {
         res.status(400).json({
+          code: 'invalid_grant',
+          error: 'invalid PKCE code verifier',
+        });
+        return;
+      }
+      if (!isPkceEnabled && !formData.redirect_uri) {
+        res.status(400).json({
           code: 'invalid_request',
-          error: 'invalid code verifier',
+          error: 'redirect_uri is required when not using PKCE',
+        });
+        return;
+      }
+      if (
+        formData.redirect_uri &&
+        !client.redirect_uris.includes(formData.redirect_uri)
+      ) {
+        res.status(400).json({
+          code: 'invalid_request',
+          error: 'invalid redirect uri',
         });
         return;
       }
@@ -357,6 +423,22 @@ authRouter.post(
         refreshToken: token.refreshToken ?? '',
         accessToken: token.accessToken,
       });
+
+      identify(
+        {
+          id: authorizationCode.user.id,
+          name: authorizationCode.user.name,
+          email: authorizationCode.user.email,
+        },
+        {
+          context: {
+            client: {
+              id: client.id,
+              name: client.client_name,
+            },
+          },
+        },
+      );
 
       // Revoke the authorization code, it can only be used once
       await model.revokeAuthorizationCode(authorizationCode);
@@ -383,7 +465,7 @@ authRouter.post(
         providedRefreshToken.accessToken,
       );
       if (!oldToken) {
-        // Refresh token is missing it counter access token, delete it
+        // Refresh token is missing its counter access token, delete it
         await model.deleteRefreshToken(providedRefreshToken);
         res
           .status(400)
@@ -411,8 +493,8 @@ authRouter.post(
         user: oldToken.user,
       });
       await model.saveRefreshToken({
-        refreshToken: token.refresh_token ?? '',
-        accessToken: token.access_token,
+        refreshToken: token.refreshToken ?? '',
+        accessToken: token.accessToken,
       });
 
       // Delete the old tokens

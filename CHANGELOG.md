@@ -4,6 +4,25 @@
 
 - Documentation: Updated README with new tools and features
 - Documentation: Improved clarity and consistency in README
+=======
+## [0.6.0] 2025-06-16
+
+- Fix: Issue with ORG API keys in local mode
+- Refc: Tools into smaller manageable modules
+- Feat: New landing page with details of supported tools
+- Feat: Streamable HTTP support
+
+## [0.5.0] 2025-05-28
+
+- Tracking tool calls and errors with Segment
+- Capture exections with Sentry
+- Add tracing with sentry
+- Support new org-only accounts
+
+## [0.4.1] - 2025-05-08
+
+- fix the `npx start` command to start server in stdio transport mode
+- fix issue with unexpected tokens in stdio transport mode
 
 ## [0.4.0] - 2025-05-08
 

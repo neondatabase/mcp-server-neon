@@ -1,6 +1,6 @@
 import { ListProjectsParams } from '@neondatabase/api-client';
 import { z } from 'zod';
-import { NEON_DEFAULT_DATABASE_NAME } from './constants.js';
+import { NEON_DEFAULT_DATABASE_NAME } from '../constants.js';
 
 type ZodObjectParams<T> = z.ZodObject<{ [key in keyof T]: z.ZodType<T[key]> }>;
 
@@ -33,6 +33,10 @@ export const createProjectInputSchema = z.object({
     .string()
     .optional()
     .describe('An optional name of the project to create.'),
+  org_id: z
+    .string()
+    .optional()
+    .describe('Create project in a specific organization.'),
 });
 
 export const deleteProjectInputSchema = z.object({

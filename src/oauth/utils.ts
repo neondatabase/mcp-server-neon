@@ -29,6 +29,26 @@ export const requiresAuth =
       return;
     }
 
+    request.auth = {
+      token: token.accessToken,
+      clientId: token.client.id,
+      scopes: Array.isArray(token.scope)
+        ? token.scope
+        : (token.scope?.split(' ') ?? []),
+      extra: {
+        account: {
+          id: token.user.id,
+          name: token.user.name,
+          email: token.user.email,
+          isOrg: false,
+        },
+        client: {
+          id: token.client.id,
+          name: token.client.client_name,
+        },
+      },
+    };
+
     next();
   };
 
@@ -79,6 +99,20 @@ export const generateRandomString = (length: number): string => {
 export const extractBearerToken = (authorizationHeader: string): string => {
   if (!authorizationHeader) return '';
   return authorizationHeader.replace(/^Bearer\s+/i, '');
+};
+
+export const extractClientCredentials = (request: Request) => {
+  const authorization = request.headers.authorization;
+  if (authorization?.startsWith('Basic ')) {
+    const credentials = atob(authorization.replace(/^Basic\s+/i, ''));
+    const [clientId, clientSecret] = credentials.split(':');
+    return { clientId, clientSecret };
+  }
+
+  return {
+    clientId: request.body.client_id,
+    clientSecret: request.body.client_secret,
+  };
 };
 
 export const toSeconds = (ms: number): number => {

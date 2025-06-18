@@ -85,7 +85,7 @@ Replace `<client_name>` with the name of your MCP client application. Supported 
 - `roo-cline` for [Roo Cline VS Code extension](https://github.com/RooVetGit/Roo-Code)
 - `witsy` for [Witsy](https://witsyai.com/)
 - `enconvo` for [Enconvo](https://www.enconvo.com/)
-- `vscode` for [Visual Studio Code (Preview)](https://code.visualstudio.com/docs/copilot/chat/mcp-servers)
+- `vscode` for [Visual Studio Code](https://code.visualstudio.com/docs/copilot/chat/mcp-servers)
 
 Restart your MCP client after installation.
 
@@ -186,6 +186,7 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 - **`create_branch`**: Creates a new branch within a specified Neon project. Leverages [Neon's branching](/docs/introduction/branching) feature for development, testing, or migrations.
 - **`delete_branch`**: Deletes an existing branch from a Neon project.
 - **`describe_branch`**: Retrieves details about a specific branch, such as its name, ID, and parent branch.
+- **`list_branch_computes`**: Lists compute endpoints for a project or specific branch, including compute ID, type, size, and autoscaling information.
 
 **SQL Query Execution:**
 
@@ -194,6 +195,7 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 - **`run_sql_transaction`**: Executes a series of SQL queries within a single transaction against a Neon database.
 - **`get_database_tables`**: Lists all tables within a specified Neon database.
 - **`describe_table_schema`**: Retrieves the schema definition of a specific table, detailing columns, data types, and constraints.
+- **`list_slow_queries`**: Identifies performance bottlenecks by finding the slowest queries in a database. Requires the pg_stat_statements extension.
 
 **Database Migrations (Schema Changes):**
 
@@ -214,6 +216,16 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 **Neon Auth:**
 
 - **`provision_neon_auth`**: Provisions Neon Auth for a Neon project. It allows developers to easily set up authentication infrastructure by creating an integration with Stack Auth (`@stackframe/stack`).
+=======
+**Query Performance Tuning:**
+
+- **`explain_sql_statement`**: Analyzes a SQL query and returns detailed execution plan information to help understand query performance.
+- **`prepare_query_tuning`**: Identifies potential performance issues in a SQL query and suggests optimizations. Creates a temporary branch for testing improvements.
+- **`complete_query_tuning`**: Finalizes and applies query optimizations after testing. Merges changes from the temporary tuning branch to the main branch.
+
+**Neon Auth:**
+
+- **`provision_neon_auth`**: Action to provision Neon Auth for a Neon project. It allows developers to easily setup authentication infrastructure by creating a integration with Stack Auth (`@stackframe/stack`).
 
 ## Migrations
 
