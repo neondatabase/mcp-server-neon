@@ -1,8 +1,9 @@
 # Changelog
 
-## UNRELEASED
+## Unreleased
 
 - Documentation: Updated README with new tools and features
+- Support API key authentication for remote server
 
 ## [0.6.0] 2025-06-16
 
