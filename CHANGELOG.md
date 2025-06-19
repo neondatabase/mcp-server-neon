@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Support API key authentication for remote server
+
 ## [0.6.0] 2025-06-16
 
 - Fix: Issue with ORG API keys in local mode
