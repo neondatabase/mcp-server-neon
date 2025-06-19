@@ -4,20 +4,20 @@ command:
   - start:sse
 env:
   - name: ANALYTICS_WRITE_KEY
-    valueFrom: ANALYTICS_WRITE_KEY
+    valueFrom: "ANALYTICS_WRITE_KEY"
   - name: CLIENT_ID
-    valueFrom: CLIENT_ID
+    valueFrom: "CLIENT_ID"
   - name: CLIENT_SECRET
-    valueFrom: CLIENT_SECRET
+    valueFrom: "CLIENT_SECRET"
   - name: COOKIE_SECRET
-    valueFrom: COOKIE_SECRET
+    valueFrom: "COOKIE_SECRET"
   - name: NODE_ENV
-    valueFrom: NODE_ENV
+    valueFrom: "NODE_ENV"
   - name: OAUTH_DATABASE_URL
-    valueFrom: OAUTH_DATABASE_URL
+    valueFrom: "OAUTH_DATABASE_URL"
   - name: SENTRY_DSN
-    valueFrom: SENTRY_DSN
+    valueFrom: "SENTRY_DSN"
   - name: NEON_API_HOST
-    valueFrom: NEON_API_HOST
+    valueFrom: "NEON_API_HOST"
   - name: UPSTREAM_OAUTH_HOST
-    valueFrom: UPSTREAM_OAUTH_HOST
+    valueFrom: "UPSTREAM_OAUTH_HOST"
