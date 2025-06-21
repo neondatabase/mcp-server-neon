@@ -27,7 +27,7 @@ export const CodeSnippet = ({ type, children }: Props) => {
     <div className="my-2">
       <Suspense
         fallback={
-          <div className="monospaced whitespace-pre-wrap bg-secondary px-2 py-[0.5em] border-l-4">
+          <div className="monospaced whitespace-pre-wrap bg-secondary px-2 py-0-25 border-l-4">
             {children}
           </div>
         }

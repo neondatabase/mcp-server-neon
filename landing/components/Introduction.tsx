@@ -1,14 +1,13 @@
-import { cn } from '@/lib/utils';
 import { ExternalLink } from '@/components/ExternalLink';
 
 export const Introduction = ({ className }: { className?: string }) => (
-  <div className={cn('flex flex-col gap-2', className)}>
-    <desc className="text-xl mb-2">
+  <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+    <desc style={{ fontSize: '1.25rem', lineHeight: '1.75rem', marginBottom: '0.5rem' }}>
       Manage your Neon Postgres databases with natural language.
     </desc>
 
     <div>
-      The <strong className="font-semibold">Neon MCP Server</strong> lets AI
+      The <strong style={{ fontWeight: '600' }}>Neon MCP Server</strong> lets AI
       agents and dev tools like Cursor interact with Neon by translating plain
       English into{' '}
       <ExternalLink href="https://api-docs.neon.tech/reference/getting-started-with-neon-api">
@@ -18,7 +17,7 @@ export const Introduction = ({ className }: { className?: string }) => (
       schema changes just by typing commands like "Create a database named
       'my-new-database'" or "List all my Neon projects".
     </div>
-    <div>
+    <div style={{ marginTop: '1rem' }}>
       Built on the{' '}
       <ExternalLink href="https://modelcontextprotocol.org/">
         Model Context Protocol (MCP)

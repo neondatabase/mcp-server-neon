@@ -40,12 +40,12 @@ const ALERT_VARIANT_PER_DESCRIPTION_TYPE: Record<
 export const TextBlockUi = (block: TextBlock) => {
   if (block.type === 'text') {
     return (
-      <div className="text-sm/[24px]">
+      <div className="text-sm-24px">
         {block.content.map((item, index) =>
           item.type === 'text' ? (
             item.content
           ) : (
-            <span key={index} className="monospaced bg-secondary p-1 py-0.25">
+            <span key={index} className="monospaced bg-secondary p-1 py-0-25">
               {item.content}
             </span>
           ),
@@ -88,7 +88,7 @@ export const DescriptionItemUi = (item: DescriptionItem) => {
   return (
     <Alert variant={variant} className="my-2">
       <IconComp className="w-4 h-4" />
-      <AlertTitle className="first-letter:capitalize font-semibold">
+      <AlertTitle className="first-letter-capitalize font-semibold">
         {item.type.replaceAll('_', ' ')}
       </AlertTitle>
       <AlertDescription className="whitespace-pre-line">
@@ -103,7 +103,7 @@ export const DescriptionItemsUi = ({
 }: {
   description: DescriptionItem[];
 }) => (
-  <div className="flex flex-col">
+  <div className="flex flex-col gap-2">
     {description.map((item, index) => (
       <DescriptionItemUi key={index} {...item} />
     ))}

@@ -29,41 +29,87 @@ export default async function Home() {
   }));
 
   return (
-    <div className="flex flex-col items-center min-h-screen p-4 pb-0 sm:p-8 sm:pb-0">
-      <main className="w-full max-w-3xl">
-        <article className="flex flex-col gap-10">
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        minHeight: '100vh',
+        padding: '1rem',
+        paddingBottom: '0',
+      }}
+    >
+      <main style={{ width: '100%', maxWidth: '48rem' }}>
+        <article
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2.5rem',
+          }}
+        >
           <Header packageVersion={packageVersion} />
           <Introduction />
           <section id="tools">
-            <h2 className="text-2xl font-bold mb-2 border-b-3 border-b-emerald-600">
+            <h2
+              style={{
+                fontSize: '1.5rem',
+                lineHeight: '2rem',
+                fontWeight: '700',
+                marginBottom: '0.5rem',
+                borderBottom: '3px solid rgb(5 150 105)',
+                width: 'fit-content',
+                paddingBottom: '0.25rem',
+                alignSelf: 'flex-start',
+              }}
+            >
               Available Tools
             </h2>
             {tools === undefined ? (
               <div>tools.json is not found</div>
             ) : (
-              <Accordion type="multiple" asChild>
-                <ul>
-                  {tools.map(({ name, description }) => (
-                    <AccordionItem key={name} value={name} asChild>
-                      <li key={name}>
-                        <AccordionTrigger className="flex items-center">
-                          <h3 className="monospaced text-xl font-semibold">
-                            {name}
-                          </h3>
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <DescriptionItemsUi description={description} />
-                        </AccordionContent>
-                      </li>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem',
+                }}
+              >
+                {tools.map(({ name, description }) => (
+                  <Accordion type="single" collapsible key={name}>
+                    <AccordionItem value={name}>
+                      <AccordionTrigger>
+                        <h3
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '1.25rem',
+                            lineHeight: '1.75rem',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {name}
+                        </h3>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <DescriptionItemsUi description={description} />
+                      </AccordionContent>
                     </AccordionItem>
-                  ))}
-                </ul>
-              </Accordion>
+                  </Accordion>
+                ))}
+              </div>
             )}
           </section>
         </article>
       </main>
-      <footer className="text-center w-full p-4 mt-10">Neon Inc. 2025</footer>
+      <footer
+        style={{
+          textAlign: 'center',
+          width: '100%',
+          padding: '1rem',
+          marginTop: '2.5rem',
+        }}
+      >
+        Neon Inc. 2025
+      </footer>
     </div>
   );
 }
