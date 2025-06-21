@@ -21,3 +21,5 @@ env:
     valueFrom: "NEON_API_HOST"
   - name: UPSTREAM_OAUTH_HOST
     valueFrom: "UPSTREAM_OAUTH_HOST"
+  - name: SERVER_PORT
+    valueFrom: "SERVER_PORT"
