@@ -7,7 +7,7 @@ export const NEON_DEFAULT_DATABASE_NAME = 'neondb';
 
 export const NODE_ENV = (process.env.NODE_ENV ?? 'production') as Environment;
 export const IS_DEV = NODE_ENV === 'development';
-export const SERVER_PORT = 3001;
+export const SERVER_PORT = process.env.SERVER_PORT ?? 3001;
 export const SERVER_HOST =
   process.env.SERVER_HOST ?? `http://localhost:${SERVER_PORT}`;
 export const CLIENT_ID = process.env.CLIENT_ID ?? '';
