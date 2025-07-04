@@ -2,7 +2,7 @@
 
 # Neon MCP Server
 
-[![Install MCP Server in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=Neon&config=eyJjb21tYW5kIjoibnB4IC15IG1jcC1yZW1vdGVAbGF0ZXN0IGh0dHBzOi8vbWNwLm5lb24udGVjaC9zc2UifQ%3D%3D)
+[![Install MCP Server in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=Neon&config=eyJ1cmwiOiJodHRwczovL21jcC5uZW9uLnRlY2gvc3NlIn0%3D)
 
 **Neon MCP Server** is an open-source tool that lets you interact with your Neon Postgres databases in **natural language**.
 
