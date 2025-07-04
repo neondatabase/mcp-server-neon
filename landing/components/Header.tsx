@@ -17,21 +17,37 @@ export const Header = ({ packageVersion }: HeaderProps) => (
         version: {packageVersion}
       </div>
     </div>
-    <Button asChild>
+    <div className="flex items-center gap-2">
       <a
-        href="https://github.com/neondatabase-labs/mcp-server-neon?tab=readme-ov-file"
+        href="https://cursor.com/install-mcp?name=Neon&config=eyJjb21tYW5kIjoibnB4IC15IG1jcC1yZW1vdGVAbGF0ZXN0IGh0dHBzOi8vbWNwLm5lb24udGVjaC9zc2UifQ%3D%3D"
         target="_blank"
         rel="noopener noreferrer"
       >
         <Image
-          alt=""
-          src={githubSvg}
+          alt="Add to Cursor"
+          src="https://cursor.com/deeplink/mcp-install-light.svg"
           className="invert dark:invert-0"
-          width={16}
-          height={16}
-        />{' '}
-        Github
+          width={126}
+          height={32}
+        />
       </a>
-    </Button>
+
+      <Button asChild size="xs">
+        <a
+          href="https://github.com/neondatabase-labs/mcp-server-neon?tab=readme-ov-file"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Image
+            alt=""
+            src={githubSvg}
+            className="invert dark:invert-0"
+            width={16}
+            height={16}
+          />{' '}
+          Github
+        </a>
+      </Button>
+    </div>
   </header>
 );
