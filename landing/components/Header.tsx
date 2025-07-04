@@ -19,7 +19,7 @@ export const Header = ({ packageVersion }: HeaderProps) => (
     </div>
     <div className="flex items-center gap-2">
       <a
-        href="https://cursor.com/install-mcp?name=Neon&config=eyJjb21tYW5kIjoibnB4IC15IG1jcC1yZW1vdGVAbGF0ZXN0IGh0dHBzOi8vbWNwLm5lb24udGVjaC9zc2UifQ%3D%3D"
+        href="https://cursor.com/install-mcp?name=Neon&config=eyJ1cmwiOiJodHRwczovL21jcC5uZW9uLnRlY2gvc3NlIn0%3D"
         target="_blank"
         rel="noopener noreferrer"
       >
