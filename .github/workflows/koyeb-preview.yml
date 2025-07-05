@@ -1,0 +1,31 @@
+name: Build and deploy backend to preview
+
+on:
+  push:
+    branches:
+      - 'main'
+
+jobs:
+  deploy:
+    concurrency:
+      group: '${{ github.ref_name }}'
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install and configure the Koyeb CLI
+        uses: koyeb-community/koyeb-actions@v2
+        with:
+          api_token: '${{ secrets.KOYEB_CLI_DEV }}'
+      - name: Build and deploy to Koyeb
+        run: |
+          koyeb deploy . platform-${{ github.ref_name }}/main \
+            --instance-type medium \
+            --region fra \
+            --archive-builder docker \
+            --archive-docker-dockerfile apps/backend/Dockerfile.backend \
+            --privileged \
+            --type web \
+            --port 3001:http \
+            --route /:3001
