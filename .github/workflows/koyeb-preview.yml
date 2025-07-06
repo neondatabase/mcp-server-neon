@@ -22,7 +22,7 @@ jobs:
       - name: Build and deploy to Koyeb
         run: |
           koyeb deploy . platform-${{ github.ref_name }}/main \
-            --instance-type nano \
+            --instance-type eco-small \
             --region fra \
             --archive-builder docker \
             --archive-docker-dockerfile apps/backend/Dockerfile.backend \
