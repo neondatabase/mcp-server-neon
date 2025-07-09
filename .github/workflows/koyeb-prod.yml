@@ -28,4 +28,11 @@ jobs:
             --privileged \
             --type web \
             --port 3001:http \
-            --route /:3001
+            --route /:3001 \
+            --env CLIENT_ID=${{secrets.CLIENT_ID}} \
+            --env CLIENT_SECRET=${{secrets.CLIENT_SECRET}} \
+            --env OAUTH_DATABASE_URL=${{secrets.PREVIEW_OAUTH_DATABASE_URL}} \
+            --env SERVER_HOST=${{vars.PREVIEW_SERVER_HOST}} \
+            --env NEON_API_HOST=${{vars.NEON_API_HOST_STAGING}} \
+            --env UPSTREAM_OAUTH_HOST=${{vars.OAUTH_HOST_STAGING}} \
+            --env COOKIE_SECRET=${{secrets.COOKIE_SECRET}} \
