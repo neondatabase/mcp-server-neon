@@ -28,8 +28,13 @@ For example, in Claude Desktop, or any MCP Client, you can use natural language 
 - `I want to run a migration on my project called "my-project" that alters the users table to add a new column called "created_at".`
 - `Can you give me a summary of all of my Neon projects and what data is in each one?`
 
-> [!NOTE]  
-> The Neon MCP server grants powerful database management capabilities through natural language requests. **Always review and authorize actions** requested by the LLM before execution. Ensure that only authorized users and applications have access to the Neon MCP server and Neon API keys.
+> [!WARNING]  
+> **Neon MCP Server Security Considerations**  
+> The Neon MCP Server grants powerful database management capabilities through natural language requests. **Always review and authorize actions requested by the LLM before execution.** Ensure that only authorized users and applications have access to the Neon MCP Server.
+> 
+> The Neon MCP Server is intended for local development and IDE integrations only. **We do not recommend using the Neon MCP Server in production environments.** It can execute powerful operations that may lead to accidental or unauthorized changes.
+> 
+> For more information, see [MCP security guidance →](https://neon.tech/docs/ai/neon-mcp-server#mcp-security-guidance).
 
 ## Setting up Neon MCP Server
 
