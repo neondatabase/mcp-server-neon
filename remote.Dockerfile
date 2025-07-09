@@ -5,8 +5,6 @@ ARG NODE_VERSION=22.0.0
 ARG BUN_VERSION=1.2.13
 FROM imbios/bun-node:1.2.13-22-slim AS base
 
-LABEL fly_launch_runtime="Node.js"
-
 # Set the working directory in the container
 WORKDIR /app
 
