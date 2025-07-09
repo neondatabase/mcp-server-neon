@@ -38,9 +38,11 @@ export default async function Home() {
             <div className="flex">
               <div className="ml-3">
                 <p className="text-sm text-yellow-700">
-                  <strong>Security Notice:</strong> The Neon MCP Server grants powerful database management capabilities through natural language requests. Please review our{' '}
-                  <a 
-                    href="https://neon.tech/docs/ai/neon-mcp-server#mcp-security-guidance" 
+                  <strong>Security Notice:</strong> The Neon MCP Server grants
+                  powerful database management capabilities through natural
+                  language requests. Please review our{' '}
+                  <a
+                    href="https://neon.tech/docs/ai/neon-mcp-server#mcp-security-guidance"
                     className="underline hover:text-yellow-800"
                     target="_blank"
                     rel="noopener noreferrer"
