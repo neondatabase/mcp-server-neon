@@ -1,10 +1,9 @@
-name: Build and deploy backend to preview
+name: Build and deploy backend to production
 
 on:
   push:
     branches:
       - 'main'
-      - 'koyeb-preview'
 
 jobs:
   deploy:
@@ -18,8 +17,8 @@ jobs:
       - name: Install and configure the Koyeb CLI
         uses: koyeb-community/koyeb-actions@v2
         with:
-          api_token: '${{ secrets.KOYEB_PREVIEW_TOKEN }}'
-      - name: Build and deploy to Koyeb preview
+          api_token: '${{ secrets.KOYEB_PROD_TOKEN }}'
+      - name: Build and deploy to Koyeb production
         run: |
           koyeb deploy . platform-${{ github.ref_name }}/main \
             --instance-type nano \
