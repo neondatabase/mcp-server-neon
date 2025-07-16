@@ -1,0 +1,38 @@
+name: Build and deploy backend to preview
+
+on:
+  push:
+    branches:
+      - 'koyeb-preview'
+
+jobs:
+  deploy:
+    concurrency:
+      group: '${{ github.ref_name }}'
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install and configure the Koyeb CLI
+        uses: koyeb-community/koyeb-actions@v2
+        with:
+          api_token: '${{ secrets.KOYEB_PREVIEW_TOKEN }}'
+      - name: Build and deploy to Koyeb preview
+        run: |
+          koyeb deploy . platform-${{ github.ref_name }}/main \
+            --instance-type nano \
+            --region was \
+            --archive-builder docker \
+            --archive-docker-dockerfile remote.Dockerfile \
+            --privileged \
+            --type web \
+            --port 3001:http \
+            --route /:3001 \
+            --env CLIENT_ID=${{secrets.CLIENT_ID}} \
+            --env CLIENT_SECRET=${{secrets.CLIENT_SECRET}} \
+            --env OAUTH_DATABASE_URL=${{secrets.PREVIEW_OAUTH_DATABASE_URL}} \
+            --env SERVER_HOST=${{vars.KOYEB_PREVIEW_SERVER_HOST}} \
+            --env NEON_API_HOST=${{vars.NEON_API_HOST_STAGING}} \
+            --env UPSTREAM_OAUTH_HOST=${{vars.OAUTH_HOST_STAGING}} \
+            --env COOKIE_SECRET=${{secrets.COOKIE_SECRET}} \
