@@ -43,10 +43,7 @@ export const createMcpServer = (context: ServerContext) => {
     server.tool(
       tool.name,
       tool.description,
-      // In case of no input parameters, the tool is invoked with an empty`{}`
-      // however zod expects `{params: {}}`
-      // To workaround this, we use `optional()`
-      { params: tool.inputSchema.optional() },
+      { params: tool.inputSchema },
       async (args, extra) => {
         return await startNewTrace(async () => {
           return await startSpan(
@@ -71,7 +68,6 @@ export const createMcpServer = (context: ServerContext) => {
                 account: context.account,
               };
               try {
-                // @ts-expect-error: Ignore zod optional
                 return await toolHandler(args, neonClient, extraArgs);
               } catch (error) {
                 logger.error('Tool call error:', {
