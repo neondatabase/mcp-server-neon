@@ -1,9 +1,9 @@
 name: Build and deploy backend to preview
 
 on:
-  push:
-    branches:
-      - 'koyeb-preview'
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
 
 jobs:
   deploy:
@@ -11,6 +11,7 @@ jobs:
       group: '${{ github.ref_name }}'
       cancel-in-progress: true
     runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'deploy-preview')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
