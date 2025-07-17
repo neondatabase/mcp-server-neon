@@ -1,6 +1,6 @@
 {
   "name": "@neondatabase/mcp-server-neon",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "MCP server for interacting with Neon Management API and databases",
   "license": "MIT",
   "author": "Neon, Inc. (https://neon.tech/)",

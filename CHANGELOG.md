@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.2] 2025-07-17
+
+- Add warnings on security risks involved in MCP tools in production environments
+- Migrate the deployment to Koyeb
+- Mark `param` as required argument for all tools
+
 ## [0.6.1] 2025-06-19
 
 - Documentation: Updated README with new tools and features
