@@ -3,7 +3,7 @@ name: Build and deploy backend to preview
 on:
   workflow_dispatch:
   pull_request:
-    types: [labeled]
+    types: [synchronize, labeled]
 
 jobs:
   deploy:
