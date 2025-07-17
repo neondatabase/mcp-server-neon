@@ -21,7 +21,7 @@ jobs:
           api_token: '${{ secrets.KOYEB_PREVIEW_TOKEN }}'
       - name: Build and deploy to Koyeb preview
         run: |
-          koyeb deploy . platform-${{ github.ref_name }}/main \
+          koyeb deploy . platform-koyeb-preview/main \
             --instance-type nano \
             --region was \
             --archive-builder docker \
