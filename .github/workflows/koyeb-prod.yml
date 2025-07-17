@@ -1,6 +1,7 @@
 name: Build and deploy backend to production
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - 'main'
@@ -11,6 +12,8 @@ jobs:
       group: '${{ github.ref_name }}'
       cancel-in-progress: true
     runs-on: ubuntu-latest
+    # Only main branch is allowed to deploy to production
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
         uses: actions/checkout@v4

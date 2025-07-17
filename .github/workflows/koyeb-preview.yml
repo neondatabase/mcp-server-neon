@@ -1,9 +1,9 @@
 name: Build and deploy backend to preview
 
 on:
-  push:
-    branches:
-      - 'koyeb-preview'
+  workflow_dispatch:
+  pull_request:
+    types: [synchronize, labeled]
 
 jobs:
   deploy:
@@ -11,6 +11,7 @@ jobs:
       group: '${{ github.ref_name }}'
       cancel-in-progress: true
     runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'deploy-preview')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,7 +21,7 @@ jobs:
           api_token: '${{ secrets.KOYEB_PREVIEW_TOKEN }}'
       - name: Build and deploy to Koyeb preview
         run: |
-          koyeb deploy . platform-${{ github.ref_name }}/main \
+          koyeb deploy . platform-koyeb-preview/main \
             --instance-type nano \
             --region was \
             --archive-builder docker \
