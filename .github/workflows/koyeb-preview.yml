@@ -30,6 +30,7 @@ jobs:
             --type web \
             --port 3001:http \
             --route /:3001 \
+            --wait \
             --env CLIENT_ID=${{secrets.CLIENT_ID}} \
             --env CLIENT_SECRET=${{secrets.CLIENT_SECRET}} \
             --env OAUTH_DATABASE_URL=${{secrets.PREVIEW_OAUTH_DATABASE_URL}} \
