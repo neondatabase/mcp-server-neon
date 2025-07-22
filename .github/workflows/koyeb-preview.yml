@@ -58,7 +58,7 @@ jobs:
             const body = `${startMarker}
             🚀 Preview deployment ready: [https://preview-mcp.neon.tech](https://preview-mcp.neon.tech)`;
 
-            const comments = await github.rest.issues.listComments({
+            const comments = await github.paginate(github.rest.issues.listComments, {
               ...ownerRepoParams,
               issue_number: context.issue.number,
             });
