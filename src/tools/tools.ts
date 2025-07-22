@@ -3,6 +3,7 @@ import {
   Branch,
   EndpointType,
   ListProjectsParams,
+  Organization,
   ProjectCreateRequest,
 } from '@neondatabase/api-client';
 import { neon } from '@neondatabase/serverless';
@@ -17,6 +18,7 @@ import {
   getDefaultDatabase,
   splitSqlStatements,
   getOrgByOrgIdOrDefault,
+  filterOrganizations,
 } from './utils.js';
 import { startSpan } from '@sentry/node';
 import { ToolHandlerExtraParams, ToolHandlers } from './types.js';
@@ -1078,6 +1080,22 @@ async function handleListBranchComputes(
   }));
 }
 
+async function handleListOrganizations(
+  neonClient: Api<unknown>,
+  account: ToolHandlerExtraParams['account'],
+  search?: string,
+): Promise<Organization[]> {
+  if (account.isOrg) {
+    const orgId = account.id;
+    const { data } = await neonClient.getOrganization(orgId);
+    return filterOrganizations([data], search);
+  }
+
+  const { data: response } = await neonClient.getCurrentUserOrganizations();
+  const organizations = response.organizations || [];
+  return filterOrganizations(organizations, search);
+}
+
 export const NEON_HANDLERS = {
   list_projects: async ({ params }, neonClient, extra) => {
     const organization = await getOrgByOrgIdOrDefault(
@@ -1564,6 +1582,22 @@ export const NEON_HANDLERS = {
     );
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+
+  list_organizations: async ({ params }, neonClient, extra) => {
+    const organizations = await handleListOrganizations(
+      neonClient,
+      extra.account,
+      params.search,
+    );
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(organizations, null, 2),
+        },
+      ],
     };
   },
 } satisfies ToolHandlers;
