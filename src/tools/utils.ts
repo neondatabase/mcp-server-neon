@@ -190,3 +190,18 @@ export async function getOrgByOrgIdOrDefault(
     );
   }
 }
+
+export function filterOrganizations(
+  organizations: Organization[],
+  search?: string,
+) {
+  if (!search) {
+    return organizations;
+  }
+  const searchLower = search.toLowerCase();
+  return organizations.filter(
+    (org) =>
+      org.name.toLowerCase().includes(searchLower) ||
+      org.id.toLowerCase().includes(searchLower),
+  );
+}
