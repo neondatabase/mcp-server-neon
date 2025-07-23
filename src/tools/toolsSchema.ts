@@ -288,3 +288,12 @@ export const listBranchComputesInputSchema = z.object({
       'The ID of the branch. If provided, endpoints for this specific branch will be listed.',
     ),
 });
+
+export const listOrganizationsInputSchema = z.object({
+  search: z
+    .string()
+    .optional()
+    .describe(
+      'Search organizations by name or ID. You can specify partial name or ID values to filter results.',
+    ),
+});

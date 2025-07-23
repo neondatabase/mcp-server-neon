@@ -20,6 +20,7 @@ import {
   runSqlInputSchema,
   runSqlTransactionInputSchema,
   listSlowQueriesInputSchema,
+  listOrganizationsInputSchema,
 } from './toolsSchema.js';
 
 export const NEON_TOOLS = [
@@ -589,5 +590,11 @@ export const NEON_TOOLS = [
     name: 'list_branch_computes' as const,
     description: 'Lists compute endpoints for a project or specific branch',
     inputSchema: listBranchComputesInputSchema,
+  },
+  {
+    name: 'list_organizations' as const,
+    description:
+      'Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.',
+    inputSchema: listOrganizationsInputSchema,
   },
 ];
