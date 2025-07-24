@@ -13,7 +13,6 @@
 [![npm version](https://img.shields.io/npm/v/@neondatabase/mcp-server-neon)](https://www.npmjs.com/package/@neondatabase/mcp-server-neon)
 [![npm downloads](https://img.shields.io/npm/dt/@neondatabase/mcp-server-neon)](https://www.npmjs.com/package/@neondatabase/mcp-server-neon)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![smithery badge](https://smithery.ai/badge/neon)](https://smithery.ai/server/neon)
 
 The Model Context Protocol (MCP) is a [new, standardized protocol](https://modelcontextprotocol.io/introduction) designed to manage context between large language models (LLMs) and external systems. This repository offers an installer and an MCP Server for [Neon](https://neon.tech).
 
@@ -79,30 +78,7 @@ Connect to Neon's managed MCP server using OAuth for authentication. This is the
 
 ### Option 2. Local MCP Server
 
-Run the Neon MCP server on your local machine.
-
-**Setup via Smithery:**
-
-```bash
-npx -y @smithery/cli@latest install neon --client <client_name>
-```
-
-You will be prompted to enter your Neon API key. Enter the API key which you obtained from the [prerequisites](#prerequisites) section
-Replace `<client_name>` with the name of your MCP client application. Supported client names include:
-
-- `claude` for [Claude Desktop](https://claude.ai/download)
-- `cursor` for [Cursor](https://cursor.com) (Installing via `smithery` makes the MCP server a global MCP server in Cursor)
-- `windsurf` for [Windsurf Editor](https://codeium.com/windsurf)
-- `roo-cline` for [Roo Cline VS Code extension](https://github.com/RooVetGit/Roo-Code)
-- `witsy` for [Witsy](https://witsyai.com/)
-- `enconvo` for [Enconvo](https://www.enconvo.com/)
-- `vscode` for [Visual Studio Code](https://code.visualstudio.com/docs/copilot/chat/mcp-servers)
-
-Restart your MCP client after installation.
-
-**Setup via npm**
-
-If your MCP client is not listed here, you can manually add the Neon MCP Server details to your client's `mcp_config` file.
+Run the Neon MCP server on your local machine with your Neon API key. This method allows you to manage your Neon projects and databases without relying on a remote MCP server.
 
 Add the following JSON configuration within the `mcpServers` section of your client's `mcp_config` file, replacing `<YOUR_NEON_API_KEY>` with your actual Neon API key:
 
