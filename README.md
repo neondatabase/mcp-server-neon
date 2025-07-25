@@ -178,6 +178,7 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 - **`delete_branch`**: Deletes an existing branch from a Neon project.
 - **`describe_branch`**: Retrieves details about a specific branch, such as its name, ID, and parent branch.
 - **`list_branch_computes`**: Lists compute endpoints for a project or specific branch, including compute ID, type, size, and autoscaling information.
+- **`list_organizations`**: Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.
 
 **SQL Query Execution:**
 
