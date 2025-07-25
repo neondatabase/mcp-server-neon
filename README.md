@@ -66,7 +66,7 @@ Connect to Neon's managed MCP server using OAuth for authentication. This is the
     "mcpServers": {
       "Neon": {
         "command": "npx",
-        "args": ["-y", "mcp-remote", "https://mcp.neon.tech/sse"]
+        "args": ["-y", "mcp-remote", "https://mcp.neon.tech/mcp"]
       }
     }
   }
@@ -75,6 +75,10 @@ Connect to Neon's managed MCP server using OAuth for authentication. This is the
 - Save the configuration file.
 - Restart or refresh your MCP client.
 - An OAuth window will open in your browser. Follow the prompts to authorize your MCP client to access your Neon account.
+
+Note: Neon's Remote MCP Server currently connects only to your personal Neon account. You won't be able to access other Neon organizations. To connect to other organizations, use the Local MCP Server setup described below.
+
+MCP supports two remote server transports: the deprecated Server-Sent Events (SSE) and the newer, recommended Streamable HTTP. If your LLM client doesn't support Streamable HTTP yet, you can switch the endpoint from `https://mcp.neon.tech/mcp` to `https://mcp.neon.tech/sse` to use SSE instead.
 
 ### Option 2. Local MCP Server
 
