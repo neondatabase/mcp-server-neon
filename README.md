@@ -76,7 +76,7 @@ Connect to Neon's managed MCP server using OAuth for authentication. This is the
 - Restart or refresh your MCP client.
 - An OAuth window will open in your browser. Follow the prompts to authorize your MCP client to access your Neon account.
 
-> With OAuth base authentication, the MCP server will, by default operate on projects under your personal Neon account. To access or manage projects under organization, you must explicitly provider either the `org_id` or the `project_id` in your prompt to MCP client.
+> With OAuth base authentication, the MCP server will, by default operate on projects under your personal Neon account. To access or manage projects under organization, you must explicitly provide either the `org_id` or the `project_id` in your prompt to MCP client.
 
 Remote MCP Server also supports authentication using API key in the `Authorization` header if your client supports it
 
