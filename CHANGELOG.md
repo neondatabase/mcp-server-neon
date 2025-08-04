@@ -1,5 +1,11 @@
 # Changelog
 
+# [0.6.3] 2025-08-04
+
+- Feat: A new tool to list authenitcated user's organizations - `list_organizations`
+- Docs: Switch configs to use streamable HTTP by default
+- Impr: While searching for project in `list_projects` tool, extend the search to all organizations. 
+
 ## [0.6.2] 2025-07-17
 
 - Add warnings on security risks involved in MCP tools in production environments
