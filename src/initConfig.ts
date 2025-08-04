@@ -90,7 +90,7 @@ export const parseArgs = (): Args => {
     };
   }
 
-  if (args.length < 3) {
+  if (args.length < 4) {
     logger.error(
       'Please provide a NEON_API_KEY as a command-line argument - you can get one through the Neon console: https://neon.tech/docs/manage/api-keys',
     );
