@@ -6,7 +6,7 @@ import {
   Organization,
   ProjectCreateRequest,
 } from '@neondatabase/api-client';
-import { neon } from '@neondatabase/serverless';
+import { neon, NeonDbError } from '@neondatabase/serverless';
 import crypto from 'crypto';
 
 import { describeTable, formatTableDescription } from '../describeUtils.js';
@@ -1000,7 +1000,7 @@ async function handleListSlowQueries(
   const extensionExists = extensionCheck[0]?.extension_exists;
 
   if (!extensionExists) {
-    throw new Error(
+    throw new NeonDbError(
       `pg_stat_statements extension is not installed on the database. Please install it using the following command: CREATE EXTENSION pg_stat_statements;`,
     );
   }
