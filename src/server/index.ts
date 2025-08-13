@@ -14,6 +14,8 @@ import { captureException, startNewTrace, startSpan } from '@sentry/node';
 import { ServerContext } from '../types/context.js';
 import { setSentryTags } from '../sentry/utils.js';
 import { ToolHandlerExtraParams } from '../tools/types.js';
+import { handleNeonDbError } from '../tools/utils.js';
+import { NeonDbError } from '@neondatabase/serverless';
 
 export const createMcpServer = (context: ServerContext) => {
   const server = new McpServer(
@@ -70,18 +72,22 @@ export const createMcpServer = (context: ServerContext) => {
               try {
                 return await toolHandler(args, neonClient, extraArgs);
               } catch (error) {
-                logger.error('Tool call error:', {
-                  error:
-                    error instanceof Error ? error.message : 'Unknown error',
-                  properties,
-                });
                 span.setStatus({
                   code: 2,
                 });
-                captureException(error, {
-                  extra: properties,
-                });
-                throw error;
+                if (error instanceof NeonDbError) {
+                  return handleNeonDbError(error);
+                } else {
+                  logger.error('Tool call error:', {
+                    error:
+                      error instanceof Error ? error.message : 'Unknown error',
+                    properties,
+                  });
+                  captureException(error, {
+                    extra: properties,
+                  });
+                  throw error;
+                }
               }
             },
           );

@@ -6,7 +6,7 @@ import {
   Organization,
   ProjectCreateRequest,
 } from '@neondatabase/api-client';
-import { neon } from '@neondatabase/serverless';
+import { neon, NeonDbError } from '@neondatabase/serverless';
 import crypto from 'crypto';
 
 import { describeTable, formatTableDescription } from '../describeUtils.js';
@@ -1000,7 +1000,7 @@ async function handleListSlowQueries(
   const extensionExists = extensionCheck[0]?.extension_exists;
 
   if (!extensionExists) {
-    throw new Error(
+    throw new NeonDbError(
       `pg_stat_statements extension is not installed on the database. Please install it using the following command: CREATE EXTENSION pg_stat_statements;`,
     );
   }
@@ -1359,20 +1359,21 @@ export const NEON_HANDLERS = {
   },
 
   prepare_database_migration: async ({ params }, neonClient, extra) => {
-    const result = await handleSchemaMigration(
-      {
-        migrationSql: params.migrationSql,
-        databaseName: params.databaseName,
-        projectId: params.projectId,
-      },
-      neonClient,
-      extra,
-    );
-    return {
-      content: [
+    try {
+      const result = await handleSchemaMigration(
         {
-          type: 'text',
-          text: `
+          migrationSql: params.migrationSql,
+          databaseName: params.databaseName,
+          projectId: params.projectId,
+        },
+        neonClient,
+        extra,
+      );
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `
               <status>Migration created successfully in temporary branch</status>
               <details>
                 <migration_id>${result.migrationId}</migration_id>
@@ -1390,9 +1391,24 @@ export const NEON_HANDLERS = {
                 3. If satisfied, use \`complete_database_migration\` with migration_id: ${result.migrationId}
               </next_actions>
             `,
-        },
-      ],
-    };
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text:
+              error instanceof Error
+                ? error.message
+                : 'Failed to prepare database migration',
+          },
+          { type: 'text', text: JSON.stringify(error, null, 2) },
+        ],
+      };
+    }
   },
 
   complete_database_migration: async ({ params }, neonClient, extra) => {

@@ -1,6 +1,7 @@
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants.js';
 import { Api, Organization } from '@neondatabase/api-client';
 import { ToolHandlerExtraParams } from './types.js';
+import { NeonDbError } from '@neondatabase/serverless';
 
 export const splitSqlStatements = (sql: string) => {
   return sql.split(';').filter(Boolean);
@@ -204,4 +205,14 @@ export function filterOrganizations(
       org.name.toLowerCase().includes(searchLower) ||
       org.id.toLowerCase().includes(searchLower),
   );
+}
+
+export function handleNeonDbError(error: NeonDbError) {
+  return Promise.resolve({
+    isError: true,
+    content: [
+      { type: 'text' as const, text: error.message },
+      { type: 'text' as const, text: JSON.stringify(error, null, 2) },
+    ],
+  });
 }
