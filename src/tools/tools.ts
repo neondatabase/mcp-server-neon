@@ -1359,21 +1359,20 @@ export const NEON_HANDLERS = {
   },
 
   prepare_database_migration: async ({ params }, neonClient, extra) => {
-    try {
-      const result = await handleSchemaMigration(
+    const result = await handleSchemaMigration(
+      {
+        migrationSql: params.migrationSql,
+        databaseName: params.databaseName,
+        projectId: params.projectId,
+      },
+      neonClient,
+      extra,
+    );
+    return {
+      content: [
         {
-          migrationSql: params.migrationSql,
-          databaseName: params.databaseName,
-          projectId: params.projectId,
-        },
-        neonClient,
-        extra,
-      );
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `
+          type: 'text',
+          text: `
               <status>Migration created successfully in temporary branch</status>
               <details>
                 <migration_id>${result.migrationId}</migration_id>
@@ -1391,24 +1390,9 @@ export const NEON_HANDLERS = {
                 3. If satisfied, use \`complete_database_migration\` with migration_id: ${result.migrationId}
               </next_actions>
             `,
-          },
-        ],
-      };
-    } catch (error) {
-      return {
-        isError: true,
-        content: [
-          {
-            type: 'text',
-            text:
-              error instanceof Error
-                ? error.message
-                : 'Failed to prepare database migration',
-          },
-          { type: 'text', text: JSON.stringify(error, null, 2) },
-        ],
-      };
-    }
+        },
+      ],
+    };
   },
 
   complete_database_migration: async ({ params }, neonClient, extra) => {
