@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { isAxiosError } from 'axios';
 import { NEON_RESOURCES } from '../resources.js';
 import {
   NEON_HANDLERS,
@@ -10,7 +11,7 @@ import {
 import { logger } from '../utils/logger.js';
 import { createNeonClient, getPackageJson } from './api.js';
 import { track } from '../analytics/analytics.js';
-import { captureException, startNewTrace, startSpan } from '@sentry/node';
+import { captureException, setHttpStatus, startSpan } from '@sentry/node';
 import { ServerContext } from '../types/context.js';
 import { setSentryTags } from '../sentry/utils.js';
 import { ToolHandlerExtraParams } from '../tools/types.js';
@@ -47,51 +48,66 @@ export const createMcpServer = (context: ServerContext) => {
       tool.description,
       { params: tool.inputSchema },
       async (args, extra) => {
-        return await startNewTrace(async () => {
-          return await startSpan(
-            {
-              name: 'tool_call',
-              attributes: {
-                tool_name: tool.name,
-              },
+        return await startSpan(
+          {
+            name: 'tool_call',
+            attributes: {
+              tool_name: tool.name,
             },
-            async (span) => {
-              const properties = { tool_name: tool.name };
-              logger.info('tool call:', properties);
-              setSentryTags(context);
-              track({
-                userId: context.account.id,
-                event: 'tool_call',
-                properties,
-                context: { client: context.client, app: context.app },
+          },
+          async (span) => {
+            const properties = { tool_name: tool.name };
+            logger.info('tool call:', properties);
+            setSentryTags(context);
+            track({
+              userId: context.account.id,
+              event: 'tool_call',
+              properties,
+              context: { client: context.client, app: context.app },
+            });
+            const extraArgs: ToolHandlerExtraParams = {
+              ...extra,
+              account: context.account,
+            };
+            try {
+              return await toolHandler(args, neonClient, extraArgs);
+            } catch (error) {
+              span.setStatus({
+                code: 2,
               });
-              const extraArgs: ToolHandlerExtraParams = {
-                ...extra,
-                account: context.account,
-              };
-              try {
-                return await toolHandler(args, neonClient, extraArgs);
-              } catch (error) {
-                span.setStatus({
-                  code: 2,
-                });
-                if (error instanceof NeonDbError) {
-                  return handleNeonDbError(error);
-                } else {
-                  logger.error('Tool call error:', {
-                    error:
-                      error instanceof Error ? error.message : 'Unknown error',
-                    properties,
-                  });
-                  captureException(error, {
-                    extra: properties,
-                  });
-                  throw error;
+              if (error instanceof NeonDbError) {
+                return handleNeonDbError(error);
+              } else {
+                if (
+                  isAxiosError(error) &&
+                  error.response?.status &&
+                  error.response?.status < 500
+                ) {
+                  setHttpStatus(span, error.response.status);
+                  return {
+                    isError: true,
+                    content: [
+                      {
+                        type: 'text',
+                        text: error.response?.data.message || error.message,
+                      },
+                    ],
+                  };
                 }
+
+                logger.error('Tool call error:', {
+                  error:
+                    error instanceof Error ? error.message : 'Unknown error',
+                  properties,
+                });
+                captureException(error, {
+                  extra: properties,
+                });
+                throw error;
               }
-            },
-          );
-        });
+            }
+          },
+        );
       },
     );
   });
