@@ -31,9 +31,8 @@ export function errorResponse(error: unknown) {
     content: [
       {
         type: 'text' as const,
-        text: error instanceof Error ? error.message : 'Unknown error',
+        text: error instanceof Error ? `${error.name}: ${error.message}` : 'Unknown error',
       },
-      { type: 'text' as const, text: JSON.stringify(error, null, 2) },
     ],
   };
 }
@@ -54,12 +53,19 @@ export function handleToolError(
       content: [
         {
           type: 'text' as const,
-          text: error.response?.data.message || error.message,
+          text: error.response.data.message,
+        },
+        {
+          type: 'text' as const,
+          text: `[${error.response.statusText}] ${error.message}`,
         },
       ],
     };
   } else {
-    logger.error('Tool call error:', { error, properties });
+    logger.error('Tool call error:', {
+      error: error instanceof Error ? `${error.name}: ${error.message}` : 'Unknown error',
+      properties,
+    });
     captureException(error, { extra: properties });
     return errorResponse(error);
   }
