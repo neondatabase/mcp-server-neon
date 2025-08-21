@@ -332,7 +332,7 @@ async function handleGetConnectionString(
         if (projects.length === 1) {
           projectId = projects[0].id;
         } else {
-          throw new InvalidArgumentError(
+          throw new NotFoundError(
             'Please provide a project ID or ensure you have only one project in your account.',
           );
         }
@@ -348,7 +348,7 @@ async function handleGetConnectionString(
         if (defaultBranch) {
           branchId = defaultBranch.id;
         } else {
-          throw new InvalidArgumentError(
+          throw new NotFoundError(
             'No default branch found in this project. Please provide a branch ID.',
           );
         }
