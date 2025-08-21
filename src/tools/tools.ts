@@ -6,8 +6,9 @@ import {
   Organization,
   ProjectCreateRequest,
 } from '@neondatabase/api-client';
-import { neon, NeonDbError } from '@neondatabase/serverless';
+import { neon } from '@neondatabase/serverless';
 import crypto from 'crypto';
+import { InvalidArgumentError, NotFoundError } from '../server/errors.js';
 
 import { describeTable, formatTableDescription } from '../describeUtils.js';
 import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
@@ -331,7 +332,9 @@ async function handleGetConnectionString(
         if (projects.length === 1) {
           projectId = projects[0].id;
         } else {
-          throw new Error('No projects found in your account');
+          throw new NotFoundError(
+            'Please provide a project ID or ensure you have only one project in your account.',
+          );
         }
       }
 
@@ -345,7 +348,9 @@ async function handleGetConnectionString(
         if (defaultBranch) {
           branchId = defaultBranch.id;
         } else {
-          throw new Error('No default branch found in your project');
+          throw new NotFoundError(
+            'No default branch found in this project. Please provide a branch ID.',
+          );
         }
       }
 
@@ -655,7 +660,7 @@ async function handleQueryTuning(
     const tableNames = extractTableNamesFromPlan(executionPlan);
 
     if (tableNames.length === 0) {
-      throw new Error(
+      throw new NotFoundError(
         'No tables found in execution plan. Cannot proceed with optimization.',
       );
     }
@@ -1000,7 +1005,7 @@ async function handleListSlowQueries(
   const extensionExists = extensionCheck[0]?.extension_exists;
 
   if (!extensionExists) {
-    throw new NeonDbError(
+    throw new NotFoundError(
       `pg_stat_statements extension is not installed on the database. Please install it using the following command: CREATE EXTENSION pg_stat_statements;`,
     );
   }
@@ -1084,8 +1089,8 @@ async function handleListBranchComputes(
     if (projects.length === 1) {
       projectId = projects[0].id;
     } else {
-      throw new Error(
-        'Please provide a project ID or ensure you have only one project.',
+      throw new InvalidArgumentError(
+        'Please provide a project ID or ensure you have only one project in your account.',
       );
     }
   }

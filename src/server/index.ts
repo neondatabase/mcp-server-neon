@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { isAxiosError } from 'axios';
 import { NEON_RESOURCES } from '../resources.js';
 import {
   NEON_HANDLERS,
@@ -11,12 +10,11 @@ import {
 import { logger } from '../utils/logger.js';
 import { createNeonClient, getPackageJson } from './api.js';
 import { track } from '../analytics/analytics.js';
-import { captureException, setHttpStatus, startSpan } from '@sentry/node';
+import { captureException, startSpan } from '@sentry/node';
 import { ServerContext } from '../types/context.js';
 import { setSentryTags } from '../sentry/utils.js';
 import { ToolHandlerExtraParams } from '../tools/types.js';
-import { handleNeonDbError } from '../tools/utils.js';
-import { NeonDbError } from '@neondatabase/serverless';
+import { handleToolError } from './errors.js';
 
 export const createMcpServer = (context: ServerContext) => {
   const server = new McpServer(
@@ -75,36 +73,7 @@ export const createMcpServer = (context: ServerContext) => {
               span.setStatus({
                 code: 2,
               });
-              if (error instanceof NeonDbError) {
-                return handleNeonDbError(error);
-              } else {
-                if (
-                  isAxiosError(error) &&
-                  error.response?.status &&
-                  error.response?.status < 500
-                ) {
-                  setHttpStatus(span, error.response.status);
-                  return {
-                    isError: true,
-                    content: [
-                      {
-                        type: 'text',
-                        text: error.response?.data.message || error.message,
-                      },
-                    ],
-                  };
-                }
-
-                logger.error('Tool call error:', {
-                  error:
-                    error instanceof Error ? error.message : 'Unknown error',
-                  properties,
-                });
-                captureException(error, {
-                  extra: properties,
-                });
-                throw error;
-              }
+              return handleToolError(error, properties);
             }
           },
         );
