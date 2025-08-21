@@ -1,7 +1,7 @@
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants.js';
 import { Api, Organization } from '@neondatabase/api-client';
 import { ToolHandlerExtraParams } from './types.js';
-import { NeonDbError } from '@neondatabase/serverless';
+import { NotFoundError } from '../server/errors.js';
 
 export const splitSqlStatements = (sql: string) => {
   return sql.split(';').filter(Boolean);
@@ -125,7 +125,7 @@ export async function getDefaultDatabase(
   );
   const databases = data.databases;
   if (databases.length === 0) {
-    throw new Error('No databases found in your project branch');
+    throw new NotFoundError('No databases found in your project branch');
   }
 
   if (databaseName) {
@@ -177,7 +177,7 @@ export async function getOrgByOrgIdOrDefault(
   );
 
   if (consoleOrganizations.length === 0) {
-    throw new Error('No organizations found for this user');
+    throw new NotFoundError('No organizations found for this user');
   }
 
   if (consoleOrganizations.length === 1) {
@@ -186,7 +186,7 @@ export async function getOrgByOrgIdOrDefault(
     const orgList = consoleOrganizations
       .map((org) => `- ${org.name} (ID: ${org.id})`)
       .join('\n');
-    throw new Error(
+    throw new NotFoundError(
       `Multiple organizations found. Please specify the org_id parameter with one of the following organization IDs:\n${orgList}`,
     );
   }
@@ -205,14 +205,4 @@ export function filterOrganizations(
       org.name.toLowerCase().includes(searchLower) ||
       org.id.toLowerCase().includes(searchLower),
   );
-}
-
-export function handleNeonDbError(error: NeonDbError) {
-  return Promise.resolve({
-    isError: true,
-    content: [
-      { type: 'text' as const, text: error.message },
-      { type: 'text' as const, text: JSON.stringify(error, null, 2) },
-    ],
-  });
 }
