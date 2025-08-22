@@ -172,24 +172,35 @@ export async function getOrgByOrgIdOrDefault(
 
   const { data: response } = await neonClient.getCurrentUserOrganizations();
   const organizations = response.organizations || [];
+
+  // 1. Filter organizations by managed_by==console, if there is only one organization, return that
   const consoleOrganizations = organizations.filter(
     (org) => org.managed_by === 'console',
   );
 
-  if (consoleOrganizations.length === 0) {
+  if (consoleOrganizations.length === 1) {
+    return consoleOrganizations[0];
+  }
+
+  // 2. If there are no organizations managed by console, and if there is only one organization (unfiltered), then return that organization
+  if (consoleOrganizations.length === 0 && organizations.length === 1) {
+    return organizations[0];
+  }
+
+  // 3. If there are no organizations at all, then throw error saying there are no organizations
+  if (organizations.length === 0) {
     throw new NotFoundError('No organizations found for this user');
   }
 
-  if (consoleOrganizations.length === 1) {
-    return consoleOrganizations[0];
-  } else {
-    const orgList = consoleOrganizations
-      .map((org) => `- ${org.name} (ID: ${org.id})`)
-      .join('\n');
-    throw new NotFoundError(
-      `Multiple organizations found. Please specify the org_id parameter with one of the following organization IDs:\n${orgList}`,
-    );
-  }
+  // 4. If there are multiple organizations, then throw error mentioning list of all these orgs (unfiltered)
+  const orgList = organizations
+    .map(
+      (org) => `- ${org.name} (ID: ${org.id}) [managed by: ${org.managed_by}]`,
+    )
+    .join('\n');
+  throw new NotFoundError(
+    `Multiple organizations found. Please specify the org_id parameter with one of the following organization IDs:\n${orgList}`,
+  );
 }
 
 export function filterOrganizations(
