@@ -21,13 +21,24 @@ import {
   runSqlTransactionInputSchema,
   listSlowQueriesInputSchema,
   listOrganizationsInputSchema,
+  listSharedProjectsInputSchema,
 } from './toolsSchema.js';
 
 export const NEON_TOOLS = [
   {
     name: 'list_projects' as const,
-    description: `Lists the first 10 Neon projects in your account. If you can't find the project, increase the limit by passing a higher value to the \`limit\` parameter.`,
+    description: `Lists the first 10 Neon projects in your account. If you can't find the project, increase the limit by passing a higher value to the \`limit\` parameter. Optionally filter by project name or ID using the \`search\` parameter.`,
     inputSchema: listProjectsInputSchema,
+  },
+  {
+    name: 'list_organizations' as const,
+    description: `Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the \`search\` parameter.`,
+    inputSchema: listOrganizationsInputSchema,
+  },
+  {
+    name: 'list_shared_projects' as const,
+    description: `Lists projects that have been shared with the current user. These are projects that the user has been granted access to collaborate on. Optionally filter by project name or ID using the \`search\` parameter.`,
+    inputSchema: listSharedProjectsInputSchema,
   },
   {
     name: 'create_project' as const,
@@ -590,11 +601,5 @@ export const NEON_TOOLS = [
     name: 'list_branch_computes' as const,
     description: 'Lists compute endpoints for a project or specific branch',
     inputSchema: listBranchComputesInputSchema,
-  },
-  {
-    name: 'list_organizations' as const,
-    description:
-      'Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.',
-    inputSchema: listOrganizationsInputSchema,
   },
 ];

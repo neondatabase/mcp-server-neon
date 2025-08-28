@@ -3,6 +3,7 @@ import {
   Branch,
   EndpointType,
   ListProjectsParams,
+  ListSharedProjectsParams,
   Organization,
   ProjectCreateRequest,
 } from '@neondatabase/api-client';
@@ -1135,6 +1136,14 @@ async function handleListOrganizations(
   return filterOrganizations(organizations, search);
 }
 
+async function handleListSharedProjects(
+  params: ListSharedProjectsParams,
+  neonClient: Api<unknown>,
+) {
+  const response = await neonClient.listSharedProjects(params);
+  return response.data.projects;
+}
+
 export const NEON_HANDLERS = {
   list_projects: async ({ params }, neonClient, extra) => {
     const organization = await getOrgByOrgIdOrDefault(
@@ -1635,6 +1644,25 @@ export const NEON_HANDLERS = {
         {
           type: 'text',
           text: JSON.stringify(organizations, null, 2),
+        },
+      ],
+    };
+  },
+
+  list_shared_projects: async ({ params }, neonClient) => {
+    const sharedProjects = await handleListSharedProjects(params, neonClient);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              shared_projects: sharedProjects,
+              count: sharedProjects.length,
+            },
+            null,
+            2,
+          ),
         },
       ],
     };

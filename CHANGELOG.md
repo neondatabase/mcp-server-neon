@@ -1,11 +1,15 @@
 # Changelog
 
+# [Unreleased]
+
+- Feat: `list_shared_projects` tool to fetch projects that user has permissions to collaborate on
+
 # [0.6.4] 2025-08-22
 
 - Fix: Do not log user sensitive information on errors
 - Fix: Return non-500 errors as valid response with `isError=true` without logging
 - Improvement: Custom error handling user generated erorrs
-- Improvement: Extend org-only users search to support orgs not managed by cconsole. 
+- Improvement: Extend org-only users search to support orgs not managed by console.
 
 # [0.6.3] 2025-08-04
 

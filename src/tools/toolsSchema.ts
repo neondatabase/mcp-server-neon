@@ -1,4 +1,7 @@
-import { ListProjectsParams } from '@neondatabase/api-client';
+import {
+  ListProjectsParams,
+  ListSharedProjectsParams,
+} from '@neondatabase/api-client';
 import { z } from 'zod';
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants.js';
 
@@ -297,3 +300,24 @@ export const listOrganizationsInputSchema = z.object({
       'Search organizations by name or ID. You can specify partial name or ID values to filter results.',
     ),
 });
+
+export const listSharedProjectsInputSchema = z.object({
+  cursor: z
+    .string()
+    .optional()
+    .describe(
+      'Specify the cursor value from the previous response to retrieve the next batch of shared projects.',
+    ),
+  limit: z
+    .number()
+    .default(10)
+    .describe(
+      'Specify a value from 1 to 400 to limit number of shared projects in the response.',
+    ),
+  search: z
+    .string()
+    .optional()
+    .describe(
+      'Search by project name or id. You can specify partial name or id values to filter results.',
+    ),
+}) satisfies ZodObjectParams<ListSharedProjectsParams>;
