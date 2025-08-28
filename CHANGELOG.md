@@ -5,7 +5,7 @@
 - Fix: Do not log user sensitive information on errors
 - Fix: Return non-500 errors as valid response with `isError=true` without logging
 - Improvement: Custom error handling user generated erorrs
-- Improvement: Extend org-only users search to support orgs not managed by cconsole. 
+- Improvement: Extend org-only users search to support orgs not managed by cconsole.
 
 # [0.6.3] 2025-08-04
 

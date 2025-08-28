@@ -21,6 +21,7 @@ import {
   runSqlTransactionInputSchema,
   listSlowQueriesInputSchema,
   listOrganizationsInputSchema,
+  listSharedProjectsInputSchema,
 } from './toolsSchema.js';
 
 export const NEON_TOOLS = [
@@ -596,5 +597,11 @@ export const NEON_TOOLS = [
     description:
       'Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.',
     inputSchema: listOrganizationsInputSchema,
+  },
+  {
+    name: 'list_shared_projects' as const,
+    description:
+      'Lists projects that have been shared with the current user. These are projects that the user has been granted access to collaborate on.',
+    inputSchema: listSharedProjectsInputSchema,
   },
 ];
