@@ -32,14 +32,12 @@ export const NEON_TOOLS = [
   },
   {
     name: 'list_organizations' as const,
-    description:
-      `Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the \`search\` parameter.`,
+    description: `Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the \`search\` parameter.`,
     inputSchema: listOrganizationsInputSchema,
   },
   {
     name: 'list_shared_projects' as const,
-    description:
-      `Lists projects that have been shared with the current user. These are projects that the user has been granted access to collaborate on. Optionally filter by project name or ID using the \`search\` parameter.`,
+    description: `Lists projects that have been shared with the current user. These are projects that the user has been granted access to collaborate on. Optionally filter by project name or ID using the \`search\` parameter.`,
     inputSchema: listSharedProjectsInputSchema,
   },
   {
