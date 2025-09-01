@@ -22,6 +22,7 @@ import {
   listSlowQueriesInputSchema,
   listOrganizationsInputSchema,
   listSharedProjectsInputSchema,
+  resetFromParentInputSchema,
 } from './toolsSchema.js';
 
 export const NEON_TOOLS = [
@@ -245,6 +246,12 @@ export const NEON_TOOLS = [
     name: 'delete_branch' as const,
     description: 'Delete a branch from a Neon project',
     inputSchema: deleteBranchInputSchema,
+  },
+  {
+    name: 'reset_from_parent' as const,
+    description:
+      'Reset a branch from its parent branch, restoring it to the parent branch state. Commonly used to create fresh development branches or reset changes made by LLMs. Optionally preserve the current state under a new branch name before resetting.',
+    inputSchema: resetFromParentInputSchema,
   },
   {
     name: 'get_connection_string' as const,

@@ -321,3 +321,16 @@ export const listSharedProjectsInputSchema = z.object({
       'Search by project name or id. You can specify partial name or id values to filter results.',
     ),
 }) satisfies ZodObjectParams<ListSharedProjectsParams>;
+
+export const resetFromParentInputSchema = z.object({
+  projectId: z.string().describe('The ID of the project containing the branch'),
+  branchId: z
+    .string()
+    .describe('The ID of the branch to reset from its parent'),
+  preserveUnderName: z
+    .string()
+    .optional()
+    .describe(
+      'Optional name to preserve the current state under a new branch before resetting',
+    ),
+});
