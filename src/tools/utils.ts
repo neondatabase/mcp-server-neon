@@ -1,5 +1,5 @@
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants.js';
-import { Api, Organization } from '@neondatabase/api-client';
+import { Api, Organization, Branch } from '@neondatabase/api-client';
 import { ToolHandlerExtraParams } from './types.js';
 import { NotFoundError } from '../server/errors.js';
 
@@ -216,4 +216,52 @@ export function filterOrganizations(
       org.name.toLowerCase().includes(searchLower) ||
       org.id.toLowerCase().includes(searchLower),
   );
+}
+
+/**
+ * Checks if a string looks like a branch ID based on the neonctl format
+ * Branch IDs have format like "br-small-term-683261" (br- prefix + haiku pattern)
+ */
+export function looksLikeBranchId(branch: string): boolean {
+  const HAIKU_REGEX = /^[a-z0-9]+-[a-z0-9]+-[a-z0-9]+$/;
+  return branch.startsWith('br-') && HAIKU_REGEX.test(branch.substring(3));
+}
+
+/**
+ * Resolves a branch name or ID to the actual branch ID
+ * If the input looks like a branch ID, returns it as-is
+ * Otherwise, searches for a branch with matching name and returns its ID
+ */
+export async function resolveBranchId(
+  branchNameOrId: string,
+  projectId: string,
+  neonClient: Api<unknown>,
+): Promise<{ branchId: string; branches: Branch[] }> {
+  // Get all branches (we'll need this data anyway)
+  const branchResponse = await neonClient.listProjectBranches({
+    projectId,
+  });
+  const branches = branchResponse.data.branches;
+
+  if (looksLikeBranchId(branchNameOrId)) {
+    // Verify the branch ID actually exists
+    const branch = branches.find((b) => b.id === branchNameOrId);
+    if (!branch) {
+      throw new NotFoundError(
+        `Branch ID "${branchNameOrId}" not found in project ${projectId}`,
+      );
+    }
+    return { branchId: branchNameOrId, branches };
+  }
+
+  // Search by name
+  const branch = branches.find((b) => b.name === branchNameOrId);
+  if (!branch) {
+    const availableBranches = branches.map((b) => b.name).join(', ');
+    throw new NotFoundError(
+      `Branch name "${branchNameOrId}" not found in project ${projectId}.\nAvailable branches: ${availableBranches}`,
+    );
+  }
+
+  return { branchId: branch.id, branches };
 }

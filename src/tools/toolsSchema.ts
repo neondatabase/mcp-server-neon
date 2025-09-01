@@ -324,9 +324,9 @@ export const listSharedProjectsInputSchema = z.object({
 
 export const resetFromParentInputSchema = z.object({
   projectId: z.string().describe('The ID of the project containing the branch'),
-  branchId: z
+  branchIdOrName: z
     .string()
-    .describe('The ID of the branch to reset from its parent'),
+    .describe('The name or ID of the branch to reset from its parent'),
   preserveUnderName: z
     .string()
     .optional()
