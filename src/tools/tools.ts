@@ -1567,12 +1567,11 @@ export const NEON_HANDLERS = {
 
     if (result.preservedBranchName) {
       messages.push(
-        params.preserveUnderName ? 
-          `Previous state preserved as: ${params.preserveUnderName}` : 
-          `Previous state auto-preserved as: ${result.preservedBranchName} (branch had children)`,
+        params.preserveUnderName
+          ? `Previous state preserved as: ${params.preserveUnderName}`
+          : `Previous state auto-preserved as: ${result.preservedBranchName} (branch had children)`,
       );
-
-    }  else {
+    } else {
       messages.push('Previous state was not preserved');
     }
 
