@@ -3,6 +3,7 @@
 # [Unreleased]
 
 - Feat: `list_shared_projects` tool to fetch projects that user has permissions to collaborate on
+- Feat: `reset_from_parent` tool to reset a branch from its parent's current state
 
 # [0.6.4] 2025-08-22
 
