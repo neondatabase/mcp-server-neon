@@ -250,7 +250,7 @@ export const NEON_TOOLS = [
   {
     name: 'reset_from_parent' as const,
     description:
-      'Reset a branch from its parent branch, restoring it to the parent branch state. Commonly used to create fresh development branches or reset changes made by LLMs. Optionally preserve the current state under a new branch name before resetting.',
+      `Resets a branch to match its parent's current state, effectively discarding all changes made on the branch. To avoid data loss, provide a name to preserve the changes in a new branch using \`preserveUnderName\` parameter. This tool is commonly used to create fresh development branches from updated parent branch, undo experimental changes, or restore a branch to a known good state. Warning: This operation will discard all changes if \`preserveUnderName\` is not provided.`,
     inputSchema: resetFromParentInputSchema,
   },
   {
