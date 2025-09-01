@@ -22,6 +22,7 @@ import {
   listSlowQueriesInputSchema,
   listOrganizationsInputSchema,
   listSharedProjectsInputSchema,
+  resetFromParentInputSchema,
 } from './toolsSchema.js';
 
 export const NEON_TOOLS = [
@@ -245,6 +246,11 @@ export const NEON_TOOLS = [
     name: 'delete_branch' as const,
     description: 'Delete a branch from a Neon project',
     inputSchema: deleteBranchInputSchema,
+  },
+  {
+    name: 'reset_from_parent' as const,
+    description: `Resets a branch to match its parent's current state, effectively discarding all changes made on the branch. To avoid data loss, provide a name to preserve the changes in a new branch using \`preserveUnderName\` parameter. This tool is commonly used to create fresh development branches from updated parent branch, undo experimental changes, or restore a branch to a known good state. Warning: This operation will discard all changes if \`preserveUnderName\` is not provided.`,
+    inputSchema: resetFromParentInputSchema,
   },
   {
     name: 'get_connection_string' as const,

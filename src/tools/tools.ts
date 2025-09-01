@@ -21,6 +21,7 @@ import {
   splitSqlStatements,
   getOrgByOrgIdOrDefault,
   filterOrganizations,
+  resolveBranchId,
 } from './utils.js';
 import { startSpan } from '@sentry/node';
 import { ToolHandlerExtraParams, ToolHandlers } from './types.js';
@@ -303,6 +304,73 @@ async function handleDeleteBranch(
 ) {
   const response = await neonClient.deleteProjectBranch(projectId, branchId);
   return response.data;
+}
+
+async function handleResetFromParent(
+  {
+    projectId,
+    branchIdOrName,
+    preserveUnderName,
+  }: {
+    projectId: string;
+    branchIdOrName: string;
+    preserveUnderName?: string;
+  },
+  neonClient: Api<unknown>,
+) {
+  // Resolve branch name or ID to actual branch ID and get all branches in one call
+  const { branchId: resolvedBranchId, branches } = await resolveBranchId(
+    branchIdOrName,
+    projectId,
+    neonClient,
+  );
+
+  const branch = branches.find((b) => b.id === resolvedBranchId);
+  if (!branch) {
+    throw new NotFoundError(
+      `Branch "${branchIdOrName}" not found in project ${projectId}`,
+    );
+  }
+
+  // Find the parent branch and validate it exists
+  const parentBranch = branch.parent_id
+    ? branches.find((b) => b.id === branch.parent_id)
+    : undefined;
+
+  if (!parentBranch) {
+    throw new InvalidArgumentError(
+      `Branch "${branchIdOrName}" does not have a parent branch and cannot be reset`,
+    );
+  }
+
+  // Check if the branch has children
+  const hasChildren = branches.some((b) => b.parent_id === resolvedBranchId);
+
+  // Auto-generate preserve name if branch has children and none was provided
+  let finalPreserveName = preserveUnderName;
+  if (hasChildren && !preserveUnderName) {
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, '-')
+      .slice(0, -5);
+    finalPreserveName = `${branch.name}_old_${timestamp}`;
+  }
+
+  // Call the restoreProjectBranch API
+  const response = await neonClient.restoreProjectBranch(
+    projectId,
+    resolvedBranchId,
+    {
+      source_branch_id: parentBranch.id,
+      preserve_under_name: finalPreserveName,
+    },
+  );
+
+  return {
+    ...response.data,
+    preservedBranchName: finalPreserveName,
+    parentBranch,
+  };
 }
 
 async function handleGetConnectionString(
@@ -1473,6 +1541,45 @@ export const NEON_HANDLERS = {
             `Project ID: ${params.projectId}`,
             `Branch ID: ${params.branchId}`,
           ].join('\n'),
+        },
+      ],
+    };
+  },
+
+  reset_from_parent: async ({ params }, neonClient) => {
+    const result = await handleResetFromParent(
+      {
+        projectId: params.projectId,
+        branchIdOrName: params.branchIdOrName,
+        preserveUnderName: params.preserveUnderName,
+      },
+      neonClient,
+    );
+
+    const parentInfo = `${result.parentBranch.name} (${result.parentBranch.id})`;
+
+    const messages = [
+      'Branch reset from parent successfully.',
+      `Project: ${params.projectId}`,
+      `Branch:  ${params.branchIdOrName}`,
+      `Reset to parent branch: ${parentInfo}`,
+    ];
+
+    if (result.preservedBranchName) {
+      messages.push(
+        params.preserveUnderName
+          ? `Previous state preserved as: ${params.preserveUnderName}`
+          : `Previous state auto-preserved as: ${result.preservedBranchName} (branch had children)`,
+      );
+    } else {
+      messages.push('Previous state was not preserved');
+    }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: messages.join('\n'),
         },
       ],
     };
