@@ -332,7 +332,12 @@ async function handleResetFromParent(
     );
   }
 
-  if (!branch.parent_id) {
+  // Find the parent branch and validate it exists
+  const parentBranch = branch.parent_id
+    ? branches.find((b) => b.id === branch.parent_id)
+    : undefined;
+
+  if (!parentBranch) {
     throw new InvalidArgumentError(
       `Branch "${branchIdOrName}" does not have a parent branch and cannot be reset`,
     );
@@ -348,7 +353,7 @@ async function handleResetFromParent(
       .toISOString()
       .replace(/[:.]/g, '-')
       .slice(0, -5);
-    finalPreserveName = `${branch.name || resolvedBranchId}-backup-${timestamp}`;
+    finalPreserveName = `${branch.name}_old_${timestamp}`;
   }
 
   // Call the restoreProjectBranch API
@@ -356,7 +361,7 @@ async function handleResetFromParent(
     projectId,
     resolvedBranchId,
     {
-      source_branch_id: branch.parent_id,
+      source_branch_id: parentBranch.id,
       preserve_under_name: finalPreserveName,
     },
   );
@@ -364,7 +369,7 @@ async function handleResetFromParent(
   return {
     ...response.data,
     preservedBranchName: finalPreserveName,
-    hasChildren
+    parentBranch,
   };
 }
 
@@ -1551,28 +1556,23 @@ export const NEON_HANDLERS = {
       neonClient,
     );
 
+    const parentInfo = `${result.parentBranch.name} (${result.parentBranch.id})`;
+
     const messages = [
       'Branch reset from parent successfully.',
       `Project: ${params.projectId}`,
       `Branch:  ${params.branchIdOrName}`,
-      `Reset to parent branch: ${result.branch.parent_id}`,
+      `Reset to parent branch: ${parentInfo}`,
     ];
 
-    if (result.hasChildren && result.preservedBranchName) {
-      if (params.preserveUnderName) {
-        messages.push(
-          `Previous state preserved as: ${params.preserveUnderName}`,
-        );
-      } else {
-        messages.push(
-          `Previous state auto-preserved as: ${result.preservedBranchName} (branch had children)`,
-        );
-      }
-    } else if (result.preservedBranchName) {
+    if (result.preservedBranchName) {
       messages.push(
-        `Previous state preserved as: ${result.preservedBranchName}`,
+        params.preserveUnderName ? 
+          `Previous state preserved as: ${params.preserveUnderName}` : 
+          `Previous state auto-preserved as: ${result.preservedBranchName} (branch had children)`,
       );
-    } else {
+
+    }  else {
       messages.push('Previous state was not preserved');
     }
 
