@@ -185,6 +185,7 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 **Project Management:**
 
 - **`list_projects`**: Lists the first 10 Neon projects in your account, providing a summary of each project. If you can't find a specific project, increase the limit by passing a higher value to the `limit` parameter.
+- **`list_shared_projects`**: Lists Neon projects shared with the current user. Supports a search parameter and limiting the number of projects returned (default: 10).
 - **`describe_project`**: Fetches detailed information about a specific Neon project, including its ID, name, and associated branches and databases.
 - **`create_project`**: Creates a new Neon project in your Neon account. A project acts as a container for branches, databases, roles, and computes.
 - **`delete_project`**: Deletes an existing Neon project and all its associated resources.
@@ -196,6 +197,7 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 - **`describe_branch`**: Retrieves details about a specific branch, such as its name, ID, and parent branch.
 - **`list_branch_computes`**: Lists compute endpoints for a project or specific branch, including compute ID, type, size, and autoscaling information.
 - **`list_organizations`**: Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.
+- **`reset_from_parent`**: Resets the current branch to its parent's state, discarding local changes. Automatically preserves to backup if branch has children, or optionally preserve on request with a custom name.
 
 **SQL Query Execution:**
 
@@ -226,15 +228,11 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 
 - **`provision_neon_auth`**: Provisions Neon Auth for a Neon project. It allows developers to easily set up authentication infrastructure by creating an integration with Stack Auth (`@stackframe/stack`).
 
-  **Query Performance Tuning:**
+**Query Performance Tuning:**
 
 - **`explain_sql_statement`**: Analyzes a SQL query and returns detailed execution plan information to help understand query performance.
 - **`prepare_query_tuning`**: Identifies potential performance issues in a SQL query and suggests optimizations. Creates a temporary branch for testing improvements.
 - **`complete_query_tuning`**: Finalizes and applies query optimizations after testing. Merges changes from the temporary tuning branch to the main branch.
-
-**Neon Auth:**
-
-- **`provision_neon_auth`**: Action to provision Neon Auth for a Neon project. It allows developers to easily setup authentication infrastructure by creating a integration with Stack Auth (`@stackframe/stack`).
 
 ## Migrations
 
