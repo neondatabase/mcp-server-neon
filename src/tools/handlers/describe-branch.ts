@@ -4,6 +4,7 @@ import { handleGetConnectionString } from './connection-string.js';
 import { neon } from '@neondatabase/serverless';
 import { DESCRIBE_DATABASE_STATEMENTS } from '../utils.js';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { CONSOLE_URLS, generateConsoleUrl } from './urls.js';
 
 const branchInfo = (branch: Branch) => {
   return `Branch Details: 
@@ -20,6 +21,11 @@ Updated: ${new Date(branch.updated_at).toLocaleDateString()}
 Compute Usage: ${branch.compute_time_seconds} seconds
 Written Data: ${branch.written_data_bytes} bytes
 Data Transfer: ${branch.data_transfer_bytes} bytes
+
+Console Link: ${generateConsoleUrl(CONSOLE_URLS.PROJECT_BRANCH, {
+    projectId: branch.project_id,
+    branchId: branch.id,
+  })}
 `;
 };
 

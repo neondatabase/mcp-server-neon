@@ -5,6 +5,7 @@ import { searchInputSchema } from '../toolsSchema.js';
 import { z } from 'zod';
 import { ToolHandlerExtraParams } from '../types.js';
 import { handleListProjects } from './list-projects.js';
+import { CONSOLE_URLS, generateConsoleUrl } from './urls.js';
 
 type SearchProps = z.infer<typeof searchInputSchema>;
 
@@ -74,7 +75,9 @@ export async function handleSearch(
         results.push({
           id: `org:${org.id}`,
           title: org.name,
-          url: `https://console.neon.tech/app/${org.id}/projects`,
+          url: generateConsoleUrl(CONSOLE_URLS.ORGANIZATION, {
+            orgId: org.id,
+          }),
           type: 'organization',
         });
       }
@@ -150,7 +153,9 @@ const searchProjectsAndBranches = async (
       results.push({
         id: `project:${project.id}`,
         title: project.name,
-        url: `https://console.neon.tech/app/projects/${project.id}`,
+        url: generateConsoleUrl(CONSOLE_URLS.PROJECT, {
+          projectId: project.id,
+        }),
         type: 'project',
       });
     }
@@ -181,7 +186,10 @@ const searchBranches = async (
       .map((branch) => ({
         id: `branch:${projectId}/${branch.id}`,
         title: branch.name,
-        url: `https://console.neon.tech/app/projects/${projectId}/branches/${branch.id}`,
+        url: generateConsoleUrl(CONSOLE_URLS.PROJECT_BRANCH, {
+          projectId,
+          branchId: branch.id,
+        }),
         type: 'branch',
       }));
   } catch {

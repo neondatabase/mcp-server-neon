@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { handleDescribeProject } from './decribe-project.js';
 import { handleDescribeBranch } from './describe-branch.js';
 import { ToolHandlerExtraParams } from '../types.js';
+import { generateConsoleUrl, CONSOLE_URLS } from './urls.js';
 
 type FetchProps = z.infer<typeof fetchInputSchema>;
 
@@ -80,7 +81,9 @@ async function fetchOrganizationDetails(
         created_at: orgData.created_at,
         updated_at: orgData.updated_at,
       },
-      console_url: `https://console.neon.tech/app/${orgData.id}/projects`,
+      console_url: generateConsoleUrl(CONSOLE_URLS.ORGANIZATION, {
+        orgId: orgData.id,
+      }),
     };
 
     return {
