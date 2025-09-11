@@ -2,10 +2,8 @@ import {
   Api,
   Branch,
   EndpointType,
-  ListProjectsParams,
   ListSharedProjectsParams,
   GetProjectBranchSchemaComparisonParams,
-  Organization,
   ProjectCreateRequest,
 } from '@neondatabase/api-client';
 import { neon } from '@neondatabase/serverless';
@@ -14,6 +12,7 @@ import { InvalidArgumentError, NotFoundError } from '../server/errors.js';
 
 import { describeTable, formatTableDescription } from '../describeUtils.js';
 import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
+import { handleSearch } from './handlers/search.js';
 import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
 
 import {
@@ -21,62 +20,12 @@ import {
   getDefaultDatabase,
   splitSqlStatements,
   getOrgByOrgIdOrDefault,
-  filterOrganizations,
   resolveBranchId,
 } from './utils.js';
 import { startSpan } from '@sentry/node';
 import { ToolHandlerExtraParams, ToolHandlers } from './types.js';
-
-async function handleListProjects(
-  params: ListProjectsParams,
-  neonClient: Api<unknown>,
-  extra: ToolHandlerExtraParams,
-) {
-  const organization = await getOrgByOrgIdOrDefault(params, neonClient, extra);
-
-  const response = await neonClient.listProjects({
-    ...params,
-    org_id: organization?.id,
-  });
-  if (response.status !== 200) {
-    throw new Error(`Failed to list projects: ${response.statusText}`);
-  }
-
-  let projects = response.data.projects;
-
-  // If search is provided and no org_id specified, and no projects found in personal account,
-  // search across all user organizations
-  if (params.search && !params.org_id && projects.length === 0) {
-    const organizations = await handleListOrganizations(
-      neonClient,
-      extra.account,
-    );
-
-    // Search projects across all organizations
-    const allProjects = [];
-    for (const org of organizations) {
-      // Skip the default organization
-      if (organization?.id === org.id) {
-        continue;
-      }
-
-      const orgResponse = await neonClient.listProjects({
-        ...params,
-        org_id: org.id,
-      });
-      if (orgResponse.status === 200) {
-        allProjects.push(...orgResponse.data.projects);
-      }
-    }
-
-    // If we found projects in other organizations, return them
-    if (allProjects.length > 0) {
-      projects = allProjects;
-    }
-  }
-
-  return projects;
-}
+import { handleListOrganizations } from './handlers/list-orgs.js';
+import { handleListProjects } from './handlers/list-projects.js';
 
 async function handleCreateProject(
   params: ProjectCreateRequest,
@@ -1189,22 +1138,6 @@ async function handleListBranchComputes(
   }));
 }
 
-async function handleListOrganizations(
-  neonClient: Api<unknown>,
-  account: ToolHandlerExtraParams['account'],
-  search?: string,
-): Promise<Organization[]> {
-  if (account.isOrg) {
-    const orgId = account.id;
-    const { data } = await neonClient.getOrganization(orgId);
-    return filterOrganizations([data], search);
-  }
-
-  const { data: response } = await neonClient.getCurrentUserOrganizations();
-  const organizations = response.organizations || [];
-  return filterOrganizations(organizations, search);
-}
-
 async function handleListSharedProjects(
   params: ListSharedProjectsParams,
   neonClient: Api<unknown>,
@@ -1796,5 +1729,9 @@ export const NEON_HANDLERS = {
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
+  },
+
+  search: async ({ params }, neonClient, extra) => {
+    return await handleSearch(params, neonClient, extra);
   },
 } satisfies ToolHandlers;
