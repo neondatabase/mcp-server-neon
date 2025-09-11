@@ -1,11 +1,14 @@
 import { cn } from '@/lib/utils';
 import { ExternalLink } from '@/components/ExternalLink';
+import { CopyableUrl } from '@/components/CopyableUrl';
 
 export const Introduction = ({ className }: { className?: string }) => (
   <div className={cn('flex flex-col gap-2', className)}>
     <desc className="text-xl mb-2">
       Manage your Neon Postgres databases with natural language.
     </desc>
+
+    <CopyableUrl url="https://mcp.neon.tech/mcp" />
 
     <div>
       The <strong className="font-semibold">Neon MCP Server</strong> lets AI
