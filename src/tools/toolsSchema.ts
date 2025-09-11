@@ -349,3 +349,12 @@ export const searchInputSchema = z.object({
       'The search query to find matching organizations, projects, or branches',
     ),
 });
+
+export const fetchInputSchema = z.object({
+  id: z
+    .string()
+    .min(1)
+    .describe(
+      'The ID returned by the search tool to fetch detailed information about the entity',
+    ),
+});
