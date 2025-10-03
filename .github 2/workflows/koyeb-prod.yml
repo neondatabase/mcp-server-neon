@@ -1,0 +1,42 @@
+name: Build and deploy backend to production
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'main'
+
+jobs:
+  deploy:
+    concurrency:
+      group: '${{ github.ref_name }}'
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    # Only main branch is allowed to deploy to production
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install and configure the Koyeb CLI
+        uses: koyeb-community/koyeb-actions@v2
+        with:
+          api_token: '${{ secrets.KOYEB_PROD_TOKEN }}'
+      - name: Build and deploy to Koyeb production
+        run: |
+          koyeb deploy . platform-${{ github.ref_name }}/main \
+            --instance-type medium \
+            --region was \
+            --archive-builder docker \
+            --archive-docker-dockerfile remote.Dockerfile \
+            --privileged \
+            --type web \
+            --port 3001:http \
+            --route /:3001 \
+            --wait \
+            --env CLIENT_ID=${{secrets.PROD_CLIENT_ID}} \
+            --env CLIENT_SECRET=${{secrets.PROD_CLIENT_SECRET}} \
+            --env OAUTH_DATABASE_URL=${{secrets.PROD_OAUTH_DATABASE_URL}} \
+            --env SERVER_HOST=${{vars.PROD_SERVER_HOST}} \
+            --env NEON_API_HOST=${{vars.PROD_NEON_API_HOST}} \
+            --env UPSTREAM_OAUTH_HOST=${{vars.PROD_OAUTH_HOST}} \
+            --env COOKIE_SECRET=${{secrets.COOKIE_SECRET}} \
