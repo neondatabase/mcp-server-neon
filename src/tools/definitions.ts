@@ -615,29 +615,45 @@ export const NEON_TOOLS = [
     <use_case>
       Use this tool to compare the schema of a database between two branches.
       The output of the tool is a JSON object with one field: \`diff\`.
-      At this field you will find a difference between two schemas.
 
-      You MUST BE READY to generate a zero-downtime migration from the diff and apply it to the parent branch.
+      <example>
+        \`\`\`json
+        {
+          "diff": "--- a/neondb\n+++ b/neondb\n@@ -27,7 +27,10 @@\n \n CREATE TABLE public.users (\n id integer NOT NULL,\n- username character varying(50) NOT NULL\n+ username character varying(50) NOT NULL,\n+ is_deleted boolean DEFAULT false NOT NULL,\n+ created_at timestamp with time zone DEFAULT now() NOT NULL,\n+ updated_at timestamp with time zone\n );\n \n \n@@ -79,6 +82,13 @@\n \n \n --\n+-- Name: users_created_at_idx; Type: INDEX; Schema: public; Owner: neondb_owner\n+--\n+\n+CREATE INDEX users_created_at_idx ON public.users USING btree (created_at DESC) WHERE (is_deleted = false);\n+\n+\n+--\n -- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: cloud_admin\n --\n \n"
+        }
+        \`\`\`
+      </example>
+
+      At this field you will find a difference between two schemas.
+      The diff represents the changes required to make the parent branch schema match the child branch schema.
+      The diff field contains a unified diff (git-style patch) as a string.
+
+      You MUST be able to generate a zero-downtime migration from the diff and apply it to the parent branch.
+      (This branch is a child and has a parent. You can get parent id just querying the branch details.)
     </use_case>
 
     <important_notes>
       To generate schema diff, you MUST SPECIFY the \`database_name\`.
-      If it's not specified, try to use the default database name: \`${NEON_DEFAULT_DATABASE_NAME}\`.
+      If \`database_name\` is not specified, you MUST fall back to the default database name: \`${NEON_DEFAULT_DATABASE_NAME}\`.
 
-      You MUST TAKE INTO ACCOUNT the Postgres version. The Postgres version is the same for both branches.
+      You MUST TAKE INTO ACCOUNT the PostgreSQL version. The PostgreSQL version is the same for both branches.
       You MUST ASK user consent before running each generated SQL query.
       You SHOULD USE \`run_sql\` tool to run each generated SQL query.
+      You SHOULD suggest creating a backup or point-in-time restore before running the migration.
       Generated queries change the schema of the parent branch and MIGHT BE dangerous to execute.
+      Generated SQL migrations SHOULD be idempotent where possible (i.e., safe to run multiple times without failure) and include \`IF NOT EXISTS\` / \`IF EXISTS\` where applicable.
+      You SHOULD recommend including comments in generated SQL linking back to diff hunks (e.g., \`-- from diff @@ -27,7 +27,10 @@\`) to make audits easier.
+      Generated SQL should be reviewed for dependencies (e.g., foreign key order) before execution.
     </important_notes>
 
     <next_steps>
       After executing this tool, you MUST follow these steps:
-        1. Review the schema diff and suggest to generate a zero-downtime migration.
+        1. Review the schema diff and suggest generating a zero-downtime migration.
         2. Follow these instructions to respond to the client:
 
         <response_instructions>
           <instructions>
-            Provide a brief information about the changes:
+            Provide brief information about the changes:
               * Tables
               * Views
               * Indexes
@@ -654,20 +670,148 @@ export const NEON_TOOLS = [
               * Privileges
           </instructions>
         </response_instructions>
+
+        3. If a migration fails, you SHOULD guide the user on how to revert the schema changes, for example by using backups, point-in-time restore, or generating reverse SQL statements (if safe).
     </next_steps>
 
     This tool:
-    1. Generates a diff between two branches.
+    1. Generates a diff between the child branch and its parent.
     2. Generates a SQL migration from the diff.
-    3. Suggest to generate zero-downtime migration.
+    3. Suggest generating zero-downtime migration.
 
-    Workflow:
+    <workflow>
       1. User asks you to generate a diff between two branches.
-      2. You suggest to generate a SQL migration from the diff.
-      3. You ensure that the generated migration is a zero-downtime migration,
-        otherwise you should warn the user about it.
-      4. You ensure that your suggested migration is also matching the Postgres version.
+      2. You suggest generating a SQL migration from the diff.
+      3. Ensure the generated migration is zero-downtime; otherwise, warn the user.
+      4. You ensure that your suggested migration is also matching the PostgreSQL version.
       5. You use \`run_sql\` tool to run each generated SQL query and ask the user consent before running it.
+        Before requesting user consent, present a summary of all generated SQL statements along with their potential impact (e.g., table rewrites, lock risks, validation steps) so the user can make an informed decision.
+      6. Propose to rerun the schema diff tool one more time to ensure that the migration is applied correctly.
+      7. If the diff is empty, confirm that the parent schema now matches the child schema.
+      8. If the diff is not empty after migration, warn the user and assist in resolving the remaining differences.
+    </workflow>
+
+    <hints>
+      <hint>
+        Adding the column with a \`DEFAULT\` static value will not have any locks.
+        But if the function is called that is not deterministic, it will have locks.
+
+        <example>
+          \`\`\`sql
+          -- No table rewrite, minimal lock time
+          ALTER TABLE users ADD COLUMN status text DEFAULT 'active';
+          \`\`\`
+        </example>
+
+        <example>
+          \`\`\`sql
+          -- Table rewrite, potentially longer lock time
+          ALTER TABLE users ADD COLUMN created_at timestamptz DEFAULT now();
+          \`\`\`
+
+          The fix for this is next:
+
+          \`\`\`sql
+          -- Table rewrite, potentially longer lock time
+          ALTER TABLE users ADD COLUMN created_at timestamptz;
+
+          UPDATE users SET created_at = now();
+          \`\`\`
+        </example>
+      </hint>
+
+      <hint>
+        Adding constraints in two phases (including foreign keys)
+
+        <example>
+          \`\`\`sql
+          -- Step 1: Add constraint without validating existing data
+          -- Fast - only blocks briefly to update catalog
+          ALTER TABLE users ADD CONSTRAINT users_age_positive
+            CHECK (age > 0) NOT VALID;
+
+        -- Step 2: Validate existing data (can take time but doesn't block writes)
+        -- Uses SHARE UPDATE EXCLUSIVE lock - allows reads/writes
+        ALTER TABLE users VALIDATE CONSTRAINT users_age_positive;
+          \`\`\`
+        </example>
+
+        <example>
+         \`\`\`sql
+          -- Step 1: Add foreign key without validation
+          -- Fast - only updates catalog, doesn't validate existing data
+          ALTER TABLE orders ADD CONSTRAINT orders_user_id_fk
+            FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;
+
+          -- Step 2: Validate existing relationships
+          -- Can take time but allows concurrent operations
+          ALTER TABLE orders VALIDATE CONSTRAINT orders_user_id_fk;
+          \`\`\`
+        </example>
+      </hint>
+
+      <hint>
+        Setting columns to NOT NULL
+
+        <example>
+         \`\`\`sql
+          -- Step 1: Add a check constraint (fast with NOT VALID)
+          ALTER TABLE users ADD CONSTRAINT users_email_not_null
+            CHECK (email IS NOT NULL) NOT VALID;
+
+          -- Step 2: Validate the constraint (allows concurrent operations)
+          ALTER TABLE users VALIDATE CONSTRAINT users_email_not_null;
+
+          -- Step 3: Set NOT NULL (fast since constraint guarantees no nulls)
+          ALTER TABLE users ALTER COLUMN email SET NOT NULL;
+
+          -- Step 4: Drop the redundant check constraint
+          ALTER TABLE users DROP CONSTRAINT users_email_not_null;
+          \`\`\`
+        </example>
+
+        <example>
+          For PostgreSQL v18+
+          (to get PostgreSQL version, you can use \`describe_project\` tool or \`run_sql\` tool and execute \`SELECT version();\` query)
+
+          \`\`\`sql
+          -- PostgreSQL 18+ - Simplified approach
+          ALTER TABLE users ALTER COLUMN email SET NOT NULL NOT VALID;
+          ALTER TABLE users VALIDATE CONSTRAINT users_email_not_null;
+          \`\`\`
+        </example>
+      </hint>
+
+      <hint>
+        Create index CONCURRENTLY
+
+        <example>
+          \`\`\`sql
+          CREATE INDEX CONCURRENTLY idx_users_email ON users (email);
+          \`\`\`
+        </example>
+      </hint>
+
+      <hint>
+        Drop index CONCURRENTLY
+
+        <example>
+          \`\`\`sql
+          DROP INDEX CONCURRENTLY idx_users_email;
+          \`\`\`
+        </example>
+      </hint>
+
+      <hint>
+        Refresh materialized view CONCURRENTLY
+
+        <example>
+          \`\`\`sql
+          REFRESH MATERIALIZED VIEW CONCURRENTLY mv_users;
+          \`\`\`
+        </example>
+      </hint>
+    </hints>
     `,
     inputSchema: compareDatabaseSchemaInputSchema,
   },
