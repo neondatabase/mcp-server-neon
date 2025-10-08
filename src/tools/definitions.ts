@@ -783,6 +783,58 @@ export const NEON_TOOLS = [
       </hint>
 
       <hint>
+        In some cases, you need to combine two approaches to achieve a zero-downtime migration.
+
+        <example>
+          \`\`\`sql
+          -- Step 1: Adding a nullable column first
+          ALTER TABLE users ADD COLUMN created_at timestamptz;
+
+          -- Step 2: Updating the all rows with the default value
+          UPDATE users SET created_at = now() WHERE created_at IS NULL;
+
+          -- Step 3: Creating a not null constraint
+          ALTER TABLE users ADD CONSTRAINT users_created_at_not_null
+            CHECK (created_at IS NOT NULL) NOT VALID;
+
+          -- Step 4: Validating the constraint
+          ALTER TABLE users VALIDATE CONSTRAINT users_created_at_not_null;
+
+          -- Step 5: Setting the column to NOT NULL
+          ALTER TABLE users ALTER COLUMN created_at SET NOT NULL;
+
+          -- Step 6: Dropping the redundant NOT NULL constraint
+          ALTER TABLE users DROP CONSTRAINT users_created_at_not_null;
+
+          -- Step 7: Adding the default value
+          ALTER TABLE users ALTER COLUMN created_at SET DEFAULT now();
+          \`\`\`
+        </example>
+
+        For PostgreSQL v18+
+        <example>
+        <example>
+          \`\`\`sql
+          -- Step 1: Adding a nullable column first
+          ALTER TABLE users ADD COLUMN created_at timestamptz;
+
+          -- Step 2: Updating the all rows with the default value
+          UPDATE users SET created_at = now() WHERE created_at IS NULL;
+
+          -- Step 3: Creating a not null constraint
+          ALTER TABLE users ALTER COLUMN created_at SET NOT NULL NOT VALID;
+
+          -- Step 4: Validating the constraint
+          ALTER TABLE users VALIDATE CONSTRAINT users_created_at_not_null;
+
+          -- Step 5: Adding the default value
+          ALTER TABLE users ALTER COLUMN created_at SET DEFAULT now();
+          \`\`\`
+        </example>
+        </example>
+      </hint>
+
+      <hint>
         Create index CONCURRENTLY
 
         <example>
