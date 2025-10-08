@@ -856,6 +856,16 @@ export const NEON_TOOLS = [
       </hint>
 
       <hint>
+        Create materialized view WITH NO DATA
+
+        <example>
+          \`\`\`sql
+          CREATE MATERIALIZED VIEW mv_users AS SELECT name FROM users WITH NO DATA;
+          \`\`\`
+        </example>
+      </hint>
+
+      <hint>
         Refresh materialized view CONCURRENTLY
 
         <example>
