@@ -198,6 +198,7 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 - **`list_branch_computes`**: Lists compute endpoints for a project or specific branch, including compute ID, type, size, and autoscaling information.
 - **`list_organizations`**: Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.
 - **`reset_from_parent`**: Resets the current branch to its parent's state, discarding local changes. Automatically preserves to backup if branch has children, or optionally preserve on request with a custom name.
+- **`compare_database_schema`**: Shows the schema diff between the child branch and its parent
 
 **SQL Query Execution:**
 

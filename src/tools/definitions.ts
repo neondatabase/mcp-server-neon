@@ -703,6 +703,8 @@ export const NEON_TOOLS = [
           \`\`\`
         </example>
 
+        There is an example of a case where the function is not deterministic and will have locks:
+
         <example>
           \`\`\`sql
           -- Table rewrite, potentially longer lock time
@@ -712,9 +714,10 @@ export const NEON_TOOLS = [
           The fix for this is next:
 
           \`\`\`sql
-          -- Table rewrite, potentially longer lock time
+          -- Adding a nullable column first
           ALTER TABLE users ADD COLUMN created_at timestamptz;
 
+          -- Setting the default value because the rows are updated
           UPDATE users SET created_at = now();
           \`\`\`
         </example>
@@ -730,9 +733,9 @@ export const NEON_TOOLS = [
           ALTER TABLE users ADD CONSTRAINT users_age_positive
             CHECK (age > 0) NOT VALID;
 
-        -- Step 2: Validate existing data (can take time but doesn't block writes)
-        -- Uses SHARE UPDATE EXCLUSIVE lock - allows reads/writes
-        ALTER TABLE users VALIDATE CONSTRAINT users_age_positive;
+          -- Step 2: Validate existing data (can take time but doesn't block writes)
+          -- Uses SHARE UPDATE EXCLUSIVE lock - allows reads/writes
+          ALTER TABLE users VALIDATE CONSTRAINT users_age_positive;
           \`\`\`
         </example>
 
@@ -813,7 +816,6 @@ export const NEON_TOOLS = [
 
         For PostgreSQL v18+
         <example>
-        <example>
           \`\`\`sql
           -- Step 1: Adding a nullable column first
           ALTER TABLE users ADD COLUMN created_at timestamptz;
@@ -830,7 +832,6 @@ export const NEON_TOOLS = [
           -- Step 5: Adding the default value
           ALTER TABLE users ALTER COLUMN created_at SET DEFAULT now();
           \`\`\`
-        </example>
         </example>
       </hint>
 

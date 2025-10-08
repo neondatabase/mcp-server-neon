@@ -13,6 +13,8 @@ import {
 import {
   Terminal,
   CircleAlert,
+  Lightbulb,
+  BadgeInfo,
   Workflow,
   SquareArrowRight,
   Component,
@@ -30,6 +32,8 @@ const ALERT_VARIANT_PER_DESCRIPTION_TYPE: Record<
   next_steps: { variant: 'default', icon: SquareArrowRight },
   important_notes: { variant: 'important', icon: CircleAlert },
   workflow: { variant: 'default', icon: Workflow },
+  hints: { variant: 'default', icon: BadgeInfo },
+  hint: { variant: 'default', icon: Lightbulb },
   instructions: { variant: 'default', icon: Terminal },
   response_instructions: { variant: 'default', icon: Terminal },
   example: { variant: 'default', icon: Terminal },

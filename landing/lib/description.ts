@@ -10,6 +10,8 @@ const POSSIBLE_TYPES = [
   'example',
   'do_not_include',
   'error_handling',
+  'hint',
+  'hints',
 ] as const;
 
 export type DescriptionItemType = (typeof POSSIBLE_TYPES)[number];
@@ -134,7 +136,7 @@ export function parseDescription(description: string): DescriptionItem[] {
 
   while (rest.length > 0) {
     const match = rest.match(
-      /<(use_case|workflow|important_notes|next_steps|response_instructions|instructions|example|do_not_include|error_handling)>(.*?)<\/\1>/s,
+      /<(use_case|workflow|important_notes|next_steps|response_instructions|instructions|example|do_not_include|error_handling|hints?)>(.*?)<\/\1>/s,
     );
 
     if (!match) {
