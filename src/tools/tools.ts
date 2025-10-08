@@ -1791,7 +1791,7 @@ export const NEON_HANDLERS = {
         branchId: params.branchId,
         db_name: params.databaseName,
       },
-      neonClient
+      neonClient,
     );
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
