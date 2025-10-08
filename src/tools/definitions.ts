@@ -23,6 +23,7 @@ import {
   listOrganizationsInputSchema,
   listSharedProjectsInputSchema,
   resetFromParentInputSchema,
+  compareDatabaseSchemaInputSchema,
 } from './toolsSchema.js';
 
 export const NEON_TOOLS = [
@@ -607,5 +608,67 @@ export const NEON_TOOLS = [
     name: 'list_branch_computes' as const,
     description: 'Lists compute endpoints for a project or specific branch',
     inputSchema: listBranchComputesInputSchema,
+  },
+  {
+    name: 'compare_database_schema' as const,
+    description: `
+    <use_case>
+      Use this tool to compare the schema of a database between two branches.
+      The output of the tool is a JSON object with one field: \`diff\`.
+      At this field you will find a difference between two schemas.
+
+      You MUST BE READY to generate a zero-downtime migration from the diff and apply it to the parent branch.
+    </use_case>
+
+    <important_notes>
+      To generate schema diff, you MUST SPECIFY the \`database_name\`.
+      If it's not specified, try to use the default database name: \`${NEON_DEFAULT_DATABASE_NAME}\`.
+
+      You MUST TAKE INTO ACCOUNT the Postgres version. The Postgres version is the same for both branches.
+      You MUST ASK user consent before running each generated SQL query.
+      You SHOULD USE \`run_sql\` tool to run each generated SQL query.
+      Generated queries change the schema of the parent branch and MIGHT BE dangerous to execute.
+    </important_notes>
+
+    <next_steps>
+      After executing this tool, you MUST follow these steps:
+        1. Review the schema diff and suggest to generate a zero-downtime migration.
+        2. Follow these instructions to respond to the client:
+
+        <response_instructions>
+          <instructions>
+            Provide a brief information about the changes:
+              * Tables
+              * Views
+              * Indexes
+              * Ownership
+              * Constraints
+              * Triggers
+              * Policies
+              * Extensions
+              * Schemas
+              * Sequences
+              * Tablespaces
+              * Users
+              * Roles
+              * Privileges
+          </instructions>
+        </response_instructions>
+    </next_steps>
+
+    This tool:
+    1. Generates a diff between two branches.
+    2. Generates a SQL migration from the diff.
+    3. Suggest to generate zero-downtime migration.
+
+    Workflow:
+      1. User asks you to generate a diff between two branches.
+      2. You suggest to generate a SQL migration from the diff.
+      3. You ensure that the generated migration is a zero-downtime migration,
+        otherwise you should warn the user about it.
+      4. You ensure that your suggested migration is also matching the Postgres version.
+      5. You use \`run_sql\` tool to run each generated SQL query and ask the user consent before running it.
+    `,
+    inputSchema: compareDatabaseSchemaInputSchema,
   },
 ];
