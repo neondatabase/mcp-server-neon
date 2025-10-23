@@ -334,3 +334,9 @@ export const resetFromParentInputSchema = z.object({
       'Optional name to preserve the current state under a new branch before resetting',
     ),
 });
+
+export const compareDatabaseSchemaInputSchema = z.object({
+  projectId: z.string().describe('The ID of the project'),
+  branchId: z.string().describe('The ID of the branch'),
+  databaseName: z.string().describe(DATABASE_NAME_DESCRIPTION),
+});

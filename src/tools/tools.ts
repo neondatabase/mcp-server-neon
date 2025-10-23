@@ -4,6 +4,7 @@ import {
   EndpointType,
   ListProjectsParams,
   ListSharedProjectsParams,
+  GetProjectBranchSchemaComparisonParams,
   Organization,
   ProjectCreateRequest,
 } from '@neondatabase/api-client';
@@ -1212,6 +1213,14 @@ async function handleListSharedProjects(
   return response.data.projects;
 }
 
+async function handleCompareDatabaseSchema(
+  params: GetProjectBranchSchemaComparisonParams,
+  neonClient: Api<unknown>,
+) {
+  const response = await neonClient.getProjectBranchSchemaComparison(params);
+  return response.data;
+}
+
 export const NEON_HANDLERS = {
   list_projects: async ({ params }, neonClient, extra) => {
     const organization = await getOrgByOrgIdOrDefault(
@@ -1772,6 +1781,20 @@ export const NEON_HANDLERS = {
           ),
         },
       ],
+    };
+  },
+
+  compare_database_schema: async ({ params }, neonClient) => {
+    const result = await handleCompareDatabaseSchema(
+      {
+        projectId: params.projectId,
+        branchId: params.branchId,
+        db_name: params.databaseName,
+      },
+      neonClient,
+    );
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
   },
 } satisfies ToolHandlers;
