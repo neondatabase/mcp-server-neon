@@ -205,16 +205,16 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 - **`describe_project`**: Fetches detailed information about a specific Neon project, including its ID, name, and associated branches and databases.
 - **`create_project`**: Creates a new Neon project in your Neon account. A project acts as a container for branches, databases, roles, and computes.
 - **`delete_project`**: Deletes an existing Neon project and all its associated resources.
+- **`list_organizations`**: Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.
 
 **Branch Management:**
 
 - **`create_branch`**: Creates a new branch within a specified Neon project. Leverages [Neon's branching](/docs/introduction/branching) feature for development, testing, or migrations.
 - **`delete_branch`**: Deletes an existing branch from a Neon project.
 - **`describe_branch`**: Retrieves details about a specific branch, such as its name, ID, and parent branch.
-- **`list_branch_computes`**: Lists compute endpoints for a project or specific branch, including compute ID, type, size, and autoscaling information.
-- **`list_organizations`**: Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.
-- **`reset_from_parent`**: Resets the current branch to its parent's state, discarding local changes. Automatically preserves to backup if branch has children, or optionally preserve on request with a custom name.
+- **`list_branch_computes`**: Lists compute endpoints for a project or specific branch, including compute ID, type, size, last active time, and autoscaling information.
 - **`compare_database_schema`**: Shows the schema diff between the child branch and its parent
+- **`reset_from_parent`**: Resets the current branch to its parent's state, discarding local changes. Automatically preserves to backup if branch has children, or optionally preserve on request with a custom name.
 
 **SQL Query Execution:**
 
@@ -223,7 +223,6 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 - **`run_sql_transaction`**: Executes a series of SQL queries within a single transaction against a Neon database.
 - **`get_database_tables`**: Lists all tables within a specified Neon database.
 - **`describe_table_schema`**: Retrieves the schema definition of a specific table, detailing columns, data types, and constraints.
-- **`list_slow_queries`**: Identifies performance bottlenecks by finding the slowest queries in a database. Requires the pg_stat_statements extension.
 
 **Database Migrations (Schema Changes):**
 
@@ -232,24 +231,14 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 
 **Query Performance Optimization:**
 
+- **`list_slow_queries`**: Identifies performance bottlenecks by finding the slowest queries in a database. Requires the pg_stat_statements extension.
 - **`explain_sql_statement`**: Provides detailed execution plans for SQL queries to help identify performance bottlenecks.
-- **`prepare_query_tuning`**: Analyzes query performance and suggests optimizations like index creation. Creates a temporary branch for safely testing these optimizations.
-- **`complete_query_tuning`**: Applies or discards query optimizations after testing. Can merge changes from the temporary branch to the main branch.
-- **`list_slow_queries`**: Identifies and analyzes slow-performing queries in your database. Requires the `pg_stat_statements` extension.
-
-**Compute Management:**
-
-- **`list_branch_computes`**: Lists compute endpoints for a project or specific branch, showing details like compute ID, type, size, and last active time.
+- **`prepare_query_tuning`**: Analyzes query performance and suggests optimizations, like index creation. Creates a temporary branch for safely testing these optimizations.
+- **`complete_query_tuning`**: Finalizes query tuning by either applying optimizations to the main branch or discarding them. Cleans up the temporary tuning branch.
 
 **Neon Auth:**
 
-- **`provision_neon_auth`**: Provisions Neon Auth for a Neon project. It allows developers to easily set up authentication infrastructure by creating an integration with Stack Auth (`@stackframe/stack`).
-
-**Query Performance Tuning:**
-
-- **`explain_sql_statement`**: Analyzes a SQL query and returns detailed execution plan information to help understand query performance.
-- **`prepare_query_tuning`**: Identifies potential performance issues in a SQL query and suggests optimizations. Creates a temporary branch for testing improvements.
-- **`complete_query_tuning`**: Finalizes and applies query optimizations after testing. Merges changes from the temporary tuning branch to the main branch.
+- **`provision_neon_auth`**: Provisions Neon Auth for a Neon project. It allows developers to easily set up authentication infrastructure by creating an integration with an Auth provider.
 
 ## Migrations
 
