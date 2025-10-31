@@ -73,7 +73,7 @@ export const NEON_RESOURCES = [
   {
     name: 'neon-get-started',
     uri: 'https://github.com/neondatabase-labs/ai-rules/blob/main/neon-get-started.mdc',
-    mimeType: 'text/plain',
+    mimeType: 'text/markdown',
     description: 'Neon getting started guide',
     handler: async (url) => {
       const uri = url.host;
@@ -83,7 +83,7 @@ export const NEON_RESOURCES = [
         contents: [
           {
             uri,
-            mimeType: 'text/plain',
+            mimeType: 'text/markdown',
             text: content,
           },
         ],
