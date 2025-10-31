@@ -70,4 +70,24 @@ export const NEON_RESOURCES = [
       };
     },
   },
+  {
+    name: 'neon-get-started',
+    uri: 'https://github.com/neondatabase-labs/ai-rules/blob/main/neon-get-started.mdc',
+    mimeType: 'text/plain',
+    description: 'Neon getting started guide',
+    handler: async (url) => {
+      const uri = url.host;
+      const rawPath = url.pathname;
+      const content = await fetchRawGithubContent(rawPath);
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: 'text/plain',
+            text: content,
+          },
+        ],
+      };
+    },
+  },
 ] satisfies (Resource & { handler: ReadResourceCallback })[];
