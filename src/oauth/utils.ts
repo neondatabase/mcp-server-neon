@@ -10,7 +10,7 @@ export const ensureCorsHeaders = () =>
   cors({
     origin: true,
     methods: '*',
-    allowedHeaders: 'Authorization, Origin, Content-Type, Accept, *',
+    allowedHeaders: 'Authorization, Origin, Content-Type, Accept, X-Read-Only, *',
   });
 
 const fetchAccountDetails = async (
@@ -67,6 +67,10 @@ export const requiresAuth =
     }
 
     const accessToken = extractBearerToken(authorization);
+    // Check for X-Read-Only header
+    const readOnlyHeader = request.headers['x-read-only'];
+    const readOnly = readOnlyHeader === 'true' || readOnlyHeader === '1';
+
     const token = await model.getAccessToken(accessToken);
     if (token) {
       if (!token.expires_at || token.expires_at < Date.now()) {
@@ -91,6 +95,7 @@ export const requiresAuth =
             id: token.client.id,
             name: token.client.client_name,
           },
+          readOnly,
         },
       };
 
@@ -110,6 +115,7 @@ export const requiresAuth =
       scopes: ['*'],
       extra: {
         account: apiKeyRecord.account,
+        readOnly,
       },
     };
     next();

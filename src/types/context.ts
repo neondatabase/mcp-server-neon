@@ -13,4 +13,5 @@ export type ServerContext = {
   client?: AuthContext['extra']['client'];
   account: AuthContext['extra']['account'];
   app: AppContext;
+  readOnly?: boolean;
 };

@@ -63,6 +63,7 @@ export const createSseTransport = (appContext: AppContext) => {
           client: auth.extra.client,
           account: auth.extra.account,
           app: appContext,
+          readOnly: auth.extra.readOnly as boolean | undefined,
         });
         await server.connect(transport);
       } catch (error: unknown) {
