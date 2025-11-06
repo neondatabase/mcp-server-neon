@@ -148,6 +148,17 @@ async function handleRunSql(
       extra,
     );
     const runQuery = neon(connectionString.uri);
+
+    // If in read-only mode, wrap the query in a read-only transaction
+    if (extra.readOnly) {
+      const response = await runQuery.transaction([
+        runQuery.query('SET TRANSACTION READ ONLY'),
+        runQuery.query(sql),
+      ]);
+      // Return only the second result (the actual query result)
+      return response[1];
+    }
+
     const response = await runQuery.query(sql);
 
     return response;
@@ -179,6 +190,17 @@ async function handleRunSqlTransaction(
     extra,
   );
   const runQuery = neon(connectionString.uri);
+
+  // If in read-only mode, prepend SET TRANSACTION READ ONLY
+  if (extra.readOnly) {
+    const response = await runQuery.transaction([
+      runQuery.query('SET TRANSACTION READ ONLY'),
+      ...sqlStatements.map((sql) => runQuery.query(sql)),
+    ]);
+    // Return all results except the first one (which is the SET command)
+    return response.slice(1);
+  }
+
   const response = await runQuery.transaction(
     sqlStatements.map((sql) => runQuery.query(sql)),
   );
