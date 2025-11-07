@@ -2,6 +2,24 @@ import { Api } from '@neondatabase/api-client';
 import { handleListProjects } from './list-projects.js';
 import { ToolHandlerExtraParams } from '../types.js';
 import { NotFoundError } from '../../server/errors.js';
+import { looksLikeBranchId, looksLikeProjectId } from '../utils.js';
+
+type MCPOrgId = `org:${string}`;
+type MCPProjectId = `project:${string}`;
+type MCPBranchId = `branch:${string}/${string}`; // projectId/branchId
+export type SearchResultId = MCPOrgId | MCPProjectId | MCPBranchId;
+
+export const isOrgId = (id: string): id is MCPOrgId => {
+  return id.startsWith('org:') || id.startsWith('org-');
+};
+
+export const isProjectId = (id: string): id is MCPProjectId => {
+  return id.startsWith('project:') || looksLikeProjectId(id);
+};
+
+export const isBranchId = (id: string): id is MCPProjectId => {
+  return id.startsWith('branch:') || looksLikeBranchId(id);
+};
 
 export async function getOnlyProject(
   neonClient: Api<unknown>,
