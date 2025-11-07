@@ -10,7 +10,8 @@ export const ensureCorsHeaders = () =>
   cors({
     origin: true,
     methods: '*',
-    allowedHeaders: 'Authorization, Origin, Content-Type, Accept, X-Read-Only, *',
+    allowedHeaders:
+      'Authorization, Origin, Content-Type, Accept, X-Read-Only, *',
   });
 
 const fetchAccountDetails = async (
