@@ -228,6 +228,15 @@ export function looksLikeBranchId(branch: string): boolean {
 }
 
 /**
+ * Checks if a string looks like a project ID based on format from console
+ * Project IDs have format like "small-term-683261"
+ */
+export function looksLikeProjectId(projectId: string): boolean {
+  const HAIKU_REGEX = /^[a-zA-Z]+-[a-zA-Z]+-[0-9]{8}$/;
+  return HAIKU_REGEX.test(projectId);
+}
+
+/**
  * Resolves a branch name or ID to the actual branch ID
  * If the input looks like a branch ID, returns it as-is
  * Otherwise, searches for a branch with matching name and returns its ID
