@@ -1,94 +1,229 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI agents when working with code in this repository.
 
 ## Project Overview
 
-This is the Neon MCP Server - a Model Context Protocol server that bridges natural language requests to the Neon API. It allows interaction with Neon Postgres databases through conversational AI interfaces.
+This is the **Neon MCP Server** - a Model Context Protocol server that bridges natural language requests to the Neon API, enabling LLMs to manage Neon Postgres databases through conversational commands. The project implements both local (stdio) and remote (SSE/Streamable HTTP) MCP server transports with OAuth authentication support.
 
-The server supports both:
-- Remote hosted MCP server (OAuth-based authentication)
-- Local MCP server (API key authentication)
+## Development Commands
 
-## Key Commands
+### Building and Running
 
-### Development
 ```bash
-npm run build          # Build TypeScript to dist/
-npm run watch          # Watch mode with automatic rebuild and chmod
-npm run typecheck      # Type check without emitting files
-npm run lint           # Run typecheck, eslint, and prettier checks
-npm run lint:fix       # Fix linting and formatting issues
-npm run format         # Format code with prettier
+# Install dependencies
+npm install
+
+# Build the project (compiles TypeScript and builds landing page)
+npm run build
+
+# Watch mode for development (auto-recompiles on changes)
+npm run watch
+
+# Type checking without emitting files
+npm run typecheck
+
+# Start local MCP server with API key
+node dist/index.js start <NEON_API_KEY>
+
+# Start SSE transport server
+node dist/index.js start:sse
 ```
+
+### Development with MCP CLI Client
+
+The fastest way to iterate on the MCP Server is using the `mcp-client/` CLI:
+
+```bash
+npm install
+npm run build
+npm run watch  # Keep this running in one terminal
+cd mcp-client/ && NEON_API_KEY=<your-key> npm run start:mcp-server-neon
+```
+
+This provides an interactive terminal to test MCP tools without restarting Claude Desktop.
 
 ### Testing
+
 ```bash
-npm run test           # Run BrainTrust evaluations
+# Run Braintrust evaluations
+npm run test
+
+# You must configure .env file with:
+# - BRAINTRUST_API_KEY
+# - NEON_API_KEY
+# - ANTHROPIC_API_KEY
 ```
 
-### Server Operations
+### Linting and Formatting
+
 ```bash
-npm run start          # Start MCP server in stdio mode
-npm run start:sse      # Start MCP server in SSE mode
-npm run inspector      # Launch MCP inspector for debugging
-npm run export-tools   # Export tool definitions to JSON
+# Run linting and formatting checks
+npm run lint
+
+# Auto-fix linting and formatting issues
+npm run lint:fix
+
+# Format code
+npm run format
 ```
 
-### Development Tools
-```bash
-# Local development with MCP CLI client
-cd mcp-client/ && NEON_API_KEY=... npm run start:mcp-server-neon
+### Single Test Development
 
-# Local development with Claude Desktop
-node dist/index.js init $NEON_API_KEY
-```
+To develop and test a single tool without running full test suite, modify the test file in `src/tools-evaluations/` and run:
 
-### Landing Page (Next.js)
 ```bash
-npm run build:landing # Build and copy landing page to public/
-cd landing/ && npm run build  # Build landing page only
+npm run test
 ```
 
 ## Architecture
 
 ### Core Components
 
-- **Entry Point** (`src/index.ts`): CLI argument parsing and transport initialization
-- **Server** (`src/server/index.ts`): MCP server creation with tool and resource registration
-- **Tools** (`src/tools/`): MCP tool definitions, handlers, and schema validation
-- **Transports** (`src/transports/`): STDIO and SSE transport implementations
-- **OAuth** (`src/oauth/`): OAuth2 authentication flow for remote server
-- **Analytics** (`src/analytics/`): Segment integration for usage tracking
-- **Landing Page** (`landing/`): Next.js application for documentation and tools display
+1. **MCP Server (`src/server/index.ts`)**
+   - Creates and configures the MCP server instance
+   - Registers all tools and resources from centralized definitions
+   - Implements error handling and observability (Sentry, analytics)
+   - Each tool call is tracked and wrapped in error handling
 
-### Tool System
+2. **Tools System (`src/tools/`)**
+   - `definitions.ts`: Exports `NEON_TOOLS` array defining all available tools with their schemas
+   - `tools.ts`: Exports `NEON_HANDLERS` object mapping tool names to handler functions
+   - `toolsSchema.ts`: Zod schemas for tool input validation
+   - `handlers/`: Individual tool handler implementations organized by feature
 
-Tools are defined in `src/tools/definitions.ts` and implemented in `src/tools/tools.ts`:
-- Each tool has a schema definition with Zod validation
-- Tool handlers receive validated parameters, Neon client, and context
-- Tools support both project management (CRUD operations) and SQL execution
-- Migration tools use Neon's branching feature for safe schema changes
+3. **Transport Layers (`src/transports/`)**
+   - `stdio.ts`: Standard input/output transport for local MCP clients (Claude Desktop, Cursor)
+   - `sse-express.ts`: Server-Sent Events transport for remote MCP server (deprecated)
+   - `stream.ts`: Streamable HTTP transport for remote MCP server (recommended)
 
-### Key Features
+4. **OAuth System (`src/oauth/`)**
+   - OAuth 2.0 server implementation for remote MCP authentication
+   - Integrates with Neon's OAuth provider (UPSTREAM_OAUTH_HOST)
+   - Token persistence using Keyv with Postgres backend
+   - Cookie-based client approval tracking
 
-- **Database Management**: Create/delete projects, branches, and execute SQL
-- **Safe Migrations**: Temporary branch creation for testing schema changes
-- **Query Performance**: Explain plans, slow query analysis, and optimization suggestions
-- **Neon Auth Integration**: Stack Auth provisioning for authentication
-- **Multi-transport Support**: STDIO for local clients, SSE for web interfaces
+5. **Resources (`src/resources.ts`)**
+   - MCP resources that provide read-only context (like "getting started" guides)
+   - Registered alongside tools but don't execute operations
 
-### Environment Configuration
+### Key Architectural Patterns
 
-Copy `.env.example` to `.env` and configure:
-- `NEON_API_KEY`: Required for API operations
-- `BRAINTRUST_API_KEY`: For running evaluations
-- `ANTHROPIC_API_KEY`: For AI-powered evaluations
-- OAuth settings for remote server mode
+- **Tool Registration Pattern**: All tools are defined in `NEON_TOOLS` array and handlers in `NEON_HANDLERS` object. The server iterates through tools and registers them with their corresponding handlers.
 
-### TypeScript Configuration
+- **Error Handling**: Tools throw errors which are caught by the server wrapper, logged to Sentry, and returned as structured error messages to the LLM.
 
-- Target: ES2022 with Node16 module resolution
-- Strict mode enabled
-- Output to `dist/` directory
-- Excludes test evaluations from compilation
+- **State Management**: Some tools (migrations, query tuning) create temporary branches and maintain state across multiple tool calls. The LLM is prompted to remember branch IDs from previous calls.
+
+- **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry error reporting.
+
+## Adding New Tools
+
+1. Define the tool schema in `src/tools/toolsSchema.ts`:
+```typescript
+export const myNewToolInputSchema = z.object({
+  project_id: z.string().describe('The Neon project ID'),
+  // ... other fields
+});
+```
+
+2. Add the tool definition to `NEON_TOOLS` array in `src/tools/definitions.ts`:
+```typescript
+{
+  name: 'my_new_tool' as const,
+  description: 'Description of what this tool does',
+  inputSchema: myNewToolInputSchema,
+}
+```
+
+3. Create a handler in `src/tools/handlers/my-new-tool.ts`:
+```typescript
+import { ToolHandler } from '../types.js';
+import { myNewToolInputSchema } from '../toolsSchema.js';
+
+export const myNewToolHandler: ToolHandler<'my_new_tool'> = async (
+  args,
+  neonClient,
+  extra
+) => {
+  // Implementation
+  return {
+    content: [
+      {
+        type: 'text',
+        text: 'Result message',
+      },
+    ],
+  };
+};
+```
+
+4. Register the handler in `src/tools/tools.ts`:
+```typescript
+import { myNewToolHandler } from './handlers/my-new-tool.js';
+
+export const NEON_HANDLERS = {
+  // ... existing handlers
+  my_new_tool: myNewToolHandler,
+};
+```
+
+5. Add evaluations in `src/tools-evaluations/` to test your tool.
+
+## Environment Configuration
+
+See `.env.example` for all configuration options. Key variables:
+
+- `NEON_API_KEY`: Required for local development and testing
+- `BRAINTRUST_API_KEY`: Required for running evaluations
+- `ANTHROPIC_API_KEY`: Required for running evaluations
+- `OAUTH_DATABASE_URL`: Required for remote MCP server with OAuth
+- `COOKIE_SECRET`: Required for remote MCP server OAuth flow
+- `CLIENT_ID` / `CLIENT_SECRET`: OAuth client credentials
+
+## Project Structure
+
+```
+src/
+├── index.ts                 # Entry point, command parser, transport selection
+├── server/
+│   ├── index.ts            # MCP server creation and tool/resource registration
+│   └── api.ts              # Neon API client factory
+├── tools/
+│   ├── definitions.ts      # Tool definitions (NEON_TOOLS)
+│   ├── tools.ts           # Tool handlers mapping (NEON_HANDLERS)
+│   ├── toolsSchema.ts     # Zod schemas for tool inputs
+│   └── handlers/          # Individual tool implementations
+├── transports/
+│   ├── stdio.ts           # Local MCP transport
+│   ├── sse-express.ts     # Remote SSE transport
+│   └── stream.ts          # Remote Streamable HTTP transport
+├── oauth/                 # OAuth 2.0 implementation
+├── analytics/             # Segment analytics integration
+├── sentry/               # Sentry error tracking
+└── utils/                # Shared utilities
+
+mcp-client/               # CLI client for testing
+landing/                  # Next.js landing page
+```
+
+## Important Notes
+
+- **TypeScript Configuration**: Uses ES2022 with Node16 module resolution. All imports must use `.js` extensions (not `.ts`) due to ESM requirements.
+
+- **Building**: The build process includes chmod operations to make `dist/index.js` executable, exports tool definitions to `landing/tools.json`, and builds the landing page.
+
+- **Logger Behavior**: In stdio mode, the logger is silenced to prevent stderr pollution. In SSE mode, logging is active.
+
+- **Migration Pattern**: Tools like `prepare_database_migration` and `prepare_query_tuning` create temporary branches. The LLM must remember these branch IDs to pass to subsequent `complete_*` tools.
+
+- **Neon API Client**: Created using `@neondatabase/api-client` package. All tool handlers receive a pre-configured `neonClient` instance.
+
+## Testing Strategy
+
+Tests use Braintrust for LLM-based evaluations. Each test:
+1. Defines a task/prompt
+2. Executes it against the MCP server
+3. Evaluates the result using Braintrust scoring functions
+
+This validates that tools work correctly with realistic LLM interactions.
