@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants.js';
 import {
   completeDatabaseMigrationInputSchema,
@@ -889,5 +890,13 @@ export const NEON_TOOLS = [
     name: 'fetch' as const,
     description: `Fetches detailed information about a specific organization, project, or branch using the ID returned by the search tool. This tool provides comprehensive information about Neon resources for detailed analysis and management.`,
     inputSchema: fetchInputSchema,
+  },
+  {
+    name: 'test_review_tool' as const,
+    description: 'Test tool for validating Claude Code Review',
+    inputSchema: z.object({
+      project_id: z.string(),
+      user_name: z.string(),
+    }),
   },
 ];
