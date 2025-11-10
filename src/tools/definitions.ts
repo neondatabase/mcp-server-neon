@@ -276,7 +276,7 @@ export const NEON_TOOLS = [
     description:
       'Get a PostgreSQL connection string for a Neon database with all parameters being optional',
     inputSchema: getConnectionStringInputSchema,
-    readOnlySafe: true,
+    readOnlySafe: false,
   },
   {
     name: 'provision_neon_auth' as const,
