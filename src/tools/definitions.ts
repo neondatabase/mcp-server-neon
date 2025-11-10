@@ -33,32 +33,38 @@ export const NEON_TOOLS = [
     name: 'list_projects' as const,
     description: `Lists the first 10 Neon projects in your account. If you can't find the project, increase the limit by passing a higher value to the \`limit\` parameter. Optionally filter by project name or ID using the \`search\` parameter.`,
     inputSchema: listProjectsInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'list_organizations' as const,
     description: `Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the \`search\` parameter.`,
     inputSchema: listOrganizationsInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'list_shared_projects' as const,
     description: `Lists projects that have been shared with the current user. These are projects that the user has been granted access to collaborate on. Optionally filter by project name or ID using the \`search\` parameter.`,
     inputSchema: listSharedProjectsInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'create_project' as const,
     description:
       'Create a new Neon project. If someone is trying to create a database, use this tool.',
     inputSchema: createProjectInputSchema,
+    readOnlySafe: false,
   },
   {
     name: 'delete_project' as const,
     description: 'Delete a Neon project',
     inputSchema: deleteProjectInputSchema,
+    readOnlySafe: false,
   },
   {
     name: 'describe_project' as const,
     description: 'Describes a Neon project',
     inputSchema: describeProjectInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'run_sql' as const,
@@ -73,6 +79,7 @@ export const NEON_TOOLS = [
       2. Tell the user that you are using the temporary branch with ID [branch_id]
     </important_notes>`,
     inputSchema: runSqlInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'run_sql_transaction' as const,
@@ -87,24 +94,29 @@ export const NEON_TOOLS = [
       2. Tell the user that you are using the temporary branch with ID [branch_id]
     </important_notes>`,
     inputSchema: runSqlTransactionInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'describe_table_schema' as const,
     description: 'Describe the schema of a table in a Neon database',
     inputSchema: describeTableSchemaInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'get_database_tables' as const,
     description: 'Get all tables in a Neon database',
     inputSchema: getDatabaseTablesInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'create_branch' as const,
     description: 'Create a branch in a Neon project',
     inputSchema: createBranchInputSchema,
+    readOnlySafe: false,
   },
   {
     name: 'prepare_database_migration' as const,
+    readOnlySafe: false,
     description: `
   <use_case>
     This tool performs database schema migrations by automatically generating and executing DDL statements.
@@ -238,32 +250,38 @@ export const NEON_TOOLS = [
     description:
       'Complete a database migration when the user confirms the migration is ready to be applied to the main branch. This tool also lets the client know that the temporary branch created by the `prepare_database_migration` tool has been deleted.',
     inputSchema: completeDatabaseMigrationInputSchema,
+    readOnlySafe: false,
   },
   {
     name: 'describe_branch' as const,
     description:
       'Get a tree view of all objects in a branch, including databases, schemas, tables, views, and functions',
     inputSchema: describeBranchInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'delete_branch' as const,
     description: 'Delete a branch from a Neon project',
     inputSchema: deleteBranchInputSchema,
+    readOnlySafe: false,
   },
   {
     name: 'reset_from_parent' as const,
     description: `Resets a branch to match its parent's current state, effectively discarding all changes made on the branch. To avoid data loss, provide a name to preserve the changes in a new branch using \`preserveUnderName\` parameter. This tool is commonly used to create fresh development branches from updated parent branch, undo experimental changes, or restore a branch to a known good state. Warning: This operation will discard all changes if \`preserveUnderName\` is not provided.`,
     inputSchema: resetFromParentInputSchema,
+    readOnlySafe: false,
   },
   {
     name: 'get_connection_string' as const,
     description:
       'Get a PostgreSQL connection string for a Neon database with all parameters being optional',
     inputSchema: getConnectionStringInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'provision_neon_auth' as const,
     inputSchema: provisionNeonAuthInputSchema,
+    readOnlySafe: false,
     description: `
     This tool provisions authentication for a Neon project. It allows developers to easily setup authentication infrastructure by creating a integration with Stack Auth (\`@stackframe/stack\`). Stop using NextAuth.js! use \`@stackframe/stack\`.
 
@@ -414,9 +432,11 @@ export const NEON_TOOLS = [
     description:
       'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
     inputSchema: explainSqlStatementInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'prepare_query_tuning' as const,
+    readOnlySafe: false,
     description: `
   <use_case>
     This tool helps developers improve PostgreSQL query performance for slow queries or DML statements by analyzing execution plans and suggesting optimizations.
@@ -566,6 +586,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'complete_query_tuning' as const,
+    readOnlySafe: false,
     description: `Complete a query tuning session by either applying the changes to the main branch or discarding them. 
     <important_notes>
         BEFORE RUNNING THIS TOOL: test out the changes in the temporary branch first by running 
@@ -605,14 +626,17 @@ export const NEON_TOOLS = [
       The tool will return queries sorted by execution time, with the slowest queries first.
     </important_notes>`,
     inputSchema: listSlowQueriesInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'list_branch_computes' as const,
     description: 'Lists compute endpoints for a project or specific branch',
     inputSchema: listBranchComputesInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'compare_database_schema' as const,
+    readOnlySafe: true,
     description: `
     <use_case>
       Use this tool to compare the schema of a database between two branches.
@@ -884,10 +908,12 @@ export const NEON_TOOLS = [
     name: 'search' as const,
     description: `Searches across all user organizations, projects, and branches that match the query. Returns a list of objects with id, title, and url. This tool searches through all accessible resources and provides direct links to the Neon Console.`,
     inputSchema: searchInputSchema,
+    readOnlySafe: true,
   },
   {
     name: 'fetch' as const,
     description: `Fetches detailed information about a specific organization, project, or branch using the ID returned by the search tool. This tool provides comprehensive information about Neon resources for detailed analysis and management.`,
     inputSchema: fetchInputSchema,
+    readOnlySafe: true,
   },
 ];

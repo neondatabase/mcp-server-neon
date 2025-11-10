@@ -17,7 +17,10 @@ export type ToolHandler<T extends NeonToolName> = ToolCallback<{
 
 export type ToolHandlerExtraParams = Parameters<
   ToolHandler<NeonToolName>
->['1'] & { account: AuthContext['extra']['account']; readOnly?: boolean };
+>['1'] & {
+  account: AuthContext['extra']['account'];
+  readOnly?: AuthContext['extra']['readOnly'];
+};
 
 export type ToolHandlerExtended<T extends NeonToolName> = (
   ...args: [

@@ -22,7 +22,7 @@ export const createStreamTransport = (appContext: AppContext) => {
         client: auth.extra.client,
         account: auth.extra.account,
         app: appContext,
-        readOnly: auth.extra.readOnly as boolean | undefined,
+        readOnly: auth.extra.readOnly,
       });
 
       const transport = new StreamableHTTPServerTransport({

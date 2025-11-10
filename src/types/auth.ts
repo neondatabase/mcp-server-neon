@@ -2,6 +2,7 @@ import { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 
 export type AuthContext = {
   extra: {
+    readOnly?: boolean;
     account: {
       id: string;
       name: string;

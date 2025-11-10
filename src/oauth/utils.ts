@@ -6,12 +6,13 @@ import { ApiKeyRecord, apiKeys } from './kv-store.js';
 import { createNeonClient } from '../server/api.js';
 import { identify } from '../analytics/analytics.js';
 
+const READ_ONLY_HEADER = 'X-read-only';
+
 export const ensureCorsHeaders = () =>
   cors({
     origin: true,
     methods: '*',
-    allowedHeaders:
-      'Authorization, Origin, Content-Type, Accept, X-Read-Only, *',
+    allowedHeaders: `Authorization, Origin, Content-Type, Accept, ${READ_ONLY_HEADER}, *`,
   });
 
 const fetchAccountDetails = async (
@@ -69,7 +70,7 @@ export const requiresAuth =
 
     const accessToken = extractBearerToken(authorization);
     // Check for X-Read-Only header
-    const readOnlyHeader = request.headers['x-read-only'];
+    const readOnlyHeader = request.headers[READ_ONLY_HEADER.toLowerCase()];
     const readOnly = readOnlyHeader === 'true' || readOnlyHeader === '1';
 
     const token = await model.getAccessToken(accessToken);

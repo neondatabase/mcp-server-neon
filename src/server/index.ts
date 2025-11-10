@@ -16,24 +16,6 @@ import { setSentryTags } from '../sentry/utils.js';
 import { ToolHandlerExtraParams } from '../tools/types.js';
 import { handleToolError } from './errors.js';
 
-// Tools that are safe to use in read-only mode
-const READ_ONLY_TOOLS = new Set([
-  'list_projects',
-  'list_organizations',
-  'list_shared_projects',
-  'describe_project',
-  'run_sql',
-  'run_sql_transaction',
-  'describe_table_schema',
-  'get_database_tables',
-  'describe_branch',
-  'get_connection_string',
-  'explain_sql_statement',
-  'list_slow_queries',
-  'list_branch_computes',
-  'compare_database_schema',
-]);
-
 export const createMcpServer = (context: ServerContext) => {
   const server = new McpServer(
     {
@@ -52,7 +34,7 @@ export const createMcpServer = (context: ServerContext) => {
 
   // Filter tools based on read-only mode
   const availableTools = context.readOnly
-    ? NEON_TOOLS.filter((tool) => READ_ONLY_TOOLS.has(tool.name))
+    ? NEON_TOOLS.filter((tool) => tool.readOnlySafe)
     : NEON_TOOLS;
 
   // Register tools
