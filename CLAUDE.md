@@ -227,6 +227,55 @@ landing/                  # Next.js landing page
 
 - **Neon API Client**: Created using `@neondatabase/api-client` package. All tool handlers receive a pre-configured `neonClient` instance.
 
+## Claude Code Review Workflow
+
+This repository uses an enhanced Claude Code Review workflow that provides inline feedback on pull requests.
+
+### What Gets Reviewed
+
+- Architecture and design patterns (tool registration, handler typing)
+- Security vulnerabilities (SQL injection, secrets, input validation)
+- Logic bugs (error handling, state management, edge cases)
+- Performance issues (N+1 queries, inefficient API usage)
+- Testing gaps (missing evaluations, uncovered scenarios)
+- MCP-specific patterns (analytics tracking, error handling, Sentry capture)
+
+### What's Automated (Not Reviewed by Claude)
+
+- Linting: `bun run lint` (checked by pr.yml)
+- Building: `bun run build` (checked by pr.yml)
+- Formatting: Automated formatting checks
+
+### Review Process
+
+1. Workflow triggers automatically on PR open/update
+2. Claude analyzes changes with full project context
+3. Inline comments posted on significant issues
+4. Summary comment provides overview and statistics
+
+### Inline Comment Format
+
+- **Severity**: 🔴 Critical | 🟡 Important | 🔵 Consider
+- **Category**: [Security/Logic/Performance/Architecture/Testing/MCP]
+- **Description**: Clear explanation with context
+- **Fix**: Actionable code example or reference
+
+Example:
+```
+🔴 **[Security]**: SQL injection vulnerability - user input concatenated directly into SQL.
+
+**Fix:** Use parameterized queries:
+const result = await query('SELECT * FROM users WHERE name = $1', [userName]);
+```
+
+### Triggering Reviews
+
+- **Automatic**: Opens when PR is created or updated
+- **Manual**: Run workflow via GitHub Actions with PR number
+- **Security**: Only OWNER/MEMBER/COLLABORATOR PRs (blocks external)
+
+See `.github/CLAUDE_REVIEW_GUIDE.md` for detailed guidance.
+
 ## Testing Strategy
 
 Tests use Braintrust for LLM-based evaluations. Each test:
