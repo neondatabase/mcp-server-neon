@@ -61,7 +61,7 @@ export const createMcpServer = (context: ServerContext) => {
           async (span) => {
             const properties = {
               tool_name: tool.name,
-              readOnly: context.readOnly ?? false,
+              readOnly: String(context.readOnly ?? false),
             };
             logger.info('tool call:', properties);
             setSentryTags(context);
