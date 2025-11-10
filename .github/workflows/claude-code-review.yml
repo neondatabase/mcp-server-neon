@@ -120,13 +120,18 @@ jobs:
             For each significant issue (max 5 per file), post an inline comment using:
 
             ```bash
-            gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments \
+            gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number || github.event.inputs.pr_number }}/comments \
               -f body="COMMENT_BODY" \
               -f path="relative/path/to/file.ts" \
               -F line=42 \
               -f side="RIGHT" \
-              -f commit_id="${{ github.event.pull_request.head.sha }}"
+              -f commit_id="${{ github.event.pull_request.head.sha || github.sha }}"
             ```
+
+            **IMPORTANT:**
+            - For this PR, use: `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number || github.event.inputs.pr_number }}/comments`
+            - Commit SHA: `${{ github.event.pull_request.head.sha || github.sha }}`
+            - Post comments for EVERY significant issue you find (not just a summary)
 
             **Inline Comment Format:**
             - Use emoji severity: 🔴 Critical | 🟡 Important | 🔵 Consider
@@ -165,4 +170,4 @@ jobs:
 
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://docs.claude.com/en/docs/claude-code/cli-reference for available options
-          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh api:repos/*/pulls/*/comments),Bash(gh api:repos/*/pulls/*/reviews)"'
+          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh api repos/*/pulls/*/comments:*),Bash(gh api repos/*/pulls/*/reviews:*)"'
