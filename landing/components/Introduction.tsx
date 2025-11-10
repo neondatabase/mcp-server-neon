@@ -42,10 +42,15 @@ export const Introduction = ({ className }: { className?: string }) => (
       <div className="flex flex-col gap-3">
         <div>
           <p className="text-sm mb-2">
-            Safe for cloud environments. All transactions are read-only - perfect for querying and analyzing data without modification risks.
+            Safe for cloud environments. All transactions are read-only -
+            perfect for querying and analyzing data without modification risks.
           </p>
           <p className="text-xs text-gray-600">
-            Enable read-only mode by adding the <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">x-read-only: true</code> header in your MCP configuration.
+            Enable read-only mode by adding the{' '}
+            <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">
+              x-read-only: true
+            </code>{' '}
+            header in your MCP configuration.
           </p>
         </div>
         <a
