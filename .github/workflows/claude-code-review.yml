@@ -2,7 +2,7 @@ name: Claude Code Review
 
 on:
   pull_request:
-    types: [opened]  # Only run when PR is first created, not on every commit
+    types: [opened] # Only run when PR is first created, not on every commit
     # Optional: Only run on specific file changes
     # paths:
     #   - "src/**/*.ts"

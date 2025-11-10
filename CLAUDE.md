@@ -261,6 +261,7 @@ This repository uses an enhanced Claude Code Review workflow that provides inlin
 - **Fix**: Actionable code example or reference
 
 Example:
+
 ```
 🔴 **[Security]**: SQL injection vulnerability - user input concatenated directly into SQL.
 
