@@ -2,7 +2,7 @@ name: Claude Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened] # Only run when PR is first created, not on every commit
     # Optional: Only run on specific file changes
     # paths:
     #   - "src/**/*.ts"
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
 
@@ -50,20 +50,118 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+            # Code Review Task
 
-            Please review this pull request and provide feedback on:
-            - Code quality and best practices
-            - Potential bugs or issues
-            - Performance considerations
-            - Security concerns
-            - Test coverage
+            **REPO:** ${{ github.repository }}
+            **PR:** ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+            **COMMIT:** ${{ github.event.pull_request.head.sha }}
 
-            Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
+            ## Context
 
-            Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
+            This is the **Neon MCP Server** - a Model Context Protocol server bridging LLMs to Neon Postgres API.
+            Review this PR with understanding of:
+            - MCP tool/handler architecture (see CLAUDE.md lines 83-122)
+            - TypeScript ES2022 + Node16 ESM requirements
+            - Tool registration pattern: definitions.ts → toolsSchema.ts → handlers/ → tools.ts
+            - Multi-call state management for migrations/tuning tools
+
+            ## What's Already Automated (Don't Review)
+
+            - ❌ Lint errors → `bun run lint` (automated by pr.yml)
+            - ❌ Build failures → `bun run build` (automated by pr.yml)
+            - ❌ Formatting issues → Automated
+
+            ## Focus Your Review On (Significant Issues Only)
+
+            1. **Architecture & Design**
+               - Does new tool follow the tool registration pattern?
+               - Is handler properly typed in NEON_HANDLERS?
+               - Are Zod schemas correctly defined in toolsSchema.ts?
+
+            2. **Security Vulnerabilities**
+               - SQL injection risks (tool handlers using raw SQL)
+               - Secrets exposure (API keys, tokens logged or returned)
+               - Input validation gaps (Zod schema completeness)
+               - Command injection in bash tool uses
+
+            3. **Logic Bugs**
+               - Error handling gaps (unhandled promise rejections)
+               - State management issues (branch ID tracking for multi-call tools)
+               - Edge cases not covered (null/undefined handling)
+
+            4. **Performance Issues**
+               - N+1 API call patterns
+               - Inefficient Neon API usage
+               - Missing pagination handling
+               - Unnecessary data fetching
+
+            5. **Testing Gaps**
+               - Missing Braintrust evaluations for new tools
+               - Uncovered edge cases in existing tests
+               - Integration test scenarios missing
+
+            6. **MCP-Specific Issues**
+               - Tool descriptions not clear for LLMs
+               - Missing analytics tracking (trackEvent calls)
+               - Error handling doesn't use ToolError pattern
+               - Missing Sentry error capture
+
+            ## Review Instructions
+
+            ### Step 1: Analyze the PR
+            Use `gh pr view` and `gh pr diff` to understand the changes.
+
+            ### Step 2: Identify Significant Issues
+            - Read the full diff and changed files
+            - For each significant issue, note: file path, line number, severity, description
+            - Only flag issues a human reviewer would care about (not lint/format)
+
+            ### Step 3: Post Inline Comments
+            For each significant issue (max 5 per file), post an inline comment using:
+
+            ```bash
+            gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number || github.event.inputs.pr_number }}/comments -f body="COMMENT_BODY" -f path="relative/path/to/file.ts" -F line=42 -f side="RIGHT" -f commit_id="${{ github.event.pull_request.head.sha || github.sha }}"
+            ```
+
+            **IMPORTANT:**
+            - Use a SINGLE LINE command (no backslashes or line continuations)
+            - For this PR, use: `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number || github.event.inputs.pr_number }}/comments`
+            - Commit SHA: `${{ github.event.pull_request.head.sha || github.sha }}`
+            - Post comments for EVERY significant issue you find (not just a summary)
+            - Keep the body text concise and use \n for line breaks within the body parameter
+
+            **Inline Comment Format:**
+            - Use emoji severity: 🔴 Critical | 🟡 Important | 🔵 Consider
+            - Start with **[Category]** (Security/Logic/Performance/Architecture/Testing)
+            - Explain the issue clearly
+            - Provide actionable fix or suggestion
+            - Reference CLAUDE.md patterns when applicable
+
+            **Example:**
+            ```
+            🔴 **[Security]**: Potential SQL injection vulnerability. User input is concatenated directly into SQL query.\n\n**Fix:** Use parameterized queries:\n\`\`\`typescript\nconst result = await query('SELECT * FROM users WHERE name = $1', [userName]);\n\`\`\`
+            ```
+
+            Note: In the actual gh command, newlines are represented as \n within the body parameter.
+
+            ### Step 4: Post Summary Comment
+            After posting inline comments, create a summary with:
+            - Review statistics (files, lines, issues)
+            - Severity breakdown (🔴, 🟡, 🔵 counts)
+            - Key findings (2-3 most critical issues)
+            - What looks good (2-3 positive aspects)
+            - Note that lint/build are automated
+
+            Use `gh pr comment` to post the summary.
+
+            ## Guidelines
+
+            - **Be selective**: Only comment on significant issues worth a human's attention
+            - **Be specific**: Reference exact lines, provide clear fixes
+            - **Be constructive**: Explain the "why" behind suggestions
+            - **Be project-aware**: Use CLAUDE.md patterns and terminology
+            - **Don't duplicate**: Skip issues automated tools will catch
 
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://docs.claude.com/en/docs/claude-code/cli-reference for available options
-          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
+          claude_args: '--allowed-tools "Bash(gh:*)"'
