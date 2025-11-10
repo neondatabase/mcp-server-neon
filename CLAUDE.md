@@ -81,23 +81,27 @@ npm run test
 ### Core Components
 
 1. **MCP Server (`src/server/index.ts`)**
+
    - Creates and configures the MCP server instance
    - Registers all tools and resources from centralized definitions
    - Implements error handling and observability (Sentry, analytics)
    - Each tool call is tracked and wrapped in error handling
 
 2. **Tools System (`src/tools/`)**
+
    - `definitions.ts`: Exports `NEON_TOOLS` array defining all available tools with their schemas
    - `tools.ts`: Exports `NEON_HANDLERS` object mapping tool names to handler functions
    - `toolsSchema.ts`: Zod schemas for tool input validation
    - `handlers/`: Individual tool handler implementations organized by feature
 
 3. **Transport Layers (`src/transports/`)**
+
    - `stdio.ts`: Standard input/output transport for local MCP clients (Claude Desktop, Cursor)
    - `sse-express.ts`: Server-Sent Events transport for remote MCP server (deprecated)
    - `stream.ts`: Streamable HTTP transport for remote MCP server (recommended)
 
 4. **OAuth System (`src/oauth/`)**
+
    - OAuth 2.0 server implementation for remote MCP authentication
    - Integrates with Neon's OAuth provider (UPSTREAM_OAUTH_HOST)
    - Token persistence using Keyv with Postgres backend
@@ -120,6 +124,7 @@ npm run test
 ## Adding New Tools
 
 1. Define the tool schema in `src/tools/toolsSchema.ts`:
+
 ```typescript
 export const myNewToolInputSchema = z.object({
   project_id: z.string().describe('The Neon project ID'),
@@ -128,6 +133,7 @@ export const myNewToolInputSchema = z.object({
 ```
 
 2. Add the tool definition to `NEON_TOOLS` array in `src/tools/definitions.ts`:
+
 ```typescript
 {
   name: 'my_new_tool' as const,
@@ -137,6 +143,7 @@ export const myNewToolInputSchema = z.object({
 ```
 
 3. Create a handler in `src/tools/handlers/my-new-tool.ts`:
+
 ```typescript
 import { ToolHandler } from '../types.js';
 import { myNewToolInputSchema } from '../toolsSchema.js';
@@ -144,7 +151,7 @@ import { myNewToolInputSchema } from '../toolsSchema.js';
 export const myNewToolHandler: ToolHandler<'my_new_tool'> = async (
   args,
   neonClient,
-  extra
+  extra,
 ) => {
   // Implementation
   return {
@@ -159,6 +166,7 @@ export const myNewToolHandler: ToolHandler<'my_new_tool'> = async (
 ```
 
 4. Register the handler in `src/tools/tools.ts`:
+
 ```typescript
 import { myNewToolHandler } from './handlers/my-new-tool.js';
 
@@ -222,6 +230,7 @@ landing/                  # Next.js landing page
 ## Testing Strategy
 
 Tests use Braintrust for LLM-based evaluations. Each test:
+
 1. Defines a task/prompt
 2. Executes it against the MCP server
 3. Evaluates the result using Braintrust scoring functions
