@@ -32,8 +32,13 @@ export const createMcpServer = (context: ServerContext) => {
 
   const neonClient = createNeonClient(context.apiKey);
 
+  // Filter tools based on read-only mode
+  const availableTools = context.readOnly
+    ? NEON_TOOLS.filter((tool) => tool.readOnlySafe)
+    : NEON_TOOLS;
+
   // Register tools
-  NEON_TOOLS.forEach((tool) => {
+  availableTools.forEach((tool) => {
     const handler = NEON_HANDLERS[tool.name];
     if (!handler) {
       throw new Error(`Handler for tool ${tool.name} not found`);
@@ -54,7 +59,10 @@ export const createMcpServer = (context: ServerContext) => {
             },
           },
           async (span) => {
-            const properties = { tool_name: tool.name };
+            const properties = {
+              tool_name: tool.name,
+              readOnly: String(context.readOnly ?? false),
+            };
             logger.info('tool call:', properties);
             setSentryTags(context);
             track({
@@ -66,6 +74,7 @@ export const createMcpServer = (context: ServerContext) => {
             const extraArgs: ToolHandlerExtraParams = {
               ...extra,
               account: context.account,
+              readOnly: context.readOnly,
             };
             try {
               return await toolHandler(args, neonClient, extraArgs);

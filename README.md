@@ -95,6 +95,22 @@ Remote MCP Server also supports authentication using API key in the `Authorizati
 
 > Provider organization's API key to limit access to projects under the organization only.
 
+**Read-Only Mode:** To prevent accidental modifications, enable read-only mode by adding the `x-read-only` header. This restricts the MCP server to only safe, non-destructive operations:
+
+```json
+{
+  "mcpServers": {
+    "Neon": {
+      "url": "https://mcp.neon.tech/mcp",
+      "headers": {
+        "Authorization": "Bearer <$NEON_API_KEY>",
+        "x-read-only": "true"
+      }
+    }
+  }
+}
+```
+
 MCP supports two remote server transports: the deprecated Server-Sent Events (SSE) and the newer, recommended Streamable HTTP. If your LLM client doesn't support Streamable HTTP yet, you can switch the endpoint from `https://mcp.neon.tech/mcp` to `https://mcp.neon.tech/sse` to use SSE instead.
 
 ### Option 2. Local MCP Server

@@ -78,6 +78,16 @@ async function handleRunSql(
       extra,
     );
     const runQuery = neon(connectionString.uri);
+
+    // If in read-only mode, use transaction with readOnly option
+    if (extra.readOnly) {
+      const response = await runQuery.transaction([runQuery.query(sql)], {
+        readOnly: true,
+      });
+      // Return the first result (the actual query result)
+      return response[0];
+    }
+
     const response = await runQuery.query(sql);
 
     return response;
@@ -109,8 +119,11 @@ async function handleRunSqlTransaction(
     extra,
   );
   const runQuery = neon(connectionString.uri);
+
+  // Use transaction with readOnly option when in read-only mode
   const response = await runQuery.transaction(
     sqlStatements.map((sql) => runQuery.query(sql)),
+    extra.readOnly ? { readOnly: true } : undefined,
   );
 
   return response;
