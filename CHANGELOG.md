@@ -2,9 +2,16 @@
 
 # [Unreleased]
 
+- Feat: `compare_database_schema` tool to generate schema diff for a specific branch. With prompt to generate migration script
+- Feat: `neon-get-started` resource to add AI rules with steps and instructions to integrate projects with Neon
+- Feat: Add generic `search` and `fetch` tools for organizations, projects, and branches
+
+# [0.6.5] 2025-09-16
+
 - Feat: `list_shared_projects` tool to fetch projects that user has permissions to collaborate on
 - Feat: `reset_from_parent` tool to reset a branch from its parent's current state
 - Feat: `compare_database_schema` tool to compare the schema from the child branch and its parent
+- docs: add copyable server link on langing page
 
 # [0.6.4] 2025-08-22
 

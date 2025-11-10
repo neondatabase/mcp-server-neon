@@ -340,3 +340,21 @@ export const compareDatabaseSchemaInputSchema = z.object({
   branchId: z.string().describe('The ID of the branch'),
   databaseName: z.string().describe(DATABASE_NAME_DESCRIPTION),
 });
+
+export const searchInputSchema = z.object({
+  query: z
+    .string()
+    .min(3)
+    .describe(
+      'The search query to find matching organizations, projects, or branches',
+    ),
+});
+
+export const fetchInputSchema = z.object({
+  id: z
+    .string()
+    .min(1)
+    .describe(
+      'The ID returned by the search tool to fetch detailed information about the entity',
+    ),
+});
