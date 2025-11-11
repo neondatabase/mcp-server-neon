@@ -1,12 +1,14 @@
 import { ReadResourceCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Resource } from '@modelcontextprotocol/sdk/types.js';
 
-async function fetchRawGithubContent(rawPath: string) {
+export async function fetchRawGithubContent(rawPath: string) {
   const path = rawPath.replace('/blob', '');
 
-  return fetch(`https://raw.githubusercontent.com${path}`).then((res) =>
-    res.text(),
-  );
+  const response = await fetch(`https://raw.githubusercontent.com${path}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch GitHub content: ${response.status}`);
+  }
+  return response.text();
 }
 
 export const NEON_RESOURCES = [

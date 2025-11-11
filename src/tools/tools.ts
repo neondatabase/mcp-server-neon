@@ -15,6 +15,7 @@ import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
 import { handleSearch } from './handlers/search.js';
 import { handleFetch } from './handlers/fetch.js';
 import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
+import { fetchRawGithubContent } from '../resources.js';
 
 import {
   getDefaultDatabase,
@@ -1014,6 +1015,20 @@ async function handleListSharedProjects(
   return response.data.projects;
 }
 
+async function handleLoadResource({ subject }: { subject: string }) {
+  const resourceMap = {
+    getStarted: '/neondatabase-labs/ai-rules/blob/main/neon-get-started.mdc',
+  };
+
+  const path = resourceMap[subject as keyof typeof resourceMap];
+  if (!path) {
+    throw new InvalidArgumentError(`Unknown resource subject: ${subject}`);
+  }
+
+  const content = await fetchRawGithubContent(path);
+  return content;
+}
+
 async function handleCompareDatabaseSchema(
   params: GetProjectBranchSchemaComparisonParams,
   neonClient: Api<unknown>,
@@ -1595,5 +1610,17 @@ export const NEON_HANDLERS = {
 
   fetch: async ({ params }, neonClient, extra) => {
     return await handleFetch(params, neonClient, extra);
+  },
+
+  load_resource: async ({ params }) => {
+    const content = await handleLoadResource({ subject: params.subject });
+    return {
+      content: [
+        {
+          type: 'text',
+          text: content,
+        },
+      ],
+    };
   },
 } satisfies ToolHandlers;
