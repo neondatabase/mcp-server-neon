@@ -15,6 +15,7 @@ import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
 import { handleSearch } from './handlers/search.js';
 import { handleFetch } from './handlers/fetch.js';
 import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
+import { fetchRawGithubContent, NEON_RESOURCES } from '../resources.js';
 
 import {
   getDefaultDatabase,
@@ -1014,6 +1015,26 @@ async function handleListSharedProjects(
   return response.data.projects;
 }
 
+async function handleLoadResource({ subject }: { subject: string }) {
+  const resource = NEON_RESOURCES.find((r) => r.name === subject);
+  if (!resource) {
+    throw new InvalidArgumentError(`Resource not found: ${subject}`);
+  }
+
+  try {
+    const url = new URL(resource.uri);
+    const path = url.pathname;
+    const content = await fetchRawGithubContent(path);
+    return content;
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(
+      `Failed to load resource "${resource.name}": ${errorMessage}`,
+    );
+  }
+}
+
 async function handleCompareDatabaseSchema(
   params: GetProjectBranchSchemaComparisonParams,
   neonClient: Api<unknown>,
@@ -1595,5 +1616,17 @@ export const NEON_HANDLERS = {
 
   fetch: async ({ params }, neonClient, extra) => {
     return await handleFetch(params, neonClient, extra);
+  },
+
+  load_resource: async ({ params }) => {
+    const content = await handleLoadResource({ subject: params.subject });
+    return {
+      content: [
+        {
+          type: 'text',
+          text: content,
+        },
+      ],
+    };
   },
 } satisfies ToolHandlers;

@@ -358,3 +358,11 @@ export const fetchInputSchema = z.object({
       'The ID returned by the search tool to fetch detailed information about the entity',
     ),
 });
+
+export const loadResourceInputSchema = z.object({
+  subject: z
+    .enum(['neon-get-started'])
+    .describe(
+      'The subject of the resource to load. Options: neon-get-started (Neon getting started guide).',
+    ),
+});

@@ -26,6 +26,7 @@ import {
   compareDatabaseSchemaInputSchema,
   searchInputSchema,
   fetchInputSchema,
+  loadResourceInputSchema,
 } from './toolsSchema.js';
 
 export const NEON_TOOLS = [
@@ -914,6 +915,29 @@ export const NEON_TOOLS = [
     name: 'fetch' as const,
     description: `Fetches detailed information about a specific organization, project, or branch using the ID returned by the search tool. This tool provides comprehensive information about Neon resources for detailed analysis and management.`,
     inputSchema: fetchInputSchema,
+    readOnlySafe: true,
+  },
+  {
+    name: 'load_resource' as const,
+    description: `
+  <use_case>
+    Loads comprehensive Neon documentation and usage guidelines from GitHub. This tool provides instructions for various Neon features and workflows.
+    
+    Use this tool when:
+    - User says "Get started with Neon" or similar onboarding phrases (with neon-get-started subject)
+    - User needs detailed guidance for initial Neon setup and configuration (with neon-get-started subject)
+    - You need comprehensive context about Neon workflows and best practices (with neon-get-started subject)
+    
+    Available subjects:
+    - neon-get-started: Comprehensive interactive guide covering organization/project setup, database configuration, connection strings, dependency installation, schema creation/migration, etc.
+  </use_case>
+
+  <important_notes>
+    - This tool provides general guidance on different subjects relevant to Neon.
+    - This tool returns the FULL documentation content
+    - Load this resource early when users need onboarding guidance
+  </important_notes>`,
+    inputSchema: loadResourceInputSchema,
     readOnlySafe: true,
   },
 ];
