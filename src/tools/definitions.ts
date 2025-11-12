@@ -924,12 +924,12 @@ export const NEON_TOOLS = [
     Loads comprehensive Neon documentation and usage guidelines from GitHub. This tool provides instructions for various Neon features and workflows.
     
     Use this tool when:
-    - User says "Get started with Neon" or similar onboarding phrases (with getStarted subject)
-    - User needs detailed guidance for initial Neon setup and configuration (with getStarted subject)
-    - You need comprehensive context about Neon workflows and best practices (with getStarted subject)
+    - User says "Get started with Neon" or similar onboarding phrases (with neon-get-started subject)
+    - User needs detailed guidance for initial Neon setup and configuration (with neon-get-started subject)
+    - You need comprehensive context about Neon workflows and best practices (with neon-get-started subject)
     
     Available subjects:
-    - getStarted: Comprehensive interactive guide covering organization/project setup, database configuration, connection strings, dependency installation, schema creation/migration, etc.
+    - neon-get-started: Comprehensive interactive guide covering organization/project setup, database configuration, connection strings, dependency installation, schema creation/migration, etc.
   </use_case>
 
   <important_notes>

@@ -361,8 +361,8 @@ export const fetchInputSchema = z.object({
 
 export const loadResourceInputSchema = z.object({
   subject: z
-    .enum(['getStarted'])
+    .enum(['neon-get-started'])
     .describe(
-      'The subject of the resource to load. Options: getStarted (Neon getting started guide).',
+      'The subject of the resource to load. Options: neon-get-started (Neon getting started guide).',
     ),
 });

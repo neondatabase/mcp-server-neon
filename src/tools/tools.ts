@@ -15,7 +15,7 @@ import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
 import { handleSearch } from './handlers/search.js';
 import { handleFetch } from './handlers/fetch.js';
 import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
-import { fetchRawGithubContent } from '../resources.js';
+import { fetchRawGithubContent, NEON_RESOURCES } from '../resources.js';
 
 import {
   getDefaultDatabase,
@@ -1016,17 +1016,23 @@ async function handleListSharedProjects(
 }
 
 async function handleLoadResource({ subject }: { subject: string }) {
-  const resourceMap = {
-    getStarted: '/neondatabase-labs/ai-rules/blob/main/neon-get-started.mdc',
-  };
-
-  const path = resourceMap[subject as keyof typeof resourceMap];
-  if (!path) {
-    throw new InvalidArgumentError(`Unknown resource subject: ${subject}`);
+  const resource = NEON_RESOURCES.find((r) => r.name === subject);
+  if (!resource) {
+    throw new InvalidArgumentError(`Resource not found: ${subject}`);
   }
 
-  const content = await fetchRawGithubContent(path);
-  return content;
+  try {
+    const url = new URL(resource.uri);
+    const path = url.pathname;
+    const content = await fetchRawGithubContent(path);
+    return content;
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(
+      `Failed to load resource "${resource.name}": ${errorMessage}`,
+    );
+  }
 }
 
 async function handleCompareDatabaseSchema(
