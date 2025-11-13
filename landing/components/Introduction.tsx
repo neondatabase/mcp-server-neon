@@ -45,9 +45,9 @@ export const Introduction = ({ className }: { className?: string }) => (
             Safe for cloud environments. All transactions are read-only -
             perfect for querying and analyzing data without modification risks.
           </p>
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-muted-foreground">
             Enable read-only mode by adding the{' '}
-            <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">
+            <code className="bg-muted px-1 py-0.5 rounded text-xs">
               x-read-only: true
             </code>{' '}
             header in your MCP configuration.
