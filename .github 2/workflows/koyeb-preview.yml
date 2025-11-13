@@ -1,0 +1,78 @@
+name: Build and deploy backend to preview
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [synchronize, labeled]
+
+jobs:
+  deploy:
+    concurrency:
+      group: '${{ github.ref_name }}'
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'deploy-preview')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install and configure the Koyeb CLI
+        uses: koyeb-community/koyeb-actions@v2
+        with:
+          api_token: '${{ secrets.KOYEB_PREVIEW_TOKEN }}'
+      - name: Build and deploy to Koyeb preview
+        run: |
+          koyeb deploy . platform-koyeb-preview/main \
+            --instance-type nano \
+            --region was \
+            --archive-builder docker \
+            --archive-docker-dockerfile remote.Dockerfile \
+            --privileged \
+            --type web \
+            --port 3001:http \
+            --route /:3001 \
+            --wait \
+            --env CLIENT_ID=${{secrets.CLIENT_ID}} \
+            --env CLIENT_SECRET=${{secrets.CLIENT_SECRET}} \
+            --env OAUTH_DATABASE_URL=${{secrets.PREVIEW_OAUTH_DATABASE_URL}} \
+            --env SERVER_HOST=${{vars.KOYEB_PREVIEW_SERVER_HOST}} \
+            --env NEON_API_HOST=${{vars.NEON_API_HOST_STAGING}} \
+            --env UPSTREAM_OAUTH_HOST=${{vars.OAUTH_HOST_STAGING}} \
+            --env COOKIE_SECRET=${{secrets.COOKIE_SECRET}} \
+
+      - name: Comment on PR with deployment URL
+        if: ${{ github.event_name == 'pull_request' && success() }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // GitHub bot id taken from (https://api.github.com/users/github-actions[bot])
+            const githubActionsBotId = 41898282
+
+            const ownerRepoParams = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            }
+
+            // Hidden start marker for the comment
+            const startMarker = '<!-- Preview Deployment Comment-->';
+            const body = `${startMarker}
+            🚀 Preview deployment ready: [https://preview-mcp.neon.tech](https://preview-mcp.neon.tech)`;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...ownerRepoParams,
+              issue_number: context.issue.number,
+            });
+
+             // Delete previous comments regarding preview deployments.
+            for (comment of comments.filter(comment => comment.user.id === githubActionsBotId && comment.body.startsWith(startMarker))) {
+              await github.rest.issues.deleteComment({
+                comment_id: comment.id,
+                ...ownerRepoParams,
+              })
+            }
+
+            await github.rest.issues.createComment({
+              ...ownerRepoParams,
+              issue_number: context.issue.number,
+              body
+            });
