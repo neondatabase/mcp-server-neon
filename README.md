@@ -240,6 +240,15 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 
 - **`provision_neon_auth`**: Provisions Neon Auth for a Neon project. It allows developers to easily set up authentication infrastructure by creating an integration with an Auth provider.
 
+**Search and Discovery:**
+
+- **`search`**: Searches across organizations, projects, and branches matching a query. Returns IDs, titles, and direct links to the Neon Console.
+- **`fetch`**: Fetches detailed information about a specific organization, project, or branch using an ID (typically from the search tool).
+
+**Documentation and Resources:**
+
+- **`load_resource`**: Loads comprehensive Neon documentation and usage guidelines, including the "neon-get-started" guide for setup, configuration, and best practices.
+
 ## Migrations
 
 Migrations are a way to manage changes to your database schema over time. With the Neon MCP server, LLMs are empowered to do migrations safely with separate "Start" (`prepare_database_migration`) and "Commit" (`complete_database_migration`) commands.
