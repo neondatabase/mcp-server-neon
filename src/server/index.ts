@@ -77,7 +77,13 @@ export const createMcpServer = (context: ServerContext) => {
               readOnly: context.readOnly,
             };
             try {
-              return await toolHandler(args, neonClient, extraArgs);
+              // Normalize args to always have params, even if empty
+              // This prevents destructuring errors that occur when tools have all optional parameters
+              const normalizedArgs = {
+                ...args,
+                params: args?.params ?? {},
+              };
+              return await toolHandler(normalizedArgs, neonClient, extraArgs);
             } catch (error) {
               span.setStatus({
                 code: 2,
