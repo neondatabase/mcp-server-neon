@@ -84,7 +84,7 @@ export const createMcpServer = (context: ServerContext) => {
             };
             try {
               return await toolHandler(
-                { params: args.params ?? {} },
+                { ...args, params: args.params ?? {} },
                 neonClient,
                 extraArgs,
               );
