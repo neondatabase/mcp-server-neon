@@ -46,16 +46,10 @@ export const createMcpServer = (context: ServerContext) => {
 
     const toolHandler = handler as ToolHandlerExtended<typeof tool.name>;
 
-    // Make params optional with a default empty object to prevent validation errors
-    // when clients don't send the params wrapper for tools with all optional parameters
-    const toolSchema = {
-      params: tool.inputSchema.optional(),
-    };
-
     server.tool(
       tool.name,
       tool.description,
-      toolSchema,
+      { params: tool.inputSchema },
       async (args, extra) => {
         return await startSpan(
           {
