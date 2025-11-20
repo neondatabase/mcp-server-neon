@@ -25,7 +25,6 @@ export const listProjectsInputSchema = z
       ),
     org_id: z.string().optional().describe('Search for projects by org_id.'),
   })
-  .optional()
   .default({});
 
 export const createProjectInputSchema = z
@@ -39,7 +38,6 @@ export const createProjectInputSchema = z
       .optional()
       .describe('Create project in a specific organization.'),
   })
-  .optional()
   .default({});
 
 export const deleteProjectInputSchema = z.object({
@@ -292,7 +290,6 @@ export const listBranchComputesInputSchema = z
         'The ID of the branch. If provided, endpoints for this specific branch will be listed.',
       ),
   })
-  .optional()
   .default({});
 
 export const listOrganizationsInputSchema = z
@@ -304,7 +301,6 @@ export const listOrganizationsInputSchema = z
         'Search organizations by name or ID. You can specify partial name or ID values to filter results.',
       ),
   })
-  .optional()
   .default({});
 
 export const listSharedProjectsInputSchema = z
@@ -328,7 +324,6 @@ export const listSharedProjectsInputSchema = z
         'Search by project name or id. You can specify partial name or id values to filter results.',
       ),
   })
-  .optional()
   .default({});
 
 export const resetFromParentInputSchema = z.object({
