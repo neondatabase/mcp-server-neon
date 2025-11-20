@@ -11,7 +11,9 @@ jobs:
     concurrency:
       group: '${{ github.ref_name }}'
       cancel-in-progress: true
-    runs-on: ubuntu-latest
+    runs-on:
+      group: neondatabase-protected-runner-group
+      labels: linux-ubuntu-latest
     # Only main branch is allowed to deploy to production
     if: github.ref == 'refs/heads/main'
     steps:

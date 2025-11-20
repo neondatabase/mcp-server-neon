@@ -10,7 +10,9 @@ jobs:
     concurrency:
       group: '${{ github.ref_name }}'
       cancel-in-progress: true
-    runs-on: ubuntu-latest
+    runs-on:
+      group: neondatabase-protected-runner-group
+      labels: linux-ubuntu-latest
     if: contains(github.event.pull_request.labels.*.name, 'deploy-preview')
     steps:
       - name: Checkout
