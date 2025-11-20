@@ -338,14 +338,16 @@ authRouter.post(
     };
     const client = await model.getClient(clientId, '');
     if (!client) {
-      res.status(400).json({ code: 'invalid_request', ...error });
+      // RFC 6749: Return 401 for invalid_client to signal client deletion to OAuth clients like Claude
+      res.status(401).json(error);
       return;
     }
 
     const isPublicClient = client.tokenEndpointAuthMethod === 'none';
     if (!isPublicClient) {
       if (clientSecret !== client.secret) {
-        res.status(400).json({ code: 'invalid_request', ...error });
+        // RFC 6749: Return 401 for invalid_client credentials
+        res.status(401).json(error);
         return;
       }
     }

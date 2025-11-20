@@ -106,6 +106,8 @@ npm run test
    - Integrates with Neon's OAuth provider (UPSTREAM_OAUTH_HOST)
    - Token persistence using Keyv with Postgres backend
    - Cookie-based client approval tracking
+   - Dynamic client registration at `/register` endpoint
+   - Redirect URI validation for registered clients
 
 5. **Resources (`src/resources.ts`)**
    - MCP resources that provide read-only context (like "getting started" guides)
@@ -178,6 +180,42 @@ export const NEON_HANDLERS = {
 
 5. Add evaluations in `src/tools-evaluations/` to test your tool.
 
+## OAuth Client Registration
+
+### Registering Claude as an OAuth Client
+
+To enable Claude.ai to connect to the Neon MCP Server as a remote connector, you need to register it as an OAuth client with the required redirect URI.
+
+**Quick Command:**
+
+```bash
+# For production
+npm run register-claude https://mcp.neon.tech
+
+# For local testing
+npm run register-claude http://localhost:3001
+```
+
+This registers a client with:
+
+- Client name: "Claude.ai"
+- Redirect URI: `https://claude.ai/api/mcp/auth_callback`
+- Grant types: `authorization_code`, `refresh_token`
+- Response types: `code`
+
+The script outputs `client_id` and `client_secret` which should be provided to Claude/Anthropic.
+
+**See:** `docs/CLAUDE_CONNECTOR_SETUP.md` for detailed setup instructions and troubleshooting.
+
+### How Redirect URI Validation Works
+
+The OAuth server validates redirect URIs at two critical points:
+
+1. During authorization (`/authorize` endpoint) - `src/oauth/server.ts:183-189`
+2. During token exchange (`/token` endpoint) - `src/oauth/server.ts:402-410`
+
+Validation ensures the provided `redirect_uri` matches one in the client's registered `redirect_uris` array.
+
 ## Environment Configuration
 
 See `.env.example` for all configuration options. Key variables:
@@ -187,7 +225,7 @@ See `.env.example` for all configuration options. Key variables:
 - `ANTHROPIC_API_KEY`: Required for running evaluations
 - `OAUTH_DATABASE_URL`: Required for remote MCP server with OAuth
 - `COOKIE_SECRET`: Required for remote MCP server OAuth flow
-- `CLIENT_ID` / `CLIENT_SECRET`: OAuth client credentials
+- `CLIENT_ID` / `CLIENT_SECRET`: OAuth client credentials (for upstream Neon OAuth)
 
 ## Project Structure
 

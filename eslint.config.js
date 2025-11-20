@@ -12,6 +12,7 @@ export default ts.config(
       // see https://eslint.org/docs/latest/use/configure/configuration-files#globally-ignoring-files-with-ignores
       'src/tools-evaluations/**/*',
       'landing/**/*',
+      'scripts/**/*', // Scripts are run directly with tsx/bun, not compiled
     ],
     rules: {
       'no-console': 'off',

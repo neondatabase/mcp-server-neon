@@ -191,6 +191,8 @@ If you are using Windows and encounter issues while adding the MCP server, you m
 - [Cline with Neon MCP Server](https://neon.tech/guides/cline-mcp-neon)
 - [Windsurf with Neon MCP Server](https://neon.tech/guides/windsurf-mcp-neon)
 - [Zed with Neon MCP Server](https://neon.tech/guides/zed-mcp-neon)
+- **[Setting Up as Claude Connector](docs/CLAUDE_CONNECTOR_SETUP.md)** - Technical guide for OAuth integration with Claude
+- **[Getting Listed as Official Claude Connector](docs/CLAUDE_OFFICIAL_LISTING.md)** - Step-by-step guide to get Neon officially listed in Claude
 
 # Features
 
