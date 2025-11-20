@@ -77,11 +77,7 @@ export const createMcpServer = (context: ServerContext) => {
               readOnly: context.readOnly,
             };
             try {
-              return await toolHandler(
-                { ...args, params: args.params ?? {} },
-                neonClient,
-                extraArgs,
-              );
+              return await toolHandler(args, neonClient, extraArgs);
             } catch (error) {
               span.setStatus({
                 code: 2,

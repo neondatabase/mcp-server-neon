@@ -1,46 +1,46 @@
-import {
-  ListProjectsParams,
-  ListSharedProjectsParams,
-} from '@neondatabase/api-client';
 import { z } from 'zod';
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants.js';
 
-type ZodObjectParams<T> = z.ZodObject<{ [key in keyof T]: z.ZodType<T[key]> }>;
-
 const DATABASE_NAME_DESCRIPTION = `The name of the database. If not provided, the default ${NEON_DEFAULT_DATABASE_NAME} or first available database is used.`;
 
-export const listProjectsInputSchema = z.object({
-  cursor: z
-    .string()
-    .optional()
-    .describe(
-      'Specify the cursor value from the previous response to retrieve the next batch of projects.',
-    ),
-  limit: z
-    .number()
-    .default(10)
-    .describe(
-      'Specify a value from 1 to 400 to limit number of projects in the response.',
-    ),
-  search: z
-    .string()
-    .optional()
-    .describe(
-      'Search by project name or id. You can specify partial name or id values to filter results.',
-    ),
-  org_id: z.string().optional().describe('Search for projects by org_id.'),
-}) satisfies ZodObjectParams<ListProjectsParams>;
+export const listProjectsInputSchema = z
+  .object({
+    cursor: z
+      .string()
+      .optional()
+      .describe(
+        'Specify the cursor value from the previous response to retrieve the next batch of projects.',
+      ),
+    limit: z
+      .number()
+      .default(10)
+      .describe(
+        'Specify a value from 1 to 400 to limit number of projects in the response.',
+      ),
+    search: z
+      .string()
+      .optional()
+      .describe(
+        'Search by project name or id. You can specify partial name or id values to filter results.',
+      ),
+    org_id: z.string().optional().describe('Search for projects by org_id.'),
+  })
+  .optional()
+  .default({});
 
-export const createProjectInputSchema = z.object({
-  name: z
-    .string()
-    .optional()
-    .describe('An optional name of the project to create.'),
-  org_id: z
-    .string()
-    .optional()
-    .describe('Create project in a specific organization.'),
-});
+export const createProjectInputSchema = z
+  .object({
+    name: z
+      .string()
+      .optional()
+      .describe('An optional name of the project to create.'),
+    org_id: z
+      .string()
+      .optional()
+      .describe('Create project in a specific organization.'),
+  })
+  .optional()
+  .default({});
 
 export const deleteProjectInputSchema = z.object({
   projectId: z.string().describe('The ID of the project to delete'),
@@ -277,50 +277,59 @@ export const listSlowQueriesInputSchema = z.object({
     ),
 });
 
-export const listBranchComputesInputSchema = z.object({
-  projectId: z
-    .string()
-    .optional()
-    .describe(
-      'The ID of the project. If not provided, the only available project will be used.',
-    ),
-  branchId: z
-    .string()
-    .optional()
-    .describe(
-      'The ID of the branch. If provided, endpoints for this specific branch will be listed.',
-    ),
-});
+export const listBranchComputesInputSchema = z
+  .object({
+    projectId: z
+      .string()
+      .optional()
+      .describe(
+        'The ID of the project. If not provided, the only available project will be used.',
+      ),
+    branchId: z
+      .string()
+      .optional()
+      .describe(
+        'The ID of the branch. If provided, endpoints for this specific branch will be listed.',
+      ),
+  })
+  .optional()
+  .default({});
 
-export const listOrganizationsInputSchema = z.object({
-  search: z
-    .string()
-    .optional()
-    .describe(
-      'Search organizations by name or ID. You can specify partial name or ID values to filter results.',
-    ),
-});
+export const listOrganizationsInputSchema = z
+  .object({
+    search: z
+      .string()
+      .optional()
+      .describe(
+        'Search organizations by name or ID. You can specify partial name or ID values to filter results.',
+      ),
+  })
+  .optional()
+  .default({});
 
-export const listSharedProjectsInputSchema = z.object({
-  cursor: z
-    .string()
-    .optional()
-    .describe(
-      'Specify the cursor value from the previous response to retrieve the next batch of shared projects.',
-    ),
-  limit: z
-    .number()
-    .default(10)
-    .describe(
-      'Specify a value from 1 to 400 to limit number of shared projects in the response.',
-    ),
-  search: z
-    .string()
-    .optional()
-    .describe(
-      'Search by project name or id. You can specify partial name or id values to filter results.',
-    ),
-}) satisfies ZodObjectParams<ListSharedProjectsParams>;
+export const listSharedProjectsInputSchema = z
+  .object({
+    cursor: z
+      .string()
+      .optional()
+      .describe(
+        'Specify the cursor value from the previous response to retrieve the next batch of shared projects.',
+      ),
+    limit: z
+      .number()
+      .default(10)
+      .describe(
+        'Specify a value from 1 to 400 to limit number of shared projects in the response.',
+      ),
+    search: z
+      .string()
+      .optional()
+      .describe(
+        'Search by project name or id. You can specify partial name or id values to filter results.',
+      ),
+  })
+  .optional()
+  .default({});
 
 export const resetFromParentInputSchema = z.object({
   projectId: z.string().describe('The ID of the project containing the branch'),

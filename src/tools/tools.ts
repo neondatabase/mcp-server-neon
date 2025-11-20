@@ -1044,7 +1044,7 @@ async function handleCompareDatabaseSchema(
 }
 
 export const NEON_HANDLERS = {
-  list_projects: async ({ params }, neonClient, extra) => {
+  list_projects: async ({ params = {} }, neonClient, extra) => {
     const organization = await getOrgByOrgIdOrDefault(
       params,
       neonClient,
@@ -1077,7 +1077,7 @@ export const NEON_HANDLERS = {
     };
   },
 
-  create_project: async ({ params }, neonClient, extra) => {
+  create_project: async ({ params = {} }, neonClient, extra) => {
     try {
       const organization = await getOrgByOrgIdOrDefault(
         params,
@@ -1547,7 +1547,7 @@ export const NEON_HANDLERS = {
     };
   },
 
-  list_branch_computes: async ({ params }, neonClient, extra) => {
+  list_branch_computes: async ({ params = {} }, neonClient, extra) => {
     const result = await handleListBranchComputes(
       {
         projectId: params.projectId,
@@ -1561,7 +1561,7 @@ export const NEON_HANDLERS = {
     };
   },
 
-  list_organizations: async ({ params }, neonClient, extra) => {
+  list_organizations: async ({ params = {} }, neonClient, extra) => {
     const organizations = await handleListOrganizations(
       neonClient,
       extra.account,
@@ -1577,7 +1577,7 @@ export const NEON_HANDLERS = {
     };
   },
 
-  list_shared_projects: async ({ params }, neonClient) => {
+  list_shared_projects: async ({ params = {} }, neonClient) => {
     const sharedProjects = await handleListSharedProjects(params, neonClient);
     return {
       content: [
