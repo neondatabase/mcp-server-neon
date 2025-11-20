@@ -46,10 +46,16 @@ export const createMcpServer = (context: ServerContext) => {
 
     const toolHandler = handler as ToolHandlerExtended<typeof tool.name>;
 
+    // Make params optional with a default empty object to prevent validation errors
+    // when clients don't send the params wrapper for tools with all optional parameters
+    const toolSchema = {
+      params: tool.inputSchema.optional(),
+    };
+
     server.tool(
       tool.name,
       tool.description,
-      { params: tool.inputSchema },
+      toolSchema,
       async (args, extra) => {
         return await startSpan(
           {
@@ -77,13 +83,11 @@ export const createMcpServer = (context: ServerContext) => {
               readOnly: context.readOnly,
             };
             try {
-              // Normalize args to always have params, even if empty
-              // This prevents destructuring errors that occur when tools have all optional parameters
-              const normalizedArgs = {
-                ...args,
-                params: args?.params ?? {},
-              };
-              return await toolHandler(normalizedArgs, neonClient, extraArgs);
+              return await toolHandler(
+                { params: args.params ?? {} },
+                neonClient,
+                extraArgs,
+              );
             } catch (error) {
               span.setStatus({
                 code: 2,
