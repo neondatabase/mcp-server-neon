@@ -1,38 +1,29 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-
 import { Api, NeonAuthSupportedAuthProvider } from '@neondatabase/api-client';
 import { provisionNeonAuthInputSchema } from '../toolsSchema.js';
 import { z } from 'zod';
 import { getDefaultDatabase } from '../utils.js';
+import { getDefaultBranch } from './utils.js';
+import { ToolHandlerExtraParams } from '../types.js';
 
 type Props = z.infer<typeof provisionNeonAuthInputSchema>;
 export async function handleProvisionNeonAuth(
-  { projectId, database }: Props,
+  { projectId, branchId, databaseName }: Props,
   neonClient: Api<unknown>,
+  _extra: ToolHandlerExtraParams,
 ): Promise<CallToolResult> {
-  const {
-    data: { branches },
-  } = await neonClient.listProjectBranches({
-    projectId,
-  });
-  const defaultBranch =
-    branches.find((branch) => branch.default) ?? branches[0];
-  if (!defaultBranch) {
-    return {
-      isError: true,
-      content: [
-        {
-          type: 'text',
-          text: 'The project has no default branch. Neon Auth can only be provisioned with a default branch.',
-        },
-      ],
-    };
+  // If branchId is not provided, use the default branch
+  let resolvedBranchId = branchId;
+  if (!resolvedBranchId) {
+    const defaultBranch = await getDefaultBranch(projectId, neonClient);
+    resolvedBranchId = defaultBranch.id;
   }
+
   const defaultDatabase = await getDefaultDatabase(
     {
       projectId,
-      branchId: defaultBranch.id,
-      databaseName: database,
+      branchId: resolvedBranchId,
+      databaseName,
     },
     neonClient,
   );
@@ -43,19 +34,22 @@ export async function handleProvisionNeonAuth(
       content: [
         {
           type: 'text',
-          text: `The project has no database named '${database}'.`,
+          text: databaseName
+            ? `The branch has no database named '${databaseName}'.`
+            : 'The branch has no databases.',
         },
       ],
     };
   }
 
-  const response = await neonClient.createNeonAuthIntegration({
-    auth_provider: NeonAuthSupportedAuthProvider.Stack,
-    project_id: projectId,
-    branch_id: defaultBranch.id,
-    database_name: defaultDatabase.name,
-    role_name: defaultDatabase.owner_name,
-  });
+  const response = await neonClient.createNeonAuth(
+    projectId,
+    resolvedBranchId,
+    {
+      auth_provider: NeonAuthSupportedAuthProvider.BetterAuth,
+      database_name: defaultDatabase.name,
+    },
+  );
 
   // In case of 409, it means that the integration already exists
   // We should not return an error, but a message that the integration already exists and fetch the existing integration
@@ -86,14 +80,10 @@ export async function handleProvisionNeonAuth(
     content: [
       {
         type: 'text',
-        text: `Authentication has been successfully provisioned for your Neon project. Following are the environment variables you need to set in your project:
-        \`\`\`
-          NEXT_PUBLIC_STACK_PROJECT_ID='${response.data.auth_provider_project_id}'
-          NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY='${response.data.pub_client_key}'
-          STACK_SECRET_SERVER_KEY='${response.data.secret_server_key}'
-        \`\`\`
-
-        Copy the above environment variables and place them in  your \`.env.local\` file for Next.js project. Note that variables with \`NEXT_PUBLIC_\` prefix will be available in the client side.
+        text: `Authentication has been successfully provisioned for your Neon project and branch. 
+           \`\`\`
+        Use this URL to access the Neon Auth through your better auth compatible client: ${response.data.base_url}
+            \`\`\`
         `,
       },
       {

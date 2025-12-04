@@ -183,7 +183,18 @@ export const provisionNeonAuthInputSchema = z.object({
   projectId: z
     .string()
     .describe('The ID of the project to provision Neon Auth for'),
-  database: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
+  branchId: z
+    .string()
+    .optional()
+    .describe(
+      'An optional ID of the branch to provision Neon Auth for. If not provided, the default branch is used.',
+    ),
+  databaseName: z
+    .string()
+    .optional()
+    .describe(
+      'The database name to provision Neon Auth for. If not provided, the default database is used.',
+    ),
 });
 
 export const prepareQueryTuningInputSchema = z.object({
