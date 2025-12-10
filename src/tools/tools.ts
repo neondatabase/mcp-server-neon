@@ -1442,13 +1442,15 @@ export const NEON_HANDLERS = {
     };
   },
 
-  provision_neon_auth: async ({ params }, neonClient) => {
+  provision_neon_auth: async ({ params }, neonClient, extra) => {
     const result = await handleProvisionNeonAuth(
       {
         projectId: params.projectId,
-        database: params.database,
+        branchId: params.branchId,
+        databaseName: params.databaseName,
       },
       neonClient,
+      extra,
     );
     return result;
   },

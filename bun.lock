@@ -6,13 +6,13 @@
       "dependencies": {
         "@keyv/postgres": "2.1.2",
         "@modelcontextprotocol/sdk": "1.11.2",
-        "@neondatabase/api-client": "2.0.0",
+        "@neondatabase/api-client": "2.5.0",
         "@neondatabase/serverless": "1.0.0",
         "@radix-ui/react-accordion": "1.2.11",
         "@segment/analytics-node": "2.2.1",
         "@sentry/node": "9.19.0",
         "@tailwindcss/postcss": "4.1.10",
-        "axios": "1.11.0",
+        "axios": "1.13.2",
         "body-parser": "2.2.0",
         "chalk": "5.3.0",
         "class-variance-authority": "0.7.1",
@@ -54,6 +54,9 @@
         "typescript-eslint": "v8.25.0",
       },
     },
+  },
+  "overrides": {
+    "axios": "1.13.2",
   },
   "packages": {
     "@ai-sdk/provider": ["@ai-sdk/provider@1.1.3", "", { "dependencies": { "json-schema": "^0.4.0" } }, "sha512-qZMxYJ0qqX/RfnuIaab+zp8UAeJn/ygXXAffR5I4N0n1IrvA6qBsjc8hXLmBiMV2zoXlifkacF7sEFnYnjBcqg=="],
@@ -232,7 +235,7 @@
 
     "@modelcontextprotocol/sdk": ["@modelcontextprotocol/sdk@1.11.2", "", { "dependencies": { "content-type": "^1.0.5", "cors": "^2.8.5", "cross-spawn": "^7.0.3", "eventsource": "^3.0.2", "express": "^5.0.1", "express-rate-limit": "^7.5.0", "pkce-challenge": "^5.0.0", "raw-body": "^3.0.0", "zod": "^3.23.8", "zod-to-json-schema": "^3.24.1" } }, "sha512-H9vwztj5OAqHg9GockCQC06k1natgcxWQSRpQcPJf6i5+MWBzfKkRtxGbjQf0X2ihii0ffLZCRGbYV2f2bjNCQ=="],
 
-    "@neondatabase/api-client": ["@neondatabase/api-client@2.0.0", "", { "dependencies": { "axios": "^1.7.9" } }, "sha512-UwjRRy8gyShNDfbbP1N+rA235FzqVWP/WPi4cgLnkGgConqpiR+U9Dsegaxu+HxAgK678kQ/5wc4/EPexvE7tw=="],
+    "@neondatabase/api-client": ["@neondatabase/api-client@2.5.0", "", { "dependencies": { "axios": "^1.9.0" } }, "sha512-Tg5/Aq8zg1kxT8OuaRULpl0NcxTLpOBpcbdeC8RO3U6Ubftu+YSjKUqB5NRZWITMwDy8GSJtPQYF/xHHlsqauQ=="],
 
     "@neondatabase/serverless": ["@neondatabase/serverless@1.0.0", "", { "dependencies": { "@types/node": "^22.10.2", "@types/pg": "^8.8.0" } }, "sha512-XWmEeWpBXIoksZSDN74kftfTnXFEGZ3iX8jbANWBc+ag6dsiQuvuR4LgB0WdCOKMb5AQgjqgufc0TgAsZubUYw=="],
 
@@ -550,7 +553,7 @@
 
     "autoevals": ["autoevals@0.0.111", "", { "dependencies": { "@braintrust/core": "0.0.71", "ajv": "^8.13.0", "compute-cosine-similarity": "^1.1.0", "js-levenshtein": "^1.1.6", "js-yaml": "^4.1.0", "linear-sum-assignment": "^1.0.7", "mustache": "^4.2.0", "openai": "4.47.1", "zod": "^3.22.4", "zod-to-json-schema": "^3.22.5" } }, "sha512-H38avDrcWU6w7aP0CwCansc/Um/3Bm8yvjMX6g8TR4FIJeyY84poimdNK3GDRk+hhoiY1DovdZoEJILWC6OmgQ=="],
 
-    "axios": ["axios@1.11.0", "", { "dependencies": { "follow-redirects": "^1.15.6", "form-data": "^4.0.4", "proxy-from-env": "^1.1.0" } }, "sha512-1Lx3WLFQWm3ooKDYZD1eXmoGO9fxYQjrycfHFC8P0sCfQVXyROp0p9PFWBehewBOdCwHc+f/b8I0fMto5eSfwA=="],
+    "axios": ["axios@1.13.2", "", { "dependencies": { "follow-redirects": "^1.15.6", "form-data": "^4.0.4", "proxy-from-env": "^1.1.0" } }, "sha512-VPk9ebNqPcy5lRGuSlKx752IlDatOjT9paPlm8A7yOuW2Fbvp4X3JznJtT4f0GzGLLiWE9W8onz51SqLYwzGaA=="],
 
     "axobject-query": ["axobject-query@4.1.0", "", {}, "sha512-qIj0G9wZbMGNLjLmg1PT6v2mE9AH2zlnADJD/2tC6E00hgmhUOfEB6greHPAfLRSufHqROIUTkw6E+M3lH0PTQ=="],
 
@@ -1367,8 +1370,6 @@
     "@eslint/plugin-kit/@eslint/core": ["@eslint/core@0.13.0", "", { "dependencies": { "@types/json-schema": "^7.0.15" } }, "sha512-yfkgDw1KR66rkT5A8ci4irzDysN7FRpq3ttJolR88OqQikAWqwA8j5VZyas+vjyBNFIJ7MfybJ9plMILI2UrCw=="],
 
     "@humanfs/node/@humanwhocodes/retry": ["@humanwhocodes/retry@0.3.1", "", {}, "sha512-JBxkERygn7Bv/GbN5Rv8Ul6LVknS+5Bp6RgDC/O8gEBU/yeH5Ui5C/OlWrTb6qct7LjjfT6Re2NxB0ln0yYybA=="],
-
-    "@neondatabase/api-client/axios": ["axios@1.9.0", "", { "dependencies": { "follow-redirects": "^1.15.6", "form-data": "^4.0.0", "proxy-from-env": "^1.1.0" } }, "sha512-re4CqKTJaURpzbLHtIi6XpDv20/CnpXOtjRY5/CU32L8gU8ek9UIivcfvSWvmKEngmVbrUtPpdDwWDWL7DNHvg=="],
 
     "@neondatabase/serverless/@types/node": ["@types/node@22.15.18", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-v1DKRfUdyW+jJhZNEI1PYy29S2YRxMV5AOO/x/SjKmW0acCIOqmbj6Haf9eHAhsPmrhlHSxEhv/1WszcLWV4cg=="],
 
