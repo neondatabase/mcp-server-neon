@@ -16,6 +16,7 @@ import { ServerContext } from '../types/context.js';
 import { setSentryTags } from '../sentry/utils.js';
 import { ToolHandlerExtraParams } from '../tools/types.js';
 import { handleToolError } from './errors.js';
+import { detectClientApplication } from '../utils/client-application.js';
 
 export const createMcpServer = (context: ServerContext) => {
   const server = new McpServer(
@@ -63,22 +64,34 @@ export const createMcpServer = (context: ServerContext) => {
             },
           },
           async (span) => {
+            // Get client info from MCP protocol
+            const clientInfo = server.server.getClientVersion();
+
             const properties = {
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
+              clientName: clientInfo?.name ?? 'unknown',
             };
             logger.info('tool call:', properties);
+            logger.info('MCP Client Info:', clientInfo);
             setSentryTags(context);
             track({
               userId: context.account.id,
               event: 'tool_call',
               properties,
-              context: { client: context.client, app: context.app },
+              context: {
+                client: context.client,
+                app: context.app,
+                clientInfo,
+              },
             });
+
+            const clientApplication = detectClientApplication(clientInfo?.name);
             const extraArgs: ToolHandlerExtraParams = {
               ...extra,
               account: context.account,
               readOnly: context.readOnly,
+              clientApplication,
             };
             try {
               return await toolHandler(args, neonClient, extraArgs);
@@ -131,7 +144,11 @@ export const createMcpServer = (context: ServerContext) => {
       prompt.name,
       prompt.description,
       prompt.argsSchema,
-      async (args) => {
+      async (args, extra) => {
+        // Get client info from MCP protocol
+        const clientInfo = server.server.getClientVersion();
+        const clientApplication = detectClientApplication(clientInfo?.name);
+
         const properties = { prompt_name: prompt.name };
         logger.info('prompt call:', properties);
         setSentryTags(context);
@@ -142,9 +159,16 @@ export const createMcpServer = (context: ServerContext) => {
           context: { client: context.client, app: context.app },
         });
         try {
+          const extraArgs: ToolHandlerExtraParams = {
+            ...extra,
+            account: context.account,
+            readOnly: context.readOnly,
+            clientApplication,
+          };
           const template = await getPromptTemplate(
             prompt.name,
-            args as Record<string, string>,
+            extraArgs,
+            args,
           );
           return {
             messages: [

@@ -3,6 +3,7 @@ import { Api } from '@neondatabase/api-client';
 
 import { NEON_TOOLS } from './definitions.js';
 import { AuthContext } from '../types/auth.js';
+import { ClientApplication } from '../utils/client-application.js';
 
 // Extract the tool names as a union type
 type NeonToolName = (typeof NEON_TOOLS)[number]['name'];
@@ -20,6 +21,8 @@ export type ToolHandlerExtraParams = Parameters<
 >['1'] & {
   account: AuthContext['extra']['account'];
   readOnly?: AuthContext['extra']['readOnly'];
+  /** Detected client application type (e.g., 'cursor', 'claude', 'other') */
+  clientApplication: ClientApplication;
 };
 
 export type ToolHandlerExtended<T extends NeonToolName> = (

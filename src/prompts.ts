@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { fetchRawGithubContent } from './resources.js';
+import { ToolHandlerExtraParams } from './tools/types.js';
+import { ClientApplication } from './utils/client-application.js';
 
 export const setupNeonAuthViteReactArgsSchema = {
   projectId: z
@@ -31,7 +33,22 @@ export const NEON_PROMPTS = [
   },
 ] as const;
 
-const COMMON_FOLLOW_INSTRUCTIONS = `
+const CLIENT_SPECIFIC_INSTRUCTIONS: Record<ClientApplication, string> = {
+  cursor: `
+  - **For URLs:** Use the \`@Web\` tool (or \`web_search\`) to fetch the page.
+  - **For Files:** Use \`grep\` or \`cat\` to read local files.
+  `,
+  claude: `
+   - **For URLs:** Use your \`web_fetch\` tool (or \`web_search\`) to read content.
+   - **For Files:** Use \`grep\` or \`cat\` to read local files.
+  `,
+  other: `
+   - **For URLs:** Use your web fetch tool to read content, or curl if you need to.
+   - **For Files:** Use \`grep\` or \`cat\` to read local files.
+  `,
+};
+
+const COMMON_FOLLOW_INSTRUCTIONS = (clientApplication: ClientApplication) => `
 
 # Just-in-Time Context Protocol
 
@@ -43,8 +60,7 @@ const COMMON_FOLLOW_INSTRUCTIONS = `
 ## 2. STRICT LINK OBEDIENCE
 - **No Guessing:** If a task relates to a linked topic (e.g., "Styling"), you are PROHIBITED from inferring patterns. You must read the linked reference.
 - **Method:**
-   - For URLs: Use \`@Web\` to read the specific page.
-   - For Paths: Use \`read_file\` or search \`@Doc\`.
+   ${CLIENT_SPECIFIC_INSTRUCTIONS[clientApplication]}
 
 ## 3. EXECUTION
 - **State Intent:** Briefly confirm: "Fetching [Topic] details from [Source]..."
@@ -56,6 +72,7 @@ const COMMON_FOLLOW_INSTRUCTIONS = `
 
 export const getPromptTemplate = async (
   promptName: string,
+  extra: ToolHandlerExtraParams,
   args?: Record<string, string>,
 ): Promise<string> => {
   if (promptName === 'setup-neon-auth') {
@@ -68,14 +85,12 @@ export const getPromptTemplate = async (
       '/neondatabase-labs/ai-rules/main/mcp-prompts/neon-auth-setup.md',
     );
 
-    return `\`\`\`markdown\n
-    To follow the instructions bellow you will need to use Curl or Web tool so you can follow the links.
-    
-    
+    return `
+    ${COMMON_FOLLOW_INSTRUCTIONS(extra.clientApplication)}
 
+    ---
     
-    
-    ${content}\`\`\``;
+    ${content}`;
   }
 
   throw new Error(`Unknown prompt: ${promptName}`);
