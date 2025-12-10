@@ -2,6 +2,7 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { NEON_RESOURCES } from '../resources.js';
+import { NEON_PROMPTS, getPromptTemplate } from '../prompts.js';
 import {
   NEON_HANDLERS,
   NEON_TOOLS,
@@ -26,6 +27,9 @@ export const createMcpServer = (context: ServerContext) => {
       capabilities: {
         tools: {},
         resources: {},
+        prompts: {
+          listChanged: true,
+        },
       },
     },
   );
@@ -111,6 +115,48 @@ export const createMcpServer = (context: ServerContext) => {
         });
         try {
           return await resource.handler(url);
+        } catch (error) {
+          captureException(error, {
+            extra: properties,
+          });
+          throw error;
+        }
+      },
+    );
+  });
+
+  // Register prompts
+  NEON_PROMPTS.forEach((prompt) => {
+    server.prompt(
+      prompt.name,
+      prompt.description,
+      prompt.argsSchema,
+      async (args) => {
+        const properties = { prompt_name: prompt.name };
+        logger.info('prompt call:', properties);
+        setSentryTags(context);
+        track({
+          userId: context.account.id,
+          event: 'prompt_call',
+          properties,
+          context: { client: context.client, app: context.app },
+        });
+        try {
+          const template = await getPromptTemplate(
+            prompt.name,
+            args as Record<string, string>,
+          );
+          return {
+            messages: [
+              {
+                role: 'user',
+                content: {
+                  type: 'text',
+                  text: template,
+                },
+              },
+            ],
+          };
         } catch (error) {
           captureException(error, {
             extra: properties,

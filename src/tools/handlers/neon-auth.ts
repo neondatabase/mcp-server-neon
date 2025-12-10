@@ -10,6 +10,7 @@ type Props = z.infer<typeof provisionNeonAuthInputSchema>;
 export async function handleProvisionNeonAuth(
   { projectId, branchId, databaseName }: Props,
   neonClient: Api<unknown>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _extra: ToolHandlerExtraParams,
 ): Promise<CallToolResult> {
   // If branchId is not provided, use the default branch
