@@ -63,18 +63,18 @@ export const createMcpServer = (context: ServerContext) => {
     });
   };
 
-  // For stdio transport (no userAgent), update after MCP initialization completes
-  if (!context.userAgent) {
-    server.server.oninitialized = () => {
-      const clientInfo = server.server.getClientVersion();
-      clientName = clientInfo?.name ?? 'unknown';
+  // Always use MCP handshake clientInfo (more reliable than HTTP User-Agent)
+  // This ensures we get the real client name even when using mcp-remote,
+  // which forwards the original client name (e.g., "Cursor (via mcp-remote 0.1.31)")
+  server.server.oninitialized = () => {
+    const clientInfo = server.server.getClientVersion();
+    // Prefer MCP clientInfo over HTTP User-Agent
+    if (clientInfo?.name) {
+      clientName = clientInfo.name;
       clientApplication = detectClientApplication(clientName);
-      trackServerInit();
-    };
-  } else {
-    // For HTTP transports, track immediately since we have userAgent
+    }
     trackServerInit();
-  }
+  };
 
   // Filter tools based on read-only mode
   const availableTools = context.readOnly
