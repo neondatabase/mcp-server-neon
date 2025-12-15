@@ -37,6 +37,45 @@ export const createMcpServer = (context: ServerContext) => {
 
   const neonClient = createNeonClient(context.apiKey);
 
+  // Compute client info once at server instantiation
+  let clientName = context.userAgent ?? 'unknown';
+  let clientApplication = detectClientApplication(clientName);
+
+  // Track server initialization
+  const trackServerInit = () => {
+    track({
+      userId: context.account.id,
+      event: 'server_init',
+      properties: {
+        clientName,
+        clientApplication,
+        readOnly: String(context.readOnly ?? false),
+      },
+      context: {
+        client: context.client,
+        app: context.app,
+      },
+    });
+    logger.info('Server initialized:', {
+      clientName,
+      clientApplication,
+      readOnly: context.readOnly,
+    });
+  };
+
+  // Always use MCP handshake clientInfo (more reliable than HTTP User-Agent)
+  // This ensures we get the real client name even when using mcp-remote,
+  // which forwards the original client name (e.g., "Cursor (via mcp-remote 0.1.31)")
+  server.server.oninitialized = () => {
+    const clientInfo = server.server.getClientVersion();
+    // Prefer MCP clientInfo over HTTP User-Agent
+    if (clientInfo?.name) {
+      clientName = clientInfo.name;
+      clientApplication = detectClientApplication(clientName);
+    }
+    trackServerInit();
+  };
+
   // Filter tools based on read-only mode
   const availableTools = context.readOnly
     ? NEON_TOOLS.filter((tool) => tool.readOnlySafe)
@@ -64,16 +103,12 @@ export const createMcpServer = (context: ServerContext) => {
             },
           },
           async (span) => {
-            // Get client info from MCP protocol
-            const clientInfo = server.server.getClientVersion();
-
             const properties = {
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
-              clientName: clientInfo?.name ?? 'unknown',
+              clientName,
             };
             logger.info('tool call:', properties);
-            logger.info('MCP Client Info:', clientInfo);
             setSentryTags(context);
             track({
               userId: context.account.id,
@@ -82,11 +117,10 @@ export const createMcpServer = (context: ServerContext) => {
               context: {
                 client: context.client,
                 app: context.app,
-                clientInfo,
+                clientName,
               },
             });
 
-            const clientApplication = detectClientApplication(clientInfo?.name);
             const extraArgs: ToolHandlerExtraParams = {
               ...extra,
               account: context.account,
@@ -145,11 +179,7 @@ export const createMcpServer = (context: ServerContext) => {
       prompt.description,
       prompt.argsSchema,
       async (args, extra) => {
-        // Get client info from MCP protocol
-        const clientInfo = server.server.getClientVersion();
-        const clientApplication = detectClientApplication(clientInfo?.name);
-
-        const properties = { prompt_name: prompt.name };
+        const properties = { prompt_name: prompt.name, clientName };
         logger.info('prompt call:', properties);
         setSentryTags(context);
         track({
