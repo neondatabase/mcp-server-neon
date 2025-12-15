@@ -33,20 +33,26 @@ export const NEON_PROMPTS = [
   },
 ] as const;
 
-const CLIENT_SPECIFIC_INSTRUCTIONS: Record<ClientApplication, string> = {
-  cursor: `
-  - **For URLs:** Use the \`@Web\` tool (or \`web_search\`) to fetch the page.
-  - **For Files:** Use \`grep\` or \`cat\` to read local files.
-  `,
-  claude: `
-   - **For URLs:** Use your \`web_fetch\` tool (or \`web_search\`) to read content.
-   - **For Files:** Use \`grep\` or \`cat\` to read local files.
-  `,
-  other: `
-   - **For URLs:** Use your web fetch tool to read content, or curl if you need to.
-   - **For Files:** Use \`grep\` or \`cat\` to read local files.
-  `,
-};
+function getClientSpecificInstructions(clientApplication: ClientApplication) {
+  switch (clientApplication) {
+    case 'cursor':
+      return `
+      - **For URLs:** Use the \`@Web\` tool (or \`web_search\`) to fetch the page.
+      - **For Files:** Use \`grep\` or \`cat\` to read local files.
+      `;
+    case 'claude-code':
+    case 'claude-desktop':
+      return `
+      - **For URLs:** Use your \`web_fetch\` tool (or \`web_search\`) to read content.
+      - **For Files:** Use \`grep\` or \`cat\` to read local files.
+      `;
+    default:
+      return `
+      - **For URLs:** Use your web fetch tool to read content, or curl if you need to.
+      - **For Files:** Use \`grep\` or \`cat\` to read local files.
+      `;
+  }
+}
 
 const COMMON_FOLLOW_INSTRUCTIONS = (clientApplication: ClientApplication) => `
 
@@ -60,7 +66,7 @@ const COMMON_FOLLOW_INSTRUCTIONS = (clientApplication: ClientApplication) => `
 ## 2. STRICT LINK OBEDIENCE
 - **No Guessing:** If a task relates to a linked topic (e.g., "Styling"), you are PROHIBITED from inferring patterns. You must read the linked reference.
 - **Method:**
-   ${CLIENT_SPECIFIC_INSTRUCTIONS[clientApplication]}
+   ${getClientSpecificInstructions(clientApplication)}
 
 ## 3. EXECUTION
 - **State Intent:** Briefly confirm: "Fetching [Topic] details from [Source]..."
