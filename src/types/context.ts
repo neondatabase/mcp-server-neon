@@ -14,4 +14,5 @@ export type ServerContext = {
   account: AuthContext['extra']['account'];
   app: AppContext;
   readOnly?: AuthContext['extra']['readOnly'];
+  userAgent?: string;
 };

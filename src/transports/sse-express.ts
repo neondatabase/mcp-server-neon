@@ -64,6 +64,7 @@ export const createSseTransport = (appContext: AppContext) => {
           account: auth.extra.account,
           app: appContext,
           readOnly: auth.extra.readOnly,
+          userAgent: req.headers['user-agent'],
         });
         await server.connect(transport);
       } catch (error: unknown) {
