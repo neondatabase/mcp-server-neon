@@ -78,7 +78,23 @@ Connect to Neon's managed MCP server using OAuth for authentication. This is the
 
 > With OAuth base authentication, the MCP server will, by default operate on projects under your personal Neon account. To access or manage projects under organization, you must explicitly provide either the `org_id` or the `project_id` in your prompt to MCP client.
 
-Remote MCP Server also supports authentication using API key in the `Authorization` header if your client supports it
+Remote MCP Server also supports authentication using an API key in the `Authorization` header if your client supports it.
+
+#### Quick Setup with API Key
+
+**Don't want to manually create an API key?**
+
+Run [`neonctl@latest init`](https://neon.com/docs/reference/cli-init) to automatically configure Neon's MCP Server with one command:
+
+```bash
+npx neonctl@latest init
+```
+
+This works with Cursor, VS Code (GitHub Copilot), and Claude Code. It will authenticate via OAuth, create a Neon API key for you, and configure your editor automatically.
+
+#### Manual API Key Setup
+
+For other IDEs or manual configuration, [create a Neon API key](https://console.neon.tech/app/settings?modal=create_api_key) in the Neon Console and use this configuration:
 
 ```json
 {
