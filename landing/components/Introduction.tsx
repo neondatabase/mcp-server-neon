@@ -1,5 +1,3 @@
-import Image from 'next/image';
-
 import { cn } from '@/lib/utils';
 import { ExternalLink } from '@/components/ExternalLink';
 import { CopyableUrl } from '@/components/CopyableUrl';
@@ -37,6 +35,21 @@ export const Introduction = ({ className }: { className?: string }) => (
       </ExternalLink>
     </div>
 
+    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg p-4 my-2">
+      <p className="text-sm">
+        <strong className="font-semibold">Quick setup:</strong> Run{' '}
+        <code className="bg-white px-2 py-0.5 rounded text-sm border border-emerald-200">
+          npx neonctl@latest init
+        </code>{' '}
+        to authenticate via OAuth, automatically create a Neon API key, and
+        configure Cursor, VS Code, or Claude Code CLI to connect to the Neon MCP
+        Server. Then ask your AI assistant "Get started with Neon".{' '}
+        <ExternalLink href="https://neon.tech/docs/reference/cli-init">
+          Learn more in the docs
+        </ExternalLink>
+      </p>
+    </div>
+
     <div className="mt-4">
       <h3 className="text-lg font-semibold mb-2">Read-Only Version</h3>
       <div className="flex flex-col gap-3">
@@ -53,19 +66,6 @@ export const Introduction = ({ className }: { className?: string }) => (
             header in your MCP configuration.
           </p>
         </div>
-        <a
-          href="https://cursor.com/en-US/install-mcp?name=Neon%20MCP%20Server&config=eyJ1cmwiOiJodHRwOi8vbWNwLm5lb24udGVjaC9tY3AiLCJoZWFkZXJzIjp7IngtcmVhZC1vbmx5IjoidHJ1ZSJ9fQ%3D%3D"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            alt="Add to Cursor"
-            src="https://cursor.com/deeplink/mcp-install-light.svg"
-            className="invert dark:invert-0"
-            width={126}
-            height={32}
-          />
-        </a>
       </div>
     </div>
   </div>
