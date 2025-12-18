@@ -9,17 +9,20 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.1",
     "@radix-ui/react-accordion": "^1.2.10",
     "@radix-ui/react-slot": "^1.2.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lodash": "^4.17.21",
     "lucide-react": "^0.511.0",
+    "mcp-handler": "^1.0.4",
     "next": "15.3.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-syntax-highlighter": "^15.6.1",
-    "tailwind-merge": "^3.3.0"
+    "tailwind-merge": "^3.3.0",
+    "zod": "^3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
