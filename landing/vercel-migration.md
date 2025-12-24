@@ -16,7 +16,7 @@ The migration moved the remote MCP server from Express-based SSE/Streamable HTTP
 
 **`vercel.json`**
 - Configured function limits for API routes:
-  - `maxDuration: 800` (Fluid Compute - supports up to 800s for SSE connections)
+  - `maxDuration: 300` (Fluid Compute - supports up to 800s for SSE connections)
   - `memory: 1024` MB
 
 ### 2. New API Route Structure
