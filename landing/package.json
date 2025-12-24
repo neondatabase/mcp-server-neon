@@ -1,12 +1,13 @@
 {
   "name": "neon-mcp-landing",
-  "version": "0.0.1",
+  "version": "0.6.4",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
     "postinstall": "patch-package"
   },
   "dependencies": {

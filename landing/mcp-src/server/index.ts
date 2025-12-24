@@ -5,7 +5,7 @@ import { NEON_RESOURCES } from '../resources';
 import { NEON_PROMPTS, getPromptTemplate } from '../prompts';
 import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools/index';
 import { logger } from '../utils/logger';
-import { createNeonClient, getPackageJson } from './api';
+import { createNeonClient } from './api';
 import { track } from '../analytics/analytics';
 import { captureException, startSpan } from '@sentry/node';
 import { ServerContext } from '../types/context';
@@ -13,12 +13,13 @@ import { setSentryTags } from '../sentry/utils';
 import { ToolHandlerExtraParams } from '../tools/types';
 import { handleToolError } from './errors';
 import { detectClientApplication } from '../utils/client-application';
+import pkg from '../../package.json';
 
 export const createMcpServer = (context: ServerContext) => {
   const server = new McpServer(
     {
       name: 'mcp-server-neon',
-      version: getPackageJson().version,
+      version: pkg.version,
     },
     {
       capabilities: {
