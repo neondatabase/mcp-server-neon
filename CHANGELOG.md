@@ -13,7 +13,6 @@
 - Feat: `neon-get-started` resource to add AI rules with steps and instructions to integrate projects with Neon
 - Feat: Add generic `search` and `fetch` tools for organizations, projects, and branches
 - Docs: Add neon init reference and improve README documentation
- 
 
 # [0.6.5] 2025-09-16
 

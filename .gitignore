@@ -4,12 +4,6 @@ node_modules/
 dist/
 build/
 
-# landing page generated files are placed in root /public directory,
-# so ignoring it in order to do not commit something unintentionally.
-# if something should be added in /public it can be done by force add:
-#   git add -f public/somefile
-/public/
-
 # IDE stuff
 .history
 .idea

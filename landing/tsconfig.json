@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2018",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -23,9 +19,7 @@
       }
     ],
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     }
   },
   "include": [
@@ -36,12 +30,5 @@
     "../public/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "mcp-src/tools-evaluations",
-    "mcp-src/index.ts",
-    "mcp-src/transports/sse-express.ts",
-    "mcp-src/transports/stdio.ts",
-    "mcp-src/transports/stream.ts"
-  ]
+  "exclude": ["node_modules"]
 }
