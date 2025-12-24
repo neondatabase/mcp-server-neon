@@ -36,9 +36,10 @@ export const Introduction = ({ className }: { className?: string }) => (
     </div>
 
     <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg p-4 my-2">
-      <p className="text-sm">
-        <strong className="font-semibold">Quick setup:</strong> Run{' '}
-        <code className="bg-white px-2 py-0.5 rounded text-sm border border-emerald-200">
+      <p className="text-sm text-gray-800">
+        <strong className="font-semibold text-gray-900">Quick setup:</strong>{' '}
+        Run{' '}
+        <code className="bg-white px-2 py-0.5 rounded text-sm border border-emerald-200 text-gray-800">
           npx neonctl@latest init
         </code>{' '}
         to authenticate via OAuth, automatically create a Neon API key, and
