@@ -5,7 +5,7 @@ import githubSvg from '@/icons/github.svg';
 import neonSvg from '@/icons/neon.svg';
 
 type HeaderProps = {
-  packageVersion: number;
+  packageVersion: string;
 };
 
 export const Header = ({ packageVersion }: HeaderProps) => (
