@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server';
-
-const SERVER_HOST = process.env.SERVER_HOST ?? 'https://mcp.neon.tech';
-const UPSTREAM_OAUTH_HOST =
-  process.env.UPSTREAM_OAUTH_HOST ?? 'https://oauth2.neon.tech';
+import { SERVER_HOST, UPSTREAM_OAUTH_HOST } from '@/lib/config';
 
 export async function GET() {
   return NextResponse.json({

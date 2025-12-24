@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-
-const SERVER_HOST = process.env.SERVER_HOST ?? 'https://mcp.neon.tech';
+import { SERVER_HOST } from '@/lib/config';
 
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
