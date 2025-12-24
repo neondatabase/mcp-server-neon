@@ -44,7 +44,7 @@ import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 const handler = createMcpHandler(serverFactory, tools, options, {
   redisUrl: process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_URL,
   basePath: '/api',
-  maxDuration: 800,
+  maxDuration: 300,
   verboseLogs: process.env.NODE_ENV !== 'production',
 });
 
