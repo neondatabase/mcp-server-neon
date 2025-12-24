@@ -1,11 +1,11 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Api, Organization, ProjectListItem } from '@neondatabase/api-client';
 import { Branch } from '@neondatabase/api-client';
-import { searchInputSchema } from '../toolsSchema.js';
+import { searchInputSchema } from '../toolsSchema';
 import { z } from 'zod';
-import { ToolHandlerExtraParams } from '../types.js';
-import { handleListProjects } from './list-projects.js';
-import { CONSOLE_URLS, generateConsoleUrl } from './urls.js';
+import { ToolHandlerExtraParams } from '../types';
+import { handleListProjects } from './list-projects';
+import { CONSOLE_URLS, generateConsoleUrl } from './urls';
 
 type SearchProps = z.infer<typeof searchInputSchema>;
 

@@ -1,6 +1,6 @@
 import { createApiClient } from '@neondatabase/api-client';
 import path from 'path';
-import { MCPClient } from '../../mcp-client/src/index.js';
+import { MCPClient } from '../../mcp-client/src/index';
 
 export async function deleteNonDefaultBranches(projectId: string) {
   const neonClient = createApiClient({

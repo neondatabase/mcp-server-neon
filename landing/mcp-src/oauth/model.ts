@@ -11,7 +11,7 @@ import {
   refreshTokens,
   authorizationCodes,
   RefreshToken,
-} from './kv-store.js';
+} from './kv-store';
 
 class Model implements AuthorizationCodeModel {
   getClient: (

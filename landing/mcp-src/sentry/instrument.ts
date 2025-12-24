@@ -1,6 +1,6 @@
 import { init } from '@sentry/node';
-import { SENTRY_DSN } from '../constants.js';
-import { getPackageJson } from '../server/api.js';
+import { SENTRY_DSN } from '../constants';
+import { getPackageJson } from '../server/api';
 
 init({
   dsn: SENTRY_DSN,

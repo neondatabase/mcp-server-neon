@@ -1,5 +1,5 @@
-import { Environment } from '../constants.js';
-import { AuthContext } from './auth.js';
+import { Environment } from '../constants';
+import { AuthContext } from './auth';
 
 export type AppContext = {
   name: string;

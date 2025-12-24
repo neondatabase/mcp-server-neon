@@ -1,3 +1,3 @@
-export { NEON_TOOLS } from './definitions.js';
-export { NEON_HANDLERS } from './tools.js';
-export { ToolHandlers, ToolHandlerExtended } from './types.js';
+export { NEON_TOOLS } from './definitions';
+export { NEON_HANDLERS } from './tools';
+export type { ToolHandlers, ToolHandlerExtended } from './types';

@@ -1,11 +1,11 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Api, MemberWithUser, ProjectListItem } from '@neondatabase/api-client';
-import { fetchInputSchema } from '../toolsSchema.js';
+import { fetchInputSchema } from '../toolsSchema';
 import { z } from 'zod';
-import { handleDescribeProject } from './decribe-project.js';
-import { handleDescribeBranch } from './describe-branch.js';
-import { ToolHandlerExtraParams } from '../types.js';
-import { generateConsoleUrl, CONSOLE_URLS } from './urls.js';
+import { handleDescribeProject } from './decribe-project';
+import { handleDescribeBranch } from './describe-branch';
+import { ToolHandlerExtraParams } from '../types';
+import { generateConsoleUrl, CONSOLE_URLS } from './urls';
 
 type FetchProps = z.infer<typeof fetchInputSchema>;
 
@@ -99,12 +99,10 @@ async function fetchOrganizationDetails(
 **Statistics:**
 ${members.length > 0 ? `- Members: ${members.length}` : undefined}
 - Projects: ${projects.length}
+
+**Raw Data:**
+${JSON.stringify({ org: orgData, members, projects }, null, 2)}
 `,
-          metadata: {
-            org: orgData,
-            members: members,
-            projects: projects,
-          },
         },
       ],
     };
@@ -149,11 +147,10 @@ async function fetchProjectDetails(
 **Statistics:**
 - Branches: ${branches.length}
 - Default Branch: ${defaultBranch?.name} (${defaultBranch?.id})
+
+**Raw Data:**
+${JSON.stringify({ project, branches }, null, 2)}
 `,
-          metadata: {
-            project: project,
-            branches: branches,
-          },
         },
       ],
     };

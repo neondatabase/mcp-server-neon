@@ -1,4 +1,4 @@
-import { NEON_DEFAULT_DATABASE_NAME } from '../constants.js';
+import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
 import {
   completeDatabaseMigrationInputSchema,
   completeQueryTuningInputSchema,
@@ -27,7 +27,7 @@ import {
   searchInputSchema,
   fetchInputSchema,
   loadResourceInputSchema,
-} from './toolsSchema.js';
+} from './toolsSchema';
 
 export const NEON_TOOLS = [
   {

@@ -1,8 +1,8 @@
 import { KeyvPostgres, KeyvPostgresOptions } from '@keyv/postgres';
-import { logger } from '../utils/logger.js';
+import { logger } from '../utils/logger';
 import { AuthorizationCode, Client, Token } from 'oauth2-server';
 import Keyv from 'keyv';
-import { AuthContext } from '../types/auth.js';
+import { AuthContext } from '../types/auth';
 import { AuthDetailsResponse } from '@neondatabase/api-client';
 
 const SCHEMA = 'mcpauth';

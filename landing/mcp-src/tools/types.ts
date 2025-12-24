@@ -1,9 +1,9 @@
 import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Api } from '@neondatabase/api-client';
 
-import { NEON_TOOLS } from './definitions.js';
-import { AuthContext } from '../types/auth.js';
-import { ClientApplication } from '../utils/client-application.js';
+import { NEON_TOOLS } from './definitions';
+import { AuthContext } from '../types/auth';
+import { ClientApplication } from '../utils/client-application';
 
 // Extract the tool names as a union type
 type NeonToolName = (typeof NEON_TOOLS)[number]['name'];

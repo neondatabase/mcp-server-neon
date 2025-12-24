@@ -1,17 +1,23 @@
 import { Analytics } from '@segment/analytics-node';
-import { ANALYTICS_WRITE_KEY } from '../constants.js';
+import { ANALYTICS_WRITE_KEY } from '../constants';
 import { Api, AuthDetailsResponse } from '@neondatabase/api-client';
-import { AuthContext } from '../types/auth.js';
+import { AuthContext } from '../types/auth';
 
-let analytics: Analytics | undefined;
 type Account = AuthContext['extra']['account'];
-export const initAnalytics = () => {
-  if (ANALYTICS_WRITE_KEY) {
-    analytics = new Analytics({
+
+// Auto-initialize analytics at module load time (for serverless compatibility)
+const analytics: Analytics | undefined = ANALYTICS_WRITE_KEY
+  ? new Analytics({
       writeKey: ANALYTICS_WRITE_KEY,
       host: 'https://track.neon.tech',
-    });
-  }
+    })
+  : undefined;
+
+/**
+ * @deprecated Use auto-initialization instead. Kept for backwards compatibility.
+ */
+export const initAnalytics = () => {
+  // No-op: analytics is now auto-initialized at module load time
 };
 
 export const identify = (

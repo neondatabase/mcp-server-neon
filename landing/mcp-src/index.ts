@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 
-import { identifyApiKey, initAnalytics, track } from './analytics/analytics.js';
-import { NODE_ENV } from './constants.js';
-import { handleInit, parseArgs } from './initConfig.js';
-import { createNeonClient, getPackageJson } from './server/api.js';
-import { createMcpServer } from './server/index.js';
-import { createSseTransport } from './transports/sse-express.js';
-import { startStdio } from './transports/stdio.js';
-import { logger } from './utils/logger.js';
-import { AppContext } from './types/context.js';
-import { NEON_TOOLS } from './tools/index.js';
+import { identifyApiKey, initAnalytics, track } from './analytics/analytics';
+import { NODE_ENV } from './constants';
+import { handleInit, parseArgs } from './initConfig';
+import { createNeonClient, getPackageJson } from './server/api';
+import { createMcpServer } from './server/index';
+import { createSseTransport } from './transports/sse-express';
+import { startStdio } from './transports/stdio';
+import { logger } from './utils/logger';
+import { AppContext } from './types/context';
+import { NEON_TOOLS } from './tools/index';
 import './utils/polyfills.js';
 
 const args = parseArgs();

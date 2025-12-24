@@ -1,10 +1,10 @@
 import { Api, Branch } from '@neondatabase/api-client';
-import { ToolHandlerExtraParams } from '../types.js';
-import { handleGetConnectionString } from './connection-string.js';
+import { ToolHandlerExtraParams } from '../types';
+import { handleGetConnectionString } from './connection-string';
 import { neon } from '@neondatabase/serverless';
-import { DESCRIBE_DATABASE_STATEMENTS } from '../utils.js';
+import { DESCRIBE_DATABASE_STATEMENTS } from '../utils';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { CONSOLE_URLS, generateConsoleUrl } from './urls.js';
+import { CONSOLE_URLS, generateConsoleUrl } from './urls';
 
 const branchInfo = (branch: Branch) => {
   return `Branch Details: 
@@ -70,14 +70,12 @@ export async function handleDescribeBranch(
         {
           type: 'text',
           text: branchInfo(branch),
-          metadata: branch,
         },
         {
           type: 'text',
           text: ['Database Structure:', JSON.stringify(response, null, 2)].join(
             '\n',
           ),
-          databasetree: response,
         },
       ],
     };

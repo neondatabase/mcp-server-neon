@@ -1,10 +1,10 @@
 import { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
-import { model } from './model.js';
-import { ApiKeyRecord, apiKeys } from './kv-store.js';
-import { createNeonClient } from '../server/api.js';
-import { identify } from '../analytics/analytics.js';
+import { model } from './model';
+import { ApiKeyRecord, apiKeys } from './kv-store';
+import { createNeonClient } from '../server/api';
+import { identify } from '../analytics/analytics';
 
 const READ_ONLY_HEADER = 'X-read-only';
 

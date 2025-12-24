@@ -12,8 +12,8 @@ import {
   UPSTREAM_OAUTH_HOST,
   REDIRECT_URI,
   SERVER_HOST,
-} from '../constants.js';
-import { logger } from '../utils/logger.js';
+} from '../constants';
+import { logger } from '../utils/logger';
 
 const NEON_MCP_SCOPES = [
   'openid',

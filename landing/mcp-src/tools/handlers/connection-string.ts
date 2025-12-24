@@ -1,8 +1,8 @@
 import { Api } from '@neondatabase/api-client';
-import { ToolHandlerExtraParams } from '../types.js';
+import { ToolHandlerExtraParams } from '../types';
 import { startSpan } from '@sentry/node';
-import { getDefaultDatabase } from '../utils.js';
-import { getDefaultBranch, getOnlyProject } from './utils.js';
+import { getDefaultDatabase } from '../utils';
+import { getDefaultBranch, getOnlyProject } from './utils';
 
 export async function handleGetConnectionString(
   {

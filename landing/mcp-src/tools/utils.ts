@@ -1,7 +1,7 @@
-import { NEON_DEFAULT_DATABASE_NAME } from '../constants.js';
+import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
 import { Api, Organization, Branch } from '@neondatabase/api-client';
-import { ToolHandlerExtraParams } from './types.js';
-import { NotFoundError } from '../server/errors.js';
+import { ToolHandlerExtraParams } from './types';
+import { NotFoundError } from '../server/errors';
 
 export const splitSqlStatements = (sql: string) => {
   return sql.split(';').filter(Boolean);

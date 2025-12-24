@@ -1,5 +1,5 @@
-import { NEON_CONSOLE_HOST } from '../../constants.js';
-import { NotFoundError } from '../../server/errors.js';
+import { NEON_CONSOLE_HOST } from '../../constants';
+import { NotFoundError } from '../../server/errors';
 
 export enum CONSOLE_URLS {
   ORGANIZATION = '/app/:orgId/projects',

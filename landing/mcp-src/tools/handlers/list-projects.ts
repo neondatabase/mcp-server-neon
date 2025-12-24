@@ -1,7 +1,7 @@
 import { Api, ListProjectsParams } from '@neondatabase/api-client';
-import { ToolHandlerExtraParams } from '../types.js';
-import { getOrgByOrgIdOrDefault } from '../utils.js';
-import { handleListOrganizations } from './list-orgs.js';
+import { ToolHandlerExtraParams } from '../types';
+import { getOrgByOrgIdOrDefault } from '../utils';
+import { handleListOrganizations } from './list-orgs';
 
 export async function handleListProjects(
   params: ListProjectsParams,

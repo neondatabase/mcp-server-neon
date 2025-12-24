@@ -1,22 +1,18 @@
 #!/usr/bin/env node
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { NEON_RESOURCES } from '../resources.js';
-import { NEON_PROMPTS, getPromptTemplate } from '../prompts.js';
-import {
-  NEON_HANDLERS,
-  NEON_TOOLS,
-  ToolHandlerExtended,
-} from '../tools/index.js';
-import { logger } from '../utils/logger.js';
-import { createNeonClient, getPackageJson } from './api.js';
-import { track } from '../analytics/analytics.js';
+import { NEON_RESOURCES } from '../resources';
+import { NEON_PROMPTS, getPromptTemplate } from '../prompts';
+import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools/index';
+import { logger } from '../utils/logger';
+import { createNeonClient, getPackageJson } from './api';
+import { track } from '../analytics/analytics';
 import { captureException, startSpan } from '@sentry/node';
-import { ServerContext } from '../types/context.js';
-import { setSentryTags } from '../sentry/utils.js';
-import { ToolHandlerExtraParams } from '../tools/types.js';
-import { handleToolError } from './errors.js';
-import { detectClientApplication } from '../utils/client-application.js';
+import { ServerContext } from '../types/context';
+import { setSentryTags } from '../sentry/utils';
+import { ToolHandlerExtraParams } from '../tools/types';
+import { handleToolError } from './errors';
+import { detectClientApplication } from '../utils/client-application';
 
 export const createMcpServer = (context: ServerContext) => {
   const server = new McpServer(

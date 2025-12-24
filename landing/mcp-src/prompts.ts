@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { fetchRawGithubContent } from './resources.js';
-import { ToolHandlerExtraParams } from './tools/types.js';
-import { ClientApplication } from './utils/client-application.js';
+import { fetchRawGithubContent } from './resources';
+import { ToolHandlerExtraParams } from './tools/types';
+import { ClientApplication } from './utils/client-application';
 
 export const setupNeonAuthViteReactArgsSchema = {
   projectId: z

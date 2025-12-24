@@ -1,4 +1,4 @@
-import { AuthContext } from './auth.js';
+import { AuthContext } from './auth';
 
 // to make the file a module and avoid the TypeScript error
 export {};

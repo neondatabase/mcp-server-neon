@@ -1,6 +1,6 @@
 import { isAxiosError } from 'axios';
 import { NeonDbError } from '@neondatabase/serverless';
-import { logger } from '../utils/logger.js';
+import { logger } from '../utils/logger';
 import { captureException } from '@sentry/node';
 
 export class InvalidArgumentError extends Error {

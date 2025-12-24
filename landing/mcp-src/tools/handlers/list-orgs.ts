@@ -1,6 +1,6 @@
 import { Api, Organization } from '@neondatabase/api-client';
-import { ToolHandlerExtraParams } from '../types.js';
-import { filterOrganizations } from '../utils.js';
+import { ToolHandlerExtraParams } from '../types';
+import { filterOrganizations } from '../utils';
 
 export async function handleListOrganizations(
   neonClient: Api<unknown>,

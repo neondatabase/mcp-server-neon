@@ -2,16 +2,16 @@ import '../sentry/instrument.js';
 import { setupExpressErrorHandler } from '@sentry/node';
 import express, { Request, Response, RequestHandler } from 'express';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { createMcpServer } from '../server/index.js';
-import { logger, morganConfig, errorHandler } from '../utils/logger.js';
-import { authRouter } from '../oauth/server.js';
-import { SERVER_PORT, SERVER_HOST } from '../constants.js';
-import { ensureCorsHeaders, requiresAuth } from '../oauth/utils.js';
+import { createMcpServer } from '../server/index';
+import { logger, morganConfig, errorHandler } from '../utils/logger';
+import { authRouter } from '../oauth/server';
+import { SERVER_PORT, SERVER_HOST } from '../constants';
+import { ensureCorsHeaders, requiresAuth } from '../oauth/utils';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
-import { track } from '../analytics/analytics.js';
-import { AppContext } from '../types/context.js';
-import { createStreamTransport } from './stream.js';
+import { track } from '../analytics/analytics';
+import { AppContext } from '../types/context';
+import { createStreamTransport } from './stream';
 
 export const createSseTransport = (appContext: AppContext) => {
   const app = express();

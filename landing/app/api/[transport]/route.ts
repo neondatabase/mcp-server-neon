@@ -1,4 +1,8 @@
 // app/api/[transport]/route.ts
+// Initialize Sentry (must be first import)
+import '../../../mcp-src/sentry/instrument';
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -234,7 +238,12 @@ const handler = createMcpHandler(
               };
 
               try {
-                return await (toolHandler as any)(args, neonClient, extraArgs);
+                // Wrap args in { params } structure expected by handlers
+                return await (toolHandler as any)(
+                  { params: args },
+                  neonClient,
+                  extraArgs,
+                );
               } catch (error) {
                 span.setStatus({ code: 2 });
                 return handleToolError(error, properties);
@@ -374,31 +383,47 @@ const handler = createMcpHandler(
     },
   },
   {
-    redisUrl: process.env.REDIS_URL,
+    redisUrl: process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_URL,
     basePath: '/api',
-    maxDuration: 60,
-    verboseLogs: true,
+    maxDuration: 800, // Fluid Compute - up to 800s for SSE connections
+    verboseLogs: process.env.NODE_ENV !== 'production',
   },
 );
 
 // Token verification function for OAuth
 const verifyToken = async (
-  _req: Request,
+  req: Request,
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> => {
+  // Debug logging
+  console.log('[DEBUG] verifyToken called');
+  console.log(
+    '[DEBUG] Authorization header:',
+    req.headers.get('authorization'),
+  );
+  console.log(
+    '[DEBUG] bearerToken received:',
+    bearerToken ? `${bearerToken.substring(0, 20)}...` : 'undefined',
+  );
+
   if (!bearerToken) return undefined;
 
   // The bearer token is the Neon API key
   // Verify it by making a test API call
   try {
+    console.log('[DEBUG] Creating Neon client...');
     const neonClient = createNeonClient(bearerToken);
+    console.log('[DEBUG] Calling getCurrentUserInfo...');
     const response = await neonClient.getCurrentUserInfo();
+    console.log('[DEBUG] Response status:', response.status);
 
     if (response.status !== 200) {
+      console.log('[DEBUG] Non-200 status, returning undefined');
       return undefined;
     }
 
     const userInfo = response.data;
+    console.log('[DEBUG] User info received:', userInfo.id);
 
     // Note: server_init is tracked on first tool/resource/prompt call
     // when we have proper client detection from MCP handshake
@@ -417,7 +442,8 @@ const verifyToken = async (
         readOnly: false, // Could be determined from token scopes
       },
     };
-  } catch {
+  } catch (error) {
+    console.log('[DEBUG] Error in verifyToken:', error);
     return undefined;
   }
 };
@@ -428,4 +454,4 @@ const authHandler = withMcpAuth(handler, verifyToken, {
   resourceMetadataPath: '/.well-known/oauth-protected-resource',
 });
 
-export { authHandler as GET, authHandler as POST };
+export { authHandler as GET, authHandler as POST, authHandler as DELETE };

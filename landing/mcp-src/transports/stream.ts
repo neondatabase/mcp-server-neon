@@ -1,10 +1,10 @@
 import { Request, Response, Router } from 'express';
-import { AppContext } from '../types/context.js';
-import { createMcpServer } from '../server/index.js';
+import { AppContext } from '../types/context';
+import { createMcpServer } from '../server/index';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { logger } from '../utils/logger.js';
-import { track } from '../analytics/analytics.js';
-import { requiresAuth } from '../oauth/utils.js';
+import { logger } from '../utils/logger';
+import { track } from '../analytics/analytics';
+import { requiresAuth } from '../oauth/utils';
 
 export const createStreamTransport = (appContext: AppContext) => {
   const router = Router();

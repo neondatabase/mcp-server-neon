@@ -8,28 +8,28 @@ import {
 } from '@neondatabase/api-client';
 import { neon } from '@neondatabase/serverless';
 import crypto from 'crypto';
-import { InvalidArgumentError, NotFoundError } from '../server/errors.js';
+import { InvalidArgumentError, NotFoundError } from '../server/errors';
 
-import { describeTable, formatTableDescription } from '../describeUtils.js';
-import { handleProvisionNeonAuth } from './handlers/neon-auth.js';
-import { handleSearch } from './handlers/search.js';
-import { handleFetch } from './handlers/fetch.js';
-import { getMigrationFromMemory, persistMigrationToMemory } from './state.js';
-import { fetchRawGithubContent, NEON_RESOURCES } from '../resources.js';
+import { describeTable, formatTableDescription } from '../describeUtils';
+import { handleProvisionNeonAuth } from './handlers/neon-auth';
+import { handleSearch } from './handlers/search';
+import { handleFetch } from './handlers/fetch';
+import { getMigrationFromMemory, persistMigrationToMemory } from './state';
+import { fetchRawGithubContent, NEON_RESOURCES } from '../resources';
 
 import {
   getDefaultDatabase,
   splitSqlStatements,
   getOrgByOrgIdOrDefault,
   resolveBranchId,
-} from './utils.js';
+} from './utils';
 import { startSpan } from '@sentry/node';
-import { ToolHandlerExtraParams, ToolHandlers } from './types.js';
-import { handleListOrganizations } from './handlers/list-orgs.js';
-import { handleListProjects } from './handlers/list-projects.js';
-import { handleDescribeProject } from './handlers/decribe-project.js';
-import { handleGetConnectionString } from './handlers/connection-string.js';
-import { handleDescribeBranch } from './handlers/describe-branch.js';
+import { ToolHandlerExtraParams, ToolHandlers } from './types';
+import { handleListOrganizations } from './handlers/list-orgs';
+import { handleListProjects } from './handlers/list-projects';
+import { handleDescribeProject } from './handlers/decribe-project';
+import { handleGetConnectionString } from './handlers/connection-string';
+import { handleDescribeBranch } from './handlers/describe-branch';
 
 async function handleCreateProject(
   params: ProjectCreateRequest,

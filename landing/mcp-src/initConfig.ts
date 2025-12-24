@@ -3,7 +3,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import chalk from 'chalk';
 import { fileURLToPath } from 'url';
-import { logger } from './utils/logger.js';
+import { logger } from './utils/logger';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(

@@ -1,5 +1,5 @@
 import { setTags, setUser } from '@sentry/node';
-import { ServerContext } from '../types/context.js';
+import { ServerContext } from '../types/context';
 
 export const setSentryTags = (context: ServerContext) => {
   setUser({

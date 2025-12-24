@@ -1,8 +1,8 @@
 import { Api } from '@neondatabase/api-client';
-import { handleListProjects } from './list-projects.js';
-import { ToolHandlerExtraParams } from '../types.js';
-import { NotFoundError } from '../../server/errors.js';
-import { looksLikeBranchId, looksLikeProjectId } from '../utils.js';
+import { handleListProjects } from './list-projects';
+import { ToolHandlerExtraParams } from '../types';
+import { NotFoundError } from '../../server/errors';
+import { looksLikeBranchId, looksLikeProjectId } from '../utils';
 
 type MCPOrgId = `org:${string}`;
 type MCPProjectId = `project:${string}`;

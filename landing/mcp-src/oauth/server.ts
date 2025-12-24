@@ -3,8 +3,8 @@ import {
   Response as ExpressResponse,
 } from 'express';
 import { AuthorizationCode, Client } from 'oauth2-server';
-import { model } from './model.js';
-import { logger } from '../utils/logger.js';
+import { model } from './model';
+import { logger } from '../utils/logger';
 import express from 'express';
 import {
   decodeAuthParams,
@@ -14,16 +14,16 @@ import {
   toMilliseconds,
   toSeconds,
   verifyPKCE,
-} from './utils.js';
-import { exchangeCode, exchangeRefreshToken, upstreamAuth } from './client.js';
-import { createNeonClient } from '../server/api.js';
+} from './utils';
+import { exchangeCode, exchangeRefreshToken, upstreamAuth } from './client';
+import { createNeonClient } from '../server/api';
 import bodyParser from 'body-parser';
-import { SERVER_HOST, COOKIE_SECRET } from '../constants.js';
+import { SERVER_HOST, COOKIE_SECRET } from '../constants';
 import {
   isClientAlreadyApproved,
   updateApprovedClientsCookie,
-} from './cookies.js';
-import { identify } from '../analytics/analytics.js';
+} from './cookies';
+import { identify } from '../analytics/analytics';
 
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
