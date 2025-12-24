@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { SERVER_HOST, UPSTREAM_OAUTH_HOST } from '@/lib/config';
+import { SERVER_HOST } from '@/lib/config';
 
 export async function GET() {
   return NextResponse.json({
     resource: SERVER_HOST,
-    authorization_servers: [UPSTREAM_OAUTH_HOST],
+    authorization_servers: [SERVER_HOST],
     bearer_methods_supported: ['header'],
     resource_documentation: 'https://neon.tech/docs/mcp',
   });
