@@ -93,7 +93,14 @@ export const createMcpServer = (context: ServerContext) => {
     server.tool(
       tool.name,
       tool.description,
-      { params: tool.inputSchema },
+      {
+        params: tool.inputSchema,
+        annotations: {
+          title: tool.title,
+          readOnlyHint: tool.readOnlySafe,
+          destructiveHint: !tool.readOnlySafe,
+        },
+      },
       async (args, extra) => {
         return await startSpan(
           {
@@ -128,7 +135,11 @@ export const createMcpServer = (context: ServerContext) => {
               clientApplication,
             };
             try {
-              return await toolHandler(args, neonClient, extraArgs);
+              return await toolHandler(
+                args as Parameters<typeof toolHandler>[0],
+                neonClient,
+                extraArgs,
+              );
             } catch (error) {
               span.setStatus({
                 code: 2,
