@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils';
 import { ExternalLink } from '@/components/ExternalLink';
 import { CopyableUrl } from '@/components/CopyableUrl';
+import { CopyableCommand } from '@/components/CopyableCommand';
 
 export const Introduction = ({ className }: { className?: string }) => (
   <div className={cn('flex flex-col gap-2', className)}>
@@ -48,6 +49,21 @@ export const Introduction = ({ className }: { className?: string }) => (
         <ExternalLink href="https://neon.tech/docs/reference/cli-init">
           Learn more in the docs
         </ExternalLink>
+      </p>
+    </div>
+
+    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 my-2">
+      <p className="text-sm text-gray-800">
+        <strong className="font-semibold text-gray-900">
+          Local setup (STDIO):
+        </strong>{' '}
+        For local MCP clients with API key authentication, run:{' '}
+        <CopyableCommand command="npx -y @neondatabase/mcp-server-neon start YOUR_API_KEY" />
+        . Get your API key from the{' '}
+        <ExternalLink href="https://console.neon.tech/app/settings/api-keys">
+          Neon Console
+        </ExternalLink>
+        .
       </p>
     </div>
 

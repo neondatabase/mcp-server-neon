@@ -2,6 +2,8 @@ import { createApiClient } from '@neondatabase/api-client';
 import { NEON_API_HOST } from '../constants';
 import pkg from '../../package.json';
 
+export const getPackageJson = () => pkg;
+
 export const createNeonClient = (apiKey: string) =>
   createApiClient({
     apiKey,
