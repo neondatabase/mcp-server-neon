@@ -50,6 +50,7 @@ export const createMcpServer = (context: ServerContext) => {
         clientName,
         clientApplication,
         readOnly: String(context.readOnly ?? false),
+        branch: 'vercel-migration', // TODO: remove after testing
       },
       context: {
         client: context.client,
