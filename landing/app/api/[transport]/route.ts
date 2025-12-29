@@ -17,25 +17,10 @@ import type { ToolHandlerExtraParams } from '../../../mcp-src/tools/types';
 import { detectClientApplication } from '../../../mcp-src/utils/client-application';
 import type { AuthContext } from '../../../mcp-src/types/auth';
 import { logger } from '../../../mcp-src/utils/logger';
-import { track } from '../../../mcp-src/analytics/analytics';
+import { waitUntil } from '@vercel/functions';
+import { track, flushAnalytics } from '../../../mcp-src/analytics/analytics';
 import { setSentryTags } from '../../../mcp-src/sentry/utils';
 import type { ServerContext, AppContext } from '../../../mcp-src/types/context';
-import { ANALYTICS_WRITE_KEY } from '../../../mcp-src/constants';
-
-// Debug: Log at module load time
-console.log('[DEBUG] route.ts module loaded');
-console.log('[DEBUG] ANALYTICS_WRITE_KEY exists:', !!ANALYTICS_WRITE_KEY);
-
-// Send a test event at module load
-track({
-  anonymousId: 'module-load-test',
-  event: 'vercel_route_module_loaded',
-  properties: {
-    branch: 'vercel-migration',
-    timestamp: new Date().toISOString(),
-  },
-});
-console.log('[DEBUG] Sent vercel_route_module_loaded event');
 
 // Helper to extract auth context from extra
 type AuthenticatedExtra = {
@@ -53,100 +38,97 @@ type AuthenticatedExtra = {
   sessionId?: string;
 };
 
-// Mutable state for client detection (updated in oninitialized)
-let clientName = 'unknown';
-let clientApplication = detectClientApplication(clientName);
-
-// Track if server_init has been tracked (to avoid duplicate tracking)
-let hasTrackedServerInit = false;
-
-// Store last known context for onerror handler
-let lastKnownContext: ServerContext | undefined;
-
-// Default app context for analytics/Sentry (used in onerror fallback)
-const defaultAppContext: AppContext = {
-  name: 'mcp-server-neon',
-  transport: 'sse',
-  environment: (process.env.NODE_ENV ??
-    'production') as AppContext['environment'],
-  version: pkg.version,
-};
-
-// Track server initialization (called after client detection with proper context)
-function trackServerInit(context: ServerContext) {
-  if (hasTrackedServerInit) return;
-  hasTrackedServerInit = true;
-
-  const properties = {
-    clientName,
-    clientApplication,
-    readOnly: String(context.readOnly ?? false),
-    branch: 'vercel-migration', // TODO: remove after testing
-  };
-
-  logger.info('[DEBUG] trackServerInit called with properties:', properties);
-  console.log('[DEBUG] trackServerInit called with properties:', JSON.stringify(properties));
-
-  track({
-    userId: context.account.id,
-    event: 'server_init',
-    properties,
-    context: {
-      client: context.client,
-      app: context.app,
-    },
-  });
-  logger.info('Server initialized:', properties);
-}
-
-// Helper function to get Neon client and context from auth info
-function getAuthContext(extra: AuthenticatedExtra) {
-  const authInfo = extra.authInfo;
-  if (!authInfo?.extra?.apiKey || !authInfo?.extra?.account) {
-    throw new Error('Authentication required');
-  }
-
-  const apiKey = authInfo.extra.apiKey;
-  const account = authInfo.extra.account;
-  const readOnly = authInfo.extra.readOnly ?? false;
-  const client = authInfo.extra.client;
-  const transport = authInfo.extra.transport ?? 'sse';
-  const neonClient = createNeonClient(apiKey);
-
-  // Create dynamic appContext with actual transport
-  const dynamicAppContext: AppContext = {
-    name: 'mcp-server-neon',
-    transport,
-    environment: (process.env.NODE_ENV ??
-      'production') as AppContext['environment'],
-    version: pkg.version,
-  };
-
-  // Build and store context for potential use in onerror
-  const context: ServerContext = {
-    apiKey,
-    account,
-    app: dynamicAppContext,
-    readOnly,
-    client,
-  };
-  lastKnownContext = context;
-
-  return {
-    apiKey,
-    account,
-    readOnly,
-    neonClient,
-    clientApplication,
-    clientName,
-    client,
-    context,
-  };
-}
-
 // Create the MCP handler with all tools, resources, and prompts
 const handler = createMcpHandler(
   (server: McpServer) => {
+    // Request-scoped mutable state (isolated per server instance)
+    let clientName = 'unknown';
+    let clientApplication = detectClientApplication(clientName);
+    let hasTrackedServerInit = false;
+    let lastKnownContext: ServerContext | undefined;
+
+    // Default app context for analytics/Sentry (used in onerror fallback)
+    const defaultAppContext: AppContext = {
+      name: 'mcp-server-neon',
+      transport: 'sse',
+      environment: (process.env.NODE_ENV ??
+        'production') as AppContext['environment'],
+      version: pkg.version,
+    };
+
+    // Track server initialization (called after client detection with proper context)
+    function trackServerInit(context: ServerContext) {
+      if (hasTrackedServerInit) return;
+      hasTrackedServerInit = true;
+
+      const properties = {
+        clientName,
+        clientApplication,
+        readOnly: String(context.readOnly ?? false),
+      };
+
+      track({
+        userId: context.account.id,
+        event: 'server_init',
+        properties,
+        context: {
+          client: context.client,
+          app: context.app,
+        },
+      });
+      waitUntil(flushAnalytics());
+      logger.info('Server initialized:', {
+        clientName,
+        clientApplication,
+        readOnly: context.readOnly,
+      });
+    }
+
+    // Helper function to get Neon client and context from auth info
+    function getAuthContext(extra: AuthenticatedExtra) {
+      const authInfo = extra.authInfo;
+      if (!authInfo?.extra?.apiKey || !authInfo?.extra?.account) {
+        throw new Error('Authentication required');
+      }
+
+      const apiKey = authInfo.extra.apiKey;
+      const account = authInfo.extra.account;
+      const readOnly = authInfo.extra.readOnly ?? false;
+      const client = authInfo.extra.client;
+      const transport = authInfo.extra.transport ?? 'sse';
+      const neonClient = createNeonClient(apiKey);
+
+      // Create dynamic appContext with actual transport
+      const dynamicAppContext: AppContext = {
+        name: 'mcp-server-neon',
+        transport,
+        environment: (process.env.NODE_ENV ??
+          'production') as AppContext['environment'],
+        version: pkg.version,
+      };
+
+      // Build and store context for potential use in onerror
+      const context: ServerContext = {
+        apiKey,
+        account,
+        app: dynamicAppContext,
+        readOnly,
+        client,
+      };
+      lastKnownContext = context;
+
+      return {
+        apiKey,
+        account,
+        readOnly,
+        neonClient,
+        clientApplication,
+        clientName,
+        client,
+        context,
+      };
+    }
+
     // Set up lifecycle hooks for client detection and error handling
     server.server.oninitialized = () => {
       const clientInfo = server.server.getClientVersion();
@@ -188,6 +170,7 @@ const handler = createMcpHandler(
         properties: { message, error, eventId },
         context: contexts,
       });
+      waitUntil(flushAnalytics());
     };
 
     // Register all tools
@@ -242,11 +225,9 @@ const handler = createMcpHandler(
                 tool_name: tool.name,
                 readOnly: String(readOnly),
                 clientName: cName,
-                branch: 'vercel-migration', // TODO: remove after testing
               };
 
-              logger.info('[DEBUG] tool_call:', properties);
-              console.log('[DEBUG] tool_call:', JSON.stringify(properties));
+              logger.info('tool call:', properties);
               setSentryTags(context);
 
               track({
@@ -259,6 +240,7 @@ const handler = createMcpHandler(
                   clientName: cName,
                 },
               });
+              waitUntil(flushAnalytics());
 
               const extraArgs: ToolHandlerExtraParams = {
                 ...extra,
@@ -318,6 +300,7 @@ const handler = createMcpHandler(
               properties,
               context: { client, app: context.app },
             });
+            waitUntil(flushAnalytics());
           } catch {
             // Resources can be called without auth in some cases
           }
@@ -365,6 +348,7 @@ const handler = createMcpHandler(
             properties,
             context: { client, app: context.app },
           });
+          waitUntil(flushAnalytics());
 
           try {
             const extraArgs: ToolHandlerExtraParams = {
@@ -425,20 +409,7 @@ const verifyToken = async (
   req: Request,
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> => {
-  console.log('[DEBUG] verifyToken called, hasToken:', !!bearerToken);
-
   if (!bearerToken) return undefined;
-
-  // Send debug event on token verification
-  track({
-    anonymousId: 'token-verify',
-    event: 'vercel_token_verify_attempt',
-    properties: {
-      branch: 'vercel-migration',
-      timestamp: new Date().toISOString(),
-    },
-  });
-  console.log('[DEBUG] Sent vercel_token_verify_attempt event');
 
   // The bearer token is the Neon API key
   // Verify it by making a test API call

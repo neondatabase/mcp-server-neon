@@ -4,6 +4,7 @@ import {
   authorizationCodeGrant,
   ClientSecretPost,
   refreshTokenGrant,
+  type Configuration,
 } from 'openid-client';
 import {
   CLIENT_ID,
@@ -29,9 +30,22 @@ const NEON_MCP_SCOPES = [
   'urn:neoncloud:orgs:permission',
 ] as const;
 
-const getUpstreamConfig = async () => {
+// Cache OAuth discovery config for function instance lifetime
+// This avoids repeated network calls during the lifetime of a serverless instance
+let cachedConfig: Configuration | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+const getUpstreamConfig = async (): Promise<Configuration> => {
+  const now = Date.now();
+
+  // Return cached config if still valid
+  if (cachedConfig && now - cacheTimestamp < CACHE_TTL_MS) {
+    return cachedConfig;
+  }
+
   const url = new URL(UPSTREAM_OAUTH_HOST);
-  const config = await discovery(
+  cachedConfig = await discovery(
     url,
     CLIENT_ID,
     {
@@ -40,8 +54,9 @@ const getUpstreamConfig = async () => {
     ClientSecretPost(CLIENT_SECRET),
     {},
   );
+  cacheTimestamp = now;
 
-  return config;
+  return cachedConfig;
 };
 
 export const upstreamAuth = async (state: string) => {

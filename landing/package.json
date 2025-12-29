@@ -33,6 +33,7 @@
     "@radix-ui/react-slot": "^1.2.2",
     "@segment/analytics-node": "2.2.1",
     "@sentry/node": "9.19.0",
+    "@vercel/functions": "^3.3.4",
     "axios": "^1.7.9",
     "chalk": "^5.4.1",
     "class-variance-authority": "^0.7.1",
