@@ -61,6 +61,7 @@ export const createMcpServer = (context: ServerContext) => {
       clientName,
       clientApplication,
       readOnly: context.readOnly,
+      branch: 'vercel-migration',
     });
   };
 

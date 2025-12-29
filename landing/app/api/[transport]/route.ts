@@ -395,7 +395,7 @@ const handler = createMcpHandler(
   {
     redisUrl: process.env.KV_URL || process.env.REDIS_URL,
     basePath: '/api',
-    maxDuration: 300, // Fluid Compute - up to 800s for SSE connections
+    maxDuration: 800, // Fluid Compute - up to 800s for SSE connections
     verboseLogs: process.env.NODE_ENV !== 'production',
   },
 );

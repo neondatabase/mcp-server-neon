@@ -6,12 +6,22 @@ import { AuthContext } from '../types/auth';
 type Account = AuthContext['extra']['account'];
 
 // Auto-initialize analytics at module load time (for serverless compatibility)
+// flushAt: 1 ensures events are sent immediately (required for serverless)
 const analytics: Analytics | undefined = ANALYTICS_WRITE_KEY
   ? new Analytics({
       writeKey: ANALYTICS_WRITE_KEY,
       host: 'https://track.neon.tech',
+      flushAt: 1,
     })
   : undefined;
+
+/**
+ * Flush all pending analytics events.
+ * Call this before returning from short-lived serverless functions.
+ */
+export const flushAnalytics = async (): Promise<void> => {
+  await analytics?.closeAndFlush();
+};
 
 /**
  * @deprecated Use auto-initialization instead. Kept for backwards compatibility.

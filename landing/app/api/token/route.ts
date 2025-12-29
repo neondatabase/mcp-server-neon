@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { model } from '../../../mcp-src/oauth/model';
 import { exchangeRefreshToken } from '../../../lib/oauth/client';
 import { verifyPKCE } from '../../../mcp-src/oauth/utils';
-import { identify } from '../../../mcp-src/analytics/analytics';
+import { identify, flushAnalytics } from '../../../mcp-src/analytics/analytics';
 import { logger } from '../../../mcp-src/utils/logger';
 
 const toSeconds = (ms: number): number => Math.floor(ms / 1000);
@@ -166,6 +166,8 @@ export async function POST(request: NextRequest) {
           },
         },
       );
+
+      await flushAnalytics();
 
       // Revoke the authorization code, it can only be used once
       await model.revokeAuthorizationCode(authorizationCode);
