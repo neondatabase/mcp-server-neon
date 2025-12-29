@@ -119,7 +119,7 @@ const renderApprovalDialog = (
       background-color: #0a0c09e6;
       border-radius: 8px;
       box-shadow: var(--card-shadow);
-      padding: 2rem 2rem 0.5rem;
+      padding: 2rem;
     }
 
     .header {

@@ -30,6 +30,7 @@ interface AuthenticatedExtra {
       account?: AuthContext['extra']['account'];
       readOnly?: boolean;
       client?: AuthContext['extra']['client'];
+      transport?: AppContext['transport'];
     };
   };
   // Include other properties from RequestHandlerExtra
@@ -47,8 +48,8 @@ let hasTrackedServerInit = false;
 // Store last known context for onerror handler
 let lastKnownContext: ServerContext | undefined;
 
-// App context for analytics/Sentry
-const appContext: AppContext = {
+// Default app context for analytics/Sentry (used in onerror fallback)
+const defaultAppContext: AppContext = {
   name: 'mcp-server-neon',
   transport: 'sse',
   environment: (process.env.NODE_ENV ??
@@ -92,13 +93,23 @@ function getAuthContext(extra: AuthenticatedExtra) {
   const account = authInfo.extra.account;
   const readOnly = authInfo.extra.readOnly ?? false;
   const client = authInfo.extra.client;
+  const transport = authInfo.extra.transport ?? 'sse';
   const neonClient = createNeonClient(apiKey);
+
+  // Create dynamic appContext with actual transport
+  const dynamicAppContext: AppContext = {
+    name: 'mcp-server-neon',
+    transport,
+    environment: (process.env.NODE_ENV ??
+      'production') as AppContext['environment'],
+    version: pkg.version,
+  };
 
   // Build and store context for potential use in onerror
   const context: ServerContext = {
     apiKey,
     account,
-    app: appContext,
+    app: dynamicAppContext,
     readOnly,
     client,
   };
@@ -143,7 +154,7 @@ const handler = createMcpHandler(
       // Use last known context if available, otherwise use defaults
       const userId = lastKnownContext?.account?.id ?? 'unknown';
       const contexts = {
-        app: appContext,
+        app: lastKnownContext?.app ?? defaultAppContext,
         client: lastKnownContext?.client,
       };
 
@@ -225,7 +236,7 @@ const handler = createMcpHandler(
                 properties,
                 context: {
                   client,
-                  app: appContext,
+                  app: context.app,
                   clientName: cName,
                 },
               });
@@ -286,7 +297,7 @@ const handler = createMcpHandler(
               userId: account.id,
               event: 'resource_call',
               properties,
-              context: { client, app: appContext },
+              context: { client, app: context.app },
             });
           } catch {
             // Resources can be called without auth in some cases
@@ -333,7 +344,7 @@ const handler = createMcpHandler(
             userId: account.id,
             event: 'prompt_call',
             properties,
-            context: { client, app: appContext },
+            context: { client, app: context.app },
           });
 
           try {
@@ -395,35 +406,25 @@ const verifyToken = async (
   req: Request,
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> => {
-  // Debug logging
-  console.log('[DEBUG] verifyToken called');
-  console.log(
-    '[DEBUG] Authorization header:',
-    req.headers.get('authorization'),
-  );
-  console.log(
-    '[DEBUG] bearerToken received:',
-    bearerToken ? `${bearerToken.substring(0, 20)}...` : 'undefined',
-  );
-
   if (!bearerToken) return undefined;
 
   // The bearer token is the Neon API key
   // Verify it by making a test API call
   try {
-    console.log('[DEBUG] Creating Neon client...');
     const neonClient = createNeonClient(bearerToken);
-    console.log('[DEBUG] Calling getCurrentUserInfo...');
     const response = await neonClient.getCurrentUserInfo();
-    console.log('[DEBUG] Response status:', response.status);
 
     if (response.status !== 200) {
-      console.log('[DEBUG] Non-200 status, returning undefined');
       return undefined;
     }
 
     const userInfo = response.data;
-    console.log('[DEBUG] User info received:', userInfo.id);
+
+    // Detect transport from URL pathname
+    const url = new URL(req.url);
+    const transport: AppContext['transport'] = url.pathname.includes('/mcp')
+      ? 'stream'
+      : 'sse';
 
     // Note: server_init is tracked on first tool/resource/prompt call
     // when we have proper client detection from MCP handshake
@@ -440,10 +441,10 @@ const verifyToken = async (
         },
         apiKey: bearerToken,
         readOnly: false, // Could be determined from token scopes
+        transport,
       },
     };
-  } catch (error) {
-    console.log('[DEBUG] Error in verifyToken:', error);
+  } catch {
     return undefined;
   }
 };

@@ -11,10 +11,12 @@ The migration moved the remote MCP server from Express-based SSE/Streamable HTTP
 ### 1. Next.js Configuration
 
 **`next.config.ts`**
+
 - Removed `output: 'export'` to enable dynamic server-side rendering required for API routes
 - Serverless deployment now uses Vercel's edge infrastructure
 
 **`vercel.json`**
+
 - Configured function limits for API routes:
   - `maxDuration: 300` (Fluid Compute - supports up to 800s for SSE connections)
   - `memory: 1024` MB
@@ -23,16 +25,16 @@ The migration moved the remote MCP server from Express-based SSE/Streamable HTTP
 
 Created Next.js App Router API routes to replace Express endpoints:
 
-| Route | Purpose |
-|-------|---------|
-| `/api/[transport]/route.ts` | Main MCP handler (SSE/Streamable HTTP) |
-| `/api/authorize/route.ts` | OAuth authorization endpoint |
-| `/api/callback/route.ts` | OAuth callback handler |
-| `/api/token/route.ts` | OAuth token exchange |
-| `/api/register/route.ts` | Dynamic client registration |
-| `/api/health/route.ts` | Health check endpoint |
-| `/.well-known/oauth-authorization-server/route.ts` | OAuth server metadata |
-| `/.well-known/oauth-protected-resource/route.ts` | OAuth protected resource metadata |
+| Route                                              | Purpose                                |
+| -------------------------------------------------- | -------------------------------------- |
+| `/api/[transport]/route.ts`                        | Main MCP handler (SSE/Streamable HTTP) |
+| `/api/authorize/route.ts`                          | OAuth authorization endpoint           |
+| `/api/callback/route.ts`                           | OAuth callback handler                 |
+| `/api/token/route.ts`                              | OAuth token exchange                   |
+| `/api/register/route.ts`                           | Dynamic client registration            |
+| `/api/health/route.ts`                             | Health check endpoint                  |
+| `/.well-known/oauth-authorization-server/route.ts` | OAuth server metadata                  |
+| `/.well-known/oauth-protected-resource/route.ts`   | OAuth protected resource metadata      |
 
 ### 3. MCP Handler Integration
 
@@ -42,7 +44,7 @@ The `mcp-handler` library provides the core MCP functionality:
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 
 const handler = createMcpHandler(serverFactory, tools, options, {
-  redisUrl: process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_URL,
+  redisUrl: process.env.KV_URL || process.env.REDIS_URL,
   basePath: '/api',
   maxDuration: 300,
   verboseLogs: process.env.NODE_ENV !== 'production',
@@ -68,16 +70,19 @@ Uses `patch-package` via postinstall script.
 Created Next.js-compatible OAuth utilities:
 
 **`lib/oauth/client.ts`**
+
 - Moved OAuth client logic using `openid-client` library
 - Handles upstream authentication with Neon OAuth provider
 - Functions: `upstreamAuth()`, `exchangeCode()`, `exchangeRefreshToken()`
 
 **`lib/oauth/cookies.ts`**
+
 - Replaced Express cookie handling with Next.js `cookies()` API
 - Uses Web Crypto API (HMAC-SHA256) for signed cookies
 - Functions: `isClientAlreadyApproved()`, `updateApprovedClientsCookie()`
 
 **`lib/config.ts`**
+
 - Centralized configuration with Vercel environment variable support
 - Uses `VERCEL_URL` as fallback for preview deployments
 
@@ -152,6 +157,7 @@ For complex data, raw JSON is now embedded in the text response.
 ### 10. TypeScript Configuration
 
 Updated `tsconfig.json`:
+
 - Module resolution: `bundler` (instead of `node16`)
 - Excluded transport files not used in Vercel deployment:
   - `mcp-src/index.ts`
@@ -172,6 +178,7 @@ redisUrl: process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_URL,
 Added to `package.json`:
 
 **Runtime:**
+
 - `@keyv/postgres` - Token/session storage
 - `@neondatabase/api-client` - Neon API client
 - `@neondatabase/serverless` - Serverless Postgres driver
@@ -186,6 +193,7 @@ Added to `package.json`:
 - `dotenv` - Environment configuration
 
 **Dev:**
+
 - `patch-package` - For mcp-handler patch
 - `@types/oauth2-server` - Type definitions
 
@@ -205,17 +213,18 @@ export type { ToolHandlers, ToolHandlerExtended } from './types';
 
 Required for Vercel deployment:
 
-| Variable | Description |
-|----------|-------------|
-| `SERVER_HOST` | Server URL (falls back to `VERCEL_URL`) |
-| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL |
-| `CLIENT_ID` | OAuth client ID |
-| `CLIENT_SECRET` | OAuth client secret |
-| `COOKIE_SECRET` | Secret for signed cookies |
-| `UPSTASH_REDIS_REST_URL` | Redis URL for session storage |
-| `OAUTH_DATABASE_URL` | Postgres URL for token storage |
-| `SENTRY_DSN` | Sentry error tracking DSN |
-| `ANALYTICS_WRITE_KEY` | Segment analytics write key |
+| Variable              | Description                                                    |
+| --------------------- | -------------------------------------------------------------- |
+| `SERVER_HOST`         | Server URL (falls back to `VERCEL_BRANCH_URL` or `VERCEL_URL`) |
+| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL                                        |
+| `CLIENT_ID`           | OAuth client ID                                                |
+| `CLIENT_SECRET`       | OAuth client secret                                            |
+| `COOKIE_SECRET`       | Secret for signed cookies                                      |
+| `KV_URL`              | Redis URL for session storage (Vercel KV)                      |
+| `REDIS_URL`           | Redis URL fallback for local development                       |
+| `OAUTH_DATABASE_URL`  | Postgres URL for token storage                                 |
+| `SENTRY_DSN`          | Sentry error tracking DSN                                      |
+| `ANALYTICS_WRITE_KEY` | Segment analytics write key                                    |
 
 ## Migration Checklist
 
@@ -231,6 +240,8 @@ Required for Vercel deployment:
 - [x] Add required dependencies
 - [x] Update tool handler parameter structure
 - [x] Remove metadata from response content
+- [x] Remove debug console.logs from production code
+- [x] Fix Redis URL environment variable documentation
 - [ ] Test OAuth flow end-to-end
 - [ ] Test MCP tool execution
 - [ ] Verify SSE streaming works with Fluid Compute
