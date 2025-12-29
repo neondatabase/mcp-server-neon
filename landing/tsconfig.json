@@ -25,6 +25,7 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    "app/.well-known/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
     "../public/types/**/*.ts",
