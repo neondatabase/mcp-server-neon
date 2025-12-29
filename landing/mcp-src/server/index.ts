@@ -47,7 +47,6 @@ export const createMcpServer = (context: ServerContext) => {
         clientName,
         clientApplication,
         readOnly: String(context.readOnly ?? false),
-        branch: 'vercel-migration', // TODO: remove after testing
       },
       context: {
         client: context.client,
@@ -105,7 +104,6 @@ export const createMcpServer = (context: ServerContext) => {
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
               clientName,
-              branch: 'vercel-migration', // TODO: remove after testing
             };
             logger.info('tool call:', properties);
             setSentryTags(context);
@@ -150,7 +148,7 @@ export const createMcpServer = (context: ServerContext) => {
         mimeType: resource.mimeType,
       },
       async (url) => {
-        const properties = { resource_name: resource.name, branch: 'vercel-migration' };
+        const properties = { resource_name: resource.name };
         logger.info('resource call:', properties);
         setSentryTags(context);
         track({
@@ -178,7 +176,7 @@ export const createMcpServer = (context: ServerContext) => {
       prompt.description,
       prompt.argsSchema,
       async (args, extra) => {
-        const properties = { prompt_name: prompt.name, clientName, branch: 'vercel-migration' };
+        const properties = { prompt_name: prompt.name, clientName };
         logger.info('prompt call:', properties);
         setSentryTags(context);
         track({
@@ -234,7 +232,7 @@ export const createMcpServer = (context: ServerContext) => {
     track({
       userId: context.account.id,
       event: 'server_error',
-      properties: { message, error, eventId, branch: 'vercel-migration' },
+      properties: { message, error, eventId },
       context: contexts,
     });
   };
