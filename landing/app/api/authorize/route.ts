@@ -42,121 +42,231 @@ const parseAuthRequest = (
 
 // Generate approval dialog HTML
 const renderApprovalDialog = (
-  client: { client_name?: string; client_uri?: string; [key: string]: unknown },
+  client: {
+    client_name?: string;
+    client_uri?: string;
+    redirect_uris?: string[];
+    [key: string]: unknown;
+  },
   state: string,
 ) => {
+  const clientName = client.client_name || 'A new MCP Client';
+  const website = client.client_uri;
+  const redirectUris = client.redirect_uris;
+
+  const websiteHtml = website
+    ? `
+          <div class="client-detail">
+            <div class="detail-label">Website:</div>
+            <div class="detail-value small">
+              <a href="${website}" target="_blank" rel="noopener noreferrer">${website}</a>
+            </div>
+          </div>`
+    : '';
+
+  const redirectUrisHtml =
+    redirectUris && redirectUris.length > 0
+      ? `
+          <div class="client-detail">
+            <div class="detail-label">Redirect URIs:</div>
+            <div class="detail-value small">
+              ${redirectUris.map((uri) => `<div>${uri}</div>`).join('')}
+            </div>
+          </div>`
+      : '';
+
   const html = `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Authorize Application</title>
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${clientName} | Authorization Request</title>
   <style>
+    :root {
+      --primary-color: #0070f3;
+      --error-color: #f44336;
+      --text-color: #dedede;
+      --text-color-secondary: #949494;
+      --background-color: #1c1c1c;
+      --border-color: #2a2929;
+      --card-shadow: 0 0px 12px 0px rgb(0 230 153 / 0.3);
+      --link-color: rgb(0 230 153 / 1);
+    }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0a0a0a;
-      color: #fff;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+        Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+      line-height: 1.6;
+      color: var(--text-color);
+      background-color: var(--background-color);
       margin: 0;
-      padding: 20px;
-      box-sizing: border-box;
+      padding: 0;
     }
+
     .container {
-      background: #1a1a1a;
-      border: 1px solid #333;
-      border-radius: 12px;
-      padding: 32px;
-      max-width: 400px;
-      width: 100%;
+      max-width: 600px;
+      margin: 2rem auto;
+      padding: 1rem;
     }
-    h1 {
-      font-size: 24px;
-      margin: 0 0 8px 0;
+
+    .precard {
+      padding: 2rem;
+      text-align: center;
     }
-    .client-name {
-      color: #00e599;
-      font-weight: 600;
-    }
-    p {
-      color: #888;
-      margin: 16px 0;
-      line-height: 1.5;
-    }
-    .permissions {
-      background: #111;
+
+    .card {
+      background-color: #0a0c09e6;
       border-radius: 8px;
-      padding: 16px;
-      margin: 24px 0;
+      box-shadow: var(--card-shadow);
+      padding: 2rem 2rem 0.5rem;
     }
-    .permissions h3 {
-      margin: 0 0 12px 0;
-      font-size: 14px;
-      color: #888;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .permissions ul {
-      margin: 0;
-      padding: 0 0 0 20px;
-      color: #ccc;
-    }
-    .permissions li {
-      margin: 8px 0;
-    }
-    .buttons {
+
+    .header {
       display: flex;
-      gap: 12px;
-      margin-top: 24px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.5rem;
+      color: var(--text-color);
+      text-decoration: none;
     }
-    button {
-      flex: 1;
-      padding: 12px 24px;
+
+    .logo {
+      width: 48px;
+      height: 48px;
+      margin-right: 1rem;
       border-radius: 8px;
-      font-size: 16px;
+      object-fit: contain;
+    }
+
+    .alert {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 400;
+      margin: 1rem 0;
+      text-align: center;
+    }
+
+    .description {
+      color: var(--text-color-secondary);
+    }
+
+    .client-info {
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1rem 1rem 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .client-detail {
+      display: flex;
+      margin-bottom: 0.5rem;
+      align-items: baseline;
+    }
+
+    .detail-label {
+      font-weight: 500;
+      min-width: 120px;
+    }
+
+    .detail-value {
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+        'Courier New', monospace;
+      word-break: break-all;
+    }
+
+    .detail-value a {
+      color: inherit;
+      text-decoration: underline;
+    }
+
+    .detail-value.small {
+      font-size: 0.8em;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+
+    .button {
+      padding: 0.65rem 1rem;
+      border-radius: 6px;
       font-weight: 500;
       cursor: pointer;
       border: none;
+      font-size: 1rem;
     }
-    .approve {
-      background: #00e599;
-      color: #000;
+
+    .button-primary {
+      background-color: rgb(0 229 153 / 1);
+      color: rgb(26 26 26 / 1);
     }
-    .approve:hover {
-      background: #00cc88;
+
+    .button-secondary {
+      background-color: transparent;
+      border: 1px solid rgb(73 75 80 / 1);
+      color: var(--text-color);
     }
-    .deny {
-      background: #333;
-      color: #fff;
-    }
-    .deny:hover {
-      background: #444;
+
+    @media (max-width: 640px) {
+      .container {
+        margin: 1rem auto;
+        padding: 0.5rem;
+      }
+
+      .card {
+        padding: 1.5rem;
+      }
+
+      .client-detail {
+        flex-direction: column;
+      }
+
+      .detail-label {
+        min-width: unset;
+        margin-bottom: 0.25rem;
+      }
+
+      .actions {
+        flex-direction: column;
+      }
+
+      .button {
+        width: 100%;
+      }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Authorize <span class="client-name">${client.client_name || 'Application'}</span></h1>
-    <p>This application wants to access your Neon account.</p>
-
-    <div class="permissions">
-      <h3>Permissions requested</h3>
-      <ul>
-        <li>Read and manage your projects</li>
-        <li>Read and manage your organizations</li>
-        <li>Access your account information</li>
-      </ul>
+    <div class="precard">
+      <a class="header" href="/" target="_blank">
+        <img src="/logo.png" alt="Neon MCP" class="logo">
+      </a>
     </div>
-
-    <form method="POST" action="/api/authorize">
-      <input type="hidden" name="state" value="${state}" />
-      <div class="buttons">
-        <button type="button" class="deny" onclick="window.close()">Deny</button>
-        <button type="submit" class="approve">Authorize</button>
+    <div class="card">
+      <h2 class="alert"><strong>MCP Client Authorization Request</strong></h2>
+      <div class="client-info">
+        <div class="client-detail">
+          <div class="detail-label">Name:</div>
+          <div class="detail-value">${clientName}</div>
+        </div>${websiteHtml}${redirectUrisHtml}
       </div>
-    </form>
+      <p class="description">
+        This MCP client is requesting to be authorized on Neon MCP Server.
+        If you approve, you will be redirected to complete the authentication.
+      </p>
+      <form method="POST" action="/api/authorize">
+        <input type="hidden" name="state" value="${state}" />
+        <div class="actions">
+          <button type="button" class="button button-secondary" onclick="window.history.back()">Cancel</button>
+          <button type="submit" class="button button-primary">Approve</button>
+        </div>
+      </form>
+    </div>
   </div>
 </body>
 </html>
