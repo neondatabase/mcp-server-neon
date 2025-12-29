@@ -6,6 +6,10 @@ This file provides guidance to AI agents when working with code in this reposito
 
 This is the **Neon MCP Server** - a Model Context Protocol server that bridges natural language requests to the Neon API, enabling LLMs to manage Neon Postgres databases through conversational commands. The project implements both local (stdio) and remote (SSE/Streamable HTTP) MCP server transports with OAuth authentication support.
 
+**Architecture Note**: The project has two server implementations:
+1. **Local MCP Server** (`src/`): Runs locally via stdio transport, published as `@neondatabase/mcp-server-neon` npm package
+2. **Remote MCP Server** (`landing/`): Deployed on Vercel serverless infrastructure, accessible at `mcp.neon.tech`
+
 ## Development Commands
 
 ### Building and Running
@@ -97,8 +101,10 @@ npm run test
 3. **Transport Layers (`src/transports/`)**
 
    - `stdio.ts`: Standard input/output transport for local MCP clients (Claude Desktop, Cursor)
-   - `sse-express.ts`: Server-Sent Events transport for remote MCP server (deprecated)
-   - `stream.ts`: Streamable HTTP transport for remote MCP server (recommended)
+   - `sse-express.ts`: Server-Sent Events transport (legacy, used for local development)
+   - `stream.ts`: Streamable HTTP transport (legacy, used for local development)
+
+   **Note**: The remote MCP server transports are now handled by Vercel serverless functions in `landing/app/api/`.
 
 4. **OAuth System (`src/oauth/`)**
 
@@ -212,12 +218,32 @@ src/
 └── utils/                # Shared utilities
 
 mcp-client/               # CLI client for testing
-landing/                  # Next.js landing page
+landing/                  # Next.js app with remote MCP server
+├── app/                 # Next.js App Router
+│   ├── api/            # API routes for remote MCP server
+│   │   ├── [transport]/route.ts  # Main MCP handler (SSE/Streamable HTTP)
+│   │   ├── authorize/  # OAuth authorization endpoint
+│   │   ├── callback/   # OAuth callback handler
+│   │   ├── token/      # OAuth token exchange
+│   │   ├── register/   # Dynamic client registration
+│   │   └── health/     # Health check endpoint
+│   └── .well-known/    # OAuth discovery endpoints
+├── lib/                # Next.js-compatible utilities
+│   ├── config.ts       # Centralized configuration
+│   └── oauth/          # OAuth utilities for Next.js
+├── mcp-src/            # MCP server code (shared with src/)
+│   ├── server/        # MCP server factory
+│   ├── tools/         # Tool definitions and handlers
+│   ├── oauth/         # OAuth model and KV store
+│   └── analytics/     # Segment analytics
+└── vercel.json        # Vercel deployment config
 ```
 
 ## Important Notes
 
-- **TypeScript Configuration**: Uses ES2022 with Node16 module resolution. All imports must use `.js` extensions (not `.ts`) due to ESM requirements.
+- **TypeScript Configuration**:
+  - `src/`: Uses ES2022 with Node16 module resolution. All imports must use `.js` extensions (not `.ts`) due to ESM requirements.
+  - `landing/mcp-src/`: Uses `bundler` module resolution for Next.js compatibility. Imports use extensionless paths.
 
 - **Building**: The build process includes chmod operations to make `dist/index.js` executable, exports tool definitions to `landing/tools.json`, and builds the landing page.
 
@@ -226,6 +252,51 @@ landing/                  # Next.js landing page
 - **Migration Pattern**: Tools like `prepare_database_migration` and `prepare_query_tuning` create temporary branches. The LLM must remember these branch IDs to pass to subsequent `complete_*` tools.
 
 - **Neon API Client**: Created using `@neondatabase/api-client` package. All tool handlers receive a pre-configured `neonClient` instance.
+
+## Remote MCP Server (Vercel)
+
+The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infrastructure.
+
+### Key Technologies
+
+- **Next.js App Router**: API routes handle MCP protocol and OAuth flow
+- **mcp-handler library**: Abstracts MCP protocol complexity for serverless environments
+- **Vercel Fluid Compute**: Supports up to 800s function duration for SSE connections
+- **Upstash Redis**: Session storage via Vercel KV (`KV_URL` environment variable)
+- **Postgres via Keyv**: Token persistence using `OAUTH_DATABASE_URL`
+
+### API Endpoints
+
+| Route | Purpose |
+|-------|---------|
+| `/api/mcp` | Streamable HTTP transport (recommended) |
+| `/api/sse` | Server-Sent Events transport (deprecated) |
+| `/api/authorize` | OAuth authorization initiation |
+| `/api/callback` | OAuth callback handler |
+| `/api/token` | OAuth token exchange |
+| `/api/register` | Dynamic client registration |
+| `/.well-known/oauth-authorization-server` | OAuth server metadata |
+| `/.well-known/oauth-protected-resource` | OAuth protected resource metadata |
+
+### Environment Variables (Vercel)
+
+| Variable | Description |
+|----------|-------------|
+| `SERVER_HOST` | Server URL (falls back to `VERCEL_BRANCH_URL` or `VERCEL_URL`) |
+| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL |
+| `CLIENT_ID` / `CLIENT_SECRET` | OAuth client credentials |
+| `COOKIE_SECRET` | Secret for signed cookies |
+| `KV_URL` | Vercel KV (Upstash Redis) URL |
+| `OAUTH_DATABASE_URL` | Postgres URL for token storage |
+| `SENTRY_DSN` | Sentry error tracking DSN |
+| `ANALYTICS_WRITE_KEY` | Segment analytics write key |
+
+### Development Notes
+
+- The `landing/mcp-src/` directory contains a copy of the MCP server code adapted for Vercel's bundler
+- Import paths in `landing/mcp-src/` are extensionless (no `.js` suffix)
+- The `mcp-handler` library has a patch (`landing/patches/mcp-handler+1.0.4.patch`) for compatibility fixes
+- See `landing/vercel-migration.md` for detailed migration documentation
 
 ## Claude Code Review Workflow
 

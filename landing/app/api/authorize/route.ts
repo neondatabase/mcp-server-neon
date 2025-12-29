@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import he from 'he';
 import { model } from '../../../mcp-src/oauth/model';
 import { upstreamAuth } from '../../../lib/oauth/client';
 import {
@@ -50,8 +51,8 @@ const renderApprovalDialog = (
   },
   state: string,
 ) => {
-  const clientName = client.client_name || 'A new MCP Client';
-  const website = client.client_uri;
+  const clientName = he.escape(client.client_name || 'A new MCP Client');
+  const website = client.client_uri ? he.escape(client.client_uri) : undefined;
   const redirectUris = client.redirect_uris;
 
   const websiteHtml = website
@@ -70,7 +71,7 @@ const renderApprovalDialog = (
           <div class="client-detail">
             <div class="detail-label">Redirect URIs:</div>
             <div class="detail-value small">
-              ${redirectUris.map((uri) => `<div>${uri}</div>`).join('')}
+              ${redirectUris.map((uri) => `<div>${he.escape(uri)}</div>`).join('')}
             </div>
           </div>`
       : '';
@@ -260,7 +261,7 @@ const renderApprovalDialog = (
         If you approve, you will be redirected to complete the authentication.
       </p>
       <form method="POST" action="/api/authorize">
-        <input type="hidden" name="state" value="${state}" />
+        <input type="hidden" name="state" value="${he.escape(state)}" />
         <div class="actions">
           <button type="button" class="button button-secondary" onclick="window.history.back()">Cancel</button>
           <button type="submit" class="button button-primary">Approve</button>

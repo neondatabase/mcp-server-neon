@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Neon MCP Server - Landing & Remote Server
 
-## Getting Started
+This directory contains:
+1. **Landing Page**: Marketing site for the Neon MCP Server
+2. **Remote MCP Server**: Vercel-hosted serverless MCP server accessible at `mcp.neon.tech`
 
-First, run the development server:
+## Architecture
+
+The remote MCP server is deployed on Vercel's serverless infrastructure using Next.js App Router.
+
+### Key Components
+
+- **`app/api/[transport]/route.ts`**: Main MCP handler supporting both SSE and Streamable HTTP transports
+- **`app/api/authorize/`, `callback/`, `token/`**: OAuth 2.0 flow endpoints
+- **`app/.well-known/`**: OAuth discovery endpoints
+- **`mcp-src/`**: MCP server implementation adapted for Vercel's bundler
+- **`lib/`**: Next.js-compatible utilities (config, OAuth)
+
+## Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
+# Install dependencies
+bun install
+
+# Run development server
 bun dev
+
+# Build for production
+bun run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Required for the remote MCP server:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Description |
+|----------|-------------|
+| `SERVER_HOST` | Server URL (defaults to `VERCEL_BRANCH_URL` or `VERCEL_URL`) |
+| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL |
+| `CLIENT_ID` | OAuth client ID |
+| `CLIENT_SECRET` | OAuth client secret |
+| `COOKIE_SECRET` | Secret for signed cookies |
+| `KV_URL` | Vercel KV (Upstash Redis) URL |
+| `OAUTH_DATABASE_URL` | Postgres URL for token storage |
 
-## Learn More
+## Deployment
 
-To learn more about Next.js, take a look at the following resources:
+The server is automatically deployed to Vercel on push to the main branch. Preview deployments are created for pull requests.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `vercel-migration.md` for detailed migration documentation from the previous Express-based deployment.
