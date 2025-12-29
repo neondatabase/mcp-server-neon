@@ -20,7 +20,7 @@
     "build:cli": "npx esbuild mcp-src/cli.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/cli/cli.js --banner:js='#!/usr/bin/env node' --packages=external && chmod +x dist/cli/cli.js",
     "start": "next start",
     "start:cli": "node dist/cli/cli.js start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "postinstall": "patch-package"
   },

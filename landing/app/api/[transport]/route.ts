@@ -2,7 +2,6 @@
 // Initialize Sentry (must be first import)
 import '../../../mcp-src/sentry/instrument';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -23,7 +22,7 @@ import { setSentryTags } from '../../../mcp-src/sentry/utils';
 import type { ServerContext, AppContext } from '../../../mcp-src/types/context';
 
 // Helper to extract auth context from extra
-interface AuthenticatedExtra {
+type AuthenticatedExtra = {
   authInfo?: AuthInfo & {
     extra?: {
       apiKey?: string;
@@ -36,7 +35,7 @@ interface AuthenticatedExtra {
   // Include other properties from RequestHandlerExtra
   signal?: AbortSignal;
   sessionId?: string;
-}
+};
 
 // Mutable state for client detection (updated in oninitialized)
 let clientName = 'unknown';

@@ -652,34 +652,25 @@ function extractExecutionMetrics(plan: any): QueryMetrics {
         metrics.totalCost = Math.max(metrics.totalCost, node['Total Cost']);
       }
       if (node['Actual Rows']) {
-        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
         metrics.actualRows += node['Actual Rows'];
       }
 
       if (node['Shared Hit Blocks'])
-        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
         metrics.bufferUsage.shared.hit += node['Shared Hit Blocks'];
       if (node['Shared Read Blocks'])
-        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
         metrics.bufferUsage.shared.read += node['Shared Read Blocks'];
       if (node['Shared Written Blocks'])
-        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
         metrics.bufferUsage.shared.written += node['Shared Written Blocks'];
       if (node['Shared Dirtied Blocks'])
-        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
         metrics.bufferUsage.shared.dirtied += node['Shared Dirtied Blocks'];
 
       if (node['Local Hit Blocks'])
-        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
         metrics.bufferUsage.local.hit += node['Local Hit Blocks'];
       if (node['Local Read Blocks'])
-        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
         metrics.bufferUsage.local.read += node['Local Read Blocks'];
       if (node['Local Written Blocks'])
-        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
         metrics.bufferUsage.local.written += node['Local Written Blocks'];
       if (node['Local Dirtied Blocks'])
-        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
         metrics.bufferUsage.local.dirtied += node['Local Dirtied Blocks'];
 
       // Process child nodes

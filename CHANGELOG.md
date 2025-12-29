@@ -2,7 +2,7 @@
 
 # [Unreleased]
 
-# [0.7.0] 2025-12-23
+# [0.7.0] 2025-12-29
 
 - Feat: Add Neon Auth v2 support with Better Auth provider and branch-level provisioning
 - Feat: Add `setup-neon-auth` prompt with client-specific instructions for Vite+React projects
