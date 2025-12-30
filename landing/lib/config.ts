@@ -1,18 +1,14 @@
 /**
  * Centralized configuration for the Vercel deployment.
  * This is the single source of truth for all configuration values.
- *
- * Priority for SERVER_HOST: SERVER_HOST > VERCEL_BRANCH_URL (stable) > VERCEL_URL (per-deployment)
  */
 
 // Server host detection
 export const SERVER_HOST =
   process.env.SERVER_HOST ||
-  (process.env.VERCEL_BRANCH_URL
-    ? `https://${process.env.VERCEL_BRANCH_URL}`
-    : process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000');
+  (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3000');
 
 // OAuth configuration
 export const UPSTREAM_OAUTH_HOST =

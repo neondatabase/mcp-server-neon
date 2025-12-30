@@ -1,4 +1,3 @@
-// app/api/[transport]/route.ts
 // Initialize Sentry (must be first import)
 import '../../../mcp-src/sentry/instrument';
 
@@ -22,7 +21,6 @@ import { track, flushAnalytics } from '../../../mcp-src/analytics/analytics';
 import { setSentryTags } from '../../../mcp-src/sentry/utils';
 import type { ServerContext, AppContext } from '../../../mcp-src/types/context';
 
-// Helper to extract auth context from extra
 type AuthenticatedExtra = {
   authInfo?: AuthInfo & {
     extra?: {
@@ -33,7 +31,6 @@ type AuthenticatedExtra = {
       transport?: AppContext['transport'];
     };
   };
-  // Include other properties from RequestHandlerExtra
   signal?: AbortSignal;
   sessionId?: string;
 };

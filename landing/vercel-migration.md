@@ -17,9 +17,19 @@ The migration moved the remote MCP server from Express-based SSE/Streamable HTTP
 
 **`vercel.json`**
 
-- Configured function limits for API routes:
-  - `maxDuration: 300` (Fluid Compute - supports up to 800s for SSE connections)
-  - `memory: 1024` MB
+- Configured Vercel Fluid Compute for long-running SSE connections:
+  ```json
+  {
+    "fluid": true,
+    "functions": {
+      "app/api/**/*.ts": {
+        "maxDuration": 800
+      }
+    }
+  }
+  ```
+- `fluid: true` enables Fluid Compute mode for SSE/streaming support
+- `maxDuration: 800` allows functions to run up to 800 seconds (SSE requirement)
 
 ### 2. New API Route Structure
 
@@ -31,6 +41,7 @@ Created Next.js App Router API routes to replace Express endpoints:
 | `/api/authorize/route.ts`                          | OAuth authorization endpoint           |
 | `/api/callback/route.ts`                           | OAuth callback handler                 |
 | `/api/token/route.ts`                              | OAuth token exchange                   |
+| `/api/revoke/route.ts`                             | OAuth token revocation                 |
 | `/api/register/route.ts`                           | Dynamic client registration            |
 | `/api/health/route.ts`                             | Health check endpoint                  |
 | `/.well-known/oauth-authorization-server/route.ts` | OAuth server metadata                  |
@@ -98,9 +109,29 @@ import { logger } from '../utils/logger.js';
 import { logger } from '../utils/logger';
 ```
 
-### 7. Analytics Auto-Initialization
+### 7. Vercel Functions Integration (`@vercel/functions`)
+
+Added `@vercel/functions` package for serverless lifecycle management:
+
+**`waitUntil` for Background Tasks**
+
+Vercel serverless functions terminate immediately after returning a response. The `waitUntil` function extends the function lifecycle to allow background tasks (like analytics) to complete:
+
+```typescript
+import { waitUntil } from '@vercel/functions';
+import { flushAnalytics } from '../../../mcp-src/analytics/analytics';
+
+// Inside request handlers
+waitUntil(flushAnalytics());
+```
+
+This ensures analytics events are flushed before the function terminates, without blocking the response.
+
+### 8. Analytics for Serverless
 
 Modified `analytics/analytics.ts` for serverless compatibility:
+
+**Auto-Initialization at Module Load**
 
 ```typescript
 // Before: Manual initialization
@@ -113,15 +144,27 @@ export const initAnalytics = () => {
 
 // After: Auto-initialization at module load
 const analytics: Analytics | undefined = ANALYTICS_WRITE_KEY
-  ? new Analytics({ ... })
+  ? new Analytics({
+      writeKey: ANALYTICS_WRITE_KEY,
+      host: 'https://track.neon.tech',
+      flushAt: 1, // Send immediately (required for serverless)
+    })
   : undefined;
+```
 
-export const initAnalytics = () => {
-  // No-op: backwards compatibility
+**Flush Function for Serverless Lifecycle**
+
+```typescript
+export const flushAnalytics = async (): Promise<void> => {
+  await analytics?.closeAndFlush();
 };
 ```
 
-### 8. Tool Handler Parameter Wrapping
+Key changes:
+- `flushAt: 1` ensures events are sent immediately (serverless functions may terminate before batched events are sent)
+- `flushAnalytics()` called via `waitUntil()` before function termination
+
+### 9. Tool Handler Parameter Wrapping
 
 Updated tool handler calls to wrap args in expected structure:
 
@@ -133,7 +176,7 @@ return await toolHandler(args, neonClient, extraArgs);
 return await toolHandler({ params: args }, neonClient, extraArgs);
 ```
 
-### 9. Response Content Changes
+### 10. Response Content Changes
 
 Removed `metadata` fields from tool response content (not supported in serverless):
 
@@ -154,7 +197,7 @@ Removed `metadata` fields from tool response content (not supported in serverles
 
 For complex data, raw JSON is now embedded in the text response.
 
-### 10. TypeScript Configuration
+### 11. TypeScript Configuration
 
 Updated `tsconfig.json`:
 
@@ -165,7 +208,7 @@ Updated `tsconfig.json`:
   - `mcp-src/transports/stdio.ts`
   - `mcp-src/transports/stream.ts`
 
-### 11. Redis/Session Storage
+### 12. Redis/Session Storage
 
 Updated Redis URL configuration for Upstash support:
 
@@ -173,7 +216,7 @@ Updated Redis URL configuration for Upstash support:
 redisUrl: process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_URL,
 ```
 
-### 12. New Dependencies
+### 13. New Dependencies
 
 Added to `package.json`:
 
@@ -184,6 +227,7 @@ Added to `package.json`:
 - `@neondatabase/serverless` - Serverless Postgres driver
 - `@segment/analytics-node` - Analytics
 - `@sentry/node` - Error tracking
+- `@vercel/functions` - Vercel serverless utilities (`waitUntil`)
 - `express` - For type compatibility
 - `keyv` - Key-value store
 - `morgan` - Logging
@@ -197,7 +241,7 @@ Added to `package.json`:
 - `patch-package` - For mcp-handler patch
 - `@types/oauth2-server` - Type definitions
 
-### 13. Export Type Fix
+### 14. Export Type Fix
 
 Fixed type exports in `tools/index.ts`:
 
@@ -209,18 +253,48 @@ export { ToolHandlers, ToolHandlerExtended } from './types.js';
 export type { ToolHandlers, ToolHandlerExtended } from './types';
 ```
 
+### 15. Vercel Environment Variable Handling
+
+**`lib/config.ts`** provides centralized configuration with Vercel-specific fallbacks:
+
+```typescript
+// Server host detection with Vercel fallback
+export const SERVER_HOST =
+  process.env.SERVER_HOST ||
+  (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3000');
+```
+
+Vercel automatically provides `VERCEL_URL` - the deployment URL (e.g., `my-app-abc123.vercel.app`).
+
+**Note:** In production, always set `SERVER_HOST` explicitly to ensure stable OAuth callbacks.
+
+### 16. GitHub Actions Changes
+
+Adapted CI/CD workflows for Vercel deployment:
+
+- **Removed** `koyeb-preview.yml` and `koyeb-prod.yml` (no longer needed)
+- **Updated** `pr.yml` to work from `landing/` directory:
+  - Changed `working-directory` to `landing`
+  - Uses Node 22 and Bun 1.2.13
+  - Lint and build commands run in landing directory
+
+Vercel handles deployments automatically via GitHub integration (no manual workflows needed).
+
 ## Environment Variables
 
 Required for Vercel deployment:
 
 | Variable              | Description                                                    |
 | --------------------- | -------------------------------------------------------------- |
-| `SERVER_HOST`         | Server URL (falls back to `VERCEL_BRANCH_URL` or `VERCEL_URL`) |
+| `SERVER_HOST`         | Server URL (falls back to `VERCEL_URL`)                        |
+| `VERCEL_URL`          | Auto-provided by Vercel - deployment URL                       |
 | `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL                                        |
 | `CLIENT_ID`           | OAuth client ID                                                |
 | `CLIENT_SECRET`       | OAuth client secret                                            |
 | `COOKIE_SECRET`       | Secret for signed cookies                                      |
-| `KV_URL`              | Redis URL for session storage (Vercel KV)                      |
+| `KV_URL`              | Redis URL for session storage (Vercel KV / Upstash)            |
 | `REDIS_URL`           | Redis URL fallback for local development                       |
 | `OAUTH_DATABASE_URL`  | Postgres URL for token storage                                 |
 | `SENTRY_DSN`          | Sentry error tracking DSN                                      |
@@ -233,15 +307,20 @@ Required for Vercel deployment:
 - [x] Create `.well-known` routes for OAuth discovery
 - [x] Refactor OAuth utilities for Next.js compatibility
 - [x] Update import paths (remove `.js` extensions)
-- [x] Configure `vercel.json` for Fluid Compute
+- [x] Configure `vercel.json` for Fluid Compute (`fluid: true`, `maxDuration: 800`)
 - [x] Patch `mcp-handler` for compatibility
-- [x] Update analytics for auto-initialization
+- [x] Update analytics for serverless (auto-init, `flushAt: 1`, `waitUntil`)
 - [x] Update TypeScript configuration
-- [x] Add required dependencies
+- [x] Add required dependencies (including `@vercel/functions`)
 - [x] Update tool handler parameter structure
 - [x] Remove metadata from response content
 - [x] Remove debug console.logs from production code
 - [x] Fix Redis URL environment variable documentation
+- [x] Add `VERCEL_URL` handling in `lib/config.ts`
+- [x] Remove Koyeb deployment workflows
+- [x] Update GitHub Actions to work from `landing/` directory
+- [x] Add token revoke endpoint (`/api/revoke`)
+- [x] Add OpenGraph meta tags
 - [ ] Test OAuth flow end-to-end
 - [ ] Test MCP tool execution
 - [ ] Verify SSE streaming works with Fluid Compute
@@ -250,8 +329,18 @@ Required for Vercel deployment:
 
 ## Notes
 
-- Vercel Fluid Compute supports up to 800s function duration for SSE connections
+### Vercel-Specific Considerations
+
+- **Fluid Compute**: Enable with `"fluid": true` in `vercel.json` for SSE/streaming support up to 800s
+- **Function Duration**: Set `maxDuration: 800` for API routes that handle long-lived connections
+- **`waitUntil`**: Use `@vercel/functions` `waitUntil()` for background tasks (analytics, logging) that should complete after response is sent
+- **Environment Variables**: `VERCEL_URL` is auto-provided; set `SERVER_HOST` explicitly in production for stable OAuth callbacks
+- **No Custom Deployment Workflows**: Vercel handles CI/CD automatically via GitHub integration
+
+### General Architecture Notes
+
 - The `mcp-handler` library abstracts much of the MCP protocol complexity
 - OAuth flow uses Neon's OAuth provider as the upstream authorization server
 - Token storage uses Postgres via Keyv for persistence
 - Session state for approved clients stored in signed HTTP-only cookies
+- Analytics uses Segment with `flushAt: 1` for immediate event delivery in serverless context

@@ -274,6 +274,7 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 | `/api/authorize` | OAuth authorization initiation |
 | `/api/callback` | OAuth callback handler |
 | `/api/token` | OAuth token exchange |
+| `/api/revoke` | OAuth token revocation |
 | `/api/register` | Dynamic client registration |
 | `/.well-known/oauth-authorization-server` | OAuth server metadata |
 | `/.well-known/oauth-protected-resource` | OAuth protected resource metadata |
@@ -282,7 +283,7 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 
 | Variable | Description |
 |----------|-------------|
-| `SERVER_HOST` | Server URL (falls back to `VERCEL_BRANCH_URL` or `VERCEL_URL`) |
+| `SERVER_HOST` | Server URL (falls back to `VERCEL_URL`) |
 | `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL |
 | `CLIENT_ID` / `CLIENT_SECRET` | OAuth client credentials |
 | `COOKIE_SECRET` | Secret for signed cookies |

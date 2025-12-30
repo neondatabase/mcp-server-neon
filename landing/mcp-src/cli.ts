@@ -1,5 +1,5 @@
 import './sentry/instrument';
-import { identifyApiKey, initAnalytics, track } from './analytics/analytics';
+import { identifyApiKey, track } from './analytics/analytics';
 import { NODE_ENV } from './constants';
 import { handleInit, parseArgs } from './initConfig';
 import { createNeonClient, getPackageJson } from './server/api';
@@ -32,9 +32,6 @@ const appContext: AppContext = {
   transport: 'stdio',
 };
 
-if (args.analytics) {
-  initAnalytics();
-}
 
 if (args.command === 'start:sse') {
   console.error(

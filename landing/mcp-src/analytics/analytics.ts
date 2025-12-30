@@ -23,13 +23,6 @@ export const flushAnalytics = async (): Promise<void> => {
   await analytics?.closeAndFlush();
 };
 
-/**
- * @deprecated Use auto-initialization instead. Kept for backwards compatibility.
- */
-export const initAnalytics = () => {
-  // No-op: analytics is now auto-initialized at module load time
-};
-
 export const identify = (
   account: Account | null,
   params: Omit<Parameters<Analytics['identify']>[0], 'userId' | 'anonymousId'>,

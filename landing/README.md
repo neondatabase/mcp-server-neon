@@ -11,7 +11,7 @@ The remote MCP server is deployed on Vercel's serverless infrastructure using Ne
 ### Key Components
 
 - **`app/api/[transport]/route.ts`**: Main MCP handler supporting both SSE and Streamable HTTP transports
-- **`app/api/authorize/`, `callback/`, `token/`**: OAuth 2.0 flow endpoints
+- **`app/api/authorize/`, `callback/`, `token/`, `revoke/`**: OAuth 2.0 flow endpoints
 - **`app/.well-known/`**: OAuth discovery endpoints
 - **`mcp-src/`**: MCP server implementation adapted for Vercel's bundler
 - **`lib/`**: Next.js-compatible utilities (config, OAuth)
@@ -35,7 +35,7 @@ Required for the remote MCP server:
 
 | Variable | Description |
 |----------|-------------|
-| `SERVER_HOST` | Server URL (defaults to `VERCEL_BRANCH_URL` or `VERCEL_URL`) |
+| `SERVER_HOST` | Server URL (defaults to `VERCEL_URL`) |
 | `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL |
 | `CLIENT_ID` | OAuth client ID |
 | `CLIENT_SECRET` | OAuth client secret |
