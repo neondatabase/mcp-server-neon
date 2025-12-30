@@ -7,6 +7,7 @@ import {
   updateApprovedClientsCookie,
 } from '../../../lib/oauth/cookies';
 import { COOKIE_SECRET } from '../../../lib/config';
+import { handleOAuthError } from '../../../lib/errors';
 
 export type DownstreamAuthRequest = {
   responseType: string;
@@ -278,62 +279,70 @@ const renderApprovalDialog = (
 };
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const requestParams = parseAuthRequest(searchParams);
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const requestParams = parseAuthRequest(searchParams);
 
-  const clientId = requestParams.clientId;
-  const client = await model.getClient(clientId, '');
-  if (!client) {
-    return NextResponse.json(
-      { code: 'invalid_request', error: 'invalid client id' },
-      { status: 400 },
-    );
+    const clientId = requestParams.clientId;
+    const client = await model.getClient(clientId, '');
+    if (!client) {
+      return NextResponse.json(
+        { code: 'invalid_request', error: 'invalid client id' },
+        { status: 400 },
+      );
+    }
+
+    if (
+      requestParams.responseType === undefined ||
+      !client.response_types.includes(requestParams.responseType)
+    ) {
+      return NextResponse.json(
+        { code: 'invalid_request', error: 'invalid response type' },
+        { status: 400 },
+      );
+    }
+
+    if (
+      requestParams.redirectUri === undefined ||
+      !client.redirect_uris.includes(requestParams.redirectUri)
+    ) {
+      return NextResponse.json(
+        { code: 'invalid_request', error: 'invalid redirect uri' },
+        { status: 400 },
+      );
+    }
+
+    if (await isClientAlreadyApproved(client.id, COOKIE_SECRET)) {
+      const authUrl = await upstreamAuth(btoa(JSON.stringify(requestParams)));
+      return NextResponse.redirect(authUrl.href);
+    }
+
+    return renderApprovalDialog(client, btoa(JSON.stringify(requestParams)));
+  } catch (error: unknown) {
+    return handleOAuthError(error, 'Authorization error');
   }
-
-  if (
-    requestParams.responseType === undefined ||
-    !client.response_types.includes(requestParams.responseType)
-  ) {
-    return NextResponse.json(
-      { code: 'invalid_request', error: 'invalid response type' },
-      { status: 400 },
-    );
-  }
-
-  if (
-    requestParams.redirectUri === undefined ||
-    !client.redirect_uris.includes(requestParams.redirectUri)
-  ) {
-    return NextResponse.json(
-      { code: 'invalid_request', error: 'invalid redirect uri' },
-      { status: 400 },
-    );
-  }
-
-  if (await isClientAlreadyApproved(client.id, COOKIE_SECRET)) {
-    const authUrl = await upstreamAuth(btoa(JSON.stringify(requestParams)));
-    return NextResponse.redirect(authUrl.href);
-  }
-
-  return renderApprovalDialog(client, btoa(JSON.stringify(requestParams)));
 }
 
 export async function POST(request: NextRequest) {
-  const formData = await request.formData();
-  const state = formData.get('state') as string;
+  try {
+    const formData = await request.formData();
+    const state = formData.get('state') as string;
 
-  if (!state) {
-    return NextResponse.json(
-      { code: 'invalid_request', error: 'invalid state' },
-      { status: 400 },
-    );
+    if (!state) {
+      return NextResponse.json(
+        { code: 'invalid_request', error: 'invalid state' },
+        { status: 400 },
+      );
+    }
+
+    const requestParams = JSON.parse(atob(state)) as DownstreamAuthRequest;
+    await updateApprovedClientsCookie(requestParams.clientId, COOKIE_SECRET);
+
+    const authUrl = await upstreamAuth(state);
+    return NextResponse.redirect(authUrl.href);
+  } catch (error: unknown) {
+    return handleOAuthError(error, 'Authorization error');
   }
-
-  const requestParams = JSON.parse(atob(state)) as DownstreamAuthRequest;
-  await updateApprovedClientsCookie(requestParams.clientId, COOKIE_SECRET);
-
-  const authUrl = await upstreamAuth(state);
-  return NextResponse.redirect(authUrl.href);
 }
 
 export async function OPTIONS() {

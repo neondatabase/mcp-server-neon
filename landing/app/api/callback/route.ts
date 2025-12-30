@@ -3,7 +3,7 @@ import { model } from '../../../mcp-src/oauth/model';
 import { exchangeCode } from '../../../lib/oauth/client';
 import { generateRandomString } from '../../../mcp-src/oauth/utils';
 import { createNeonClient } from '../../../mcp-src/server/api';
-import { logger } from '../../../mcp-src/utils/logger';
+import { handleOAuthError } from '../../../lib/errors';
 import type { AuthorizationCode } from 'oauth2-server';
 
 type DownstreamAuthRequest = {
@@ -98,12 +98,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.redirect(redirectUrl.href);
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('OAuth callback error:', { message, error });
-    return NextResponse.json(
-      { code: 'server_error', error: message },
-      { status: 500 },
-    );
+    return handleOAuthError(error, 'OAuth callback error');
   }
 }
 

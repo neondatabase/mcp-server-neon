@@ -3,7 +3,7 @@ import { model } from '../../../mcp-src/oauth/model';
 import { exchangeRefreshToken } from '../../../lib/oauth/client';
 import { verifyPKCE } from '../../../mcp-src/oauth/utils';
 import { identify, flushAnalytics } from '../../../mcp-src/analytics/analytics';
-import { logger } from '../../../mcp-src/utils/logger';
+import { handleOAuthError } from '../../../lib/errors';
 
 const toSeconds = (ms: number): number => Math.floor(ms / 1000);
 const toMilliseconds = (seconds: number): number => seconds * 1000;
@@ -250,12 +250,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Token exchange error:', { message, error });
-    return NextResponse.json(
-      { code: 'server_error', error: message },
-      { status: 500 },
-    );
+    return handleOAuthError(error, 'Token exchange error');
   }
 }
 

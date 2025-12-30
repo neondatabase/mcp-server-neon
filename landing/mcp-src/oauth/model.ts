@@ -12,7 +12,6 @@ import {
   getAuthorizationCodes,
   RefreshToken,
 } from './kv-store';
-import { logger } from '../utils/logger';
 
 class Model implements AuthorizationCodeModel {
   getClient: (
@@ -22,21 +21,7 @@ class Model implements AuthorizationCodeModel {
     return getClients().get(clientId);
   };
   saveClient: (client: Client) => Promise<Client> = async (client) => {
-    logger.info('DEBUG: model.saveClient called', { clientId: client.id });
-    const keyvInstance = getClients();
-    logger.info('DEBUG: got keyv instance for clients');
-    try {
-      logger.info('DEBUG: calling keyv.set');
-      const result = await keyvInstance.set(client.id, client);
-      logger.info('DEBUG: keyv.set completed', { result });
-    } catch (setError) {
-      logger.error('DEBUG: keyv.set threw error', {
-        error: setError instanceof Error ? setError.message : String(setError),
-        stack: setError instanceof Error ? setError.stack : undefined,
-      });
-      throw setError;
-    }
-    logger.info('DEBUG: model.saveClient returning client');
+    await getClients().set(client.id, client);
     return client;
   };
   saveToken: (token: Token) => Promise<Token> = async (token) => {
