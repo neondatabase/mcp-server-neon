@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     siteName: 'Neon MCP Server',
     images: [
       {
-        url: '/logo.png',
+        url: '/og-image.png',
         width: 1200,
         height: 630,
         alt: 'Neon MCP Server',
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     title: 'Neon MCP Server',
     description:
       'Connect your AI tools to Neon Postgres databases using the Model Context Protocol.',
-    images: ['/logo.png'],
+    images: ['/og-image.png'],
   },
   robots: {
     index: true,
