@@ -12,13 +12,27 @@ const createLazyKeyv = <T>(table: string, errorLabel: string) => {
   let instance: Keyv<T> | null = null;
   return () => {
     if (!instance) {
-      instance = new Keyv<T>({
-        store: new KeyvPostgres({
-          connectionString: process.env.OAUTH_DATABASE_URL,
-          schema: SCHEMA,
-          table,
-        }),
+      logger.info(`DEBUG: Creating Keyv instance for ${table}`, {
+        hasConnectionString: !!process.env.OAUTH_DATABASE_URL,
+        connectionStringLength: process.env.OAUTH_DATABASE_URL?.length,
+        schema: SCHEMA,
+        table,
       });
+      try {
+        instance = new Keyv<T>({
+          store: new KeyvPostgres({
+            connectionString: process.env.OAUTH_DATABASE_URL,
+            schema: SCHEMA,
+            table,
+          }),
+        });
+        logger.info(`DEBUG: Keyv instance created for ${table}`);
+      } catch (createError) {
+        logger.error(`DEBUG: Failed to create Keyv instance for ${table}`, {
+          error: createError instanceof Error ? createError.message : String(createError),
+        });
+        throw createError;
+      }
       instance.on('error', (err) => {
         logger.error(`${errorLabel} keyv error:`, { err });
       });

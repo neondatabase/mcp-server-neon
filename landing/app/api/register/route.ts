@@ -9,6 +9,11 @@ const SUPPORTED_RESPONSE_TYPES = ['code'];
 
 export async function POST(request: NextRequest) {
   try {
+    logger.info('DEBUG: register route started', {
+      OAUTH_DATABASE_URL_set: !!process.env.OAUTH_DATABASE_URL,
+      OAUTH_DATABASE_URL_length: process.env.OAUTH_DATABASE_URL?.length,
+    });
+
     const payload = await request.json();
 
     logger.info('request to register client: ', {
@@ -73,7 +78,19 @@ export async function POST(request: NextRequest) {
       registrationDate: Math.floor(Date.now() / 1000),
     };
 
-    await model.saveClient(client);
+    logger.info('DEBUG: about to save client', { clientId });
+
+    try {
+      await model.saveClient(client);
+      logger.info('DEBUG: saveClient completed successfully', { clientId });
+    } catch (saveError) {
+      logger.error('DEBUG: saveClient threw error', {
+        error: saveError instanceof Error ? saveError.message : String(saveError),
+        stack: saveError instanceof Error ? saveError.stack : undefined,
+      });
+      throw saveError;
+    }
+
     logger.info('new client registered', {
       clientId,
       client_name: payload.client_name,
@@ -81,19 +98,38 @@ export async function POST(request: NextRequest) {
       client_uri: payload.client_uri,
     });
 
-    return NextResponse.json({
+    logger.info('DEBUG: about to return response');
+
+    const responseData = {
       client_id: clientId,
       client_secret: clientSecret,
       client_name: payload.client_name,
       redirect_uris: payload.redirect_uris,
       token_endpoint_auth_method: client.tokenEndpointAuthMethod,
+    };
+
+    logger.info('DEBUG: response data prepared', {
+      hasClientId: !!responseData.client_id,
+      hasClientSecret: !!responseData.client_secret,
     });
+
+    const response = NextResponse.json(responseData);
+
+    logger.info('DEBUG: NextResponse.json created', {
+      status: response.status,
+      ok: response.ok,
+    });
+
+    return response;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
+    const stack = error instanceof Error ? error.stack : undefined;
     logger.error('failed to register client:', {
       message,
-      error,
+      stack,
+      errorType: error?.constructor?.name,
     });
+    logger.info('DEBUG: returning error response from catch block');
     return NextResponse.json(
       { code: 'server_error', error: message },
       { status: 500 },
