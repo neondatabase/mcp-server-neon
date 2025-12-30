@@ -1,0 +1,27 @@
+# Neon MCP Server
+
+> Connect AI tools to Neon Postgres databases using the Model Context Protocol (MCP).
+
+The Neon MCP Server enables Large Language Models to manage Neon Postgres databases through natural language commands. It implements the Model Context Protocol specification for seamless AI integration.
+
+## Capabilities
+
+- Create and manage Neon projects, branches, and databases
+- Run SQL queries and migrations
+- Optimize query performance
+- Manage database roles and permissions
+
+## Integration
+
+- **NPM Package**: @neondatabase/mcp-server-neon
+- **Remote MCP**: Connect via https://mcp.neon.tech/sse
+
+## Documentation
+
+- Neon MCP Docs: https://neon.tech/docs/ai/neon-mcp-server
+- MCP Protocol: https://modelcontextprotocol.io
+
+## Contact
+
+- Website: https://neon.tech
+- GitHub: https://github.com/neondatabase/mcp-server-neon
