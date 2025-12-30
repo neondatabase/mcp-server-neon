@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@keyv/postgres": "2.1.2",
-    "@modelcontextprotocol/sdk": "1.11.2",
+    "@modelcontextprotocol/sdk": "1.24.0",
     "@neondatabase/api-client": "2.5.0",
     "@neondatabase/serverless": "1.0.0",
     "@radix-ui/react-accordion": "1.2.11",
