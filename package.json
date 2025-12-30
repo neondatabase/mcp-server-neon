@@ -39,7 +39,7 @@
     "@segment/analytics-node": "2.2.1",
     "@sentry/node": "9.19.0",
     "axios": "1.13.2",
-    "body-parser": "2.2.0",
+    "body-parser": "2.2.1",
     "chalk": "5.3.0",
     "class-variance-authority": "0.7.1",
     "cookie-parser": "1.4.7",
