@@ -6,32 +6,31 @@ This file provides guidance to AI agents when working with code in this reposito
 
 This is the **Neon MCP Server** - a Model Context Protocol server that bridges natural language requests to the Neon API, enabling LLMs to manage Neon Postgres databases through conversational commands. The project implements both local (stdio) and remote (SSE/Streamable HTTP) MCP server transports with OAuth authentication support.
 
-**Architecture Note**: The project has two server implementations:
-1. **Local MCP Server** (`src/`): Runs locally via stdio transport, published as `@neondatabase/mcp-server-neon` npm package
-2. **Remote MCP Server** (`landing/`): Deployed on Vercel serverless infrastructure, accessible at `mcp.neon.tech`
+**Architecture Note**: The entire project is a unified Next.js application in the `landing/` directory that serves dual purposes:
+1. **Remote MCP Server**: Deployed on Vercel serverless infrastructure, accessible at `mcp.neon.tech`
+2. **Local MCP CLI**: Published as `@neondatabase/mcp-server-neon` npm package, runs locally via stdio transport
 
 ## Development Commands
+
+All commands should be run from the `landing/` directory. The project uses [Bun](https://bun.sh) as the package manager.
 
 ### Building and Running
 
 ```bash
-# Install dependencies
-npm install
+cd landing
+bun install
 
-# Build the project (compiles TypeScript and builds landing page)
-npm run build
+# Start the Next.js dev server (for the remote MCP server)
+bun run dev
 
-# Watch mode for development (auto-recompiles on changes)
-npm run watch
+# Build the CLI for local testing
+bun run build:cli
 
-# Type checking without emitting files
-npm run typecheck
+# Run the CLI locally with API key
+bun run start:cli $NEON_API_KEY
 
-# Start local MCP server with API key
-node dist/index.js start <NEON_API_KEY>
-
-# Start SSE transport server
-node dist/index.js start:sse
+# Or run the built CLI directly
+node dist/cli/cli.js start <NEON_API_KEY>
 ```
 
 ### Development with MCP CLI Client
@@ -39,81 +38,56 @@ node dist/index.js start:sse
 The fastest way to iterate on the MCP Server is using the `mcp-client/` CLI:
 
 ```bash
-npm install
-npm run build
-npm run watch  # Keep this running in one terminal
-cd mcp-client/ && NEON_API_KEY=<your-key> npm run start:mcp-server-neon
+cd landing && bun install && bun run build:cli
+cd ../mcp-client && NEON_API_KEY=<your-key> npm run start:mcp-server-neon
 ```
 
 This provides an interactive terminal to test MCP tools without restarting Claude Desktop.
 
-### Testing
+### Linting and Type Checking
 
 ```bash
-# Run Braintrust evaluations
-npm run test
-
-# You must configure .env file with:
-# - BRAINTRUST_API_KEY
-# - NEON_API_KEY
-# - ANTHROPIC_API_KEY
-```
-
-### Linting and Formatting
-
-```bash
-# Run linting and formatting checks
-npm run lint
-
-# Auto-fix linting and formatting issues
-npm run lint:fix
-
-# Format code
-npm run format
-```
-
-### Single Test Development
-
-To develop and test a single tool without running full test suite, modify the test file in `src/tools-evaluations/` and run:
-
-```bash
-npm run test
+cd landing
+bun run lint
+bun run typecheck
 ```
 
 ## Architecture
 
 ### Core Components
 
-1. **MCP Server (`src/server/index.ts`)**
+1. **MCP Server (`landing/mcp-src/server/index.ts`)**
 
    - Creates and configures the MCP server instance
    - Registers all tools and resources from centralized definitions
    - Implements error handling and observability (Sentry, analytics)
    - Each tool call is tracked and wrapped in error handling
 
-2. **Tools System (`src/tools/`)**
+2. **Tools System (`landing/mcp-src/tools/`)**
 
    - `definitions.ts`: Exports `NEON_TOOLS` array defining all available tools with their schemas
    - `tools.ts`: Exports `NEON_HANDLERS` object mapping tool names to handler functions
    - `toolsSchema.ts`: Zod schemas for tool input validation
    - `handlers/`: Individual tool handler implementations organized by feature
 
-3. **Transport Layers (`src/transports/`)**
+3. **CLI Entry Point (`landing/mcp-src/cli.ts`)**
 
-   - `stdio.ts`: Standard input/output transport for local MCP clients (Claude Desktop, Cursor)
-   - `sse-express.ts`: Server-Sent Events transport (legacy, used for local development)
-   - `stream.ts`: Streamable HTTP transport (legacy, used for local development)
+   - Entry point for the npm package CLI
+   - Handles stdio transport for local MCP clients (Claude Desktop, Cursor)
 
-   **Note**: The remote MCP server transports are now handled by Vercel serverless functions in `landing/app/api/`.
+4. **Remote Transport (`landing/app/api/[transport]/route.ts`)**
 
-4. **OAuth System (`src/oauth/`)**
+   - Next.js API route handling SSE and Streamable HTTP transports
+   - Uses `mcp-handler` library for serverless MCP protocol handling
+
+5. **OAuth System (`landing/lib/oauth/` and `landing/mcp-src/oauth/`)**
 
    - OAuth 2.0 server implementation for remote MCP authentication
    - Integrates with Neon's OAuth provider (UPSTREAM_OAUTH_HOST)
    - Token persistence using Keyv with Postgres backend
    - Cookie-based client approval tracking
 
-5. **Resources (`src/resources.ts`)**
+6. **Resources (`landing/mcp-src/resources.ts`)**
    - MCP resources that provide read-only context (like "getting started" guides)
    - Registered alongside tools but don't execute operations
 
@@ -129,7 +103,7 @@ npm run test
 
 ## Adding New Tools
 
-1. Define the tool schema in `src/tools/toolsSchema.ts`:
+1. Define the tool schema in `landing/mcp-src/tools/toolsSchema.ts`:
 
 ```typescript
 export const myNewToolInputSchema = z.object({
@@ -138,7 +112,7 @@ export const myNewToolInputSchema = z.object({
 });
 ```
 
-2. Add the tool definition to `NEON_TOOLS` array in `src/tools/definitions.ts`:
+2. Add the tool definition to `NEON_TOOLS` array in `landing/mcp-src/tools/definitions.ts`:
 
 ```typescript
 {
@@ -148,11 +122,11 @@ export const myNewToolInputSchema = z.object({
 }
 ```
 
-3. Create a handler in `src/tools/handlers/my-new-tool.ts`:
+3. Create a handler in `landing/mcp-src/tools/handlers/my-new-tool.ts`:
 
 ```typescript
-import { ToolHandler } from '../types.js';
-import { myNewToolInputSchema } from '../toolsSchema.js';
+import { ToolHandler } from '../types';
+import { myNewToolInputSchema } from '../toolsSchema';
 
 export const myNewToolHandler: ToolHandler<'my_new_tool'> = async (
   args,
@@ -171,10 +145,10 @@ export const myNewToolHandler: ToolHandler<'my_new_tool'> = async (
 };
 ```
 
-4. Register the handler in `src/tools/tools.ts`:
+4. Register the handler in `landing/mcp-src/tools/tools.ts`:
 
 ```typescript
-import { myNewToolHandler } from './handlers/my-new-tool.js';
+import { myNewToolHandler } from './handlers/my-new-tool';
 
 export const NEON_HANDLERS = {
   // ... existing handlers
@@ -182,11 +156,9 @@ export const NEON_HANDLERS = {
 };
 ```
 
-5. Add evaluations in `src/tools-evaluations/` to test your tool.
-
 ## Environment Configuration
 
-See `.env.example` for all configuration options. Key variables:
+See `landing/.env.local.example` for all configuration options. Key variables:
 
 - `NEON_API_KEY`: Required for local development and testing
 - `BRAINTRUST_API_KEY`: Required for running evaluations
@@ -198,27 +170,7 @@ See `.env.example` for all configuration options. Key variables:
 ## Project Structure
 
 ```
-src/
-├── index.ts                 # Entry point, command parser, transport selection
-├── server/
-│   ├── index.ts            # MCP server creation and tool/resource registration
-│   └── api.ts              # Neon API client factory
-├── tools/
-│   ├── definitions.ts      # Tool definitions (NEON_TOOLS)
-│   ├── tools.ts           # Tool handlers mapping (NEON_HANDLERS)
-│   ├── toolsSchema.ts     # Zod schemas for tool inputs
-│   └── handlers/          # Individual tool implementations
-├── transports/
-│   ├── stdio.ts           # Local MCP transport
-│   ├── sse-express.ts     # Remote SSE transport
-│   └── stream.ts          # Remote Streamable HTTP transport
-├── oauth/                 # OAuth 2.0 implementation
-├── analytics/             # Segment analytics integration
-├── sentry/               # Sentry error tracking
-└── utils/                # Shared utilities
-
-mcp-client/               # CLI client for testing
-landing/                  # Next.js app with remote MCP server
+landing/                  # Next.js app (main project)
 ├── app/                 # Next.js App Router
 │   ├── api/            # API routes for remote MCP server
 │   │   ├── [transport]/route.ts  # Main MCP handler (SSE/Streamable HTTP)
@@ -226,28 +178,54 @@ landing/                  # Next.js app with remote MCP server
 │   │   ├── callback/   # OAuth callback handler
 │   │   ├── token/      # OAuth token exchange
 │   │   ├── register/   # Dynamic client registration
+│   │   ├── revoke/     # OAuth token revocation
 │   │   └── health/     # Health check endpoint
 │   └── .well-known/    # OAuth discovery endpoints
 ├── lib/                # Next.js-compatible utilities
 │   ├── config.ts       # Centralized configuration
 │   └── oauth/          # OAuth utilities for Next.js
-├── mcp-src/            # MCP server code (shared with src/)
-│   ├── server/        # MCP server factory
-│   ├── tools/         # Tool definitions and handlers
-│   ├── oauth/         # OAuth model and KV store
-│   └── analytics/     # Segment analytics
-└── vercel.json        # Vercel deployment config
+├── mcp-src/            # MCP server source code
+│   ├── cli.ts          # CLI entry point (stdio transport)
+│   ├── server/         # MCP server factory
+│   │   ├── index.ts    # Server creation and tool registration
+│   │   ├── api.ts      # Neon API client factory
+│   │   └── errors.ts   # Error handling utilities
+│   ├── tools/          # Tool definitions and handlers
+│   │   ├── definitions.ts  # Tool definitions (NEON_TOOLS)
+│   │   ├── tools.ts       # Tool handlers mapping (NEON_HANDLERS)
+│   │   ├── toolsSchema.ts # Zod schemas for tool inputs
+│   │   ├── handlers/      # Individual tool implementations
+│   │   ├── state.ts       # Tool state management
+│   │   ├── types.ts       # TypeScript types
+│   │   └── utils.ts       # Tool utilities
+│   ├── oauth/          # OAuth model and KV store
+│   ├── analytics/      # Segment analytics
+│   ├── sentry/         # Sentry error tracking
+│   ├── transports/     # Transport implementations
+│   │   └── stdio.ts    # Stdio transport for CLI
+│   ├── types/          # Shared TypeScript types
+│   ├── utils/          # Shared utilities
+│   ├── resources.ts    # MCP resources
+│   ├── prompts.ts      # LLM prompts
+│   └── constants.ts    # Shared constants
+├── components/         # React components for landing page
+├── patches/            # npm package patches
+├── public/             # Static assets
+├── package.json        # Package configuration
+├── tsconfig.json       # TypeScript config (bundler resolution)
+├── vercel.json         # Vercel deployment config
+└── vercel-migration.md # Migration documentation
+
+mcp-client/             # CLI client for testing
 ```
 
 ## Important Notes
 
-- **TypeScript Configuration**:
-  - `src/`: Uses ES2022 with Node16 module resolution. All imports must use `.js` extensions (not `.ts`) due to ESM requirements.
-  - `landing/mcp-src/`: Uses `bundler` module resolution for Next.js compatibility. Imports use extensionless paths.
+- **TypeScript Configuration**: Uses `bundler` module resolution for Next.js compatibility. Imports use extensionless paths (no `.js` suffix).
 
-- **Building**: The build process includes chmod operations to make `dist/index.js` executable, exports tool definitions to `landing/tools.json`, and builds the landing page.
+- **Building**: The CLI build uses esbuild to bundle `mcp-src/cli.ts` into a standalone executable at `dist/cli/cli.js`.
 
-- **Logger Behavior**: In stdio mode, the logger is silenced to prevent stderr pollution. In SSE mode, logging is active.
+- **Logger Behavior**: In stdio mode, the logger is silenced to prevent stderr pollution. In server mode, logging is active.
 
 - **Migration Pattern**: Tools like `prepare_database_migration` and `prepare_query_tuning` create temporary branches. The LLM must remember these branch IDs to pass to subsequent `complete_*` tools.
 
@@ -294,7 +272,6 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 
 ### Development Notes
 
-- The `landing/mcp-src/` directory contains a copy of the MCP server code adapted for Vercel's bundler
 - Import paths in `landing/mcp-src/` are extensionless (no `.js` suffix)
 - The `mcp-handler` library has a patch (`landing/patches/mcp-handler+1.0.4.patch`) for compatibility fixes
 - See `landing/vercel-migration.md` for detailed migration documentation
@@ -327,32 +304,13 @@ This repository uses an enhanced Claude Code Review workflow that provides inlin
 
 ### Inline Comment Format
 
-- **Severity**: 🔴 Critical | 🟡 Important | 🔵 Consider
+- **Severity**: Critical | Important | Consider
 - **Category**: [Security/Logic/Performance/Architecture/Testing/MCP]
 - **Description**: Clear explanation with context
 - **Fix**: Actionable code example or reference
-
-Example:
-
-```
-🔴 **[Security]**: SQL injection vulnerability - user input concatenated directly into SQL.
-
-**Fix:** Use parameterized queries:
-const result = await query('SELECT * FROM users WHERE name = $1', [userName]);
-```
 
 ### Triggering Reviews
 
 - **Automatic**: Opens when PR is created
 - **Manual**: Run workflow via GitHub Actions with PR number
 - **Security**: Only OWNER/MEMBER/COLLABORATOR PRs (blocks external)
-
-## Testing Strategy
-
-Tests use Braintrust for LLM-based evaluations. Each test:
-
-1. Defines a task/prompt
-2. Executes it against the MCP server
-3. Evaluates the result using Braintrust scoring functions
-
-This validates that tools work correctly with realistic LLM interactions.

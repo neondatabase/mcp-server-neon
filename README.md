@@ -51,9 +51,11 @@ You have two options for connecting your MCP client to Neon:
 
 - An MCP Client application.
 - A [Neon account](https://console.neon.tech/signup).
-- **Node.js (>= v18.0.0) and npm:** Download from [nodejs.org](https://nodejs.org).
+- **Node.js (>= v18.0.0):** Download from [nodejs.org](https://nodejs.org).
 
 For Local MCP Server setup, you also need a Neon API key. See [Neon API Keys documentation](https://neon.tech/docs/manage/api-keys) for instructions on generating one.
+
+For development, you'll also need [Bun](https://bun.sh) installed.
 
 ### Option 1. Remote Hosted MCP Server (Preview)
 
@@ -273,32 +275,39 @@ The "Start" command accepts a migration and runs it in a new temporary branch. U
 
 # Development
 
-## Development with MCP CLI Client
+This project uses [Bun](https://bun.sh) as the package manager and runtime.
 
-The easiest way to iterate on the MCP Server is using the `mcp-client/`. Learn more in `mcp-client/README.md`.
+## Project Structure
 
-```bash
-npm install
-npm run build
-npm run watch # You can keep this open.
-cd mcp-client/ && NEON_API_KEY=... npm run start:mcp-server-neon
-```
-
-## Development with Claude Desktop (Local MCP Server)
+The MCP server code lives in the `landing/` directory, which is a Next.js application deployed to Vercel. The same codebase also produces the CLI published to npm as `@neondatabase/mcp-server-neon`.
 
 ```bash
-npm install
-npm run build
-npm run watch # You can keep this open.
-node dist/index.js init $NEON_API_KEY
+cd landing
+bun install
 ```
 
-Then, **restart Claude** each time you want to test changes.
-
-# Testing
-
-To run the tests you need to setup the `.env` file according to the `.env.example` file.
+## Local Development
 
 ```bash
-npm run test
+# Start the Next.js dev server (for the remote MCP server)
+bun run dev
+
+# Build the CLI for local testing
+bun run build:cli
+
+# Run the CLI locally
+bun run start:cli $NEON_API_KEY
 ```
+
+## Linting and Type Checking
+
+```bash
+bun run lint
+bun run typecheck
+```
+
+## Testing with Claude Desktop
+
+1. Build the CLI: `bun run build:cli`
+2. Configure Claude Desktop to use your local build
+3. Restart Claude Desktop after each rebuild
