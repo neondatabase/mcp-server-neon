@@ -1,0 +1,8 @@
+{
+  "fluid": true,
+  "functions": {
+    "app/api/**/*.ts": {
+      "maxDuration": 800
+    }
+  }
+}

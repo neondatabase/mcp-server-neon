@@ -10,21 +10,21 @@ jobs:
     runs-on:
       group: neondatabase-protected-runner-group
       labels: linux-ubuntu-latest
+    defaults:
+      run:
+        working-directory: landing
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version: '22'
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version-file: .bun-version
-      - name: Install root dependencies
-        run: bun install --frozen-lockfile
-      - name: Install landing dependencies
-        working-directory: landing
+          bun-version: '1.2.13'
+      - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Lint
         run: bun run lint

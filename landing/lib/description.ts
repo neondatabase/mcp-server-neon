@@ -1,5 +1,3 @@
-import { min } from 'lodash';
-
 const POSSIBLE_TYPES = [
   'use_case',
   'workflow',
@@ -86,8 +84,8 @@ function highlightCodeSpans(text: string): TextSpan[] {
 
 function removeRedundantIndentation(text: string): string {
   const lines = text.split('\n');
-  const minIndent = min(
-    lines.map((line) => line.match(/^\s+/)?.[0].length ?? 0),
+  const minIndent = Math.min(
+    ...lines.map((line) => line.match(/^\s+/)?.[0].length ?? 0),
   );
   if (!minIndent) {
     return text;

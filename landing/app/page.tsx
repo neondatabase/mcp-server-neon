@@ -1,5 +1,3 @@
-import fs from 'fs/promises';
-
 import {
   Accordion,
   AccordionContent,
@@ -10,21 +8,14 @@ import { parseDescription } from '@/lib/description';
 import { DescriptionItemsUi } from '@/components/DescriptionItem';
 import { Introduction } from '@/components/Introduction';
 import { Header } from '@/components/Header';
-
-type ToolDescription = {
-  name: string;
-  description: string;
-};
+import pkg from '../package.json';
+import { NEON_TOOLS } from '../mcp-src/tools/definitions';
 
 export default async function Home() {
-  const packageJson = await fs.readFile('../package.json', 'utf-8');
-  const packageVersion = JSON.parse(packageJson).version as number;
+  const packageVersion = pkg.version;
 
-  const toolsJson = await fs.readFile('./tools.json', 'utf-8');
-  const rawTools = JSON.parse(toolsJson) as ToolDescription[];
-
-  const tools = rawTools.map(({ description, ...data }) => ({
-    ...data,
+  const tools = NEON_TOOLS.map(({ name, description }) => ({
+    name,
     description: parseDescription(description),
   }));
 

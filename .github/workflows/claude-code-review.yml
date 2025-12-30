@@ -56,9 +56,11 @@ jobs:
             ## Context
 
             This is the **Neon MCP Server** - a Model Context Protocol server bridging LLMs to Neon Postgres API.
+            The main codebase is in the `landing/` directory using Next.js App Router with Vercel serverless deployment.
             Review this PR with understanding of:
-            - MCP tool/handler architecture (see CLAUDE.md lines 83-122)
-            - TypeScript ES2022 + Node16 ESM requirements
+            - MCP tool/handler architecture in `landing/mcp-src/` (see CLAUDE.md)
+            - Next.js App Router API routes for OAuth and MCP transport
+            - TypeScript with bundler module resolution
             - Tool registration pattern: definitions.ts → toolsSchema.ts → handlers/ → tools.ts
             - Multi-call state management for migrations/tuning tools
 

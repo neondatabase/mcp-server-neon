@@ -2,9 +2,17 @@
 
 # [Unreleased]
 
-- Feat: `compare_database_schema` tool to generate schema diff for a specific branch. With prompt to generate migration script
+# [0.7.0] 2025-12-29
+
+- Feat: Add Neon Auth v2 support with Better Auth provider and branch-level provisioning
+- Feat: Add `setup-neon-auth` prompt with client-specific instructions for Vite+React projects
+- Feat: Add `load_resource` tool to expose guides (like `neon-get-started`) via MCP tools
+- Feat: Add read-only mode for enhanced safety in production environments via `X-READ-ONLY` header
+- Feat: Add `server_init` analytics event with improved client detection for HTTP transports
+- Feat: `compare_database_schema` tool to generate schema diff for a specific branch with prompt to generate migration script
 - Feat: `neon-get-started` resource to add AI rules with steps and instructions to integrate projects with Neon
 - Feat: Add generic `search` and `fetch` tools for organizations, projects, and branches
+- Docs: Add neon init reference and improve README documentation
 
 # [0.6.5] 2025-09-16
 
