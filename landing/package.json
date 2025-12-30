@@ -22,7 +22,8 @@
     "start:cli": "node dist/cli/cli.js start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "prepublishOnly": "npx tsx scripts/before-publish.ts"
   },
   "dependencies": {
     "@keyv/postgres": "2.1.2",
