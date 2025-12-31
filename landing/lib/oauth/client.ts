@@ -13,7 +13,7 @@ import {
   UPSTREAM_OAUTH_HOST,
 } from '../config';
 
-const REDIRECT_URI = `${SERVER_HOST}/api/callback`;
+const REDIRECT_URI = `${SERVER_HOST}/callback`;
 
 const NEON_MCP_SCOPES = [
   'openid',
@@ -52,7 +52,7 @@ const getUpstreamConfig = async (): Promise<Configuration> => {
       client_secret: CLIENT_SECRET,
     },
     ClientSecretPost(CLIENT_SECRET),
-    {},
+    {}
   );
   cacheTimestamp = now;
 

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { model } from '../../../mcp-src/oauth/model';
-import { exchangeCode } from '../../../lib/oauth/client';
-import { generateRandomString } from '../../../mcp-src/oauth/utils';
-import { createNeonClient } from '../../../mcp-src/server/api';
-import { handleOAuthError } from '../../../lib/errors';
+import { model } from '../../mcp-src/oauth/model';
+import { exchangeCode } from '../../lib/oauth/client';
+import { generateRandomString } from '../../mcp-src/oauth/utils';
+import { createNeonClient } from '../../mcp-src/server/api';
+import { handleOAuthError } from '../../lib/errors';
 import type { AuthorizationCode } from 'oauth2-server';
 
 type DownstreamAuthRequest = {
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     if (!code || !state) {
       return NextResponse.json(
         { code: 'invalid_request', error: 'missing code or state' },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     if (!client) {
       return NextResponse.json(
         { code: 'invalid_request', error: 'invalid client id' },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
