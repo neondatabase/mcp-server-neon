@@ -341,54 +341,71 @@ async function handleSchemaMigration(
   extra: ToolHandlerExtraParams
 ) {
   return await startSpan({ name: 'prepare_schema_migration' }, async (span) => {
-    // Create branch with identifiable name for easy orphan cleanup
-    const branchName = generateMigrationBranchName();
-    const newBranch = await handleCreateBranch(
-      { projectId, branchName },
-      neonClient
-    );
+    let newBranch: { branch: Branch } | undefined;
 
-    let resolvedDatabaseName = databaseName;
-    if (!resolvedDatabaseName) {
-      const dbObject = await getDefaultDatabase(
-        {
-          projectId,
-          branchId: newBranch.branch.id,
-          databaseName,
-        },
+    try {
+      // Create branch with identifiable name for easy orphan cleanup
+      const branchName = generateMigrationBranchName();
+      newBranch = await handleCreateBranch(
+        { projectId, branchName },
         neonClient
       );
-      resolvedDatabaseName = dbObject.name;
-    }
 
-    const result = await handleRunSqlTransaction(
-      {
-        sqlStatements: splitSqlStatements(migrationSql),
+      let resolvedDatabaseName = databaseName;
+      if (!resolvedDatabaseName) {
+        const dbObject = await getDefaultDatabase(
+          {
+            projectId,
+            branchId: newBranch.branch.id,
+            databaseName,
+          },
+          neonClient
+        );
+        resolvedDatabaseName = dbObject.name;
+      }
+
+      const result = await handleRunSqlTransaction(
+        {
+          sqlStatements: splitSqlStatements(migrationSql),
+          databaseName: resolvedDatabaseName,
+          projectId,
+          branchId: newBranch.branch.id,
+        },
+        neonClient,
+        extra
+      );
+
+      const migrationId = crypto.randomUUID();
+      span.setAttributes({
+        projectId,
+        migrationId,
+      });
+
+      // Return all context needed for completion (stateless approach)
+      // No in-memory state storage - LLM will pass these back
+      return {
+        migrationId,
+        migrationSql,
         databaseName: resolvedDatabaseName,
         projectId,
-        branchId: newBranch.branch.id,
-      },
-      neonClient,
-      extra
-    );
-
-    const migrationId = crypto.randomUUID();
-    span.setAttributes({
-      projectId,
-      migrationId,
-    });
-
-    // Return all context needed for completion (stateless approach)
-    // No in-memory state storage - LLM will pass these back
-    return {
-      migrationId,
-      migrationSql,
-      databaseName: resolvedDatabaseName,
-      projectId,
-      branch: newBranch.branch,
-      parentBranchId: newBranch.branch.parent_id,
-      migrationResult: result,
-    };
+        branch: newBranch.branch,
+        parentBranchId: newBranch.branch.parent_id,
+        migrationResult: result,
+      };
+    } catch (error) {
+      // Clean up orphaned branch if it was created
+      if (newBranch) {
+        try {
+          await handleDeleteBranch(
+            { projectId, branchId: newBranch.branch.id },
+            neonClient
+          );
+        } catch {
+          // Ignore cleanup errors - branch naming makes orphans identifiable
+        }
+      }
+      throw error;
+    }
   });
 }
 
@@ -435,17 +452,25 @@ async function handleCommitMigration(
     }
 
     // Always clean up temporary branch
-    await handleDeleteBranch(
-      {
-        projectId,
-        branchId: temporaryBranchId,
-      },
-      neonClient
-    );
+    let branchDeleted = true;
+    let cleanupError: string | undefined;
+    try {
+      await handleDeleteBranch(
+        {
+          projectId,
+          branchId: temporaryBranchId,
+        },
+        neonClient
+      );
+    } catch (error) {
+      branchDeleted = false;
+      cleanupError = (error as Error).message;
+    }
 
     return {
       applied: applyChanges,
-      deletedBranchId: temporaryBranchId,
+      deletedBranchId: branchDeleted ? temporaryBranchId : undefined,
+      cleanupError,
       migrationResult,
     };
   });
@@ -1366,21 +1391,19 @@ You MUST follow these steps:
       neonClient,
       extra
     );
+    let message: string;
+    if (result.applied) {
+      message = result.deletedBranchId
+        ? `Migration applied successfully to parent branch. Temporary branch ${result.deletedBranchId} deleted.\n\nResult: ${JSON.stringify(result.migrationResult, null, 2)}`
+        : `Migration applied successfully to parent branch.\n\n⚠️ Warning: Failed to delete temporary branch. Manual cleanup may be required. Error: ${result.cleanupError}\n\nResult: ${JSON.stringify(result.migrationResult, null, 2)}`;
+    } else {
+      message = result.deletedBranchId
+        ? `Migration cancelled. Temporary branch ${result.deletedBranchId} deleted without applying changes.`
+        : `Migration cancelled.\n\n⚠️ Warning: Failed to delete temporary branch. Manual cleanup may be required. Error: ${result.cleanupError}`;
+    }
+
     return {
-      content: [
-        {
-          type: 'text',
-          text: result.applied
-            ? `Migration applied successfully to parent branch. Temporary branch ${
-                result.deletedBranchId
-              } deleted.\n\nResult: ${JSON.stringify(
-                result.migrationResult,
-                null,
-                2
-              )}`
-            : `Migration cancelled. Temporary branch ${result.deletedBranchId} deleted without applying changes.`,
-        },
-      ],
+      content: [{ type: 'text', text: message }],
     };
   },
 
