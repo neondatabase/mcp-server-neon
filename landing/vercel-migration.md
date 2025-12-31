@@ -39,7 +39,7 @@ Created Next.js App Router API routes to replace Express endpoints:
 | -------------------------------------------------- | -------------------------------------- |
 | `/api/[transport]/route.ts`                        | Main MCP handler (SSE/Streamable HTTP) |
 | `/api/authorize/route.ts`                          | OAuth authorization endpoint           |
-| `/api/callback/route.ts`                           | OAuth callback handler                 |
+| `/callback/route.ts`                               | OAuth callback handler (allowlisted)   |
 | `/api/token/route.ts`                              | OAuth token exchange                   |
 | `/api/revoke/route.ts`                             | OAuth token revocation                 |
 | `/api/register/route.ts`                           | Dynamic client registration            |
@@ -300,6 +300,76 @@ Required for Vercel deployment:
 | `SENTRY_DSN`          | Sentry error tracking DSN                                      |
 | `ANALYTICS_WRITE_KEY` | Segment analytics write key                                    |
 
+### 17. Backwards Compatible Rewrites
+
+Added Next.js rewrites in `next.config.ts` to maintain backwards compatibility for clients using legacy URLs:
+
+```typescript
+async rewrites() {
+  return [
+    { source: '/mcp', destination: '/api/mcp' },
+    { source: '/sse', destination: '/api/sse' },
+    { source: '/health', destination: '/api/health' },
+  ];
+}
+```
+
+This allows existing MCP client configurations to continue working without changes:
+- `/mcp` → `/api/mcp` (Streamable HTTP transport)
+- `/sse` → `/api/sse` (Server-Sent Events transport)
+- `/health` → `/api/health` (Health check endpoint)
+
+**Note:** OAuth endpoints don't need rewrites because they're discovered dynamically via `/.well-known/oauth-authorization-server`.
+
+### 18. OAuth Callback Route Location
+
+Moved OAuth callback from `/api/callback` to `/callback` (outside the API directory) to use an allowlisted redirect URI:
+
+```
+landing/app/api/callback/route.ts  →  landing/app/callback/route.ts
+```
+
+Updated redirect URI in `lib/oauth/client.ts`:
+```typescript
+const REDIRECT_URI = `${SERVER_HOST}/callback`;  // Was /api/callback
+```
+
+**Important:** The callback URL must be allowlisted in the upstream OAuth provider (Neon OAuth).
+
+### 19. URL Normalization for mcp-handler
+
+The `mcp-handler` library does **exact pathname matching** to route requests:
+
+```javascript
+if (url.pathname === streamableHttpEndpoint) { ... }  // expects '/api/mcp'
+```
+
+**Problem:** Next.js rewrites preserve the original client URL in `request.url`. When a client requests `/mcp`, even though routing works, `request.url.pathname` still shows `/mcp`, not `/api/mcp`. This causes 404 after OAuth authentication succeeds (before auth, `withMcpAuth` returns 401 before pathname matching runs).
+
+**Solution:** Added URL normalization wrapper in `app/api/[transport]/route.ts`:
+
+```typescript
+const handleRequest = (req: Request) => {
+  const url = new URL(req.url);
+
+  // Normalize legacy paths to canonical /api/* paths
+  if (url.pathname === '/mcp') url.pathname = '/api/mcp';
+  else if (url.pathname === '/sse') url.pathname = '/api/sse';
+
+  const normalizedReq = new Request(url.toString(), {
+    method: req.method,
+    headers: req.headers,
+    body: req.body,
+    // @ts-expect-error duplex is required for streaming bodies
+    duplex: 'half',
+  });
+
+  return authHandler(normalizedReq);
+};
+
+export { handleRequest as GET, handleRequest as POST, handleRequest as DELETE };
+```
+
 ## Migration Checklist
 
 - [x] Create Next.js API routes for OAuth flow
@@ -321,11 +391,14 @@ Required for Vercel deployment:
 - [x] Update GitHub Actions to work from `landing/` directory
 - [x] Add token revoke endpoint (`/api/revoke`)
 - [x] Add OpenGraph meta tags
-- [ ] Test OAuth flow end-to-end
-- [ ] Test MCP tool execution
-- [ ] Verify SSE streaming works with Fluid Compute
-- [ ] Deploy to Vercel preview environment
-- [ ] Production deployment
+- [x] Add backwards compatible rewrites (`/mcp` → `/api/mcp`, etc.)
+- [x] Move OAuth callback to allowlisted URL (`/callback`)
+- [x] Add URL normalization for mcp-handler pathname matching
+- [x] Test OAuth flow end-to-end
+- [x] Test MCP tool execution
+- [x] Verify SSE streaming works with Fluid Compute
+- [x] Deploy to Vercel preview environment
+- [x] Production deployment
 
 ## Notes
 

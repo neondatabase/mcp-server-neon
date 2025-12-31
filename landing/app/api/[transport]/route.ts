@@ -455,4 +455,31 @@ const authHandler = withMcpAuth(handler, verifyToken, {
   resourceMetadataPath: '/.well-known/oauth-protected-resource',
 });
 
-export { authHandler as GET, authHandler as POST, authHandler as DELETE };
+// Normalize legacy paths (/mcp, /sse) to canonical /api/* paths
+// for mcp-handler's exact pathname matching.
+//
+// Next.js rewrites preserve the original client URL in request.url,
+// but mcp-handler expects /api/mcp or /api/sse. Without this normalization,
+// requests to /mcp would get 404 after OAuth (before auth, withMcpAuth
+// returns 401 before pathname matching happens).
+const handleRequest = (req: Request) => {
+  const url = new URL(req.url);
+
+  if (url.pathname === '/mcp') {
+    url.pathname = '/api/mcp';
+  } else if (url.pathname === '/sse') {
+    url.pathname = '/api/sse';
+  }
+
+  const normalizedReq = new Request(url.toString(), {
+    method: req.method,
+    headers: req.headers,
+    body: req.body,
+    // @ts-expect-error duplex is required for streaming bodies
+    duplex: 'half',
+  });
+
+  return authHandler(normalizedReq);
+};
+
+export { handleRequest as GET, handleRequest as POST, handleRequest as DELETE };
