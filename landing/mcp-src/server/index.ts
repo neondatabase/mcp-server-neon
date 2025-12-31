@@ -91,6 +91,7 @@ export const createMcpServer = (context: ServerContext) => {
       tool.name,
       tool.description,
       { params: tool.inputSchema },
+      tool.annotations,
       async (args, extra) => {
         return await startSpan(
           {
