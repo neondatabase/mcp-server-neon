@@ -333,8 +333,24 @@ export const NEON_TOOLS = [
   },
   {
     name: 'complete_database_migration' as const,
-    description:
-      'Complete a database migration when the user confirms the migration is ready to be applied to the main branch. This tool also lets the client know that the temporary branch created by the `prepare_database_migration` tool has been deleted.',
+    description: `Complete a database migration by applying changes to the main branch and cleaning up the temporary branch.
+    
+    <important_notes>
+      You MUST pass ALL values from the \`prepare_database_migration\` response:
+      - migrationId: The migration ID
+      - migrationSql: The exact SQL from prepare step
+      - databaseName: The database name
+      - projectId: The project ID
+      - temporaryBranchId: The temporary branch to delete
+      - parentBranchId: The branch to apply migration to
+      - applyChanges: Set to true to apply the migration, or false to just delete the temp branch without applying
+    </important_notes>
+    
+    <workflow>
+      1. If applyChanges is true, applies the migration SQL to the parent branch
+      2. Deletes the temporary branch (cleanup)
+      3. Returns confirmation of the operation
+    </workflow>`,
     inputSchema: completeDatabaseMigrationInputSchema,
     readOnlySafe: false,
     annotations: {

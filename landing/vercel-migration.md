@@ -394,11 +394,57 @@ export { handleRequest as GET, handleRequest as POST, handleRequest as DELETE };
 - [x] Add backwards compatible rewrites (`/mcp` → `/api/mcp`, etc.)
 - [x] Move OAuth callback to allowlisted URL (`/callback`)
 - [x] Add URL normalization for mcp-handler pathname matching
+- [x] Refactor migration tools to be stateless (no in-memory state)
 - [x] Test OAuth flow end-to-end
 - [x] Test MCP tool execution
 - [x] Verify SSE streaming works with Fluid Compute
 - [x] Deploy to Vercel preview environment
 - [x] Production deployment
+
+### 20. Stateless Migration Workflow
+
+The database migration tools (`prepare_database_migration` and `complete_database_migration`) were refactored to be fully stateless for serverless compatibility.
+
+**Problem:** The original implementation stored migration state in an in-memory `Map`:
+
+```typescript
+// OLD: Broken in serverless - state lost between function invocations
+const migrationsState = new Map<MigrationId, MigrationDetails>();
+persistMigrationToMemory(migrationId, { ... });
+// Later invocation on different container: getMigrationFromMemory() returns undefined
+```
+
+**Solution:** Follow the stateless pattern (like `query_tuning` already did):
+
+1. `prepare_database_migration` returns ALL context in the response
+2. `complete_database_migration` accepts ALL context as parameters
+3. LLM stores context in conversation memory between tool calls
+4. No server-side state required
+
+**Changes Made:**
+
+- **Deleted `mcp-src/tools/state.ts`** - Removed in-memory state storage
+- **Updated `completeDatabaseMigrationInputSchema`** - Added required params: `migrationSql`, `databaseName`, `projectId`, `temporaryBranchId`, `parentBranchId`, `applyChanges`
+- **Added branch naming convention** - Temp branches named `mcp-migration-YYYY-MM-DDTHH-mm-ss` for easy orphan identification
+- **Added `applyChanges` flag** - Allows canceling migrations by deleting temp branch without applying
+
+**API Change (Breaking):**
+
+```typescript
+// OLD: Just migration ID (broken in serverless)
+complete_database_migration({ migrationId: "uuid" })
+
+// NEW: All context passed back (works everywhere)
+complete_database_migration({
+  migrationId: "uuid",
+  migrationSql: "ALTER TABLE ...",
+  databaseName: "neondb",
+  projectId: "proj-xxx",
+  temporaryBranchId: "br-xxx",
+  parentBranchId: "br-main",
+  applyChanges: true
+})
+```
 
 ## Notes
 
@@ -417,3 +463,4 @@ export { handleRequest as GET, handleRequest as POST, handleRequest as DELETE };
 - Token storage uses Postgres via Keyv for persistence
 - Session state for approved clients stored in signed HTTP-only cookies
 - Analytics uses Segment with `flushAt: 1` for immediate event delivery in serverless context
+- **Stateless tool design**: Multi-step workflows (migrations, query tuning) return all context in responses and expect it back as parameters - no server-side state storage

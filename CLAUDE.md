@@ -97,7 +97,16 @@ bun run typecheck
 
 - **Error Handling**: Tools throw errors which are caught by the server wrapper, logged to Sentry, and returned as structured error messages to the LLM.
 
-- **State Management**: Some tools (migrations, query tuning) create temporary branches and maintain state across multiple tool calls. The LLM is prompted to remember branch IDs from previous calls.
+- **Stateless Design**: The server is designed for serverless deployment. Tools like migrations and query tuning create temporary branches but do NOT store state in memory. Instead, all context (branch IDs, migration SQL, etc.) is returned to the LLM, which passes it back to subsequent tool calls. This enables horizontal scaling on Vercel.
+
+- **Read-Only Mode**: Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available.
+
+- **MCP Tool Annotations**: All tools include MCP-standard annotations for client hints:
+  - `title`: Human-readable tool name
+  - `readOnlyHint`: Whether the tool only reads data
+  - `destructiveHint`: Whether the tool can cause irreversible changes
+  - `idempotentHint`: Whether repeated calls produce the same result
+  - `openWorldHint`: Whether the tool interacts with external systems
 
 - **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry error reporting.
 
@@ -119,6 +128,14 @@ export const myNewToolInputSchema = z.object({
   name: 'my_new_tool' as const,
   description: 'Description of what this tool does',
   inputSchema: myNewToolInputSchema,
+  readOnlySafe: true, // Set to true if tool only reads data (for read-only mode filtering)
+  annotations: {
+    title: 'My New Tool',
+    readOnlyHint: true,      // Does it only read data?
+    destructiveHint: false,  // Can it cause irreversible changes?
+    idempotentHint: true,    // Do repeated calls produce same result?
+    openWorldHint: false,    // Does it interact with external systems?
+  } satisfies ToolAnnotations,
 }
 ```
 
@@ -191,11 +208,10 @@ landing/                  # Next.js app (main project)
 │   │   ├── api.ts      # Neon API client factory
 │   │   └── errors.ts   # Error handling utilities
 │   ├── tools/          # Tool definitions and handlers
-│   │   ├── definitions.ts  # Tool definitions (NEON_TOOLS)
+│   │   ├── definitions.ts  # Tool definitions (NEON_TOOLS) with annotations
 │   │   ├── tools.ts       # Tool handlers mapping (NEON_HANDLERS)
 │   │   ├── toolsSchema.ts # Zod schemas for tool inputs
 │   │   ├── handlers/      # Individual tool implementations
-│   │   ├── state.ts       # Tool state management
 │   │   ├── types.ts       # TypeScript types
 │   │   └── utils.ts       # Tool utilities
 │   ├── oauth/          # OAuth model and KV store
@@ -227,7 +243,7 @@ mcp-client/             # CLI client for testing
 
 - **Logger Behavior**: In stdio mode, the logger is silenced to prevent stderr pollution. In server mode, logging is active.
 
-- **Migration Pattern**: Tools like `prepare_database_migration` and `prepare_query_tuning` create temporary branches. The LLM must remember these branch IDs to pass to subsequent `complete_*` tools.
+- **Migration Pattern**: Tools like `prepare_database_migration` and `prepare_query_tuning` create temporary branches and return all context (branch IDs, SQL, database name, etc.) in the response. The LLM must pass this context back to subsequent `complete_*` tools. No state is stored server-side, enabling serverless deployment.
 
 - **Neon API Client**: Created using `@neondatabase/api-client` package. All tool handlers receive a pre-configured `neonClient` instance.
 

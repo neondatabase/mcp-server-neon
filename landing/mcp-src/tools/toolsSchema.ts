@@ -14,19 +14,19 @@ export const listProjectsInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Specify the cursor value from the previous response to retrieve the next batch of projects.',
+      'Specify the cursor value from the previous response to retrieve the next batch of projects.'
     ),
   limit: z
     .number()
     .default(10)
     .describe(
-      'Specify a value from 1 to 400 to limit number of projects in the response.',
+      'Specify a value from 1 to 400 to limit number of projects in the response.'
     ),
   search: z
     .string()
     .optional()
     .describe(
-      'Search by project name or id. You can specify partial name or id values to filter results.',
+      'Search by project name or id. You can specify partial name or id values to filter results.'
     ),
   org_id: z.string().optional().describe('Search for projects by org_id.'),
 }) satisfies ZodObjectParams<ListProjectsParams>;
@@ -59,7 +59,7 @@ export const runSqlInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'An optional ID of the branch to execute the query against. If not provided the default branch is used.',
+      'An optional ID of the branch to execute the query against. If not provided the default branch is used.'
     ),
   databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
 });
@@ -73,7 +73,7 @@ export const runSqlTransactionInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'An optional ID of the branch to execute the query against. If not provided the default branch is used.',
+      'An optional ID of the branch to execute the query against. If not provided the default branch is used.'
     ),
   databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
 });
@@ -87,7 +87,7 @@ export const explainSqlStatementInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'An optional ID of the branch to execute the query against. If not provided the default branch is used.',
+      'An optional ID of the branch to execute the query against. If not provided the default branch is used.'
     ),
   databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
   analyze: z
@@ -104,7 +104,7 @@ export const describeTableSchemaInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'An optional ID of the branch to execute the query against. If not provided the default branch is used.',
+      'An optional ID of the branch to execute the query against. If not provided the default branch is used.'
     ),
   databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
 });
@@ -115,7 +115,7 @@ export const getDatabaseTablesInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'An optional ID of the branch. If not provided the default branch is used.',
+      'An optional ID of the branch. If not provided the default branch is used.'
     ),
   databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
 });
@@ -138,7 +138,36 @@ export const prepareDatabaseMigrationInputSchema = z.object({
 });
 
 export const completeDatabaseMigrationInputSchema = z.object({
-  migrationId: z.string(),
+  migrationId: z
+    .string()
+    .describe('The migration ID from prepare_database_migration.'),
+  migrationSql: z
+    .string()
+    .describe(
+      'The SQL statements to apply. Pass the exact value from prepare_database_migration.'
+    ),
+  databaseName: z
+    .string()
+    .describe(
+      'The database name. Pass the exact value from prepare_database_migration.'
+    ),
+  projectId: z
+    .string()
+    .describe(
+      'The project ID. Pass the exact value from prepare_database_migration.'
+    ),
+  temporaryBranchId: z
+    .string()
+    .describe('The temporary branch ID to delete after migration.'),
+  parentBranchId: z
+    .string()
+    .describe('The parent branch ID where migration will be applied.'),
+  applyChanges: z
+    .boolean()
+    .default(true)
+    .describe(
+      'Whether to apply the migration. Set to false to just delete the temp branch without applying.'
+    ),
 });
 
 export const describeBranchInputSchema = z.object({
@@ -156,26 +185,26 @@ export const getConnectionStringInputSchema = z.object({
   projectId: z
     .string()
     .describe(
-      'The ID of the project. If not provided, the only available project will be used.',
+      'The ID of the project. If not provided, the only available project will be used.'
     ),
   branchId: z
     .string()
     .optional()
     .describe(
-      'The ID or name of the branch. If not provided, the default branch will be used.',
+      'The ID or name of the branch. If not provided, the default branch will be used.'
     ),
   computeId: z
     .string()
     .optional()
     .describe(
-      'The ID of the compute/endpoint. If not provided, the read-write compute associated with the branch will be used.',
+      'The ID of the compute/endpoint. If not provided, the read-write compute associated with the branch will be used.'
     ),
   databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
   roleName: z
     .string()
     .optional()
     .describe(
-      'The name of the role to connect with. If not provided, the database owner name will be used.',
+      'The name of the role to connect with. If not provided, the database owner name will be used.'
     ),
 });
 
@@ -187,13 +216,13 @@ export const provisionNeonAuthInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'An optional ID of the branch to provision Neon Auth for. If not provided, the default branch is used.',
+      'An optional ID of the branch to provision Neon Auth for. If not provided, the default branch is used.'
     ),
   databaseName: z
     .string()
     .optional()
     .describe(
-      'The database name to provision Neon Auth for. If not provided, the default database is used.',
+      'The database name to provision Neon Auth for. If not provided, the default database is used.'
     ),
 });
 
@@ -209,7 +238,7 @@ export const prepareQueryTuningInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.',
+      'The name of the role to connect with. If not provided, the default role (usually "neondb_owner") will be used.'
     ),
 });
 
@@ -217,7 +246,7 @@ export const completeQueryTuningInputSchema = z.object({
   suggestedSqlStatements: z
     .array(z.string())
     .describe(
-      'The SQL DDL statements to execute to improve performance. These statements are the result of the prior steps, for example creating additional indexes.',
+      'The SQL DDL statements to execute to improve performance. These statements are the result of the prior steps, for example creating additional indexes.'
     ),
   applyChanges: z
     .boolean()
@@ -226,7 +255,7 @@ export const completeQueryTuningInputSchema = z.object({
   tuningId: z
     .string()
     .describe(
-      'The ID of the tuning to complete. This is NOT the branch ID. Remember this ID from the prior step using tool prepare_query_tuning.',
+      'The ID of the tuning to complete. This is NOT the branch ID. Remember this ID from the prior step using tool prepare_query_tuning.'
     ),
   databaseName: z
     .string()
@@ -238,7 +267,7 @@ export const completeQueryTuningInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'The name of the role to connect with. If you have used a specific role in prepare_query_tuning you MUST pass the same role again to this tool. If not provided, the default role (usually "neondb_owner") will be used.',
+      'The name of the role to connect with. If you have used a specific role in prepare_query_tuning you MUST pass the same role again to this tool. If not provided, the default role (usually "neondb_owner") will be used.'
     ),
   shouldDeleteTemporaryBranch: z
     .boolean()
@@ -247,13 +276,13 @@ export const completeQueryTuningInputSchema = z.object({
   temporaryBranchId: z
     .string()
     .describe(
-      'The ID of the temporary branch that needs to be deleted after tuning.',
+      'The ID of the temporary branch that needs to be deleted after tuning.'
     ),
   branchId: z
     .string()
     .optional()
     .describe(
-      'The ID or name of the branch that receives the changes. If not provided, the default (main) branch will be used.',
+      'The ID or name of the branch that receives the changes. If not provided, the default (main) branch will be used.'
     ),
 });
 
@@ -265,14 +294,14 @@ export const listSlowQueriesInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'An optional ID of the branch. If not provided the default branch is used.',
+      'An optional ID of the branch. If not provided the default branch is used.'
     ),
   databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
   computeId: z
     .string()
     .optional()
     .describe(
-      'The ID of the compute/endpoint. If not provided, the read-write compute associated with the branch will be used.',
+      'The ID of the compute/endpoint. If not provided, the read-write compute associated with the branch will be used.'
     ),
   limit: z
     .number()
@@ -284,7 +313,7 @@ export const listSlowQueriesInputSchema = z.object({
     .optional()
     .default(1000)
     .describe(
-      'Minimum execution time in milliseconds to consider a query as slow',
+      'Minimum execution time in milliseconds to consider a query as slow'
     ),
 });
 
@@ -293,13 +322,13 @@ export const listBranchComputesInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'The ID of the project. If not provided, the only available project will be used.',
+      'The ID of the project. If not provided, the only available project will be used.'
     ),
   branchId: z
     .string()
     .optional()
     .describe(
-      'The ID of the branch. If provided, endpoints for this specific branch will be listed.',
+      'The ID of the branch. If provided, endpoints for this specific branch will be listed.'
     ),
 });
 
@@ -308,7 +337,7 @@ export const listOrganizationsInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Search organizations by name or ID. You can specify partial name or ID values to filter results.',
+      'Search organizations by name or ID. You can specify partial name or ID values to filter results.'
     ),
 });
 
@@ -317,19 +346,19 @@ export const listSharedProjectsInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Specify the cursor value from the previous response to retrieve the next batch of shared projects.',
+      'Specify the cursor value from the previous response to retrieve the next batch of shared projects.'
     ),
   limit: z
     .number()
     .default(10)
     .describe(
-      'Specify a value from 1 to 400 to limit number of shared projects in the response.',
+      'Specify a value from 1 to 400 to limit number of shared projects in the response.'
     ),
   search: z
     .string()
     .optional()
     .describe(
-      'Search by project name or id. You can specify partial name or id values to filter results.',
+      'Search by project name or id. You can specify partial name or id values to filter results.'
     ),
 }) satisfies ZodObjectParams<ListSharedProjectsParams>;
 
@@ -342,7 +371,7 @@ export const resetFromParentInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Optional name to preserve the current state under a new branch before resetting',
+      'Optional name to preserve the current state under a new branch before resetting'
     ),
 });
 
@@ -357,7 +386,7 @@ export const searchInputSchema = z.object({
     .string()
     .min(3)
     .describe(
-      'The search query to find matching organizations, projects, or branches',
+      'The search query to find matching organizations, projects, or branches'
     ),
 });
 
@@ -366,7 +395,7 @@ export const fetchInputSchema = z.object({
     .string()
     .min(1)
     .describe(
-      'The ID returned by the search tool to fetch detailed information about the entity',
+      'The ID returned by the search tool to fetch detailed information about the entity'
     ),
 });
 
@@ -374,6 +403,6 @@ export const loadResourceInputSchema = z.object({
   subject: z
     .enum(['neon-get-started'])
     .describe(
-      'The subject of the resource to load. Options: neon-get-started (Neon getting started guide).',
+      'The subject of the resource to load. Options: neon-get-started (Neon getting started guide).'
     ),
 });
