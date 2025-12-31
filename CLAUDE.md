@@ -175,11 +175,11 @@ landing/                  # Next.js app (main project)
 │   ├── api/            # API routes for remote MCP server
 │   │   ├── [transport]/route.ts  # Main MCP handler (SSE/Streamable HTTP)
 │   │   ├── authorize/  # OAuth authorization endpoint
-│   │   ├── callback/   # OAuth callback handler
 │   │   ├── token/      # OAuth token exchange
 │   │   ├── register/   # Dynamic client registration
 │   │   ├── revoke/     # OAuth token revocation
 │   │   └── health/     # Health check endpoint
+│   ├── callback/       # OAuth callback handler
 │   └── .well-known/    # OAuth discovery endpoints
 ├── lib/                # Next.js-compatible utilities
 │   ├── config.ts       # Centralized configuration
@@ -250,7 +250,7 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 | `/api/mcp` | Streamable HTTP transport (recommended) |
 | `/api/sse` | Server-Sent Events transport (deprecated) |
 | `/api/authorize` | OAuth authorization initiation |
-| `/api/callback` | OAuth callback handler |
+| `/callback` | OAuth callback handler |
 | `/api/token` | OAuth token exchange |
 | `/api/revoke` | OAuth token revocation |
 | `/api/register` | Dynamic client registration |
