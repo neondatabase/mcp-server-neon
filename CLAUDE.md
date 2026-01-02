@@ -292,7 +292,34 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 - The `mcp-handler` library has a patch (`landing/patches/mcp-handler+1.0.4.patch`) for compatibility fixes
 - See `landing/vercel-migration.md` for detailed migration documentation
 
-## Claude Code Review Workflow
+## GitHub Workflows
+
+### Deploy Preview Workflow
+
+The `deploy-preview.yml` workflow enables deploying PRs to the preview environment (`preview-mcp.neon.tech`) for testing OAuth flows and remote MCP functionality.
+
+**Usage:**
+1. Add the `deploy-preview` label to a PR
+2. The workflow pushes to the `preview` branch, which triggers Vercel deployment
+3. Only one PR can own the preview environment at a time (label is auto-removed from other PRs)
+4. Label is automatically removed when PR is merged or closed
+
+**Note:** The preview environment has OAuth configured, making it the only way to test full OAuth flows in PRs.
+
+### Claude Code Action Workflow
+
+The `claude.yml` workflow enables interactive Claude assistance in issues and pull requests.
+
+**Usage:**
+- Mention `@claude` in any issue, PR comment, or PR review comment
+- Claude will analyze and respond to your request
+- Only works for OWNER/MEMBER/COLLABORATOR to prevent abuse
+
+**Available Commands:**
+- GitHub CLI commands (`gh issue:*`, `gh pr:*`, `gh search:*`)
+- Can help with code review, issue triage, and PR descriptions
+
+### Claude Code Review Workflow
 
 This repository uses an enhanced Claude Code Review workflow that provides inline feedback on pull requests.
 
