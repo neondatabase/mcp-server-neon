@@ -4,5 +4,6 @@
     "app/api/**/*.ts": {
       "maxDuration": 800
     }
-  }
+  },
+  "ignoreCommand": "[ \"$VERCEL_GIT_COMMIT_REF\" = \"main\" ] || [ \"$VERCEL_GIT_COMMIT_REF\" = \"preview\" ] && exit 1 || exit 0"
 }

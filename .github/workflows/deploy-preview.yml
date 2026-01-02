@@ -2,7 +2,7 @@ name: Deploy to Preview
 
 on:
   pull_request:
-    types: [labeled, closed]
+    types: [labeled, synchronize, closed]
 
 permissions:
   contents: write
@@ -11,7 +11,10 @@ permissions:
 
 jobs:
   deploy:
-    if: github.event.action == 'labeled' && github.event.label.name == 'deploy-preview'
+    # Deploy when: (1) the deploy-preview label is added, OR (2) a new commit is pushed to a PR that already has the label
+    if: |
+      (github.event.action == 'labeled' && github.event.label.name == 'deploy-preview') ||
+      (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'deploy-preview'))
     runs-on:
       group: neondatabase-protected-runner-group
       labels: linux-ubuntu-latest
@@ -21,12 +24,14 @@ jobs:
           fetch-depth: 1
           ref: ${{ github.event.pull_request.head.sha }}
 
+      # Only remove labels from other PRs when a new label is added (not on every commit)
       - name: Remove deploy-preview label from other PRs
+        if: github.event.action == 'labeled'
         uses: actions/github-script@v7
         with:
           script: |
             const currentPR = context.payload.pull_request.number;
-            
+
             // Find all open PRs with the 'deploy-preview' label
             const { data: prs } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
@@ -34,7 +39,7 @@ jobs:
               labels: 'deploy-preview',
               state: 'open'
             });
-            
+
             // Remove label from other PRs
             for (const pr of prs) {
               if (pr.number !== currentPR) {
@@ -45,7 +50,7 @@ jobs:
                   issue_number: pr.number,
                   name: 'deploy-preview'
                 });
-                
+
                 // Notify the other PR
                 await github.rest.issues.createComment({
                   owner: context.repo.owner,
@@ -87,7 +92,9 @@ jobs:
               description: 'Deployment successful'
             });
 
+      # Only comment on initial label, not on every commit push
       - name: Comment on PR
+        if: github.event.action == 'labeled'
         uses: actions/github-script@v7
         with:
           script: |
