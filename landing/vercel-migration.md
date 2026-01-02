@@ -1,4 +1,4 @@
-# Vercel Migration Guide
+# Vercel Migration Diary
 
 This document outlines the changes made to migrate the Neon MCP Server from an Express-based deployment to Vercel's serverless infrastructure using Next.js App Router.
 

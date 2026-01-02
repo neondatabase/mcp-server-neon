@@ -1,0 +1,57 @@
+name: Deploy to Preview
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  deploy:
+    if: github.event.label.name == 'preview'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Push to preview branch
+        run: |
+          git push origin HEAD:refs/heads/preview --force
+
+      # Creates a GitHub Deployment record to track this deployment in the GitHub UI.
+      # Note: This doesn't perform the actual deployment - that happens when Vercel
+      # detects the push to the preview branch above. This step just creates a visible
+      # record in GitHub's "Environments" tab and adds the deployment link to the PR.
+      - name: Create GitHub Deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.payload.pull_request.head.sha,
+              environment: 'preview',
+              auto_merge: false,
+              required_contexts: [],
+              description: `PR #${context.payload.pull_request.number}: ${context.payload.pull_request.title}`
+            });
+
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: 'success',
+              environment_url: 'https://preview-mcp.neon.tech',
+              description: 'Deployment successful'
+            });
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '🚀 Deployed to https://preview-mcp.neon.tech\n\nThis PR now owns the preview environment. OAuth flow is available for testing.'
+            })
