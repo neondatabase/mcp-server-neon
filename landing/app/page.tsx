@@ -47,7 +47,7 @@ export default async function Home() {
           </div>
           <section id="tools">
             <h2 className="text-2xl font-bold mb-2 border-b-3 border-b-emerald-600">
-              LOOOL
+              Available Tools
             </h2>
             {tools === undefined ? (
               <div>tools.json is not found</div>
