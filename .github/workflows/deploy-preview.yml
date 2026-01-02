@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   deploy:
-    if: github.event.action == 'labeled' && github.event.label.name == 'preview'
+    if: github.event.action == 'labeled' && github.event.label.name == 'deploy-preview'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,29 +19,29 @@ jobs:
           fetch-depth: 1
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Remove preview label from other PRs
+      - name: Remove deploy-preview label from other PRs
         uses: actions/github-script@v7
         with:
           script: |
             const currentPR = context.payload.pull_request.number;
             
-            // Find all open PRs with the 'preview' label
+            // Find all open PRs with the 'deploy-preview' label
             const { data: prs } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              labels: 'preview',
+              labels: 'deploy-preview',
               state: 'open'
             });
             
             // Remove label from other PRs
             for (const pr of prs) {
               if (pr.number !== currentPR) {
-                console.log(`Removing 'preview' label from PR #${pr.number}`);
+                console.log(`Removing 'deploy-preview' label from PR #${pr.number}`);
                 await github.rest.issues.removeLabel({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: pr.number,
-                  name: 'preview'
+                  name: 'deploy-preview'
                 });
                 
                 // Notify the other PR
@@ -49,7 +49,7 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: pr.number,
-                  body: `⚠️ The \`preview\` label was removed because PR #${currentPR} now owns the preview environment.`
+                  body: `⚠️ The \`deploy-preview\` label was removed because PR #${currentPR} now owns the preview environment.`
                 });
               }
             }
@@ -96,26 +96,26 @@ jobs:
               body: '🚀 Deployed to https://preview-mcp.neon.tech\n\nThis PR now owns the preview environment. OAuth flow is available for testing.'
             })
 
-  # Automatically remove the preview label when a PR is merged or closed
+  # Automatically remove the deploy-preview label when a PR is merged or closed
   cleanup:
-    if: github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'preview')
+    if: github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
     runs-on: ubuntu-latest
     steps:
-      - name: Remove preview label
+      - name: Remove deploy-preview label
         uses: actions/github-script@v7
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
             const merged = context.payload.pull_request.merged;
             
-            console.log(`PR #${prNumber} was ${merged ? 'merged' : 'closed'}. Removing 'preview' label.`);
+            console.log(`PR #${prNumber} was ${merged ? 'merged' : 'closed'}. Removing 'deploy-preview' label.`);
             
             try {
               await github.rest.issues.removeLabel({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
-                name: 'preview'
+                name: 'deploy-preview'
               });
             } catch (error) {
               // Label might already be removed
