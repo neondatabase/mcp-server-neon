@@ -289,7 +289,6 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 ### Development Notes
 
 - Import paths in `landing/mcp-src/` are extensionless (no `.js` suffix)
-- The `mcp-handler` library has a patch (`landing/patches/mcp-handler+1.0.4.patch`) for compatibility fixes
 - See `landing/vercel-migration.md` for detailed migration documentation
 
 ## GitHub Workflows
