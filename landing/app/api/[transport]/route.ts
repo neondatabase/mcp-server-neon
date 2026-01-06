@@ -471,8 +471,16 @@ const verifyToken = async (
   req: Request,
   bearerToken?: string
 ): Promise<AuthInfo | undefined> => {
+  const userAgent = req.headers.get('user-agent') ?? 'unknown';
+
+  logger.info('verifyToken called', {
+    hasBearerToken: !!bearerToken,
+    bearerTokenLength: bearerToken?.length ?? 0,
+    tokenPrefix: bearerToken?.substring(0, 10) ?? 'none',
+    userAgent,
+  });
+
   if (!bearerToken) {
-    logger.info('verifyToken: no bearer token provided');
     return undefined;
   }
 
@@ -529,6 +537,10 @@ const verifyToken = async (
   // PATH 2: Not an OAuth token - try API key
   // (For direct API key usage)
   // ============================================
+  logger.info('Trying API key verification path', {
+    tokenPrefix: bearerToken.substring(0, 10),
+  });
+
   const apiKeyRecord = await fetchAccountDetails(bearerToken);
   if (!apiKeyRecord) {
     return undefined;
