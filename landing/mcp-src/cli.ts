@@ -1,5 +1,5 @@
 import './sentry/instrument';
-import { identifyApiKey, track } from './analytics/analytics';
+import { track } from './analytics/analytics';
 import { NODE_ENV } from './constants';
 import { handleInit, parseArgs } from './initConfig';
 import { createNeonClient, getPackageJson } from './server/api';
@@ -9,6 +9,7 @@ import { logger } from './utils/logger';
 import { AppContext } from './types/context';
 import { NEON_TOOLS } from './tools/index';
 import './utils/polyfills';
+import { resolveAccountFromAuth } from './server/account';
 
 const args = parseArgs();
 const appVersion = getPackageJson().version;
@@ -47,7 +48,7 @@ if (args.command === 'start:sse') {
     const { data } = await neonClient.getAuthDetails();
     const accountId = data.account_id;
 
-    const account = await identifyApiKey(data, neonClient, {
+    const account = await resolveAccountFromAuth(data, neonClient, {
       context: appContext,
     });
 

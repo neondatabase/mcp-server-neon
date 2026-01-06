@@ -3,6 +3,7 @@ import { model } from '../../mcp-src/oauth/model';
 import { exchangeCode } from '../../lib/oauth/client';
 import { generateRandomString } from '../../mcp-src/oauth/utils';
 import { createNeonClient } from '../../mcp-src/server/api';
+import { resolveAccountFromAuth } from '../../mcp-src/server/account';
 import { handleOAuthError } from '../../lib/errors';
 import type { AuthorizationCode } from 'oauth2-server';
 
@@ -59,10 +60,13 @@ export async function GET(request: NextRequest) {
     const nonce = generateRandomString(32);
     const authCode = `${grantId}:${nonce}`;
 
-    // Get the user's info from Neon
+    // Get auth details to determine account type (org vs personal)
     const neonClient = createNeonClient(tokens.access_token);
-    const { data: user } = await neonClient.getCurrentUserInfo();
+    const { data: auth } = await neonClient.getAuthDetails();
     const expiresAt = Date.now() + toMilliseconds(tokens.expiresIn() ?? 0);
+
+    // Resolve account info (no identify here - happens in token exchange)
+    const userInfo = await resolveAccountFromAuth(auth, neonClient);
 
     // Save the authorization code with associated data
     const authCodeData: AuthorizationCode = {
@@ -72,11 +76,7 @@ export async function GET(request: NextRequest) {
       redirectUri: requestParams.redirectUri,
       scope: requestParams.scope.join(' '),
       client: client,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: `${user.name} ${user.last_name}`.trim(),
-      },
+      user: userInfo,
       token: {
         access_token: tokens.access_token,
         access_token_expires_at: expiresAt,

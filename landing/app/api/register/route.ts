@@ -83,14 +83,34 @@ export async function POST(request: NextRequest) {
       client_uri: payload.client_uri,
     });
 
-    return NextResponse.json({
+    const responseBody = {
       client_id: clientId,
       client_secret: clientSecret,
       client_name: payload.client_name,
       redirect_uris: payload.redirect_uris,
       token_endpoint_auth_method: client.tokenEndpointAuthMethod,
+    };
+
+    logger.info('creating response', {
+      responseBodyKeys: Object.keys(responseBody),
+      tokenEndpointAuthMethod: responseBody.token_endpoint_auth_method,
     });
+
+    const response = NextResponse.json(responseBody);
+
+    logger.info('response created successfully', {
+      status: response.status,
+      headers: Object.fromEntries(response.headers.entries()),
+    });
+
+    return response;
   } catch (error: unknown) {
+    logger.error('caught error in register handler', {
+      error,
+      errorType: typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+    });
     return handleOAuthError(error, 'Client registration error');
   }
 }

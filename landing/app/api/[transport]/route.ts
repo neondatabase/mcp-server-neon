@@ -18,6 +18,9 @@ import type { AuthContext } from '../../../mcp-src/types/auth';
 import { logger } from '../../../mcp-src/utils/logger';
 import { waitUntil } from '@vercel/functions';
 import { track, flushAnalytics } from '../../../mcp-src/analytics/analytics';
+import { resolveAccountFromAuth } from '../../../mcp-src/server/account';
+import { model } from '../../../mcp-src/oauth/model';
+import { getApiKeys, type ApiKeyRecord } from '../../../mcp-src/oauth/kv-store';
 import { setSentryTags } from '../../../mcp-src/sentry/utils';
 import type { ServerContext, AppContext } from '../../../mcp-src/types/context';
 
@@ -401,84 +404,159 @@ const handler = createMcpHandler(
   }
 );
 
-// Token verification function for OAuth
+// Cache TTL for API key verification (5 minutes)
+// Balances security (revoked keys stop working soon) with performance (reduce API calls)
+const API_KEY_CACHE_TTL_MS = 5 * 60 * 1000;
+
+// Helper: Fetch and cache API key details
+const fetchAccountDetails = async (
+  accessToken: string
+): Promise<ApiKeyRecord | null> => {
+  // 1. Check cache first
+  try {
+    const cached = await getApiKeys().get(accessToken);
+    if (cached) {
+      logger.info('API key cache hit', { accountId: cached.account.id });
+      return cached;
+    }
+  } catch (error) {
+    logger.warn('API key cache read failed', { error });
+  }
+
+  // 2. Cache miss - verify with Neon API
+  try {
+    const neonClient = createNeonClient(accessToken);
+    const { data: auth } = await neonClient.getAuthDetails();
+
+    // Use shared account resolution with identify on cache miss
+    const account = await resolveAccountFromAuth(auth, neonClient, {
+      context: { authMethod: auth.auth_method },
+    });
+
+    const record: ApiKeyRecord = {
+      apiKey: accessToken,
+      authMethod: auth.auth_method,
+      account,
+    };
+
+    // 4. Save to cache with TTL (non-blocking)
+    waitUntil(
+      getApiKeys()
+        .set(accessToken, record, API_KEY_CACHE_TTL_MS)
+        .catch((err) => {
+          logger.warn('API key cache write failed', { err });
+        })
+    );
+
+    logger.info('API key cache miss, verified and cached', {
+      accountId: account.id,
+    });
+    return record;
+  } catch (error) {
+    const axiosError = error as {
+      response?: { status?: number; data?: unknown };
+      message?: string;
+    };
+    logger.error('API key verification failed', {
+      message: axiosError.message,
+      status: axiosError.response?.status,
+      data: axiosError.response?.data,
+    });
+    return null;
+  }
+};
+
+// Token verification function with two paths (OAuth tokens + API keys)
 const verifyToken = async (
   req: Request,
   bearerToken?: string
 ): Promise<AuthInfo | undefined> => {
-  // Debug logging for auth issues
-  const authHeader = req.headers.get('Authorization');
-  const userAgent = req.headers.get('User-Agent');
+  const userAgent = req.headers.get('user-agent') ?? 'unknown';
+
   logger.info('verifyToken called', {
     hasBearerToken: !!bearerToken,
     bearerTokenLength: bearerToken?.length ?? 0,
-    authHeader: authHeader ? `${authHeader.substring(0, 20)}...` : 'missing',
+    tokenPrefix: bearerToken?.substring(0, 10) ?? 'none',
     userAgent,
   });
 
   if (!bearerToken) {
-    logger.info('No bearer token, returning undefined');
     return undefined;
   }
 
-  // The bearer token is the Neon API key
-  // Verify it by making a test API call
+  // Detect transport from URL pathname
+  const url = new URL(req.url);
+  const transport: AppContext['transport'] = url.pathname.includes('/mcp')
+    ? 'stream'
+    : 'sse';
+
+  // ============================================
+  // PATH 1: Check OAuth tokens table FIRST
+  // (For users who authenticated via OAuth flow)
+  // ============================================
   try {
-    const neonClient = createNeonClient(bearerToken);
-    logger.info('Calling Neon API', {
-      endpoint: '/users/me',
-      tokenPrefix: bearerToken.substring(0, 10),
-    });
-    const response = await neonClient.getCurrentUserInfo();
-    logger.info('Neon API response', { status: response.status });
+    const token = await model.getAccessToken(bearerToken);
+    if (token) {
+      // Expiration is checked by withMcpAuth using expiresAt field
+      // which returns proper RFC-compliant 401 with WWW-Authenticate header
 
-    if (response.status !== 200) {
-      logger.info('Non-200 status, returning undefined', {
-        status: response.status,
-      });
-      return undefined;
-    }
+      logger.info('OAuth token found', { clientId: token.client.id });
 
-    const userInfo = response.data;
-
-    // Detect transport from URL pathname
-    const url = new URL(req.url);
-    const transport: AppContext['transport'] = url.pathname.includes('/mcp')
-      ? 'stream'
-      : 'sse';
-
-    // Note: server_init is tracked on first tool/resource/prompt call
-    // when we have proper client detection from MCP handshake
-
-    return {
-      token: bearerToken,
-      scopes: ['read', 'write'],
-      clientId: userInfo.id,
-      extra: {
-        account: {
-          id: userInfo.id,
-          name: userInfo.name ?? 'Unknown',
-          email: userInfo.email,
+      // Return auth from stored token (0 API calls!)
+      return {
+        token: token.accessToken,
+        scopes: Array.isArray(token.scope)
+          ? token.scope
+          : token.scope?.split(' ') ?? ['read', 'write'],
+        clientId: token.client.id,
+        expiresAt: token.expires_at
+          ? Math.floor(token.expires_at / 1000)
+          : undefined,
+        extra: {
+          account: {
+            id: token.user.id,
+            name: token.user.name,
+            email: token.user.email,
+            isOrg: token.user.isOrg ?? false,
+          },
+          apiKey: bearerToken,
+          readOnly: false,
+          client: {
+            id: token.client.id,
+            name: token.client.client_name,
+          },
+          transport,
         },
-        apiKey: bearerToken,
-        readOnly: false, // Could be determined from token scopes
-        transport,
-      },
-    };
-  } catch (error: unknown) {
-    // Extract detailed error info from axios errors
-    const axiosError = error as {
-      response?: { status?: number; data?: unknown; config?: { url?: string } };
-      message?: string;
-    };
-    logger.error('Exception in verifyToken', {
-      message: axiosError.message,
-      status: axiosError.response?.status,
-      data: axiosError.response?.data,
-      url: axiosError.response?.config?.url,
-    });
+      };
+    }
+  } catch (error) {
+    logger.warn('OAuth token lookup failed, trying API key path', { error });
+  }
+
+  // ============================================
+  // PATH 2: Not an OAuth token - try API key
+  // (For direct API key usage)
+  // ============================================
+  logger.info('Trying API key verification path', {
+    tokenPrefix: bearerToken.substring(0, 10),
+  });
+
+  const apiKeyRecord = await fetchAccountDetails(bearerToken);
+  if (!apiKeyRecord) {
     return undefined;
   }
+
+  return {
+    token: bearerToken,
+    scopes: ['*'], // API keys get all scopes (like old code)
+    clientId: 'api-key', // Literal string (like old code)
+    extra: {
+      account: apiKeyRecord.account,
+      apiKey: bearerToken,
+      readOnly: false,
+      transport,
+    },
+  };
 };
 
 // Wrap with authentication
