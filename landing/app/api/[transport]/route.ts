@@ -406,26 +406,31 @@ const verifyToken = async (
   req: Request,
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> => {
-  // Debug logging for auth issues (using console.log for Vercel visibility)
+  // Debug logging for auth issues
   const authHeader = req.headers.get('Authorization');
   const userAgent = req.headers.get('User-Agent');
-  const debugInfo = {
+  logger.info('verifyToken called', {
     hasBearerToken: !!bearerToken,
     bearerTokenLength: bearerToken?.length ?? 0,
     authHeader: authHeader ? `${authHeader.substring(0, 20)}...` : 'missing',
     userAgent,
-  };
-  console.log('[AUTH DEBUG] verifyToken called:', JSON.stringify(debugInfo));
+  });
 
-  if (!bearerToken) return undefined;
+  if (!bearerToken) {
+    logger.info('No bearer token, returning undefined');
+    return undefined;
+  }
 
   // The bearer token is the Neon API key
   // Verify it by making a test API call
   try {
     const neonClient = createNeonClient(bearerToken);
+    logger.info('Calling getCurrentUserInfo...');
     const response = await neonClient.getCurrentUserInfo();
+    logger.info('Neon API response', { status: response.status });
 
     if (response.status !== 200) {
+      logger.info('Non-200 status, returning undefined', { status: response.status });
       return undefined;
     }
 
@@ -455,7 +460,8 @@ const verifyToken = async (
         transport,
       },
     };
-  } catch {
+  } catch (error) {
+    logger.error('Exception in verifyToken', { error: error instanceof Error ? error.message : error });
     return undefined;
   }
 };
