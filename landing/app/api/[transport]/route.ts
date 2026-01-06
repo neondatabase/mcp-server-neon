@@ -425,7 +425,11 @@ const verifyToken = async (
   // Verify it by making a test API call
   try {
     const neonClient = createNeonClient(bearerToken);
-    logger.info('Calling getCurrentUserInfo...');
+    logger.info('Calling Neon API', {
+      baseURL: neonClient.baseUrl,
+      endpoint: '/users/me',
+      tokenPrefix: bearerToken.substring(0, 10),
+    });
     const response = await neonClient.getCurrentUserInfo();
     logger.info('Neon API response', { status: response.status });
 
@@ -460,8 +464,15 @@ const verifyToken = async (
         transport,
       },
     };
-  } catch (error) {
-    logger.error('Exception in verifyToken', { error: error instanceof Error ? error.message : error });
+  } catch (error: unknown) {
+    // Extract detailed error info from axios errors
+    const axiosError = error as { response?: { status?: number; data?: unknown; config?: { url?: string } }; message?: string };
+    logger.error('Exception in verifyToken', {
+      message: axiosError.message,
+      status: axiosError.response?.status,
+      data: axiosError.response?.data,
+      url: axiosError.response?.config?.url,
+    });
     return undefined;
   }
 };
