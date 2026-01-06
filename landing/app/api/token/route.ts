@@ -334,6 +334,21 @@ export async function POST(request: NextRequest) {
       const newRefreshToken =
         upstreamToken.refresh_token ?? providedRefreshToken.refreshToken;
 
+      // Validate upstream token has required fields
+      if (!upstreamToken.access_token) {
+        logger.error('Upstream token missing access_token', {
+          hasAccessToken: !!upstreamToken.access_token,
+          hasRefreshToken: !!upstreamToken.refresh_token,
+        });
+        return NextResponse.json(
+          {
+            error: 'server_error',
+            error_description: 'Invalid token response from upstream',
+          },
+          { status: 502 },
+        );
+      }
+
       logger.info('Saving new tokens from refresh');
       const token = await model.saveToken({
         accessToken: upstreamToken.access_token,
@@ -354,13 +369,63 @@ export async function POST(request: NextRequest) {
       await model.deleteRefreshToken(providedRefreshToken);
       logger.info('Refresh token exchanged successfully');
 
-      return NextResponse.json({
+      // Validate saved token has required fields
+      if (!token.accessToken) {
+        logger.error('Saved token missing accessToken after saveToken', {
+          hasAccessToken: !!token.accessToken,
+          hasRefreshToken: !!token.refreshToken,
+        });
+        return NextResponse.json(
+          {
+            error: 'server_error',
+            error_description: 'Failed to save token',
+          },
+          { status: 500 },
+        );
+      }
+
+      // Calculate expires_in and validate it's a valid number
+      const expiresIn = toSeconds(expiresAt - now);
+      if (!Number.isFinite(expiresIn)) {
+        logger.error('Invalid expiresIn calculated', {
+          expiresAt,
+          now,
+          expiresIn,
+        });
+        return NextResponse.json(
+          {
+            error: 'server_error',
+            error_description: 'Invalid token expiration',
+          },
+          { status: 500 },
+        );
+      }
+
+      // Ensure scope is serializable (string, array of strings, or undefined)
+      const scope = oldToken.scope;
+      const scopeValue =
+        typeof scope === 'string' || Array.isArray(scope) ? scope : undefined;
+
+      // Build response object explicitly to ensure serializable values
+      const responseBody = {
         access_token: token.accessToken,
-        expires_in: toSeconds(expiresAt - now),
-        token_type: 'bearer',
-        refresh_token: token.refreshToken,
-        scope: oldToken.scope,
+        expires_in: expiresIn,
+        token_type: 'bearer' as const,
+        refresh_token: token.refreshToken ?? newRefreshToken,
+        scope: scopeValue,
+      };
+
+      logger.info('Building refresh token response', {
+        hasAccessToken: !!responseBody.access_token,
+        hasRefreshToken: !!responseBody.refresh_token,
+        expiresIn: responseBody.expires_in,
+        scopeType: typeof responseBody.scope,
+        scopeIsArray: Array.isArray(responseBody.scope),
       });
+
+      const response = NextResponse.json(responseBody);
+      logger.info('Returning refresh token response');
+      return response;
     }
 
     logger.warn('Invalid grant type', { grantType });
