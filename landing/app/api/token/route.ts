@@ -28,9 +28,13 @@ const extractClientCredentials = (
 };
 
 export async function POST(request: NextRequest) {
+  logger.info('Token endpoint called');
+
   try {
     const contentType = request.headers.get('content-type');
+
     if (!contentType?.includes('application/x-www-form-urlencoded')) {
+      logger.warn('Invalid content type for token request', { contentType });
       return NextResponse.json(
         { code: 'invalid_request', error: 'invalid content type' },
         { status: 415 },
@@ -39,12 +43,17 @@ export async function POST(request: NextRequest) {
 
     const body = await request.text();
     const formData = new URLSearchParams(body);
+    const grantType = formData.get('grant_type');
+
+    logger.info('Token request parsed', { grantType });
 
     const { clientId, clientSecret } = extractClientCredentials(
       request,
       formData,
     );
+
     if (!clientId) {
+      logger.warn('Token request missing client_id');
       return NextResponse.json(
         { code: 'invalid_request', error: 'client_id is required' },
         { status: 400 },
@@ -55,8 +64,10 @@ export async function POST(request: NextRequest) {
       error: 'invalid_client',
       error_description: 'client not found or invalid client credentials',
     };
+
     const client = await model.getClient(clientId, '');
     if (!client) {
+      logger.warn('Client not found', { clientId });
       return NextResponse.json(
         { code: 'invalid_request', ...error },
         { status: 400 },
@@ -66,6 +77,7 @@ export async function POST(request: NextRequest) {
     const isPublicClient = client.tokenEndpointAuthMethod === 'none';
     if (!isPublicClient) {
       if (clientSecret !== client.secret) {
+        logger.warn('Client secret mismatch', { clientId });
         return NextResponse.json(
           { code: 'invalid_request', ...error },
           { status: 400 },
@@ -73,11 +85,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const grantType = formData.get('grant_type');
-
     if (grantType === 'authorization_code') {
+      logger.info('Processing authorization_code grant');
       const code = formData.get('code');
       if (!code) {
+        logger.warn('Authorization code missing');
         return NextResponse.json(
           { code: 'invalid_request', error: 'code is required' },
           { status: 400 },
@@ -86,13 +98,19 @@ export async function POST(request: NextRequest) {
 
       const authorizationCode = await model.getAuthorizationCode(code);
       if (!authorizationCode) {
+        logger.warn('Invalid authorization code');
         return NextResponse.json(
           { code: 'invalid_request', error: 'invalid authorization code' },
           { status: 400 },
         );
       }
+      logger.info('Authorization code found', { userId: authorizationCode.user?.id });
 
       if (authorizationCode.client.id !== client.id) {
+        logger.warn('Authorization code client mismatch', {
+          codeClientId: authorizationCode.client.id,
+          requestClientId: client.id,
+        });
         return NextResponse.json(
           { code: 'invalid_request', error: 'invalid authorization code' },
           { status: 400 },
@@ -100,6 +118,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (authorizationCode.expiresAt < new Date()) {
+        logger.warn('Authorization code expired');
         return NextResponse.json(
           { code: 'invalid_request', error: 'authorization code expired' },
           { status: 400 },
@@ -108,6 +127,7 @@ export async function POST(request: NextRequest) {
 
       const isPkceEnabled = authorizationCode.code_challenge !== undefined;
       const codeVerifier = formData.get('code_verifier');
+
       if (
         isPkceEnabled &&
         !verifyPKCE(
@@ -116,6 +136,7 @@ export async function POST(request: NextRequest) {
           codeVerifier ?? '',
         )
       ) {
+        logger.warn('Invalid PKCE code verifier');
         return NextResponse.json(
           { code: 'invalid_grant', error: 'invalid PKCE code verifier' },
           { status: 400 },
@@ -124,6 +145,7 @@ export async function POST(request: NextRequest) {
 
       const redirectUri = formData.get('redirect_uri');
       if (!isPkceEnabled && !redirectUri) {
+        logger.warn('Missing redirect_uri for non-PKCE flow');
         return NextResponse.json(
           {
             code: 'invalid_request',
@@ -133,6 +155,7 @@ export async function POST(request: NextRequest) {
         );
       }
       if (redirectUri && !client.redirect_uris.includes(redirectUri)) {
+        logger.warn('Invalid redirect_uri', { provided: redirectUri });
         return NextResponse.json(
           { code: 'invalid_request', error: 'invalid redirect uri' },
           { status: 400 },
@@ -140,6 +163,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Save the token
+      logger.info('Saving token for authorization_code grant');
       const token = await model.saveToken({
         accessToken: authorizationCode.token.access_token,
         refreshToken: authorizationCode.token.refresh_token,
@@ -175,6 +199,7 @@ export async function POST(request: NextRequest) {
 
       // Revoke the authorization code, it can only be used once
       await model.revokeAuthorizationCode(authorizationCode);
+      logger.info('Authorization code exchanged successfully');
 
       return NextResponse.json({
         access_token: token.accessToken,
@@ -184,8 +209,10 @@ export async function POST(request: NextRequest) {
         scope: authorizationCode.scope,
       });
     } else if (grantType === 'refresh_token') {
+      logger.info('Processing refresh_token grant');
       const refreshToken = formData.get('refresh_token');
       if (!refreshToken) {
+        logger.warn('Refresh token missing from request');
         return NextResponse.json(
           { code: 'invalid_request', error: 'refresh_token is required' },
           { status: 400 },
@@ -194,6 +221,7 @@ export async function POST(request: NextRequest) {
 
       const providedRefreshToken = await model.getRefreshToken(refreshToken);
       if (!providedRefreshToken) {
+        logger.warn('Refresh token not found in storage');
         return NextResponse.json(
           { code: 'invalid_request', error: 'invalid refresh token' },
           { status: 400 },
@@ -204,6 +232,7 @@ export async function POST(request: NextRequest) {
         providedRefreshToken.accessToken,
       );
       if (!oldToken) {
+        logger.warn('Access token for refresh token not found, cleaning up');
         // Refresh token is missing its counter access token, delete it
         await model.deleteRefreshToken(providedRefreshToken);
         return NextResponse.json(
@@ -213,6 +242,10 @@ export async function POST(request: NextRequest) {
       }
 
       if (oldToken.client.id !== client.id) {
+        logger.warn('Client mismatch for refresh token', {
+          tokenClientId: oldToken.client.id,
+          requestClientId: client.id,
+        });
         return NextResponse.json(
           { code: 'invalid_request', error: 'invalid refresh token' },
           { status: 400 },
@@ -221,9 +254,11 @@ export async function POST(request: NextRequest) {
 
       let upstreamToken;
       try {
+        logger.info('Exchanging refresh token with upstream');
         upstreamToken = await exchangeRefreshToken(
           providedRefreshToken.refreshToken,
         );
+        logger.info('Upstream token exchange successful');
       } catch (error) {
         const isClientError =
           error instanceof Error &&
@@ -269,6 +304,7 @@ export async function POST(request: NextRequest) {
       const newRefreshToken =
         upstreamToken.refresh_token ?? providedRefreshToken.refreshToken;
 
+      logger.info('Saving new tokens from refresh');
       const token = await model.saveToken({
         accessToken: upstreamToken.access_token,
         refreshToken: newRefreshToken,
@@ -277,6 +313,7 @@ export async function POST(request: NextRequest) {
         user: oldToken.user,
         scope: oldToken.scope,
       });
+
       await model.saveRefreshToken({
         refreshToken: newRefreshToken,
         accessToken: token.accessToken,
@@ -285,6 +322,7 @@ export async function POST(request: NextRequest) {
       // Delete the old tokens
       await model.deleteToken(oldToken);
       await model.deleteRefreshToken(providedRefreshToken);
+      logger.info('Refresh token exchanged successfully');
 
       return NextResponse.json({
         access_token: token.accessToken,
@@ -295,11 +333,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    logger.warn('Invalid grant type', { grantType });
     return NextResponse.json(
       { code: 'invalid_request', error: 'invalid grant type' },
       { status: 400 },
     );
   } catch (error: unknown) {
+    logger.error('Token endpoint error', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return handleOAuthError(error, 'Token exchange error');
   }
 }

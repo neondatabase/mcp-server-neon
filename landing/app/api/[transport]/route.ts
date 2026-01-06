@@ -548,8 +548,8 @@ const verifyToken = async (
 
   return {
     token: bearerToken,
-    scopes: ['*'], // API keys get all scopes (like old code)
-    clientId: 'api-key', // Literal string (like old code)
+    scopes: ['*'], // API keys get all scopes
+    clientId: 'api-key', // Literal string
     extra: {
       account: apiKeyRecord.account,
       apiKey: bearerToken,
