@@ -22,8 +22,13 @@ concurrency:
 
 jobs:
   claude-review:
-    # Disabled: set to false to prevent workflow execution
-    if: ${{ false }}
+    # For automatic runs: only allow members/collaborators/owners
+    # For manual runs: always allow (since only repo members can trigger workflows)
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.author_association == 'OWNER' ||
+      github.event.pull_request.author_association == 'MEMBER' ||
+      github.event.pull_request.author_association == 'COLLABORATOR'
 
     runs-on:
       group: neondatabase-protected-runner-group
