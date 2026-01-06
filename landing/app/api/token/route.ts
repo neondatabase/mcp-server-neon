@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import { model } from '../../../mcp-src/oauth/model';
 import { exchangeRefreshToken } from '../../../lib/oauth/client';
 import { verifyPKCE } from '../../../mcp-src/oauth/utils';
 import { identify, flushAnalytics } from '../../../mcp-src/analytics/analytics';
 import { handleOAuthError } from '../../../lib/errors';
+import { logger } from '../../../mcp-src/utils/logger';
 
 const toSeconds = (ms: number): number => Math.floor(ms / 1000);
 const toMilliseconds = (seconds: number): number => seconds * 1000;
@@ -144,6 +146,7 @@ export async function POST(request: NextRequest) {
         expires_at: authorizationCode.token.access_token_expires_at,
         client: client,
         user: authorizationCode.user,
+        scope: authorizationCode.scope,
       });
 
       await model.saveRefreshToken({
@@ -156,6 +159,7 @@ export async function POST(request: NextRequest) {
           id: authorizationCode.user.id,
           name: authorizationCode.user.name,
           email: authorizationCode.user.email,
+          isOrg: authorizationCode.user.isOrg ?? false,
         },
         {
           context: {
@@ -167,7 +171,7 @@ export async function POST(request: NextRequest) {
         },
       );
 
-      await flushAnalytics();
+      waitUntil(flushAnalytics());
 
       // Revoke the authorization code, it can only be used once
       await model.revokeAuthorizationCode(authorizationCode);
@@ -215,20 +219,47 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const upstreamToken = await exchangeRefreshToken(
-        providedRefreshToken.refreshToken,
-      );
+      let upstreamToken;
+      try {
+        upstreamToken = await exchangeRefreshToken(
+          providedRefreshToken.refreshToken,
+        );
+      } catch (error) {
+        logger.error('Upstream refresh token exchange failed', {
+          error: error instanceof Error ? error.message : error,
+          clientId: client.id,
+        });
+
+        // If upstream says token is invalid/revoked, clean up our records
+        await model.deleteToken(oldToken);
+        await model.deleteRefreshToken(providedRefreshToken);
+
+        return NextResponse.json(
+          {
+            error: 'invalid_grant',
+            error_description: 'Refresh token is expired or revoked',
+          },
+          { status: 400 },
+        );
+      }
+
       const now = Date.now();
       const expiresAt = now + toMilliseconds(upstreamToken.expiresIn() ?? 0);
+
+      // Use new refresh token if provided, otherwise keep the old one
+      const newRefreshToken =
+        upstreamToken.refresh_token || providedRefreshToken.refreshToken;
+
       const token = await model.saveToken({
         accessToken: upstreamToken.access_token,
-        refreshToken: upstreamToken.refresh_token ?? '',
+        refreshToken: newRefreshToken,
         expires_at: expiresAt,
         client: client,
         user: oldToken.user,
+        scope: oldToken.scope,
       });
       await model.saveRefreshToken({
-        refreshToken: token.refreshToken ?? '',
+        refreshToken: newRefreshToken,
         accessToken: token.accessToken,
       });
 

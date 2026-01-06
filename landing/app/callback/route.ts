@@ -59,10 +59,29 @@ export async function GET(request: NextRequest) {
     const nonce = generateRandomString(32);
     const authCode = `${grantId}:${nonce}`;
 
-    // Get the user's info from Neon
+    // Get auth details to determine account type (org vs personal)
     const neonClient = createNeonClient(tokens.access_token);
-    const { data: user } = await neonClient.getCurrentUserInfo();
+    const { data: auth } = await neonClient.getAuthDetails();
     const expiresAt = Date.now() + toMilliseconds(tokens.expiresIn() ?? 0);
+
+    // Fetch account info based on auth method
+    let userInfo: { id: string; name: string; email?: string; isOrg: boolean };
+    if (auth.auth_method === 'api_key_org') {
+      const { data: org } = await neonClient.getOrganization(auth.account_id);
+      userInfo = {
+        id: auth.account_id,
+        name: org.name,
+        isOrg: true,
+      };
+    } else {
+      const { data: user } = await neonClient.getCurrentUserInfo();
+      userInfo = {
+        id: user.id,
+        email: user.email,
+        name: `${user.name} ${user.last_name}`.trim(),
+        isOrg: false,
+      };
+    }
 
     // Save the authorization code with associated data
     const authCodeData: AuthorizationCode = {
@@ -72,11 +91,7 @@ export async function GET(request: NextRequest) {
       redirectUri: requestParams.redirectUri,
       scope: requestParams.scope.join(' '),
       client: client,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: `${user.name} ${user.last_name}`.trim(),
-      },
+      user: userInfo,
       token: {
         access_token: tokens.access_token,
         access_token_expires_at: expiresAt,
