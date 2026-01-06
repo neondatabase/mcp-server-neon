@@ -24,11 +24,11 @@ jobs:
   claude-review:
     # For automatic runs: only allow members/collaborators/owners
     # For manual runs: always allow (since only repo members can trigger workflows)
-    if: |
+    if: >-
       github.event_name == 'workflow_dispatch' ||
-      github.event.pull_request.author_association == 'OWNER' ||
-      github.event.pull_request.author_association == 'MEMBER' ||
-      github.event.pull_request.author_association == 'COLLABORATOR'
+      (github.event_name == 'pull_request' &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+                github.event.pull_request.author_association))
 
     runs-on:
       group: neondatabase-protected-runner-group
@@ -125,7 +125,7 @@ jobs:
             For each significant issue (max 5 per file), post an inline comment using:
 
             ```bash
-            gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number || github.event.inputs.pr_number }}/comments -f body="COMMENT_BODY" -f path="relative/path/to/file.ts" -F line=42 -f side="RIGHT" -f commit_id="${{ github.event.pull_request.head.sha || github.sha }}"
+            gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number || github.event.inputs.pr_number }}/comments -f body=$'COMMENT_BODY' -f path="relative/path/to/file.ts" -F line=42 -f side="RIGHT" -f commit_id="${{ github.event.pull_request.head.sha || github.sha }}"
             ```
 
             **IMPORTANT:**
@@ -133,7 +133,7 @@ jobs:
             - For this PR, use: `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number || github.event.inputs.pr_number }}/comments`
             - Commit SHA: `${{ github.event.pull_request.head.sha || github.sha }}`
             - Post comments for EVERY significant issue you find (not just a summary)
-            - Keep the body text concise and use \n for line breaks within the body parameter
+            - Use $'...' (ANSI-C quoting) for body parameter so \n becomes actual newlines
 
             **Inline Comment Format:**
             - Use emoji severity: 🔴 Critical | 🟡 Important | 🔵 Consider
@@ -143,11 +143,11 @@ jobs:
             - Reference CLAUDE.md patterns when applicable
 
             **Example:**
-            ```
-            🔴 **[Security]**: Potential SQL injection vulnerability. User input is concatenated directly into SQL query.\n\n**Fix:** Use parameterized queries:\n\`\`\`typescript\nconst result = await query('SELECT * FROM users WHERE name = $1', [userName]);\n\`\`\`
+            ```bash
+            gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number || github.event.inputs.pr_number }}/comments -f body=$'🔴 **[Security]**: Potential SQL injection vulnerability.\n\n**Fix:** Use parameterized queries:\n```typescript\nconst result = await query(\'SELECT * FROM users WHERE name = $1\', [userName]);\n```' -f path="landing/mcp-src/tools/handlers/run-sql.ts" -F line=42 -f side="RIGHT" -f commit_id="${{ github.event.pull_request.head.sha || github.sha }}"
             ```
 
-            Note: In the actual gh command, newlines are represented as \n within the body parameter.
+            Note: The $'...' syntax is bash ANSI-C quoting which interprets \n as actual newlines. Use \' to escape single quotes within the body.
 
             ### Step 4: Post Summary Comment
             After posting inline comments, create a summary with:

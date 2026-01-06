@@ -287,7 +287,10 @@ export async function GET(request: NextRequest) {
     const client = await model.getClient(clientId, '');
     if (!client) {
       return NextResponse.json(
-        { code: 'invalid_request', error: 'invalid client id' },
+        {
+          error: 'invalid_client',
+          error_description: 'Invalid client ID',
+        },
         { status: 400 },
       );
     }
@@ -297,7 +300,10 @@ export async function GET(request: NextRequest) {
       !client.response_types.includes(requestParams.responseType)
     ) {
       return NextResponse.json(
-        { code: 'invalid_request', error: 'invalid response type' },
+        {
+          error: 'unsupported_response_type',
+          error_description: 'Invalid response type',
+        },
         { status: 400 },
       );
     }
@@ -307,7 +313,10 @@ export async function GET(request: NextRequest) {
       !client.redirect_uris.includes(requestParams.redirectUri)
     ) {
       return NextResponse.json(
-        { code: 'invalid_request', error: 'invalid redirect uri' },
+        {
+          error: 'invalid_request',
+          error_description: 'Invalid redirect URI',
+        },
         { status: 400 },
       );
     }
@@ -330,7 +339,10 @@ export async function POST(request: NextRequest) {
 
     if (!state) {
       return NextResponse.json(
-        { code: 'invalid_request', error: 'invalid state' },
+        {
+          error: 'invalid_request',
+          error_description: 'Invalid state',
+        },
         { status: 400 },
       );
     }

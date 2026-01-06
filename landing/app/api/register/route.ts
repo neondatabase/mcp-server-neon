@@ -19,14 +19,20 @@ export async function POST(request: NextRequest) {
 
     if (payload.client_name === undefined) {
       return NextResponse.json(
-        { code: 'invalid_request', error: 'client_name is required' },
+        {
+          error: 'invalid_request',
+          error_description: 'client_name is required',
+        },
         { status: 400 },
       );
     }
 
     if (payload.redirect_uris === undefined) {
       return NextResponse.json(
-        { code: 'invalid_request', error: 'redirect_uris is required' },
+        {
+          error: 'invalid_request',
+          error_description: 'redirect_uris is required',
+        },
         { status: 400 },
       );
     }
@@ -39,8 +45,8 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json(
         {
-          code: 'invalid_request',
-          error:
+          error: 'invalid_request',
+          error_description:
             'grant_types is required and must only include supported grant types',
         },
         { status: 400 },
@@ -55,8 +61,8 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json(
         {
-          code: 'invalid_request',
-          error:
+          error: 'invalid_request',
+          error_description:
             'response_types is required and must only include supported response types',
         },
         { status: 400 },
