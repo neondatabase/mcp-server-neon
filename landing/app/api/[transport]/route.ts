@@ -406,6 +406,17 @@ const verifyToken = async (
   req: Request,
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> => {
+  // Debug logging for auth issues (using console.log for Vercel visibility)
+  const authHeader = req.headers.get('Authorization');
+  const userAgent = req.headers.get('User-Agent');
+  const debugInfo = {
+    hasBearerToken: !!bearerToken,
+    bearerTokenLength: bearerToken?.length ?? 0,
+    authHeader: authHeader ? `${authHeader.substring(0, 20)}...` : 'missing',
+    userAgent,
+  };
+  console.log('[AUTH DEBUG] verifyToken called:', JSON.stringify(debugInfo));
+
   if (!bearerToken) return undefined;
 
   // The bearer token is the Neon API key
