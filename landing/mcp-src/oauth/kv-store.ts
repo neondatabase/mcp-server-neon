@@ -11,6 +11,7 @@ const createLazyKeyv = <T>(table: string, errorLabel: string) => {
   let instance: Keyv<T> | null = null;
   return () => {
     if (!instance) {
+      logger.info(`initializing keyv for ${table}`);
       instance = new Keyv<T>({
         store: new KeyvPostgres({
           connectionString: process.env.OAUTH_DATABASE_URL,
@@ -21,6 +22,7 @@ const createLazyKeyv = <T>(table: string, errorLabel: string) => {
       instance.on('error', (err) => {
         logger.error(`${errorLabel} keyv error:`, { err });
       });
+      logger.info(`keyv initialized for ${table}`);
     }
     return instance;
   };
