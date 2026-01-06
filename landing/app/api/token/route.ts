@@ -36,7 +36,10 @@ export async function POST(request: NextRequest) {
     if (!contentType?.includes('application/x-www-form-urlencoded')) {
       logger.warn('Invalid content type for token request', { contentType });
       return NextResponse.json(
-        { code: 'invalid_request', error: 'invalid content type' },
+        {
+          error: 'invalid_request',
+          error_description: 'Invalid content type',
+        },
         { status: 415 },
       );
     }
@@ -55,7 +58,10 @@ export async function POST(request: NextRequest) {
     if (!clientId) {
       logger.warn('Token request missing client_id');
       return NextResponse.json(
-        { code: 'invalid_request', error: 'client_id is required' },
+        {
+          error: 'invalid_request',
+          error_description: 'client_id is required',
+        },
         { status: 400 },
       );
     }
@@ -68,20 +74,14 @@ export async function POST(request: NextRequest) {
     const client = await model.getClient(clientId, '');
     if (!client) {
       logger.warn('Client not found', { clientId });
-      return NextResponse.json(
-        { code: 'invalid_request', ...error },
-        { status: 400 },
-      );
+      return NextResponse.json(error, { status: 400 });
     }
 
     const isPublicClient = client.tokenEndpointAuthMethod === 'none';
     if (!isPublicClient) {
       if (clientSecret !== client.secret) {
         logger.warn('Client secret mismatch', { clientId });
-        return NextResponse.json(
-          { code: 'invalid_request', ...error },
-          { status: 400 },
-        );
+        return NextResponse.json(error, { status: 400 });
       }
     }
 
@@ -91,7 +91,10 @@ export async function POST(request: NextRequest) {
       if (!code) {
         logger.warn('Authorization code missing');
         return NextResponse.json(
-          { code: 'invalid_request', error: 'code is required' },
+          {
+            error: 'invalid_request',
+            error_description: 'code is required',
+          },
           { status: 400 },
         );
       }
@@ -100,7 +103,10 @@ export async function POST(request: NextRequest) {
       if (!authorizationCode) {
         logger.warn('Invalid authorization code');
         return NextResponse.json(
-          { code: 'invalid_request', error: 'invalid authorization code' },
+          {
+            error: 'invalid_grant',
+            error_description: 'Invalid authorization code',
+          },
           { status: 400 },
         );
       }
@@ -112,7 +118,10 @@ export async function POST(request: NextRequest) {
           requestClientId: client.id,
         });
         return NextResponse.json(
-          { code: 'invalid_request', error: 'invalid authorization code' },
+          {
+            error: 'invalid_grant',
+            error_description: 'Invalid authorization code',
+          },
           { status: 400 },
         );
       }
@@ -120,7 +129,10 @@ export async function POST(request: NextRequest) {
       if (authorizationCode.expiresAt < new Date()) {
         logger.warn('Authorization code expired');
         return NextResponse.json(
-          { code: 'invalid_request', error: 'authorization code expired' },
+          {
+            error: 'invalid_grant',
+            error_description: 'Authorization code expired',
+          },
           { status: 400 },
         );
       }
@@ -138,7 +150,10 @@ export async function POST(request: NextRequest) {
       ) {
         logger.warn('Invalid PKCE code verifier');
         return NextResponse.json(
-          { code: 'invalid_grant', error: 'invalid PKCE code verifier' },
+          {
+            error: 'invalid_grant',
+            error_description: 'Invalid PKCE code verifier',
+          },
           { status: 400 },
         );
       }
@@ -148,8 +163,8 @@ export async function POST(request: NextRequest) {
         logger.warn('Missing redirect_uri for non-PKCE flow');
         return NextResponse.json(
           {
-            code: 'invalid_request',
-            error: 'redirect_uri is required when not using PKCE',
+            error: 'invalid_request',
+            error_description: 'redirect_uri is required when not using PKCE',
           },
           { status: 400 },
         );
@@ -157,7 +172,10 @@ export async function POST(request: NextRequest) {
       if (redirectUri && !client.redirect_uris.includes(redirectUri)) {
         logger.warn('Invalid redirect_uri', { provided: redirectUri });
         return NextResponse.json(
-          { code: 'invalid_request', error: 'invalid redirect uri' },
+          {
+            error: 'invalid_request',
+            error_description: 'Invalid redirect URI',
+          },
           { status: 400 },
         );
       }
@@ -214,7 +232,10 @@ export async function POST(request: NextRequest) {
       if (!refreshToken) {
         logger.warn('Refresh token missing from request');
         return NextResponse.json(
-          { code: 'invalid_request', error: 'refresh_token is required' },
+          {
+            error: 'invalid_request',
+            error_description: 'refresh_token is required',
+          },
           { status: 400 },
         );
       }
@@ -223,7 +244,10 @@ export async function POST(request: NextRequest) {
       if (!providedRefreshToken) {
         logger.warn('Refresh token not found in storage');
         return NextResponse.json(
-          { code: 'invalid_request', error: 'invalid refresh token' },
+          {
+            error: 'invalid_grant',
+            error_description: 'Invalid refresh token',
+          },
           { status: 400 },
         );
       }
@@ -236,7 +260,10 @@ export async function POST(request: NextRequest) {
         // Refresh token is missing its counter access token, delete it
         await model.deleteRefreshToken(providedRefreshToken);
         return NextResponse.json(
-          { code: 'invalid_request', error: 'invalid refresh token' },
+          {
+            error: 'invalid_grant',
+            error_description: 'Invalid refresh token',
+          },
           { status: 400 },
         );
       }
@@ -247,7 +274,10 @@ export async function POST(request: NextRequest) {
           requestClientId: client.id,
         });
         return NextResponse.json(
-          { code: 'invalid_request', error: 'invalid refresh token' },
+          {
+            error: 'invalid_grant',
+            error_description: 'Invalid refresh token',
+          },
           { status: 400 },
         );
       }
@@ -335,7 +365,10 @@ export async function POST(request: NextRequest) {
 
     logger.warn('Invalid grant type', { grantType });
     return NextResponse.json(
-      { code: 'invalid_request', error: 'invalid grant type' },
+      {
+        error: 'unsupported_grant_type',
+        error_description: 'Unsupported grant type',
+      },
       { status: 400 },
     );
   } catch (error: unknown) {

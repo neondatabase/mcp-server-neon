@@ -32,7 +32,10 @@ export async function GET(request: NextRequest) {
 
     if (!code || !state) {
       return NextResponse.json(
-        { code: 'invalid_request', error: 'missing code or state' },
+        {
+          error: 'invalid_request',
+          error_description: 'Missing code or state',
+        },
         { status: 400 }
       );
     }
@@ -50,7 +53,10 @@ export async function GET(request: NextRequest) {
     const client = await model.getClient(clientId, '');
     if (!client) {
       return NextResponse.json(
-        { code: 'invalid_request', error: 'invalid client id' },
+        {
+          error: 'invalid_client',
+          error_description: 'Invalid client ID',
+        },
         { status: 400 }
       );
     }
