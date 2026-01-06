@@ -225,21 +225,40 @@ export async function POST(request: NextRequest) {
           providedRefreshToken.refreshToken,
         );
       } catch (error) {
+        const isClientError =
+          error instanceof Error &&
+          'status' in error &&
+          typeof (error as { status: unknown }).status === 'number' &&
+          (error as { status: number }).status >= 400 &&
+          (error as { status: number }).status < 500;
+
         logger.error('Upstream refresh token exchange failed', {
           error: error instanceof Error ? error.message : error,
           clientId: client.id,
+          isClientError,
         });
 
-        // If upstream says token is invalid/revoked, clean up our records
-        await model.deleteToken(oldToken);
-        await model.deleteRefreshToken(providedRefreshToken);
+        if (isClientError) {
+          // Only delete tokens on explicit 4xx rejection (invalid/revoked)
+          await model.deleteToken(oldToken);
+          await model.deleteRefreshToken(providedRefreshToken);
 
+          return NextResponse.json(
+            {
+              error: 'invalid_grant',
+              error_description: 'Refresh token is expired or revoked',
+            },
+            { status: 400 },
+          );
+        }
+
+        // Transient error (5xx, network) - don't delete tokens, return server error
         return NextResponse.json(
           {
-            error: 'invalid_grant',
-            error_description: 'Refresh token is expired or revoked',
+            error: 'server_error',
+            error_description: 'Temporary error refreshing token, please retry',
           },
-          { status: 400 },
+          { status: 503 },
         );
       }
 
@@ -248,7 +267,7 @@ export async function POST(request: NextRequest) {
 
       // Use new refresh token if provided, otherwise keep the old one
       const newRefreshToken =
-        upstreamToken.refresh_token || providedRefreshToken.refreshToken;
+        upstreamToken.refresh_token ?? providedRefreshToken.refreshToken;
 
       const token = await model.saveToken({
         accessToken: upstreamToken.access_token,

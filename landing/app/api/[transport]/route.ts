@@ -17,11 +17,8 @@ import { detectClientApplication } from '../../../mcp-src/utils/client-applicati
 import type { AuthContext } from '../../../mcp-src/types/auth';
 import { logger } from '../../../mcp-src/utils/logger';
 import { waitUntil } from '@vercel/functions';
-import {
-  track,
-  flushAnalytics,
-  identify,
-} from '../../../mcp-src/analytics/analytics';
+import { track, flushAnalytics } from '../../../mcp-src/analytics/analytics';
+import { resolveAccountFromAuth } from '../../../mcp-src/server/account';
 import { model } from '../../../mcp-src/oauth/model';
 import { getApiKeys, type ApiKeyRecord } from '../../../mcp-src/oauth/kv-store';
 import { setSentryTags } from '../../../mcp-src/sentry/utils';
@@ -431,28 +428,16 @@ const fetchAccountDetails = async (
     const neonClient = createNeonClient(accessToken);
     const { data: auth } = await neonClient.getAuthDetails();
 
-    let account: ApiKeyRecord['account'];
-    if (auth.auth_method === 'api_key_org') {
-      const { data: org } = await neonClient.getOrganization(auth.account_id);
-      account = { id: auth.account_id, name: org.name, isOrg: true };
-    } else {
-      const { data: user } = await neonClient.getCurrentUserInfo();
-      account = {
-        id: user.id,
-        name: `${user.name} ${user.last_name}`.trim(),
-        email: user.email,
-        isOrg: false,
-      };
-    }
+    // Use shared account resolution with identify on cache miss
+    const account = await resolveAccountFromAuth(auth, neonClient, {
+      context: { authMethod: auth.auth_method },
+    });
 
     const record: ApiKeyRecord = {
       apiKey: accessToken,
       authMethod: auth.auth_method,
       account,
     };
-
-    // 3. Call identify() ONLY on cache miss
-    identify(record.account, { context: { authMethod: record.authMethod } });
 
     // 4. Save to cache with TTL (non-blocking)
     waitUntil(

@@ -3,6 +3,7 @@ import { model } from '../../mcp-src/oauth/model';
 import { exchangeCode } from '../../lib/oauth/client';
 import { generateRandomString } from '../../mcp-src/oauth/utils';
 import { createNeonClient } from '../../mcp-src/server/api';
+import { resolveAccountFromAuth } from '../../mcp-src/server/account';
 import { handleOAuthError } from '../../lib/errors';
 import type { AuthorizationCode } from 'oauth2-server';
 
@@ -64,24 +65,8 @@ export async function GET(request: NextRequest) {
     const { data: auth } = await neonClient.getAuthDetails();
     const expiresAt = Date.now() + toMilliseconds(tokens.expiresIn() ?? 0);
 
-    // Fetch account info based on auth method
-    let userInfo: { id: string; name: string; email?: string; isOrg: boolean };
-    if (auth.auth_method === 'api_key_org') {
-      const { data: org } = await neonClient.getOrganization(auth.account_id);
-      userInfo = {
-        id: auth.account_id,
-        name: org.name,
-        isOrg: true,
-      };
-    } else {
-      const { data: user } = await neonClient.getCurrentUserInfo();
-      userInfo = {
-        id: user.id,
-        email: user.email,
-        name: `${user.name} ${user.last_name}`.trim(),
-        isOrg: false,
-      };
-    }
+    // Resolve account info (no identify here - happens in token exchange)
+    const userInfo = await resolveAccountFromAuth(auth, neonClient);
 
     // Save the authorization code with associated data
     const authCodeData: AuthorizationCode = {

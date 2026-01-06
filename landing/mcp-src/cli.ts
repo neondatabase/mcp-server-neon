@@ -1,5 +1,5 @@
 import './sentry/instrument';
-import { identify, track } from './analytics/analytics';
+import { track } from './analytics/analytics';
 import { NODE_ENV } from './constants';
 import { handleInit, parseArgs } from './initConfig';
 import { createNeonClient, getPackageJson } from './server/api';
@@ -7,37 +7,13 @@ import { createMcpServer } from './server/index';
 import { startStdio } from './transports/stdio';
 import { logger } from './utils/logger';
 import { AppContext } from './types/context';
-import { AuthContext } from './types/auth';
 import { NEON_TOOLS } from './tools/index';
 import './utils/polyfills';
-import type { Api, AuthDetailsResponse } from '@neondatabase/api-client';
+import { resolveAccountFromAuth } from './server/account';
 
 const args = parseArgs();
 const appVersion = getPackageJson().version;
 const appName = getPackageJson().name;
-
-// Helper to identify API key user/org (inlined from old identifyApiKey)
-const fetchAccountFromApiKey = async (
-  auth: AuthDetailsResponse,
-  neonClient: Api<unknown>,
-  appContext: AppContext
-): Promise<AuthContext['extra']['account']> => {
-  if (auth.auth_method === 'api_key_org') {
-    const { data: org } = await neonClient.getOrganization(auth.account_id);
-    const account = { id: auth.account_id, name: org.name, isOrg: true };
-    identify(account, { context: appContext });
-    return account;
-  }
-  const { data: user } = await neonClient.getCurrentUserInfo();
-  const account = {
-    id: user.id,
-    name: `${user.name} ${user.last_name}`.trim(),
-    email: user.email,
-    isOrg: false,
-  };
-  identify(account, { context: appContext });
-  return account;
-};
 
 if (args.command === 'export-tools') {
   console.log(
@@ -72,7 +48,9 @@ if (args.command === 'start:sse') {
     const { data } = await neonClient.getAuthDetails();
     const accountId = data.account_id;
 
-    const account = await fetchAccountFromApiKey(data, neonClient, appContext);
+    const account = await resolveAccountFromAuth(data, neonClient, {
+      context: appContext,
+    });
 
     if (args.command === 'init') {
       track({
