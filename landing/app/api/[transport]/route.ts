@@ -251,15 +251,15 @@ const handler = createMcpHandler(
                 return await (toolHandler as any)(
                   { params: args },
                   neonClient,
-                  extraArgs,
+                  extraArgs
                 );
               } catch (error) {
                 span.setStatus({ code: 2 });
                 return handleToolError(error, properties);
               }
-            },
+            }
           );
-        },
+        }
       );
     });
 
@@ -310,7 +310,7 @@ const handler = createMcpHandler(
             });
             throw error;
           }
-        },
+        }
       );
     });
 
@@ -357,7 +357,7 @@ const handler = createMcpHandler(
             const template = await getPromptTemplate(
               prompt.name,
               extraArgs,
-              args,
+              args
             );
             return {
               messages: [
@@ -376,7 +376,7 @@ const handler = createMcpHandler(
             });
             throw error;
           }
-        },
+        }
       );
     });
   },
@@ -398,13 +398,13 @@ const handler = createMcpHandler(
     basePath: '/api',
     maxDuration: 800, // Fluid Compute - up to 800s for SSE connections
     verboseLogs: process.env.NODE_ENV !== 'production',
-  },
+  }
 );
 
 // Token verification function for OAuth
 const verifyToken = async (
   req: Request,
-  bearerToken?: string,
+  bearerToken?: string
 ): Promise<AuthInfo | undefined> => {
   // Debug logging for auth issues
   const authHeader = req.headers.get('Authorization');
@@ -426,7 +426,6 @@ const verifyToken = async (
   try {
     const neonClient = createNeonClient(bearerToken);
     logger.info('Calling Neon API', {
-      baseURL: neonClient.baseUrl,
       endpoint: '/users/me',
       tokenPrefix: bearerToken.substring(0, 10),
     });
@@ -434,7 +433,9 @@ const verifyToken = async (
     logger.info('Neon API response', { status: response.status });
 
     if (response.status !== 200) {
-      logger.info('Non-200 status, returning undefined', { status: response.status });
+      logger.info('Non-200 status, returning undefined', {
+        status: response.status,
+      });
       return undefined;
     }
 
@@ -466,7 +467,10 @@ const verifyToken = async (
     };
   } catch (error: unknown) {
     // Extract detailed error info from axios errors
-    const axiosError = error as { response?: { status?: number; data?: unknown; config?: { url?: string } }; message?: string };
+    const axiosError = error as {
+      response?: { status?: number; data?: unknown; config?: { url?: string } };
+      message?: string;
+    };
     logger.error('Exception in verifyToken', {
       message: axiosError.message,
       status: axiosError.response?.status,
