@@ -32,6 +32,7 @@ type AuthenticatedExtra = {
       readOnly?: boolean;
       client?: AuthContext['extra']['client'];
       transport?: AppContext['transport'];
+      userAgent?: string;
     };
   };
   signal?: AbortSignal;
@@ -98,6 +99,12 @@ const handler = createMcpHandler(
       const transport = authInfo.extra.transport ?? 'sse';
       const neonClient = createNeonClient(apiKey);
 
+      // Use User-Agent as clientName fallback if MCP handshake hasn't provided it yet
+      if (clientName === 'unknown' && authInfo.extra.userAgent) {
+        clientName = authInfo.extra.userAgent;
+        clientApplication = detectClientApplication(clientName);
+      }
+
       // Create dynamic appContext with actual transport
       const dynamicAppContext: AppContext = {
         name: 'mcp-server-neon',
@@ -132,6 +139,11 @@ const handler = createMcpHandler(
     // Set up lifecycle hooks for client detection and error handling
     server.server.oninitialized = () => {
       const clientInfo = server.server.getClientVersion();
+      logger.info('MCP oninitialized:', {
+        clientInfo,
+        hasName: !!clientInfo?.name,
+        currentClientName: clientName,
+      });
       // Prefer MCP clientInfo over HTTP User-Agent (more reliable)
       // This ensures we get the real client name even when using mcp-remote,
       // which forwards the original client name (e.g., "Cursor (via mcp-remote 0.1.31)")
@@ -257,13 +269,19 @@ const handler = createMcpHandler(
                   extraArgs
                 );
                 if (result.isError) {
-                  logger.warn('tool error response:', { ...properties, result });
+                  logger.warn('tool error response:', {
+                    ...properties,
+                    result,
+                  });
                 }
                 return result;
               } catch (error) {
                 span.setStatus({ code: 2 });
                 const errorResult = handleToolError(error, properties);
-                logger.warn('tool error response:', { ...properties, result: errorResult });
+                logger.warn('tool error response:', {
+                  ...properties,
+                  result: errorResult,
+                });
                 return errorResult;
               }
             }
@@ -477,7 +495,7 @@ const verifyToken = async (
   req: Request,
   bearerToken?: string
 ): Promise<AuthInfo | undefined> => {
-  const userAgent = req.headers.get('user-agent') ?? 'unknown';
+  const userAgent = req.headers.get('user-agent') || undefined;
 
   logger.info('verifyToken called', {
     hasBearerToken: !!bearerToken,
@@ -532,6 +550,7 @@ const verifyToken = async (
             name: token.client.client_name,
           },
           transport,
+          userAgent,
         },
       };
     }
@@ -561,6 +580,7 @@ const verifyToken = async (
       apiKey: bearerToken,
       readOnly: false,
       transport,
+      userAgent,
     },
   };
 };
