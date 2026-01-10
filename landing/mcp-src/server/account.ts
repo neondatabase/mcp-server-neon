@@ -1,5 +1,7 @@
 import type { Api, AuthDetailsResponse } from '@neondatabase/api-client';
+import { isAxiosError } from 'axios';
 import { identify } from '../analytics/analytics';
+import { logger } from '../utils/logger';
 
 export type Account = {
   id: string;
@@ -8,15 +10,6 @@ export type Account = {
   isOrg: boolean;
 };
 
-/**
- * Resolves account information from Neon API auth details.
- * Handles both organization and personal accounts.
- *
- * @param auth - Auth details from neonClient.getAuthDetails()
- * @param neonClient - Configured Neon API client
- * @param identifyContext - If provided, calls identify() with this context
- * @returns Account information
- */
 export async function resolveAccountFromAuth(
   auth: AuthDetailsResponse,
   neonClient: Api<unknown>,
@@ -24,21 +17,44 @@ export async function resolveAccountFromAuth(
 ): Promise<Account> {
   let account: Account;
 
-  if (auth.auth_method === 'api_key_org') {
-    const { data: org } = await neonClient.getOrganization(auth.account_id);
-    account = {
-      id: auth.account_id,
-      name: org.name,
-      isOrg: true,
-    };
-  } else {
-    const { data: user } = await neonClient.getCurrentUserInfo();
-    account = {
-      id: user.id,
-      name: `${user.name ?? ''} ${user.last_name ?? ''}`.trim() || 'Unknown',
-      email: user.email,
-      isOrg: false,
-    };
+  try {
+    if (auth.auth_method === 'api_key_org') {
+      const { data: org } = await neonClient.getOrganization(auth.account_id);
+      account = {
+        id: auth.account_id,
+        name: org.name,
+        isOrg: true,
+      };
+    } else {
+      const { data: user } = await neonClient.getCurrentUserInfo();
+      account = {
+        id: user.id,
+        name: `${user.name ?? ''} ${user.last_name ?? ''}`.trim() || 'Unknown',
+        email: user.email,
+        isOrg: false,
+      };
+    }
+  } catch (error) {
+    // Project-scoped API keys cannot access account-level endpoints
+    const isProjectScopedKeyError =
+      isAxiosError(error) &&
+      error.response?.status === 404 &&
+      error.response?.data?.message?.includes(
+        'not allowed to perform actions outside the project'
+      );
+
+    if (isProjectScopedKeyError) {
+      logger.debug('Using project-scoped API key fallback', {
+        account_id: auth.account_id,
+      });
+      account = {
+        id: auth.account_id,
+        name: 'Project-scoped API Key',
+        isOrg: false,
+      };
+    } else {
+      throw error;
+    }
   }
 
   if (identifyContext) {
