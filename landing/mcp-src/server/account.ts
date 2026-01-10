@@ -39,10 +39,10 @@ export async function resolveAccountFromAuth(
     // Project-scoped API keys cannot access account-level endpoints
     const isProjectScopedKeyError =
       isAxiosError(error) &&
-      error.response?.status === 404 &&
-      error.response?.data?.message?.includes(
-        'not allowed to perform actions outside the project'
-      );
+      (error.response?.status === 404 || error.response?.status === 403) &&
+      typeof error.response?.data?.message === 'string' &&
+      (error.response.data.message.includes('outside the project') ||
+        error.response.data.message.includes('project-scoped'));
 
     if (isProjectScopedKeyError) {
       logger.debug('Using project-scoped API key fallback', {
