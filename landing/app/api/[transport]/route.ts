@@ -271,7 +271,9 @@ const handler = createMcpHandler(
                 if (result.isError) {
                   logger.warn('tool error response:', {
                     ...properties,
-                    result,
+                    isError: true,
+                    contentLength: result.content?.length,
+                    firstContentType: result.content?.[0]?.type,
                   });
                 }
                 return result;
@@ -280,7 +282,9 @@ const handler = createMcpHandler(
                 const errorResult = handleToolError(error, properties);
                 logger.warn('tool error response:', {
                   ...properties,
-                  result: errorResult,
+                  isError: true,
+                  contentLength: errorResult.content?.length,
+                  firstContentType: errorResult.content?.[0]?.type,
                 });
                 return errorResult;
               }

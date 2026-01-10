@@ -1,6 +1,6 @@
 import type { Api, AuthDetailsResponse } from '@neondatabase/api-client';
 import { isAxiosError } from 'axios';
-import { captureException } from '@sentry/node';
+import { addBreadcrumb } from '@sentry/node';
 import { identify } from '../analytics/analytics';
 import { logger } from '../utils/logger';
 
@@ -11,6 +11,10 @@ export type Account = {
   isOrg: boolean;
 };
 
+/**
+ * Resolves account info from Neon API auth details.
+ * Handles org accounts, personal accounts, and project-scoped API key fallback.
+ */
 export async function resolveAccountFromAuth(
   auth: AuthDetailsResponse,
   neonClient: Api<unknown>,
@@ -49,15 +53,14 @@ export async function resolveAccountFromAuth(
         account_id: auth.account_id,
       });
 
-      // Track project-scoped key usage in Sentry for observability
-      // Using 'info' level to monitor without triggering alerts
-      captureException(error, {
+      // Add breadcrumb for debugging context in case of later errors
+      addBreadcrumb({
+        category: 'auth',
+        message: 'Using project-scoped API key fallback',
         level: 'info',
-        tags: {
+        data: {
           auth_type: 'project_scoped_key',
           auth_method: auth.auth_method,
-        },
-        extra: {
           account_id: auth.account_id,
         },
       });
