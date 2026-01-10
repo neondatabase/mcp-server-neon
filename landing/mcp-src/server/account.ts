@@ -1,5 +1,8 @@
 import type { Api, AuthDetailsResponse } from '@neondatabase/api-client';
+import { isAxiosError } from 'axios';
+import { addBreadcrumb } from '@sentry/node';
 import { identify } from '../analytics/analytics';
+import { logger } from '../utils/logger';
 
 export type Account = {
   id: string;
@@ -9,13 +12,8 @@ export type Account = {
 };
 
 /**
- * Resolves account information from Neon API auth details.
- * Handles both organization and personal accounts.
- *
- * @param auth - Auth details from neonClient.getAuthDetails()
- * @param neonClient - Configured Neon API client
- * @param identifyContext - If provided, calls identify() with this context
- * @returns Account information
+ * Resolves account info from Neon API auth details.
+ * Handles org accounts, personal accounts, and project-scoped API key fallback.
  */
 export async function resolveAccountFromAuth(
   auth: AuthDetailsResponse,
@@ -24,21 +22,57 @@ export async function resolveAccountFromAuth(
 ): Promise<Account> {
   let account: Account;
 
-  if (auth.auth_method === 'api_key_org') {
-    const { data: org } = await neonClient.getOrganization(auth.account_id);
-    account = {
-      id: auth.account_id,
-      name: org.name,
-      isOrg: true,
-    };
-  } else {
-    const { data: user } = await neonClient.getCurrentUserInfo();
-    account = {
-      id: user.id,
-      name: `${user.name ?? ''} ${user.last_name ?? ''}`.trim() || 'Unknown',
-      email: user.email,
-      isOrg: false,
-    };
+  try {
+    if (auth.auth_method === 'api_key_org') {
+      const { data: org } = await neonClient.getOrganization(auth.account_id);
+      account = {
+        id: auth.account_id,
+        name: org.name,
+        isOrg: true,
+      };
+    } else {
+      const { data: user } = await neonClient.getCurrentUserInfo();
+      account = {
+        id: user.id,
+        name: `${user.name ?? ''} ${user.last_name ?? ''}`.trim() || 'Unknown',
+        email: user.email,
+        isOrg: false,
+      };
+    }
+  } catch (error) {
+    // Project-scoped API keys cannot access account-level endpoints
+    const isProjectScopedKeyError =
+      isAxiosError(error) &&
+      (error.response?.status === 404 || error.response?.status === 403) &&
+      typeof error.response?.data?.message === 'string' &&
+      (error.response.data.message.includes('outside the project') ||
+        error.response.data.message.includes('project-scoped'));
+
+    if (isProjectScopedKeyError) {
+      logger.debug('Using project-scoped API key fallback', {
+        account_id: auth.account_id,
+      });
+
+      // Add breadcrumb for debugging context in case of later errors
+      addBreadcrumb({
+        category: 'auth',
+        message: 'Using project-scoped API key fallback',
+        level: 'info',
+        data: {
+          auth_type: 'project_scoped_key',
+          auth_method: auth.auth_method,
+          account_id: auth.account_id,
+        },
+      });
+
+      account = {
+        id: auth.account_id,
+        name: 'Project-scoped API Key',
+        isOrg: false,
+      };
+    } else {
+      throw error;
+    }
   }
 
   if (identifyContext) {
