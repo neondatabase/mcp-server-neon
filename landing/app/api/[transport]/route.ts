@@ -251,14 +251,20 @@ const handler = createMcpHandler(
 
               try {
                 // Wrap args in { params } structure expected by handlers
-                return await (toolHandler as any)(
+                const result = await (toolHandler as any)(
                   { params: args },
                   neonClient,
                   extraArgs
                 );
+                if (result.isError) {
+                  logger.warn('tool error response:', { ...properties, result });
+                }
+                return result;
               } catch (error) {
                 span.setStatus({ code: 2 });
-                return handleToolError(error, properties);
+                const errorResult = handleToolError(error, properties);
+                logger.warn('tool error response:', { ...properties, result: errorResult });
+                return errorResult;
               }
             }
           );
