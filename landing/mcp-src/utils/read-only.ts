@@ -3,11 +3,12 @@ export const SUPPORTED_SCOPES = ['read', 'write', '*'] as const;
 export const SCOPE_DEFINITIONS = {
   read: {
     label: 'Read-only',
-    description: 'View projects and run read-only queries',
+    description: 'View Neon resources and run read-only queries',
   },
   write: {
     label: 'Full access',
-    description: 'Allow full management of your Neon projects and databases',
+    description:
+      'Allow full management of your Neon resources and databases, including running any INSERT, UPDATE, or DELETE statements',
   },
 } as const;
 
