@@ -1,5 +1,16 @@
 export const SUPPORTED_SCOPES = ['read', 'write', '*'] as const;
 
+export const SCOPE_DEFINITIONS = {
+  read: {
+    label: 'Read-only',
+    description: 'View projects and run read-only queries',
+  },
+  write: {
+    label: 'Full access',
+    description: 'Allow full management of your Neon projects and databases',
+  },
+} as const;
+
 export type ReadOnlyContext = {
   headerValue?: string | null;
   scope?: string | string[] | null;
