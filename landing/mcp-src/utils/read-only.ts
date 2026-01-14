@@ -23,10 +23,18 @@ function normalizeScope(scope: string | string[] | null | undefined): string[] {
   return scope.split(' ').filter(Boolean);
 }
 
+/**
+ * Checks if the scope includes write access ('write' or '*').
+ */
+export function hasWriteScope(scope: string | string[] | null | undefined): boolean {
+  const scopes = normalizeScope(scope);
+  return scopes.some((s) => s === 'write' || s === '*');
+}
+
 function isScopeReadOnly(scope: string | string[] | null | undefined): boolean {
   const scopes = normalizeScope(scope);
   if (scopes.length === 0) return false;
-  return !scopes.some((s) => s.includes('write') || s === '*');
+  return !hasWriteScope(scopes);
 }
 
 function parseReadOnlyHeader(

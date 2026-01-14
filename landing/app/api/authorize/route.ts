@@ -9,6 +9,7 @@ import {
 import { COOKIE_SECRET } from '../../../lib/config';
 import { handleOAuthError } from '../../../lib/errors';
 import {
+  hasWriteScope,
   SCOPE_DEFINITIONS,
   SUPPORTED_SCOPES,
 } from '../../../mcp-src/utils/read-only';
@@ -47,18 +48,11 @@ const parseAuthRequest = (
 };
 
 /**
- * Checks if write access was requested (includes 'write' or '*').
- */
-function wasWriteRequested(scopes: string[]): boolean {
-  return scopes.some((s) => s === 'write' || s === '*');
-}
-
-/**
  * Renders the scope selection UI.
  * Read access is always granted. Write access is optional if requested.
  */
 function renderScopeSection(requestedScopes: string[]): string {
-  const writeRequested = wasWriteRequested(requestedScopes);
+  const writeRequested = hasWriteScope(requestedScopes);
 
   // Read access is always granted (hidden input ensures it's submitted)
   let html = `<input type="hidden" name="scopes" value="read" />`;
