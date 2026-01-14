@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { SERVER_HOST } from '@/lib/config';
+import { SUPPORTED_SCOPES } from '@/mcp-src/utils/read-only';
 
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
@@ -24,6 +25,7 @@ export async function GET() {
     registration_endpoint_auth_methods_supported: SUPPORTED_AUTH_METHODS,
     revocation_endpoint_auth_methods_supported: SUPPORTED_AUTH_METHODS,
     code_challenge_methods_supported: SUPPORTED_CODE_CHALLENGE_METHODS,
+    scopes_supported: SUPPORTED_SCOPES,
   });
 }
 
