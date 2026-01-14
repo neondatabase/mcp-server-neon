@@ -68,15 +68,18 @@ export const Introduction = ({ className }: { className?: string }) => (
     </div>
 
     <div className="mt-4">
-      <h3 className="text-lg font-semibold mb-2">Read-Only Version</h3>
+      <h3 className="text-lg font-semibold mb-2">Read-Only Mode</h3>
       <div className="flex flex-col gap-3">
         <div>
           <p className="text-sm mb-2">
-            Safe for cloud environments. All transactions are read-only -
-            perfect for querying and analyzing data without modification risks.
+            Restricts available tools to read-only operations like listing
+            projects, describing schemas, and viewing data. Write operations
+            like creating projects, branches, or running migrations are
+            disabled.
           </p>
           <p className="text-xs text-muted-foreground">
-            Enable read-only mode by adding the{' '}
+            Enable via OAuth (uncheck &quot;Full access&quot; during
+            authorization) or add the{' '}
             <code className="bg-muted px-1 py-0.5 rounded text-xs">
               x-read-only: true
             </code>{' '}

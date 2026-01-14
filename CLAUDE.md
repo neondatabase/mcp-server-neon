@@ -104,7 +104,9 @@ bun run typecheck
 
 - **Stateless Design**: The server is designed for serverless deployment. Tools like migrations and query tuning create temporary branches but do NOT store state in memory. Instead, all context (branch IDs, migration SQL, etc.) is returned to the LLM, which passes it back to subsequent tool calls. This enables horizontal scaling on Vercel.
 
-- **Read-Only Mode** (`landing/mcp-src/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. Read-only mode is determined by priority: `X-READ-ONLY` header > OAuth scope (only `read` scope = read-only) > default (false).
+- **Read-Only Mode** (`landing/mcp-src/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. Read-only mode is determined by priority: `X-READ-ONLY` header > OAuth scope (only `read` scope = read-only) > default (false). The module also exports `SCOPE_DEFINITIONS` for human-readable scope labels and `hasWriteScope()` to check for write permissions.
+
+- **OAuth Scope Selection UI**: During OAuth authorization, users see a permissions dialog where they can select which scopes to grant. Read access is always granted, while write access can be opted out of. The authorization endpoint (`landing/app/api/authorize/route.ts`) renders this UI and processes scope selections.
 
 - **MCP Tool Annotations**: All tools include MCP-standard annotations for client hints:
   - `title`: Human-readable tool name
@@ -227,7 +229,10 @@ landing/                  # Next.js app (main project)
 │   │   └── stdio.ts    # Stdio transport for CLI
 │   ├── types/          # Shared TypeScript types
 │   ├── utils/          # Shared utilities
-│   │   ├── read-only.ts    # Read-only mode detection (header/OAuth scope)
+│   │   ├── read-only.ts    # Read-only mode detection, scope definitions
+│   │   ├── client-application.ts  # Client application utilities
+│   │   ├── logger.ts       # Logging utilities
+│   │   └── polyfills.ts    # Runtime polyfills
 │   ├── resources.ts    # MCP resources
 │   ├── prompts.ts      # LLM prompts
 │   └── constants.ts    # Shared constants
@@ -280,8 +285,18 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 | `/api/token` | OAuth token exchange |
 | `/api/revoke` | OAuth token revocation |
 | `/api/register` | Dynamic client registration |
-| `/.well-known/oauth-authorization-server` | OAuth server metadata |
+| `/.well-known/oauth-authorization-server` | OAuth server metadata (includes `scopes_supported`) |
 | `/.well-known/oauth-protected-resource` | OAuth protected resource metadata |
+
+### OAuth Scopes
+
+The server supports three scopes: `read`, `write`, and `*`. These are exposed via the `/.well-known/oauth-authorization-server` endpoint's `scopes_supported` field.
+
+- **`read`**: Read-only access to Neon resources
+- **`write`**: Full access including create/delete operations
+- **`*`**: Wildcard, equivalent to full access
+
+During authorization, users can uncheck "Full access" to request only `read` scope, which enables read-only mode.
 
 ### Environment Variables (Vercel)
 

@@ -2,6 +2,7 @@
 
 # [Unreleased]
 
+- Feat: OAuth scope selection UI - users can now opt out of write access during authorization
 - Fix: Read-only mode now correctly respects OAuth scopes (only `read` scope enables read-only mode)
 - Fix: Handle project-scoped API keys gracefully when account-level endpoints are inaccessible
 - Fix: Token endpoint now returns proper response

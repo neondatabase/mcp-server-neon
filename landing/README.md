@@ -12,9 +12,28 @@ The remote MCP server is deployed on Vercel's serverless infrastructure using Ne
 
 - **`app/api/[transport]/route.ts`**: Main MCP handler supporting both SSE and Streamable HTTP transports
 - **`app/api/authorize/`, `callback/`, `token/`, `revoke/`**: OAuth 2.0 flow endpoints
-- **`app/.well-known/`**: OAuth discovery endpoints
+- **`app/.well-known/`**: OAuth discovery endpoints (includes `scopes_supported` metadata)
 - **`mcp-src/`**: MCP server implementation adapted for Vercel's bundler
+- **`mcp-src/utils/read-only.ts`**: Read-only mode detection and scope definitions
 - **`lib/`**: Next.js-compatible utilities (config, OAuth)
+
+### Read-Only Mode
+
+The server supports read-only mode to restrict available tools. Priority for determining read-only status:
+
+1. **`X-READ-ONLY` header**: Explicit override (`true`/`false`)
+2. **OAuth scope**: If token has only `read` scope (no `write` or `*`), read-only is enabled
+3. **Default**: Read-write access
+
+### OAuth Scopes
+
+Available scopes: `read`, `write`, `*`
+
+During OAuth authorization, users see a permissions dialog where they can:
+- **Read-only**: Always granted (view projects, run queries)
+- **Full access**: Optional checkbox (create/delete resources, migrations)
+
+The `/.well-known/oauth-authorization-server` endpoint exposes `scopes_supported` for client discovery.
 
 ## Development
 

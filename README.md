@@ -113,7 +113,13 @@ For other IDEs or manual configuration, [create a Neon API key](https://console.
 
 > Provider organization's API key to limit access to projects under the organization only.
 
-**Read-Only Mode:** To prevent accidental modifications, enable read-only mode by adding the `x-read-only` header. This restricts the MCP server to only safe, non-destructive operations:
+**Read-Only Mode:** Restricts which tools are available, disabling write operations like creating projects, branches, or running migrations. Read-only tools include listing projects, describing schemas, querying data, and viewing performance metrics.
+
+You can enable read-only mode in two ways:
+
+1. **OAuth Scope Selection (Recommended):** When connecting via OAuth, uncheck "Full access" during authorization to operate in read-only mode.
+
+2. **Header Override:** Add the `x-read-only` header to your configuration:
 
 ```json
 {
@@ -128,6 +134,26 @@ For other IDEs or manual configuration, [create a Neon API key](https://console.
   }
 }
 ```
+
+> **Note:** Read-only mode restricts which *tools* are available, not the SQL content. The `run_sql` tool remains available and can execute any SQL including INSERT/UPDATE/DELETE. For true read-only SQL access, use database roles with restricted permissions.
+
+<details>
+<summary><strong>Tools available in read-only mode</strong></summary>
+
+- `list_projects`, `list_shared_projects`, `describe_project`, `list_organizations`
+- `describe_branch`, `list_branch_computes`, `compare_database_schema`
+- `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`
+- `list_slow_queries`, `explain_sql_statement`
+- `search`, `fetch`, `load_resource`
+
+**Tools requiring write access:**
+- `create_project`, `delete_project`
+- `create_branch`, `delete_branch`, `reset_from_parent`
+- `get_connection_string`, `provision_neon_auth`
+- `prepare_database_migration`, `complete_database_migration`
+- `prepare_query_tuning`, `complete_query_tuning`
+
+</details>
 
 MCP supports two remote server transports: the deprecated Server-Sent Events (SSE) and the newer, recommended Streamable HTTP. If your LLM client doesn't support Streamable HTTP yet, you can switch the endpoint from `https://mcp.neon.tech/mcp` to `https://mcp.neon.tech/sse` to use SSE instead.
 
