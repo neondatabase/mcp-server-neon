@@ -14,6 +14,7 @@ import pkg from '../../../package.json';
 import { handleToolError } from '../../../mcp-src/server/errors';
 import type { ToolHandlerExtraParams } from '../../../mcp-src/tools/types';
 import { detectClientApplication } from '../../../mcp-src/utils/client-application';
+import { isReadOnly } from '../../../mcp-src/utils/read-only';
 import type { AuthContext } from '../../../mcp-src/types/auth';
 import { logger } from '../../../mcp-src/utils/logger';
 import { waitUntil } from '@vercel/functions';
@@ -500,6 +501,7 @@ const verifyToken = async (
   bearerToken?: string
 ): Promise<AuthInfo | undefined> => {
   const userAgent = req.headers.get('user-agent') || undefined;
+  const readOnlyHeader = req.headers.get('x-read-only');
 
   logger.info('verifyToken called', {
     hasBearerToken: !!bearerToken,
@@ -530,6 +532,12 @@ const verifyToken = async (
 
       logger.info('OAuth token found', { clientId: token.client.id });
 
+      // Determine read-only mode from header and OAuth scope
+      const readOnly = isReadOnly({
+        headerValue: readOnlyHeader,
+        scope: token.scope,
+      });
+
       // Return auth from stored token (0 API calls!)
       return {
         token: token.accessToken,
@@ -548,7 +556,7 @@ const verifyToken = async (
             isOrg: token.user.isOrg ?? false,
           },
           apiKey: bearerToken,
-          readOnly: false,
+          readOnly,
           client: {
             id: token.client.id,
             name: token.client.client_name,
@@ -575,6 +583,11 @@ const verifyToken = async (
     return undefined;
   }
 
+  // Determine read-only mode from header only (API keys don't have OAuth scopes)
+  const readOnly = isReadOnly({
+    headerValue: readOnlyHeader,
+  });
+
   return {
     token: bearerToken,
     scopes: ['*'], // API keys get all scopes
@@ -582,7 +595,7 @@ const verifyToken = async (
     extra: {
       account: apiKeyRecord.account,
       apiKey: bearerToken,
-      readOnly: false,
+      readOnly,
       transport,
       userAgent,
     },

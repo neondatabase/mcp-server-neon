@@ -8,6 +8,11 @@ import {
 } from '../../../lib/oauth/cookies';
 import { COOKIE_SECRET } from '../../../lib/config';
 import { handleOAuthError } from '../../../lib/errors';
+import {
+  hasWriteScope,
+  SCOPE_DEFINITIONS,
+  SUPPORTED_SCOPES,
+} from '../../../mcp-src/utils/read-only';
 
 export type DownstreamAuthRequest = {
   responseType: string;
@@ -42,6 +47,48 @@ const parseAuthRequest = (
   };
 };
 
+/**
+ * Renders the scope selection UI.
+ * Read access is always granted. Write access is optional if requested.
+ */
+function renderScopeSection(requestedScopes: string[]): string {
+  const writeRequested = hasWriteScope(requestedScopes);
+
+  // Read access is always granted (hidden input ensures it's submitted)
+  let html = `<input type="hidden" name="scopes" value="read" />`;
+
+  html += `
+    <div class="scope-item scope-granted">
+      <span class="scope-check">✓</span>
+      <div class="scope-info">
+        <span class="scope-label">${he.escape(SCOPE_DEFINITIONS.read.label)}</span>
+        <span class="scope-description">${he.escape(SCOPE_DEFINITIONS.read.description)}</span>
+      </div>
+    </div>
+  `;
+
+  // Only show write checkbox if it was requested
+  if (writeRequested) {
+    html += `
+      <label class="scope-item scope-option">
+        <input
+          type="checkbox"
+          name="scopes"
+          value="write"
+          checked
+          class="scope-checkbox"
+        />
+        <div class="scope-info">
+          <span class="scope-label">${he.escape(SCOPE_DEFINITIONS.write.label)}</span>
+          <span class="scope-description">${he.escape(SCOPE_DEFINITIONS.write.description)}</span>
+        </div>
+      </label>
+    `;
+  }
+
+  return html;
+}
+
 // Generate approval dialog HTML
 const renderApprovalDialog = (
   client: {
@@ -51,6 +98,7 @@ const renderApprovalDialog = (
     [key: string]: unknown;
   },
   state: string,
+  requestedScopes: string[],
 ) => {
   const clientName = he.escape(client.client_name || 'A new MCP Client');
   const website = client.client_uri ? he.escape(client.client_uri) : undefined;
@@ -213,6 +261,76 @@ const renderApprovalDialog = (
       color: var(--text-color);
     }
 
+    .scope-section {
+      margin: 1.5rem 0;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .scope-section-title {
+      font-weight: 500;
+      margin-bottom: 1rem;
+      color: var(--text-color);
+    }
+
+    .scope-item {
+      display: flex;
+      align-items: flex-start;
+      padding: 0.75rem;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+    }
+
+    .scope-option {
+      cursor: pointer;
+      transition: border-color 0.2s, background-color 0.2s;
+    }
+
+    .scope-option:hover {
+      border-color: rgba(0, 230, 153, 0.5);
+      background-color: rgba(0, 230, 153, 0.05);
+    }
+
+    .scope-granted {
+      background-color: rgba(0, 230, 153, 0.05);
+      border-color: rgba(0, 230, 153, 0.3);
+    }
+
+    .scope-check {
+      color: rgb(0, 229, 153);
+      font-size: 1rem;
+      margin-right: 0.75rem;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+
+    .scope-checkbox {
+      width: 18px;
+      height: 18px;
+      margin-right: 0.75rem;
+      margin-top: 2px;
+      accent-color: rgb(0, 229, 153);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .scope-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .scope-label {
+      font-weight: 500;
+      color: var(--text-color);
+    }
+
+    .scope-description {
+      font-size: 0.875rem;
+      color: var(--text-color-secondary);
+    }
+
     @media (max-width: 640px) {
       .container {
         margin: 1rem auto;
@@ -261,8 +379,12 @@ const renderApprovalDialog = (
         This MCP client is requesting to be authorized on Neon MCP Server.
         If you approve, you will be redirected to complete the authentication.
       </p>
-      <form method="POST" action="/api/authorize">
+      <form method="POST" action="/api/authorize" id="authorize-form">
         <input type="hidden" name="state" value="${he.escape(state)}" />
+        <div class="scope-section">
+          <div class="scope-section-title">Permissions:</div>
+          ${renderScopeSection(requestedScopes)}
+        </div>
         <div class="actions">
           <button type="button" class="button button-secondary" onclick="window.history.back()">Cancel</button>
           <button type="submit" class="button button-primary">Approve</button>
@@ -270,6 +392,23 @@ const renderApprovalDialog = (
       </form>
     </div>
   </div>
+  <script>
+    function updateUrlScope() {
+      var writeCheckbox = document.querySelector('.scope-checkbox');
+      var scopes = ['read'];
+      if (writeCheckbox && writeCheckbox.checked) {
+        scopes.push('write');
+      }
+      var url = new URL(window.location.href);
+      url.searchParams.set('scope', scopes.join(' '));
+      window.history.replaceState({}, '', url.toString());
+    }
+
+    var writeCheckbox = document.querySelector('.scope-checkbox');
+    if (writeCheckbox) {
+      writeCheckbox.addEventListener('change', updateUrlScope);
+    }
+  </script>
 </body>
 </html>
 `;
@@ -326,7 +465,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(authUrl.href);
     }
 
-    return renderApprovalDialog(client, btoa(JSON.stringify(requestParams)));
+    return renderApprovalDialog(
+      client,
+      btoa(JSON.stringify(requestParams)),
+      requestParams.scope,
+    );
   } catch (error: unknown) {
     return handleOAuthError(error, 'Authorization error');
   }
@@ -336,6 +479,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const state = formData.get('state') as string;
+    const selectedScopes = formData.getAll('scopes') as string[];
 
     if (!state) {
       return NextResponse.json(
@@ -347,10 +491,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Filter to only valid scopes (read is always included via hidden input)
+    const validScopes = selectedScopes.filter((s) =>
+      SUPPORTED_SCOPES.includes(s as (typeof SUPPORTED_SCOPES)[number]),
+    );
+    if (validScopes.length === 0) {
+      return NextResponse.json(
+        {
+          error: 'invalid_scope',
+          error_description: 'No valid scopes selected',
+        },
+        { status: 400 },
+      );
+    }
+
     const requestParams = JSON.parse(atob(state)) as DownstreamAuthRequest;
+
+    // Update scopes with user selection
+    requestParams.scope = validScopes;
+
     await updateApprovedClientsCookie(requestParams.clientId, COOKIE_SECRET);
 
-    const authUrl = await upstreamAuth(state);
+    // Re-encode state with updated scopes
+    const updatedState = btoa(JSON.stringify(requestParams));
+    const authUrl = await upstreamAuth(updatedState);
     return NextResponse.redirect(authUrl.href);
   } catch (error: unknown) {
     return handleOAuthError(error, 'Authorization error');

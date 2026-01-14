@@ -2,6 +2,12 @@
 
 # [Unreleased]
 
+- Feat: OAuth scope selection UI - users can now opt out of write access during authorization
+- Fix: Read-only mode now correctly respects OAuth scopes (only `read` scope enables read-only mode)
+- Fix: Handle project-scoped API keys gracefully when account-level endpoints are inaccessible
+- Fix: Token endpoint now returns proper response
+- Chore: Improved logging across OAuth and transport code paths
+
 # [0.7.0] 2025-12-29
 
 - Feat: Add Neon Auth v2 support with Better Auth provider and branch-level provisioning

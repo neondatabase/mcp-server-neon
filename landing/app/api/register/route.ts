@@ -97,19 +97,12 @@ export async function POST(request: NextRequest) {
       token_endpoint_auth_method: client.tokenEndpointAuthMethod,
     };
 
-    logger.info('creating response', {
-      responseBodyKeys: Object.keys(responseBody),
+    logger.info('returning registration response', {
+      clientId,
       tokenEndpointAuthMethod: responseBody.token_endpoint_auth_method,
     });
 
-    const response = NextResponse.json(responseBody);
-
-    logger.info('response created successfully', {
-      status: response.status,
-      headers: Object.fromEntries(response.headers.entries()),
-    });
-
-    return response;
+    return NextResponse.json(responseBody);
   } catch (error: unknown) {
     logger.error('caught error in register handler', {
       error,
