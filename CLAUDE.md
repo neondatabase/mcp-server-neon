@@ -63,6 +63,11 @@ bun run typecheck
    - Implements error handling and observability (Sentry, analytics)
    - Each tool call is tracked and wrapped in error handling
 
+   **Account Resolution (`landing/mcp-src/server/account.ts`)**:
+   - Resolves user/org account info from Neon API auth details
+   - Handles org accounts, personal accounts, and project-scoped API keys
+   - Falls back gracefully when project-scoped keys cannot access account-level endpoints
+
 2. **Tools System (`landing/mcp-src/tools/`)**
 
    - `definitions.ts`: Exports `NEON_TOOLS` array defining all available tools with their schemas
@@ -99,7 +104,7 @@ bun run typecheck
 
 - **Stateless Design**: The server is designed for serverless deployment. Tools like migrations and query tuning create temporary branches but do NOT store state in memory. Instead, all context (branch IDs, migration SQL, etc.) is returned to the LLM, which passes it back to subsequent tool calls. This enables horizontal scaling on Vercel.
 
-- **Read-Only Mode**: Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available.
+- **Read-Only Mode** (`landing/mcp-src/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. Read-only mode is determined by priority: `X-READ-ONLY` header > OAuth scope (only `read` scope = read-only) > default (false).
 
 - **MCP Tool Annotations**: All tools include MCP-standard annotations for client hints:
   - `title`: Human-readable tool name
@@ -206,6 +211,7 @@ landing/                  # Next.js app (main project)
 │   ├── server/         # MCP server factory
 │   │   ├── index.ts    # Server creation and tool registration
 │   │   ├── api.ts      # Neon API client factory
+│   │   ├── account.ts  # Account resolution (user/org/project-scoped)
 │   │   └── errors.ts   # Error handling utilities
 │   ├── tools/          # Tool definitions and handlers
 │   │   ├── definitions.ts  # Tool definitions (NEON_TOOLS) with annotations
@@ -221,6 +227,7 @@ landing/                  # Next.js app (main project)
 │   │   └── stdio.ts    # Stdio transport for CLI
 │   ├── types/          # Shared TypeScript types
 │   ├── utils/          # Shared utilities
+│   │   ├── read-only.ts    # Read-only mode detection (header/OAuth scope)
 │   ├── resources.ts    # MCP resources
 │   ├── prompts.ts      # LLM prompts
 │   └── constants.ts    # Shared constants
@@ -233,6 +240,9 @@ landing/                  # Next.js app (main project)
 └── vercel-migration.md # Migration documentation
 
 mcp-client/             # CLI client for testing
+
+dev-notes/              # Developer notes and solution documentation
+└── *.md               # Problem solutions, fixes, and technical decisions
 ```
 
 ## Important Notes
