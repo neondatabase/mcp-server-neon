@@ -22,7 +22,11 @@ export const metadata: Metadata = {
     'Connect your AI tools to Neon Postgres databases using the Model Context Protocol. Manage databases, run migrations, and optimize queries through natural language.',
   metadataBase: new URL('https://mcp.neon.tech'),
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: '32x32' },
+    ],
+    apple: '/apple-touch-icon.png',
   },
   openGraph: {
     title: 'Neon MCP Server',

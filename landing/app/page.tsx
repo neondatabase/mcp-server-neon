@@ -74,7 +74,7 @@ export default async function Home() {
           </section>
         </article>
       </main>
-      <footer className="text-center w-full p-4 mt-10">Neon Inc. 2025</footer>
+      <footer className="text-center w-full p-4 mt-10">Neon Inc. 2026</footer>
     </div>
   );
 }
