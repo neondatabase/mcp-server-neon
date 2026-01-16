@@ -266,7 +266,13 @@ export const provisionNeonDataApiInputSchema = z.object({
     .describe(
       'The expected JWT audience claim. Tokens without an audience claim will still be accepted.'
     ),
-});
+}).refine(
+  (data) => !(data.authProvider === 'external' && !data.jwksUrl),
+  {
+    message: 'jwksUrl is required when authProvider is "external"',
+    path: ['jwksUrl'],
+  }
+);
 
 export const prepareQueryTuningInputSchema = z.object({
   sql: z.string().describe('The SQL statement to analyze and tune'),

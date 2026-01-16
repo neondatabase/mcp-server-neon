@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { getDefaultDatabase } from '../utils';
 import { getDefaultBranch } from './utils';
 import { ToolHandlerExtraParams } from '../types';
+import { logger } from '../../utils/logger';
 
 type Props = z.infer<typeof provisionNeonDataApiInputSchema>;
 
@@ -48,19 +49,6 @@ export async function handleProvisionNeonDataApi(
           text: databaseName
             ? `The branch has no database named '${databaseName}'.`
             : 'The branch has no databases.',
-        },
-      ],
-    };
-  }
-
-  // Validate external auth configuration
-  if (authProvider === 'external' && !jwksUrl) {
-    return {
-      isError: true,
-      content: [
-        {
-          type: 'text',
-          text: 'When using external authentication provider, you must provide the jwksUrl parameter with the JWKS endpoint URL from your auth provider.',
         },
       ],
     };
@@ -146,7 +134,9 @@ Status: ${existingResponse.data.status}`,
   const authMessage = authProvider
     ? authProvider === 'neon_auth'
       ? 'Authentication is configured to use Neon Auth. JWTs from your Neon Auth setup will be validated automatically.'
-      : `Authentication is configured to use external provider${providerName ? ` (${providerName})` : ''}. JWTs will be validated against the provided JWKS URL.`
+      : `Authentication is configured to use external provider${
+          providerName ? ` (${providerName})` : ''
+        }. JWTs will be validated against the provided JWKS URL.`
     : 'No authentication is configured. The Data API will allow unauthenticated access.';
 
   return {

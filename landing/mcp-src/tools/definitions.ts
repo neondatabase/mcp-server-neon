@@ -475,7 +475,7 @@ export const NEON_TOOLS = [
       title: 'Provision Neon Data API',
       readOnlyHint: false,
       destructiveHint: false,
-      idempotentHint: false,
+      idempotentHint: true,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },
