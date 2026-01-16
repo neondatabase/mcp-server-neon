@@ -243,10 +243,10 @@ export const provisionNeonDataApiInputSchema = z.object({
       'The database name to provision the Data API for. If not provided, the default database is used.'
     ),
   authProvider: z
-    .enum(['neon_auth', 'external'])
+    .enum(['neon_auth', 'external', 'none'])
     .optional()
     .describe(
-      'The authentication provider - "neon_auth" for Neon Auth integration, or "external" for third-party providers like Clerk, Auth0, or Stytch.'
+      'The authentication provider - "neon_auth" for Neon Auth integration, "external" for third-party providers like Clerk, Auth0, or Stytch, or "none" for unauthenticated access (not recommended). If not specified, the tool will check existing auth configuration and return options for selection.'
     ),
   jwksUrl: z
     .string()
@@ -265,6 +265,12 @@ export const provisionNeonDataApiInputSchema = z.object({
     .optional()
     .describe(
       'The expected JWT audience claim. Tokens without an audience claim will still be accepted.'
+    ),
+  provisionNeonAuthFirst: z
+    .boolean()
+    .optional()
+    .describe(
+      'When true with authProvider="neon_auth", provisions Neon Auth before Data API if not already set up.'
     ),
 }).refine(
   (data) => !(data.authProvider === 'external' && !data.jwksUrl),

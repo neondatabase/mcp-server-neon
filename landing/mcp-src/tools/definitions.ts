@@ -454,13 +454,33 @@ export const NEON_TOOLS = [
     description: `
     Provisions the Neon Data API for a Neon branch. The Data API enables HTTP-based access to your Postgres database with automatic JWT authentication support.
 
+    <interactive_behavior>
+      When called WITHOUT an authProvider:
+        1. Automatically checks if Neon Auth is already provisioned
+        2. Checks if Data API already exists
+        3. Returns authentication options for user selection:
+           - neon_auth: Use Neon Auth (recommended)
+           - external: Use external provider (Clerk, Auth0, Stytch)
+           - none: No authentication (not recommended)
+        4. User selects an option, then call this tool again with authProvider specified
+
+      When called WITH authProvider="neon_auth" and provisionNeonAuthFirst=true:
+        - Automatically provisions Neon Auth first (if not already set up)
+        - Then provisions the Data API with Neon Auth integration
+
+      When called WITH authProvider="none":
+        - Provisions Data API without authentication
+        - Returns a strong warning about RLS not working without auth
+    </interactive_behavior>
+
     <workflow>
       The tool will:
         1. Resolve the default branch if branchId is not provided
         2. Resolve the default database if databaseName is not provided
-        3. Create the Data API endpoint for your branch
-        4. Configure authentication if authProvider is specified
-        5. Return the Data API URL for your application
+        3. If no authProvider: check existing config and return options for selection
+        4. If authProvider specified: create the Data API endpoint with that auth
+        5. If provisionNeonAuthFirst: set up Neon Auth before Data API
+        6. Return the Data API URL for your application
     </workflow>
 
     <key_features>
