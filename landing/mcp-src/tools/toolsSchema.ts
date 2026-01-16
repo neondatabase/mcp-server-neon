@@ -226,6 +226,48 @@ export const provisionNeonAuthInputSchema = z.object({
     ),
 });
 
+export const provisionNeonDataApiInputSchema = z.object({
+  projectId: z
+    .string()
+    .describe('The ID of the project to provision the Data API for'),
+  branchId: z
+    .string()
+    .optional()
+    .describe(
+      'An optional ID of the branch to provision the Data API for. If not provided, the default branch is used.'
+    ),
+  databaseName: z
+    .string()
+    .optional()
+    .describe(
+      'The database name to provision the Data API for. If not provided, the default database is used.'
+    ),
+  authProvider: z
+    .enum(['neon_auth', 'external'])
+    .optional()
+    .describe(
+      'The authentication provider - "neon_auth" for Neon Auth integration, or "external" for third-party providers like Clerk, Auth0, or Stytch.'
+    ),
+  jwksUrl: z
+    .string()
+    .optional()
+    .describe(
+      'The JWKS URL for external authentication providers. Required when authProvider is "external".'
+    ),
+  providerName: z
+    .string()
+    .optional()
+    .describe(
+      'The name of the external authentication provider (e.g., "Clerk", "Auth0", "Stytch"). Used when authProvider is "external".'
+    ),
+  jwtAudience: z
+    .string()
+    .optional()
+    .describe(
+      'The expected JWT audience claim. Tokens without an audience claim will still be accepted.'
+    ),
+});
+
 export const prepareQueryTuningInputSchema = z.object({
   sql: z.string().describe('The SQL statement to analyze and tune'),
   databaseName: z

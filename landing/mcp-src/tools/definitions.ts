@@ -18,6 +18,7 @@ import {
   prepareDatabaseMigrationInputSchema,
   prepareQueryTuningInputSchema,
   provisionNeonAuthInputSchema,
+  provisionNeonDataApiInputSchema,
   runSqlInputSchema,
   runSqlTransactionInputSchema,
   listSlowQueriesInputSchema,
@@ -422,10 +423,6 @@ export const NEON_TOOLS = [
     description: `
     Provisions Neon Auth for a Neon branch. Neon Auth is a managed authentication service built on Better Auth, fully integrated into the Neon platform.
 
-    Parameters:
-    - \`<projectId>\`: The Project ID of the Neon project.
-    - \`[branchId]\`: An optional Branch ID to provision Neon Auth for. If not provided, the default branch is used.
-    - \`[databaseName]\`: The database name to provision Neon Auth for. If not provided, the default database is used.
     
     <workflow>
       The tool will:
@@ -444,6 +441,38 @@ export const NEON_TOOLS = [
     `,
     annotations: {
       title: 'Provision Neon Auth',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'provision_neon_data_api' as const,
+    inputSchema: provisionNeonDataApiInputSchema,
+    readOnlySafe: false,
+    description: `
+    Provisions the Neon Data API for a Neon branch. The Data API enables HTTP-based access to your Postgres database with automatic JWT authentication support.
+
+    <workflow>
+      The tool will:
+        1. Resolve the default branch if branchId is not provided
+        2. Resolve the default database if databaseName is not provided
+        3. Create the Data API endpoint for your branch
+        4. Configure authentication if authProvider is specified
+        5. Return the Data API URL for your application
+    </workflow>
+
+    <key_features>
+      - HTTP-based API: Access your Postgres database via REST endpoints
+      - JWT Authentication: Supports Neon Auth or external providers (Clerk, Auth0, Stytch, etc.)
+      - Row Level Security: Works with RLS policies for fine-grained access control
+      - Branch-compatible: Data API configuration branches with your database
+      - PostgREST-compatible: Uses the same API patterns as PostgREST
+    </key_features>
+    `,
+    annotations: {
+      title: 'Provision Neon Data API',
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
