@@ -469,8 +469,8 @@ export const NEON_TOOLS = [
         - Then provisions the Data API with Neon Auth integration
 
       When called WITH authProvider="none":
-        - Provisions Data API without authentication
-        - Returns a strong warning about RLS not working without auth
+        - Provisions Data API without a pre-configured JWKS
+        - User will need to manually configure a JWKS URL before the Data API can be used
     </interactive_behavior>
 
     <workflow>

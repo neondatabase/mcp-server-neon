@@ -113,7 +113,11 @@ To reconfigure authentication, you would need to delete and re-provision the Dat
 Before provisioning the Data API, please select an authentication method.
 
 **Current Status:**
-- **Neon Auth**: ${neonAuthStatus.enabled ? `Enabled (JWKS: ${neonAuthStatus.jwksUrl})` : 'Not provisioned'}
+- **Neon Auth**: ${
+    neonAuthStatus.enabled
+      ? `Enabled (JWKS: ${neonAuthStatus.jwksUrl})`
+      : 'Not provisioned'
+  }
 - **Data API**: Not provisioned
 
 **Project ID**: ${projectId}
@@ -135,8 +139,8 @@ Before provisioning the Data API, please select an authentication method.
    - **To use**: Call this tool with \`authProvider: "external", jwksUrl: "<your-jwks-url>"\`
 
 **3. none** ⚠️ (Not recommended)
-   - Data API allows unauthenticated access
-   - **WARNING**: Row Level Security (RLS) policies won't have user context
+   - Provisions Data API without a pre-configured JWKS
+   - **Note**: You will need to configure a JWKS URL before the Data API can be used
    - **To use**: Call this tool with \`authProvider: "none"\``;
 }
 
@@ -309,24 +313,20 @@ Status: ${existingResponse.data.status}`,
       content: [
         {
           type: 'text',
-          text: `Data API has been provisioned **without authentication**.
+          text: `Data API has been provisioned **without a pre-configured JWKS**.
 
 Use this URL to access your Neon Data API:
 \`\`\`
 ${response.data.url}
 \`\`\`
 
-⚠️ **WARNING**: The Data API is configured without authentication. This means:
-- Any request to the Data API will be **unauthenticated**
-- Row Level Security (RLS) policies will **NOT** have user context
-- This configuration is **NOT recommended for production use**
+⚠️ **Important**: To use the Data API, you still need to configure a JWKS (JSON Web Key Set) URL for JWT verification. Without a JWKS, the Data API cannot validate authentication tokens and requests will fail.
 
-Consider reconfiguring with \`authProvider: "neon_auth"\` or \`authProvider: "external"\` for proper authentication.
+**Next steps:**
+- Configure your JWKS URL through the Neon Console or API
+- Or reconfigure using \`authProvider: "neon_auth"\` or \`authProvider: "external"\` for automatic JWKS setup
 
-**Example Request (no auth required):**
-\`\`\`bash
-curl "${response.data.url}/your_table"
-\`\`\`
+**Note**: Row Level Security (RLS) policies require authenticated requests to have user context.
 `,
         },
       ],
