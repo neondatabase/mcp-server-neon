@@ -12,6 +12,7 @@ import { InvalidArgumentError, NotFoundError } from '../server/errors';
 
 import { describeTable, formatTableDescription } from '../describeUtils';
 import { handleProvisionNeonAuth } from './handlers/neon-auth';
+import { handleProvisionNeonDataApi } from './handlers/data-api';
 import { handleSearch } from './handlers/search';
 import { handleFetch } from './handlers/fetch';
 import { fetchRawGithubContent, NEON_RESOURCES } from '../resources';
@@ -1522,6 +1523,23 @@ You MUST follow these steps:
         projectId: params.projectId,
         branchId: params.branchId,
         databaseName: params.databaseName,
+      },
+      neonClient,
+      extra
+    );
+    return result;
+  },
+
+  provision_neon_data_api: async ({ params }, neonClient, extra) => {
+    const result = await handleProvisionNeonDataApi(
+      {
+        projectId: params.projectId,
+        branchId: params.branchId,
+        databaseName: params.databaseName,
+        authProvider: params.authProvider,
+        jwksUrl: params.jwksUrl,
+        providerName: params.providerName,
+        jwtAudience: params.jwtAudience,
       },
       neonClient,
       extra

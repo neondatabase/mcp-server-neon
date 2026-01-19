@@ -18,6 +18,7 @@ import {
   prepareDatabaseMigrationInputSchema,
   prepareQueryTuningInputSchema,
   provisionNeonAuthInputSchema,
+  provisionNeonDataApiInputSchema,
   runSqlInputSchema,
   runSqlTransactionInputSchema,
   listSlowQueriesInputSchema,
@@ -422,10 +423,6 @@ export const NEON_TOOLS = [
     description: `
     Provisions Neon Auth for a Neon branch. Neon Auth is a managed authentication service built on Better Auth, fully integrated into the Neon platform.
 
-    Parameters:
-    - \`<projectId>\`: The Project ID of the Neon project.
-    - \`[branchId]\`: An optional Branch ID to provision Neon Auth for. If not provided, the default branch is used.
-    - \`[databaseName]\`: The database name to provision Neon Auth for. If not provided, the default database is used.
     
     <workflow>
       The tool will:
@@ -447,6 +444,58 @@ export const NEON_TOOLS = [
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
+      openWorldHint: false,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'provision_neon_data_api' as const,
+    inputSchema: provisionNeonDataApiInputSchema,
+    readOnlySafe: false,
+    description: `
+    Provisions the Neon Data API for a Neon branch. The Data API enables HTTP-based access to your Postgres database with automatic JWT authentication support.
+
+    <interactive_behavior>
+      When called WITHOUT an authProvider:
+        1. Automatically checks if Neon Auth is already provisioned
+        2. Checks if Data API already exists
+        3. Returns authentication options for user selection:
+           - neon_auth: Use Neon Auth (recommended)
+           - external: Use external provider (Clerk, Auth0, Stytch)
+           - none: No authentication (not recommended)
+        4. User selects an option, then call this tool again with authProvider specified
+
+      When called WITH authProvider="neon_auth" and provisionNeonAuthFirst=true:
+        - Automatically provisions Neon Auth first (if not already set up)
+        - Then provisions the Data API with Neon Auth integration
+
+      When called WITH authProvider="none":
+        - Provisions Data API without a pre-configured JWKS
+        - User will need to manually configure a JWKS URL before the Data API can be used
+    </interactive_behavior>
+
+    <workflow>
+      The tool will:
+        1. Resolve the default branch if branchId is not provided
+        2. Resolve the default database if databaseName is not provided
+        3. If no authProvider: check existing config and return options for selection
+        4. If authProvider specified: create the Data API endpoint with that auth
+        5. If provisionNeonAuthFirst: set up Neon Auth before Data API
+        6. Return the Data API URL for your application
+    </workflow>
+
+    <key_features>
+      - HTTP-based API: Access your Postgres database via REST endpoints
+      - JWT Authentication: Supports Neon Auth or external providers (Clerk, Auth0, Stytch, etc.)
+      - Row Level Security: Works with RLS policies for fine-grained access control
+      - Branch-compatible: Data API configuration branches with your database
+      - PostgREST-compatible: Uses the same API patterns as PostgREST
+    </key_features>
+    `,
+    annotations: {
+      title: 'Provision Neon Data API',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },

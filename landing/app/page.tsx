@@ -10,6 +10,8 @@ import { Introduction } from '@/components/Introduction';
 import { Header } from '@/components/Header';
 import pkg from '../package.json';
 import { NEON_TOOLS } from '../mcp-src/tools/definitions';
+import { NEON_RESOURCES } from '../mcp-src/resources';
+import { NEON_PROMPTS } from '../mcp-src/prompts';
 
 export default async function Home() {
   const packageVersion = pkg.version;
@@ -49,6 +51,10 @@ export default async function Home() {
             <h2 className="text-2xl font-bold mb-2 border-b-3 border-b-emerald-600">
               Available Tools
             </h2>
+            <p className="text-muted-foreground mb-4">
+              Actions that allow AI agents to manage Neon databases, from
+              creating projects to running queries and migrations.
+            </p>
             {tools === undefined ? (
               <div>tools.json is not found</div>
             ) : (
@@ -71,6 +77,70 @@ export default async function Home() {
                 </ul>
               </Accordion>
             )}
+          </section>
+          <section id="resources">
+            <h2 className="text-2xl font-bold mb-2 border-b-3 border-b-emerald-600">
+              Resources
+            </h2>
+            <p className="text-muted-foreground mb-4">
+              Context resources that provide documentation and guides for
+              working with Neon.
+            </p>
+            <Accordion type="multiple" asChild>
+              <ul>
+                {NEON_RESOURCES.map(({ name, description, uri }) => (
+                  <AccordionItem key={name} value={name} asChild>
+                    <li>
+                      <AccordionTrigger className="flex items-center">
+                        <h3 className="monospaced text-xl font-semibold">
+                          {name}
+                        </h3>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <p className="mb-2">{description}</p>
+                        <p className="text-sm text-muted-foreground">
+                          <span className="font-medium">URI:</span>{' '}
+                          <a
+                            href={uri}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-link hover:underline"
+                          >
+                            {uri}
+                          </a>
+                        </p>
+                      </AccordionContent>
+                    </li>
+                  </AccordionItem>
+                ))}
+              </ul>
+            </Accordion>
+          </section>
+          <section id="prompts">
+            <h2 className="text-2xl font-bold mb-2 border-b-3 border-b-emerald-600">
+              Prompts
+            </h2>
+            <p className="text-muted-foreground mb-4">
+              Interactive guides and templates for common tasks.
+            </p>
+            <Accordion type="multiple" asChild>
+              <ul>
+                {NEON_PROMPTS.map(({ name, description }) => (
+                  <AccordionItem key={name} value={name} asChild>
+                    <li>
+                      <AccordionTrigger className="flex items-center">
+                        <h3 className="monospaced text-xl font-semibold">
+                          {name}
+                        </h3>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <p>{description}</p>
+                      </AccordionContent>
+                    </li>
+                  </AccordionItem>
+                ))}
+              </ul>
+            </Accordion>
           </section>
         </article>
       </main>
