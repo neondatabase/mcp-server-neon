@@ -1,7 +1,6 @@
 import { cn } from '@/lib/utils';
 import { ExternalLink } from '@/components/ExternalLink';
 import { CopyableUrl } from '@/components/CopyableUrl';
-import { CopyableCommand } from '@/components/CopyableCommand';
 
 export const Introduction = ({ className }: { className?: string }) => (
   <div className={cn('flex flex-col gap-2', className)}>
