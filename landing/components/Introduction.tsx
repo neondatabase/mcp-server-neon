@@ -52,21 +52,6 @@ export const Introduction = ({ className }: { className?: string }) => (
       </p>
     </div>
 
-    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 my-2">
-      <p className="text-sm text-gray-800">
-        <strong className="font-semibold text-gray-900">
-          Local setup (STDIO):
-        </strong>{' '}
-        For local MCP clients with API key authentication, run:{' '}
-        <CopyableCommand command="npx -y @neondatabase/mcp-server-neon start YOUR_API_KEY" />
-        . Get your API key from the{' '}
-        <ExternalLink href="https://console.neon.tech/app/settings/api-keys">
-          Neon Console
-        </ExternalLink>
-        .
-      </p>
-    </div>
-
     <div className="mt-4">
       <h3 className="text-lg font-semibold mb-2">Read-Only Mode</h3>
       <div className="flex flex-col gap-3">

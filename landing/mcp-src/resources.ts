@@ -94,4 +94,24 @@ export const NEON_RESOURCES = [
       };
     },
   },
+  {
+    name: 'neon-js',
+    uri: 'https://github.com/neondatabase-labs/ai-rules/blob/main/neon-js.mdc',
+    mimeType: 'text/plain',
+    description: 'Neon JS SDK usage instructions',
+    handler: async (url) => {
+      const uri = url.host;
+      const rawPath = url.pathname;
+      const content = await fetchRawGithubContent(rawPath);
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: 'text/plain',
+            text: content,
+          },
+        ],
+      };
+    },
+  },
 ] satisfies (Resource & { handler: ReadResourceCallback })[];
