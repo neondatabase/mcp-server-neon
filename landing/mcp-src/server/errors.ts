@@ -43,6 +43,7 @@ export function errorResponse(error: unknown) {
 export function handleToolError(
   error: unknown,
   properties: Record<string, string>,
+  traceId?: string,
 ) {
   if (error instanceof NeonDbError || isClientError(error)) {
     return errorResponse(error);
@@ -65,14 +66,15 @@ export function handleToolError(
       ],
     };
   } else {
+    const errorContext = { ...properties, ...(traceId && { traceId }) };
     logger.error('Tool call error:', {
       error:
         error instanceof Error
           ? `${error.name}: ${error.message}`
           : 'Unknown error',
-      properties,
+      ...errorContext,
     });
-    captureException(error, { extra: properties });
+    captureException(error, { extra: errorContext });
     return errorResponse(error);
   }
 }

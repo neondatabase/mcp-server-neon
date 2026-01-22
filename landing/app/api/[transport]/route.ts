@@ -17,6 +17,7 @@ import { detectClientApplication } from '../../../mcp-src/utils/client-applicati
 import { isReadOnly } from '../../../mcp-src/utils/read-only';
 import type { AuthContext } from '../../../mcp-src/types/auth';
 import { logger } from '../../../mcp-src/utils/logger';
+import { generateTraceId } from '../../../mcp-src/utils/trace';
 import { waitUntil } from '@vercel/functions';
 import { track, flushAnalytics } from '../../../mcp-src/analytics/analytics';
 import { resolveAccountFromAuth } from '../../../mcp-src/server/account';
@@ -226,11 +227,13 @@ const handler = createMcpHandler(
             };
           }
 
+          const traceId = generateTraceId();
           return await startSpan(
             {
               name: 'tool_call',
               attributes: {
                 tool_name: tool.name,
+                trace_id: traceId,
               },
             },
             async (span) => {
@@ -238,6 +241,7 @@ const handler = createMcpHandler(
                 tool_name: tool.name,
                 readOnly: String(readOnly),
                 clientName: cName,
+                traceId,
               };
 
               logger.info('tool call:', properties);
@@ -280,7 +284,7 @@ const handler = createMcpHandler(
                 return result;
               } catch (error) {
                 span.setStatus({ code: 2 });
-                const errorResult = handleToolError(error, properties);
+                const errorResult = handleToolError(error, properties, traceId);
                 logger.warn('tool error response:', {
                   ...properties,
                   isError: true,
@@ -305,7 +309,8 @@ const handler = createMcpHandler(
           mimeType: resource.mimeType,
         },
         async (url: URL, extra: any) => {
-          const properties = { resource_name: resource.name };
+          const traceId = generateTraceId();
+          const properties = { resource_name: resource.name, traceId };
           logger.info('resource call:', properties);
 
           // Try to get auth context for tracking
@@ -367,7 +372,8 @@ const handler = createMcpHandler(
           // Track server_init on first authenticated request
           trackServerInit(context);
 
-          const properties = { prompt_name: prompt.name, clientName: cName };
+          const traceId = generateTraceId();
+          const properties = { prompt_name: prompt.name, clientName: cName, traceId };
           logger.info('prompt call:', properties);
           setSentryTags(context);
 

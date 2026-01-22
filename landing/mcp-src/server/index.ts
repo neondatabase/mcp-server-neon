@@ -5,6 +5,7 @@ import { NEON_RESOURCES } from '../resources';
 import { NEON_PROMPTS, getPromptTemplate } from '../prompts';
 import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools/index';
 import { logger } from '../utils/logger';
+import { generateTraceId } from '../utils/trace';
 import { createNeonClient } from './api';
 import { track } from '../analytics/analytics';
 import { captureException, startSpan } from '@sentry/node';
@@ -93,11 +94,13 @@ export const createMcpServer = (context: ServerContext) => {
       { params: tool.inputSchema },
       tool.annotations,
       async (args, extra) => {
+        const traceId = generateTraceId();
         return await startSpan(
           {
             name: 'tool_call',
             attributes: {
               tool_name: tool.name,
+              trace_id: traceId,
             },
           },
           async (span) => {
@@ -105,6 +108,7 @@ export const createMcpServer = (context: ServerContext) => {
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
               clientName,
+              traceId,
             };
             logger.info('tool call:', properties);
             setSentryTags(context);
@@ -131,7 +135,7 @@ export const createMcpServer = (context: ServerContext) => {
               span.setStatus({
                 code: 2,
               });
-              return handleToolError(error, properties);
+              return handleToolError(error, properties, traceId);
             }
           },
         );
@@ -149,7 +153,8 @@ export const createMcpServer = (context: ServerContext) => {
         mimeType: resource.mimeType,
       },
       async (url) => {
-        const properties = { resource_name: resource.name };
+        const traceId = generateTraceId();
+        const properties = { resource_name: resource.name, traceId };
         logger.info('resource call:', properties);
         setSentryTags(context);
         track({
@@ -177,7 +182,8 @@ export const createMcpServer = (context: ServerContext) => {
       prompt.description,
       prompt.argsSchema,
       async (args, extra) => {
-        const properties = { prompt_name: prompt.name, clientName };
+        const traceId = generateTraceId();
+        const properties = { prompt_name: prompt.name, clientName, traceId };
         logger.info('prompt call:', properties);
         setSentryTags(context);
         track({
