@@ -443,7 +443,7 @@ export const NEON_TOOLS = [
       title: 'Provision Neon Auth',
       readOnlyHint: false,
       destructiveHint: false,
-      idempotentHint: false,
+      idempotentHint: true,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },
