@@ -55,14 +55,39 @@ export async function handleProvisionNeonAuth(
   // In case of 409, it means that the integration already exists
   // We should not return an error, but a message that the integration already exists and fetch the existing integration
   if (response.status === 409) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: 'Neon Auth already provisioned.',
-        },
-      ],
-    };
+    try {
+      const existingResponse = await neonClient.getNeonAuth(
+        projectId,
+        resolvedBranchId,
+      );
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Neon Auth already provisioned.
+
+Use this URL to access the Neon Auth through your better auth compatible client:
+\`\`\`
+${existingResponse.data.base_url}
+\`\`\`
+
+Use Following JWKS URL to retrieve the public key to verify the JSON Web Tokens (JWT) issued by authentication provider:
+\`\`\`
+${existingResponse.data.jwks_url}
+\`\`\``,
+          },
+        ],
+      };
+    } catch {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: 'Neon Auth already provisioned.',
+          },
+        ],
+      };
+    }
   }
 
   if (response.status !== 201) {
@@ -81,20 +106,17 @@ export async function handleProvisionNeonAuth(
     content: [
       {
         type: 'text',
-        text: `Authentication has been successfully provisioned for your Neon project and branch. 
-           \`\`\`
-        Use this URL to access the Neon Auth through your better auth compatible client: ${response.data.base_url}
-            \`\`\`
-        `,
-      },
-      {
-        type: 'text',
-        text: `
-        Use Following JWKS URL to retrieve the public key to verify the JSON Web Tokens (JWT) issued by authentication provider:
-        \`\`\`
-        ${response.data.jwks_url}
-        \`\`\`
-        `,
+        text: `Authentication has been successfully provisioned for your Neon project and branch.
+
+Use this URL to access the Neon Auth through your better auth compatible client:
+\`\`\`
+${response.data.base_url}
+\`\`\`
+
+Use Following JWKS URL to retrieve the public key to verify the JSON Web Tokens (JWT) issued by authentication provider:
+\`\`\`
+${response.data.jwks_url}
+\`\`\``,
       },
     ],
   };
