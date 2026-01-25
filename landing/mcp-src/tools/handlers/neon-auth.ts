@@ -106,20 +106,17 @@ ${existingResponse.data.jwks_url}
     content: [
       {
         type: 'text',
-        text: `Authentication has been successfully provisioned for your Neon project and branch. 
-           \`\`\`
-        Use this URL to access the Neon Auth through your better auth compatible client: ${response.data.base_url}
-            \`\`\`
-        `,
-      },
-      {
-        type: 'text',
-        text: `
-        Use Following JWKS URL to retrieve the public key to verify the JSON Web Tokens (JWT) issued by authentication provider:
-        \`\`\`
-        ${response.data.jwks_url}
-        \`\`\`
-        `,
+        text: `Authentication has been successfully provisioned for your Neon project and branch.
+
+Use this URL to access the Neon Auth through your better auth compatible client:
+\`\`\`
+${response.data.base_url}
+\`\`\`
+
+Use Following JWKS URL to retrieve the public key to verify the JSON Web Tokens (JWT) issued by authentication provider:
+\`\`\`
+${response.data.jwks_url}
+\`\`\``,
       },
     ],
   };
