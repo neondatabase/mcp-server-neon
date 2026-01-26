@@ -144,12 +144,13 @@ You can enable read-only mode in two ways:
 - `describe_branch`, `list_branch_computes`, `compare_database_schema`
 - `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`
 - `list_slow_queries`, `explain_sql_statement`
+- `get_connection_string`
 - `search`, `fetch`, `load_resource`
 
 **Tools requiring write access:**
 - `create_project`, `delete_project`
 - `create_branch`, `delete_branch`, `reset_from_parent`
-- `get_connection_string`, `provision_neon_auth`, `provision_neon_data_api`
+- `provision_neon_auth`, `provision_neon_data_api`
 - `prepare_database_migration`, `complete_database_migration`
 - `prepare_query_tuning`, `complete_query_tuning`
 
