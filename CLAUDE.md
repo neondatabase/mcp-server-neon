@@ -230,6 +230,7 @@ landing/                  # Next.js app (main project)
 │   ├── types/          # Shared TypeScript types
 │   ├── utils/          # Shared utilities
 │   │   ├── read-only.ts    # Read-only mode detection, scope definitions
+│   │   ├── trace.ts        # TraceId generation for request correlation
 │   │   ├── client-application.ts  # Client application utilities
 │   │   ├── logger.ts       # Logging utilities
 │   │   └── polyfills.ts    # Runtime polyfills

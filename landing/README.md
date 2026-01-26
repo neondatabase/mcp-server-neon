@@ -15,6 +15,7 @@ The remote MCP server is deployed on Vercel's serverless infrastructure using Ne
 - **`app/.well-known/`**: OAuth discovery endpoints (includes `scopes_supported` metadata)
 - **`mcp-src/`**: MCP server implementation adapted for Vercel's bundler
 - **`mcp-src/utils/read-only.ts`**: Read-only mode detection and scope definitions
+- **`mcp-src/utils/trace.ts`**: TraceId generation for request correlation across logs and errors
 - **`lib/`**: Next.js-compatible utilities (config, OAuth)
 
 ### Read-Only Mode

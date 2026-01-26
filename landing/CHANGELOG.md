@@ -2,9 +2,13 @@
 
 # [Unreleased]
 
+- Feat: Add `provision_neon_data_api` tool for HTTP-based database access with JWT authentication
+- Feat: Add traceId for request correlation across logs, analytics, and error reports
+- Feat: Add MCP tool annotations (title, readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
 - Feat: OAuth scope selection UI - users can now opt out of write access during authorization
 - Fix: Read-only mode now correctly respects OAuth scopes (only `read` scope enables read-only mode)
 - Fix: Handle project-scoped API keys gracefully when account-level endpoints are inaccessible
+- Fix: Make `provision_neon_auth` tool idempotent - returns existing integration details if already provisioned
 - Fix: Token endpoint now returns proper response
 - Chore: Improved logging across OAuth and transport code paths
 

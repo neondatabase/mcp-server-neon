@@ -94,7 +94,7 @@ export const NEON_TOOLS = [
       title: 'Delete Project',
       readOnlyHint: false,
       destructiveHint: true,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },
@@ -335,7 +335,7 @@ export const NEON_TOOLS = [
   {
     name: 'complete_database_migration' as const,
     description: `Complete a database migration by applying changes to the main branch and cleaning up the temporary branch.
-    
+
     <important_notes>
       You MUST pass ALL values from the \`prepare_database_migration\` response:
       - migrationId: The migration ID
@@ -346,7 +346,7 @@ export const NEON_TOOLS = [
       - parentBranchId: The branch to apply migration to
       - applyChanges: Set to true to apply the migration, or false to just delete the temp branch without applying
     </important_notes>
-    
+
     <workflow>
       1. If applyChanges is true, applies the migration SQL to the parent branch
       2. Deletes the temporary branch (cleanup)
@@ -358,7 +358,7 @@ export const NEON_TOOLS = [
       title: 'Complete Database Migration',
       readOnlyHint: false,
       destructiveHint: true,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },
@@ -385,7 +385,7 @@ export const NEON_TOOLS = [
       title: 'Delete Branch',
       readOnlyHint: false,
       destructiveHint: true,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },
@@ -398,7 +398,7 @@ export const NEON_TOOLS = [
       title: 'Reset Branch from Parent',
       readOnlyHint: false,
       destructiveHint: true,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },
@@ -407,10 +407,10 @@ export const NEON_TOOLS = [
     description:
       'Get a PostgreSQL connection string for a Neon database with all parameters being optional',
     inputSchema: getConnectionStringInputSchema,
-    readOnlySafe: false,
+    readOnlySafe: true,
     annotations: {
       title: 'Get Connection String',
-      readOnlyHint: false,
+      readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
       openWorldHint: false,
@@ -703,7 +703,7 @@ export const NEON_TOOLS = [
       title: 'Complete Query Tuning',
       readOnlyHint: false,
       destructiveHint: true,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },
@@ -724,7 +724,7 @@ export const NEON_TOOLS = [
       title: 'List Slow Queries',
       readOnlyHint: true,
       destructiveHint: false,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },
