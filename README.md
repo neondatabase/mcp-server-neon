@@ -149,7 +149,7 @@ You can enable read-only mode in two ways:
 **Tools requiring write access:**
 - `create_project`, `delete_project`
 - `create_branch`, `delete_branch`, `reset_from_parent`
-- `get_connection_string`, `provision_neon_auth`
+- `get_connection_string`, `provision_neon_auth`, `provision_neon_data_api`
 - `prepare_database_migration`, `complete_database_migration`
 - `prepare_query_tuning`, `complete_query_tuning`
 
@@ -283,6 +283,10 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 **Neon Auth:**
 
 - **`provision_neon_auth`**: Provisions Neon Auth for a Neon project. It allows developers to easily set up authentication infrastructure by creating an integration with an Auth provider.
+
+**Neon Data API:**
+
+- **`provision_neon_data_api`**: Provisions the Neon Data API for HTTP-based database access with optional JWT authentication via Neon Auth or external JWKS providers.
 
 **Search and Discovery:**
 
