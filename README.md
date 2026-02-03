@@ -80,7 +80,7 @@ Run the following command to add the Neon MCP Server for all detected agents and
 npx add-mcp https://mcp.neon.tech/mcp
 ```
 
-Alternativly, you can add the following "Neon" entry to your client's MCP server configuration file (e.g., `mcp.json`, `mcp_config.json`):
+Alternatively, you can add the following "Neon" entry to your client's MCP server configuration file (e.g., `mcp.json`, `mcp_config.json`):
 
 ```json
 {
@@ -115,7 +115,7 @@ Alternatively, you can add the following "Neon" entry to your client's MCP serve
   "mcpServers": {
     "Neon": {
       "type": "http",
-      "url": "https://mcp.neon.tech/mcp"
+      "url": "https://mcp.neon.tech/mcp",
       "headers": {
         "Authorization": "Bearer <$NEON_API_KEY>"
       }
