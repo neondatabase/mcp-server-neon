@@ -58,7 +58,7 @@ For Local MCP Server setup, you also need a Neon API key. See [Neon API Keys doc
 
 For development, you'll also need [Bun](https://bun.sh) installed.
 
-### Option 1.Quick Setup with API Key
+### Option 1. Quick Setup with API Key
 
 **Don't want to manually create an API key?**
 
