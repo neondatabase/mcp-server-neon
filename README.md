@@ -150,20 +150,6 @@ Run the Neon MCP server on your local machine with your Neon API key. This metho
 
 ### Read-Only Mode
 
-```json
-{
-  "mcpServers": {
-    "Neon": {
-      "type": "http",
-      "url": "https://mcp.neon.tech/mcp",
-      "headers": {
-        "Authorization": "Bearer <$NEON_API_KEY>"
-      }
-    }
-  }
-}
-```
-
 **Read-Only Mode:** Restricts which tools are available, disabling write operations like creating projects, branches, or running migrations. Read-only tools include listing projects, describing schemas, querying data, and viewing performance metrics.
 
 You can enable read-only mode in two ways:
@@ -209,6 +195,12 @@ You can enable read-only mode in two ways:
 ### Server-Sent Events (SSE) Transport (Deprecated)
 
 MCP supports two remote server transports: the deprecated Server-Sent Events (SSE) and the newer, recommended Streamable HTTP. If your LLM client doesn't support Streamable HTTP yet, you can switch the endpoint from `https://mcp.neon.tech/mcp` to `https://mcp.neon.tech/sse` to use SSE instead.
+
+Run the following command to add the Neon MCP Server for all detected agents and editors in your workspace using the SSE transport:
+
+```bash
+npx add-mcp https://mcp.neon.tech/sse --type sse
+```
 
 ### Troubleshooting
 
