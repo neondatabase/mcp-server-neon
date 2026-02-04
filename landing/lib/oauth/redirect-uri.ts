@@ -7,8 +7,7 @@
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
 function isLoopbackHost(host: string): boolean {
-  const normalized = host.toLowerCase().replace(/^\[|\]$/g, '');
-  return LOOPBACK_HOSTS.has(host.toLowerCase()) || normalized === '::1';
+ return LOOPBACK_HOSTS.has(host.toLowerCase());    
 }
 
 function parseUri(uri: string) {
@@ -24,8 +23,17 @@ function parseUri(uri: string) {
   }
 }
 
-function urisMatch(requestUri: string, registeredUri: string): boolean {
-  const request = parseUri(requestUri);
+type ParsedUri = {
+  scheme: string;
+  path: string;
+  isLoopback: boolean;
+};
+
+function urisMatch(
+  requestUri: string,
+  request: ParsedUri | null,
+  registeredUri: string,
+): boolean {
   const registered = parseUri(registeredUri);
 
   if (!request || !registered) {
@@ -44,5 +52,9 @@ export function matchesRedirectUri(
   requestUri: string,
   registeredUris: string[],
 ): boolean {
-  return registeredUris.some((registered) => urisMatch(requestUri, registered));
+  // Parse request URI once, reuse for all comparisons
+  const request = parseUri(requestUri);
+  return registeredUris.some((registered) =>
+    urisMatch(requestUri, request, registered),
+  );
 }
