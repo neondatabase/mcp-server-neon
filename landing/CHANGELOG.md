@@ -10,6 +10,7 @@
 - Fix: Handle project-scoped API keys gracefully when account-level endpoints are inaccessible
 - Fix: Make `provision_neon_auth` tool idempotent - returns existing integration details if already provisioned
 - Fix: Token endpoint now returns proper response
+- Fix: RFC 8252 loopback redirect URI matching - localhost, 127.0.0.1, and ::1 are now treated as equivalent
 - Chore: Improved logging across OAuth and transport code paths
 
 # [0.7.0] 2025-12-29

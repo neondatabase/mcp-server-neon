@@ -17,6 +17,7 @@ The remote MCP server is deployed on Vercel's serverless infrastructure using Ne
 - **`mcp-src/utils/read-only.ts`**: Read-only mode detection and scope definitions
 - **`mcp-src/utils/trace.ts`**: TraceId generation for request correlation across logs and errors
 - **`lib/`**: Next.js-compatible utilities (config, OAuth)
+- **`lib/oauth/redirect-uri.ts`**: RFC 8252 loopback redirect URI matching (localhost/127.0.0.1/::1 equivalence)
 
 ### Read-Only Mode
 
@@ -53,15 +54,21 @@ bun run build
 
 Required for the remote MCP server:
 
-| Variable | Description |
-|----------|-------------|
-| `SERVER_HOST` | Server URL (defaults to `VERCEL_URL`) |
-| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL |
-| `CLIENT_ID` | OAuth client ID |
-| `CLIENT_SECRET` | OAuth client secret |
-| `COOKIE_SECRET` | Secret for signed cookies |
-| `KV_URL` | Vercel KV (Upstash Redis) URL |
-| `OAUTH_DATABASE_URL` | Postgres URL for token storage |
+| Variable              | Description                           |
+| --------------------- | ------------------------------------- |
+| `SERVER_HOST`         | Server URL (defaults to `VERCEL_URL`) |
+| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL               |
+| `CLIENT_ID`           | OAuth client ID                       |
+| `CLIENT_SECRET`       | OAuth client secret                   |
+| `COOKIE_SECRET`       | Secret for signed cookies             |
+| `KV_URL`              | Vercel KV (Upstash Redis) URL         |
+| `OAUTH_DATABASE_URL`  | Postgres URL for token storage        |
+
+Optional:
+
+| Variable    | Description                                                                       |
+| ----------- | --------------------------------------------------------------------------------- |
+| `LOG_LEVEL` | Winston log level: `error`, `warn`, `info` (default), `debug`, `verbose`, `silly` |
 
 ## Deployment
 

@@ -65,14 +65,11 @@ const authHandler = withMcpAuth(handler, verifyToken, authOptions);
 export { authHandler as GET, authHandler as POST, authHandler as DELETE };
 ```
 
-### 4. `mcp-handler` Patch
+### 4. ~~`mcp-handler` Patch~~ (No Longer Needed)
 
-Created `patches/mcp-handler+1.0.4.patch` to fix compatibility issues:
+~~Created `patches/mcp-handler+1.0.4.patch` to fix compatibility issues.~~
 
-1. **rawHeaders support**: Added `rawHeaders` array to fake request for `@hono/node-server` compatibility
-2. **Buffer handling**: Fixed Buffer to Uint8Array conversion instead of throwing errors
-
-Uses `patch-package` via postinstall script.
+**Update:** As of `mcp-handler@1.0.6`, all compatibility issues have been resolved upstream. The patches directory and `patch-package` dependency have been removed.
 
 ### 5. OAuth System Refactoring
 
@@ -238,7 +235,6 @@ Added to `package.json`:
 
 **Dev:**
 
-- `patch-package` - For mcp-handler patch
 - `@types/oauth2-server` - Type definitions
 
 ### 14. Export Type Fix
@@ -378,7 +374,7 @@ export { handleRequest as GET, handleRequest as POST, handleRequest as DELETE };
 - [x] Refactor OAuth utilities for Next.js compatibility
 - [x] Update import paths (remove `.js` extensions)
 - [x] Configure `vercel.json` for Fluid Compute (`fluid: true`, `maxDuration: 800`)
-- [x] Patch `mcp-handler` for compatibility
+- [x] ~~Patch `mcp-handler` for compatibility~~ (no longer needed, fixed in mcp-handler@1.0.6)
 - [x] Update analytics for serverless (auto-init, `flushAt: 1`, `waitUntil`)
 - [x] Update TypeScript configuration
 - [x] Add required dependencies (including `@vercel/functions`)
