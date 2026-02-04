@@ -14,6 +14,7 @@ import {
   SUPPORTED_SCOPES,
 } from '../../../mcp-src/utils/read-only';
 import { logger } from '../../../mcp-src/utils/logger';
+import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
 
 export type DownstreamAuthRequest = {
   responseType: string;
@@ -464,7 +465,7 @@ export async function GET(request: NextRequest) {
 
     if (
       requestParams.redirectUri === undefined ||
-      !client.redirect_uris.includes(requestParams.redirectUri)
+      !matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)
     ) {
       logger.warn('Invalid redirect URI', {
         clientId: requestParams.clientId,
