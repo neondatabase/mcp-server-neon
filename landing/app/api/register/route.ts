@@ -9,9 +9,7 @@ const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
 
 export async function POST(request: NextRequest) {
-  // #region debug
-  logger.info('[DEBUG] POST handler entered', { url: request.url });
-  // #endregion
+  logger.debug('POST handler entered', { url: request.url });
   try {
     const payload = await request.json();
 
@@ -83,13 +81,9 @@ export async function POST(request: NextRequest) {
       registrationDate: Math.floor(Date.now() / 1000),
     };
 
-    // #region debug
-    logger.info('[DEBUG] Before model.saveClient', { clientId: client.id });
-    // #endregion
+    logger.debug('before model.saveClient', { clientId: client.id });
     await model.saveClient(client);
-    // #region debug
-    logger.info('[DEBUG] After model.saveClient completed', { clientId: client.id });
-    // #endregion
+    logger.debug('after model.saveClient completed', { clientId: client.id });
 
     logger.info('new client registered', {
       clientId,
@@ -111,53 +105,41 @@ export async function POST(request: NextRequest) {
       tokenEndpointAuthMethod: responseBody.token_endpoint_auth_method,
     });
 
-    // #region debug
-    logger.info('[DEBUG] About to create NextResponse.json', {
+    logger.debug('about to create NextResponse.json', {
       responseBodyKeys: Object.keys(responseBody),
       clientId,
       hasClientSecret: !!responseBody.client_secret,
     });
-    // #endregion
 
     let response: NextResponse;
     try {
-      // #region debug
-      logger.info('[DEBUG] Calling NextResponse.json now');
-      // #endregion
+      logger.debug('calling NextResponse.json');
       response = NextResponse.json(responseBody);
-      // #region debug
-      logger.info('[DEBUG] NextResponse.json succeeded', {
+      logger.debug('NextResponse.json succeeded', {
         responseType: typeof response,
         responseStatus: response?.status,
         isResponse: response instanceof Response,
       });
-      // #endregion
     } catch (jsonError) {
-      // #region debug
-      logger.error('[DEBUG] NextResponse.json threw error', {
+      logger.error('NextResponse.json threw error', {
         error: jsonError instanceof Error ? jsonError.message : String(jsonError),
         stack: jsonError instanceof Error ? jsonError.stack : undefined,
       });
-      // #endregion
       throw jsonError;
     }
 
-    // #region debug
-    logger.info('[DEBUG] About to return response', {
+    logger.debug('about to return response', {
       responseExists: !!response,
       responseType: typeof response,
     });
-    // #endregion
 
     return response;
   } catch (error: unknown) {
-    // #region debug
-    logger.error('[DEBUG] Catch block entered', {
+    logger.debug('catch block entered', {
       errorType: typeof error,
       errorMessage: error instanceof Error ? error.message : String(error),
       errorName: error instanceof Error ? error.name : undefined,
     });
-    // #endregion
     logger.error('caught error in register handler', {
       error,
       errorType: typeof error,
@@ -165,12 +147,10 @@ export async function POST(request: NextRequest) {
       errorStack: error instanceof Error ? error.stack : undefined,
     });
     const errorResponse = handleOAuthError(error, 'Client registration error');
-    // #region debug
-    logger.info('[DEBUG] Returning from catch block', {
+    logger.debug('returning from catch block', {
       errorResponseExists: !!errorResponse,
       errorResponseType: typeof errorResponse,
     });
-    // #endregion
     return errorResponse;
   }
 }

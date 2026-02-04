@@ -54,15 +54,21 @@ bun run build
 
 Required for the remote MCP server:
 
-| Variable | Description |
-|----------|-------------|
-| `SERVER_HOST` | Server URL (defaults to `VERCEL_URL`) |
-| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL |
-| `CLIENT_ID` | OAuth client ID |
-| `CLIENT_SECRET` | OAuth client secret |
-| `COOKIE_SECRET` | Secret for signed cookies |
-| `KV_URL` | Vercel KV (Upstash Redis) URL |
-| `OAUTH_DATABASE_URL` | Postgres URL for token storage |
+| Variable              | Description                           |
+| --------------------- | ------------------------------------- |
+| `SERVER_HOST`         | Server URL (defaults to `VERCEL_URL`) |
+| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL               |
+| `CLIENT_ID`           | OAuth client ID                       |
+| `CLIENT_SECRET`       | OAuth client secret                   |
+| `COOKIE_SECRET`       | Secret for signed cookies             |
+| `KV_URL`              | Vercel KV (Upstash Redis) URL         |
+| `OAUTH_DATABASE_URL`  | Postgres URL for token storage        |
+
+Optional:
+
+| Variable    | Description                                                                       |
+| ----------- | --------------------------------------------------------------------------------- |
+| `LOG_LEVEL` | Winston log level: `error`, `warn`, `info` (default), `debug`, `verbose`, `silly` |
 
 ## Deployment
 
