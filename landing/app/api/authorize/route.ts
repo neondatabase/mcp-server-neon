@@ -51,10 +51,11 @@ const parseAuthRequest = (
 
 /**
  * Renders the scope selection UI.
- * Read access is always granted. Write access is optional if requested.
+ * Read access is always granted. Write access is always shown as an option.
  */
 function renderScopeSection(requestedScopes: string[]): string {
-  const writeRequested = hasWriteScope(requestedScopes);
+  const writeChecked =
+    requestedScopes.length === 0 || hasWriteScope(requestedScopes);
 
   // Read access is always granted (hidden input ensures it's submitted)
   let html = `<input type="hidden" name="scopes" value="read" />`;
@@ -69,24 +70,21 @@ function renderScopeSection(requestedScopes: string[]): string {
     </div>
   `;
 
-  // Only show write checkbox if it was requested
-  if (writeRequested) {
-    html += `
-      <label class="scope-item scope-option">
-        <input
-          type="checkbox"
-          name="scopes"
-          value="write"
-          checked
-          class="scope-checkbox"
-        />
-        <div class="scope-info">
-          <span class="scope-label">${he.escape(SCOPE_DEFINITIONS.write.label)}</span>
-          <span class="scope-description">${he.escape(SCOPE_DEFINITIONS.write.description)}</span>
-        </div>
-      </label>
-    `;
-  }
+  html += `
+    <label class="scope-item scope-option">
+      <input
+        type="checkbox"
+        name="scopes"
+        value="write"
+        ${writeChecked ? 'checked' : ''}
+        class="scope-checkbox"
+      />
+      <div class="scope-info">
+        <span class="scope-label">${he.escape(SCOPE_DEFINITIONS.write.label)}</span>
+        <span class="scope-description">${he.escape(SCOPE_DEFINITIONS.write.description)}</span>
+      </div>
+    </label>
+  `;
 
   return html;
 }

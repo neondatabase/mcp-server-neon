@@ -52,7 +52,6 @@ export function matchesRedirectUri(
   requestUri: string,
   registeredUris: string[],
 ): boolean {
-  // Parse request URI once, reuse for all comparisons
   const request = parseUri(requestUri);
   return registeredUris.some((registered) =>
     urisMatch(requestUri, request, registered),
