@@ -13,6 +13,7 @@ import {
   SCOPE_DEFINITIONS,
   SUPPORTED_SCOPES,
 } from '../../../mcp-src/utils/read-only';
+import { logger } from '../../../mcp-src/utils/logger';
 
 export type DownstreamAuthRequest = {
   responseType: string;
@@ -424,7 +425,16 @@ export async function GET(request: NextRequest) {
 
     const clientId = requestParams.clientId;
     const client = await model.getClient(clientId, '');
+
+    logger.info('Authorize request', {
+      clientId,
+      redirectUri: requestParams.redirectUri,
+      responseType: requestParams.responseType,
+      scope: requestParams.scope,
+    });
+
     if (!client) {
+      logger.warn('Client not found', { clientId });
       return NextResponse.json(
         {
           error: 'invalid_client',
@@ -438,6 +448,11 @@ export async function GET(request: NextRequest) {
       requestParams.responseType === undefined ||
       !client.response_types.includes(requestParams.responseType)
     ) {
+      logger.warn('Invalid response type', {
+        clientId,
+        providedResponseType: requestParams.responseType,
+        supportedResponseTypes: client.response_types,
+      });
       return NextResponse.json(
         {
           error: 'unsupported_response_type',
@@ -451,6 +466,11 @@ export async function GET(request: NextRequest) {
       requestParams.redirectUri === undefined ||
       !client.redirect_uris.includes(requestParams.redirectUri)
     ) {
+      logger.warn('Invalid redirect URI', {
+        clientId: requestParams.clientId,
+        providedRedirectUri: requestParams.redirectUri,
+        registeredRedirectUris: client.redirect_uris,
+      });
       return NextResponse.json(
         {
           error: 'invalid_request',
