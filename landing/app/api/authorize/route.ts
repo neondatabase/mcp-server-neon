@@ -364,7 +364,7 @@ const renderApprovalDialog = (
   <div class="container">
     <div class="precard">
       <a class="header" href="/" target="_blank">
-        <img src="/logo.png" alt="Neon MCP" class="logo">
+        <img src="/brand/neon-logomark-dark-color.svg" alt="Neon MCP" class="logo">
       </a>
     </div>
     <div class="card">
