@@ -9,7 +9,7 @@ const loggerFormat = winston.format.combine(
 );
 
 export const logger = winston.createLogger({
-  level: 'info',
+  level: process.env.LOG_LEVEL ?? 'info',
   format: loggerFormat,
   transports: [
     new winston.transports.Console({

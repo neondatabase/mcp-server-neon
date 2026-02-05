@@ -238,7 +238,6 @@ landing/                  # Next.js app (main project)
 │   ├── prompts.ts      # LLM prompts
 │   └── constants.ts    # Shared constants
 ├── components/         # React components for landing page
-├── patches/            # npm package patches
 ├── public/             # Static assets
 ├── package.json        # Package configuration
 ├── tsconfig.json       # TypeScript config (bundler resolution)

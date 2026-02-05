@@ -9,6 +9,7 @@ const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
 
 export async function POST(request: NextRequest) {
+  logger.debug('POST handler entered', { url: request.url });
   try {
     const payload = await request.json();
 
@@ -80,7 +81,9 @@ export async function POST(request: NextRequest) {
       registrationDate: Math.floor(Date.now() / 1000),
     };
 
+    logger.debug('before model.saveClient', { clientId: client.id });
     await model.saveClient(client);
+    logger.debug('after model.saveClient completed', { clientId: client.id });
 
     logger.info('new client registered', {
       clientId,
@@ -102,15 +105,53 @@ export async function POST(request: NextRequest) {
       tokenEndpointAuthMethod: responseBody.token_endpoint_auth_method,
     });
 
-    return NextResponse.json(responseBody);
+    logger.debug('about to create NextResponse.json', {
+      responseBodyKeys: Object.keys(responseBody),
+      clientId,
+      hasClientSecret: !!responseBody.client_secret,
+    });
+
+    let response: NextResponse;
+    try {
+      logger.debug('calling NextResponse.json');
+      response = NextResponse.json(responseBody);
+      logger.debug('NextResponse.json succeeded', {
+        responseType: typeof response,
+        responseStatus: response?.status,
+        isResponse: response instanceof Response,
+      });
+    } catch (jsonError) {
+      logger.error('NextResponse.json threw error', {
+        error: jsonError instanceof Error ? jsonError.message : String(jsonError),
+        stack: jsonError instanceof Error ? jsonError.stack : undefined,
+      });
+      throw jsonError;
+    }
+
+    logger.debug('about to return response', {
+      responseExists: !!response,
+      responseType: typeof response,
+    });
+
+    return response;
   } catch (error: unknown) {
+    logger.debug('catch block entered', {
+      errorType: typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : undefined,
+    });
     logger.error('caught error in register handler', {
       error,
       errorType: typeof error,
       errorMessage: error instanceof Error ? error.message : String(error),
       errorStack: error instanceof Error ? error.stack : undefined,
     });
-    return handleOAuthError(error, 'Client registration error');
+    const errorResponse = handleOAuthError(error, 'Client registration error');
+    logger.debug('returning from catch block', {
+      errorResponseExists: !!errorResponse,
+      errorResponseType: typeof errorResponse,
+    });
+    return errorResponse;
   }
 }
 

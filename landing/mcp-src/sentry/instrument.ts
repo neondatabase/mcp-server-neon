@@ -24,5 +24,7 @@ init({
     /socket hang up/i,
     /Client network socket disconnected before secure TLS connection/i,
     /^aborted$/i,
+    // PostgreSQL connection terminated (stale serverless connections)
+    /Connection terminated unexpectedly/i,
   ],
 });
