@@ -14,7 +14,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/@neondatabase/mcp-server-neon)](https://www.npmjs.com/package/@neondatabase/mcp-server-neon)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-The Model Context Protocol (MCP) is a [new, standardized protocol](https://modelcontextprotocol.io/introduction) designed to manage context between large language models (LLMs) and external systems. This repository offers an installer and an MCP Server for [Neon](https://neon.tech).
+The Model Context Protocol (MCP) is a [standardized protocol](https://modelcontextprotocol.io/introduction) designed to manage context between large language models (LLMs) and external systems. This repository offers an installer and an MCP Server for [Neon](https://neon.tech).
 
 Neon's MCP server acts as a bridge between natural language requests and the [Neon API](https://api-docs.neon.tech/reference/getting-started-with-neon-api). Built upon MCP, it translates your requests into the necessary API calls, enabling you to manage tasks such as creating projects and branches, running queries, and performing database migrations seamlessly.
 
@@ -25,7 +25,7 @@ Some of the key features of the Neon MCP server include:
 - **Accessibility for non-developers:** Empower users with varying technical backgrounds to interact with Neon databases.
 - **Database migration support:** Leverage Neon's branching capabilities for database schema changes initiated via natural language.
 
-For example, in Claude Desktop, or any MCP Client, you can use natural language to accomplish things with Neon, such as:
+For example, in Claude Code, or any MCP Client, you can use natural language to accomplish things with Neon, such as:
 
 - `Let's create a new Postgres database, and call it "my-database". Let's then create a table called users with the following columns: id, name, email, and password.`
 - `I want to run a migration on my project called "my-project" that alters the users table to add a new column called "created_at".`
@@ -41,13 +41,14 @@ For example, in Claude Desktop, or any MCP Client, you can use natural language 
 
 ## Setting up Neon MCP Server
 
-You have two options for connecting your MCP client to Neon:
+There are a few options for setting up the Neon MCP Server:
 
-1. **Remote MCP Server (Preview):** Connect to Neon's managed MCP server using OAuth for authentication. This method is more convenient as it eliminates the need to manage API keys. Additionally, you will automatically receive the latest features and improvements as soon as they are released.
+1. **Quick Setup with API Key (Cursor, VS Code, and Claude Code):** Run [`neonctl@latest init`](https://neon.com/docs/reference/cli-init) to automatically configure Neon's MCP Server, [agent skills](https://github.com/neondatabase/agent-skills), and VS Code extension with one command.
+2. **Remote MCP Server (OAuth Based Authentication):** Connect to Neon's managed MCP server using OAuth for authentication. This method is more convenient as it eliminates the need to manage API keys. Additionally, you will automatically receive the latest features and improvements as soon as they are released.
+3. **Remote MCP Server (API Key Based Authentication):** Connect to Neon's managed MCP server using API key for authentication. This method is useful if you want to connect a remote agent to Neon where OAuth is not available. Additionally, you will automatically receive the latest features and improvements as soon as they are released.
+4. **Local MCP Server:** Run the Neon MCP server locally on your machine, authenticating with a Neon API key.
 
-2. **Local MCP Server:** Run the Neon MCP server locally on your machine, authenticating with a Neon API key.
-
-## Prerequisites
+### Prerequisites
 
 - An MCP Client application.
 - A [Neon account](https://console.neon.tech/signup).
@@ -57,32 +58,7 @@ For Local MCP Server setup, you also need a Neon API key. See [Neon API Keys doc
 
 For development, you'll also need [Bun](https://bun.sh) installed.
 
-### Option 1. Remote Hosted MCP Server (Preview)
-
-Connect to Neon's managed MCP server using OAuth for authentication. This is the easiest setup, requires no local installation of this server, and doesn't need a Neon API key configured in the client.
-
-- Add the following "Neon" entry to your client's MCP server configuration file (e.g., `mcp.json`, `mcp_config.json`):
-
-  ```json
-  {
-    "mcpServers": {
-      "Neon": {
-        "command": "npx",
-        "args": ["-y", "mcp-remote", "https://mcp.neon.tech/mcp"]
-      }
-    }
-  }
-  ```
-
-- Save the configuration file.
-- Restart or refresh your MCP client.
-- An OAuth window will open in your browser. Follow the prompts to authorize your MCP client to access your Neon account.
-
-> With OAuth base authentication, the MCP server will, by default operate on projects under your personal Neon account. To access or manage projects under organization, you must explicitly provide either the `org_id` or the `project_id` in your prompt to MCP client.
-
-Remote MCP Server also supports authentication using an API key in the `Authorization` header if your client supports it.
-
-#### Quick Setup with API Key
+### Option 1. Quick Setup with API Key
 
 **Don't want to manually create an API key?**
 
@@ -94,14 +70,51 @@ npx neonctl@latest init
 
 This works with Cursor, VS Code (GitHub Copilot), and Claude Code. It will authenticate via OAuth, create a Neon API key for you, and configure your editor automatically.
 
-#### Manual API Key Setup
+### Option 2. Remote Hosted MCP Server (OAuth Based Authentication)
 
-For other IDEs or manual configuration, [create a Neon API key](https://console.neon.tech/app/settings?modal=create_api_key) in the Neon Console and use this configuration:
+Connect to Neon's managed MCP server using OAuth for authentication. This is the easiest setup, requires no local installation of this server, and doesn't need a Neon API key configured in the client.
+
+Run the following command to add the Neon MCP Server for all detected agents and editors in your workspace:
+
+```bash
+npx add-mcp https://mcp.neon.tech/mcp
+```
+
+Alternatively, you can add the following "Neon" entry to your client's MCP server configuration file (e.g., `mcp.json`, `mcp_config.json`):
 
 ```json
 {
   "mcpServers": {
     "Neon": {
+      "type": "http",
+      "url": "https://mcp.neon.tech/mcp"
+    }
+  }
+}
+```
+
+- Restart or refresh your MCP client.
+- An OAuth window will open in your browser. Follow the prompts to authorize your MCP client to access your Neon account.
+
+> With OAuth base authentication, the MCP server will, by default operate on projects under your personal Neon account. To access or manage projects under organization, you must explicitly provide either the `org_id` or the `project_id` in your prompt to MCP client.
+
+### Option 3. Remote Hosted MCP Server (API Key Based Authentication)
+
+Remote MCP Server also supports authentication using an API key in the `Authorization` header if your client supports it.
+
+[Create a Neon API key](https://console.neon.tech/app/settings?modal=create_api_key) in the Neon Console. Next, run the following command to add the Neon MCP Server for all detected agents and editors in your workspace:
+
+```bash
+npx add-mcp https://mcp.neon.tech/mcp --header "Authorization: Bearer <$NEON_API_KEY>"
+```
+
+Alternatively, you can add the following "Neon" entry to your client's MCP server configuration file (e.g., `mcp.json`, `mcp_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "Neon": {
+      "type": "http",
       "url": "https://mcp.neon.tech/mcp",
       "headers": {
         "Authorization": "Bearer <$NEON_API_KEY>"
@@ -111,58 +124,13 @@ For other IDEs or manual configuration, [create a Neon API key](https://console.
 }
 ```
 
-> Provider organization's API key to limit access to projects under the organization only.
+> Provide an organization's API key to limit access to projects under the organization only.
 
-**Read-Only Mode:** Restricts which tools are available, disabling write operations like creating projects, branches, or running migrations. Read-only tools include listing projects, describing schemas, querying data, and viewing performance metrics.
-
-You can enable read-only mode in two ways:
-
-1. **OAuth Scope Selection (Recommended):** When connecting via OAuth, uncheck "Full access" during authorization to operate in read-only mode.
-
-2. **Header Override:** Add the `x-read-only` header to your configuration:
-
-```json
-{
-  "mcpServers": {
-    "Neon": {
-      "url": "https://mcp.neon.tech/mcp",
-      "headers": {
-        "Authorization": "Bearer <$NEON_API_KEY>",
-        "x-read-only": "true"
-      }
-    }
-  }
-}
-```
-
-> **Note:** Read-only mode restricts which *tools* are available, not the SQL content. The `run_sql` tool remains available and can execute any SQL including INSERT/UPDATE/DELETE. For true read-only SQL access, use database roles with restricted permissions.
-
-<details>
-<summary><strong>Tools available in read-only mode</strong></summary>
-
-- `list_projects`, `list_shared_projects`, `describe_project`, `list_organizations`
-- `describe_branch`, `list_branch_computes`, `compare_database_schema`
-- `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`
-- `list_slow_queries`, `explain_sql_statement`
-- `get_connection_string`
-- `search`, `fetch`, `load_resource`
-
-**Tools requiring write access:**
-- `create_project`, `delete_project`
-- `create_branch`, `delete_branch`, `reset_from_parent`
-- `provision_neon_auth`, `provision_neon_data_api`
-- `prepare_database_migration`, `complete_database_migration`
-- `prepare_query_tuning`, `complete_query_tuning`
-
-</details>
-
-MCP supports two remote server transports: the deprecated Server-Sent Events (SSE) and the newer, recommended Streamable HTTP. If your LLM client doesn't support Streamable HTTP yet, you can switch the endpoint from `https://mcp.neon.tech/mcp` to `https://mcp.neon.tech/sse` to use SSE instead.
-
-### Option 2. Local MCP Server
+### Option 4. Local MCP Server
 
 Run the Neon MCP server on your local machine with your Neon API key. This method allows you to manage your Neon projects and databases without relying on a remote MCP server.
 
-Add the following JSON configuration within the `mcpServers` section of your client's `mcp_config` file, replacing `<YOUR_NEON_API_KEY>` with your actual Neon API key:
+[Create a Neon API key](https://console.neon.tech/app/settings?modal=create_api_key) in the Neon Console. Next, add the following JSON configuration within the `mcpServers` section of your client's `mcp_config` file, replacing `<YOUR_NEON_API_KEY>` with your actual Neon API key:
 
 ```json
 {
@@ -178,6 +146,60 @@ Add the following JSON configuration within the `mcpServers` section of your cli
     }
   }
 }
+```
+
+### Read-Only Mode
+
+**Read-Only Mode:** Restricts which tools are available, disabling write operations like creating projects, branches, or running migrations. Read-only tools include listing projects, describing schemas, querying data, and viewing performance metrics.
+
+You can enable read-only mode in two ways:
+
+1. **OAuth Scope Selection (Recommended):** When connecting via OAuth, uncheck "Full access" during authorization to operate in read-only mode.
+2. **Header Override:** Add the `x-read-only` header to your configuration:
+
+```json
+{
+  "mcpServers": {
+    "Neon": {
+      "url": "https://mcp.neon.tech/mcp",
+      "headers": {
+        "x-read-only": "true"
+      }
+    }
+  }
+}
+```
+
+> **Note:** Read-only mode restricts which _tools_ are available, not the SQL content. The `run_sql` tool remains available and can execute any SQL including INSERT/UPDATE/DELETE. For true read-only SQL access, use database roles with restricted permissions.
+
+<details>
+<summary><strong>Tools available in read-only mode</strong></summary>
+
+- `list_projects`, `list_shared_projects`, `describe_project`, `list_organizations`
+- `describe_branch`, `list_branch_computes`, `compare_database_schema`
+- `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`
+- `list_slow_queries`, `explain_sql_statement`
+- `get_connection_string`
+- `search`, `fetch`, `load_resource`
+
+**Tools requiring write access:**
+
+- `create_project`, `delete_project`
+- `create_branch`, `delete_branch`, `reset_from_parent`
+- `provision_neon_auth`, `provision_neon_data_api`
+- `prepare_database_migration`, `complete_database_migration`
+- `prepare_query_tuning`, `complete_query_tuning`
+
+</details>
+
+### Server-Sent Events (SSE) Transport (Deprecated)
+
+MCP supports two remote server transports: the deprecated Server-Sent Events (SSE) and the newer, recommended Streamable HTTP. If your LLM client doesn't support Streamable HTTP yet, you can switch the endpoint from `https://mcp.neon.tech/mcp` to `https://mcp.neon.tech/sse` to use SSE instead.
+
+Run the following command to add the Neon MCP Server for all detected agents and editors in your workspace using the SSE transport:
+
+```bash
+npx add-mcp https://mcp.neon.tech/sse --type sse
 ```
 
 ### Troubleshooting
