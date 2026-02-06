@@ -436,6 +436,63 @@ const handler = createMcpHandler(
     basePath: '/api',
     maxDuration: 800, // Fluid Compute - up to 800s for SSE connections
     verboseLogs: process.env.NODE_ENV !== 'production',
+    onEvent: (event) => {
+      switch (event.type) {
+        case 'SESSION_STARTED':
+          logger.info('MCP session started', {
+            sessionId: event.sessionId,
+            transport: event.transport,
+            clientInfo: event.clientInfo,
+          });
+          break;
+
+        case 'SESSION_ENDED':
+          logger.info('MCP session ended', {
+            sessionId: event.sessionId,
+            transport: event.transport,
+          });
+          break;
+
+        case 'REQUEST_COMPLETED':
+          if (event.status === 'error') {
+            logger.warn('MCP request failed', {
+              sessionId: event.sessionId,
+              requestId: event.requestId,
+              method: event.method,
+              duration: event.duration,
+            });
+          }
+          break;
+
+        case 'ERROR':
+          const isConnectionError =
+            typeof event.error === 'string'
+              ? event.error.includes('No connection established')
+              : event.error?.message?.includes('No connection established');
+
+          if (isConnectionError) {
+            logger.warn('MCP connection lost', {
+              sessionId: event.sessionId,
+              source: event.source,
+              severity: event.severity,
+              context: event.context,
+            });
+          } else if (event.severity === 'fatal') {
+            logger.error('MCP fatal error', {
+              sessionId: event.sessionId,
+              error: event.error,
+              source: event.source,
+              context: event.context,
+            });
+            captureException(
+              event.error instanceof Error
+                ? event.error
+                : new Error(String(event.error))
+            );
+          }
+          break;
+      }
+    },
   }
 );
 
