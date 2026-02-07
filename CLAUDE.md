@@ -400,13 +400,83 @@ This repository uses an enhanced Claude Code Review workflow that provides inlin
 - **Manual**: Run workflow via GitHub Actions with PR number
 - **Security**: Only OWNER/MEMBER/COLLABORATOR PRs (blocks external)
 
-## Browser Automation
+## Testing the OAuth Consent Page Locally
 
-Use `agent-browser` for web automation. Run `agent-browser --help` for all commands.
+The OAuth authorization page (`/api/authorize`) requires a registered OAuth client in the database. Since the dev server uses `OAUTH_DATABASE_URL` from `.env.local` for client storage, you need to register a client first.
 
-Core workflow:
+### 1. Register an OAuth Client
 
-1. `agent-browser open <url>` - Navigate to page
-2. `agent-browser snapshot -i` - Get interactive elements with refs (@e1, @e2)
-3. `agent-browser click @e1` / `fill @e2 "text"` - Interact using refs
-4. Re-snapshot after page changes
+With the dev server running (`cd landing && bun run dev`), use `curl` to dynamically register a client:
+
+```bash
+curl -s -X POST http://localhost:3000/api/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_name": "My Test Client",
+    "redirect_uris": ["http://localhost:3000/callback"],
+    "grant_types": ["authorization_code"],
+    "response_types": ["code"],
+    "token_endpoint_auth_method": "none"
+  }'
+```
+
+This returns a JSON response with `client_id` and `client_secret`. Save the `client_id` — you'll need it for the authorize URL.
+
+**Important**: The `grant_types`, `response_types`, and `token_endpoint_auth_method` fields are required. Omitting them will return a 400 error.
+
+### 2. Visit the OAuth Consent Page
+
+Build the authorize URL with the registered `client_id`:
+
+```
+http://localhost:3000/api/authorize?response_type=code&client_id=<CLIENT_ID>&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback&state=test&code_challenge=test123456789012345678901234567890123456789&code_challenge_method=S256
+```
+
+Open this URL in a browser to see the OAuth consent page with preset tabs, scope categories, and branch protection options.
+
+**Note**: After approving once, a signed cookie remembers the approval and will skip the dialog on subsequent visits. Use an incognito window or clear cookies to see the consent page again.
+
+### 3. Take Screenshots with agent-browser
+
+Use `agent-browser` to automate screenshots of different OAuth consent page states:
+
+```bash
+# Open the OAuth consent page
+agent-browser open "http://localhost:3000/api/authorize?response_type=code&client_id=<CLIENT_ID>&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback&state=test&code_challenge=test123456789012345678901234567890123456789&code_challenge_method=S256"
+
+# Take a full-page screenshot of the default view (Full Access preset)
+agent-browser screenshot --full screenshots/full-access.png
+
+# Get interactive elements to find button refs
+agent-browser snapshot -i
+# Output: button "Custom" [ref=e2], button "Local Development" [ref=e3], etc.
+
+# Click different presets and screenshot each
+agent-browser click @e2   # Custom preset
+agent-browser screenshot --full screenshots/custom-preset.png
+
+agent-browser click @e3   # Local Development preset
+agent-browser screenshot --full screenshots/local-dev.png
+
+# Expand permission details (collapsible section on non-custom presets)
+agent-browser find text "Show permission details" click
+agent-browser screenshot --full screenshots/local-dev-expanded.png
+
+# Check the branch protection checkbox
+agent-browser check @e6
+agent-browser screenshot --full screenshots/with-branch-protection.png
+
+# Clean up
+agent-browser close
+```
+
+**agent-browser quick reference**:
+
+- `agent-browser open <url>` — Navigate to page
+- `agent-browser snapshot -i` — Get interactive elements with refs (`@e1`, `@e2`)
+- `agent-browser click @e1` / `fill @e2 "text"` — Interact using refs
+- `agent-browser screenshot [path.png]` — Screenshot (add `--full` for full page)
+- `agent-browser find text "..." click` — Find by text and click
+- `agent-browser check @e1` / `uncheck @e1` — Toggle checkboxes
+- `agent-browser close` — Close browser
+- Re-snapshot after page changes to get updated refs
