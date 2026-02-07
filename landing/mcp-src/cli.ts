@@ -10,6 +10,7 @@ import { AppContext } from './types/context';
 import { NEON_TOOLS } from './tools/index';
 import './utils/polyfills';
 import { resolveAccountFromAuth } from './server/account';
+import { resolveGrantFromCliArgs } from './utils/grant-context';
 
 const args = parseArgs();
 const appVersion = getPackageJson().version;
@@ -67,15 +68,23 @@ if (args.command === 'start:sse') {
     }
 
     if (args.command === 'start') {
+      const grant = resolveGrantFromCliArgs(args.grantArgs);
+
       track({
         userId: accountId,
         event: 'start_stdio',
+        properties: {
+          preset: grant.preset,
+          projectScoped: String(!!grant.projectId),
+        },
         context: appContext,
       });
       const server = createMcpServer({
         apiKey: args.neonApiKey,
         account,
         app: appContext,
+        grant,
+        readOnly: grant.preset === 'production_use',
       });
       await startStdio(server);
     }

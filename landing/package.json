@@ -22,7 +22,10 @@
     "start:cli": "node dist/cli/cli.js start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "postinstall": "patch-package",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "postinstall": "patch-package && rm -rf node_modules/@modelcontextprotocol/sdk/node_modules/ajv",
     "prepublishOnly": "npx tsx scripts/before-publish.ts"
   },
   "dependencies": {
@@ -56,6 +59,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/he": "^1.2.3",
     "@types/node": "^20",
@@ -63,6 +67,8 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "autoevals": "^0.0.92",
     "braintrust": "^0.0.198",
     "eslint": "^9",
@@ -70,6 +76,7 @@
     "patch-package": "^8.0.1",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18"
   }
 }

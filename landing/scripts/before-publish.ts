@@ -26,7 +26,7 @@ function checkMainBranch(version: string) {
       console.error(`Current branch: ${currentBranch}`);
       process.exit(1);
     }
-  } catch (error) {
+  } catch {
     console.error('Error: Git repository not found');
     process.exit(1);
   }
@@ -49,7 +49,7 @@ function checkChangelog() {
       process.exit(1);
     }
     return version;
-  } catch (err) {
+  } catch {
     console.error('\x1b[31mError: CHANGELOG.md not found\x1b[0m');
     process.exit(1);
   }

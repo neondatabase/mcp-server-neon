@@ -6,6 +6,7 @@ import { createNeonClient } from '../../mcp-src/server/api';
 import { resolveAccountFromAuth } from '../../mcp-src/server/account';
 import { handleOAuthError } from '../../lib/errors';
 import type { AuthorizationCode } from 'oauth2-server';
+import type { GrantContext } from '../../mcp-src/utils/grant-context';
 
 type DownstreamAuthRequest = {
   responseType: string;
@@ -15,6 +16,7 @@ type DownstreamAuthRequest = {
   state: string;
   codeChallenge?: string;
   codeChallengeMethod?: string;
+  grant?: GrantContext;
 };
 
 const decodeAuthParams = (state: string): DownstreamAuthRequest => {
@@ -75,7 +77,7 @@ export async function GET(request: NextRequest) {
     const userInfo = await resolveAccountFromAuth(auth, neonClient);
 
     // Save the authorization code with associated data
-    const authCodeData: AuthorizationCode = {
+    const authCodeData: AuthorizationCode & { grant?: GrantContext } = {
       authorizationCode: authCode,
       expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
       createdAt: Date.now(),
@@ -91,6 +93,7 @@ export async function GET(request: NextRequest) {
       },
       code_challenge: requestParams.codeChallenge,
       code_challenge_method: requestParams.codeChallengeMethod,
+      grant: requestParams.grant,
     };
 
     await model.saveAuthorizationCode(authCodeData);

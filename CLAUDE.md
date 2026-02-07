@@ -7,6 +7,7 @@ This file provides guidance to AI agents when working with code in this reposito
 This is the **Neon MCP Server** - a Model Context Protocol server that bridges natural language requests to the Neon API, enabling LLMs to manage Neon Postgres databases through conversational commands. The project implements both local (stdio) and remote (SSE/Streamable HTTP) MCP server transports with OAuth authentication support.
 
 **Architecture Note**: The entire project is a unified Next.js application in the `landing/` directory that serves dual purposes:
+
 1. **Remote MCP Server**: Deployed on Vercel serverless infrastructure, accessible at `mcp.neon.tech`
 2. **Local MCP CLI**: Published as `@neondatabase/mcp-server-neon` npm package, runs locally via stdio transport
 
@@ -28,6 +29,9 @@ bun run build:cli
 
 # Run the CLI locally with API key
 bun run start:cli $NEON_API_KEY
+
+# Run the CLI with access control flags
+bun run start:cli $NEON_API_KEY -- --preset local_development --project-id my-project --protect-production
 
 # Or run the built CLI directly
 node dist/cli/cli.js start <NEON_API_KEY>
@@ -57,7 +61,6 @@ bun run typecheck
 ### Core Components
 
 1. **MCP Server (`landing/mcp-src/server/index.ts`)**
-
    - Creates and configures the MCP server instance
    - Registers all tools and resources from centralized definitions
    - Implements error handling and observability (Sentry, analytics)
@@ -69,24 +72,20 @@ bun run typecheck
    - Falls back gracefully when project-scoped keys cannot access account-level endpoints
 
 2. **Tools System (`landing/mcp-src/tools/`)**
-
    - `definitions.ts`: Exports `NEON_TOOLS` array defining all available tools with their schemas
    - `tools.ts`: Exports `NEON_HANDLERS` object mapping tool names to handler functions
    - `toolsSchema.ts`: Zod schemas for tool input validation
    - `handlers/`: Individual tool handler implementations organized by feature
 
 3. **CLI Entry Point (`landing/mcp-src/cli.ts`)**
-
    - Entry point for the npm package CLI
    - Handles stdio transport for local MCP clients (Claude Desktop, Cursor)
 
 4. **Remote Transport (`landing/app/api/[transport]/route.ts`)**
-
    - Next.js API route handling SSE and Streamable HTTP transports
    - Uses `mcp-handler` library for serverless MCP protocol handling
 
 5. **OAuth System (`landing/lib/oauth/` and `landing/mcp-src/oauth/`)**
-
    - OAuth 2.0 server implementation for remote MCP authentication
    - Integrates with Neon's OAuth provider (UPSTREAM_OAUTH_HOST)
    - Token persistence using Keyv with Postgres backend
@@ -104,9 +103,9 @@ bun run typecheck
 
 - **Stateless Design**: The server is designed for serverless deployment. Tools like migrations and query tuning create temporary branches but do NOT store state in memory. Instead, all context (branch IDs, migration SQL, etc.) is returned to the LLM, which passes it back to subsequent tool calls. This enables horizontal scaling on Vercel.
 
-- **Read-Only Mode** (`landing/mcp-src/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. Read-only mode is determined by priority: `X-READ-ONLY` header > OAuth scope (only `read` scope = read-only) > default (false). The module also exports `SCOPE_DEFINITIONS` for human-readable scope labels and `hasWriteScope()` to check for write permissions.
+- **Read-Only Mode** (`landing/mcp-src/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. Read-only mode is determined by priority: `X-Neon-Read-Only` header > `x-read-only` header (legacy synonym) > grant preset (`production_use` = read-only) > OAuth scope (only `read` scope = read-only) > default (false). The module also exports `SCOPE_DEFINITIONS` for human-readable scope labels and `hasWriteScope()` to check for write permissions.
 
-- **OAuth Scope Selection UI**: During OAuth authorization, users see a permissions dialog where they can select which scopes to grant. Read access is always granted, while write access can be opted out of. The authorization endpoint (`landing/app/api/authorize/route.ts`) renders this UI and processes scope selections.
+- **OAuth Authorization UI**: During OAuth authorization, users see a permissions dialog rendered by `landing/app/api/authorize/route.ts`. The UI presents **permission presets** as radio buttons (`full_access`, `local_development`, `production_use`) and a **"Protect production branches"** checkbox. The selected preset and protection settings are encoded into the grant context and forwarded through the OAuth flow. When a client has already been approved (tracked via signed cookies), the dialog is skipped.
 
 - **MCP Tool Annotations**: All tools include MCP-standard annotations for client hints:
   - `title`: Human-readable tool name
@@ -114,6 +113,14 @@ bun run typecheck
   - `destructiveHint`: Whether the tool can cause irreversible changes
   - `idempotentHint`: Whether repeated calls produce the same result
   - `openWorldHint`: Whether the tool interacts with external systems
+
+- **Fine-Grained Access Control** (`landing/mcp-src/utils/grant-context.ts`, `landing/mcp-src/tools/grant-filter.ts`, `landing/mcp-src/tools/grant-enforcement.ts`): The server supports access control through permission presets, project scoping, production branch protection, and custom scope categories.
+  - **Permission Presets**: `full_access` (default, no restrictions), `local_development` (no project create/delete), `production_use` (read-only), `custom` (select specific tool categories).
+  - **Project Scoping**: Restricts all operations to a single Neon project. Project-agnostic tools are hidden and `projectId` is auto-injected into tool calls.
+  - **Production Branch Protection**: Blocks destructive operations (`delete_branch`, `reset_from_parent`, `run_sql`, `run_sql_transaction`) on protected branches.
+  - **Custom Scope Categories**: `projects`, `branches`, `schema`, `querying`, `performance`, `neon_auth`, `docs`. When scopes are provided, preset is automatically set to `custom`.
+  - **HTTP Headers** (remote server): `X-Neon-Preset`, `X-Neon-Scopes`, `X-Neon-Project-Id`, `X-Neon-Protect-Production`, `X-Neon-Read-Only` (legacy `x-read-only` accepted as synonym).
+  - **CLI Flags** (local server): `--preset`, `--scopes`, `--project-id`, `--protect-production`. Parsed in `landing/mcp-src/initConfig.ts`.
 
 - **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry error reporting.
 
@@ -123,7 +130,7 @@ bun run typecheck
 
 ```typescript
 export const myNewToolInputSchema = z.object({
-  project_id: z.string().describe('The Neon project ID'),
+  project_id: z.string().describe("The Neon project ID"),
   // ... other fields
 });
 ```
@@ -149,10 +156,10 @@ export const myNewToolInputSchema = z.object({
 3. Create a handler in `landing/mcp-src/tools/handlers/my-new-tool.ts`:
 
 ```typescript
-import { ToolHandler } from '../types';
-import { myNewToolInputSchema } from '../toolsSchema';
+import { ToolHandler } from "../types";
+import { myNewToolInputSchema } from "../toolsSchema";
 
-export const myNewToolHandler: ToolHandler<'my_new_tool'> = async (
+export const myNewToolHandler: ToolHandler<"my_new_tool"> = async (
   args,
   neonClient,
   extra,
@@ -161,8 +168,8 @@ export const myNewToolHandler: ToolHandler<'my_new_tool'> = async (
   return {
     content: [
       {
-        type: 'text',
-        text: 'Result message',
+        type: "text",
+        text: "Result message",
       },
     ],
   };
@@ -172,7 +179,7 @@ export const myNewToolHandler: ToolHandler<'my_new_tool'> = async (
 4. Register the handler in `landing/mcp-src/tools/tools.ts`:
 
 ```typescript
-import { myNewToolHandler } from './handlers/my-new-tool';
+import { myNewToolHandler } from "./handlers/my-new-tool";
 
 export const NEON_HANDLERS = {
   // ... existing handlers
@@ -198,30 +205,35 @@ landing/                  # Next.js app (main project)
 ├── app/                 # Next.js App Router
 │   ├── api/            # API routes for remote MCP server
 │   │   ├── [transport]/route.ts  # Main MCP handler (SSE/Streamable HTTP)
-│   │   ├── authorize/  # OAuth authorization endpoint
+│   │   ├── authorize/  # OAuth authorization endpoint (renders preset UI)
 │   │   ├── token/      # OAuth token exchange
 │   │   ├── register/   # Dynamic client registration
 │   │   ├── revoke/     # OAuth token revocation
 │   │   └── health/     # Health check endpoint
 │   ├── callback/       # OAuth callback handler
 │   └── .well-known/    # OAuth discovery endpoints
+│   # Note: Root `/` redirects to https://neon.tech/docs/ai/neon-mcp-server
+│   # (configured in next.config.ts). There is no landing page.
 ├── lib/                # Next.js-compatible utilities
 │   ├── config.ts       # Centralized configuration
 │   └── oauth/          # OAuth utilities for Next.js
 ├── mcp-src/            # MCP server source code
 │   ├── cli.ts          # CLI entry point (stdio transport)
+│   ├── initConfig.ts   # CLI argument parsing (--preset, --project-id, etc.)
 │   ├── server/         # MCP server factory
 │   │   ├── index.ts    # Server creation and tool registration
 │   │   ├── api.ts      # Neon API client factory
 │   │   ├── account.ts  # Account resolution (user/org/project-scoped)
 │   │   └── errors.ts   # Error handling utilities
 │   ├── tools/          # Tool definitions and handlers
-│   │   ├── definitions.ts  # Tool definitions (NEON_TOOLS) with annotations
-│   │   ├── tools.ts       # Tool handlers mapping (NEON_HANDLERS)
-│   │   ├── toolsSchema.ts # Zod schemas for tool inputs
-│   │   ├── handlers/      # Individual tool implementations
-│   │   ├── types.ts       # TypeScript types
-│   │   └── utils.ts       # Tool utilities
+│   │   ├── definitions.ts     # Tool definitions (NEON_TOOLS) with annotations
+│   │   ├── tools.ts           # Tool handlers mapping (NEON_HANDLERS)
+│   │   ├── toolsSchema.ts     # Zod schemas for tool inputs
+│   │   ├── handlers/          # Individual tool implementations
+│   │   ├── grant-filter.ts    # Filters tools based on grant context (presets/scopes)
+│   │   ├── grant-enforcement.ts # Enforces branch protection at runtime
+│   │   ├── types.ts           # TypeScript types
+│   │   └── utils.ts           # Tool utilities
 │   ├── oauth/          # OAuth model and KV store
 │   ├── analytics/      # Segment analytics
 │   ├── sentry/         # Sentry error tracking
@@ -229,18 +241,21 @@ landing/                  # Next.js app (main project)
 │   │   └── stdio.ts    # Stdio transport for CLI
 │   ├── types/          # Shared TypeScript types
 │   ├── utils/          # Shared utilities
-│   │   ├── read-only.ts    # Read-only mode detection, scope definitions
-│   │   ├── trace.ts        # TraceId generation for request correlation
+│   │   ├── read-only.ts       # Read-only mode detection, scope definitions
+│   │   ├── grant-context.ts   # Grant context types, preset definitions, CLI grant parsing
+│   │   ├── trace.ts           # TraceId generation for request correlation
 │   │   ├── client-application.ts  # Client application utilities
-│   │   ├── logger.ts       # Logging utilities
-│   │   └── polyfills.ts    # Runtime polyfills
+│   │   ├── logger.ts          # Logging utilities
+│   │   └── polyfills.ts       # Runtime polyfills
 │   ├── resources.ts    # MCP resources
 │   ├── prompts.ts      # LLM prompts
 │   └── constants.ts    # Shared constants
-├── components/         # React components for landing page
+├── components/         # React components (OAuth UI, shared UI primitives)
+├── patches/            # npm package patches
 ├── public/             # Static assets
 ├── package.json        # Package configuration
 ├── tsconfig.json       # TypeScript config (bundler resolution)
+├── next.config.ts      # Next.js config (redirects, rewrites)
 ├── vercel.json         # Vercel deployment config
 └── vercel-migration.md # Migration documentation
 
@@ -276,40 +291,40 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 
 ### API Endpoints
 
-| Route | Purpose |
-|-------|---------|
-| `/api/mcp` | Streamable HTTP transport (recommended) |
-| `/api/sse` | Server-Sent Events transport (deprecated) |
-| `/api/authorize` | OAuth authorization initiation |
-| `/callback` | OAuth callback handler |
-| `/api/token` | OAuth token exchange |
-| `/api/revoke` | OAuth token revocation |
-| `/api/register` | Dynamic client registration |
+| Route                                     | Purpose                                             |
+| ----------------------------------------- | --------------------------------------------------- |
+| `/api/mcp`                                | Streamable HTTP transport (recommended)             |
+| `/api/sse`                                | Server-Sent Events transport (deprecated)           |
+| `/api/authorize`                          | OAuth authorization initiation                      |
+| `/callback`                               | OAuth callback handler                              |
+| `/api/token`                              | OAuth token exchange                                |
+| `/api/revoke`                             | OAuth token revocation                              |
+| `/api/register`                           | Dynamic client registration                         |
 | `/.well-known/oauth-authorization-server` | OAuth server metadata (includes `scopes_supported`) |
-| `/.well-known/oauth-protected-resource` | OAuth protected resource metadata |
+| `/.well-known/oauth-protected-resource`   | OAuth protected resource metadata                   |
 
-### OAuth Scopes
+### OAuth Scopes and Presets
 
-The server supports three scopes: `read`, `write`, and `*`. These are exposed via the `/.well-known/oauth-authorization-server` endpoint's `scopes_supported` field.
+The server supports three OAuth scopes: `read`, `write`, and `*`. These are exposed via the `/.well-known/oauth-authorization-server` endpoint's `scopes_supported` field.
 
 - **`read`**: Read-only access to Neon resources
 - **`write`**: Full access including create/delete operations
 - **`*`**: Wildcard, equivalent to full access
 
-During authorization, users can uncheck "Full access" to request only `read` scope, which enables read-only mode.
+During OAuth authorization, the UI presents **permission presets** (radio buttons: Full Access, Local Development, Production Use) and a **"Protect production branches"** checkbox. The selected preset and grant context are encoded into the OAuth state and forwarded through the flow.
 
 ### Environment Variables (Vercel)
 
-| Variable | Description |
-|----------|-------------|
-| `SERVER_HOST` | Server URL (falls back to `VERCEL_URL`) |
-| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL |
-| `CLIENT_ID` / `CLIENT_SECRET` | OAuth client credentials |
-| `COOKIE_SECRET` | Secret for signed cookies |
-| `KV_URL` | Vercel KV (Upstash Redis) URL |
-| `OAUTH_DATABASE_URL` | Postgres URL for token storage |
-| `SENTRY_DSN` | Sentry error tracking DSN |
-| `ANALYTICS_WRITE_KEY` | Segment analytics write key |
+| Variable                      | Description                             |
+| ----------------------------- | --------------------------------------- |
+| `SERVER_HOST`                 | Server URL (falls back to `VERCEL_URL`) |
+| `UPSTREAM_OAUTH_HOST`         | Neon OAuth provider URL                 |
+| `CLIENT_ID` / `CLIENT_SECRET` | OAuth client credentials                |
+| `COOKIE_SECRET`               | Secret for signed cookies               |
+| `KV_URL`                      | Vercel KV (Upstash Redis) URL           |
+| `OAUTH_DATABASE_URL`          | Postgres URL for token storage          |
+| `SENTRY_DSN`                  | Sentry error tracking DSN               |
+| `ANALYTICS_WRITE_KEY`         | Segment analytics write key             |
 
 ### Development Notes
 
@@ -323,6 +338,7 @@ During authorization, users can uncheck "Full access" to request only `read` sco
 The `deploy-preview.yml` workflow enables deploying PRs to the preview environment (`preview-mcp.neon.tech`) for testing OAuth flows and remote MCP functionality.
 
 **Usage:**
+
 1. Add the `deploy-preview` label to a PR
 2. The workflow pushes to the `preview` branch, which triggers Vercel deployment
 3. Only one PR can own the preview environment at a time (label is auto-removed from other PRs)
@@ -335,11 +351,13 @@ The `deploy-preview.yml` workflow enables deploying PRs to the preview environme
 The `claude.yml` workflow enables interactive Claude assistance in issues and pull requests.
 
 **Usage:**
+
 - Mention `@claude` in any issue, PR comment, or PR review comment
 - Claude will analyze and respond to your request
 - Only works for OWNER/MEMBER/COLLABORATOR to prevent abuse
 
 **Available Commands:**
+
 - GitHub CLI commands (`gh issue:*`, `gh pr:*`, `gh search:*`)
 - Can help with code review, issue triage, and PR descriptions
 
@@ -381,3 +399,14 @@ This repository uses an enhanced Claude Code Review workflow that provides inlin
 - **Automatic**: Opens when PR is created
 - **Manual**: Run workflow via GitHub Actions with PR number
 - **Security**: Only OWNER/MEMBER/COLLABORATOR PRs (blocks external)
+
+## Browser Automation
+
+Use `agent-browser` for web automation. Run `agent-browser --help` for all commands.
+
+Core workflow:
+
+1. `agent-browser open <url>` - Navigate to page
+2. `agent-browser snapshot -i` - Get interactive elements with refs (@e1, @e2)
+3. `agent-browser click @e1` / `fill @e2 "text"` - Interact using refs
+4. Re-snapshot after page changes

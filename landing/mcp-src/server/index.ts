@@ -3,7 +3,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { NEON_RESOURCES } from '../resources';
 import { NEON_PROMPTS, getPromptTemplate } from '../prompts';
-import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools/index';
+import { NEON_HANDLERS, ToolHandlerExtended } from '../tools/index';
 import { logger } from '../utils/logger';
 import { generateTraceId } from '../utils/trace';
 import { createNeonClient } from './api';
@@ -14,6 +14,9 @@ import { setSentryTags } from '../sentry/utils';
 import { ToolHandlerExtraParams } from '../tools/types';
 import { handleToolError } from './errors';
 import { detectClientApplication } from '../utils/client-application';
+import { DEFAULT_GRANT } from '../utils/grant-context';
+import { getAvailableTools, injectProjectId } from '../tools/grant-filter';
+import { enforceProtectedBranches, GrantViolationError } from '../tools/grant-enforcement';
 import pkg from '../../package.json';
 
 export const createMcpServer = (context: ServerContext) => {
@@ -39,6 +42,8 @@ export const createMcpServer = (context: ServerContext) => {
   let clientName = context.userAgent ?? 'unknown';
   let clientApplication = detectClientApplication(clientName);
 
+  const grant = context.grant ?? DEFAULT_GRANT;
+
   // Track server initialization
   const trackServerInit = () => {
     track({
@@ -48,6 +53,10 @@ export const createMcpServer = (context: ServerContext) => {
         clientName,
         clientApplication,
         readOnly: String(context.readOnly ?? false),
+        preset: grant.preset,
+        projectScoped: String(!!grant.projectId),
+        protectedBranches: grant.protectedBranches?.join(',') ?? 'none',
+        customScopes: grant.scopes?.join(',') ?? 'all',
       },
       context: {
         client: context.client,
@@ -58,6 +67,7 @@ export const createMcpServer = (context: ServerContext) => {
       clientName,
       clientApplication,
       readOnly: context.readOnly,
+      grant,
     });
   };
 
@@ -74,10 +84,9 @@ export const createMcpServer = (context: ServerContext) => {
     trackServerInit();
   };
 
-  // Filter tools based on read-only mode
-  const availableTools = context.readOnly
-    ? NEON_TOOLS.filter((tool) => tool.readOnlySafe)
-    : NEON_TOOLS;
+  // Filter tools based on grant context (presets, scopes, project scoping)
+  // and read-only mode (for backwards compatibility with X-Neon-Read-Only header / OAuth scopes)
+  const availableTools = getAvailableTools(grant, context.readOnly ?? false);
 
   // Register tools
   availableTools.forEach((tool) => {
@@ -107,6 +116,8 @@ export const createMcpServer = (context: ServerContext) => {
             const properties = {
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
+              preset: grant.preset,
+              projectScoped: String(!!grant.projectId),
               clientName,
               traceId,
             };
@@ -130,8 +141,36 @@ export const createMcpServer = (context: ServerContext) => {
               clientApplication,
             };
             try {
-              return await toolHandler(args, neonClient, extraArgs);
+              // Inject projectId if in project-scoped mode
+              const effectiveArgs = injectProjectId(
+                args as Record<string, unknown>,
+                grant,
+              );
+
+              // Enforce protected branch restrictions
+              enforceProtectedBranches(
+                grant,
+                tool.name,
+                effectiveArgs,
+              );
+
+              return await toolHandler(
+                effectiveArgs as typeof args,
+                neonClient,
+                extraArgs,
+              );
             } catch (error) {
+              if (error instanceof GrantViolationError) {
+                return {
+                  content: [
+                    {
+                      type: 'text' as const,
+                      text: error.message,
+                    },
+                  ],
+                  isError: true,
+                };
+              }
               span.setStatus({
                 code: 2,
               });

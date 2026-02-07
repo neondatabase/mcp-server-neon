@@ -6,6 +6,7 @@ import { verifyPKCE } from '../../../mcp-src/oauth/utils';
 import { identify, flushAnalytics } from '../../../mcp-src/analytics/analytics';
 import { handleOAuthError } from '../../../lib/errors';
 import { logger } from '../../../mcp-src/utils/logger';
+import type { GrantContext } from '../../../mcp-src/utils/grant-context';
 
 const toSeconds = (ms: number): number => Math.floor(ms / 1000);
 const toMilliseconds = (seconds: number): number => seconds * 1000;
@@ -180,8 +181,11 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Save the token
+      // Save the token (including grant context from OAuth consent)
       logger.info('Saving token for authorization_code grant');
+      const authCodeWithGrant = authorizationCode as typeof authorizationCode & {
+        grant?: GrantContext;
+      };
       const token = await model.saveToken({
         accessToken: authorizationCode.token.access_token,
         refreshToken: authorizationCode.token.refresh_token,
@@ -189,7 +193,8 @@ export async function POST(request: NextRequest) {
         client: client,
         user: authorizationCode.user,
         scope: authorizationCode.scope,
-      });
+        grant: authCodeWithGrant.grant,
+      } as Parameters<typeof model.saveToken>[0]);
 
       await model.saveRefreshToken({
         refreshToken: token.refreshToken ?? '',
@@ -349,7 +354,11 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Preserve grant context from the old token through refresh
       logger.info('Saving new tokens from refresh');
+      const oldTokenWithGrant = oldToken as typeof oldToken & {
+        grant?: GrantContext;
+      };
       const token = await model.saveToken({
         accessToken: upstreamToken.access_token,
         refreshToken: newRefreshToken,
@@ -357,7 +366,8 @@ export async function POST(request: NextRequest) {
         client: client,
         user: oldToken.user,
         scope: oldToken.scope,
-      });
+        grant: oldTokenWithGrant.grant,
+      } as Parameters<typeof model.saveToken>[0]);
 
       await model.saveRefreshToken({
         refreshToken: newRefreshToken,

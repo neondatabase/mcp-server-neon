@@ -1,8 +1,10 @@
 import { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { GrantContext } from '../utils/grant-context';
 
 export type AuthContext = {
   extra: {
     readOnly?: boolean;
+    grant?: GrantContext;
     account: {
       id: string;
       name: string;

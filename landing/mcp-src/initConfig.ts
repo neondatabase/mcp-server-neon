@@ -3,6 +3,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import chalk from 'chalk';
 import { logger } from './utils/logger';
+import type { CliGrantArgs } from './utils/grant-context';
 import pkg from '../package.json';
 
 // Determine Claude config path based on OS platform
@@ -38,6 +39,7 @@ type Args =
       command: 'start';
       neonApiKey: string;
       analytics: boolean;
+      grantArgs: CliGrantArgs;
     }
   | {
       command: 'init';
@@ -50,6 +52,72 @@ type Args =
     };
 
 const commands = ['init', 'start', 'start:sse', 'export-tools'] as const;
+
+/**
+ * Parse a named flag from the remaining args.
+ * Supports: --flag value and --flag=value
+ */
+function parseFlag(
+  remainingArgs: string[],
+  flagName: string,
+): string | undefined {
+  for (let i = 0; i < remainingArgs.length; i++) {
+    const arg = remainingArgs[i];
+    // --flag=value
+    if (arg.startsWith(`--${flagName}=`)) {
+      return arg.slice(`--${flagName}=`.length);
+    }
+    // --flag value
+    if (arg === `--${flagName}` && i + 1 < remainingArgs.length) {
+      const next = remainingArgs[i + 1];
+      if (!next.startsWith('--')) {
+        return next;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Check if a boolean flag is present in the remaining args.
+ * For --protect-production, it can be a boolean flag (no value) or have a value.
+ */
+function parseBooleanOrValueFlag(
+  remainingArgs: string[],
+  flagName: string,
+): string | undefined {
+  for (let i = 0; i < remainingArgs.length; i++) {
+    const arg = remainingArgs[i];
+    // --flag=value
+    if (arg.startsWith(`--${flagName}=`)) {
+      return arg.slice(`--${flagName}=`.length);
+    }
+    // --flag (boolean) or --flag value
+    if (arg === `--${flagName}`) {
+      const next = remainingArgs[i + 1];
+      if (next && !next.startsWith('--')) {
+        return next;
+      }
+      return 'true';
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Parse grant-related CLI flags from remaining args (after command and API key).
+ */
+function parseGrantArgs(remainingArgs: string[]): CliGrantArgs {
+  return {
+    preset: parseFlag(remainingArgs, 'preset'),
+    scopes: parseFlag(remainingArgs, 'scopes'),
+    projectId: parseFlag(remainingArgs, 'project-id'),
+    protectProduction: parseBooleanOrValueFlag(
+      remainingArgs,
+      'protect-production',
+    ),
+  };
+}
 
 export const parseArgs = (): Args => {
   const args = process.argv;
@@ -92,11 +160,24 @@ export const parseArgs = (): Args => {
     process.exit(1);
   }
 
+  // Remaining args after command and API key
+  const remainingArgs = args.slice(4);
+  const analytics = !remainingArgs.some((a) => a.includes('no-analytics'));
+
+  if (command === 'init') {
+    return {
+      executablePath: args[1],
+      command: 'init',
+      neonApiKey: args[3],
+      analytics,
+    };
+  }
+
   return {
-    executablePath: args[1],
-    command: args[2] as 'start' | 'init',
+    command: 'start',
     neonApiKey: args[3],
-    analytics: !args[4]?.includes('no-analytics'),
+    analytics,
+    grantArgs: parseGrantArgs(remainingArgs),
   };
 };
 
