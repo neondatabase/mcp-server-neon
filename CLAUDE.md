@@ -103,9 +103,9 @@ bun run typecheck
 
 - **Stateless Design**: The server is designed for serverless deployment. Tools like migrations and query tuning create temporary branches but do NOT store state in memory. Instead, all context (branch IDs, migration SQL, etc.) is returned to the LLM, which passes it back to subsequent tool calls. This enables horizontal scaling on Vercel.
 
-- **Read-Only Mode** (`landing/mcp-src/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. Read-only mode is determined by priority: `X-Neon-Read-Only` header > `x-read-only` header (legacy synonym) > grant preset (`production_use` = read-only) > OAuth scope (only `read` scope = read-only) > default (false). The module also exports `SCOPE_DEFINITIONS` for human-readable scope labels and `hasWriteScope()` to check for write permissions.
+- **Read-Only Mode** (`landing/mcp-src/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. The module also exports `SCOPE_DEFINITIONS` for human-readable scope labels and `hasWriteScope()` to check for write permissions.
 
-- **OAuth Authorization UI**: During OAuth authorization, users see a permissions dialog rendered by `landing/app/api/authorize/route.ts`. The UI presents **permission presets** as radio buttons (`full_access`, `local_development`, `production_use`) and a **"Protect production branches"** checkbox. The selected preset and protection settings are encoded into the grant context and forwarded through the OAuth flow. When a client has already been approved (tracked via signed cookies), the dialog is skipped.
+- **OAuth Authorization UI**: During OAuth authorization, users see a permissions dialog rendered by `landing/app/api/authorize/route.ts`. The UI presents **permission presets** as radio buttons (`full_access`, `local_development`, `production_use`, `custom`) and a **"Protect production branches"** checkbox. The selected preset and protection settings are encoded into the grant context and forwarded through the OAuth flow. When a client has already been approved (tracked via signed cookies), the dialog is skipped.
 
 - **MCP Tool Annotations**: All tools include MCP-standard annotations for client hints:
   - `title`: Human-readable tool name
@@ -114,13 +114,12 @@ bun run typecheck
   - `idempotentHint`: Whether repeated calls produce the same result
   - `openWorldHint`: Whether the tool interacts with external systems
 
-- **Fine-Grained Access Control** (`landing/mcp-src/utils/grant-context.ts`, `landing/mcp-src/tools/grant-filter.ts`, `landing/mcp-src/tools/grant-enforcement.ts`): The server supports access control through permission presets, project scoping, production branch protection, and custom scope categories.
-  - **Permission Presets**: `full_access` (default, no restrictions), `local_development` (no project create/delete), `production_use` (read-only), `custom` (select specific tool categories).
-  - **Project Scoping**: Restricts all operations to a single Neon project. Project-agnostic tools are hidden and `projectId` is auto-injected into tool calls.
-  - **Production Branch Protection**: Blocks destructive operations (`delete_branch`, `reset_from_parent`, `run_sql`, `run_sql_transaction`) on protected branches.
-  - **Custom Scope Categories**: `projects`, `branches`, `schema`, `querying`, `performance`, `neon_auth`, `docs`. When scopes are provided, preset is automatically set to `custom`.
-  - **HTTP Headers** (remote server): `X-Neon-Preset`, `X-Neon-Scopes`, `X-Neon-Project-Id`, `X-Neon-Protect-Production`, `X-Neon-Read-Only` (legacy `x-read-only` accepted as synonym).
-  - **CLI Flags** (local server): `--preset`, `--scopes`, `--project-id`, `--protect-production`. Parsed in `landing/mcp-src/initConfig.ts`.
+- **Fine-Grained Access Control** (`landing/mcp-src/utils/grant-context.ts`, `landing/mcp-src/tools/grant-filter.ts`, `landing/mcp-src/tools/grant-enforcement.ts`): The server supports access control through permission presets, project scoping, production branch protection, and custom scope categories. See `README.md` for full user-facing documentation of all supported headers, flags, and values. The **source of truth for access control behavior** (exact tool counts, filtering pipeline, edge cases, and precedence rules) is the test suite in `landing/mcp-src/__tests__/`:
+  - `grant-filter.test.ts`: Tool inventory integrity, preset/scope/project filtering, exact tool count matrix, and access control warnings
+  - `list-tools-endpoint.test.ts`: End-to-end header-based filtering via the `/api/list-tools` endpoint
+  - `read-only.test.ts`: Read-only priority chain (headers > preset > OAuth scope > default)
+  - `grant-context.test.ts`: Header/CLI/token grant parsing, scope category validation, precedence rules
+  - `grant-enforcement.test.ts`: Runtime branch protection enforcement
 
 - **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry error reporting.
 

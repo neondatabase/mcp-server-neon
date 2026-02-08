@@ -425,4 +425,63 @@ test.describe('OAuth Consent Page', () => {
     const response = await page.goto(`/api/authorize?${params.toString()}`);
     expect(response?.status()).toBe(400);
   });
+
+  test('renders project scope input as editable by default', async ({
+    page,
+  }) => {
+    await page.goto(buildAuthorizeUrl(client.client_id));
+
+    const projectInput = page.locator('#project-id-input');
+    await expect(projectInput).toBeVisible();
+    await expect(projectInput).toHaveValue('');
+    await expect(projectInput).not.toHaveAttribute('readonly');
+
+    // Label and description
+    const section = page.locator('.project-scope-section');
+    await expect(section.getByText('Project scope')).toBeVisible();
+    await expect(
+      section.getByText('Restrict access to a single Neon project'),
+    ).toBeVisible();
+  });
+
+  test('project scope input accepts user input', async ({ page }) => {
+    await page.goto(buildAuthorizeUrl(client.client_id));
+
+    const projectInput = page.locator('#project-id-input');
+    await projectInput.fill('proj-my-test-123');
+    await expect(projectInput).toHaveValue('proj-my-test-123');
+  });
+
+  test('project scope input is readonly when X-Neon-Project-Id header is set', async ({
+    request,
+  }, testInfo) => {
+    const baseURL =
+      testInfo.project.use.baseURL ?? 'http://localhost:3000';
+
+    // Register a fresh client to avoid cookie-based auto-approval
+    const freshClient = await registerTestClient(baseURL);
+    const url = buildAuthorizeUrl(freshClient.client_id);
+
+    const response = await request.get(url, {
+      headers: { 'X-Neon-Project-Id': 'proj-header-456' },
+    });
+    expect(response.ok()).toBeTruthy();
+
+    const html = await response.text();
+
+    // The input should have the header value and be readonly
+    expect(html).toContain('value="proj-header-456"');
+    expect(html).toContain('id="project-id-input"');
+    expect(html).toMatch(/value="proj-header-456"[^>]*readonly/);
+  });
+
+  test('project scope input is inside the form', async ({ page }) => {
+    await page.goto(buildAuthorizeUrl(client.client_id));
+
+    // The project_id input should be inside the authorize form
+    const form = page.locator('#authorize-form');
+    const projectInput = form.locator('input[name="project_id"]');
+    await expect(projectInput).toBeVisible();
+    await expect(projectInput).toHaveAttribute('type', 'text');
+  });
 });

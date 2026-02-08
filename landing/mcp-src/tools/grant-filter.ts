@@ -186,6 +186,47 @@ export function getAvailableTools(
 }
 
 /**
+ * Build warning messages for access control edge cases.
+ *
+ * Returns human-readable warnings (using ⚠️ prefix) that should be
+ * appended to tool call responses so the LLM is aware of
+ * contradictory or potentially confusing configurations.
+ */
+export function getAccessControlWarnings(
+  grant: GrantContext,
+  readOnly: boolean,
+): string[] {
+  const warnings: string[] = [];
+
+  // readOnly explicitly set to false but production_use preset already
+  // restricts to read-only tools — the readOnly flag has no additional effect.
+  if (!readOnly && grant.preset === 'production_use') {
+    warnings.push(
+      '⚠️ Warning: Read-only mode is set to false, but the "production_use" preset ' +
+        'already restricts tools to the read-only set. ' +
+        'The read-only flag has no additional effect with this preset.',
+    );
+  }
+
+  // custom preset with null or empty scopes = nearly locked out (only search + fetch).
+  // This typically means X-Neon-Preset: custom was sent without X-Neon-Scopes,
+  // or all scope values were invalid.
+  if (
+    grant.preset === 'custom' &&
+    (!grant.scopes || grant.scopes.length === 0)
+  ) {
+    warnings.push(
+      '⚠️ Warning: The "custom" preset is active but no valid scope categories are set. ' +
+        'Only the "search" and "fetch" tools are available. ' +
+        'Add scope categories via the X-Neon-Scopes header (e.g., "querying,schema") ' +
+        'to enable additional tools.',
+    );
+  }
+
+  return warnings;
+}
+
+/**
  * Inject projectId into tool call args when in project-scoped mode.
  * This should be called before passing args to the tool handler.
  */

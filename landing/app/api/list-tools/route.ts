@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { resolveGrantFromHeaders } from '../../../mcp-src/utils/grant-context';
 import { isReadOnly } from '../../../mcp-src/utils/read-only';
-import { getAvailableTools } from '../../../mcp-src/tools/grant-filter';
+import {
+  getAvailableTools,
+  getAccessControlWarnings,
+} from '../../../mcp-src/tools/grant-filter';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -40,10 +43,12 @@ export function GET(req: Request) {
   });
 
   const tools = getAvailableTools(grant, readOnly);
+  const warnings = getAccessControlWarnings(grant, readOnly);
 
   const body = {
     grant,
     readOnly,
+    ...(warnings.length > 0 ? { warnings } : {}),
     tools: tools.map((tool) => ({
       name: tool.name,
       title: tool.annotations?.title ?? tool.name,

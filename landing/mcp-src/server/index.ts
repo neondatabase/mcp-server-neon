@@ -15,11 +15,15 @@ import { ToolHandlerExtraParams } from '../tools/types';
 import { handleToolError } from './errors';
 import { detectClientApplication } from '../utils/client-application';
 import { DEFAULT_GRANT } from '../utils/grant-context';
-import { getAvailableTools, injectProjectId } from '../tools/grant-filter';
+import {
+  getAvailableTools,
+  getAccessControlWarnings,
+  injectProjectId,
+} from '../tools/grant-filter';
 import { enforceProtectedBranches, GrantViolationError } from '../tools/grant-enforcement';
 import pkg from '../../package.json';
 
-export const createMcpServer = (context: ServerContext) => {
+export const createMcpServer = async (context: ServerContext) => {
   const server = new McpServer(
     {
       name: 'mcp-server-neon',
@@ -42,7 +46,19 @@ export const createMcpServer = (context: ServerContext) => {
   let clientName = context.userAgent ?? 'unknown';
   let clientApplication = detectClientApplication(clientName);
 
-  const grant = context.grant ?? DEFAULT_GRANT;
+  const grant = { ...(context.grant ?? DEFAULT_GRANT) };
+
+  // Validate project ID against the Neon API if one was provided
+  if (grant.projectId) {
+    try {
+      await neonClient.getProject(grant.projectId);
+    } catch {
+      logger.warn(
+        `Project ID "${grant.projectId}" could not be verified — falling back to unscoped access.`,
+      );
+      grant.projectId = null;
+    }
+  }
 
   // Track server initialization
   const trackServerInit = () => {
@@ -86,7 +102,11 @@ export const createMcpServer = (context: ServerContext) => {
 
   // Filter tools based on grant context (presets, scopes, project scoping)
   // and read-only mode (for backwards compatibility with X-Neon-Read-Only header / OAuth scopes)
-  const availableTools = getAvailableTools(grant, context.readOnly ?? false);
+  const readOnly = context.readOnly ?? false;
+  const availableTools = getAvailableTools(grant, readOnly);
+
+  // Compute access control warnings once (appended to every tool response)
+  const accessControlWarnings = getAccessControlWarnings(grant, readOnly);
 
   // Register tools
   availableTools.forEach((tool) => {
@@ -154,11 +174,23 @@ export const createMcpServer = (context: ServerContext) => {
                 effectiveArgs,
               );
 
-              return await toolHandler(
+              const result = await toolHandler(
                 effectiveArgs as typeof args,
                 neonClient,
                 extraArgs,
               );
+
+              // Append access control warnings to tool response
+              if (accessControlWarnings.length > 0) {
+                result.content.push(
+                  ...accessControlWarnings.map((w) => ({
+                    type: 'text' as const,
+                    text: w,
+                  })),
+                );
+              }
+
+              return result;
             } catch (error) {
               if (error instanceof GrantViolationError) {
                 return {

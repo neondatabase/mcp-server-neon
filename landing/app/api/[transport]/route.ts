@@ -4,6 +4,7 @@ import '../../../mcp-src/sentry/instrument';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { captureException, startSpan } from '@sentry/node';
 
 import { NEON_RESOURCES } from '../../../mcp-src/resources';
@@ -31,7 +32,12 @@ import {
   DEFAULT_GRANT,
   type GrantContext,
 } from '../../../mcp-src/utils/grant-context';
-import { filterToolsForGrant, injectProjectId } from '../../../mcp-src/tools/grant-filter';
+import {
+  filterToolsForGrant,
+  getAvailableTools,
+  getAccessControlWarnings,
+  injectProjectId,
+} from '../../../mcp-src/tools/grant-filter';
 import { enforceProtectedBranches, GrantViolationError } from '../../../mcp-src/tools/grant-enforcement';
 
 type AuthenticatedExtra = {
@@ -103,7 +109,7 @@ const handler = createMcpHandler(
     }
 
     // Helper function to get Neon client and context from auth info
-    function getAuthContext(extra: AuthenticatedExtra) {
+    async function getAuthContext(extra: AuthenticatedExtra) {
       const authInfo = extra.authInfo;
       if (!authInfo?.extra?.apiKey || !authInfo?.extra?.account) {
         throw new Error('Authentication required');
@@ -112,10 +118,22 @@ const handler = createMcpHandler(
       const apiKey = authInfo.extra.apiKey;
       const account = authInfo.extra.account;
       const readOnly = authInfo.extra.readOnly ?? false;
-      const grant = authInfo.extra.grant ?? DEFAULT_GRANT;
+      const grant = { ...(authInfo.extra.grant ?? DEFAULT_GRANT) };
       const client = authInfo.extra.client;
       const transport = authInfo.extra.transport ?? 'sse';
       const neonClient = createNeonClient(apiKey);
+
+      // Validate project ID against the Neon API if one was provided
+      if (grant.projectId) {
+        try {
+          await neonClient.getProject(grant.projectId);
+        } catch {
+          logger.warn(
+            `Project ID "${grant.projectId}" could not be verified — falling back to unscoped access.`,
+          );
+          grant.projectId = null;
+        }
+      }
 
       // Use User-Agent as clientName fallback if MCP handshake hasn't provided it yet
       if (clientName === 'unknown' && authInfo.extra.userAgent) {
@@ -228,7 +246,7 @@ const handler = createMcpHandler(
             clientName: cName,
             client,
             context,
-          } = getAuthContext(extra as AuthenticatedExtra);
+          } = await getAuthContext(extra as AuthenticatedExtra);
 
           // Track server_init on first authenticated request (after client detection)
           trackServerInit(context);
@@ -327,6 +345,18 @@ const handler = createMcpHandler(
                     firstContentType: result.content?.[0]?.type,
                   });
                 }
+
+                // Append access control warnings to tool response
+                const accessControlWarnings = getAccessControlWarnings(grant, readOnly);
+                if (accessControlWarnings.length > 0 && result.content) {
+                  result.content.push(
+                    ...accessControlWarnings.map((w: string) => ({
+                      type: 'text' as const,
+                      text: w,
+                    })),
+                  );
+                }
+
                 return result;
               } catch (error) {
                 if (error instanceof GrantViolationError) {
@@ -376,7 +406,7 @@ const handler = createMcpHandler(
           let client: AuthContext['extra']['client'] | undefined;
 
           try {
-            const authContext = getAuthContext(extra as AuthenticatedExtra);
+            const authContext = await getAuthContext(extra as AuthenticatedExtra);
             context = authContext.context;
             account = authContext.account;
             client = authContext.client;
@@ -424,7 +454,7 @@ const handler = createMcpHandler(
             clientName: cName,
             client,
             context,
-          } = getAuthContext(extra as AuthenticatedExtra);
+          } = await getAuthContext(extra as AuthenticatedExtra);
 
           // Track server_init on first authenticated request
           trackServerInit(context);
@@ -473,6 +503,59 @@ const handler = createMcpHandler(
           }
         }
       );
+    });
+
+    // Override tools/list to filter tools based on the authenticated user's grant context.
+    // By default, the MCP SDK returns ALL registered tools. Since the remote server
+    // registers all tools upfront (shared across sessions), we need to filter per-request
+    // so each user only sees tools they can actually use.
+    server.server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
+      // Access the SDK's internal registered tools (already JSON-schema-converted)
+      const registeredTools = (server as unknown as Record<string, unknown>)._registeredTools as Record<
+        string,
+        { enabled: boolean; title?: string; description?: string; inputSchema?: unknown; outputSchema?: unknown; annotations?: unknown; execution?: unknown; _meta?: unknown }
+      >;
+
+      try {
+        const { readOnly, grant } = await getAuthContext(extra as AuthenticatedExtra);
+
+        // Get the names of tools available for this user's grant + read-only context
+        const availableToolNames: Set<string> = new Set(
+          getAvailableTools(grant, readOnly).map((t) => t.name),
+        );
+
+        // Filter the registered tools (which have already-converted JSON schemas)
+        const tools = Object.entries(registeredTools)
+          .filter(([name, tool]) => tool.enabled && availableToolNames.has(name))
+          .map(([name, tool]) => ({
+            name,
+            title: tool.title,
+            description: tool.description,
+            inputSchema: tool.inputSchema ?? { type: 'object' as const },
+            annotations: tool.annotations,
+            execution: tool.execution,
+            _meta: tool._meta,
+            ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+          }));
+
+        return { tools };
+      } catch {
+        // If auth fails (e.g., unauthenticated request), fall back to showing all enabled tools
+        const tools = Object.entries(registeredTools)
+          .filter(([, tool]) => tool.enabled)
+          .map(([name, tool]) => ({
+            name,
+            title: tool.title,
+            description: tool.description,
+            inputSchema: tool.inputSchema ?? { type: 'object' as const },
+            annotations: tool.annotations,
+            execution: tool.execution,
+            _meta: tool._meta,
+            ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+          }));
+
+        return { tools };
+      }
     });
   },
   {

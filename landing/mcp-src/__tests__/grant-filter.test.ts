@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { filterToolsForGrant, getAvailableTools, injectProjectId } from '../tools/grant-filter';
+import {
+  filterToolsForGrant,
+  getAvailableTools,
+  getAccessControlWarnings,
+  injectProjectId,
+} from '../tools/grant-filter';
 import type { NeonTool } from '../tools/grant-filter';
 import { NEON_TOOLS } from '../tools/definitions';
 import type { GrantContext, ScopeCategory } from '../utils/grant-context';
@@ -464,5 +469,324 @@ describe('injectProjectId', () => {
       grant({ projectId: 'new-proj' }),
     );
     expect(result.projectId).toBe('new-proj');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getAccessControlWarnings
+// ---------------------------------------------------------------------------
+describe('getAccessControlWarnings', () => {
+  it('returns a warning when production_use preset with readOnly=false', () => {
+    const warnings = getAccessControlWarnings(
+      grant({ preset: 'production_use' }),
+      false,
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('⚠️ Warning:');
+    expect(warnings[0]).toContain('production_use');
+    expect(warnings[0]).toContain('read-only');
+  });
+
+  it('returns no warning when production_use preset with readOnly=true', () => {
+    const warnings = getAccessControlWarnings(
+      grant({ preset: 'production_use' }),
+      true,
+    );
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('returns no warning for full_access with readOnly=false', () => {
+    const warnings = getAccessControlWarnings(
+      grant({ preset: 'full_access' }),
+      false,
+    );
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('returns no warning for full_access with readOnly=true', () => {
+    const warnings = getAccessControlWarnings(
+      grant({ preset: 'full_access' }),
+      true,
+    );
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('returns no warning for local_development with readOnly=false', () => {
+    const warnings = getAccessControlWarnings(
+      grant({ preset: 'local_development' }),
+      false,
+    );
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('returns no warning for custom preset with valid scopes', () => {
+    const warnings = getAccessControlWarnings(
+      grant({ preset: 'custom', scopes: ['querying'] }),
+      false,
+    );
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('returns a warning when custom preset has null scopes (nearly locked out)', () => {
+    const warnings = getAccessControlWarnings(
+      grant({ preset: 'custom', scopes: null }),
+      false,
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('⚠️ Warning:');
+    expect(warnings[0]).toContain('custom');
+    expect(warnings[0]).toContain('no valid scope categories');
+  });
+
+  it('returns a warning when custom preset has empty scopes array', () => {
+    const warnings = getAccessControlWarnings(
+      grant({ preset: 'custom', scopes: [] }),
+      false,
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('⚠️ Warning:');
+    expect(warnings[0]).toContain('X-Neon-Scopes');
+  });
+
+  it('returns no warning for custom preset with all scopes', () => {
+    const allScopes: ScopeCategory[] = [
+      'projects', 'branches', 'schema', 'querying',
+      'performance', 'neon_auth', 'docs',
+    ];
+    const warnings = getAccessControlWarnings(
+      grant({ preset: 'custom', scopes: allScopes }),
+      false,
+    );
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('does not return custom-scopes warning for non-custom presets', () => {
+    // full_access with null scopes should NOT trigger the custom warning
+    const warnings = getAccessControlWarnings(
+      grant({ preset: 'full_access', scopes: null }),
+      false,
+    );
+    expect(warnings).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getAvailableTools – exact tool count matrix
+// ---------------------------------------------------------------------------
+describe('getAvailableTools – exact tool counts', () => {
+  it.each([
+    // preset, projectId, readOnly, expectedCount
+    ['full_access', null, false, 28],
+    ['full_access', null, true, 17],
+    ['full_access', 'proj-123', false, 23],
+    ['full_access', 'proj-123', true, 14],
+    ['local_development', null, false, 26],
+    ['local_development', null, true, 17],
+    ['local_development', 'proj-123', false, 23],
+    ['local_development', 'proj-123', true, 14],
+    ['production_use', null, false, 17],
+    ['production_use', 'proj-123', false, 14],
+  ] as const)(
+    '%s / project=%s / readOnly=%s -> %d tools',
+    (preset, projectId, readOnly, expectedCount) => {
+      const tools = getAvailableTools(
+        grant({ preset, projectId }),
+        readOnly,
+      );
+      expect(tools).toHaveLength(expectedCount);
+    },
+  );
+
+  it('custom (no scopes) / no project / no readonly -> 2 tools', () => {
+    const tools = getAvailableTools(
+      grant({ preset: 'custom', scopes: [] }),
+      false,
+    );
+    expect(tools).toHaveLength(2);
+  });
+
+  it('custom (all scopes) / no project / no readonly -> 28 tools', () => {
+    const allScopes: ScopeCategory[] = [
+      'projects', 'branches', 'schema', 'querying',
+      'performance', 'neon_auth', 'docs',
+    ];
+    const tools = getAvailableTools(
+      grant({ preset: 'custom', scopes: allScopes }),
+      false,
+    );
+    expect(tools).toHaveLength(28);
+  });
+
+  it('custom (querying only) / no project / no readonly -> 7 tools', () => {
+    const tools = getAvailableTools(
+      grant({ preset: 'custom', scopes: ['querying'] }),
+      false,
+    );
+    expect(tools).toHaveLength(7);
+  });
+
+  it('custom (querying only) / project / readonly -> 5 tools', () => {
+    const tools = getAvailableTools(
+      grant({ preset: 'custom', scopes: ['querying'], projectId: 'proj-123' }),
+      true,
+    );
+    expect(tools).toHaveLength(5);
+  });
+
+  // Scope category counts from temp.md "Custom Scope Combinations" table
+  it.each([
+    [['projects', 'branches'] as ScopeCategory[], 14],
+    [['performance'] as ScopeCategory[], 6],
+    [['neon_auth'] as ScopeCategory[], 4],
+  ] as const)(
+    'custom scopes %s -> %d tools',
+    (scopes, expectedCount) => {
+      const tools = getAvailableTools(
+        grant({ preset: 'custom', scopes: [...scopes] }),
+        false,
+      );
+      expect(tools).toHaveLength(expectedCount);
+    },
+  );
+
+  // Edge case #2 from temp.md: local_development + project = same as full_access + project
+  it('local_development + project-scoped = same count as full_access + project-scoped (23)', () => {
+    const localDev = getAvailableTools(
+      grant({ preset: 'local_development', projectId: 'proj-123' }),
+      false,
+    );
+    const fullAccess = getAvailableTools(
+      grant({ preset: 'full_access', projectId: 'proj-123' }),
+      false,
+    );
+    expect(localDev).toHaveLength(23);
+    expect(fullAccess).toHaveLength(23);
+    expect(toolNames(localDev)).toEqual(toolNames(fullAccess));
+  });
+
+  // Custom scopes + project-scoped
+  it('custom (querying,schema) + project-scoped -> 9 tools', () => {
+    const tools = getAvailableTools(
+      grant({ preset: 'custom', scopes: ['querying', 'schema'], projectId: 'proj-abc' }),
+      false,
+    );
+    expect(tools).toHaveLength(9);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tool inventory integrity – verify tool-to-scope assignments and flags
+// match the documented spec in temp.md Section 5
+// ---------------------------------------------------------------------------
+describe('tool inventory integrity', () => {
+  /**
+   * Complete map from temp.md "Tool Inventory" table.
+   * Each entry: [toolName, expectedScope, expectedReadOnlySafe]
+   */
+  const EXPECTED_TOOL_MAP: [string, string | null, boolean][] = [
+    ['list_projects', 'projects', true],
+    ['list_organizations', 'projects', true],
+    ['list_shared_projects', 'projects', true],
+    ['create_project', 'projects', false],
+    ['delete_project', 'projects', false],
+    ['describe_project', 'projects', true],
+    ['run_sql', 'querying', true],
+    ['run_sql_transaction', 'querying', true],
+    ['describe_table_schema', 'schema', true],
+    ['get_database_tables', 'schema', true],
+    ['create_branch', 'branches', false],
+    ['prepare_database_migration', 'querying', false],
+    ['complete_database_migration', 'querying', false],
+    ['describe_branch', 'branches', true],
+    ['delete_branch', 'branches', false],
+    ['reset_from_parent', 'branches', false],
+    ['get_connection_string', 'branches', true],
+    ['provision_neon_auth', 'neon_auth', false],
+    ['provision_neon_data_api', 'neon_auth', false],
+    ['explain_sql_statement', 'performance', true],
+    ['prepare_query_tuning', 'performance', false],
+    ['complete_query_tuning', 'performance', false],
+    ['list_slow_queries', 'performance', true],
+    ['list_branch_computes', 'branches', true],
+    ['compare_database_schema', 'querying', true],
+    ['search', null, true],
+    ['fetch', null, true],
+    ['load_resource', 'docs', true],
+  ];
+
+  it('has exactly the expected number of tools', () => {
+    expect(NEON_TOOLS).toHaveLength(EXPECTED_TOOL_MAP.length);
+  });
+
+  it.each(EXPECTED_TOOL_MAP)(
+    '%s has scope=%s, readOnlySafe=%s',
+    (toolName, expectedScope, expectedReadOnlySafe) => {
+      const tool = NEON_TOOLS.find((t) => t.name === toolName);
+      expect(tool, `Tool "${toolName}" not found in NEON_TOOLS`).toBeDefined();
+      expect(tool!.scope).toBe(expectedScope);
+      expect(tool!.readOnlySafe).toBe(expectedReadOnlySafe);
+    },
+  );
+
+  // Verify the exact set of project-agnostic tools
+  it('project-agnostic tools are exactly: list_projects, list_organizations, list_shared_projects, create_project, delete_project', () => {
+    const projectScopedTools = filterToolsForGrant(
+      NEON_TOOLS,
+      grant({ projectId: 'proj-test' }),
+    );
+    const hiddenTools = NEON_TOOLS
+      .map((t) => t.name)
+      .filter((name) => !projectScopedTools.some((t) => t.name === name));
+
+    expect(hiddenTools.sort()).toEqual([
+      'create_project',
+      'delete_project',
+      'list_organizations',
+      'list_projects',
+      'list_shared_projects',
+    ]);
+  });
+
+  // Verify tools-per-scope-category counts from temp.md table
+  it.each([
+    ['projects', 6],
+    ['branches', 6],
+    ['schema', 2],
+    ['querying', 5],
+    ['performance', 4],
+    ['neon_auth', 2],
+    ['docs', 1],
+  ] as const)(
+    'scope category "%s" has %d tools',
+    (scope, expectedCount) => {
+      const toolsInScope = NEON_TOOLS.filter((t) => t.scope === scope);
+      expect(toolsInScope).toHaveLength(expectedCount);
+    },
+  );
+
+  it('2 tools have no scope (null) and are always-available', () => {
+    const nullScopeTools = NEON_TOOLS.filter((t) => t.scope === null);
+    expect(nullScopeTools).toHaveLength(2);
+    expect(nullScopeTools.map((t) => t.name).sort()).toEqual(['fetch', 'search']);
+  });
+
+  // Verify readOnlySafe counts
+  it('17 tools are readOnlySafe', () => {
+    const readOnlySafe = NEON_TOOLS.filter((t) => t.readOnlySafe);
+    expect(readOnlySafe).toHaveLength(17);
+  });
+
+  it('11 tools are NOT readOnlySafe (write-only)', () => {
+    const writeOnly = NEON_TOOLS.filter((t) => !t.readOnlySafe);
+    expect(writeOnly).toHaveLength(11);
+  });
+
+  // Edge case #5: run_sql and run_sql_transaction are readOnlySafe
+  // This is potentially surprising but intentional (they can run read-only queries)
+  it('run_sql and run_sql_transaction are marked readOnlySafe (available in production_use)', () => {
+    const runSql = NEON_TOOLS.find((t) => t.name === 'run_sql');
+    const runSqlTx = NEON_TOOLS.find((t) => t.name === 'run_sql_transaction');
+    expect(runSql!.readOnlySafe).toBe(true);
+    expect(runSqlTx!.readOnlySafe).toBe(true);
   });
 });

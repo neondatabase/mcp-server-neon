@@ -25,7 +25,7 @@ export function isClientError(
   );
 }
 
-export function errorResponse(error: unknown) {
+function errorResponse(error: unknown) {
   return {
     isError: true,
     content: [

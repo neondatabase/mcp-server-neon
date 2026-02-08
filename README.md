@@ -154,50 +154,6 @@ Run the Neon MCP server on your local machine with your Neon API key. This metho
 }
 ```
 
-### Read-Only Mode
-
-**Read-Only Mode:** Restricts which tools are available, disabling write operations like creating projects, branches, or running migrations. Read-only tools include listing projects, describing schemas, querying data, and viewing performance metrics.
-
-You can enable read-only mode in two ways:
-
-1. **OAuth Scope Selection (Recommended):** When connecting via OAuth, uncheck "Full access" during authorization to operate in read-only mode.
-2. **Header Override:** Add the `x-read-only` header to your configuration:
-
-```json
-{
-  "mcpServers": {
-    "Neon": {
-      "url": "https://mcp.neon.tech/mcp",
-      "headers": {
-        "x-read-only": "true"
-      }
-    }
-  }
-}
-```
-
-> **Note:** Read-only mode restricts which _tools_ are available, not the SQL content. The `run_sql` tool remains available and can execute any SQL including INSERT/UPDATE/DELETE. For true read-only SQL access, use database roles with restricted permissions.
-
-<details>
-<summary><strong>Tools available in read-only mode</strong></summary>
-
-- `list_projects`, `list_shared_projects`, `describe_project`, `list_organizations`
-- `describe_branch`, `list_branch_computes`, `compare_database_schema`
-- `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`
-- `list_slow_queries`, `explain_sql_statement`
-- `get_connection_string`
-- `search`, `fetch`, `load_resource`
-
-**Tools requiring write access:**
-
-- `create_project`, `delete_project`
-- `create_branch`, `delete_branch`, `reset_from_parent`
-- `provision_neon_auth`, `provision_neon_data_api`
-- `prepare_database_migration`, `complete_database_migration`
-- `prepare_query_tuning`, `complete_query_tuning`
-
-</details>
-
 ### Server-Sent Events (SSE) Transport (Deprecated)
 
 MCP supports two remote server transports: the deprecated Server-Sent Events (SSE) and the newer, recommended Streamable HTTP. If your LLM client doesn't support Streamable HTTP yet, you can switch the endpoint from `https://mcp.neon.tech/mcp` to `https://mcp.neon.tech/sse` to use SSE instead.
@@ -273,13 +229,43 @@ Access control can be configured via:
 
 - **HTTP headers** (`X-Neon-*`) for the remote MCP server with API key authentication
 - **CLI flags** (`--preset`, `--project-id`, etc.) for the local MCP server
-- **OAuth consent UI** when connecting via OAuth (the authorization page lets you select a preset)
+- **OAuth consent UI** when connecting via OAuth (the authorization page lets you select a preset, project scope, and branch protection)
 
 > **OAuth vs API key:** When using OAuth, access control settings are locked in during the consent flow and stored with the token. HTTP headers (`X-Neon-*`) are ignored for OAuth-authenticated requests -- to change permissions, re-authenticate through a new OAuth flow. HTTP headers only apply when authenticating with an API key via the `Authorization` header.
 
+## Access Control Reference
+
+### HTTP Headers (Remote MCP Server with API Key)
+
+| Header | Values | Default | Description |
+|---|---|---|---|
+| `X-Neon-Preset` | `full_access`, `local_development`, `production_use`, `custom` | `full_access` | Permission preset. Invalid values silently fall back to `full_access`. |
+| `X-Neon-Scopes` | Comma-separated: `projects`, `branches`, `schema`, `querying`, `performance`, `neon_auth`, `docs` | Not set | Custom scope categories. **Overrides preset to `custom`** when present. Invalid category names are silently dropped. |
+| `X-Neon-Project-Id` | Neon project ID (e.g., `proj-abc-123`) | Not set | Scope all operations to a single project. |
+| `X-Neon-Protect-Production` | `true`, `false`, branch name, or comma-separated names | Not set | Protect branches from destructive operations. `true` protects `main`, `master`, `prod`, `production`. |
+| `X-Neon-Read-Only` | `true` / `false` | Not set | Explicit read-only mode (highest priority). The legacy `x-read-only` header is accepted as a synonym with lower priority. |
+
+### CLI Flags (Local MCP Server)
+
+| Flag | Values | Default | Description |
+|---|---|---|---|
+| `--preset` | `full_access`, `local_development`, `production_use`, `custom` | `full_access` | Permission preset |
+| `--scopes` | Comma-separated: `projects`, `branches`, `schema`, `querying`, `performance`, `neon_auth`, `docs` | Not set | Custom scope categories (overrides preset to `custom`) |
+| `--project-id` | Neon project ID | Not set | Scope all operations to a single project |
+| `--protect-production` | `true` (no value), branch name, or comma-separated names | Not set | Protect branches from destructive operations |
+
+### Precedence Rules
+
+1. `X-Neon-Read-Only` / `x-read-only` header takes the highest priority for read-only determination
+2. `X-Neon-Scopes` / `--scopes` always overrides `X-Neon-Preset` / `--preset` (implies `custom` preset)
+3. `production_use` preset implies read-only mode
+4. When no access control headers or flags are provided, the default is `full_access` with no project scoping and no branch protection
+
+In **OAuth mode**, all access control is determined during the consent flow and stored with the token. HTTP headers are ignored for OAuth-authenticated requests.
+
 ## Permission Presets
 
-Presets are predefined access levels that control which tools are available.
+Presets are predefined access levels that control which tools are available. Set via `X-Neon-Preset` header or `--preset` CLI flag. The default is `full_access`.
 
 | Preset | Description | Write access | Project create/delete | SQL execution |
 |---|---|---|---|---|
@@ -288,156 +274,17 @@ Presets are predefined access levels that control which tools are available.
 | `production_use` | Read-only access for schema inspection and documentation. | No | No | Read-only |
 | `custom` | Select specific tool categories to enable (see [Custom Scopes](#custom-scope-categories)). | Depends on scopes | Depends on scopes | Depends on scopes |
 
-The default preset is `full_access` when no preset is specified.
-
-### Remote MCP Server with API Key
-
-Set the `X-Neon-Preset` header to choose a preset.
-
-**Local Development preset with `add-mcp`:**
-
-```bash
-npx add-mcp@latest https://mcp.neon.tech/mcp \
-  --name Neon \
-  --header "Authorization: Bearer $NEON_API_KEY" \
-  --header "X-Neon-Preset: local_development"
-```
-
-**Production Use (read-only) preset with `add-mcp`:**
-
-```bash
-npx add-mcp@latest https://mcp.neon.tech/mcp \
-  --name Neon \
-  --header "Authorization: Bearer $NEON_API_KEY" \
-  --header "X-Neon-Preset: production_use"
-```
-
-Or use JSON config:
-
-```json
-{
-  "mcpServers": {
-    "Neon": {
-      "url": "https://mcp.neon.tech/mcp",
-      "headers": {
-        "Authorization": "Bearer <NEON_API_KEY>",
-        "X-Neon-Preset": "local_development"
-      }
-    }
-  }
-}
-```
-
-### Local MCP Server
-
-Use the `--preset` flag:
-
-```bash
-npx add-mcp@latest @neondatabase/mcp-server-neon \
-  --name neon \
-  -- start $NEON_API_KEY --preset local_development
-```
-
-Or use JSON config:
-
-```json
-{
-  "mcpServers": {
-    "neon": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@neondatabase/mcp-server-neon",
-        "start",
-        "<YOUR_NEON_API_KEY>",
-        "--preset",
-        "local_development"
-      ]
-    }
-  }
-}
-```
-
-### OAuth
-
-When connecting via OAuth, the authorization page presents preset options as radio buttons. Select your preferred preset before approving. Your selection is stored with the OAuth token and cannot be changed via headers afterward -- re-authenticate to change permissions.
-
 ## Project Scoping
 
-You can restrict the MCP server to operate on a single Neon project. When project-scoped:
+Restrict the MCP server to a single Neon project using `X-Neon-Project-Id` header or `--project-id` CLI flag. When project-scoped:
 
 - **Project-agnostic tools are hidden** (`list_projects`, `create_project`, `delete_project`, `list_organizations`, `list_shared_projects`)
 - **`projectId` is auto-injected** into all tool calls and removed from schemas visible to the LLM
 - The LLM cannot accidentally operate on the wrong project
 
-### Remote MCP Server with API Key
-
-Set the `X-Neon-Project-Id` header.
-
-**Project-scoped with `add-mcp`:**
-
-```bash
-npx add-mcp@latest https://mcp.neon.tech/mcp \
-  --name Neon \
-  --header "Authorization: Bearer $NEON_API_KEY" \
-  --header "X-Neon-Project-Id: my-project-abc123" \
-  --header "X-Neon-Preset: local_development"
-```
-
-Or use JSON config:
-
-```json
-{
-  "mcpServers": {
-    "Neon": {
-      "url": "https://mcp.neon.tech/mcp",
-      "headers": {
-        "Authorization": "Bearer <NEON_API_KEY>",
-        "X-Neon-Project-Id": "<NEON_PROJECT_ID>",
-        "X-Neon-Preset": "local_development"
-      }
-    }
-  }
-}
-```
-
-### Local MCP Server
-
-Use the `--project-id` flag:
-
-```bash
-npx add-mcp@latest @neondatabase/mcp-server-neon \
-  --name neon \
-  -- start $NEON_API_KEY --project-id my-project-abc123 --preset local_development
-```
-
-Or use JSON config:
-
-```json
-{
-  "mcpServers": {
-    "neon": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@neondatabase/mcp-server-neon",
-        "start",
-        "<YOUR_NEON_API_KEY>",
-        "--project-id",
-        "<NEON_PROJECT_ID>",
-        "--preset",
-        "local_development"
-      ]
-    }
-  }
-}
-```
-
 ## Production Branch Protection
 
-Protect critical branches from destructive operations. When enabled, the MCP server blocks `delete_branch`, `reset_from_parent`, `run_sql`, and `run_sql_transaction` on protected branches.
-
-The `X-Neon-Protect-Production` header (or `--protect-production` CLI flag) supports three formats:
+Protect critical branches from destructive operations (`delete_branch`, `reset_from_parent`, `run_sql`, `run_sql_transaction`) using `X-Neon-Protect-Production` header or `--protect-production` CLI flag.
 
 | Value | Behavior |
 |---|---|
@@ -445,93 +292,11 @@ The `X-Neon-Protect-Production` header (or `--protect-production` CLI flag) supp
 | `my-branch` | Protects the single branch named `my-branch` |
 | `main,staging,prod` | Protects all listed branches (comma-separated) |
 
-### Remote MCP Server with API Key
-
-**Protect default production branches with `add-mcp`:**
-
-```bash
-npx add-mcp@latest https://mcp.neon.tech/mcp \
-  --name Neon \
-  --header "Authorization: Bearer $NEON_API_KEY" \
-  --header "X-Neon-Preset: local_development" \
-  --header "X-Neon-Protect-Production: true"
-```
-
-**Protect specific branches:**
-
-```bash
-npx add-mcp@latest https://mcp.neon.tech/mcp \
-  --name Neon \
-  --header "Authorization: Bearer $NEON_API_KEY" \
-  --header "X-Neon-Preset: full_access" \
-  --header "X-Neon-Protect-Production: main,staging"
-```
-
-Or use JSON config:
-
-```json
-{
-  "mcpServers": {
-    "Neon": {
-      "url": "https://mcp.neon.tech/mcp",
-      "headers": {
-        "Authorization": "Bearer <NEON_API_KEY>",
-        "X-Neon-Preset": "local_development",
-        "X-Neon-Protect-Production": "true"
-      }
-    }
-  }
-}
-```
-
-### Local MCP Server
-
-Use the `--protect-production` flag:
-
-```bash
-npx add-mcp@latest @neondatabase/mcp-server-neon \
-  --name neon \
-  -- start $NEON_API_KEY --preset local_development --protect-production
-```
-
-Protect specific branches:
-
-```bash
-npx add-mcp@latest @neondatabase/mcp-server-neon \
-  --name neon \
-  -- start $NEON_API_KEY --protect-production main,staging
-```
-
-Or use JSON config:
-
-```json
-{
-  "mcpServers": {
-    "neon": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@neondatabase/mcp-server-neon",
-        "start",
-        "<YOUR_NEON_API_KEY>",
-        "--preset",
-        "local_development",
-        "--protect-production"
-      ]
-    }
-  }
-}
-```
-
-### OAuth
-
-When connecting via OAuth, check the "Protect production branches" checkbox in the authorization dialog to protect branches named `main`, `master`, `prod`, and `production`.
+When connecting via OAuth, check the "Protect production branches" checkbox in the authorization dialog.
 
 ## Custom Scope Categories
 
-For fine-grained control beyond presets, you can enable specific tool categories using the `custom` preset. When `X-Neon-Scopes` (or `--scopes`) is provided, the preset is automatically set to `custom` regardless of any `X-Neon-Preset` value.
-
-Available scope categories:
+For fine-grained control beyond presets, enable specific tool categories using `X-Neon-Scopes` header or `--scopes` CLI flag. When scopes are provided, the preset is automatically set to `custom` regardless of any preset value.
 
 | Category | Tools included |
 |---|---|
@@ -543,81 +308,47 @@ Available scope categories:
 | `neon_auth` | `provision_neon_auth`, `provision_neon_data_api` |
 | `docs` | `load_resource` |
 
-The `search` and `fetch` tools are always available regardless of scope selection.
+The `search` and `fetch` tools are always available regardless of scope selection. At least one valid scope category is required for useful access. Values are case-sensitive.
 
-> **Note:** At least one valid scope category is required for useful access. If `X-Neon-Scopes` is present but contains only invalid values, the `custom` preset is still applied with no categories enabled -- only `search` and `fetch` will be available. Preset values are case-sensitive (e.g., `local_development` is valid, `Local_Development` is not).
+## Read-Only Mode
 
-### Remote MCP Server with API Key
+Read-only mode restricts which tools are available, disabling write operations like creating projects, branches, or running migrations. Enable it via:
 
-**Allow only schema inspection and querying with `add-mcp`:**
+1. **`X-Neon-Read-Only: true` header** -- highest priority, overrides all other settings
+2. **`production_use` preset** -- automatically enables read-only mode
+3. **OAuth scope selection** -- uncheck "Full access" during authorization
 
-```bash
-npx add-mcp@latest https://mcp.neon.tech/mcp \
-  --name Neon \
-  --header "Authorization: Bearer $NEON_API_KEY" \
-  --header "X-Neon-Scopes: schema,querying"
-```
+Read-only mode is useful in combination with custom scopes: scopes control **which** tool categories are available, while read-only controls **whether** write tools within those categories are included.
 
-**Allow everything except project management:**
+> **Note:** Read-only mode restricts which _tools_ are available, not the SQL content. The `run_sql` tool remains available and can execute any SQL including INSERT/UPDATE/DELETE. For true read-only SQL access, use database roles with restricted permissions.
 
-```bash
-npx add-mcp@latest https://mcp.neon.tech/mcp \
-  --name Neon \
-  --header "Authorization: Bearer $NEON_API_KEY" \
-  --header "X-Neon-Scopes: branches,schema,querying,performance,neon_auth,docs"
-```
+> The legacy `x-read-only` header is accepted as a synonym for `X-Neon-Read-Only`. If both are present, `X-Neon-Read-Only` takes priority.
 
-Or use JSON config:
+<details>
+<summary><strong>Tools available in read-only mode</strong></summary>
 
-```json
-{
-  "mcpServers": {
-    "Neon": {
-      "url": "https://mcp.neon.tech/mcp",
-      "headers": {
-        "Authorization": "Bearer <NEON_API_KEY>",
-        "X-Neon-Scopes": "schema,querying"
-      }
-    }
-  }
-}
-```
+- `list_projects`, `list_shared_projects`, `describe_project`, `list_organizations`
+- `describe_branch`, `list_branch_computes`, `compare_database_schema`
+- `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`
+- `list_slow_queries`, `explain_sql_statement`
+- `get_connection_string`
+- `search`, `fetch`, `load_resource`
 
-### Local MCP Server
+**Tools requiring write access:**
 
-Use the `--scopes` flag:
+- `create_project`, `delete_project`
+- `create_branch`, `delete_branch`, `reset_from_parent`
+- `provision_neon_auth`, `provision_neon_data_api`
+- `prepare_database_migration`, `complete_database_migration`
+- `prepare_query_tuning`, `complete_query_tuning`
 
-```bash
-npx add-mcp@latest @neondatabase/mcp-server-neon \
-  --name neon \
-  -- start $NEON_API_KEY --scopes schema,querying
-```
+</details>
 
-Or use JSON config:
+## Examples
 
-```json
-{
-  "mcpServers": {
-    "neon": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@neondatabase/mcp-server-neon",
-        "start",
-        "<YOUR_NEON_API_KEY>",
-        "--scopes",
-        "schema,querying"
-      ]
-    }
-  }
-}
-```
+All access control options can be combined. Here are common configurations:
 
-## Combining Options
-
-All access control options can be combined. Here are some common configurations:
-
-### Safe Development Environment
+### Safe Development Environment (Remote)
 
 Scope to a single project, allow development operations, and protect production branches:
 
@@ -646,17 +377,9 @@ npx add-mcp@latest https://mcp.neon.tech/mcp \
 }
 ```
 
-### Read-Only Schema Inspector
+### Read-Only Schema Inspector (Remote)
 
 Only allow schema and documentation access on a single project:
-
-```bash
-npx add-mcp@latest https://mcp.neon.tech/mcp \
-  --name Neon \
-  --header "Authorization: Bearer $NEON_API_KEY" \
-  --header "X-Neon-Scopes: schema,docs" \
-  --header "X-Neon-Project-Id: my-project-abc123"
-```
 
 ```json
 {
@@ -673,15 +396,7 @@ npx add-mcp@latest https://mcp.neon.tech/mcp \
 }
 ```
 
-### Full Access with Branch Protection (Local)
-
-Full access but protect `main` and `staging` branches from destructive operations:
-
-```bash
-npx add-mcp@latest @neondatabase/mcp-server-neon \
-  --name neon \
-  -- start $NEON_API_KEY --protect-production main,staging
-```
+### Safe Development Environment (Local)
 
 ```json
 {
@@ -693,84 +408,16 @@ npx add-mcp@latest @neondatabase/mcp-server-neon \
         "@neondatabase/mcp-server-neon",
         "start",
         "<YOUR_NEON_API_KEY>",
-        "--protect-production",
-        "main,staging"
+        "--preset",
+        "local_development",
+        "--project-id",
+        "<NEON_PROJECT_ID>",
+        "--protect-production"
       ]
     }
   }
 }
 ```
-
-## Read-Only Mode
-
-Use the `X-Neon-Read-Only` header to explicitly enable or disable read-only mode. This takes the highest priority over all other access control settings, including presets and OAuth scopes.
-
-This is particularly useful in combination with the `custom` preset and `X-Neon-Scopes`: custom scopes control **which** tool categories are available, while `X-Neon-Read-Only` controls **whether** write tools within those categories are included.
-
-### Remote MCP Server with API Key
-
-**Read-only with custom scopes (only schema and querying read tools):**
-
-```bash
-npx add-mcp@latest https://mcp.neon.tech/mcp \
-  --name Neon \
-  --header "Authorization: Bearer $NEON_API_KEY" \
-  --header "X-Neon-Scopes: schema,querying" \
-  --header "X-Neon-Read-Only: true"
-```
-
-Or use JSON config:
-
-```json
-{
-  "mcpServers": {
-    "Neon": {
-      "url": "https://mcp.neon.tech/mcp",
-      "headers": {
-        "Authorization": "Bearer <NEON_API_KEY>",
-        "X-Neon-Scopes": "schema,querying",
-        "X-Neon-Read-Only": "true"
-      }
-    }
-  }
-}
-```
-
-> **Backwards compatibility:** The legacy `x-read-only` header is accepted as a synonym for `X-Neon-Read-Only`. If both are present, `X-Neon-Read-Only` takes priority.
-
-## Access Control Reference
-
-### HTTP Headers (Remote MCP Server)
-
-| Header | Values | Description |
-|---|---|---|
-| `X-Neon-Preset` | `full_access`, `local_development`, `production_use` | Permission preset |
-| `X-Neon-Scopes` | Comma-separated categories | Custom scope categories (overrides preset to `custom`) |
-| `X-Neon-Project-Id` | Neon project ID | Scope all operations to a single project |
-| `X-Neon-Protect-Production` | `true`, branch name, or comma-separated names | Protect branches from destructive operations |
-| `X-Neon-Read-Only` | `true` / `false` | Explicit read-only mode (highest priority). `x-read-only` is accepted as a synonym. |
-
-### CLI Flags (Local MCP Server)
-
-| Flag | Values | Description |
-|---|---|---|
-| `--preset` | `full_access`, `local_development`, `production_use` | Permission preset |
-| `--scopes` | Comma-separated categories | Custom scope categories (overrides preset to `custom`) |
-| `--project-id` | Neon project ID | Scope all operations to a single project |
-| `--protect-production` | `true` (no value), branch name, or comma-separated names | Protect branches from destructive operations |
-
-### Precedence Rules
-
-**API key mode** (HTTP headers):
-
-1. `X-Neon-Read-Only` header takes the highest priority for read-only determination (the legacy `x-read-only` header is checked next as a synonym)
-2. `X-Neon-Scopes` / `--scopes` always overrides `X-Neon-Preset` / `--preset` (implies `custom` preset)
-3. `production_use` preset implies read-only mode
-4. When no access control headers or flags are provided, the default is `full_access` with no project scoping and no branch protection
-
-**OAuth mode:**
-
-All access control is determined during the OAuth consent flow and stored with the token. HTTP headers are ignored for OAuth-authenticated requests. Read-only mode is determined by the stored OAuth scope and grant preset only.
 
 # Features
 

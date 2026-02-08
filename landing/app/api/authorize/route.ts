@@ -24,6 +24,32 @@ import {
   type Preset,
   type ScopeCategory,
 } from '../../../mcp-src/utils/grant-context';
+import { NEON_TOOLS } from '../../../mcp-src/tools/definitions';
+
+/**
+ * Generates minimal tool data for client-side filtering and display.
+ */
+function getToolDataJson(): string {
+  const data = NEON_TOOLS.map((tool) => ({
+    name: tool.name,
+    title: tool.annotations?.title ?? tool.name,
+    scope: tool.scope,
+    readOnly: tool.readOnlySafe,
+    destructive: !!tool.annotations?.destructiveHint,
+  }));
+  return JSON.stringify(data);
+}
+
+/**
+ * Generates scope category labels for client-side display.
+ */
+function getScopeLabelsJson(): string {
+  const labels: Record<string, string> = {};
+  for (const cat of SCOPE_CATEGORIES) {
+    labels[cat] = SCOPE_CATEGORY_DEFINITIONS[cat].label;
+  }
+  return JSON.stringify(labels);
+}
 
 export type DownstreamAuthRequest = {
   responseType: string;
@@ -116,7 +142,7 @@ function renderPermissionDetailItems(): string {
  * checkboxes for custom preset, collapsible permission details, branch
  * protection, and caution banner.
  */
-function renderPresetSection(): string {
+function renderPresetSection(projectId: string | null): string {
   // Hidden inputs for OAuth scopes (updated by JS based on preset)
   let html = `<input type="hidden" name="scopes" value="read" />`;
   html += `<input type="hidden" name="scopes" value="write" id="write-scope-input" />`;
@@ -166,6 +192,26 @@ function renderPresetSection(): string {
     </div>
   `;
 
+  // Project scope
+  const projectIdValue = projectId ? he.escape(projectId) : '';
+  const projectIdReadonly = projectId ? ' readonly' : '';
+  html += `
+    <div class="project-scope-section">
+      <div class="scope-info">
+        <span class="scope-label">Project scope</span>
+        <span class="scope-description">Restrict access to a single Neon project (optional)</span>
+      </div>
+      <input
+        type="text"
+        name="project_id"
+        id="project-id-input"
+        class="project-id-input"
+        placeholder="proj-abc-123"
+        value="${projectIdValue}"${projectIdReadonly}
+      />
+    </div>
+  `;
+
   // Protect production branches
   html += `
     <div class="protect-section">
@@ -182,6 +228,17 @@ function renderPresetSection(): string {
           <span class="scope-description">Prevent branch deletion and SQL execution on branches named <code>main</code>, <code>prod</code>, or <code>production</code></span>
         </div>
       </label>
+    </div>
+  `;
+
+  // Tools preview (populated by client-side JS)
+  html += `
+    <div class="tools-preview" id="tools-preview">
+      <div class="tools-preview-header">
+        <span class="tools-preview-title">Included tools</span>
+        <span class="tools-preview-count" id="tools-count"></span>
+      </div>
+      <div class="tools-preview-content" id="tools-content"></div>
     </div>
   `;
 
@@ -244,6 +301,7 @@ const renderApprovalDialog = (
   },
   state: string,
   requestedScopes: string[],
+  projectId: string | null = null,
   showPresets: boolean = true,
 ) => {
   const clientName = he.escape(client.client_name || 'A new MCP Client');
@@ -572,6 +630,47 @@ const renderApprovalDialog = (
       border: 1px solid rgba(245, 158, 11, 0.3);
     }
 
+    /* Project scope section */
+    .project-scope-section {
+      margin-top: 1.25rem;
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+    }
+
+    .project-scope-section .scope-info {
+      margin-bottom: 0.5rem;
+    }
+
+    .project-id-input {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      background-color: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-color);
+      font-size: 0.875rem;
+      font-family: monospace;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .project-id-input::placeholder {
+      color: var(--text-color-secondary);
+      opacity: 0.5;
+    }
+
+    .project-id-input:focus {
+      border-color: var(--neon-green-border);
+    }
+
+    .project-id-input[readonly] {
+      background-color: rgba(255, 255, 255, 0.02);
+      color: var(--text-color-secondary);
+      cursor: not-allowed;
+    }
+
     /* Protect section */
     .protect-section {
       margin-top: 1.25rem;
@@ -609,6 +708,98 @@ const renderApprovalDialog = (
       font-size: 0.8rem;
       color: var(--sensitive-color);
       line-height: 1.5;
+    }
+
+    /* Tools preview */
+    .tools-preview {
+      margin: 1.25rem 0 1rem;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+    }
+
+    .tools-preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .tools-preview-title {
+      font-weight: 500;
+      font-size: 0.875rem;
+      color: var(--text-color);
+    }
+
+    .tools-preview-count {
+      font-size: 0.7rem;
+      color: var(--text-color-secondary);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 0.15rem 0.5rem;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+    }
+
+    .tools-preview-content {
+      max-height: 260px;
+      overflow-y: auto;
+    }
+
+    .tools-preview-content::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .tools-preview-content::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .tools-preview-content::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 2px;
+    }
+
+    .tool-group {
+      margin-bottom: 0.6rem;
+    }
+
+    .tool-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .tool-group-label {
+      font-size: 0.65rem;
+      color: var(--text-color-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.3rem;
+    }
+
+    .tool-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+    }
+
+    .tool-chip {
+      display: inline-block;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-color);
+      color: var(--text-color-secondary);
+      white-space: nowrap;
+      line-height: 1.4;
+    }
+
+    .tool-chip.tool-write {
+      border-color: rgba(0, 230, 153, 0.2);
+      color: var(--text-color);
+    }
+
+    .tool-chip.tool-destructive {
+      border-color: rgba(245, 158, 11, 0.25);
+      color: var(--sensitive-color);
     }
 
     /* Actions */
@@ -763,7 +954,7 @@ const renderApprovalDialog = (
         <input type="hidden" name="state" value="${he.escape(state)}" />
         <div class="scope-section">
           <div class="scope-section-title">Select Permissions</div>
-          ${showPresets ? renderPresetSection() : renderScopeSection(requestedScopes)}
+          ${showPresets ? renderPresetSection(projectId) : renderScopeSection(requestedScopes)}
         </div>
         <div class="actions">
           <button type="button" class="button button-secondary" onclick="window.history.back()">Deny</button>
@@ -820,6 +1011,8 @@ const renderApprovalDialog = (
           permDetails.removeAttribute('open');
         }
       }
+
+      renderToolPreview();
     }
 
     for (var i = 0; i < tabs.length; i++) {
@@ -844,6 +1037,97 @@ const renderApprovalDialog = (
     if (legacyCheckbox) {
       legacyCheckbox.addEventListener('change', updateUrlScope);
     }
+
+    // Tool preview: data embedded server-side, filtering + rendering client-side
+    var TOOLS = ${getToolDataJson()};
+    var SCOPE_LABELS = ${getScopeLabelsJson()};
+    var ALWAYS_AVAIL = {search:1, fetch:1};
+    var LOCAL_BLOCKED = {create_project:1, delete_project:1};
+    var PROJ_AGNOSTIC = {list_projects:1, list_organizations:1, list_shared_projects:1, create_project:1, delete_project:1};
+    var GROUP_ORDER = ['projects','branches','schema','querying','performance','neon_auth','docs','_general'];
+
+    function getFilteredTools() {
+      var preset = presetInput ? presetInput.value : 'full_access';
+      var pidEl = document.getElementById('project-id-input');
+      var pid = pidEl ? pidEl.value.trim() : '';
+      var result = TOOLS.slice();
+
+      if (preset === 'production_use') {
+        result = result.filter(function(t) { return t.readOnly || ALWAYS_AVAIL[t.name]; });
+      } else if (preset === 'local_development') {
+        result = result.filter(function(t) { return !LOCAL_BLOCKED[t.name]; });
+      } else if (preset === 'custom') {
+        var checked = document.querySelectorAll('#scope-categories input[name="scope_categories"]:checked');
+        var sc = {};
+        for (var j = 0; j < checked.length; j++) sc[checked[j].value] = 1;
+        result = result.filter(function(t) {
+          return ALWAYS_AVAIL[t.name] || !t.scope || sc[t.scope];
+        });
+      }
+
+      if (pid) {
+        result = result.filter(function(t) { return !PROJ_AGNOSTIC[t.name]; });
+      }
+
+      return result;
+    }
+
+    function renderToolPreview() {
+      var countEl = document.getElementById('tools-count');
+      var contentEl = document.getElementById('tools-content');
+      if (!contentEl) return;
+
+      var tools = getFilteredTools();
+
+      if (countEl) {
+        countEl.textContent = tools.length + ' tool' + (tools.length !== 1 ? 's' : '');
+      }
+
+      var groups = {};
+      tools.forEach(function(t) {
+        var key = t.scope || '_general';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(t);
+      });
+
+      var h = '';
+      GROUP_ORDER.forEach(function(key) {
+        if (!groups[key]) return;
+        var label = key === '_general' ? 'Always Available' : (SCOPE_LABELS[key] || key);
+        h += '<div class="tool-group">';
+        h += '<div class="tool-group-label">' + label + '</div>';
+        h += '<div class="tool-chips">';
+        groups[key].forEach(function(t) {
+          var cls = 'tool-chip';
+          if (t.destructive) cls += ' tool-destructive';
+          else if (!t.readOnly) cls += ' tool-write';
+          h += '<span class="' + cls + '">' + t.title + '</span>';
+        });
+        h += '</div>';
+        h += '</div>';
+      });
+
+      contentEl.innerHTML = h;
+    }
+
+    // Re-render tools when custom scope checkboxes change
+    var scopeCbs = document.querySelectorAll('#scope-categories input[name="scope_categories"]');
+    for (var k = 0; k < scopeCbs.length; k++) {
+      scopeCbs[k].addEventListener('change', renderToolPreview);
+    }
+
+    // Re-render tools when project ID changes (debounced)
+    var pidInput = document.getElementById('project-id-input');
+    var pidTimer;
+    if (pidInput) {
+      pidInput.addEventListener('input', function() {
+        clearTimeout(pidTimer);
+        pidTimer = setTimeout(renderToolPreview, 300);
+      });
+    }
+
+    // Initial render
+    renderToolPreview();
   </script>
 </body>
 </html>
@@ -920,10 +1204,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(authUrl.href);
     }
 
+    const projectId =
+      request.headers.get('x-neon-project-id')?.trim() || null;
+
     return renderApprovalDialog(
       client,
       btoa(JSON.stringify(requestParams)),
       requestParams.scope,
+      projectId,
     );
   } catch (error: unknown) {
     return handleOAuthError(error, 'Authorization error');
@@ -937,6 +1225,8 @@ export async function POST(request: NextRequest) {
     const selectedScopes = formData.getAll('scopes') as string[];
     const selectedPreset = formData.get('preset') as string | null;
     const protectProduction = formData.get('protect_production') === 'true';
+    const projectId =
+      (formData.get('project_id') as string)?.trim() || null;
 
     if (!state) {
       return NextResponse.json(
@@ -978,7 +1268,7 @@ export async function POST(request: NextRequest) {
       ) as ScopeCategory[];
 
       requestParams.grant = {
-        projectId: null,
+        projectId,
         preset: selectedPreset as Preset,
         scopes: selectedPreset === 'custom' ? validCategories : null,
         protectedBranches: protectProduction

@@ -8,7 +8,6 @@ import { startStdio } from './transports/stdio';
 import { logger } from './utils/logger';
 import { AppContext } from './types/context';
 import { NEON_TOOLS } from './tools/index';
-import './utils/polyfills';
 import { resolveAccountFromAuth } from './server/account';
 import { resolveGrantFromCliArgs } from './utils/grant-context';
 
@@ -79,7 +78,7 @@ if (args.command === 'start:sse') {
         },
         context: appContext,
       });
-      const server = createMcpServer({
+      const server = await createMcpServer({
         apiKey: args.neonApiKey,
         account,
         app: appContext,

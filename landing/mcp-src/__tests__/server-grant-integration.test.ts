@@ -38,7 +38,14 @@ vi.mock('../utils/logger', () => ({
     error: vi.fn(),
     warn: vi.fn(),
     debug: vi.fn(),
+    silent: false,
   },
+}));
+
+vi.mock('../server/api', () => ({
+  createNeonClient: () => ({
+    getProject: vi.fn().mockResolvedValue({ data: { project: { id: 'mock' } } }),
+  }),
 }));
 
 // Import after mocks are set up
@@ -71,7 +78,7 @@ function buildContext(overrides: Partial<ServerContext> = {}): ServerContext {
  * The MCP SDK stores tools in `_registeredTools` on the McpServer instance.
  * We access it for testing purposes only.
  */
-function getRegisteredToolNames(server: ReturnType<typeof createMcpServer>): string[] {
+function getRegisteredToolNames(server: Awaited<ReturnType<typeof createMcpServer>>): string[] {
   const registeredTools = (server as unknown as Record<string, unknown>)._registeredTools as Record<
     string,
     { enabled: boolean }
@@ -87,20 +94,20 @@ describe('createMcpServer – tool registration based on grant', () => {
     vi.clearAllMocks();
   });
 
-  it('registers all tools with default (full_access) grant', () => {
-    const server = createMcpServer(buildContext());
+  it('registers all tools with default (full_access) grant', async () => {
+    const server = await createMcpServer(buildContext());
     const names = getRegisteredToolNames(server);
     expect(names).toHaveLength(NEON_TOOLS.length);
   });
 
-  it('registers only readOnlySafe tools with production_use preset', () => {
+  it('registers only readOnlySafe tools with production_use preset', async () => {
     const grant: GrantContext = {
       projectId: null,
       preset: 'production_use',
       scopes: null,
       protectedBranches: null,
     };
-    const server = createMcpServer(buildContext({ grant }));
+    const server = await createMcpServer(buildContext({ grant }));
     const names = getRegisteredToolNames(server);
 
     // production_use filters to readOnlySafe + always-available
@@ -116,14 +123,14 @@ describe('createMcpServer – tool registration based on grant', () => {
     expect(names).not.toContain('delete_branch');
   });
 
-  it('registers all tools except create/delete project with local_development preset', () => {
+  it('registers all tools except create/delete project with local_development preset', async () => {
     const grant: GrantContext = {
       projectId: null,
       preset: 'local_development',
       scopes: null,
       protectedBranches: null,
     };
-    const server = createMcpServer(buildContext({ grant }));
+    const server = await createMcpServer(buildContext({ grant }));
     const names = getRegisteredToolNames(server);
 
     expect(names).toHaveLength(NEON_TOOLS.length - 2);
@@ -134,14 +141,14 @@ describe('createMcpServer – tool registration based on grant', () => {
     expect(names).toContain('delete_branch');
   });
 
-  it('hides project-agnostic tools with project-scoped grant', () => {
+  it('hides project-agnostic tools with project-scoped grant', async () => {
     const grant: GrantContext = {
       projectId: 'proj-test-123',
       preset: 'full_access',
       scopes: null,
       protectedBranches: null,
     };
-    const server = createMcpServer(buildContext({ grant }));
+    const server = await createMcpServer(buildContext({ grant }));
     const names = getRegisteredToolNames(server);
 
     expect(names).not.toContain('list_projects');
@@ -156,14 +163,14 @@ describe('createMcpServer – tool registration based on grant', () => {
     expect(names).toContain('create_branch');
   });
 
-  it('custom preset with specific scopes only registers matching tools', () => {
+  it('custom preset with specific scopes only registers matching tools', async () => {
     const grant: GrantContext = {
       projectId: null,
       preset: 'custom',
       scopes: ['schema', 'docs'],
       protectedBranches: null,
     };
-    const server = createMcpServer(buildContext({ grant }));
+    const server = await createMcpServer(buildContext({ grant }));
     const names = getRegisteredToolNames(server);
 
     // schema: describe_table_schema, get_database_tables
@@ -182,23 +189,23 @@ describe('createMcpServer – tool registration based on grant', () => {
     expect(names).not.toContain('explain_sql_statement');
   });
 
-  it('readOnly context flag further filters tools', () => {
+  it('readOnly context flag further filters tools', async () => {
     // Even with full_access, if readOnly is true on context, only readOnlySafe tools remain
-    const server = createMcpServer(buildContext({ readOnly: true }));
+    const server = await createMcpServer(buildContext({ readOnly: true }));
     const names = getRegisteredToolNames(server);
 
     const readOnlyTools = NEON_TOOLS.filter((t) => t.readOnlySafe);
     expect(names).toHaveLength(readOnlyTools.length);
   });
 
-  it('combined: production_use + project-scoped', () => {
+  it('combined: production_use + project-scoped', async () => {
     const grant: GrantContext = {
       projectId: 'proj-abc',
       preset: 'production_use',
       scopes: null,
       protectedBranches: ['main'],
     };
-    const server = createMcpServer(buildContext({ grant }));
+    const server = await createMcpServer(buildContext({ grant }));
     const names = getRegisteredToolNames(server);
 
     // Should be readOnlySafe tools minus project-agnostic tools
