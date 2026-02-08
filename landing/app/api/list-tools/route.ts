@@ -1,16 +1,16 @@
-import { NextResponse } from 'next/server';
-import { resolveGrantFromHeaders } from '../../../mcp-src/utils/grant-context';
-import { isReadOnly } from '../../../mcp-src/utils/read-only';
+import { NextResponse } from "next/server";
+import { resolveGrantFromHeaders } from "../../../mcp-src/utils/grant-context";
+import { isReadOnly } from "../../../mcp-src/utils/read-only";
 import {
   getAvailableTools,
   getAccessControlWarnings,
-} from '../../../mcp-src/tools/grant-filter';
+} from "../../../mcp-src/tools/grant-filter";
 
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers':
-    'X-Neon-Preset, X-Neon-Scopes, X-Neon-Project-Id, X-Neon-Protect-Production, X-Neon-Read-Only, x-read-only',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers":
+    "X-Neon-Preset, X-Neon-Scopes, X-Neon-Project-Id, X-Neon-Protect-Production, X-Neon-Read-Only, x-read-only",
 };
 
 /**
@@ -37,8 +37,8 @@ export function GET(req: Request) {
   const grant = resolveGrantFromHeaders(req.headers);
 
   const readOnly = isReadOnly({
-    neonHeaderValue: req.headers.get('x-neon-read-only'),
-    headerValue: req.headers.get('x-read-only'),
+    neonHeaderValue: req.headers.get("x-neon-read-only"),
+    headerValue: req.headers.get("x-read-only"),
     grant,
   });
 

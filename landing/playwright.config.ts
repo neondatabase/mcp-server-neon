@@ -1,10 +1,10 @@
-import { defineConfig, devices } from '@playwright/test';
-import { existsSync, readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { defineConfig, devices } from "@playwright/test";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = process.env.E2E_PORT ?? '3100';
+const PORT = process.env.E2E_PORT ?? "3100";
 const BASE_URL = `http://localhost:${PORT}`;
 
 /**
@@ -13,35 +13,35 @@ const BASE_URL = `http://localhost:${PORT}`;
  * has a working OAUTH_DATABASE_URL.
  */
 function loadE2eEnv(): Record<string, string> {
-  const envFile = path.resolve(__dirname, '.env.e2e');
+  const envFile = path.resolve(__dirname, ".env.e2e");
   if (!existsSync(envFile)) return {};
 
-  const lines = readFileSync(envFile, 'utf-8').split('\n');
+  const lines = readFileSync(envFile, "utf-8").split("\n");
   const env: Record<string, string> = {};
   for (const line of lines) {
-    if (line.startsWith('#') || !line.includes('=')) continue;
-    const [key, ...rest] = line.split('=');
-    env[key.trim()] = rest.join('=').trim();
+    if (line.startsWith("#") || !line.includes("=")) continue;
+    const [key, ...rest] = line.split("=");
+    env[key.trim()] = rest.join("=").trim();
   }
   return env;
 }
 
 export default defineConfig({
-  globalSetup: './e2e/global-setup.ts',
-  testDir: './e2e',
+  globalSetup: "./e2e/global-setup.ts",
+  testDir: "./e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'list',
+  reporter: "list",
   use: {
     baseURL: BASE_URL,
-    trace: 'on-first-retry',
+    trace: "on-first-retry",
   },
   projects: [
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
     },
   ],
   webServer: {

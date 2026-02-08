@@ -1,7 +1,7 @@
-import { Api } from '@neondatabase/api-client';
-import { handleListProjects } from './list-projects';
-import { ToolHandlerExtraParams } from '../types';
-import { NotFoundError } from '../../server/errors';
+import { Api } from "@neondatabase/api-client";
+import { handleListProjects } from "./list-projects";
+import { ToolHandlerExtraParams } from "../types";
+import { NotFoundError } from "../../server/errors";
 
 export async function getOnlyProject(
   neonClient: Api<unknown>,
@@ -12,7 +12,7 @@ export async function getOnlyProject(
     return projects[0];
   }
   throw new NotFoundError(
-    'Please provide a project ID or ensure you have only one project in your account.',
+    "Please provide a project ID or ensure you have only one project in your account.",
   );
 }
 
@@ -28,6 +28,6 @@ export const getDefaultBranch = async (
     return defaultBranch;
   }
   throw new NotFoundError(
-    'No default branch found in this project. Please provide a branch ID.',
+    "No default branch found in this project. Please provide a branch ID.",
   );
 };

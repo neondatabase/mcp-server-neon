@@ -1,8 +1,8 @@
-import type { Api, AuthDetailsResponse } from '@neondatabase/api-client';
-import { isAxiosError } from 'axios';
-import { addBreadcrumb } from '@sentry/node';
-import { identify } from '../analytics/analytics';
-import { logger } from '../utils/logger';
+import type { Api, AuthDetailsResponse } from "@neondatabase/api-client";
+import { isAxiosError } from "axios";
+import { addBreadcrumb } from "@sentry/node";
+import { identify } from "../analytics/analytics";
+import { logger } from "../utils/logger";
 
 export type Account = {
   id: string;
@@ -18,12 +18,12 @@ export type Account = {
 export async function resolveAccountFromAuth(
   auth: AuthDetailsResponse,
   neonClient: Api<unknown>,
-  identifyContext?: Parameters<typeof identify>[1]
+  identifyContext?: Parameters<typeof identify>[1],
 ): Promise<Account> {
   let account: Account;
 
   try {
-    if (auth.auth_method === 'api_key_org') {
+    if (auth.auth_method === "api_key_org") {
       const { data: org } = await neonClient.getOrganization(auth.account_id);
       account = {
         id: auth.account_id,
@@ -34,7 +34,7 @@ export async function resolveAccountFromAuth(
       const { data: user } = await neonClient.getCurrentUserInfo();
       account = {
         id: user.id,
-        name: `${user.name ?? ''} ${user.last_name ?? ''}`.trim() || 'Unknown',
+        name: `${user.name ?? ""} ${user.last_name ?? ""}`.trim() || "Unknown",
         email: user.email,
         isOrg: false,
       };
@@ -44,22 +44,22 @@ export async function resolveAccountFromAuth(
     const isProjectScopedKeyError =
       isAxiosError(error) &&
       (error.response?.status === 404 || error.response?.status === 403) &&
-      typeof error.response?.data?.message === 'string' &&
-      (error.response.data.message.includes('outside the project') ||
-        error.response.data.message.includes('project-scoped'));
+      typeof error.response?.data?.message === "string" &&
+      (error.response.data.message.includes("outside the project") ||
+        error.response.data.message.includes("project-scoped"));
 
     if (isProjectScopedKeyError) {
-      logger.debug('Using project-scoped API key fallback', {
+      logger.debug("Using project-scoped API key fallback", {
         account_id: auth.account_id,
       });
 
       // Add breadcrumb for debugging context in case of later errors
       addBreadcrumb({
-        category: 'auth',
-        message: 'Using project-scoped API key fallback',
-        level: 'info',
+        category: "auth",
+        message: "Using project-scoped API key fallback",
+        level: "info",
         data: {
-          auth_type: 'project_scoped_key',
+          auth_type: "project_scoped_key",
           auth_method: auth.auth_method,
           account_id: auth.account_id,
         },
@@ -67,7 +67,7 @@ export async function resolveAccountFromAuth(
 
       account = {
         id: auth.account_id,
-        name: 'Project-scoped API Key',
+        name: "Project-scoped API Key",
         isOrg: false,
       };
     } else {

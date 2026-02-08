@@ -1,20 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server';
-import he from 'he';
-import { model } from '../../../mcp-src/oauth/model';
-import { upstreamAuth } from '../../../lib/oauth/client';
+import { NextRequest, NextResponse } from "next/server";
+import he from "he";
+import { model } from "../../../mcp-src/oauth/model";
+import { upstreamAuth } from "../../../lib/oauth/client";
 import {
   isClientAlreadyApproved,
   updateApprovedClientsCookie,
-} from '../../../lib/oauth/cookies';
-import { COOKIE_SECRET } from '../../../lib/config';
-import { handleOAuthError } from '../../../lib/errors';
+} from "../../../lib/oauth/cookies";
+import { COOKIE_SECRET } from "../../../lib/config";
+import { handleOAuthError } from "../../../lib/errors";
 import {
   hasWriteScope,
   SCOPE_DEFINITIONS,
   SUPPORTED_SCOPES,
-} from '../../../mcp-src/utils/read-only';
-import { logger } from '../../../mcp-src/utils/logger';
-import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
+} from "../../../mcp-src/utils/read-only";
+import { logger } from "../../../mcp-src/utils/logger";
+import { matchesRedirectUri } from "../../../lib/oauth/redirect-uri";
 import {
   PRESETS,
   PRESET_DEFINITIONS,
@@ -23,8 +23,8 @@ import {
   type GrantContext,
   type Preset,
   type ScopeCategory,
-} from '../../../mcp-src/utils/grant-context';
-import { NEON_TOOLS } from '../../../mcp-src/tools/definitions';
+} from "../../../mcp-src/utils/grant-context";
+import { NEON_TOOLS } from "../../../mcp-src/tools/definitions";
 
 /**
  * Generates minimal tool data for client-side filtering and display.
@@ -65,20 +65,20 @@ export type DownstreamAuthRequest = {
 const parseAuthRequest = (
   searchParams: URLSearchParams,
 ): DownstreamAuthRequest => {
-  const responseType = searchParams.get('response_type') || '';
-  const clientId = searchParams.get('client_id') || '';
-  const redirectUri = searchParams.get('redirect_uri') || '';
-  const scope = searchParams.get('scope') || '';
-  const state = searchParams.get('state') || '';
-  const codeChallenge = searchParams.get('code_challenge') || undefined;
+  const responseType = searchParams.get("response_type") || "";
+  const clientId = searchParams.get("client_id") || "";
+  const redirectUri = searchParams.get("redirect_uri") || "";
+  const scope = searchParams.get("scope") || "";
+  const state = searchParams.get("state") || "";
+  const codeChallenge = searchParams.get("code_challenge") || undefined;
   const codeChallengeMethod =
-    searchParams.get('code_challenge_method') || 'plain';
+    searchParams.get("code_challenge_method") || "plain";
 
   return {
     responseType,
     clientId,
     redirectUri,
-    scope: scope.split(' ').filter(Boolean),
+    scope: scope.split(" ").filter(Boolean),
     state,
     codeChallenge,
     codeChallengeMethod,
@@ -89,12 +89,12 @@ const parseAuthRequest = (
  * Renders scope category checkboxes for the custom preset.
  */
 function renderScopeCategoryCheckboxes(): string {
-  let html = '';
+  let html = "";
   for (const category of SCOPE_CATEGORIES) {
     const def = SCOPE_CATEGORY_DEFINITIONS[category];
     const sensitiveHtml = def.sensitive
       ? ' <span class="badge badge-sensitive">SENSITIVE</span>'
-      : '';
+      : "";
     html += `
       <label class="category-item">
         <input
@@ -118,12 +118,12 @@ function renderScopeCategoryCheckboxes(): string {
  * Renders scope categories as read-only indicators for the permission details view.
  */
 function renderPermissionDetailItems(): string {
-  let html = '';
+  let html = "";
   for (const category of SCOPE_CATEGORIES) {
     const def = SCOPE_CATEGORY_DEFINITIONS[category];
     const sensitiveHtml = def.sensitive
       ? ' <span class="badge badge-sensitive">SENSITIVE</span>'
-      : '';
+      : "";
     html += `
       <div class="category-detail">
         <span class="detail-check">\u2713</span>
@@ -152,20 +152,20 @@ function renderPresetSection(projectId: string | null): string {
   html += `<div class="preset-label">Presets</div>`;
   html += `<div class="preset-tabs">`;
   const presetOrder: Preset[] = [
-    'custom',
-    'local_development',
-    'production_use',
-    'full_access',
+    "custom",
+    "local_development",
+    "production_use",
+    "full_access",
   ];
   for (const preset of presetOrder) {
     const def = PRESET_DEFINITIONS[preset];
-    const isDefault = preset === 'full_access';
+    const isDefault = preset === "full_access";
     html += `
       <button
         type="button"
-        class="preset-tab${isDefault ? ' active' : ''}"
+        class="preset-tab${isDefault ? " active" : ""}"
         data-preset="${he.escape(preset)}"
-        data-readonly="${preset === 'production_use' ? 'true' : 'false'}"
+        data-readonly="${preset === "production_use" ? "true" : "false"}"
         data-desc="${he.escape(def.description)}"
       >${he.escape(def.label)}</button>
     `;
@@ -193,8 +193,8 @@ function renderPresetSection(projectId: string | null): string {
   `;
 
   // Project scope
-  const projectIdValue = projectId ? he.escape(projectId) : '';
-  const projectIdReadonly = projectId ? ' readonly' : '';
+  const projectIdValue = projectId ? he.escape(projectId) : "";
+  const projectIdReadonly = projectId ? " readonly" : "";
   html += `
     <div class="project-scope-section">
       <div class="scope-info">
@@ -278,7 +278,7 @@ function renderScopeSection(requestedScopes: string[]): string {
         type="checkbox"
         name="scopes"
         value="write"
-        ${writeChecked ? 'checked' : ''}
+        ${writeChecked ? "checked" : ""}
         class="scope-checkbox"
       />
       <div class="scope-info">
@@ -304,7 +304,7 @@ const renderApprovalDialog = (
   projectId: string | null = null,
   showPresets: boolean = true,
 ) => {
-  const clientName = he.escape(client.client_name || 'A new MCP Client');
+  const clientName = he.escape(client.client_name || "A new MCP Client");
   const website = client.client_uri ? he.escape(client.client_uri) : undefined;
   const redirectUris = client.redirect_uris;
 
@@ -316,7 +316,7 @@ const renderApprovalDialog = (
               <a href="${website}" target="_blank" rel="noopener noreferrer">${website}</a>
             </div>
           </div>`
-    : '';
+    : "";
 
   const redirectUrisHtml =
     redirectUris && redirectUris.length > 0
@@ -324,10 +324,10 @@ const renderApprovalDialog = (
           <div class="client-detail">
             <div class="detail-label">Redirect URIs:</div>
             <div class="detail-value small">
-              ${redirectUris.map((uri) => `<div>${he.escape(uri)}</div>`).join('')}
+              ${redirectUris.map((uri) => `<div>${he.escape(uri)}</div>`).join("")}
             </div>
           </div>`
-      : '';
+      : "";
 
   const html = `
 <!DOCTYPE html>
@@ -1133,7 +1133,7 @@ const renderApprovalDialog = (
 </html>
 `;
   return new NextResponse(html, {
-    headers: { 'Content-Type': 'text/html' },
+    headers: { "Content-Type": "text/html" },
   });
 };
 
@@ -1143,9 +1143,9 @@ export async function GET(request: NextRequest) {
     const requestParams = parseAuthRequest(searchParams);
 
     const clientId = requestParams.clientId;
-    const client = await model.getClient(clientId, '');
+    const client = await model.getClient(clientId, "");
 
-    logger.info('Authorize request', {
+    logger.info("Authorize request", {
       clientId,
       redirectUri: requestParams.redirectUri,
       responseType: requestParams.responseType,
@@ -1153,11 +1153,11 @@ export async function GET(request: NextRequest) {
     });
 
     if (!client) {
-      logger.warn('Client not found', { clientId });
+      logger.warn("Client not found", { clientId });
       return NextResponse.json(
         {
-          error: 'invalid_client',
-          error_description: 'Invalid client ID',
+          error: "invalid_client",
+          error_description: "Invalid client ID",
         },
         { status: 400 },
       );
@@ -1167,15 +1167,15 @@ export async function GET(request: NextRequest) {
       requestParams.responseType === undefined ||
       !client.response_types.includes(requestParams.responseType)
     ) {
-      logger.warn('Invalid response type', {
+      logger.warn("Invalid response type", {
         clientId,
         providedResponseType: requestParams.responseType,
         supportedResponseTypes: client.response_types,
       });
       return NextResponse.json(
         {
-          error: 'unsupported_response_type',
-          error_description: 'Invalid response type',
+          error: "unsupported_response_type",
+          error_description: "Invalid response type",
         },
         { status: 400 },
       );
@@ -1185,15 +1185,15 @@ export async function GET(request: NextRequest) {
       requestParams.redirectUri === undefined ||
       !matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)
     ) {
-      logger.warn('Invalid redirect URI', {
+      logger.warn("Invalid redirect URI", {
         clientId: requestParams.clientId,
         providedRedirectUri: requestParams.redirectUri,
         registeredRedirectUris: client.redirect_uris,
       });
       return NextResponse.json(
         {
-          error: 'invalid_request',
-          error_description: 'Invalid redirect URI',
+          error: "invalid_request",
+          error_description: "Invalid redirect URI",
         },
         { status: 400 },
       );
@@ -1204,8 +1204,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(authUrl.href);
     }
 
-    const projectId =
-      request.headers.get('x-neon-project-id')?.trim() || null;
+    const projectId = request.headers.get("x-neon-project-id")?.trim() || null;
 
     return renderApprovalDialog(
       client,
@@ -1214,25 +1213,24 @@ export async function GET(request: NextRequest) {
       projectId,
     );
   } catch (error: unknown) {
-    return handleOAuthError(error, 'Authorization error');
+    return handleOAuthError(error, "Authorization error");
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const state = formData.get('state') as string;
-    const selectedScopes = formData.getAll('scopes') as string[];
-    const selectedPreset = formData.get('preset') as string | null;
-    const protectProduction = formData.get('protect_production') === 'true';
-    const projectId =
-      (formData.get('project_id') as string)?.trim() || null;
+    const state = formData.get("state") as string;
+    const selectedScopes = formData.getAll("scopes") as string[];
+    const selectedPreset = formData.get("preset") as string | null;
+    const protectProduction = formData.get("protect_production") === "true";
+    const projectId = (formData.get("project_id") as string)?.trim() || null;
 
     if (!state) {
       return NextResponse.json(
         {
-          error: 'invalid_request',
-          error_description: 'Invalid state',
+          error: "invalid_request",
+          error_description: "Invalid state",
         },
         { status: 400 },
       );
@@ -1245,8 +1243,8 @@ export async function POST(request: NextRequest) {
     if (validScopes.length === 0) {
       return NextResponse.json(
         {
-          error: 'invalid_scope',
-          error_description: 'No valid scopes selected',
+          error: "invalid_scope",
+          error_description: "No valid scopes selected",
         },
         { status: 400 },
       );
@@ -1261,7 +1259,7 @@ export async function POST(request: NextRequest) {
     if (selectedPreset && PRESETS.includes(selectedPreset as Preset)) {
       // Parse scope categories for custom preset
       const selectedCategories = formData.getAll(
-        'scope_categories',
+        "scope_categories",
       ) as string[];
       const validCategories = selectedCategories.filter((c) =>
         SCOPE_CATEGORIES.includes(c as ScopeCategory),
@@ -1270,9 +1268,9 @@ export async function POST(request: NextRequest) {
       requestParams.grant = {
         projectId,
         preset: selectedPreset as Preset,
-        scopes: selectedPreset === 'custom' ? validCategories : null,
+        scopes: selectedPreset === "custom" ? validCategories : null,
         protectedBranches: protectProduction
-          ? ['main', 'master', 'prod', 'production']
+          ? ["main", "master", "prod", "production"]
           : null,
       };
     }
@@ -1284,7 +1282,7 @@ export async function POST(request: NextRequest) {
     const authUrl = await upstreamAuth(updatedState);
     return NextResponse.redirect(authUrl.href);
   } catch (error: unknown) {
-    return handleOAuthError(error, 'Authorization error');
+    return handleOAuthError(error, "Authorization error");
   }
 }
 
@@ -1292,9 +1290,9 @@ export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
     headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
     },
   });
 }

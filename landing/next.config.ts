@@ -1,4 +1,4 @@
-import type { NextConfig } from 'next';
+import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Serverless deployment on Vercel - do not use 'export' mode
@@ -8,8 +8,8 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
-        source: '/',
-        destination: 'https://neon.tech/docs/ai/neon-mcp-server',
+        source: "/",
+        destination: "https://neon.tech/docs/ai/neon-mcp-server",
         permanent: true,
       },
     ];
@@ -20,16 +20,16 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: '/mcp',
-        destination: '/api/mcp',
+        source: "/mcp",
+        destination: "/api/mcp",
       },
       {
-        source: '/sse',
-        destination: '/api/sse',
+        source: "/sse",
+        destination: "/api/sse",
       },
       {
-        source: '/health',
-        destination: '/api/health',
+        source: "/health",
+        destination: "/api/health",
       },
     ];
   },

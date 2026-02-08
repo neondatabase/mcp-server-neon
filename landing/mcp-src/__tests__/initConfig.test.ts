@@ -11,14 +11,14 @@
  * This file focuses on verifying the CLI flag extraction works end-to-end.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // We need to control process.argv and prevent process.exit
 const originalArgv = process.argv;
 const originalExit = process.exit;
 
 function withArgv(args: string[], fn: () => void) {
-  process.argv = ['node', 'cli.js', ...args];
+  process.argv = ["node", "cli.js", ...args];
   try {
     fn();
   } finally {
@@ -26,12 +26,12 @@ function withArgv(args: string[], fn: () => void) {
   }
 }
 
-describe('parseArgs – start command with grant flags', () => {
+describe("parseArgs – start command with grant flags", () => {
   beforeEach(() => {
     // Prevent actual exit
     process.exit = vi.fn() as never;
     // Suppress logger output
-    vi.mock('../utils/logger', () => ({
+    vi.mock("../utils/logger", () => ({
       logger: {
         info: vi.fn(),
         error: vi.fn(),
@@ -49,12 +49,12 @@ describe('parseArgs – start command with grant flags', () => {
   });
 
   it('parses "start <key>" with no grant flags', async () => {
-    withArgv(['start', 'napi_test_key'], async () => {
-      const { parseArgs } = await import('../initConfig');
+    withArgv(["start", "napi_test_key"], async () => {
+      const { parseArgs } = await import("../initConfig");
       const result = parseArgs();
       expect(result).toEqual({
-        command: 'start',
-        neonApiKey: 'napi_test_key',
+        command: "start",
+        neonApiKey: "napi_test_key",
         analytics: true,
         grantArgs: {
           preset: undefined,
@@ -66,119 +66,101 @@ describe('parseArgs – start command with grant flags', () => {
     });
   });
 
-  it('parses --preset flag (= syntax)', async () => {
+  it("parses --preset flag (= syntax)", async () => {
+    withArgv(["start", "napi_key", "--preset=local_development"], async () => {
+      const { parseArgs } = await import("../initConfig");
+      const result = parseArgs();
+      if (result.command !== "start") throw new Error("wrong command");
+      expect(result.grantArgs.preset).toBe("local_development");
+    });
+  });
+
+  it("parses --preset flag (space syntax)", async () => {
+    withArgv(["start", "napi_key", "--preset", "production_use"], async () => {
+      const { parseArgs } = await import("../initConfig");
+      const result = parseArgs();
+      if (result.command !== "start") throw new Error("wrong command");
+      expect(result.grantArgs.preset).toBe("production_use");
+    });
+  });
+
+  it("parses --project-id flag", async () => {
+    withArgv(["start", "napi_key", "--project-id", "proj-abc"], async () => {
+      const { parseArgs } = await import("../initConfig");
+      const result = parseArgs();
+      if (result.command !== "start") throw new Error("wrong command");
+      expect(result.grantArgs.projectId).toBe("proj-abc");
+    });
+  });
+
+  it("parses --scopes flag", async () => {
+    withArgv(["start", "napi_key", "--scopes=branches,querying"], async () => {
+      const { parseArgs } = await import("../initConfig");
+      const result = parseArgs();
+      if (result.command !== "start") throw new Error("wrong command");
+      expect(result.grantArgs.scopes).toBe("branches,querying");
+    });
+  });
+
+  it("parses --protect-production as boolean flag", async () => {
+    withArgv(["start", "napi_key", "--protect-production"], async () => {
+      const { parseArgs } = await import("../initConfig");
+      const result = parseArgs();
+      if (result.command !== "start") throw new Error("wrong command");
+      expect(result.grantArgs.protectProduction).toBe("true");
+    });
+  });
+
+  it("parses --protect-production with value", async () => {
     withArgv(
-      ['start', 'napi_key', '--preset=local_development'],
+      ["start", "napi_key", "--protect-production=staging,deploy"],
       async () => {
-        const { parseArgs } = await import('../initConfig');
+        const { parseArgs } = await import("../initConfig");
         const result = parseArgs();
-        if (result.command !== 'start') throw new Error('wrong command');
-        expect(result.grantArgs.preset).toBe('local_development');
+        if (result.command !== "start") throw new Error("wrong command");
+        expect(result.grantArgs.protectProduction).toBe("staging,deploy");
       },
     );
   });
 
-  it('parses --preset flag (space syntax)', async () => {
-    withArgv(
-      ['start', 'napi_key', '--preset', 'production_use'],
-      async () => {
-        const { parseArgs } = await import('../initConfig');
-        const result = parseArgs();
-        if (result.command !== 'start') throw new Error('wrong command');
-        expect(result.grantArgs.preset).toBe('production_use');
-      },
-    );
-  });
-
-  it('parses --project-id flag', async () => {
-    withArgv(
-      ['start', 'napi_key', '--project-id', 'proj-abc'],
-      async () => {
-        const { parseArgs } = await import('../initConfig');
-        const result = parseArgs();
-        if (result.command !== 'start') throw new Error('wrong command');
-        expect(result.grantArgs.projectId).toBe('proj-abc');
-      },
-    );
-  });
-
-  it('parses --scopes flag', async () => {
-    withArgv(
-      ['start', 'napi_key', '--scopes=branches,querying'],
-      async () => {
-        const { parseArgs } = await import('../initConfig');
-        const result = parseArgs();
-        if (result.command !== 'start') throw new Error('wrong command');
-        expect(result.grantArgs.scopes).toBe('branches,querying');
-      },
-    );
-  });
-
-  it('parses --protect-production as boolean flag', async () => {
-    withArgv(
-      ['start', 'napi_key', '--protect-production'],
-      async () => {
-        const { parseArgs } = await import('../initConfig');
-        const result = parseArgs();
-        if (result.command !== 'start') throw new Error('wrong command');
-        expect(result.grantArgs.protectProduction).toBe('true');
-      },
-    );
-  });
-
-  it('parses --protect-production with value', async () => {
-    withArgv(
-      ['start', 'napi_key', '--protect-production=staging,deploy'],
-      async () => {
-        const { parseArgs } = await import('../initConfig');
-        const result = parseArgs();
-        if (result.command !== 'start') throw new Error('wrong command');
-        expect(result.grantArgs.protectProduction).toBe('staging,deploy');
-      },
-    );
-  });
-
-  it('parses multiple grant flags together', async () => {
+  it("parses multiple grant flags together", async () => {
     withArgv(
       [
-        'start',
-        'napi_key',
-        '--preset',
-        'local_development',
-        '--project-id=proj-xyz',
-        '--protect-production',
+        "start",
+        "napi_key",
+        "--preset",
+        "local_development",
+        "--project-id=proj-xyz",
+        "--protect-production",
       ],
       async () => {
-        const { parseArgs } = await import('../initConfig');
+        const { parseArgs } = await import("../initConfig");
         const result = parseArgs();
-        if (result.command !== 'start') throw new Error('wrong command');
+        if (result.command !== "start") throw new Error("wrong command");
         expect(result.grantArgs).toEqual({
-          preset: 'local_development',
+          preset: "local_development",
           scopes: undefined,
-          projectId: 'proj-xyz',
-          protectProduction: 'true',
+          projectId: "proj-xyz",
+          protectProduction: "true",
         });
       },
     );
   });
 
-  it('parses --no-analytics flag', async () => {
-    withArgv(
-      ['start', 'napi_key', '--no-analytics'],
-      async () => {
-        const { parseArgs } = await import('../initConfig');
-        const result = parseArgs();
-        if (result.command !== 'start') throw new Error('wrong command');
-        expect(result.analytics).toBe(false);
-      },
-    );
+  it("parses --no-analytics flag", async () => {
+    withArgv(["start", "napi_key", "--no-analytics"], async () => {
+      const { parseArgs } = await import("../initConfig");
+      const result = parseArgs();
+      if (result.command !== "start") throw new Error("wrong command");
+      expect(result.analytics).toBe(false);
+    });
   });
 
-  it('parses export-tools command', async () => {
-    withArgv(['export-tools'], async () => {
-      const { parseArgs } = await import('../initConfig');
+  it("parses export-tools command", async () => {
+    withArgv(["export-tools"], async () => {
+      const { parseArgs } = await import("../initConfig");
       const result = parseArgs();
-      expect(result).toEqual({ command: 'export-tools' });
+      expect(result).toEqual({ command: "export-tools" });
     });
   });
 });

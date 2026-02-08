@@ -5,7 +5,7 @@
  * and blocks destructive or mutating operations on protected branches.
  */
 
-import type { GrantContext } from '../utils/grant-context';
+import type { GrantContext } from "../utils/grant-context";
 
 /**
  * Error thrown when a grant enforcement check fails.
@@ -13,7 +13,7 @@ import type { GrantContext } from '../utils/grant-context';
 export class GrantViolationError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'GrantViolationError';
+    this.name = "GrantViolationError";
   }
 }
 
@@ -23,10 +23,10 @@ export class GrantViolationError extends Error {
  * Maps tool names to the arg key that identifies the target branch.
  */
 const BRANCH_SENSITIVE_TOOLS: ReadonlyMap<string, string> = new Map([
-  ['delete_branch', 'branchId'],
-  ['reset_from_parent', 'branchIdOrName'],
-  ['run_sql', 'branchId'],
-  ['run_sql_transaction', 'branchId'],
+  ["delete_branch", "branchId"],
+  ["reset_from_parent", "branchIdOrName"],
+  ["run_sql", "branchId"],
+  ["run_sql_transaction", "branchId"],
 ]);
 
 /**
@@ -53,7 +53,7 @@ export function enforceProtectedBranches(
   if (!branchArgKey) return;
 
   const branchRef = args[branchArgKey];
-  if (typeof branchRef !== 'string' || !branchRef) return;
+  if (typeof branchRef !== "string" || !branchRef) return;
 
   const isProtected = grant.protectedBranches.some(
     (protected_) => protected_.toLowerCase() === branchRef.toLowerCase(),
@@ -63,7 +63,7 @@ export function enforceProtectedBranches(
     throw new GrantViolationError(
       `Operation blocked: Branch "${branchRef}" is protected. ` +
         `Cannot execute "${toolName}" on protected branches. ` +
-        `Protected branches: ${grant.protectedBranches.join(', ')}`,
+        `Protected branches: ${grant.protectedBranches.join(", ")}`,
     );
   }
 }

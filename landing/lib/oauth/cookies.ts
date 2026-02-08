@@ -1,6 +1,6 @@
-import { cookies } from 'next/headers';
+import { cookies } from "next/headers";
 
-const COOKIE_NAME = 'approved-mcp-clients';
+const COOKIE_NAME = "approved-mcp-clients";
 const ONE_YEAR_IN_SECONDS = 365 * 24 * 60 * 60; // 365 days in seconds
 
 /**
@@ -9,11 +9,11 @@ const ONE_YEAR_IN_SECONDS = 365 * 24 * 60 * 60; // 365 days in seconds
 const importKey = async (secret: string): Promise<CryptoKey> => {
   const enc = new TextEncoder();
   return crypto.subtle.importKey(
-    'raw',
+    "raw",
     enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
+    { name: "HMAC", hash: "SHA-256" },
     false,
-    ['sign', 'verify'],
+    ["sign", "verify"],
   );
 };
 
@@ -23,13 +23,13 @@ const importKey = async (secret: string): Promise<CryptoKey> => {
 const signData = async (key: CryptoKey, data: string): Promise<string> => {
   const enc = new TextEncoder();
   const signatureBuffer = await crypto.subtle.sign(
-    'HMAC',
+    "HMAC",
     key,
     enc.encode(data),
   );
   return Array.from(new Uint8Array(signatureBuffer))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 };
 
 /**
@@ -47,13 +47,13 @@ const verifySignature = async (
     );
 
     return await crypto.subtle.verify(
-      'HMAC',
+      "HMAC",
       key,
       signatureBytes.buffer,
       enc.encode(data),
     );
   } catch (e) {
-    console.error('Error verifying signature:', e);
+    console.error("Error verifying signature:", e);
     return false;
   }
 };
@@ -68,7 +68,7 @@ const getApprovedClientsFromCookie = async (
   if (!cookie) return [];
 
   try {
-    const [signatureHex, base64Payload] = cookie.split('.');
+    const [signatureHex, base64Payload] = cookie.split(".");
     if (!signatureHex || !base64Payload) return [];
 
     const payload = atob(base64Payload);
@@ -91,7 +91,7 @@ export const isClientAlreadyApproved = async (
   cookieSecret: string,
 ): Promise<boolean> => {
   const cookieStore = await cookies();
-  const cookie = cookieStore.get(COOKIE_NAME)?.value ?? '';
+  const cookie = cookieStore.get(COOKIE_NAME)?.value ?? "";
   const approvedClients = await getApprovedClientsFromCookie(
     cookie,
     cookieSecret,
@@ -127,7 +127,7 @@ export const updateApprovedClientsCookie = async (
   cookieSecret: string,
 ): Promise<void> => {
   const cookieStore = await cookies();
-  const existingCookie = cookieStore.get(COOKIE_NAME)?.value ?? '';
+  const existingCookie = cookieStore.get(COOKIE_NAME)?.value ?? "";
   const cookieValue = await createApprovedClientsCookieValue(
     existingCookie,
     clientId,
@@ -136,9 +136,9 @@ export const updateApprovedClientsCookie = async (
 
   cookieStore.set(COOKIE_NAME, cookieValue, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
     maxAge: ONE_YEAR_IN_SECONDS,
-    path: '/',
+    path: "/",
   });
 };

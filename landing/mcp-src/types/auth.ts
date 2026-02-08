@@ -1,5 +1,5 @@
-import { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-import type { GrantContext } from '../utils/grant-context';
+import { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import type { GrantContext } from "../utils/grant-context";
 
 export type AuthContext = {
   extra: {

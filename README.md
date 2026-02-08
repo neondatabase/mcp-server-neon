@@ -8,13 +8,11 @@
 
 [![Install MCP Server in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en-US/install-mcp?name=Neon&config=eyJ1cmwiOiJodHRwczovL21jcC5uZW9uLnRlY2gvbWNwIn0%3D)
 
-**Neon MCP Server** is an open-source tool that lets you interact with your Neon Postgres databases in **natural language**.
-
 [![npm version](https://img.shields.io/npm/v/@neondatabase/mcp-server-neon)](https://www.npmjs.com/package/@neondatabase/mcp-server-neon)
 [![npm downloads](https://img.shields.io/npm/dt/@neondatabase/mcp-server-neon)](https://www.npmjs.com/package/@neondatabase/mcp-server-neon)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-The Model Context Protocol (MCP) is a [standardized protocol](https://modelcontextprotocol.io/introduction) designed to manage context between large language models (LLMs) and external systems. This repository offers an installer and an MCP Server for [Neon](https://neon.tech).
+The **Neon MCP Server** lets you connect your Neon Postgres databases with agentic tools like Claude, Cursor, and GitHub Copilot. The Model Context Protocol (MCP) is a [standardized protocol](https://modelcontextprotocol.io/introduction) designed to manage context between large language models (LLMs) and external systems. This repository offers an MCP Server for [Neon](https://neon.com).
 
 Neon's MCP server acts as a bridge between natural language requests and the [Neon API](https://api-docs.neon.tech/reference/getting-started-with-neon-api). Built upon MCP, it translates your requests into the necessary API calls, enabling you to manage tasks such as creating projects and branches, running queries, and performing database migrations seamlessly.
 
@@ -237,22 +235,22 @@ Access control can be configured via:
 
 ### HTTP Headers (Remote MCP Server with API Key)
 
-| Header | Values | Default | Description |
-|---|---|---|---|
-| `X-Neon-Preset` | `full_access`, `local_development`, `production_use`, `custom` | `full_access` | Permission preset. Invalid values silently fall back to `full_access`. |
-| `X-Neon-Scopes` | Comma-separated: `projects`, `branches`, `schema`, `querying`, `performance`, `neon_auth`, `docs` | Not set | Custom scope categories. **Overrides preset to `custom`** when present. Invalid category names are silently dropped. |
-| `X-Neon-Project-Id` | Neon project ID (e.g., `proj-abc-123`) | Not set | Scope all operations to a single project. |
-| `X-Neon-Protect-Production` | `true`, `false`, branch name, or comma-separated names | Not set | Protect branches from destructive operations. `true` protects `main`, `master`, `prod`, `production`. |
-| `X-Neon-Read-Only` | `true` / `false` | Not set | Explicit read-only mode (highest priority). The legacy `x-read-only` header is accepted as a synonym with lower priority. |
+| Header                      | Values                                                                                            | Default       | Description                                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `X-Neon-Preset`             | `full_access`, `local_development`, `production_use`, `custom`                                    | `full_access` | Permission preset. Invalid values silently fall back to `full_access`.                                                    |
+| `X-Neon-Scopes`             | Comma-separated: `projects`, `branches`, `schema`, `querying`, `performance`, `neon_auth`, `docs` | Not set       | Custom scope categories. **Overrides preset to `custom`** when present. Invalid category names are silently dropped.      |
+| `X-Neon-Project-Id`         | Neon project ID (e.g., `proj-abc-123`)                                                            | Not set       | Scope all operations to a single project.                                                                                 |
+| `X-Neon-Protect-Production` | `true`, `false`, branch name, or comma-separated names                                            | Not set       | Protect branches from destructive operations. `true` protects `main`, `master`, `prod`, `production`.                     |
+| `X-Neon-Read-Only`          | `true` / `false`                                                                                  | Not set       | Explicit read-only mode (highest priority). The legacy `x-read-only` header is accepted as a synonym with lower priority. |
 
 ### CLI Flags (Local MCP Server)
 
-| Flag | Values | Default | Description |
-|---|---|---|---|
-| `--preset` | `full_access`, `local_development`, `production_use`, `custom` | `full_access` | Permission preset |
-| `--scopes` | Comma-separated: `projects`, `branches`, `schema`, `querying`, `performance`, `neon_auth`, `docs` | Not set | Custom scope categories (overrides preset to `custom`) |
-| `--project-id` | Neon project ID | Not set | Scope all operations to a single project |
-| `--protect-production` | `true` (no value), branch name, or comma-separated names | Not set | Protect branches from destructive operations |
+| Flag                   | Values                                                                                            | Default       | Description                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------ |
+| `--preset`             | `full_access`, `local_development`, `production_use`, `custom`                                    | `full_access` | Permission preset                                      |
+| `--scopes`             | Comma-separated: `projects`, `branches`, `schema`, `querying`, `performance`, `neon_auth`, `docs` | Not set       | Custom scope categories (overrides preset to `custom`) |
+| `--project-id`         | Neon project ID                                                                                   | Not set       | Scope all operations to a single project               |
+| `--protect-production` | `true` (no value), branch name, or comma-separated names                                          | Not set       | Protect branches from destructive operations           |
 
 ### Precedence Rules
 
@@ -267,12 +265,12 @@ In **OAuth mode**, all access control is determined during the consent flow and 
 
 Presets are predefined access levels that control which tools are available. Set via `X-Neon-Preset` header or `--preset` CLI flag. The default is `full_access`.
 
-| Preset | Description | Write access | Project create/delete | SQL execution |
-|---|---|---|---|---|
-| `full_access` | No restrictions. Use with caution. | Yes | Yes | Yes |
-| `local_development` | Safe development access with branch management and SQL. | Yes | No | Yes |
-| `production_use` | Read-only access for schema inspection and documentation. | No | No | Read-only |
-| `custom` | Select specific tool categories to enable (see [Custom Scopes](#custom-scope-categories)). | Depends on scopes | Depends on scopes | Depends on scopes |
+| Preset              | Description                                                                                | Write access      | Project create/delete | SQL execution     |
+| ------------------- | ------------------------------------------------------------------------------------------ | ----------------- | --------------------- | ----------------- |
+| `full_access`       | No restrictions. Use with caution.                                                         | Yes               | Yes                   | Yes               |
+| `local_development` | Safe development access with branch management and SQL.                                    | Yes               | No                    | Yes               |
+| `production_use`    | Read-only access for schema inspection and documentation.                                  | No                | No                    | Read-only         |
+| `custom`            | Select specific tool categories to enable (see [Custom Scopes](#custom-scope-categories)). | Depends on scopes | Depends on scopes     | Depends on scopes |
 
 ## Project Scoping
 
@@ -286,11 +284,11 @@ Restrict the MCP server to a single Neon project using `X-Neon-Project-Id` heade
 
 Protect critical branches from destructive operations (`delete_branch`, `reset_from_parent`, `run_sql`, `run_sql_transaction`) using `X-Neon-Protect-Production` header or `--protect-production` CLI flag.
 
-| Value | Behavior |
-|---|---|
-| `true` | Protects branches named `main`, `master`, `prod`, and `production` |
-| `my-branch` | Protects the single branch named `my-branch` |
-| `main,staging,prod` | Protects all listed branches (comma-separated) |
+| Value               | Behavior                                                           |
+| ------------------- | ------------------------------------------------------------------ |
+| `true`              | Protects branches named `main`, `master`, `prod`, and `production` |
+| `my-branch`         | Protects the single branch named `my-branch`                       |
+| `main,staging,prod` | Protects all listed branches (comma-separated)                     |
 
 When connecting via OAuth, check the "Protect production branches" checkbox in the authorization dialog.
 
@@ -298,15 +296,15 @@ When connecting via OAuth, check the "Protect production branches" checkbox in t
 
 For fine-grained control beyond presets, enable specific tool categories using `X-Neon-Scopes` header or `--scopes` CLI flag. When scopes are provided, the preset is automatically set to `custom` regardless of any preset value.
 
-| Category | Tools included |
-|---|---|
-| `projects` | `list_projects`, `create_project`, `delete_project`, `describe_project`, `list_organizations`, `list_shared_projects` |
-| `branches` | `create_branch`, `delete_branch`, `describe_branch`, `reset_from_parent`, `list_branch_computes`, `get_connection_string` |
-| `schema` | `get_database_tables`, `describe_table_schema` |
-| `querying` | `run_sql`, `run_sql_transaction`, `prepare_database_migration`, `complete_database_migration`, `compare_database_schema` |
-| `performance` | `explain_sql_statement`, `prepare_query_tuning`, `complete_query_tuning`, `list_slow_queries` |
-| `neon_auth` | `provision_neon_auth`, `provision_neon_data_api` |
-| `docs` | `load_resource` |
+| Category      | Tools included                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `projects`    | `list_projects`, `create_project`, `delete_project`, `describe_project`, `list_organizations`, `list_shared_projects`     |
+| `branches`    | `create_branch`, `delete_branch`, `describe_branch`, `reset_from_parent`, `list_branch_computes`, `get_connection_string` |
+| `schema`      | `get_database_tables`, `describe_table_schema`                                                                            |
+| `querying`    | `run_sql`, `run_sql_transaction`, `prepare_database_migration`, `complete_database_migration`, `compare_database_schema`  |
+| `performance` | `explain_sql_statement`, `prepare_query_tuning`, `complete_query_tuning`, `list_slow_queries`                             |
+| `neon_auth`   | `provision_neon_auth`, `provision_neon_data_api`                                                                          |
+| `docs`        | `load_resource`                                                                                                           |
 
 The `search` and `fetch` tools are always available regardless of scope selection. At least one valid scope category is required for useful access. Values are case-sensitive.
 

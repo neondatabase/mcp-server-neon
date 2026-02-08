@@ -12,22 +12,22 @@
  */
 
 export const PRESETS = [
-  'local_development',
-  'production_use',
-  'full_access',
-  'custom',
+  "local_development",
+  "production_use",
+  "full_access",
+  "custom",
 ] as const;
 
 export type Preset = (typeof PRESETS)[number];
 
 export const SCOPE_CATEGORIES = [
-  'projects',
-  'branches',
-  'schema',
-  'querying',
-  'performance',
-  'neon_auth',
-  'docs',
+  "projects",
+  "branches",
+  "schema",
+  "querying",
+  "performance",
+  "neon_auth",
+  "docs",
 ] as const;
 
 export type ScopeCategory = (typeof SCOPE_CATEGORIES)[number];
@@ -40,40 +40,39 @@ export const SCOPE_CATEGORY_DEFINITIONS: Record<
   { label: string; description: string; sensitive?: boolean }
 > = {
   projects: {
-    label: 'Project Management',
+    label: "Project Management",
     description:
-      'Create, delete, list, and search Neon projects and organizations across your account.',
+      "Create, delete, list, and search Neon projects and organizations across your account.",
   },
   branches: {
-    label: 'Branch Management',
+    label: "Branch Management",
     description:
-      'Create, delete, and manage database branches for development, testing, or migrations.',
+      "Create, delete, and manage database branches for development, testing, or migrations.",
   },
   schema: {
-    label: 'Schema and Table Inspection',
+    label: "Schema and Table Inspection",
     description:
-      'List tables and inspect schema definitions to understand your database structure.',
+      "List tables and inspect schema definitions to understand your database structure.",
   },
   querying: {
-    label: 'SQL Query Execution',
+    label: "SQL Query Execution",
     description:
-      'Execute SQL queries, transactions, and database migrations against your databases.',
+      "Execute SQL queries, transactions, and database migrations against your databases.",
     sensitive: true,
   },
   performance: {
-    label: 'Query Performance Optimization',
+    label: "Query Performance Optimization",
     description:
-      'Analyze slow queries and test performance optimizations on temporary branches.',
+      "Analyze slow queries and test performance optimizations on temporary branches.",
   },
   neon_auth: {
-    label: 'Neon Auth',
+    label: "Neon Auth",
     description:
-      'Provision authentication infrastructure by integrating with Auth providers.',
+      "Provision authentication infrastructure by integrating with Auth providers.",
   },
   docs: {
-    label: 'Documentation and Resources',
-    description:
-      'Access Neon documentation, setup guides, and best practices.',
+    label: "Documentation and Resources",
+    description: "Access Neon documentation, setup guides, and best practices.",
   },
 };
 
@@ -85,23 +84,21 @@ export const PRESET_DEFINITIONS: Record<
   { label: string; description: string }
 > = {
   local_development: {
-    label: 'Local Development',
+    label: "Local Development",
     description:
-      'Full development access with branch management and SQL execution.',
+      "Full development access with branch management and SQL execution.",
   },
   production_use: {
-    label: 'Production Use',
-    description:
-      'Read-only access for schema inspection and documentation.',
+    label: "Production Use",
+    description: "Read-only access for schema inspection and documentation.",
   },
   full_access: {
-    label: 'Full Access',
-    description:
-      'Full access including project deletion. Use with caution.',
+    label: "Full Access",
+    description: "Full access including project deletion. Use with caution.",
   },
   custom: {
-    label: 'Custom',
-    description: 'Select specific tool categories to enable.',
+    label: "Custom",
+    description: "Select specific tool categories to enable.",
   },
 };
 
@@ -109,10 +106,10 @@ export const PRESET_DEFINITIONS: Record<
  * Default branch names considered "production" when protect-production is set to "true".
  */
 export const DEFAULT_PROTECTED_BRANCHES = [
-  'main',
-  'master',
-  'prod',
-  'production',
+  "main",
+  "master",
+  "prod",
+  "production",
 ];
 
 export type GrantContext = {
@@ -132,7 +129,7 @@ export type GrantContext = {
  */
 export const DEFAULT_GRANT: GrantContext = {
   projectId: null,
-  preset: 'full_access',
+  preset: "full_access",
   scopes: null,
   protectedBranches: null,
 };
@@ -159,11 +156,11 @@ export function parseProtectedBranches(
   if (!value) return null;
 
   const trimmed = value.trim();
-  if (!trimmed || trimmed.toLowerCase() === 'false') return null;
-  if (trimmed.toLowerCase() === 'true') return [...DEFAULT_PROTECTED_BRANCHES];
+  if (!trimmed || trimmed.toLowerCase() === "false") return null;
+  if (trimmed.toLowerCase() === "true") return [...DEFAULT_PROTECTED_BRANCHES];
 
   return trimmed
-    .split(',')
+    .split(",")
     .map((b) => b.trim())
     .filter(Boolean);
 }
@@ -183,7 +180,7 @@ export function parseScopeCategories(
   if (!value) return null;
 
   const categories = value
-    .split(',')
+    .split(",")
     .map((s) => s.trim())
     .filter(isValidScopeCategory);
 
@@ -199,10 +196,10 @@ export function parseScopeCategories(
  * - If neither is present, default to "full_access"
  */
 export function resolveGrantFromHeaders(headers: Headers): GrantContext {
-  const scopesHeader = headers.get('x-neon-scopes');
-  const presetHeader = headers.get('x-neon-preset');
-  const projectIdHeader = headers.get('x-neon-project-id');
-  const protectProductionHeader = headers.get('x-neon-protect-production');
+  const scopesHeader = headers.get("x-neon-scopes");
+  const presetHeader = headers.get("x-neon-preset");
+  const projectIdHeader = headers.get("x-neon-project-id");
+  const protectProductionHeader = headers.get("x-neon-protect-production");
 
   const scopes = parseScopeCategories(scopesHeader);
   const protectedBranches = parseProtectedBranches(protectProductionHeader);
@@ -212,7 +209,7 @@ export function resolveGrantFromHeaders(headers: Headers): GrantContext {
   if (scopes !== null) {
     return {
       projectId,
-      preset: 'custom',
+      preset: "custom",
       scopes,
       protectedBranches,
     };
@@ -220,7 +217,7 @@ export function resolveGrantFromHeaders(headers: Headers): GrantContext {
 
   // X-Neon-Preset without scopes
   const preset =
-    presetHeader && isValidPreset(presetHeader) ? presetHeader : 'full_access';
+    presetHeader && isValidPreset(presetHeader) ? presetHeader : "full_access";
 
   return {
     projectId,
@@ -257,14 +254,14 @@ export function resolveGrantFromCliArgs(args: CliGrantArgs): GrantContext {
   if (scopes) {
     return {
       projectId,
-      preset: 'custom',
+      preset: "custom",
       scopes,
       protectedBranches,
     };
   }
 
   const preset =
-    args.preset && isValidPreset(args.preset) ? args.preset : 'full_access';
+    args.preset && isValidPreset(args.preset) ? args.preset : "full_access";
 
   return {
     projectId,

@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from "vitest";
 import {
   enforceProtectedBranches,
   GrantViolationError,
-} from '../tools/grant-enforcement';
-import type { GrantContext } from '../utils/grant-context';
-import { DEFAULT_GRANT } from '../utils/grant-context';
+} from "../tools/grant-enforcement";
+import type { GrantContext } from "../utils/grant-context";
+import { DEFAULT_GRANT } from "../utils/grant-context";
 
 function grant(overrides: Partial<GrantContext> = {}): GrantContext {
   return { ...DEFAULT_GRANT, ...overrides };
@@ -13,37 +13,37 @@ function grant(overrides: Partial<GrantContext> = {}): GrantContext {
 // ---------------------------------------------------------------------------
 // GrantViolationError
 // ---------------------------------------------------------------------------
-describe('GrantViolationError', () => {
-  it('is an instance of Error', () => {
-    const err = new GrantViolationError('test');
+describe("GrantViolationError", () => {
+  it("is an instance of Error", () => {
+    const err = new GrantViolationError("test");
     expect(err).toBeInstanceOf(Error);
     expect(err).toBeInstanceOf(GrantViolationError);
   });
 
   it('has name "GrantViolationError"', () => {
-    const err = new GrantViolationError('msg');
-    expect(err.name).toBe('GrantViolationError');
+    const err = new GrantViolationError("msg");
+    expect(err.name).toBe("GrantViolationError");
   });
 });
 
 // ---------------------------------------------------------------------------
 // enforceProtectedBranches – no protection
 // ---------------------------------------------------------------------------
-describe('enforceProtectedBranches – no protection', () => {
-  it('does nothing when protectedBranches is null', () => {
+describe("enforceProtectedBranches – no protection", () => {
+  it("does nothing when protectedBranches is null", () => {
     expect(() =>
-      enforceProtectedBranches(grant(), 'delete_branch', {
-        branchId: 'main',
+      enforceProtectedBranches(grant(), "delete_branch", {
+        branchId: "main",
       }),
     ).not.toThrow();
   });
 
-  it('does nothing when protectedBranches is empty', () => {
+  it("does nothing when protectedBranches is empty", () => {
     expect(() =>
       enforceProtectedBranches(
         grant({ protectedBranches: [] }),
-        'delete_branch',
-        { branchId: 'main' },
+        "delete_branch",
+        { branchId: "main" },
       ),
     ).not.toThrow();
   });
@@ -52,30 +52,30 @@ describe('enforceProtectedBranches – no protection', () => {
 // ---------------------------------------------------------------------------
 // enforceProtectedBranches – non-sensitive tools
 // ---------------------------------------------------------------------------
-describe('enforceProtectedBranches – non-sensitive tools', () => {
+describe("enforceProtectedBranches – non-sensitive tools", () => {
   const protectedGrant = grant({
-    protectedBranches: ['main', 'prod'],
+    protectedBranches: ["main", "prod"],
   });
 
-  it('allows describe_project (not branch-sensitive)', () => {
+  it("allows describe_project (not branch-sensitive)", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'describe_project', {
-        projectId: 'proj-1',
+      enforceProtectedBranches(protectedGrant, "describe_project", {
+        projectId: "proj-1",
       }),
     ).not.toThrow();
   });
 
-  it('allows list_projects (not branch-sensitive)', () => {
+  it("allows list_projects (not branch-sensitive)", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'list_projects', {}),
+      enforceProtectedBranches(protectedGrant, "list_projects", {}),
     ).not.toThrow();
   });
 
-  it('allows create_branch (not branch-sensitive)', () => {
+  it("allows create_branch (not branch-sensitive)", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'create_branch', {
-        projectId: 'proj-1',
-        branchName: 'main',
+      enforceProtectedBranches(protectedGrant, "create_branch", {
+        projectId: "proj-1",
+        branchName: "main",
       }),
     ).not.toThrow();
   });
@@ -84,54 +84,54 @@ describe('enforceProtectedBranches – non-sensitive tools', () => {
 // ---------------------------------------------------------------------------
 // enforceProtectedBranches – branch-sensitive tools
 // ---------------------------------------------------------------------------
-describe('enforceProtectedBranches – branch-sensitive tools (protected)', () => {
+describe("enforceProtectedBranches – branch-sensitive tools (protected)", () => {
   const protectedGrant = grant({
-    protectedBranches: ['main', 'master', 'prod', 'production'],
+    protectedBranches: ["main", "master", "prod", "production"],
   });
 
-  it('throws for delete_branch targeting a protected branch', () => {
+  it("throws for delete_branch targeting a protected branch", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'delete_branch', {
-        branchId: 'main',
+      enforceProtectedBranches(protectedGrant, "delete_branch", {
+        branchId: "main",
       }),
     ).toThrow(GrantViolationError);
   });
 
-  it('throws for reset_from_parent targeting a protected branch', () => {
+  it("throws for reset_from_parent targeting a protected branch", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'reset_from_parent', {
-        branchIdOrName: 'prod',
+      enforceProtectedBranches(protectedGrant, "reset_from_parent", {
+        branchIdOrName: "prod",
       }),
     ).toThrow(GrantViolationError);
   });
 
-  it('throws for run_sql targeting a protected branch', () => {
+  it("throws for run_sql targeting a protected branch", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'run_sql', {
-        branchId: 'production',
+      enforceProtectedBranches(protectedGrant, "run_sql", {
+        branchId: "production",
       }),
     ).toThrow(GrantViolationError);
   });
 
-  it('throws for run_sql_transaction targeting a protected branch', () => {
+  it("throws for run_sql_transaction targeting a protected branch", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'run_sql_transaction', {
-        branchId: 'master',
+      enforceProtectedBranches(protectedGrant, "run_sql_transaction", {
+        branchId: "master",
       }),
     ).toThrow(GrantViolationError);
   });
 
-  it('error message includes branch name and tool name', () => {
+  it("error message includes branch name and tool name", () => {
     try {
-      enforceProtectedBranches(protectedGrant, 'delete_branch', {
-        branchId: 'main',
+      enforceProtectedBranches(protectedGrant, "delete_branch", {
+        branchId: "main",
       });
-      expect.fail('Should have thrown');
+      expect.fail("Should have thrown");
     } catch (error) {
       expect(error).toBeInstanceOf(GrantViolationError);
       const msg = (error as GrantViolationError).message;
-      expect(msg).toContain('main');
-      expect(msg).toContain('delete_branch');
+      expect(msg).toContain("main");
+      expect(msg).toContain("delete_branch");
     }
   });
 });
@@ -139,23 +139,23 @@ describe('enforceProtectedBranches – branch-sensitive tools (protected)', () =
 // ---------------------------------------------------------------------------
 // Case-insensitive matching
 // ---------------------------------------------------------------------------
-describe('enforceProtectedBranches – case-insensitive', () => {
+describe("enforceProtectedBranches – case-insensitive", () => {
   const protectedGrant = grant({
-    protectedBranches: ['Main', 'PROD'],
+    protectedBranches: ["Main", "PROD"],
   });
 
-  it('matches case-insensitively (lowercase branch vs uppercase protected)', () => {
+  it("matches case-insensitively (lowercase branch vs uppercase protected)", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'delete_branch', {
-        branchId: 'main',
+      enforceProtectedBranches(protectedGrant, "delete_branch", {
+        branchId: "main",
       }),
     ).toThrow(GrantViolationError);
   });
 
-  it('matches case-insensitively (uppercase branch vs mixed-case protected)', () => {
+  it("matches case-insensitively (uppercase branch vs mixed-case protected)", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'run_sql', {
-        branchId: 'PROD',
+      enforceProtectedBranches(protectedGrant, "run_sql", {
+        branchId: "PROD",
       }),
     ).toThrow(GrantViolationError);
   });
@@ -164,46 +164,46 @@ describe('enforceProtectedBranches – case-insensitive', () => {
 // ---------------------------------------------------------------------------
 // Non-protected branches pass through
 // ---------------------------------------------------------------------------
-describe('enforceProtectedBranches – non-protected branches', () => {
+describe("enforceProtectedBranches – non-protected branches", () => {
   const protectedGrant = grant({
-    protectedBranches: ['main', 'prod'],
+    protectedBranches: ["main", "prod"],
   });
 
-  it('allows delete_branch on non-protected branch', () => {
+  it("allows delete_branch on non-protected branch", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'delete_branch', {
-        branchId: 'feature-branch',
+      enforceProtectedBranches(protectedGrant, "delete_branch", {
+        branchId: "feature-branch",
       }),
     ).not.toThrow();
   });
 
-  it('allows run_sql on non-protected branch', () => {
+  it("allows run_sql on non-protected branch", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'run_sql', {
-        branchId: 'dev-branch',
+      enforceProtectedBranches(protectedGrant, "run_sql", {
+        branchId: "dev-branch",
       }),
     ).not.toThrow();
   });
 
-  it('allows when branchId arg is missing', () => {
+  it("allows when branchId arg is missing", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'run_sql', {
-        projectId: 'proj-1',
+      enforceProtectedBranches(protectedGrant, "run_sql", {
+        projectId: "proj-1",
       }),
     ).not.toThrow();
   });
 
-  it('allows when branchId arg is empty string', () => {
+  it("allows when branchId arg is empty string", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'run_sql', {
-        branchId: '',
+      enforceProtectedBranches(protectedGrant, "run_sql", {
+        branchId: "",
       }),
     ).not.toThrow();
   });
 
-  it('allows when branchId arg is not a string', () => {
+  it("allows when branchId arg is not a string", () => {
     expect(() =>
-      enforceProtectedBranches(protectedGrant, 'run_sql', {
+      enforceProtectedBranches(protectedGrant, "run_sql", {
         branchId: 123,
       }),
     ).not.toThrow();

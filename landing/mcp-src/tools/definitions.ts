@@ -1,6 +1,6 @@
-import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
-import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
-import type { ScopeCategory } from '../utils/grant-context';
+import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import { NEON_DEFAULT_DATABASE_NAME } from "../constants";
+import type { ScopeCategory } from "../utils/grant-context";
 import {
   completeDatabaseMigrationInputSchema,
   completeQueryTuningInputSchema,
@@ -30,17 +30,17 @@ import {
   searchInputSchema,
   fetchInputSchema,
   loadResourceInputSchema,
-} from './toolsSchema';
+} from "./toolsSchema";
 
 export const NEON_TOOLS = [
   {
-    name: 'list_projects' as const,
-    scope: 'projects' as const satisfies ScopeCategory,
+    name: "list_projects" as const,
+    scope: "projects" as const satisfies ScopeCategory,
     description: `Lists the first 10 Neon projects in your account. If you can't find the project, increase the limit by passing a higher value to the \`limit\` parameter. Optionally filter by project name or ID using the \`search\` parameter.`,
     inputSchema: listProjectsInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'List Projects',
+      title: "List Projects",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -48,13 +48,13 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'list_organizations' as const,
-    scope: 'projects' as const satisfies ScopeCategory,
+    name: "list_organizations" as const,
+    scope: "projects" as const satisfies ScopeCategory,
     description: `Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the \`search\` parameter.`,
     inputSchema: listOrganizationsInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'List Organizations',
+      title: "List Organizations",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -62,13 +62,13 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'list_shared_projects' as const,
-    scope: 'projects' as const satisfies ScopeCategory,
+    name: "list_shared_projects" as const,
+    scope: "projects" as const satisfies ScopeCategory,
     description: `Lists projects that have been shared with the current user. These are projects that the user has been granted access to collaborate on. Optionally filter by project name or ID using the \`search\` parameter.`,
     inputSchema: listSharedProjectsInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'List Shared Projects',
+      title: "List Shared Projects",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -76,14 +76,14 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'create_project' as const,
-    scope: 'projects' as const satisfies ScopeCategory,
+    name: "create_project" as const,
+    scope: "projects" as const satisfies ScopeCategory,
     description:
-      'Create a new Neon project. If someone is trying to create a database, use this tool.',
+      "Create a new Neon project. If someone is trying to create a database, use this tool.",
     inputSchema: createProjectInputSchema,
     readOnlySafe: false,
     annotations: {
-      title: 'Create Project',
+      title: "Create Project",
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
@@ -91,13 +91,13 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'delete_project' as const,
-    scope: 'projects' as const satisfies ScopeCategory,
-    description: 'Delete a Neon project',
+    name: "delete_project" as const,
+    scope: "projects" as const satisfies ScopeCategory,
+    description: "Delete a Neon project",
     inputSchema: deleteProjectInputSchema,
     readOnlySafe: false,
     annotations: {
-      title: 'Delete Project',
+      title: "Delete Project",
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
@@ -105,13 +105,13 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'describe_project' as const,
-    scope: 'projects' as const satisfies ScopeCategory,
-    description: 'Describes a Neon project',
+    name: "describe_project" as const,
+    scope: "projects" as const satisfies ScopeCategory,
+    description: "Describes a Neon project",
     inputSchema: describeProjectInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'Describe Project',
+      title: "Describe Project",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -119,8 +119,8 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'run_sql' as const,
-    scope: 'querying' as const satisfies ScopeCategory,
+    name: "run_sql" as const,
+    scope: "querying" as const satisfies ScopeCategory,
     description: `
     <use_case>
       Use this tool to execute a single SQL statement against a Neon database.
@@ -134,7 +134,7 @@ export const NEON_TOOLS = [
     inputSchema: runSqlInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'Run SQL',
+      title: "Run SQL",
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
@@ -142,8 +142,8 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'run_sql_transaction' as const,
-    scope: 'querying' as const satisfies ScopeCategory,
+    name: "run_sql_transaction" as const,
+    scope: "querying" as const satisfies ScopeCategory,
     description: `
     <use_case>
       Use this tool to execute a SQL transaction against a Neon database, should be used for multiple SQL statements.
@@ -157,7 +157,7 @@ export const NEON_TOOLS = [
     inputSchema: runSqlTransactionInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'Run SQL Transaction',
+      title: "Run SQL Transaction",
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
@@ -165,13 +165,13 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'describe_table_schema' as const,
-    scope: 'schema' as const satisfies ScopeCategory,
-    description: 'Describe the schema of a table in a Neon database',
+    name: "describe_table_schema" as const,
+    scope: "schema" as const satisfies ScopeCategory,
+    description: "Describe the schema of a table in a Neon database",
     inputSchema: describeTableSchemaInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'Describe Table Schema',
+      title: "Describe Table Schema",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -179,13 +179,13 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'get_database_tables' as const,
-    scope: 'schema' as const satisfies ScopeCategory,
-    description: 'Get all tables in a Neon database',
+    name: "get_database_tables" as const,
+    scope: "schema" as const satisfies ScopeCategory,
+    description: "Get all tables in a Neon database",
     inputSchema: getDatabaseTablesInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'Get Database Tables',
+      title: "Get Database Tables",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -193,13 +193,13 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'create_branch' as const,
-    scope: 'branches' as const satisfies ScopeCategory,
-    description: 'Create a branch in a Neon project',
+    name: "create_branch" as const,
+    scope: "branches" as const satisfies ScopeCategory,
+    description: "Create a branch in a Neon project",
     inputSchema: createBranchInputSchema,
     readOnlySafe: false,
     annotations: {
-      title: 'Create Branch',
+      title: "Create Branch",
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
@@ -207,8 +207,8 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'prepare_database_migration' as const,
-    scope: 'querying' as const satisfies ScopeCategory,
+    name: "prepare_database_migration" as const,
+    scope: "querying" as const satisfies ScopeCategory,
     readOnlySafe: false,
     description: `
   <use_case>
@@ -338,7 +338,7 @@ export const NEON_TOOLS = [
   </error_handling>`,
     inputSchema: prepareDatabaseMigrationInputSchema,
     annotations: {
-      title: 'Prepare Database Migration',
+      title: "Prepare Database Migration",
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
@@ -346,8 +346,8 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'complete_database_migration' as const,
-    scope: 'querying' as const satisfies ScopeCategory,
+    name: "complete_database_migration" as const,
+    scope: "querying" as const satisfies ScopeCategory,
     description: `Complete a database migration by applying changes to the main branch and cleaning up the temporary branch.
 
     <important_notes>
@@ -369,7 +369,7 @@ export const NEON_TOOLS = [
     inputSchema: completeDatabaseMigrationInputSchema,
     readOnlySafe: false,
     annotations: {
-      title: 'Complete Database Migration',
+      title: "Complete Database Migration",
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
@@ -377,14 +377,14 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'describe_branch' as const,
-    scope: 'branches' as const satisfies ScopeCategory,
+    name: "describe_branch" as const,
+    scope: "branches" as const satisfies ScopeCategory,
     description:
-      'Get a tree view of all objects in a branch, including databases, schemas, tables, views, and functions',
+      "Get a tree view of all objects in a branch, including databases, schemas, tables, views, and functions",
     inputSchema: describeBranchInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'Describe Branch',
+      title: "Describe Branch",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -392,13 +392,13 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'delete_branch' as const,
-    scope: 'branches' as const satisfies ScopeCategory,
-    description: 'Delete a branch from a Neon project',
+    name: "delete_branch" as const,
+    scope: "branches" as const satisfies ScopeCategory,
+    description: "Delete a branch from a Neon project",
     inputSchema: deleteBranchInputSchema,
     readOnlySafe: false,
     annotations: {
-      title: 'Delete Branch',
+      title: "Delete Branch",
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
@@ -406,13 +406,13 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'reset_from_parent' as const,
-    scope: 'branches' as const satisfies ScopeCategory,
+    name: "reset_from_parent" as const,
+    scope: "branches" as const satisfies ScopeCategory,
     description: `Resets a branch to match its parent's current state, effectively discarding all changes made on the branch. To avoid data loss, provide a name to preserve the changes in a new branch using \`preserveUnderName\` parameter. This tool is commonly used to create fresh development branches from updated parent branch, undo experimental changes, or restore a branch to a known good state. Warning: This operation will discard all changes if \`preserveUnderName\` is not provided.`,
     inputSchema: resetFromParentInputSchema,
     readOnlySafe: false,
     annotations: {
-      title: 'Reset Branch from Parent',
+      title: "Reset Branch from Parent",
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
@@ -420,14 +420,14 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'get_connection_string' as const,
-    scope: 'branches' as const satisfies ScopeCategory,
+    name: "get_connection_string" as const,
+    scope: "branches" as const satisfies ScopeCategory,
     description:
-      'Get a PostgreSQL connection string for a Neon database with all parameters being optional',
+      "Get a PostgreSQL connection string for a Neon database with all parameters being optional",
     inputSchema: getConnectionStringInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'Get Connection String',
+      title: "Get Connection String",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -435,8 +435,8 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'provision_neon_auth' as const,
-    scope: 'neon_auth' as const satisfies ScopeCategory,
+    name: "provision_neon_auth" as const,
+    scope: "neon_auth" as const satisfies ScopeCategory,
     inputSchema: provisionNeonAuthInputSchema,
     readOnlySafe: false,
     description: `
@@ -459,7 +459,7 @@ export const NEON_TOOLS = [
     </key_features>
     `,
     annotations: {
-      title: 'Provision Neon Auth',
+      title: "Provision Neon Auth",
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: true,
@@ -467,8 +467,8 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'provision_neon_data_api' as const,
-    scope: 'neon_auth' as const satisfies ScopeCategory,
+    name: "provision_neon_data_api" as const,
+    scope: "neon_auth" as const satisfies ScopeCategory,
     inputSchema: provisionNeonDataApiInputSchema,
     readOnlySafe: false,
     description: `
@@ -512,7 +512,7 @@ export const NEON_TOOLS = [
     </key_features>
     `,
     annotations: {
-      title: 'Provision Neon Data API',
+      title: "Provision Neon Data API",
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: true,
@@ -520,14 +520,14 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'explain_sql_statement' as const,
-    scope: 'performance' as const satisfies ScopeCategory,
+    name: "explain_sql_statement" as const,
+    scope: "performance" as const satisfies ScopeCategory,
     description:
-      'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
+      "Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database",
     inputSchema: explainSqlStatementInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'Explain SQL Statement',
+      title: "Explain SQL Statement",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -535,8 +535,8 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'prepare_query_tuning' as const,
-    scope: 'performance' as const satisfies ScopeCategory,
+    name: "prepare_query_tuning" as const,
+    scope: "performance" as const satisfies ScopeCategory,
     readOnlySafe: false,
     description: `
   <use_case>
@@ -685,7 +685,7 @@ export const NEON_TOOLS = [
     `,
     inputSchema: prepareQueryTuningInputSchema,
     annotations: {
-      title: 'Prepare Query Tuning',
+      title: "Prepare Query Tuning",
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
@@ -693,8 +693,8 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'complete_query_tuning' as const,
-    scope: 'performance' as const satisfies ScopeCategory,
+    name: "complete_query_tuning" as const,
+    scope: "performance" as const satisfies ScopeCategory,
     readOnlySafe: false,
     description: `Complete a query tuning session by either applying the changes to the main branch or discarding them. 
     <important_notes>
@@ -723,7 +723,7 @@ export const NEON_TOOLS = [
     `,
     inputSchema: completeQueryTuningInputSchema,
     annotations: {
-      title: 'Complete Query Tuning',
+      title: "Complete Query Tuning",
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
@@ -731,8 +731,8 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'list_slow_queries' as const,
-    scope: 'performance' as const satisfies ScopeCategory,
+    name: "list_slow_queries" as const,
+    scope: "performance" as const satisfies ScopeCategory,
     description: `
     <use_case>
       Use this tool to list slow queries from your Neon database.
@@ -745,7 +745,7 @@ export const NEON_TOOLS = [
     inputSchema: listSlowQueriesInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'List Slow Queries',
+      title: "List Slow Queries",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: false,
@@ -753,13 +753,13 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'list_branch_computes' as const,
-    scope: 'branches' as const satisfies ScopeCategory,
-    description: 'Lists compute endpoints for a project or specific branch',
+    name: "list_branch_computes" as const,
+    scope: "branches" as const satisfies ScopeCategory,
+    description: "Lists compute endpoints for a project or specific branch",
     inputSchema: listBranchComputesInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'List Branch Computes',
+      title: "List Branch Computes",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -767,8 +767,8 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'compare_database_schema' as const,
-    scope: 'querying' as const satisfies ScopeCategory,
+    name: "compare_database_schema" as const,
+    scope: "querying" as const satisfies ScopeCategory,
     readOnlySafe: true,
     description: `
     <use_case>
@@ -1037,7 +1037,7 @@ export const NEON_TOOLS = [
     `,
     inputSchema: compareDatabaseSchemaInputSchema,
     annotations: {
-      title: 'Compare Database Schema',
+      title: "Compare Database Schema",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -1045,13 +1045,13 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'search' as const,
+    name: "search" as const,
     scope: null,
     description: `Searches across all user organizations, projects, and branches that match the query. Returns a list of objects with id, title, and url. This tool searches through all accessible resources and provides direct links to the Neon Console.`,
     inputSchema: searchInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'Search',
+      title: "Search",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -1059,13 +1059,13 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'fetch' as const,
+    name: "fetch" as const,
     scope: null,
     description: `Fetches detailed information about a specific organization, project, or branch using the ID returned by the search tool. This tool provides comprehensive information about Neon resources for detailed analysis and management.`,
     inputSchema: fetchInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'Fetch',
+      title: "Fetch",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -1073,8 +1073,8 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'load_resource' as const,
-    scope: 'docs' as const satisfies ScopeCategory,
+    name: "load_resource" as const,
+    scope: "docs" as const satisfies ScopeCategory,
     description: `
   <use_case>
     Loads comprehensive Neon documentation and usage guidelines from GitHub. This tool provides instructions for various Neon features and workflows.
@@ -1096,7 +1096,7 @@ export const NEON_TOOLS = [
     inputSchema: loadResourceInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'Load Resource',
+      title: "Load Resource",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
