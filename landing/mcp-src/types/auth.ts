@@ -1,4 +1,4 @@
-import { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 
 export type AuthContext = {
   extra: {

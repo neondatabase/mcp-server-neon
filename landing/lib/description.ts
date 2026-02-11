@@ -1,22 +1,22 @@
 const POSSIBLE_TYPES = [
-  'use_case',
-  'workflow',
-  'important_notes',
-  'next_steps',
-  'response_instructions',
-  'instructions',
-  'example',
-  'do_not_include',
-  'error_handling',
-  'hint',
-  'hints',
+  "use_case",
+  "workflow",
+  "important_notes",
+  "next_steps",
+  "response_instructions",
+  "instructions",
+  "example",
+  "do_not_include",
+  "error_handling",
+  "hint",
+  "hints",
 ] as const;
 
 export type DescriptionItemType = (typeof POSSIBLE_TYPES)[number];
 
 export type DescriptionItem =
   | {
-      type: 'text';
+      type: "text";
       content: TextBlock[];
     }
   | {
@@ -26,22 +26,22 @@ export type DescriptionItem =
 
 export type TextBlock =
   | {
-      type: 'text';
+      type: "text";
       content: TextSpan[];
     }
   | {
-      type: 'code';
+      type: "code";
       syntax?: string;
       content: string;
     };
 
 export type TextSpan =
   | {
-      type: 'text';
+      type: "text";
       content: string;
     }
   | {
-      type: 'code';
+      type: "code";
       content: string;
     };
 
@@ -58,7 +58,7 @@ function highlightCodeSpans(text: string): TextSpan[] {
 
     if (!match) {
       items.push({
-        type: 'text',
+        type: "text",
         content: rest,
       });
       break;
@@ -66,13 +66,13 @@ function highlightCodeSpans(text: string): TextSpan[] {
 
     if ((match.index ?? 0) !== 0) {
       items.push({
-        type: 'text',
+        type: "text",
         content: rest.substring(0, match.index),
       });
     }
 
     items.push({
-      type: 'code',
+      type: "code",
       content: match[1].trim(),
     });
 
@@ -83,7 +83,7 @@ function highlightCodeSpans(text: string): TextSpan[] {
 }
 
 function removeRedundantIndentation(text: string): string {
-  const lines = text.split('\n');
+  const lines = text.split("\n");
   const minIndent = Math.min(
     ...lines.map((line) => line.match(/^\s+/)?.[0].length ?? 0),
   );
@@ -91,7 +91,7 @@ function removeRedundantIndentation(text: string): string {
     return text;
   }
 
-  return lines.map((line) => line.substring(minIndent)).join('\n');
+  return lines.map((line) => line.substring(minIndent)).join("\n");
 }
 
 function highlightCodeBlocks(description: string): TextBlock[] {
@@ -103,7 +103,7 @@ function highlightCodeBlocks(description: string): TextBlock[] {
 
     if (!match) {
       parts.push({
-        type: 'text',
+        type: "text",
         content: highlightCodeSpans(rest),
       });
       break;
@@ -111,13 +111,13 @@ function highlightCodeBlocks(description: string): TextBlock[] {
 
     if ((match.index ?? 0) > 0) {
       parts.push({
-        type: 'text',
+        type: "text",
         content: highlightCodeSpans(rest.slice(0, match.index).trim()),
       });
     }
 
     parts.push({
-      type: 'code',
+      type: "code",
       syntax: match[1].trim() || undefined,
       content: removeRedundantIndentation(match[2]),
     });
@@ -139,7 +139,7 @@ export function parseDescription(description: string): DescriptionItem[] {
 
     if (!match) {
       parts.push({
-        type: 'text',
+        type: "text",
         content: highlightCodeBlocks(rest),
       });
       break;
@@ -148,12 +148,12 @@ export function parseDescription(description: string): DescriptionItem[] {
     const type = match[1];
 
     if (!isValidType(type)) {
-      throw new Error('Invalid type');
+      throw new Error("Invalid type");
     }
 
     if ((match.index ?? 0) > 0) {
       parts.push({
-        type: 'text',
+        type: "text",
         content: highlightCodeBlocks(rest.slice(0, match.index).trim()),
       });
     }

@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { Suspense } from 'react';
-import dynamic from 'next/dynamic';
+import { Suspense } from "react";
+import dynamic from "next/dynamic";
 import {
   docco,
   stackoverflowDark,
-} from 'react-syntax-highlighter/dist/esm/styles/hljs';
-import { useTheme } from '@/components/ThemeProvider';
+} from "react-syntax-highlighter/dist/esm/styles/hljs";
+import { useTheme } from "@/components/ThemeProvider";
 
 const SyntaxHighlighter = dynamic(
-  () => import('react-syntax-highlighter').then((module) => module.default),
+  () => import("react-syntax-highlighter").then((module) => module.default),
   {
     ssr: false,
   },
@@ -35,7 +35,7 @@ export const CodeSnippet = ({ type, children }: Props) => {
         <SyntaxHighlighter
           language={type}
           wrapLongLines
-          style={theme === 'light' ? docco : stackoverflowDark}
+          style={theme === "light" ? docco : stackoverflowDark}
         >
           {children}
         </SyntaxHighlighter>

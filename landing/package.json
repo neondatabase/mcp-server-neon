@@ -22,6 +22,7 @@
     "start:cli": "node dist/cli/cli.js start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "fmt": "prettier -w .",
     "postinstall": "patch-package",
     "prepublishOnly": "npx tsx scripts/before-publish.ts"
   },
@@ -68,6 +69,7 @@
     "eslint": "^9",
     "eslint-config-next": "^16.1.1",
     "patch-package": "^8.0.1",
+    "prettier": "^3.8.1",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.0",
     "typescript": "^5"

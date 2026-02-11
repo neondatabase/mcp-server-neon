@@ -1,20 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server';
-import he from 'he';
-import { model } from '../../../mcp-src/oauth/model';
-import { upstreamAuth } from '../../../lib/oauth/client';
+import { NextRequest, NextResponse } from "next/server";
+import he from "he";
+import { model } from "../../../mcp-src/oauth/model";
+import { upstreamAuth } from "../../../lib/oauth/client";
 import {
   isClientAlreadyApproved,
   updateApprovedClientsCookie,
-} from '../../../lib/oauth/cookies';
-import { COOKIE_SECRET } from '../../../lib/config';
-import { handleOAuthError } from '../../../lib/errors';
+} from "../../../lib/oauth/cookies";
+import { COOKIE_SECRET } from "../../../lib/config";
+import { handleOAuthError } from "../../../lib/errors";
 import {
   hasWriteScope,
   SCOPE_DEFINITIONS,
   SUPPORTED_SCOPES,
-} from '../../../mcp-src/utils/read-only';
-import { logger } from '../../../mcp-src/utils/logger';
-import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
+} from "../../../mcp-src/utils/read-only";
+import { logger } from "../../../mcp-src/utils/logger";
+import { matchesRedirectUri } from "../../../lib/oauth/redirect-uri";
 
 export type DownstreamAuthRequest = {
   responseType: string;
@@ -29,20 +29,20 @@ export type DownstreamAuthRequest = {
 const parseAuthRequest = (
   searchParams: URLSearchParams,
 ): DownstreamAuthRequest => {
-  const responseType = searchParams.get('response_type') || '';
-  const clientId = searchParams.get('client_id') || '';
-  const redirectUri = searchParams.get('redirect_uri') || '';
-  const scope = searchParams.get('scope') || '';
-  const state = searchParams.get('state') || '';
-  const codeChallenge = searchParams.get('code_challenge') || undefined;
+  const responseType = searchParams.get("response_type") || "";
+  const clientId = searchParams.get("client_id") || "";
+  const redirectUri = searchParams.get("redirect_uri") || "";
+  const scope = searchParams.get("scope") || "";
+  const state = searchParams.get("state") || "";
+  const codeChallenge = searchParams.get("code_challenge") || undefined;
   const codeChallengeMethod =
-    searchParams.get('code_challenge_method') || 'plain';
+    searchParams.get("code_challenge_method") || "plain";
 
   return {
     responseType,
     clientId,
     redirectUri,
-    scope: scope.split(' ').filter(Boolean),
+    scope: scope.split(" ").filter(Boolean),
     state,
     codeChallenge,
     codeChallengeMethod,
@@ -76,7 +76,7 @@ function renderScopeSection(requestedScopes: string[]): string {
         type="checkbox"
         name="scopes"
         value="write"
-        ${writeChecked ? 'checked' : ''}
+        ${writeChecked ? "checked" : ""}
         class="scope-checkbox"
       />
       <div class="scope-info">
@@ -100,7 +100,7 @@ const renderApprovalDialog = (
   state: string,
   requestedScopes: string[],
 ) => {
-  const clientName = he.escape(client.client_name || 'A new MCP Client');
+  const clientName = he.escape(client.client_name || "A new MCP Client");
   const website = client.client_uri ? he.escape(client.client_uri) : undefined;
   const redirectUris = client.redirect_uris;
 
@@ -112,7 +112,7 @@ const renderApprovalDialog = (
               <a href="${website}" target="_blank" rel="noopener noreferrer">${website}</a>
             </div>
           </div>`
-    : '';
+    : "";
 
   const redirectUrisHtml =
     redirectUris && redirectUris.length > 0
@@ -120,10 +120,10 @@ const renderApprovalDialog = (
           <div class="client-detail">
             <div class="detail-label">Redirect URIs:</div>
             <div class="detail-value small">
-              ${redirectUris.map((uri) => `<div>${he.escape(uri)}</div>`).join('')}
+              ${redirectUris.map((uri) => `<div>${he.escape(uri)}</div>`).join("")}
             </div>
           </div>`
-      : '';
+      : "";
 
   const html = `
 <!DOCTYPE html>
@@ -413,7 +413,7 @@ const renderApprovalDialog = (
 </html>
 `;
   return new NextResponse(html, {
-    headers: { 'Content-Type': 'text/html' },
+    headers: { "Content-Type": "text/html" },
   });
 };
 
@@ -423,9 +423,9 @@ export async function GET(request: NextRequest) {
     const requestParams = parseAuthRequest(searchParams);
 
     const clientId = requestParams.clientId;
-    const client = await model.getClient(clientId, '');
+    const client = await model.getClient(clientId, "");
 
-    logger.info('Authorize request', {
+    logger.info("Authorize request", {
       clientId,
       redirectUri: requestParams.redirectUri,
       responseType: requestParams.responseType,
@@ -433,11 +433,11 @@ export async function GET(request: NextRequest) {
     });
 
     if (!client) {
-      logger.warn('Client not found', { clientId });
+      logger.warn("Client not found", { clientId });
       return NextResponse.json(
         {
-          error: 'invalid_client',
-          error_description: 'Invalid client ID',
+          error: "invalid_client",
+          error_description: "Invalid client ID",
         },
         { status: 400 },
       );
@@ -447,15 +447,15 @@ export async function GET(request: NextRequest) {
       requestParams.responseType === undefined ||
       !client.response_types.includes(requestParams.responseType)
     ) {
-      logger.warn('Invalid response type', {
+      logger.warn("Invalid response type", {
         clientId,
         providedResponseType: requestParams.responseType,
         supportedResponseTypes: client.response_types,
       });
       return NextResponse.json(
         {
-          error: 'unsupported_response_type',
-          error_description: 'Invalid response type',
+          error: "unsupported_response_type",
+          error_description: "Invalid response type",
         },
         { status: 400 },
       );
@@ -465,15 +465,15 @@ export async function GET(request: NextRequest) {
       requestParams.redirectUri === undefined ||
       !matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)
     ) {
-      logger.warn('Invalid redirect URI', {
+      logger.warn("Invalid redirect URI", {
         clientId: requestParams.clientId,
         providedRedirectUri: requestParams.redirectUri,
         registeredRedirectUris: client.redirect_uris,
       });
       return NextResponse.json(
         {
-          error: 'invalid_request',
-          error_description: 'Invalid redirect URI',
+          error: "invalid_request",
+          error_description: "Invalid redirect URI",
         },
         { status: 400 },
       );
@@ -490,21 +490,21 @@ export async function GET(request: NextRequest) {
       requestParams.scope,
     );
   } catch (error: unknown) {
-    return handleOAuthError(error, 'Authorization error');
+    return handleOAuthError(error, "Authorization error");
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const state = formData.get('state') as string;
-    const selectedScopes = formData.getAll('scopes') as string[];
+    const state = formData.get("state") as string;
+    const selectedScopes = formData.getAll("scopes") as string[];
 
     if (!state) {
       return NextResponse.json(
         {
-          error: 'invalid_request',
-          error_description: 'Invalid state',
+          error: "invalid_request",
+          error_description: "Invalid state",
         },
         { status: 400 },
       );
@@ -517,8 +517,8 @@ export async function POST(request: NextRequest) {
     if (validScopes.length === 0) {
       return NextResponse.json(
         {
-          error: 'invalid_scope',
-          error_description: 'No valid scopes selected',
+          error: "invalid_scope",
+          error_description: "No valid scopes selected",
         },
         { status: 400 },
       );
@@ -536,7 +536,7 @@ export async function POST(request: NextRequest) {
     const authUrl = await upstreamAuth(updatedState);
     return NextResponse.redirect(authUrl.href);
   } catch (error: unknown) {
-    return handleOAuthError(error, 'Authorization error');
+    return handleOAuthError(error, "Authorization error");
   }
 }
 
@@ -544,9 +544,9 @@ export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
     headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
     },
   });
 }

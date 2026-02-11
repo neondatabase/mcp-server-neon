@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { model } from '../../mcp-src/oauth/model';
-import { exchangeCode } from '../../lib/oauth/client';
-import { generateRandomString } from '../../mcp-src/oauth/utils';
-import { createNeonClient } from '../../mcp-src/server/api';
-import { resolveAccountFromAuth } from '../../mcp-src/server/account';
-import { handleOAuthError } from '../../lib/errors';
-import type { AuthorizationCode } from 'oauth2-server';
+import { NextRequest, NextResponse } from "next/server";
+import { model } from "../../mcp-src/oauth/model";
+import { exchangeCode } from "../../lib/oauth/client";
+import { generateRandomString } from "../../mcp-src/oauth/utils";
+import { createNeonClient } from "../../mcp-src/server/api";
+import { resolveAccountFromAuth } from "../../mcp-src/server/account";
+import { handleOAuthError } from "../../lib/errors";
+import type { AuthorizationCode } from "oauth2-server";
 
 type DownstreamAuthRequest = {
   responseType: string;
@@ -27,22 +27,22 @@ const toMilliseconds = (seconds: number): number => seconds * 1000;
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const code = searchParams.get('code');
-    const state = searchParams.get('state');
+    const code = searchParams.get("code");
+    const state = searchParams.get("state");
 
     if (!code || !state) {
       return NextResponse.json(
         {
-          error: 'invalid_request',
-          error_description: 'Missing code or state',
+          error: "invalid_request",
+          error_description: "Missing code or state",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // Build the current URL for the code exchange
     const currentUrl = new URL(request.url);
-    currentUrl.protocol = 'https:'; // Force HTTPS for production
+    currentUrl.protocol = "https:"; // Force HTTPS for production
 
     // Exchange the upstream authorization code for tokens
     const tokens = await exchangeCode(currentUrl, state);
@@ -50,14 +50,14 @@ export async function GET(request: NextRequest) {
     const requestParams = decodeAuthParams(state);
 
     const clientId = requestParams.clientId;
-    const client = await model.getClient(clientId, '');
+    const client = await model.getClient(clientId, "");
     if (!client) {
       return NextResponse.json(
         {
-          error: 'invalid_client',
-          error_description: 'Invalid client ID',
+          error: "invalid_client",
+          error_description: "Invalid client ID",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
       expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
       createdAt: Date.now(),
       redirectUri: requestParams.redirectUri,
-      scope: requestParams.scope.join(' '),
+      scope: requestParams.scope.join(" "),
       client: client,
       user: userInfo,
       token: {
@@ -97,14 +97,14 @@ export async function GET(request: NextRequest) {
 
     // Redirect back to client with auth code
     const redirectUrl = new URL(requestParams.redirectUri);
-    redirectUrl.searchParams.set('code', authCode);
+    redirectUrl.searchParams.set("code", authCode);
     if (requestParams.state) {
-      redirectUrl.searchParams.set('state', requestParams.state);
+      redirectUrl.searchParams.set("state", requestParams.state);
     }
 
     return NextResponse.redirect(redirectUrl.href);
   } catch (error: unknown) {
-    return handleOAuthError(error, 'OAuth callback error');
+    return handleOAuthError(error, "OAuth callback error");
   }
 }
 
@@ -112,9 +112,9 @@ export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
     headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
     },
   });
 }

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   createContext,
@@ -6,29 +6,29 @@ import {
   useContext,
   useLayoutEffect,
   useState,
-} from 'react';
+} from "react";
 
-export type Theme = 'light' | 'dark';
+export type Theme = "light" | "dark";
 
 type ThemeProviderState = {
   theme: Theme;
 };
 
 const ThemeContext = createContext<ThemeProviderState>({
-  theme: 'light',
+  theme: "light",
 });
 
 export const ThemeProvider = ({ children }: { children?: ReactNode }) => {
   const [themeState, setThemeState] = useState<ThemeProviderState>({
-    theme: 'light',
+    theme: "light",
   });
 
   useLayoutEffect(() => {
-    const match = window.matchMedia('(prefers-color-scheme:dark)');
+    const match = window.matchMedia("(prefers-color-scheme:dark)");
 
     function onChange(event: { matches: boolean }) {
       setThemeState((themeState) => {
-        const targetTheme = event.matches ? 'dark' : 'light';
+        const targetTheme = event.matches ? "dark" : "light";
 
         if (themeState.theme === targetTheme) {
           return themeState;
@@ -43,9 +43,9 @@ export const ThemeProvider = ({ children }: { children?: ReactNode }) => {
 
     onChange(match);
 
-    match.addEventListener('change', onChange);
+    match.addEventListener("change", onChange);
     return () => {
-      match.removeEventListener('change', onChange);
+      match.removeEventListener("change", onChange);
     };
   }, []);
 

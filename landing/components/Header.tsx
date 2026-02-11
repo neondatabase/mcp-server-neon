@@ -1,8 +1,8 @@
-import Image from 'next/image';
+import Image from "next/image";
 
-import { Button } from '@/components/ui/button';
-import githubSvg from '@/icons/github.svg';
-import neonSvg from '@/icons/neon.svg';
+import { Button } from "@/components/ui/button";
+import githubSvg from "@/icons/github.svg";
+import neonSvg from "@/icons/neon.svg";
 
 type HeaderProps = {
   packageVersion: string;
@@ -13,7 +13,7 @@ export const Header = ({ packageVersion }: HeaderProps) => (
     <div className="flex items-center gap-3">
       <Image src={neonSvg} width={30} height={30} alt="Neon logo" />
       <div className="flex items-baseline gap-2">
-        <h1 className="text-3xl font-bold whitespace-nowrap">Neon MCP</h1>{' '}
+        <h1 className="text-3xl font-bold whitespace-nowrap">Neon MCP</h1>{" "}
         version: {packageVersion}
       </div>
     </div>
@@ -44,7 +44,7 @@ export const Header = ({ packageVersion }: HeaderProps) => (
             className="invert dark:invert-0"
             width={16}
             height={16}
-          />{' '}
+          />{" "}
           Github
         </a>
       </Button>

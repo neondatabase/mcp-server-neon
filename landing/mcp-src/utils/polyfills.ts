@@ -2,7 +2,7 @@ import nodeFetch, {
   Headers as NodeHeaders,
   Request as NodeRequest,
   Response as NodeResponse,
-} from 'node-fetch';
+} from "node-fetch";
 
 // Use different names to avoid conflicts
 declare global {

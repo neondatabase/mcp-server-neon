@@ -2,14 +2,14 @@ import {
   DescriptionItem,
   DescriptionItemType,
   TextBlock,
-} from '@/lib/description';
-import { CodeSnippet } from '@/components/CodeSnippet';
+} from "@/lib/description";
+import { CodeSnippet } from "@/components/CodeSnippet";
 import {
   Alert,
   AlertDescription,
   AlertTitle,
   AlertVariant,
-} from '@/components/ui/alert';
+} from "@/components/ui/alert";
 import {
   Terminal,
   CircleAlert,
@@ -19,7 +19,7 @@ import {
   SquareArrowRight,
   Component,
   BookOpenCheck,
-} from 'lucide-react';
+} from "lucide-react";
 
 const ALERT_VARIANT_PER_DESCRIPTION_TYPE: Record<
   DescriptionItemType,
@@ -28,25 +28,25 @@ const ALERT_VARIANT_PER_DESCRIPTION_TYPE: Record<
     icon: typeof Component;
   }
 > = {
-  use_case: { variant: 'default', icon: BookOpenCheck },
-  next_steps: { variant: 'default', icon: SquareArrowRight },
-  important_notes: { variant: 'important', icon: CircleAlert },
-  workflow: { variant: 'default', icon: Workflow },
-  hints: { variant: 'default', icon: BadgeInfo },
-  hint: { variant: 'default', icon: Lightbulb },
-  instructions: { variant: 'default', icon: Terminal },
-  response_instructions: { variant: 'default', icon: Terminal },
-  example: { variant: 'default', icon: Terminal },
-  do_not_include: { variant: 'destructive', icon: CircleAlert },
-  error_handling: { variant: 'destructive', icon: CircleAlert },
+  use_case: { variant: "default", icon: BookOpenCheck },
+  next_steps: { variant: "default", icon: SquareArrowRight },
+  important_notes: { variant: "important", icon: CircleAlert },
+  workflow: { variant: "default", icon: Workflow },
+  hints: { variant: "default", icon: BadgeInfo },
+  hint: { variant: "default", icon: Lightbulb },
+  instructions: { variant: "default", icon: Terminal },
+  response_instructions: { variant: "default", icon: Terminal },
+  example: { variant: "default", icon: Terminal },
+  do_not_include: { variant: "destructive", icon: CircleAlert },
+  error_handling: { variant: "destructive", icon: CircleAlert },
 };
 
 export const TextBlockUi = (block: TextBlock) => {
-  if (block.type === 'text') {
+  if (block.type === "text") {
     return (
       <div className="text-sm/[24px]">
         {block.content.map((item, index) =>
-          item.type === 'text' ? (
+          item.type === "text" ? (
             item.content
           ) : (
             <span key={index} className="monospaced bg-secondary p-1 py-0.25">
@@ -62,7 +62,7 @@ export const TextBlockUi = (block: TextBlock) => {
 };
 
 export const DescriptionItemUi = (item: DescriptionItem) => {
-  if (item.type === 'text') {
+  if (item.type === "text") {
     return (
       <div className="whitespace-pre-line">
         {item.content.map((childItem, index) => (
@@ -75,11 +75,11 @@ export const DescriptionItemUi = (item: DescriptionItem) => {
   // If an example section contains only code snippet then render snippet
   // without a section wrapper. An extra wrapper makes the code less readable.
   if (
-    item.type === 'example' &&
+    item.type === "example" &&
     item.content.length === 1 &&
-    item.content[0].type === 'text' &&
+    item.content[0].type === "text" &&
     item.content[0].content.length === 1 &&
-    item.content[0].content[0].type === 'code'
+    item.content[0].content[0].type === "code"
   ) {
     const snippet = item.content[0].content[0];
 
@@ -93,7 +93,7 @@ export const DescriptionItemUi = (item: DescriptionItem) => {
     <Alert variant={variant} className="my-2">
       <IconComp className="w-4 h-4" />
       <AlertTitle className="first-letter:capitalize font-semibold">
-        {item.type.replaceAll('_', ' ')}
+        {item.type.replaceAll("_", " ")}
       </AlertTitle>
       <AlertDescription className="whitespace-pre-line">
         <DescriptionItemsUi description={item.content} />

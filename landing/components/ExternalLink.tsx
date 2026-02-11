@@ -1,6 +1,6 @@
-import { ReactNode } from 'react';
+import { ReactNode } from "react";
 
-import { ExternalIcon } from '@/components/ExternalIcon';
+import { ExternalIcon } from "@/components/ExternalIcon";
 
 type ExternalLinkProps = { href: string; children?: ReactNode };
 

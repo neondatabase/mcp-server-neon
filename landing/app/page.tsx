@@ -3,15 +3,15 @@ import {
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from '@/components/ui/accordion';
-import { parseDescription } from '@/lib/description';
-import { DescriptionItemsUi } from '@/components/DescriptionItem';
-import { Introduction } from '@/components/Introduction';
-import { Header } from '@/components/Header';
-import pkg from '../package.json';
-import { NEON_TOOLS } from '../mcp-src/tools/definitions';
-import { NEON_RESOURCES } from '../mcp-src/resources';
-import { NEON_PROMPTS } from '../mcp-src/prompts';
+} from "@/components/ui/accordion";
+import { parseDescription } from "@/lib/description";
+import { DescriptionItemsUi } from "@/components/DescriptionItem";
+import { Introduction } from "@/components/Introduction";
+import { Header } from "@/components/Header";
+import pkg from "../package.json";
+import { NEON_TOOLS } from "../mcp-src/tools/definitions";
+import { NEON_RESOURCES } from "../mcp-src/resources";
+import { NEON_PROMPTS } from "../mcp-src/prompts";
 
 export default async function Home() {
   const packageVersion = pkg.version;
@@ -33,7 +33,7 @@ export default async function Home() {
                 <p className="text-sm text-yellow-700">
                   <strong>Security Notice:</strong> The Neon MCP Server grants
                   powerful database management capabilities through natural
-                  language requests. Please review our{' '}
+                  language requests. Please review our{" "}
                   <a
                     href="https://neon.tech/docs/ai/neon-mcp-server#mcp-security-guidance"
                     className="underline hover:text-yellow-800"
@@ -41,7 +41,7 @@ export default async function Home() {
                     rel="noopener noreferrer"
                   >
                     MCP security guidance
-                  </a>{' '}
+                  </a>{" "}
                   before using.
                 </p>
               </div>
@@ -99,7 +99,7 @@ export default async function Home() {
                       <AccordionContent>
                         <p className="mb-2">{description}</p>
                         <p className="text-sm text-muted-foreground">
-                          <span className="font-medium">URI:</span>{' '}
+                          <span className="font-medium">URI:</span>{" "}
                           <a
                             href={uri}
                             target="_blank"
