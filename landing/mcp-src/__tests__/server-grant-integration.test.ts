@@ -176,11 +176,12 @@ describe("createMcpServer – tool registration based on grant", () => {
     const names = getRegisteredToolNames(server);
 
     // schema: describe_table_schema, get_database_tables
-    // docs: load_resource
+    // docs: list_docs_resources, get_doc_resource
     // always-available: search, fetch
     expect(names).toContain("describe_table_schema");
     expect(names).toContain("get_database_tables");
-    expect(names).toContain("load_resource");
+    expect(names).toContain("list_docs_resources");
+    expect(names).toContain("get_doc_resource");
     expect(names).toContain("search");
     expect(names).toContain("fetch");
 

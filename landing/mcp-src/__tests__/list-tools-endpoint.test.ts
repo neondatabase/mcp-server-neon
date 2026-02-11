@@ -43,42 +43,42 @@ async function callListTools(
 }
 
 describe("/api/list-tools endpoint", () => {
-  it("returns 28 tools with no headers (full_access default)", async () => {
+  it("returns 29 tools with no headers (full_access default)", async () => {
     const body = await callListTools();
 
-    expect(body.tools).toHaveLength(28);
+    expect(body.tools).toHaveLength(29);
     expect(body.readOnly).toBe(false);
     expect(body.grant.preset).toBe("full_access");
     expect(body.grant.projectId).toBeNull();
     expect(body.warnings).toBeUndefined();
   });
 
-  it("returns 17 tools for production_use preset", async () => {
+  it("returns 18 tools for production_use preset", async () => {
     const body = await callListTools({
       "X-Neon-Preset": "production_use",
     });
 
-    expect(body.tools).toHaveLength(17);
+    expect(body.tools).toHaveLength(18);
     expect(body.readOnly).toBe(true);
     expect(body.grant.preset).toBe("production_use");
   });
 
-  it("returns 26 tools for local_development preset", async () => {
+  it("returns 27 tools for local_development preset", async () => {
     const body = await callListTools({
       "X-Neon-Preset": "local_development",
     });
 
-    expect(body.tools).toHaveLength(26);
+    expect(body.tools).toHaveLength(27);
     expect(body.readOnly).toBe(false);
     expect(body.grant.preset).toBe("local_development");
   });
 
-  it("returns 5 tools for X-Neon-Scopes: schema,docs (custom preset)", async () => {
+  it("returns 6 tools for X-Neon-Scopes: schema,docs (custom preset)", async () => {
     const body = await callListTools({
       "X-Neon-Scopes": "schema,docs",
     });
 
-    expect(body.tools).toHaveLength(5);
+    expect(body.tools).toHaveLength(6);
     expect(body.grant.preset).toBe("custom");
     expect(body.grant.scopes).toEqual(
       expect.arrayContaining(["schema", "docs"]),
@@ -105,12 +105,12 @@ describe("/api/list-tools endpoint", () => {
     expect(body.warnings![0]).toContain("no valid scope categories");
   });
 
-  it("returns 23 tools for project-scoped mode", async () => {
+  it("returns 24 tools for project-scoped mode", async () => {
     const body = await callListTools({
       "X-Neon-Project-Id": "proj-123",
     });
 
-    expect(body.tools).toHaveLength(23);
+    expect(body.tools).toHaveLength(24);
     expect(body.grant.projectId).toBe("proj-123");
 
     // Project-agnostic tools should be hidden
@@ -121,12 +121,12 @@ describe("/api/list-tools endpoint", () => {
     expect(names).not.toContain("delete_project");
   });
 
-  it("returns 17 tools for X-Neon-Read-Only: true", async () => {
+  it("returns 18 tools for X-Neon-Read-Only: true", async () => {
     const body = await callListTools({
       "X-Neon-Read-Only": "true",
     });
 
-    expect(body.tools).toHaveLength(17);
+    expect(body.tools).toHaveLength(18);
     expect(body.readOnly).toBe(true);
 
     // All returned tools should be readOnlySafe
@@ -141,7 +141,7 @@ describe("/api/list-tools endpoint", () => {
       "X-Neon-Read-Only": "false",
     });
 
-    expect(body.tools).toHaveLength(17);
+    expect(body.tools).toHaveLength(18);
     // readOnly is false because the explicit header overrides the preset
     expect(body.readOnly).toBe(false);
     expect(body.warnings).toBeDefined();
@@ -189,7 +189,7 @@ describe("/api/list-tools endpoint", () => {
       "x-read-only": "true",
     });
 
-    expect(body.tools).toHaveLength(17);
+    expect(body.tools).toHaveLength(18);
     expect(body.readOnly).toBe(true);
   });
 
@@ -201,7 +201,7 @@ describe("/api/list-tools endpoint", () => {
 
     // X-Neon-Read-Only (false) should win
     expect(body.readOnly).toBe(false);
-    expect(body.tools).toHaveLength(28);
+    expect(body.tools).toHaveLength(29);
   });
 
   it("protect-production sets protectedBranches", async () => {
@@ -216,7 +216,7 @@ describe("/api/list-tools endpoint", () => {
       "production",
     ]);
     // Branch protection does not change tool count (runtime enforcement only)
-    expect(body.tools).toHaveLength(28);
+    expect(body.tools).toHaveLength(29);
   });
 
   it("protect-production accepts custom branch names", async () => {
@@ -240,31 +240,31 @@ describe("/api/list-tools endpoint", () => {
   // ----- Gap fills from temp.md cross-reference -----
 
   // Edge case: invalid preset silently falls back to full_access
-  it("invalid preset falls back to full_access (28 tools)", async () => {
+  it("invalid preset falls back to full_access (29 tools)", async () => {
     const body = await callListTools({
       "X-Neon-Preset": "bogus_preset",
     });
 
-    expect(body.tools).toHaveLength(28);
+    expect(body.tools).toHaveLength(29);
     expect(body.grant.preset).toBe("full_access");
     expect(body.readOnly).toBe(false);
   });
 
   // Edge case #3: empty X-Neon-Scopes header vs missing header
   // Empty string -> null -> falls through to preset logic -> 28 tools (NOT 2)
-  it("empty X-Neon-Scopes header is treated as missing (28 tools, not 2)", async () => {
+  it("empty X-Neon-Scopes header is treated as missing (29 tools, not 2)", async () => {
     const body = await callListTools({
       "X-Neon-Scopes": "",
     });
 
     // Empty string returns null scopes, so preset logic applies (full_access)
-    expect(body.tools).toHaveLength(28);
+    expect(body.tools).toHaveLength(29);
     expect(body.grant.preset).toBe("full_access");
     expect(body.grant.scopes).toBeNull();
   });
 
   // Edge case #2: local_development + project = same result as full_access + project
-  it("local_development + project-scoped = same as full_access + project-scoped (23 tools)", async () => {
+  it("local_development + project-scoped = same as full_access + project-scoped (24 tools)", async () => {
     const localDev = await callListTools({
       "X-Neon-Preset": "local_development",
       "X-Neon-Project-Id": "proj-123",
@@ -274,8 +274,8 @@ describe("/api/list-tools endpoint", () => {
       "X-Neon-Project-Id": "proj-123",
     });
 
-    expect(localDev.tools).toHaveLength(23);
-    expect(fullAccess.tools).toHaveLength(23);
+    expect(localDev.tools).toHaveLength(24);
+    expect(fullAccess.tools).toHaveLength(24);
     // Same tool names
     const localDevNames = localDev.tools.map((t) => t.name).sort();
     const fullAccessNames = fullAccess.tools.map((t) => t.name).sort();
@@ -301,7 +301,7 @@ describe("/api/list-tools endpoint", () => {
     });
 
     expect(body.grant.protectedBranches).toBeNull();
-    expect(body.tools).toHaveLength(28);
+    expect(body.tools).toHaveLength(29);
   });
 
   // Edge case #4: scopes override preset AND reset readOnly
@@ -324,13 +324,13 @@ describe("/api/list-tools endpoint", () => {
   });
 
   // Explicit full_access + read-only override
-  it("X-Neon-Read-Only: true + explicit full_access preset -> 17 tools", async () => {
+  it("X-Neon-Read-Only: true + explicit full_access preset -> 18 tools", async () => {
     const body = await callListTools({
       "X-Neon-Preset": "full_access",
       "X-Neon-Read-Only": "true",
     });
 
-    expect(body.tools).toHaveLength(17);
+    expect(body.tools).toHaveLength(18);
     expect(body.readOnly).toBe(true);
     expect(body.grant.preset).toBe("full_access");
   });
@@ -376,13 +376,13 @@ describe("/api/list-tools endpoint", () => {
   });
 
   // production_use + project-scoped (through the endpoint)
-  it("production_use + project-scoped -> 14 tools", async () => {
+  it("production_use + project-scoped -> 15 tools", async () => {
     const body = await callListTools({
       "X-Neon-Preset": "production_use",
       "X-Neon-Project-Id": "proj-123",
     });
 
-    expect(body.tools).toHaveLength(14);
+    expect(body.tools).toHaveLength(15);
     expect(body.readOnly).toBe(true);
     expect(body.grant.preset).toBe("production_use");
     expect(body.grant.projectId).toBe("proj-123");

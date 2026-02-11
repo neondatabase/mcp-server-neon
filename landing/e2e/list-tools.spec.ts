@@ -15,40 +15,40 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("/api/list-tools endpoint", () => {
-  test("returns all 28 tools with no headers (full_access default)", async ({
+  test("returns all 29 tools with no headers (full_access default)", async ({
     request,
   }) => {
     const response = await request.get("/api/list-tools");
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(28);
+    expect(body.tools).toHaveLength(29);
     expect(body.readOnly).toBe(false);
     expect(body.grant.preset).toBe("full_access");
     expect(body.grant.projectId).toBeNull();
     expect(body.warnings).toBeUndefined();
   });
 
-  test("returns 17 tools for production_use preset", async ({ request }) => {
+  test("returns 18 tools for production_use preset", async ({ request }) => {
     const response = await request.get("/api/list-tools", {
       headers: { "X-Neon-Preset": "production_use" },
     });
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(17);
+    expect(body.tools).toHaveLength(18);
     expect(body.readOnly).toBe(true);
     expect(body.grant.preset).toBe("production_use");
   });
 
-  test("returns 26 tools for local_development preset", async ({ request }) => {
+  test("returns 27 tools for local_development preset", async ({ request }) => {
     const response = await request.get("/api/list-tools", {
       headers: { "X-Neon-Preset": "local_development" },
     });
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(26);
+    expect(body.tools).toHaveLength(27);
     expect(body.readOnly).toBe(false);
     expect(body.grant.preset).toBe("local_development");
   });
@@ -64,14 +64,14 @@ test.describe("/api/list-tools endpoint", () => {
     expect(body.grant.preset).toBe("custom");
   });
 
-  test("returns 23 tools for project-scoped mode", async ({ request }) => {
+  test("returns 24 tools for project-scoped mode", async ({ request }) => {
     const response = await request.get("/api/list-tools", {
       headers: { "X-Neon-Project-Id": "proj-123" },
     });
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(23);
+    expect(body.tools).toHaveLength(24);
     expect(body.grant.projectId).toBe("proj-123");
 
     // Project-agnostic tools should be hidden
@@ -82,14 +82,14 @@ test.describe("/api/list-tools endpoint", () => {
     expect(names).not.toContain("delete_project");
   });
 
-  test("returns 17 tools for X-Neon-Read-Only: true", async ({ request }) => {
+  test("returns 18 tools for X-Neon-Read-Only: true", async ({ request }) => {
     const response = await request.get("/api/list-tools", {
       headers: { "X-Neon-Read-Only": "true" },
     });
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(17);
+    expect(body.tools).toHaveLength(18);
     expect(body.readOnly).toBe(true);
 
     // All returned tools should be readOnlySafe
@@ -110,7 +110,7 @@ test.describe("/api/list-tools endpoint", () => {
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(17);
+    expect(body.tools).toHaveLength(18);
     expect(body.readOnly).toBe(false);
     expect(body.warnings).toBeDefined();
     expect(body.warnings).toHaveLength(1);

@@ -7,7 +7,6 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { captureException, startSpan } from "@sentry/node";
 
-import { NEON_RESOURCES } from "../../../mcp-src/resources";
 import { NEON_PROMPTS, getPromptTemplate } from "../../../mcp-src/prompts";
 import { NEON_HANDLERS, NEON_TOOLS } from "../../../mcp-src/tools/index";
 import { createNeonClient } from "../../../mcp-src/server/api";
@@ -391,60 +390,6 @@ const handler = createMcpHandler(
               }
             },
           );
-        },
-      );
-    });
-
-    // Register all resources
-    NEON_RESOURCES.forEach((resource) => {
-      server.registerResource(
-        resource.name,
-        resource.uri,
-        {
-          description: resource.description,
-          mimeType: resource.mimeType,
-        },
-        async (url: URL, extra: any) => {
-          const traceId = generateTraceId();
-          const properties = { resource_name: resource.name, traceId };
-          logger.info("resource call:", properties);
-
-          // Try to get auth context for tracking
-          let context: ServerContext | undefined;
-          let account: AuthContext["extra"]["account"] | undefined;
-          let client: AuthContext["extra"]["client"] | undefined;
-
-          try {
-            const authContext = await getAuthContext(
-              extra as AuthenticatedExtra,
-            );
-            context = authContext.context;
-            account = authContext.account;
-            client = authContext.client;
-
-            // Track server_init on first authenticated request
-            trackServerInit(context);
-
-            setSentryTags(context);
-            track({
-              userId: account.id,
-              event: "resource_call",
-              properties,
-              context: { client, app: context.app },
-            });
-            waitUntil(flushAnalytics());
-          } catch {
-            // Resources can be called without auth in some cases
-          }
-
-          try {
-            return await resource.handler(url);
-          } catch (error) {
-            captureException(error, {
-              extra: properties,
-            });
-            throw error;
-          }
         },
       );
     });

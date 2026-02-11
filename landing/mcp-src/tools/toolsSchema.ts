@@ -452,10 +452,12 @@ export const fetchInputSchema = z.object({
     ),
 });
 
-export const loadResourceInputSchema = z.object({
-  subject: z
-    .enum(["neon-get-started"])
+export const listDocsResourcesInputSchema = z.object({});
+
+export const getDocResourceInputSchema = z.object({
+  slug: z
+    .string()
     .describe(
-      "The subject of the resource to load. Options: neon-get-started (Neon getting started guide).",
+      "The docs page slug (path) to fetch, e.g. 'docs/guides/prisma.md'. Slugs use .md file endings matching the URLs in the documentation index. Use the list_docs_resources tool first to discover available slugs.",
     ),
 });

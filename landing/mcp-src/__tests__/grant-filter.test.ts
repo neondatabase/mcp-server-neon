@@ -29,8 +29,8 @@ function toolNames(tools: NeonTool[]): string[] {
 // Sanity: tool definitions integrity
 // ---------------------------------------------------------------------------
 describe("NEON_TOOLS definitions", () => {
-  it("has 28 tools", () => {
-    expect(NEON_TOOLS).toHaveLength(28);
+  it("has 29 tools", () => {
+    expect(NEON_TOOLS).toHaveLength(29);
   });
 
   it("every tool has a name, scope (or null), and readOnlySafe flag", () => {
@@ -85,7 +85,8 @@ describe("filterToolsForGrant – production_use", () => {
   it("includes read-safe tools like describe_project and run_sql", () => {
     expect(names).toContain("describe_project");
     expect(names).toContain("run_sql");
-    expect(names).toContain("load_resource");
+    expect(names).toContain("list_docs_resources");
+    expect(names).toContain("get_doc_resource");
   });
 
   it("includes always-available tools", () => {
@@ -140,7 +141,8 @@ describe("filterToolsForGrant – custom preset", () => {
     expect(names).toContain("compare_database_schema");
 
     // docs scope tools
-    expect(names).toContain("load_resource");
+    expect(names).toContain("list_docs_resources");
+    expect(names).toContain("get_doc_resource");
 
     // always-available (null scope)
     expect(names).toContain("search");
@@ -581,16 +583,16 @@ describe("getAccessControlWarnings", () => {
 describe("getAvailableTools – exact tool counts", () => {
   it.each([
     // preset, projectId, readOnly, expectedCount
-    ["full_access", null, false, 28],
-    ["full_access", null, true, 17],
-    ["full_access", "proj-123", false, 23],
-    ["full_access", "proj-123", true, 14],
-    ["local_development", null, false, 26],
-    ["local_development", null, true, 17],
-    ["local_development", "proj-123", false, 23],
-    ["local_development", "proj-123", true, 14],
-    ["production_use", null, false, 17],
-    ["production_use", "proj-123", false, 14],
+    ["full_access", null, false, 29],
+    ["full_access", null, true, 18],
+    ["full_access", "proj-123", false, 24],
+    ["full_access", "proj-123", true, 15],
+    ["local_development", null, false, 27],
+    ["local_development", null, true, 18],
+    ["local_development", "proj-123", false, 24],
+    ["local_development", "proj-123", true, 15],
+    ["production_use", null, false, 18],
+    ["production_use", "proj-123", false, 15],
   ] as const)(
     "%s / project=%s / readOnly=%s -> %d tools",
     (preset, projectId, readOnly, expectedCount) => {
@@ -607,7 +609,7 @@ describe("getAvailableTools – exact tool counts", () => {
     expect(tools).toHaveLength(2);
   });
 
-  it("custom (all scopes) / no project / no readonly -> 28 tools", () => {
+  it("custom (all scopes) / no project / no readonly -> 29 tools", () => {
     const allScopes: ScopeCategory[] = [
       "projects",
       "branches",
@@ -621,7 +623,7 @@ describe("getAvailableTools – exact tool counts", () => {
       grant({ preset: "custom", scopes: allScopes }),
       false,
     );
-    expect(tools).toHaveLength(28);
+    expect(tools).toHaveLength(29);
   });
 
   it("custom (querying only) / no project / no readonly -> 7 tools", () => {
@@ -654,7 +656,7 @@ describe("getAvailableTools – exact tool counts", () => {
   });
 
   // Edge case #2 from temp.md: local_development + project = same as full_access + project
-  it("local_development + project-scoped = same count as full_access + project-scoped (23)", () => {
+  it("local_development + project-scoped = same count as full_access + project-scoped (24)", () => {
     const localDev = getAvailableTools(
       grant({ preset: "local_development", projectId: "proj-123" }),
       false,
@@ -663,8 +665,8 @@ describe("getAvailableTools – exact tool counts", () => {
       grant({ preset: "full_access", projectId: "proj-123" }),
       false,
     );
-    expect(localDev).toHaveLength(23);
-    expect(fullAccess).toHaveLength(23);
+    expect(localDev).toHaveLength(24);
+    expect(fullAccess).toHaveLength(24);
     expect(toolNames(localDev)).toEqual(toolNames(fullAccess));
   });
 
@@ -719,7 +721,8 @@ describe("tool inventory integrity", () => {
     ["compare_database_schema", "querying", true],
     ["search", null, true],
     ["fetch", null, true],
-    ["load_resource", "docs", true],
+    ["list_docs_resources", "docs", true],
+    ["get_doc_resource", "docs", true],
   ];
 
   it("has exactly the expected number of tools", () => {
@@ -763,7 +766,7 @@ describe("tool inventory integrity", () => {
     ["querying", 5],
     ["performance", 4],
     ["neon_auth", 2],
-    ["docs", 1],
+    ["docs", 2],
   ] as const)('scope category "%s" has %d tools', (scope, expectedCount) => {
     const toolsInScope = NEON_TOOLS.filter((t) => t.scope === scope);
     expect(toolsInScope).toHaveLength(expectedCount);
@@ -779,9 +782,9 @@ describe("tool inventory integrity", () => {
   });
 
   // Verify readOnlySafe counts
-  it("17 tools are readOnlySafe", () => {
+  it("18 tools are readOnlySafe", () => {
     const readOnlySafe = NEON_TOOLS.filter((t) => t.readOnlySafe);
-    expect(readOnlySafe).toHaveLength(17);
+    expect(readOnlySafe).toHaveLength(18);
   });
 
   it("11 tools are NOT readOnlySafe (write-only)", () => {
