@@ -26,7 +26,9 @@ function normalizeScope(scope: string | string[] | null | undefined): string[] {
 /**
  * Checks if the scope includes write access ('write' or '*').
  */
-export function hasWriteScope(scope: string | string[] | null | undefined): boolean {
+export function hasWriteScope(
+  scope: string | string[] | null | undefined,
+): boolean {
   const scopes = normalizeScope(scope);
   return scopes.some((s) => s === 'write' || s === '*');
 }
@@ -38,7 +40,7 @@ function isScopeReadOnly(scope: string | string[] | null | undefined): boolean {
 }
 
 function parseReadOnlyHeader(
-  headerValue: string | null | undefined
+  headerValue: string | null | undefined,
 ): boolean | undefined {
   if (headerValue === null || headerValue === undefined) {
     return undefined;

@@ -271,7 +271,7 @@ const handler = createMcpHandler(
                 const result = await (toolHandler as any)(
                   { params: args },
                   neonClient,
-                  extraArgs
+                  extraArgs,
                 );
                 if (result.isError) {
                   logger.warn('tool error response:', {
@@ -293,9 +293,9 @@ const handler = createMcpHandler(
                 });
                 return errorResult;
               }
-            }
+            },
           );
-        }
+        },
       );
     });
 
@@ -347,7 +347,7 @@ const handler = createMcpHandler(
             });
             throw error;
           }
-        }
+        },
       );
     });
 
@@ -373,7 +373,11 @@ const handler = createMcpHandler(
           trackServerInit(context);
 
           const traceId = generateTraceId();
-          const properties = { prompt_name: prompt.name, clientName: cName, traceId };
+          const properties = {
+            prompt_name: prompt.name,
+            clientName: cName,
+            traceId,
+          };
           logger.info('prompt call:', properties);
           setSentryTags(context);
 
@@ -395,7 +399,7 @@ const handler = createMcpHandler(
             const template = await getPromptTemplate(
               prompt.name,
               extraArgs,
-              args
+              args,
             );
             return {
               messages: [
@@ -414,7 +418,7 @@ const handler = createMcpHandler(
             });
             throw error;
           }
-        }
+        },
       );
     });
   },
@@ -487,13 +491,13 @@ const handler = createMcpHandler(
             captureException(
               event.error instanceof Error
                 ? event.error
-                : new Error(String(event.error))
+                : new Error(String(event.error)),
             );
           }
           break;
       }
     },
-  }
+  },
 );
 
 // Cache TTL for API key verification (5 minutes)
@@ -502,7 +506,7 @@ const API_KEY_CACHE_TTL_MS = 5 * 60 * 1000;
 
 // Helper: Fetch and cache API key details
 const fetchAccountDetails = async (
-  accessToken: string
+  accessToken: string,
 ): Promise<ApiKeyRecord | null> => {
   // 1. Check cache first
   try {
@@ -537,7 +541,7 @@ const fetchAccountDetails = async (
         .set(accessToken, record, API_KEY_CACHE_TTL_MS)
         .catch((err) => {
           logger.warn('API key cache write failed', { err });
-        })
+        }),
     );
 
     logger.info('API key cache miss, verified and cached', {
@@ -561,7 +565,7 @@ const fetchAccountDetails = async (
 // Token verification function with two paths (OAuth tokens + API keys)
 const verifyToken = async (
   req: Request,
-  bearerToken?: string
+  bearerToken?: string,
 ): Promise<AuthInfo | undefined> => {
   const userAgent = req.headers.get('user-agent') || undefined;
   const readOnlyHeader = req.headers.get('x-read-only');
@@ -606,7 +610,7 @@ const verifyToken = async (
         token: token.accessToken,
         scopes: Array.isArray(token.scope)
           ? token.scope
-          : token.scope?.split(' ') ?? ['read', 'write'],
+          : (token.scope?.split(' ') ?? ['read', 'write']),
         clientId: token.client.id,
         expiresAt: token.expires_at
           ? Math.floor(token.expires_at / 1000)

@@ -122,7 +122,8 @@ export async function POST(request: NextRequest) {
       });
     } catch (jsonError) {
       logger.error('NextResponse.json threw error', {
-        error: jsonError instanceof Error ? jsonError.message : String(jsonError),
+        error:
+          jsonError instanceof Error ? jsonError.message : String(jsonError),
         stack: jsonError instanceof Error ? jsonError.stack : undefined,
       });
       throw jsonError;

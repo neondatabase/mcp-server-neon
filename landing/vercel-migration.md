@@ -158,6 +158,7 @@ export const flushAnalytics = async (): Promise<void> => {
 ```
 
 Key changes:
+
 - `flushAt: 1` ensures events are sent immediately (serverless functions may terminate before batched events are sent)
 - `flushAnalytics()` called via `waitUntil()` before function termination
 
@@ -282,19 +283,19 @@ Vercel handles deployments automatically via GitHub integration (no manual workf
 
 Required for Vercel deployment:
 
-| Variable              | Description                                                    |
-| --------------------- | -------------------------------------------------------------- |
-| `SERVER_HOST`         | Server URL (falls back to `VERCEL_URL`)                        |
-| `VERCEL_URL`          | Auto-provided by Vercel - deployment URL                       |
-| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL                                        |
-| `CLIENT_ID`           | OAuth client ID                                                |
-| `CLIENT_SECRET`       | OAuth client secret                                            |
-| `COOKIE_SECRET`       | Secret for signed cookies                                      |
-| `KV_URL`              | Redis URL for session storage (Vercel KV / Upstash)            |
-| `REDIS_URL`           | Redis URL fallback for local development                       |
-| `OAUTH_DATABASE_URL`  | Postgres URL for token storage                                 |
-| `SENTRY_DSN`          | Sentry error tracking DSN                                      |
-| `ANALYTICS_WRITE_KEY` | Segment analytics write key                                    |
+| Variable              | Description                                         |
+| --------------------- | --------------------------------------------------- |
+| `SERVER_HOST`         | Server URL (falls back to `VERCEL_URL`)             |
+| `VERCEL_URL`          | Auto-provided by Vercel - deployment URL            |
+| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL                             |
+| `CLIENT_ID`           | OAuth client ID                                     |
+| `CLIENT_SECRET`       | OAuth client secret                                 |
+| `COOKIE_SECRET`       | Secret for signed cookies                           |
+| `KV_URL`              | Redis URL for session storage (Vercel KV / Upstash) |
+| `REDIS_URL`           | Redis URL fallback for local development            |
+| `OAUTH_DATABASE_URL`  | Postgres URL for token storage                      |
+| `SENTRY_DSN`          | Sentry error tracking DSN                           |
+| `ANALYTICS_WRITE_KEY` | Segment analytics write key                         |
 
 ### 17. Backwards Compatible Rewrites
 
@@ -311,6 +312,7 @@ async rewrites() {
 ```
 
 This allows existing MCP client configurations to continue working without changes:
+
 - `/mcp` → `/api/mcp` (Streamable HTTP transport)
 - `/sse` → `/api/sse` (Server-Sent Events transport)
 - `/health` → `/api/health` (Health check endpoint)
@@ -326,8 +328,9 @@ landing/app/api/callback/route.ts  →  landing/app/callback/route.ts
 ```
 
 Updated redirect URI in `lib/oauth/client.ts`:
+
 ```typescript
-const REDIRECT_URI = `${SERVER_HOST}/callback`;  // Was /api/callback
+const REDIRECT_URI = `${SERVER_HOST}/callback`; // Was /api/callback
 ```
 
 **Important:** The callback URL must be allowlisted in the upstream OAuth provider (Neon OAuth).
@@ -428,18 +431,18 @@ persistMigrationToMemory(migrationId, { ... });
 
 ```typescript
 // OLD: Just migration ID (broken in serverless)
-complete_database_migration({ migrationId: "uuid" })
+complete_database_migration({ migrationId: 'uuid' });
 
 // NEW: All context passed back (works everywhere)
 complete_database_migration({
-  migrationId: "uuid",
-  migrationSql: "ALTER TABLE ...",
-  databaseName: "neondb",
-  projectId: "proj-xxx",
-  temporaryBranchId: "br-xxx",
-  parentBranchId: "br-main",
-  applyChanges: true
-})
+  migrationId: 'uuid',
+  migrationSql: 'ALTER TABLE ...',
+  databaseName: 'neondb',
+  projectId: 'proj-xxx',
+  temporaryBranchId: 'br-xxx',
+  parentBranchId: 'br-main',
+  applyChanges: true,
+});
 ```
 
 ## Notes

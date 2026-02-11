@@ -1,0 +1,10 @@
+.next/
+node_modules/
+dist/
+build/
+out/
+bun.lock
+coverage/
+.vercel/
+patches/
+test-results/

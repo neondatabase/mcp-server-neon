@@ -18,7 +18,7 @@ export type Account = {
 export async function resolveAccountFromAuth(
   auth: AuthDetailsResponse,
   neonClient: Api<unknown>,
-  identifyContext?: Parameters<typeof identify>[1]
+  identifyContext?: Parameters<typeof identify>[1],
 ): Promise<Account> {
   let account: Account;
 

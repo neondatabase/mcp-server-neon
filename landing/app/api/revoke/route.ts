@@ -39,7 +39,10 @@ export async function POST(request: NextRequest) {
     );
     if (!clientId) {
       return NextResponse.json(
-        { error: 'invalid_request', error_description: 'client_id is required' },
+        {
+          error: 'invalid_request',
+          error_description: 'client_id is required',
+        },
         { status: 400 },
       );
     }
@@ -77,7 +80,9 @@ export async function POST(request: NextRequest) {
       const refreshToken = await model.getRefreshToken(token);
       if (refreshToken) {
         // Delete both refresh token and associated access token
-        const accessToken = await model.getAccessToken(refreshToken.accessToken);
+        const accessToken = await model.getAccessToken(
+          refreshToken.accessToken,
+        );
         if (accessToken && accessToken.client.id === client.id) {
           await model.deleteToken(accessToken);
         }

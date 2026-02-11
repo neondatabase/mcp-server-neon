@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
           error: 'invalid_request',
           error_description: 'Missing code or state',
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
           error: 'invalid_client',
           error_description: 'Invalid client ID',
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 

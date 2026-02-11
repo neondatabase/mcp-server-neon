@@ -110,7 +110,9 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         );
       }
-      logger.info('Authorization code found', { userId: authorizationCode.user?.id });
+      logger.info('Authorization code found', {
+        userId: authorizationCode.user?.id,
+      });
 
       if (authorizationCode.client.id !== client.id) {
         logger.warn('Authorization code client mismatch', {

@@ -7,7 +7,7 @@
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
 function isLoopbackHost(host: string): boolean {
- return LOOPBACK_HOSTS.has(host.toLowerCase());    
+  return LOOPBACK_HOSTS.has(host.toLowerCase());
 }
 
 function parseUri(uri: string) {
@@ -42,7 +42,9 @@ function urisMatch(
 
   // Loopback equivalence only applies when BOTH are loopback
   if (request.isLoopback && registered.isLoopback) {
-    return request.scheme === registered.scheme && request.path === registered.path;
+    return (
+      request.scheme === registered.scheme && request.path === registered.path
+    );
   }
 
   return requestUri === registeredUri;

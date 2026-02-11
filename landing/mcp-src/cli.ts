@@ -33,7 +33,6 @@ const appContext: AppContext = {
   transport: 'stdio',
 };
 
-
 if (args.command === 'start:sse') {
   console.error(
     'SSE mode is not supported in CLI. Use the Vercel deployment for remote access.',

@@ -26,7 +26,7 @@ type DataApiStatus = {
 async function checkNeonAuthStatus(
   projectId: string,
   branchId: string,
-  neonClient: Api<unknown>
+  neonClient: Api<unknown>,
 ): Promise<NeonAuthStatus> {
   try {
     const response = await neonClient.getNeonAuth(projectId, branchId);
@@ -51,13 +51,13 @@ async function checkDataApiStatus(
   projectId: string,
   branchId: string,
   databaseName: string,
-  neonClient: Api<unknown>
+  neonClient: Api<unknown>,
 ): Promise<DataApiStatus> {
   try {
     const response = await neonClient.getProjectBranchDataApi(
       projectId,
       branchId,
-      databaseName
+      databaseName,
     );
     if (response.status === 200) {
       return {
@@ -81,7 +81,7 @@ function buildAuthOptionsResponse(
   dataApiStatus: DataApiStatus,
   projectId: string,
   branchId: string,
-  databaseName: string
+  databaseName: string,
 ): string {
   // If Data API already exists, show existing info
   if (dataApiStatus.exists) {
@@ -157,7 +157,7 @@ export async function handleProvisionNeonDataApi(
   }: Props,
   neonClient: Api<unknown>,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _extra: ToolHandlerExtraParams
+  _extra: ToolHandlerExtraParams,
 ): Promise<CallToolResult> {
   // If branchId is not provided, use the default branch
   let resolvedBranchId = branchId;
@@ -173,7 +173,7 @@ export async function handleProvisionNeonDataApi(
       branchId: resolvedBranchId,
       databaseName,
     },
-    neonClient
+    neonClient,
   );
 
   if (!defaultDatabase) {
@@ -198,7 +198,7 @@ export async function handleProvisionNeonDataApi(
         projectId,
         resolvedBranchId,
         defaultDatabase.name,
-        neonClient
+        neonClient,
       ),
     ]);
 
@@ -211,7 +211,7 @@ export async function handleProvisionNeonDataApi(
             dataApiStatus,
             projectId,
             resolvedBranchId,
-            defaultDatabase.name
+            defaultDatabase.name,
           ),
         },
       ],
@@ -224,7 +224,7 @@ export async function handleProvisionNeonDataApi(
     const neonAuthStatus = await checkNeonAuthStatus(
       projectId,
       resolvedBranchId,
-      neonClient
+      neonClient,
     );
 
     if (!neonAuthStatus.enabled) {
@@ -235,7 +235,7 @@ export async function handleProvisionNeonDataApi(
         {
           auth_provider: NeonAuthSupportedAuthProvider.BetterAuth,
           database_name: defaultDatabase.name,
-        }
+        },
       );
 
       if (neonAuthResponse.status !== 201 && neonAuthResponse.status !== 409) {
@@ -259,7 +259,7 @@ export async function handleProvisionNeonDataApi(
       projectId,
       resolvedBranchId,
       defaultDatabase.name,
-      {}
+      {},
     );
 
     // Handle 409 - Data API already exists
@@ -268,7 +268,7 @@ export async function handleProvisionNeonDataApi(
         const existingResponse = await neonClient.getProjectBranchDataApi(
           projectId,
           resolvedBranchId,
-          defaultDatabase.name
+          defaultDatabase.name,
         );
         return {
           content: [
@@ -358,7 +358,7 @@ ${response.data.url}
     projectId,
     resolvedBranchId,
     defaultDatabase.name,
-    requestPayload
+    requestPayload,
   );
 
   // Handle 409 - Data API already exists
@@ -368,7 +368,7 @@ ${response.data.url}
       const existingResponse = await neonClient.getProjectBranchDataApi(
         projectId,
         resolvedBranchId,
-        defaultDatabase.name
+        defaultDatabase.name,
       );
       return {
         content: [

@@ -52,7 +52,7 @@ const getUpstreamConfig = async (): Promise<Configuration> => {
       client_secret: CLIENT_SECRET,
     },
     ClientSecretPost(CLIENT_SECRET),
-    {}
+    {},
   );
   cacheTimestamp = now;
 
