@@ -1,11 +1,11 @@
-import crypto from "crypto";
+import crypto from 'crypto';
 
 export const generateRandomString = (length: number): string => {
   const charset =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   const array = new Uint8Array(length);
   crypto.getRandomValues(array);
-  return Array.from(array, (byte) => charset[byte % charset.length]).join("");
+  return Array.from(array, (byte) => charset[byte % charset.length]).join('');
 };
 
 export const verifyPKCE = (
@@ -17,15 +17,15 @@ export const verifyPKCE = (
     return false;
   }
 
-  if (codeChallengeMethod === "S256") {
+  if (codeChallengeMethod === 'S256') {
     const hash = crypto
-      .createHash("sha256")
+      .createHash('sha256')
       .update(codeVerifier)
-      .digest("base64url");
+      .digest('base64url');
     return codeChallenge === hash;
   }
 
-  if (codeChallengeMethod === "plain") {
+  if (codeChallengeMethod === 'plain') {
     return codeChallenge === codeVerifier;
   }
 

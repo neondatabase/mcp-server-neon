@@ -1,4 +1,4 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   // Serverless deployment on Vercel - do not use 'export' mode
@@ -9,16 +9,16 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: "/mcp",
-        destination: "/api/mcp",
+        source: '/mcp',
+        destination: '/api/mcp',
       },
       {
-        source: "/sse",
-        destination: "/api/sse",
+        source: '/sse',
+        destination: '/api/sse',
       },
       {
-        source: "/health",
-        destination: "/api/health",
+        source: '/health',
+        destination: '/api/health',
       },
     ];
   },

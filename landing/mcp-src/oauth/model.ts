@@ -4,14 +4,14 @@ import {
   Client,
   Token,
   User,
-} from "oauth2-server";
+} from 'oauth2-server';
 import {
   getClients,
   getTokens,
   getRefreshTokens,
   getAuthorizationCodes,
   RefreshToken,
-} from "./kv-store";
+} from './kv-store';
 
 class Model implements AuthorizationCodeModel {
   getClient: (

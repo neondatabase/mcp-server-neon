@@ -1,21 +1,21 @@
-import "./sentry/instrument";
-import { track } from "./analytics/analytics";
-import { NODE_ENV } from "./constants";
-import { handleInit, parseArgs } from "./initConfig";
-import { createNeonClient, getPackageJson } from "./server/api";
-import { createMcpServer } from "./server/index";
-import { startStdio } from "./transports/stdio";
-import { logger } from "./utils/logger";
-import { AppContext } from "./types/context";
-import { NEON_TOOLS } from "./tools/index";
-import "./utils/polyfills";
-import { resolveAccountFromAuth } from "./server/account";
+import './sentry/instrument';
+import { track } from './analytics/analytics';
+import { NODE_ENV } from './constants';
+import { handleInit, parseArgs } from './initConfig';
+import { createNeonClient, getPackageJson } from './server/api';
+import { createMcpServer } from './server/index';
+import { startStdio } from './transports/stdio';
+import { logger } from './utils/logger';
+import { AppContext } from './types/context';
+import { NEON_TOOLS } from './tools/index';
+import './utils/polyfills';
+import { resolveAccountFromAuth } from './server/account';
 
 const args = parseArgs();
 const appVersion = getPackageJson().version;
 const appName = getPackageJson().name;
 
-if (args.command === "export-tools") {
+if (args.command === 'export-tools') {
   console.log(
     JSON.stringify(
       NEON_TOOLS.map((item) => ({ ...item, inputSchema: undefined })),
@@ -30,12 +30,12 @@ const appContext: AppContext = {
   environment: NODE_ENV,
   name: appName,
   version: appVersion,
-  transport: "stdio",
+  transport: 'stdio',
 };
 
-if (args.command === "start:sse") {
+if (args.command === 'start:sse') {
   console.error(
-    "SSE mode is not supported in CLI. Use the Vercel deployment for remote access.",
+    'SSE mode is not supported in CLI. Use the Vercel deployment for remote access.',
   );
   process.exit(1);
 } else {
@@ -51,10 +51,10 @@ if (args.command === "start:sse") {
       context: appContext,
     });
 
-    if (args.command === "init") {
+    if (args.command === 'init') {
       track({
         userId: accountId,
-        event: "init_stdio",
+        event: 'init_stdio',
         context: appContext,
       });
       handleInit({
@@ -65,10 +65,10 @@ if (args.command === "start:sse") {
       process.exit(0);
     }
 
-    if (args.command === "start") {
+    if (args.command === 'start') {
       track({
         userId: accountId,
-        event: "start_stdio",
+        event: 'start_stdio',
         context: appContext,
       });
       const server = createMcpServer({
@@ -79,10 +79,10 @@ if (args.command === "start:sse") {
       await startStdio(server);
     }
   } catch (error) {
-    console.error("Server error:", error);
+    console.error('Server error:', error);
     track({
-      anonymousId: "anonymous",
-      event: "server_error",
+      anonymousId: 'anonymous',
+      event: 'server_error',
       properties: { error },
       context: appContext,
     });

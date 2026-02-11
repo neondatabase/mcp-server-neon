@@ -21,8 +21,10 @@
     "start": "next start",
     "start:cli": "node dist/cli/cli.js start",
     "lint": "eslint .",
+    "lint:fix": "eslint --fix . && prettier -w .",
     "typecheck": "tsc --noEmit",
     "fmt": "prettier -w .",
+    "fmt:check": "prettier --check .",
     "postinstall": "patch-package",
     "prepublishOnly": "npx tsx scripts/before-publish.ts"
   },

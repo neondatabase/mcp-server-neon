@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
 export const CopyableUrl = ({ url }: { url: string }) => {
   const [copied, setCopied] = useState(false);
@@ -11,7 +11,7 @@ export const CopyableUrl = ({ url }: { url: string }) => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error("Failed to copy:", err);
+      console.error('Failed to copy:', err);
     }
   };
 
@@ -24,7 +24,7 @@ export const CopyableUrl = ({ url }: { url: string }) => {
           className="ml-3 px-2 py-1 text-xs bg-primary/10 hover:bg-primary/20 rounded transition-colors opacity-0 group-hover:opacity-100"
           title="Copy to clipboard"
         >
-          {copied ? "Copied!" : "Copy"}
+          {copied ? 'Copied!' : 'Copy'}
         </button>
       </div>
     </div>

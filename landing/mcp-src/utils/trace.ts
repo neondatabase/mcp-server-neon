@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomUUID } from 'crypto';
 
 /**
  * Generates a unique trace ID for correlating logs, analytics, and errors

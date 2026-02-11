@@ -1,10 +1,10 @@
-import { Api, Branch } from "@neondatabase/api-client";
-import { ToolHandlerExtraParams } from "../types";
-import { handleGetConnectionString } from "./connection-string";
-import { neon } from "@neondatabase/serverless";
-import { DESCRIBE_DATABASE_STATEMENTS } from "../utils";
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { CONSOLE_URLS, generateConsoleUrl } from "./urls";
+import { Api, Branch } from '@neondatabase/api-client';
+import { ToolHandlerExtraParams } from '../types';
+import { handleGetConnectionString } from './connection-string';
+import { neon } from '@neondatabase/serverless';
+import { DESCRIBE_DATABASE_STATEMENTS } from '../utils';
+import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { CONSOLE_URLS, generateConsoleUrl } from './urls';
 
 const branchInfo = (branch: Branch) => {
   return `Branch Details: 
@@ -12,9 +12,9 @@ Name: ${branch.name}
 ID: ${branch.id}
 Parent Branch: ${branch.parent_id}
 Default: ${branch.default}
-Protected: ${branch.protected ? "Yes" : "No"}
+Protected: ${branch.protected ? 'Yes' : 'No'}
 
-${branch.created_by ? `Created By: ${branch.created_by.name}` : ""}
+${branch.created_by ? `Created By: ${branch.created_by.name}` : ''}
 Created: ${new Date(branch.created_at).toLocaleDateString()}
 Updated: ${new Date(branch.updated_at).toLocaleDateString()}
 
@@ -68,13 +68,13 @@ export async function handleDescribeBranch(
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: branchInfo(branch),
         },
         {
-          type: "text",
-          text: ["Database Structure:", JSON.stringify(response, null, 2)].join(
-            "\n",
+          type: 'text',
+          text: ['Database Structure:', JSON.stringify(response, null, 2)].join(
+            '\n',
           ),
         },
       ],
@@ -86,7 +86,7 @@ export async function handleDescribeBranch(
   return {
     content: [
       {
-        type: "text",
+        type: 'text',
         text: branchInfo(branch),
       },
     ],

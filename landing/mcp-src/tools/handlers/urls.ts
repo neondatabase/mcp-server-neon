@@ -1,10 +1,10 @@
-import { NEON_CONSOLE_HOST } from "../../constants";
-import { NotFoundError } from "../../server/errors";
+import { NEON_CONSOLE_HOST } from '../../constants';
+import { NotFoundError } from '../../server/errors';
 
 export enum CONSOLE_URLS {
-  ORGANIZATION = "/app/:orgId/projects",
-  PROJECT = "/app/projects/:projectId",
-  PROJECT_BRANCH = "/app/projects/:projectId/branches/:branchId",
+  ORGANIZATION = '/app/:orgId/projects',
+  PROJECT = '/app/projects/:projectId',
+  PROJECT_BRANCH = '/app/projects/:projectId/branches/:branchId',
 }
 
 type ExtractPathParams<T extends string> =

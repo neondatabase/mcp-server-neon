@@ -1,10 +1,10 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { Api, NeonAuthSupportedAuthProvider } from "@neondatabase/api-client";
-import { provisionNeonAuthInputSchema } from "../toolsSchema";
-import { z } from "zod";
-import { getDefaultDatabase } from "../utils";
-import { getDefaultBranch } from "./utils";
-import { ToolHandlerExtraParams } from "../types";
+import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { Api, NeonAuthSupportedAuthProvider } from '@neondatabase/api-client';
+import { provisionNeonAuthInputSchema } from '../toolsSchema';
+import { z } from 'zod';
+import { getDefaultDatabase } from '../utils';
+import { getDefaultBranch } from './utils';
+import { ToolHandlerExtraParams } from '../types';
 
 type Props = z.infer<typeof provisionNeonAuthInputSchema>;
 export async function handleProvisionNeonAuth(
@@ -34,10 +34,10 @@ export async function handleProvisionNeonAuth(
       isError: true,
       content: [
         {
-          type: "text",
+          type: 'text',
           text: databaseName
             ? `The branch has no database named '${databaseName}'.`
-            : "The branch has no databases.",
+            : 'The branch has no databases.',
         },
       ],
     };
@@ -63,7 +63,7 @@ export async function handleProvisionNeonAuth(
       return {
         content: [
           {
-            type: "text",
+            type: 'text',
             text: `Neon Auth already provisioned.
 
 Use this URL to access the Neon Auth through your better auth compatible client:
@@ -82,8 +82,8 @@ ${existingResponse.data.jwks_url}
       return {
         content: [
           {
-            type: "text",
-            text: "Neon Auth already provisioned.",
+            type: 'text',
+            text: 'Neon Auth already provisioned.',
           },
         ],
       };
@@ -95,7 +95,7 @@ ${existingResponse.data.jwks_url}
       isError: true,
       content: [
         {
-          type: "text",
+          type: 'text',
           text: `Failed to provision Neon Auth. Error: ${response.statusText}`,
         },
       ],
@@ -105,7 +105,7 @@ ${existingResponse.data.jwks_url}
   return {
     content: [
       {
-        type: "text",
+        type: 'text',
         text: `Authentication has been successfully provisioned for your Neon project and branch.
 
 Use this URL to access the Neon Auth through your better auth compatible client:

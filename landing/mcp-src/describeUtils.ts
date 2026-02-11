@@ -3,7 +3,7 @@
  * Original source: https://github.com/neondatabase/psql-describe
  */
 
-import { neon } from "@neondatabase/serverless";
+import { neon } from '@neondatabase/serverless';
 
 export type TableDescription = {
   columns: ColumnDescription[];
@@ -127,36 +127,36 @@ export function formatTableDescription(desc: TableDescription): string {
   lines.push(`Table size: ${desc.tableSize}`);
   lines.push(`Index size: ${desc.indexSize}`);
   lines.push(`Total size: ${desc.totalSize}`);
-  lines.push("");
+  lines.push('');
 
   // Add columns
-  lines.push("Columns:");
+  lines.push('Columns:');
   desc.columns.forEach((col) => {
-    const nullable = col.nullable ? "NULL" : "NOT NULL";
-    const defaultStr = col.default ? ` DEFAULT ${col.default}` : "";
-    const descStr = col.description ? `\n    ${col.description}` : "";
+    const nullable = col.nullable ? 'NULL' : 'NOT NULL';
+    const defaultStr = col.default ? ` DEFAULT ${col.default}` : '';
+    const descStr = col.description ? `\n    ${col.description}` : '';
     lines.push(`  ${col.name} ${col.type} ${nullable}${defaultStr}${descStr}`);
   });
-  lines.push("");
+  lines.push('');
 
   // Add indexes
   if (desc.indexes.length > 0) {
-    lines.push("Indexes:");
+    lines.push('Indexes:');
     desc.indexes.forEach((idx) => {
       lines.push(`  ${idx.name} (${idx.size})`);
       lines.push(`    ${idx.definition}`);
     });
-    lines.push("");
+    lines.push('');
   }
 
   // Add constraints
   if (desc.constraints.length > 0) {
-    lines.push("Constraints:");
+    lines.push('Constraints:');
     desc.constraints.forEach((con) => {
       lines.push(`  ${con.name} (${con.type})`);
       lines.push(`    ${con.definition}`);
     });
   }
 
-  return lines.join("\n");
+  return lines.join('\n');
 }

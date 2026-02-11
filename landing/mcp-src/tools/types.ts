@@ -1,16 +1,16 @@
-import { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Api } from "@neondatabase/api-client";
+import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { Api } from '@neondatabase/api-client';
 
-import { NEON_TOOLS } from "./definitions";
-import { AuthContext } from "../types/auth";
-import { ClientApplication } from "../utils/client-application";
+import { NEON_TOOLS } from './definitions';
+import { AuthContext } from '../types/auth';
+import { ClientApplication } from '../utils/client-application';
 
 // Extract the tool names as a union type
-type NeonToolName = (typeof NEON_TOOLS)[number]["name"];
+type NeonToolName = (typeof NEON_TOOLS)[number]['name'];
 export type ToolParams<T extends NeonToolName = NeonToolName> = Extract<
   (typeof NEON_TOOLS)[number],
   { name: T }
->["inputSchema"];
+>['inputSchema'];
 
 export type ToolHandler<T extends NeonToolName> = ToolCallback<{
   params: ToolParams<T>;
@@ -18,16 +18,16 @@ export type ToolHandler<T extends NeonToolName> = ToolCallback<{
 
 export type ToolHandlerExtraParams = Parameters<
   ToolHandler<NeonToolName>
->["1"] & {
-  account: AuthContext["extra"]["account"];
-  readOnly?: AuthContext["extra"]["readOnly"];
+>['1'] & {
+  account: AuthContext['extra']['account'];
+  readOnly?: AuthContext['extra']['readOnly'];
   /** Detected client application type (e.g., 'cursor', 'claude', 'other') */
   clientApplication: ClientApplication;
 };
 
 export type ToolHandlerExtended<T extends NeonToolName> = (
   ...args: [
-    args: Parameters<ToolHandler<T>>["0"],
+    args: Parameters<ToolHandler<T>>['0'],
     neonClient: Api<unknown>,
     extra: ToolHandlerExtraParams,
   ]

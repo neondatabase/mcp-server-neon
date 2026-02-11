@@ -52,13 +52,13 @@ Created Next.js App Router API routes to replace Express endpoints:
 The `mcp-handler` library provides the core MCP functionality:
 
 ```typescript
-import { createMcpHandler, withMcpAuth } from "mcp-handler";
+import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 
 const handler = createMcpHandler(serverFactory, tools, options, {
   redisUrl: process.env.KV_URL || process.env.REDIS_URL,
-  basePath: "/api",
+  basePath: '/api',
   maxDuration: 300,
-  verboseLogs: process.env.NODE_ENV !== "production",
+  verboseLogs: process.env.NODE_ENV !== 'production',
 });
 
 const authHandler = withMcpAuth(handler, verifyToken, authOptions);
@@ -100,10 +100,10 @@ Converted all `.js` extensions to extensionless imports for Next.js/bundler comp
 
 ```typescript
 // Before
-import { logger } from "../utils/logger.js";
+import { logger } from '../utils/logger.js';
 
 // After
-import { logger } from "../utils/logger";
+import { logger } from '../utils/logger';
 ```
 
 ### 7. Vercel Functions Integration (`@vercel/functions`)
@@ -115,8 +115,8 @@ Added `@vercel/functions` package for serverless lifecycle management:
 Vercel serverless functions terminate immediately after returning a response. The `waitUntil` function extends the function lifecycle to allow background tasks (like analytics) to complete:
 
 ```typescript
-import { waitUntil } from "@vercel/functions";
-import { flushAnalytics } from "../../../mcp-src/analytics/analytics";
+import { waitUntil } from '@vercel/functions';
+import { flushAnalytics } from '../../../mcp-src/analytics/analytics';
 
 // Inside request handlers
 waitUntil(flushAnalytics());
@@ -244,10 +244,10 @@ Fixed type exports in `tools/index.ts`:
 
 ```typescript
 // Before
-export { ToolHandlers, ToolHandlerExtended } from "./types.js";
+export { ToolHandlers, ToolHandlerExtended } from './types.js';
 
 // After
-export type { ToolHandlers, ToolHandlerExtended } from "./types";
+export type { ToolHandlers, ToolHandlerExtended } from './types';
 ```
 
 ### 15. Vercel Environment Variable Handling
@@ -260,7 +260,7 @@ export const SERVER_HOST =
   process.env.SERVER_HOST ||
   (process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000");
+    : 'http://localhost:3000');
 ```
 
 Vercel automatically provides `VERCEL_URL` - the deployment URL (e.g., `my-app-abc123.vercel.app`).
@@ -352,15 +352,15 @@ const handleRequest = (req: Request) => {
   const url = new URL(req.url);
 
   // Normalize legacy paths to canonical /api/* paths
-  if (url.pathname === "/mcp") url.pathname = "/api/mcp";
-  else if (url.pathname === "/sse") url.pathname = "/api/sse";
+  if (url.pathname === '/mcp') url.pathname = '/api/mcp';
+  else if (url.pathname === '/sse') url.pathname = '/api/sse';
 
   const normalizedReq = new Request(url.toString(), {
     method: req.method,
     headers: req.headers,
     body: req.body,
     // @ts-expect-error duplex is required for streaming bodies
-    duplex: "half",
+    duplex: 'half',
   });
 
   return authHandler(normalizedReq);
@@ -431,16 +431,16 @@ persistMigrationToMemory(migrationId, { ... });
 
 ```typescript
 // OLD: Just migration ID (broken in serverless)
-complete_database_migration({ migrationId: "uuid" });
+complete_database_migration({ migrationId: 'uuid' });
 
 // NEW: All context passed back (works everywhere)
 complete_database_migration({
-  migrationId: "uuid",
-  migrationSql: "ALTER TABLE ...",
-  databaseName: "neondb",
-  projectId: "proj-xxx",
-  temporaryBranchId: "br-xxx",
-  parentBranchId: "br-main",
+  migrationId: 'uuid',
+  migrationSql: 'ALTER TABLE ...',
+  databaseName: 'neondb',
+  projectId: 'proj-xxx',
+  temporaryBranchId: 'br-xxx',
+  parentBranchId: 'br-main',
   applyChanges: true,
 });
 ```

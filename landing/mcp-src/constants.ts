@@ -16,7 +16,7 @@ export {
   NODE_ENV,
   NEON_CONSOLE_HOST,
   type Environment,
-} from "../lib/config";
+} from '../lib/config';
 
 // MCP-specific constants
-export const NEON_DEFAULT_DATABASE_NAME = "neondb";
+export const NEON_DEFAULT_DATABASE_NAME = 'neondb';

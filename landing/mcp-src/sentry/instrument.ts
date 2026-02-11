@@ -1,6 +1,6 @@
-import { init } from "@sentry/node";
-import { SENTRY_DSN } from "../constants";
-import pkg from "../../package.json";
+import { init } from '@sentry/node';
+import { SENTRY_DSN } from '../constants';
+import pkg from '../../package.json';
 
 init({
   dsn: SENTRY_DSN,

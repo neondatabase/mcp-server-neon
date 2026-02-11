@@ -1,47 +1,47 @@
-import { z } from "zod";
-import { fetchRawGithubContent } from "./resources";
-import { ToolHandlerExtraParams } from "./tools/types";
-import { ClientApplication } from "./utils/client-application";
+import { z } from 'zod';
+import { fetchRawGithubContent } from './resources';
+import { ToolHandlerExtraParams } from './tools/types';
+import { ClientApplication } from './utils/client-application';
 
 export const setupNeonAuthViteReactArgsSchema = {
   projectId: z
     .string()
     .optional()
     .describe(
-      "Optional Neon project ID. If not provided, the guide will help discover available projects.",
+      'Optional Neon project ID. If not provided, the guide will help discover available projects.',
     ),
   branchId: z
     .string()
     .optional()
     .describe(
-      "Optional branch ID. If not provided, the default branch will be used.",
+      'Optional branch ID. If not provided, the default branch will be used.',
     ),
   databaseName: z
     .string()
     .optional()
     .describe(
-      "Optional database name. If not provided, the default database (neondb) will be used.",
+      'Optional database name. If not provided, the default database (neondb) will be used.',
     ),
 } as const;
 
 export const NEON_PROMPTS = [
   {
-    name: "setup-neon-auth",
+    name: 'setup-neon-auth',
     description:
-      "Interactive guide for setting up Neon Auth in a Vite+React project. Walks through provisioning, package installation, client setup, and UI components.",
+      'Interactive guide for setting up Neon Auth in a Vite+React project. Walks through provisioning, package installation, client setup, and UI components.',
     argsSchema: setupNeonAuthViteReactArgsSchema,
   },
 ] as const;
 
 function getClientSpecificInstructions(clientApplication: ClientApplication) {
   switch (clientApplication) {
-    case "cursor":
+    case 'cursor':
       return `
       - **For URLs:** Use the \`@Web\` tool (or \`web_search\`) to fetch the page.
       - **For Files:** Use \`grep\` or \`cat\` to read local files.
       `;
-    case "claude-code":
-    case "claude-desktop":
+    case 'claude-code':
+    case 'claude-desktop':
       return `
       - **For URLs:** Use your \`web_fetch\` tool (or \`web_search\`) to read content.
       - **For Files:** Use \`grep\` or \`cat\` to read local files.
@@ -81,14 +81,14 @@ export const getPromptTemplate = async (
   extra: ToolHandlerExtraParams,
   args?: Record<string, string>,
 ): Promise<string> => {
-  if (promptName === "setup-neon-auth") {
+  if (promptName === 'setup-neon-auth') {
     // Variables are available for future template interpolation
     void args?.projectId;
     void args?.branchId;
     void args?.databaseName;
 
     const content = await fetchRawGithubContent(
-      "/neondatabase-labs/ai-rules/main/mcp-prompts/neon-auth-setup.md",
+      '/neondatabase-labs/ai-rules/main/mcp-prompts/neon-auth-setup.md',
     );
 
     return `

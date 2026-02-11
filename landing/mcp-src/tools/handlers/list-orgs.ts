@@ -1,10 +1,10 @@
-import { Api, Organization } from "@neondatabase/api-client";
-import { ToolHandlerExtraParams } from "../types";
-import { filterOrganizations } from "../utils";
+import { Api, Organization } from '@neondatabase/api-client';
+import { ToolHandlerExtraParams } from '../types';
+import { filterOrganizations } from '../utils';
 
 export async function handleListOrganizations(
   neonClient: Api<unknown>,
-  account: ToolHandlerExtraParams["account"],
+  account: ToolHandlerExtraParams['account'],
   search?: string,
 ): Promise<Organization[]> {
   if (account.isOrg) {

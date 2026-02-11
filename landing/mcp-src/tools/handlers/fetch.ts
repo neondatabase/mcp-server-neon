@@ -1,11 +1,11 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { Api, MemberWithUser, ProjectListItem } from "@neondatabase/api-client";
-import { fetchInputSchema } from "../toolsSchema";
-import { z } from "zod";
-import { handleDescribeProject } from "./decribe-project";
-import { handleDescribeBranch } from "./describe-branch";
-import { ToolHandlerExtraParams } from "../types";
-import { generateConsoleUrl, CONSOLE_URLS } from "./urls";
+import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { Api, MemberWithUser, ProjectListItem } from '@neondatabase/api-client';
+import { fetchInputSchema } from '../toolsSchema';
+import { z } from 'zod';
+import { handleDescribeProject } from './decribe-project';
+import { handleDescribeBranch } from './describe-branch';
+import { ToolHandlerExtraParams } from '../types';
+import { generateConsoleUrl, CONSOLE_URLS } from './urls';
 
 type FetchProps = z.infer<typeof fetchInputSchema>;
 
@@ -16,19 +16,19 @@ export async function handleFetch(
 ): Promise<CallToolResult> {
   try {
     // Parse the ID format
-    if (id.startsWith("org:") || id.startsWith("org-")) {
+    if (id.startsWith('org:') || id.startsWith('org-')) {
       return await fetchOrganizationDetails(id.slice(4), neonClient);
-    } else if (id.startsWith("branch:")) {
-      const [projectId, branchId] = id.slice(7).split("/");
+    } else if (id.startsWith('branch:')) {
+      const [projectId, branchId] = id.slice(7).split('/');
       return await fetchBranchDetails(projectId, branchId, neonClient, extra);
-    } else if (id.startsWith("project:")) {
+    } else if (id.startsWith('project:')) {
       return await fetchProjectDetails(id.slice(8), neonClient);
     } else {
       return {
         isError: true,
         content: [
           {
-            type: "text",
+            type: 'text',
             text: `Invalid ID format: "${id}". Expected format: org:*, project:*, or branch:*`,
           },
         ],
@@ -39,8 +39,8 @@ export async function handleFetch(
       isError: true,
       content: [
         {
-          type: "text",
-          text: `Failed to fetch details: ${error instanceof Error ? error.message : "Unknown error"}`,
+          type: 'text',
+          text: `Failed to fetch details: ${error instanceof Error ? error.message : 'Unknown error'}`,
         },
       ],
     };
@@ -89,7 +89,7 @@ async function fetchOrganizationDetails(
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: `**Organization Details**
 **Basic Information:**
 - Name: ${details.organization.name}
@@ -111,8 +111,8 @@ ${JSON.stringify({ org: orgData, members, projects }, null, 2)}
       isError: true,
       content: [
         {
-          type: "text",
-          text: `Failed to fetch organization details: ${error instanceof Error ? error.message : "Unknown error"}`,
+          type: 'text',
+          text: `Failed to fetch organization details: ${error instanceof Error ? error.message : 'Unknown error'}`,
         },
       ],
     };
@@ -133,7 +133,7 @@ async function fetchProjectDetails(
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: `**Project Details**
 
 **Basic Information:**
@@ -159,8 +159,8 @@ ${JSON.stringify({ project, branches }, null, 2)}
       isError: true,
       content: [
         {
-          type: "text",
-          text: `Failed to fetch project details: ${error instanceof Error ? error.message : "Unknown error"}`,
+          type: 'text',
+          text: `Failed to fetch project details: ${error instanceof Error ? error.message : 'Unknown error'}`,
         },
       ],
     };
@@ -186,7 +186,7 @@ async function fetchBranchDetails(
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: JSON.stringify(result, null, 2),
         },
       ],
@@ -196,8 +196,8 @@ async function fetchBranchDetails(
       isError: true,
       content: [
         {
-          type: "text",
-          text: `Failed to fetch branch details: ${error instanceof Error ? error.message : "Unknown error"}`,
+          type: 'text',
+          text: `Failed to fetch branch details: ${error instanceof Error ? error.message : 'Unknown error'}`,
         },
       ],
     };

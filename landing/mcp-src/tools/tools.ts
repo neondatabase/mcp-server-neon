@@ -5,31 +5,31 @@ import {
   ListSharedProjectsParams,
   GetProjectBranchSchemaComparisonParams,
   ProjectCreateRequest,
-} from "@neondatabase/api-client";
-import { neon } from "@neondatabase/serverless";
-import crypto from "crypto";
-import { InvalidArgumentError, NotFoundError } from "../server/errors";
+} from '@neondatabase/api-client';
+import { neon } from '@neondatabase/serverless';
+import crypto from 'crypto';
+import { InvalidArgumentError, NotFoundError } from '../server/errors';
 
-import { describeTable, formatTableDescription } from "../describeUtils";
-import { handleProvisionNeonAuth } from "./handlers/neon-auth";
-import { handleProvisionNeonDataApi } from "./handlers/data-api";
-import { handleSearch } from "./handlers/search";
-import { handleFetch } from "./handlers/fetch";
-import { fetchRawGithubContent, NEON_RESOURCES } from "../resources";
+import { describeTable, formatTableDescription } from '../describeUtils';
+import { handleProvisionNeonAuth } from './handlers/neon-auth';
+import { handleProvisionNeonDataApi } from './handlers/data-api';
+import { handleSearch } from './handlers/search';
+import { handleFetch } from './handlers/fetch';
+import { fetchRawGithubContent, NEON_RESOURCES } from '../resources';
 
 import {
   getDefaultDatabase,
   splitSqlStatements,
   getOrgByOrgIdOrDefault,
   resolveBranchId,
-} from "./utils";
-import { startSpan } from "@sentry/node";
-import { ToolHandlerExtraParams, ToolHandlers } from "./types";
-import { handleListOrganizations } from "./handlers/list-orgs";
-import { handleListProjects } from "./handlers/list-projects";
-import { handleDescribeProject } from "./handlers/decribe-project";
-import { handleGetConnectionString } from "./handlers/connection-string";
-import { handleDescribeBranch } from "./handlers/describe-branch";
+} from './utils';
+import { startSpan } from '@sentry/node';
+import { ToolHandlerExtraParams, ToolHandlers } from './types';
+import { handleListOrganizations } from './handlers/list-orgs';
+import { handleListProjects } from './handlers/list-projects';
+import { handleDescribeProject } from './handlers/decribe-project';
+import { handleGetConnectionString } from './handlers/connection-string';
+import { handleDescribeBranch } from './handlers/describe-branch';
 
 /**
  * Generates a unique, identifiable branch name for migrations.
@@ -37,7 +37,7 @@ import { handleDescribeBranch } from "./handlers/describe-branch";
  * This makes orphaned branches easy to identify and clean up.
  */
 function generateMigrationBranchName(): string {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   return `mcp-migration-${timestamp}`;
 }
 
@@ -78,7 +78,7 @@ async function handleRunSql(
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
 ) {
-  return await startSpan({ name: "run_sql" }, async () => {
+  return await startSpan({ name: 'run_sql' }, async () => {
     const connectionString = await handleGetConnectionString(
       {
         projectId,
@@ -203,7 +203,7 @@ async function handleDescribeTableSchema(
   );
 
   // Extract table name without schema if schema-qualified
-  const tableNameParts = tableName.split(".");
+  const tableNameParts = tableName.split('.');
   const simpleTableName = tableNameParts[tableNameParts.length - 1];
 
   const description = await describeTable(
@@ -235,7 +235,7 @@ async function handleCreateBranch(
         type: EndpointType.ReadWrite,
         autoscaling_limit_min_cu: 0.25,
         autoscaling_limit_max_cu: 0.25,
-        provisioner: "k8s-neonvm",
+        provisioner: 'k8s-neonvm',
       },
     ],
   });
@@ -306,7 +306,7 @@ async function handleResetFromParent(
   if (hasChildren && !preserveUnderName) {
     const timestamp = new Date()
       .toISOString()
-      .replace(/[:.]/g, "-")
+      .replace(/[:.]/g, '-')
       .slice(0, -5);
     finalPreserveName = `${branch.name}_old_${timestamp}`;
   }
@@ -341,7 +341,7 @@ async function handleSchemaMigration(
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
 ) {
-  return await startSpan({ name: "prepare_schema_migration" }, async (span) => {
+  return await startSpan({ name: 'prepare_schema_migration' }, async (span) => {
     let newBranch: { branch: Branch } | undefined;
 
     try {
@@ -431,7 +431,7 @@ async function handleCommitMigration(
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
 ) {
-  return await startSpan({ name: "commit_schema_migration" }, async (span) => {
+  return await startSpan({ name: 'commit_schema_migration' }, async (span) => {
     span.setAttributes({
       migrationId,
       projectId,
@@ -493,8 +493,8 @@ async function handleExplainSqlStatement(
   extra: ToolHandlerExtraParams,
 ) {
   const explainPrefix = params.analyze
-    ? "EXPLAIN (ANALYZE, VERBOSE, BUFFERS, FILECACHE, FORMAT JSON)"
-    : "EXPLAIN (VERBOSE, FORMAT JSON)";
+    ? 'EXPLAIN (ANALYZE, VERBOSE, BUFFERS, FILECACHE, FORMAT JSON)'
+    : 'EXPLAIN (VERBOSE, FORMAT JSON)';
 
   const explainSql = `${explainPrefix} ${params.sql}`;
 
@@ -512,7 +512,7 @@ async function handleExplainSqlStatement(
   return {
     content: [
       {
-        type: "text" as const,
+        type: 'text' as const,
         text: JSON.stringify(result, null, 2),
       },
     ],
@@ -525,7 +525,7 @@ async function createTemporaryBranch(
 ): Promise<{ branch: Branch }> {
   const result = await handleCreateBranch({ projectId }, neonClient);
   if (!result?.branch) {
-    throw new Error("Failed to create temporary branch");
+    throw new Error('Failed to create temporary branch');
   }
   return result;
 }
@@ -577,7 +577,7 @@ async function handleQueryTuning(
     // Create temporary branch
     const newBranch = await createTemporaryBranch(params.projectId, neonClient);
     if (!newBranch.branch) {
-      throw new Error("Failed to create temporary branch: branch is undefined");
+      throw new Error('Failed to create temporary branch: branch is undefined');
     }
     tempBranch = newBranch.branch;
 
@@ -607,7 +607,7 @@ async function handleQueryTuning(
 
     if (tableNames.length === 0) {
       throw new NotFoundError(
-        "No tables found in execution plan. Cannot proceed with optimization.",
+        'No tables found in execution plan. Cannot proceed with optimization.',
       );
     }
 
@@ -680,7 +680,7 @@ async function handleQueryTuning(
 function extractExecutionMetrics(plan: any): QueryMetrics {
   try {
     const planJson =
-      typeof plan.content?.[0]?.text === "string"
+      typeof plan.content?.[0]?.text === 'string'
         ? JSON.parse(plan.content[0].text)
         : plan;
 
@@ -696,42 +696,42 @@ function extractExecutionMetrics(plan: any): QueryMetrics {
     };
 
     // Extract planning and execution time if available
-    if (planJson?.[0]?.["Planning Time"]) {
-      metrics.planningTime = planJson[0]["Planning Time"];
+    if (planJson?.[0]?.['Planning Time']) {
+      metrics.planningTime = planJson[0]['Planning Time'];
     }
-    if (planJson?.[0]?.["Execution Time"]) {
-      metrics.executionTime = planJson[0]["Execution Time"];
+    if (planJson?.[0]?.['Execution Time']) {
+      metrics.executionTime = planJson[0]['Execution Time'];
     }
 
     // Recursively process plan nodes to accumulate costs and buffer usage
     function processNode(node: any) {
-      if (!node || typeof node !== "object") return;
+      if (!node || typeof node !== 'object') return;
 
       // Accumulate costs
-      if (node["Total Cost"]) {
-        metrics.totalCost = Math.max(metrics.totalCost, node["Total Cost"]);
+      if (node['Total Cost']) {
+        metrics.totalCost = Math.max(metrics.totalCost, node['Total Cost']);
       }
-      if (node["Actual Rows"]) {
-        metrics.actualRows += node["Actual Rows"];
+      if (node['Actual Rows']) {
+        metrics.actualRows += node['Actual Rows'];
       }
 
-      if (node["Shared Hit Blocks"])
-        metrics.bufferUsage.shared.hit += node["Shared Hit Blocks"];
-      if (node["Shared Read Blocks"])
-        metrics.bufferUsage.shared.read += node["Shared Read Blocks"];
-      if (node["Shared Written Blocks"])
-        metrics.bufferUsage.shared.written += node["Shared Written Blocks"];
-      if (node["Shared Dirtied Blocks"])
-        metrics.bufferUsage.shared.dirtied += node["Shared Dirtied Blocks"];
+      if (node['Shared Hit Blocks'])
+        metrics.bufferUsage.shared.hit += node['Shared Hit Blocks'];
+      if (node['Shared Read Blocks'])
+        metrics.bufferUsage.shared.read += node['Shared Read Blocks'];
+      if (node['Shared Written Blocks'])
+        metrics.bufferUsage.shared.written += node['Shared Written Blocks'];
+      if (node['Shared Dirtied Blocks'])
+        metrics.bufferUsage.shared.dirtied += node['Shared Dirtied Blocks'];
 
-      if (node["Local Hit Blocks"])
-        metrics.bufferUsage.local.hit += node["Local Hit Blocks"];
-      if (node["Local Read Blocks"])
-        metrics.bufferUsage.local.read += node["Local Read Blocks"];
-      if (node["Local Written Blocks"])
-        metrics.bufferUsage.local.written += node["Local Written Blocks"];
-      if (node["Local Dirtied Blocks"])
-        metrics.bufferUsage.local.dirtied += node["Local Dirtied Blocks"];
+      if (node['Local Hit Blocks'])
+        metrics.bufferUsage.local.hit += node['Local Hit Blocks'];
+      if (node['Local Read Blocks'])
+        metrics.bufferUsage.local.read += node['Local Read Blocks'];
+      if (node['Local Written Blocks'])
+        metrics.bufferUsage.local.written += node['Local Written Blocks'];
+      if (node['Local Dirtied Blocks'])
+        metrics.bufferUsage.local.dirtied += node['Local Dirtied Blocks'];
 
       // Process child nodes
       if (Array.isArray(node.Plans)) {
@@ -782,11 +782,11 @@ function extractTableNamesFromPlan(planResult: any): string[] {
   const tableNames = new Set<string>();
 
   function recursivelyExtractFromNode(node: any) {
-    if (!node || typeof node !== "object") return;
+    if (!node || typeof node !== 'object') return;
 
     // Check if current node has relation information
-    if (node["Relation Name"] && node.Schema) {
-      const tableName = `${node.Schema}.${node["Relation Name"]}`;
+    if (node['Relation Name'] && node.Schema) {
+      const tableName = `${node.Schema}.${node['Relation Name']}`;
       tableNames.add(tableName);
     }
 
@@ -835,7 +835,7 @@ async function handleCompleteTuning(
     // Validate branch information
     if (!params.temporaryBranch) {
       throw new Error(
-        "Branch information is required for completing query tuning",
+        'Branch information is required for completing query tuning',
       );
     }
 
@@ -845,7 +845,7 @@ async function handleCompleteTuning(
       params.suggestedSqlStatements &&
       params.suggestedSqlStatements.length > 0
     ) {
-      operationLog.push("Applying optimizations to main branch...");
+      operationLog.push('Applying optimizations to main branch...');
 
       results = await handleRunSqlTransaction(
         {
@@ -858,16 +858,16 @@ async function handleCompleteTuning(
         extra,
       );
 
-      operationLog.push("Successfully applied optimizations to main branch.");
+      operationLog.push('Successfully applied optimizations to main branch.');
     } else {
       operationLog.push(
-        "No changes were applied (either none suggested or changes were discarded).",
+        'No changes were applied (either none suggested or changes were discarded).',
       );
     }
 
     // Only delete branch if shouldDeleteTemporaryBranch is true
     if (params.shouldDeleteTemporaryBranch && params.temporaryBranch) {
-      operationLog.push("Cleaning up temporary branch...");
+      operationLog.push('Cleaning up temporary branch...');
 
       await handleDeleteBranch(
         {
@@ -877,7 +877,7 @@ async function handleCompleteTuning(
         neonClient,
       );
 
-      operationLog.push("Successfully cleaned up temporary branch.");
+      operationLog.push('Successfully cleaned up temporary branch.');
     }
 
     const result: CompleteTuningResult = {
@@ -890,7 +890,7 @@ async function handleCompleteTuning(
         params.shouldDeleteTemporaryBranch && params.temporaryBranch
           ? [params.temporaryBranch.id]
           : undefined,
-      message: operationLog.join("\n"),
+      message: operationLog.join('\n'),
     };
 
     return result;
@@ -1029,7 +1029,7 @@ async function handleListBranchComputes(
       projectId = projects[0].id;
     } else {
       throw new InvalidArgumentError(
-        "Please provide a project ID or ensure you have only one project in your account.",
+        'Please provide a project ID or ensure you have only one project in your account.',
       );
     }
   }
@@ -1079,7 +1079,7 @@ async function handleLoadResource({ subject }: { subject: string }) {
     return content;
   } catch (error) {
     const errorMessage =
-      error instanceof Error ? error.message : "Unknown error";
+      error instanceof Error ? error.message : 'Unknown error';
     throw new Error(
       `Failed to load resource "${resource.name}": ${errorMessage}`,
     );
@@ -1109,7 +1109,7 @@ export const NEON_HANDLERS = {
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: JSON.stringify(
             {
               organization: organization
@@ -1154,43 +1154,43 @@ export const NEON_HANDLERS = {
       return {
         content: [
           {
-            type: "text",
+            type: 'text',
             text: [
               `Your Neon project is created ${
-                organization ? `in organization "${organization.name}"` : ""
+                organization ? `in organization "${organization.name}"` : ''
               } and is ready.`,
               `The project_id is "${result.project.id}"`,
               `The branch name is "${result.branch.name}" (ID: ${result.branch.id})`,
               `There is one database available on this branch, called "${result.databases[0].name}",`,
-              "but you can create more databases using SQL commands.",
-              "",
-              "Connection string details:",
+              'but you can create more databases using SQL commands.',
+              '',
+              'Connection string details:',
               `URI: ${connectionString.uri}`,
               `Project ID: ${connectionString.projectId}`,
               `Branch ID: ${connectionString.branchId}`,
               `Database: ${connectionString.databaseName}`,
               `Role: ${connectionString.roleName}`,
-              "",
-              "You can use this connection string with any PostgreSQL client to connect to your Neon database.",
-              "For example, with psql:",
+              '',
+              'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
+              'For example, with psql:',
               `psql "${connectionString.uri}"`,
-            ].join("\n"),
+            ].join('\n'),
           },
         ],
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
+      const message = error instanceof Error ? error.message : 'Unknown error';
       return {
         isError: true,
         content: [
           {
-            type: "text",
+            type: 'text',
             text: [
-              "An error occurred while creating the project.",
-              "Error details:",
+              'An error occurred while creating the project.',
+              'Error details:',
               message,
-              "If you have reached the Neon project limit, please upgrade your account in this link: https://console.neon.tech/app/billing",
-            ].join("\n"),
+              'If you have reached the Neon project limit, please upgrade your account in this link: https://console.neon.tech/app/billing',
+            ].join('\n'),
           },
         ],
       };
@@ -1202,11 +1202,11 @@ export const NEON_HANDLERS = {
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: [
-            "Project deleted successfully.",
+            'Project deleted successfully.',
             `Project ID: ${params.projectId}`,
-          ].join("\n"),
+          ].join('\n'),
         },
       ],
     };
@@ -1217,11 +1217,11 @@ export const NEON_HANDLERS = {
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: `This project is called ${result.project.name}.`,
         },
         {
-          type: "text",
+          type: 'text',
           text: `It contains the following branches (use the describe branch tool to learn more about each branch): ${JSON.stringify(
             result.branches,
             null,
@@ -1244,7 +1244,7 @@ export const NEON_HANDLERS = {
       extra,
     );
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
   },
 
@@ -1260,7 +1260,7 @@ export const NEON_HANDLERS = {
       extra,
     );
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
   },
 
@@ -1276,7 +1276,7 @@ export const NEON_HANDLERS = {
       extra,
     );
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
   },
 
@@ -1293,7 +1293,7 @@ export const NEON_HANDLERS = {
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: JSON.stringify(result, null, 2),
         },
       ],
@@ -1311,14 +1311,14 @@ export const NEON_HANDLERS = {
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: [
-            "Branch created successfully.",
+            'Branch created successfully.',
             `Project ID: ${result.branch.project_id}`,
             `Branch ID: ${result.branch.id}`,
             `Branch name: ${result.branch.name}`,
             `Parent branch: ${result.branch.parent_id}`,
-          ].join("\n"),
+          ].join('\n'),
         },
       ],
     };
@@ -1337,7 +1337,7 @@ export const NEON_HANDLERS = {
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: `
 <status>Migration created successfully in temporary branch</status>
 
@@ -1404,7 +1404,7 @@ You MUST follow these steps:
     }
 
     return {
-      content: [{ type: "text", text: message }],
+      content: [{ type: 'text', text: message }],
     };
   },
 
@@ -1431,12 +1431,12 @@ You MUST follow these steps:
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: [
-            "Branch deleted successfully.",
+            'Branch deleted successfully.',
             `Project ID: ${params.projectId}`,
             `Branch ID: ${params.branchId}`,
-          ].join("\n"),
+          ].join('\n'),
         },
       ],
     };
@@ -1455,7 +1455,7 @@ You MUST follow these steps:
     const parentInfo = `${result.parentBranch.name} (${result.parentBranch.id})`;
 
     const messages = [
-      "Branch reset from parent successfully.",
+      'Branch reset from parent successfully.',
       `Project: ${params.projectId}`,
       `Branch:  ${params.branchIdOrName}`,
       `Reset to parent branch: ${parentInfo}`,
@@ -1468,14 +1468,14 @@ You MUST follow these steps:
           : `Previous state auto-preserved as: ${result.preservedBranchName} (branch had children)`,
       );
     } else {
-      messages.push("Previous state was not preserved");
+      messages.push('Previous state was not preserved');
     }
 
     return {
       content: [
         {
-          type: "text",
-          text: messages.join("\n"),
+          type: 'text',
+          text: messages.join('\n'),
         },
       ],
     };
@@ -1496,22 +1496,22 @@ You MUST follow these steps:
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: [
-            "Connection string details:",
+            'Connection string details:',
             `URI: ${result.uri}`,
             `Project ID: ${result.projectId}`,
             `Database: ${result.databaseName}`,
             `Role: ${result.roleName}`,
             result.branchId
               ? `Branch ID: ${result.branchId}`
-              : "Using default branch",
+              : 'Using default branch',
             result.computeId
               ? `Compute ID: ${result.computeId}`
-              : "Using default compute",
-            "",
-            "You can use this connection string with any PostgreSQL client to connect to your Neon database.",
-          ].join("\n"),
+              : 'Using default compute',
+            '',
+            'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
+          ].join('\n'),
         },
       ],
     };
@@ -1569,7 +1569,7 @@ You MUST follow these steps:
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: JSON.stringify(
             {
               tuningId: result.tuningId,
@@ -1612,7 +1612,7 @@ You MUST follow these steps:
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: JSON.stringify(result, null, 2),
         },
       ],
@@ -1634,7 +1634,7 @@ You MUST follow these steps:
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: JSON.stringify(result, null, 2),
         },
       ],
@@ -1651,7 +1651,7 @@ You MUST follow these steps:
       extra,
     );
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
   },
 
@@ -1664,7 +1664,7 @@ You MUST follow these steps:
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: JSON.stringify(organizations, null, 2),
         },
       ],
@@ -1676,7 +1676,7 @@ You MUST follow these steps:
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: JSON.stringify(
             {
               shared_projects: sharedProjects,
@@ -1700,7 +1700,7 @@ You MUST follow these steps:
       neonClient,
     );
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
   },
 
@@ -1717,7 +1717,7 @@ You MUST follow these steps:
     return {
       content: [
         {
-          type: "text",
+          type: 'text',
           text: content,
         },
       ],
