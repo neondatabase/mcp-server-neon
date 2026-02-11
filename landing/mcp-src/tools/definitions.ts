@@ -28,7 +28,8 @@ import {
   compareDatabaseSchemaInputSchema,
   searchInputSchema,
   fetchInputSchema,
-  loadResourceInputSchema,
+  listDocsResourcesInputSchema,
+  getDocResourceInputSchema,
 } from './toolsSchema';
 
 export const NEON_TOOLS = [
@@ -1045,33 +1046,75 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'load_resource' as const,
+    name: 'list_docs_resources' as const,
     description: `
   <use_case>
-    Loads comprehensive Neon documentation and usage guidelines from GitHub. This tool provides instructions for various Neon features and workflows.
-    
+    Lists all available Neon documentation pages by fetching the index from https://neon.com/docs/llms.txt.
+    Returns a markdown index of documentation page URLs (with .md file endings) and titles that can be fetched individually using the get_doc_resource tool.
+
     Use this tool when:
-    - User says "Get started with Neon" or similar onboarding phrases (with neon-get-started subject)
-    - User needs detailed guidance for initial Neon setup and configuration (with neon-get-started subject)
-    - You need comprehensive context about Neon workflows and best practices (with neon-get-started subject)
-    
-    Available subjects:
-    - neon-get-started: Comprehensive interactive guide covering organization/project setup, database configuration, connection strings, dependency installation, schema creation/migration, etc.
+    - You need to find the right Neon documentation page for a topic
+    - The user asks about Neon features, setup, configuration, or best practices
+    - You want to discover what documentation is available before fetching a specific page
+    - The user says "Get started with Neon" or similar onboarding phrases
   </use_case>
 
+  <workflow>
+    1. Call this tool (no parameters needed) to get the full list of Neon docs pages
+    2. Identify the relevant page(s) based on the user's question
+    3. Use the get_doc_resource tool with the page slug (including .md extension) to fetch the full content
+  </workflow>
+
   <important_notes>
-    - This tool provides general guidance on different subjects relevant to Neon.
-    - This tool returns the FULL documentation content
-    - Load this resource early when users need onboarding guidance
+    - This tool returns a markdown index of all Neon documentation pages with their .md URLs
+    - Documentation URLs use .md file endings (e.g. https://neon.com/docs/guides/prisma.md)
+    - Always call this tool first before using get_doc_resource to find the correct slug
+    - Do not guess documentation page slugs — use this index to find them
   </important_notes>`,
-    inputSchema: loadResourceInputSchema,
+    inputSchema: listDocsResourcesInputSchema,
     readOnlySafe: true,
     annotations: {
-      title: 'Load Resource',
+      title: 'List Documentation Resources',
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
-      openWorldHint: false,
+      openWorldHint: true,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'get_doc_resource' as const,
+    description: `
+  <use_case>
+    Fetches a specific Neon documentation page as markdown content.
+    Use the list_docs_resources tool first to discover available page slugs, then pass the slug to this tool.
+
+    Use this tool when:
+    - You have identified a specific docs page to fetch (from list_docs_resources results)
+    - You need detailed guidance on a Neon feature, workflow, or configuration
+    - The user needs step-by-step instructions for a Neon-related task
+  </use_case>
+
+  <workflow>
+    1. First call list_docs_resources to get the index of available pages
+    2. Pick the relevant page slug from the list (e.g. "docs/guides/prisma.md")
+    3. Call this tool with that slug to get the full page content as markdown
+  </workflow>
+
+  <important_notes>
+    - The slug parameter is the path portion of the docs .md URL (e.g. "docs/connect/connection-pooling.md")
+    - Slugs use .md file endings matching the URLs in the documentation index
+    - Always use list_docs_resources first to discover the correct slug — do not guess slugs
+    - This tool fetches the page directly from https://neon.com/{slug} as markdown
+    - Returns the full documentation page content as markdown text
+  </important_notes>`,
+    inputSchema: getDocResourceInputSchema,
+    readOnlySafe: true,
+    annotations: {
+      title: 'Get Documentation Resource',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
     } satisfies ToolAnnotations,
   },
 ];
