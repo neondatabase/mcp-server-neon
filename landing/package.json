@@ -25,6 +25,9 @@
     "typecheck": "tsc --noEmit",
     "fmt": "prettier -w .",
     "fmt:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "postinstall": "patch-package",
     "prepublishOnly": "npx tsx scripts/before-publish.ts"
   },
@@ -51,19 +54,20 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/he": "^1.2.3",
     "@types/node": "^20",
     "@types/oauth2-server": "3.0.18",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19",
-    "autoevals": "^0.0.92",
-    "braintrust": "^0.0.198",
+    "dotenv": "^17.2.4",
     "eslint": "^9",
     "eslint-config-next": "^16.1.1",
     "patch-package": "^8.0.1",
     "prettier": "^3.8.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18"
   }
 }

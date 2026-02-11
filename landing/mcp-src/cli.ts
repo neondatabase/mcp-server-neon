@@ -8,7 +8,6 @@ import { startStdio } from './transports/stdio';
 import { logger } from './utils/logger';
 import { AppContext } from './types/context';
 import { NEON_TOOLS } from './tools/index';
-import './utils/polyfills';
 import { resolveAccountFromAuth } from './server/account';
 
 const args = parseArgs();

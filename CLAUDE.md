@@ -44,13 +44,50 @@ cd ../mcp-client && NEON_API_KEY=<your-key> npm run start:mcp-server-neon
 
 This provides an interactive terminal to test MCP tools without restarting Claude Desktop.
 
-### Linting and Type Checking
+### Formatting, Linting, and Type Checking
 
 ```bash
 cd landing
+
+# Check formatting (runs in CI)
+bun run fmt:check
+
+# Auto-fix formatting
+bun run fmt
+
+# Lint
 bun run lint
+
+# Auto-fix lint + formatting together
+bun run lint:fix
+
+# Type check
 bun run typecheck
 ```
+
+### Testing
+
+```bash
+cd landing
+
+# Run unit tests (vitest)
+bun run test
+
+# Run unit tests in watch mode
+bun run test:watch
+
+# Run e2e tests (playwright — starts Next.js dev server automatically)
+bun run test:e2e
+```
+
+**Unit tests** use [Vitest](https://vitest.dev/) and live in `mcp-src/__tests__/`. Configuration is in `landing/vitest.config.ts`. Tests follow the `*.test.ts` naming convention.
+
+**E2E tests** use [Playwright](https://playwright.dev/) and live in `landing/e2e/`. Configuration is in `landing/playwright.config.ts`.
+
+- **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com) and generates a random `COOKIE_SECRET`. Both are written to `.env.e2e` (gitignored) and passed to the Next.js dev server.
+- **No secrets needed**: The e2e infrastructure is fully self-contained. Instagres databases expire after 72 hours; no explicit teardown is required.
+- **Reuse across runs**: If `.env.e2e` already exists, global-setup reuses it instead of re-provisioning. Delete the file to force a fresh database.
+- **CI**: Playwright chromium is installed and e2e tests run automatically in the PR workflow.
 
 ## Architecture
 
@@ -105,8 +142,6 @@ bun run typecheck
 - **Stateless Design**: The server is designed for serverless deployment. Tools like migrations and query tuning create temporary branches but do NOT store state in memory. Instead, all context (branch IDs, migration SQL, etc.) is returned to the LLM, which passes it back to subsequent tool calls. This enables horizontal scaling on Vercel.
 
 - **Read-Only Mode** (`landing/mcp-src/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. Read-only mode is determined by priority: `X-READ-ONLY` header > OAuth scope (only `read` scope = read-only) > default (false). The module also exports `SCOPE_DEFINITIONS` for human-readable scope labels and `hasWriteScope()` to check for write permissions.
-
-- **OAuth Scope Selection UI**: During OAuth authorization, users see a permissions dialog where they can select which scopes to grant. Read access is always granted, while write access can be opted out of. The authorization endpoint (`landing/app/api/authorize/route.ts`) renders this UI and processes scope selections.
 
 - **MCP Tool Annotations**: All tools include MCP-standard annotations for client hints:
   - `title`: Human-readable tool name
@@ -185,11 +220,11 @@ export const NEON_HANDLERS = {
 See `landing/.env.local.example` for all configuration options. Key variables:
 
 - `NEON_API_KEY`: Required for local development and testing
-- `BRAINTRUST_API_KEY`: Required for running evaluations
-- `ANTHROPIC_API_KEY`: Required for running evaluations
 - `OAUTH_DATABASE_URL`: Required for remote MCP server with OAuth
 - `COOKIE_SECRET`: Required for remote MCP server OAuth flow
 - `CLIENT_ID` / `CLIENT_SECRET`: OAuth client credentials
+
+**E2E test environment**: The e2e tests do not require any manual environment configuration. `e2e/global-setup.ts` provisions an ephemeral database and generates secrets automatically, writing them to `.env.e2e` (gitignored).
 
 ## Project Structure
 
@@ -198,17 +233,24 @@ landing/                  # Next.js app (main project)
 ├── app/                 # Next.js App Router
 │   ├── api/            # API routes for remote MCP server
 │   │   ├── [transport]/route.ts  # Main MCP handler (SSE/Streamable HTTP)
-│   │   ├── authorize/  # OAuth authorization endpoint
+│   │   ├── authorize/  # OAuth authorization endpoint (renders consent UI)
 │   │   ├── token/      # OAuth token exchange
 │   │   ├── register/   # Dynamic client registration
 │   │   ├── revoke/     # OAuth token revocation
 │   │   └── health/     # Health check endpoint
 │   ├── callback/       # OAuth callback handler
 │   └── .well-known/    # OAuth discovery endpoints
+│   # Note: Root `/` redirects to https://neon.tech/docs/ai/neon-mcp-server
+│   # (configured in next.config.ts). There is no landing page.
+├── e2e/                # Playwright E2E tests
+│   ├── global-setup.ts # Instagres DB provisioning + secret generation
+│   └── smoke.spec.ts   # Smoke tests (health, OAuth discovery, redirect)
 ├── lib/                # Next.js-compatible utilities
 │   ├── config.ts       # Centralized configuration
 │   └── oauth/          # OAuth utilities for Next.js
 ├── mcp-src/            # MCP server source code
+│   ├── __tests__/      # Vitest unit tests
+│   │   └── initConfig.test.ts  # CLI argument parsing tests
 │   ├── cli.ts          # CLI entry point (stdio transport)
 │   ├── server/         # MCP server factory
 │   │   ├── index.ts    # Server creation and tool registration
@@ -232,13 +274,15 @@ landing/                  # Next.js app (main project)
 │   │   ├── read-only.ts    # Read-only mode detection, scope definitions
 │   │   ├── trace.ts        # TraceId generation for request correlation
 │   │   ├── client-application.ts  # Client application utilities
-│   │   ├── logger.ts       # Logging utilities
-│   │   └── polyfills.ts    # Runtime polyfills
+│   │   └── logger.ts       # Logging utilities
 │   ├── resources.ts    # MCP resources
 │   ├── prompts.ts      # LLM prompts
 │   └── constants.ts    # Shared constants
-├── components/         # React components for landing page
-├── public/             # Static assets
+├── public/             # Static assets (favicons, OG image, llms.txt)
+├── .prettierrc         # Prettier config (singleQuote: true)
+├── .prettierignore     # Prettier ignore patterns
+├── vitest.config.ts    # Vitest configuration
+├── playwright.config.ts # Playwright E2E configuration
 ├── package.json        # Package configuration
 ├── tsconfig.json       # TypeScript config (bundler resolution)
 ├── vercel.json         # Vercel deployment config
@@ -358,9 +402,11 @@ This repository uses an enhanced Claude Code Review workflow that provides inlin
 
 ### What's Automated (Not Reviewed by Claude)
 
+- Formatting: `bun run fmt:check` (checked by pr.yml)
 - Linting: `bun run lint` (checked by pr.yml)
+- Unit tests: `bun run test` (vitest, checked by pr.yml)
+- E2E tests: `bun run test:e2e` (playwright, checked by pr.yml)
 - Building: `bun run build` (checked by pr.yml)
-- Formatting: Automated formatting checks
 
 ### Review Process
 
