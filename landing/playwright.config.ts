@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.E2E_PORT ?? '3100';
@@ -16,14 +17,8 @@ function loadE2eEnv(): Record<string, string> {
   const envFile = path.resolve(__dirname, '.env.e2e');
   if (!existsSync(envFile)) return {};
 
-  const lines = readFileSync(envFile, 'utf-8').split('\n');
-  const env: Record<string, string> = {};
-  for (const line of lines) {
-    if (line.startsWith('#') || !line.includes('=')) continue;
-    const [key, ...rest] = line.split('=');
-    env[key.trim()] = rest.join('=').trim();
-  }
-  return env;
+  const parsed = dotenv.config({ path: envFile, processEnv: {} });
+  return (parsed.parsed as Record<string, string>) ?? {};
 }
 
 export default defineConfig({
