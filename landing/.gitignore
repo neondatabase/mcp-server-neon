@@ -42,3 +42,8 @@ next-env.d.ts
 
 # part of building process
 tools.json
+
+# e2e tests
+.env.e2e
+test-results/
+playwright-report/
