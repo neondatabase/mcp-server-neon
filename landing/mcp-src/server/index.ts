@@ -1,31 +1,39 @@
 #!/usr/bin/env node
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { NEON_RESOURCES } from '../resources';
-import { NEON_PROMPTS, getPromptTemplate } from '../prompts';
-import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools/index';
-import { logger } from '../utils/logger';
-import { generateTraceId } from '../utils/trace';
-import { createNeonClient } from './api';
-import { track } from '../analytics/analytics';
-import { captureException, startSpan } from '@sentry/node';
-import { ServerContext } from '../types/context';
-import { setSentryTags } from '../sentry/utils';
-import { ToolHandlerExtraParams } from '../tools/types';
-import { handleToolError } from './errors';
-import { detectClientApplication } from '../utils/client-application';
-import pkg from '../../package.json';
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { NEON_PROMPTS, getPromptTemplate } from "../prompts";
+import { NEON_HANDLERS, ToolHandlerExtended } from "../tools/index";
+import { logger } from "../utils/logger";
+import { generateTraceId } from "../utils/trace";
+import { createNeonClient } from "./api";
+import { track } from "../analytics/analytics";
+import { captureException, startSpan } from "@sentry/node";
+import { ServerContext } from "../types/context";
+import { setSentryTags } from "../sentry/utils";
+import { ToolHandlerExtraParams } from "../tools/types";
+import { handleToolError } from "./errors";
+import { detectClientApplication } from "../utils/client-application";
+import { DEFAULT_GRANT } from "../utils/grant-context";
+import {
+  getAvailableTools,
+  getAccessControlWarnings,
+  injectProjectId,
+} from "../tools/grant-filter";
+import {
+  enforceProtectedBranches,
+  GrantViolationError,
+} from "../tools/grant-enforcement";
+import pkg from "../../package.json";
 
-export const createMcpServer = (context: ServerContext) => {
+export const createMcpServer = async (context: ServerContext) => {
   const server = new McpServer(
     {
-      name: 'mcp-server-neon',
+      name: "mcp-server-neon",
       version: pkg.version,
     },
     {
       capabilities: {
         tools: {},
-        resources: {},
         prompts: {
           listChanged: true,
         },
@@ -36,28 +44,47 @@ export const createMcpServer = (context: ServerContext) => {
   const neonClient = createNeonClient(context.apiKey);
 
   // Compute client info once at server instantiation
-  let clientName = context.userAgent ?? 'unknown';
+  let clientName = context.userAgent ?? "unknown";
   let clientApplication = detectClientApplication(clientName);
+
+  const grant = { ...(context.grant ?? DEFAULT_GRANT) };
+
+  // Validate project ID against the Neon API if one was provided
+  if (grant.projectId) {
+    try {
+      await neonClient.getProject(grant.projectId);
+    } catch {
+      logger.warn(
+        `Project ID "${grant.projectId}" could not be verified — falling back to unscoped access.`,
+      );
+      grant.projectId = null;
+    }
+  }
 
   // Track server initialization
   const trackServerInit = () => {
     track({
       userId: context.account.id,
-      event: 'server_init',
+      event: "server_init",
       properties: {
         clientName,
         clientApplication,
         readOnly: String(context.readOnly ?? false),
+        preset: grant.preset,
+        projectScoped: String(!!grant.projectId),
+        protectedBranches: grant.protectedBranches?.join(",") ?? "none",
+        customScopes: grant.scopes?.join(",") ?? "all",
       },
       context: {
         client: context.client,
         app: context.app,
       },
     });
-    logger.info('Server initialized:', {
+    logger.info("Server initialized:", {
       clientName,
       clientApplication,
       readOnly: context.readOnly,
+      grant,
     });
   };
 
@@ -74,10 +101,13 @@ export const createMcpServer = (context: ServerContext) => {
     trackServerInit();
   };
 
-  // Filter tools based on read-only mode
-  const availableTools = context.readOnly
-    ? NEON_TOOLS.filter((tool) => tool.readOnlySafe)
-    : NEON_TOOLS;
+  // Filter tools based on grant context (presets, scopes, project scoping)
+  // and read-only mode (for backwards compatibility with X-Neon-Read-Only header / OAuth scopes)
+  const readOnly = context.readOnly ?? false;
+  const availableTools = getAvailableTools(grant, readOnly);
+
+  // Compute access control warnings once (appended to every tool response)
+  const accessControlWarnings = getAccessControlWarnings(grant, readOnly);
 
   // Register tools
   availableTools.forEach((tool) => {
@@ -97,7 +127,7 @@ export const createMcpServer = (context: ServerContext) => {
         const traceId = generateTraceId();
         return await startSpan(
           {
-            name: 'tool_call',
+            name: "tool_call",
             attributes: {
               tool_name: tool.name,
               trace_id: traceId,
@@ -107,14 +137,16 @@ export const createMcpServer = (context: ServerContext) => {
             const properties = {
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
+              preset: grant.preset,
+              projectScoped: String(!!grant.projectId),
               clientName,
               traceId,
             };
-            logger.info('tool call:', properties);
+            logger.info("tool call:", properties);
             setSentryTags(context);
             track({
               userId: context.account.id,
-              event: 'tool_call',
+              event: "tool_call",
               properties,
               context: {
                 client: context.client,
@@ -130,8 +162,44 @@ export const createMcpServer = (context: ServerContext) => {
               clientApplication,
             };
             try {
-              return await toolHandler(args, neonClient, extraArgs);
+              // Inject projectId if in project-scoped mode
+              const effectiveArgs = injectProjectId(
+                args as Record<string, unknown>,
+                grant,
+              );
+
+              // Enforce protected branch restrictions
+              enforceProtectedBranches(grant, tool.name, effectiveArgs);
+
+              const result = await toolHandler(
+                effectiveArgs as typeof args,
+                neonClient,
+                extraArgs,
+              );
+
+              // Append access control warnings to tool response
+              if (accessControlWarnings.length > 0) {
+                result.content.push(
+                  ...accessControlWarnings.map((w) => ({
+                    type: "text" as const,
+                    text: w,
+                  })),
+                );
+              }
+
+              return result;
             } catch (error) {
+              if (error instanceof GrantViolationError) {
+                return {
+                  content: [
+                    {
+                      type: "text" as const,
+                      text: error.message,
+                    },
+                  ],
+                  isError: true,
+                };
+              }
               span.setStatus({
                 code: 2,
               });
@@ -139,38 +207,6 @@ export const createMcpServer = (context: ServerContext) => {
             }
           },
         );
-      },
-    );
-  });
-
-  // Register resources
-  NEON_RESOURCES.forEach((resource) => {
-    server.resource(
-      resource.name,
-      resource.uri,
-      {
-        description: resource.description,
-        mimeType: resource.mimeType,
-      },
-      async (url) => {
-        const traceId = generateTraceId();
-        const properties = { resource_name: resource.name, traceId };
-        logger.info('resource call:', properties);
-        setSentryTags(context);
-        track({
-          userId: context.account.id,
-          event: 'resource_call',
-          properties,
-          context: { client: context.client, app: context.app },
-        });
-        try {
-          return await resource.handler(url);
-        } catch (error) {
-          captureException(error, {
-            extra: properties,
-          });
-          throw error;
-        }
       },
     );
   });
@@ -184,11 +220,11 @@ export const createMcpServer = (context: ServerContext) => {
       async (args, extra) => {
         const traceId = generateTraceId();
         const properties = { prompt_name: prompt.name, clientName, traceId };
-        logger.info('prompt call:', properties);
+        logger.info("prompt call:", properties);
         setSentryTags(context);
         track({
           userId: context.account.id,
-          event: 'prompt_call',
+          event: "prompt_call",
           properties,
           context: { client: context.client, app: context.app },
         });
@@ -207,9 +243,9 @@ export const createMcpServer = (context: ServerContext) => {
           return {
             messages: [
               {
-                role: 'user',
+                role: "user",
                 content: {
-                  type: 'text',
+                  type: "text",
                   text: template,
                 },
               },
@@ -226,8 +262,8 @@ export const createMcpServer = (context: ServerContext) => {
   });
 
   server.server.onerror = (error: unknown) => {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Server error:', {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    logger.error("Server error:", {
       message,
       error,
     });
@@ -238,7 +274,7 @@ export const createMcpServer = (context: ServerContext) => {
     });
     track({
       userId: context.account.id,
-      event: 'server_error',
+      event: "server_error",
       properties: { message, error, eventId },
       context: contexts,
     });

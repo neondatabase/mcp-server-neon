@@ -1,19 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { model } from '../../../mcp-src/oauth/model';
-import { generateRandomString } from '../../../mcp-src/oauth/utils';
-import { handleOAuthError } from '../../../lib/errors';
-import { logger } from '../../../mcp-src/utils/logger';
-import type { Client } from 'oauth2-server';
+import { NextRequest, NextResponse } from "next/server";
+import { model } from "../../../mcp-src/oauth/model";
+import { generateRandomString } from "../../../mcp-src/oauth/utils";
+import { handleOAuthError } from "../../../lib/errors";
+import { logger } from "../../../mcp-src/utils/logger";
+import type { Client } from "oauth2-server";
 
-const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
-const SUPPORTED_RESPONSE_TYPES = ['code'];
+const SUPPORTED_GRANT_TYPES = ["authorization_code", "refresh_token"];
+const SUPPORTED_RESPONSE_TYPES = ["code"];
 
 export async function POST(request: NextRequest) {
-  logger.debug('POST handler entered', { url: request.url });
+  logger.debug("POST handler entered", { url: request.url });
   try {
     const payload = await request.json();
 
-    logger.info('request to register client', {
+    logger.info("request to register client", {
       name: payload.client_name,
       client_uri: payload.client_uri,
     });
@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
     if (payload.client_name === undefined) {
       return NextResponse.json(
         {
-          error: 'invalid_request',
-          error_description: 'client_name is required',
+          error: "invalid_request",
+          error_description: "client_name is required",
         },
         { status: 400 },
       );
@@ -31,8 +31,8 @@ export async function POST(request: NextRequest) {
     if (payload.redirect_uris === undefined) {
       return NextResponse.json(
         {
-          error: 'invalid_request',
-          error_description: 'redirect_uris is required',
+          error: "invalid_request",
+          error_description: "redirect_uris is required",
         },
         { status: 400 },
       );
@@ -46,9 +46,9 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json(
         {
-          error: 'invalid_request',
+          error: "invalid_request",
           error_description:
-            'grant_types is required and must only include supported grant types',
+            "grant_types is required and must only include supported grant types",
         },
         { status: 400 },
       );
@@ -62,9 +62,9 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json(
         {
-          error: 'invalid_request',
+          error: "invalid_request",
           error_description:
-            'response_types is required and must only include supported response types',
+            "response_types is required and must only include supported response types",
         },
         { status: 400 },
       );
@@ -77,15 +77,15 @@ export async function POST(request: NextRequest) {
       id: clientId,
       secret: clientSecret,
       tokenEndpointAuthMethod:
-        (payload.token_endpoint_auth_method as string) ?? 'client_secret_post',
+        (payload.token_endpoint_auth_method as string) ?? "client_secret_post",
       registrationDate: Math.floor(Date.now() / 1000),
     };
 
-    logger.debug('before model.saveClient', { clientId: client.id });
+    logger.debug("before model.saveClient", { clientId: client.id });
     await model.saveClient(client);
-    logger.debug('after model.saveClient completed', { clientId: client.id });
+    logger.debug("after model.saveClient completed", { clientId: client.id });
 
-    logger.info('new client registered', {
+    logger.info("new client registered", {
       clientId,
       client_name: payload.client_name,
       redirect_uris: payload.redirect_uris,
@@ -100,12 +100,12 @@ export async function POST(request: NextRequest) {
       token_endpoint_auth_method: client.tokenEndpointAuthMethod,
     };
 
-    logger.info('returning registration response', {
+    logger.info("returning registration response", {
       clientId,
       tokenEndpointAuthMethod: responseBody.token_endpoint_auth_method,
     });
 
-    logger.debug('about to create NextResponse.json', {
+    logger.debug("about to create NextResponse.json", {
       responseBodyKeys: Object.keys(responseBody),
       clientId,
       hasClientSecret: !!responseBody.client_secret,
@@ -113,41 +113,42 @@ export async function POST(request: NextRequest) {
 
     let response: NextResponse;
     try {
-      logger.debug('calling NextResponse.json');
+      logger.debug("calling NextResponse.json");
       response = NextResponse.json(responseBody);
-      logger.debug('NextResponse.json succeeded', {
+      logger.debug("NextResponse.json succeeded", {
         responseType: typeof response,
         responseStatus: response?.status,
         isResponse: response instanceof Response,
       });
     } catch (jsonError) {
-      logger.error('NextResponse.json threw error', {
-        error: jsonError instanceof Error ? jsonError.message : String(jsonError),
+      logger.error("NextResponse.json threw error", {
+        error:
+          jsonError instanceof Error ? jsonError.message : String(jsonError),
         stack: jsonError instanceof Error ? jsonError.stack : undefined,
       });
       throw jsonError;
     }
 
-    logger.debug('about to return response', {
+    logger.debug("about to return response", {
       responseExists: !!response,
       responseType: typeof response,
     });
 
     return response;
   } catch (error: unknown) {
-    logger.debug('catch block entered', {
+    logger.debug("catch block entered", {
       errorType: typeof error,
       errorMessage: error instanceof Error ? error.message : String(error),
       errorName: error instanceof Error ? error.name : undefined,
     });
-    logger.error('caught error in register handler', {
+    logger.error("caught error in register handler", {
       error,
       errorType: typeof error,
       errorMessage: error instanceof Error ? error.message : String(error),
       errorStack: error instanceof Error ? error.stack : undefined,
     });
-    const errorResponse = handleOAuthError(error, 'Client registration error');
-    logger.debug('returning from catch block', {
+    const errorResponse = handleOAuthError(error, "Client registration error");
+    logger.debug("returning from catch block", {
       errorResponseExists: !!errorResponse,
       errorResponseType: typeof errorResponse,
     });
@@ -159,9 +160,9 @@ export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
     headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
     },
   });
 }

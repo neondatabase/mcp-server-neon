@@ -1,10 +1,10 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { Api, NeonAuthSupportedAuthProvider } from '@neondatabase/api-client';
-import { provisionNeonDataApiInputSchema } from '../toolsSchema';
-import { z } from 'zod';
-import { getDefaultDatabase } from '../utils';
-import { getDefaultBranch } from './utils';
-import { ToolHandlerExtraParams } from '../types';
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { Api, NeonAuthSupportedAuthProvider } from "@neondatabase/api-client";
+import { provisionNeonDataApiInputSchema } from "../toolsSchema";
+import { z } from "zod";
+import { getDefaultDatabase } from "../utils";
+import { getDefaultBranch } from "./utils";
+import { ToolHandlerExtraParams } from "../types";
 
 type Props = z.infer<typeof provisionNeonDataApiInputSchema>;
 
@@ -26,7 +26,7 @@ type DataApiStatus = {
 async function checkNeonAuthStatus(
   projectId: string,
   branchId: string,
-  neonClient: Api<unknown>
+  neonClient: Api<unknown>,
 ): Promise<NeonAuthStatus> {
   try {
     const response = await neonClient.getNeonAuth(projectId, branchId);
@@ -51,13 +51,13 @@ async function checkDataApiStatus(
   projectId: string,
   branchId: string,
   databaseName: string,
-  neonClient: Api<unknown>
+  neonClient: Api<unknown>,
 ): Promise<DataApiStatus> {
   try {
     const response = await neonClient.getProjectBranchDataApi(
       projectId,
       branchId,
-      databaseName
+      databaseName,
     );
     if (response.status === 200) {
       return {
@@ -81,7 +81,7 @@ function buildAuthOptionsResponse(
   dataApiStatus: DataApiStatus,
   projectId: string,
   branchId: string,
-  databaseName: string
+  databaseName: string,
 ): string {
   // If Data API already exists, show existing info
   if (dataApiStatus.exists) {
@@ -97,12 +97,12 @@ To reconfigure authentication, you would need to delete and re-provision the Dat
 
   // Build the auth options message
   const neonAuthRecommendation = neonAuthStatus.enabled
-    ? '(Recommended - already set up)'
-    : '(Recommended)';
+    ? "(Recommended - already set up)"
+    : "(Recommended)";
 
   const neonAuthDescription = neonAuthStatus.enabled
     ? `Uses your existing Neon Auth setup (JWKS: ${neonAuthStatus.jwksUrl})`
-    : 'Enables Neon Auth with built-in user management (Better Auth)';
+    : "Enables Neon Auth with built-in user management (Better Auth)";
 
   const neonAuthUsage = neonAuthStatus.enabled
     ? `Call this tool with \`authProvider: "neon_auth"\``
@@ -116,7 +116,7 @@ Before provisioning the Data API, please select an authentication method.
 - **Neon Auth**: ${
     neonAuthStatus.enabled
       ? `Enabled (JWKS: ${neonAuthStatus.jwksUrl})`
-      : 'Not provisioned'
+      : "Not provisioned"
   }
 - **Data API**: Not provisioned
 
@@ -157,7 +157,7 @@ export async function handleProvisionNeonDataApi(
   }: Props,
   neonClient: Api<unknown>,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _extra: ToolHandlerExtraParams
+  _extra: ToolHandlerExtraParams,
 ): Promise<CallToolResult> {
   // If branchId is not provided, use the default branch
   let resolvedBranchId = branchId;
@@ -173,7 +173,7 @@ export async function handleProvisionNeonDataApi(
       branchId: resolvedBranchId,
       databaseName,
     },
-    neonClient
+    neonClient,
   );
 
   if (!defaultDatabase) {
@@ -181,10 +181,10 @@ export async function handleProvisionNeonDataApi(
       isError: true,
       content: [
         {
-          type: 'text',
+          type: "text",
           text: databaseName
             ? `The branch has no database named '${databaseName}'.`
-            : 'The branch has no databases.',
+            : "The branch has no databases.",
         },
       ],
     };
@@ -198,20 +198,20 @@ export async function handleProvisionNeonDataApi(
         projectId,
         resolvedBranchId,
         defaultDatabase.name,
-        neonClient
+        neonClient,
       ),
     ]);
 
     return {
       content: [
         {
-          type: 'text',
+          type: "text",
           text: buildAuthOptionsResponse(
             neonAuthStatus,
             dataApiStatus,
             projectId,
             resolvedBranchId,
-            defaultDatabase.name
+            defaultDatabase.name,
           ),
         },
       ],
@@ -219,12 +219,12 @@ export async function handleProvisionNeonDataApi(
   }
 
   // Handle provisionNeonAuthFirst for neon_auth
-  if (provisionNeonAuthFirst && authProvider === 'neon_auth') {
+  if (provisionNeonAuthFirst && authProvider === "neon_auth") {
     // Check if Neon Auth is already provisioned
     const neonAuthStatus = await checkNeonAuthStatus(
       projectId,
       resolvedBranchId,
-      neonClient
+      neonClient,
     );
 
     if (!neonAuthStatus.enabled) {
@@ -235,7 +235,7 @@ export async function handleProvisionNeonDataApi(
         {
           auth_provider: NeonAuthSupportedAuthProvider.BetterAuth,
           database_name: defaultDatabase.name,
-        }
+        },
       );
 
       if (neonAuthResponse.status !== 201 && neonAuthResponse.status !== 409) {
@@ -243,7 +243,7 @@ export async function handleProvisionNeonDataApi(
           isError: true,
           content: [
             {
-              type: 'text',
+              type: "text",
               text: `Failed to provision Neon Auth before Data API. Error: ${neonAuthResponse.statusText}`,
             },
           ],
@@ -254,12 +254,12 @@ export async function handleProvisionNeonDataApi(
   }
 
   // Handle authProvider: 'none' with strong warning
-  if (authProvider === 'none') {
+  if (authProvider === "none") {
     const response = await neonClient.createProjectBranchDataApi(
       projectId,
       resolvedBranchId,
       defaultDatabase.name,
-      {}
+      {},
     );
 
     // Handle 409 - Data API already exists
@@ -268,12 +268,12 @@ export async function handleProvisionNeonDataApi(
         const existingResponse = await neonClient.getProjectBranchDataApi(
           projectId,
           resolvedBranchId,
-          defaultDatabase.name
+          defaultDatabase.name,
         );
         return {
           content: [
             {
-              type: 'text',
+              type: "text",
               text: `Data API already provisioned for this database.
 
 Use this URL to access your Neon Data API:
@@ -289,8 +289,8 @@ Status: ${existingResponse.data.status}`,
         return {
           content: [
             {
-              type: 'text',
-              text: 'Data API already provisioned for this database.',
+              type: "text",
+              text: "Data API already provisioned for this database.",
             },
           ],
         };
@@ -302,7 +302,7 @@ Status: ${existingResponse.data.status}`,
         isError: true,
         content: [
           {
-            type: 'text',
+            type: "text",
             text: `Failed to provision Data API. Error: ${response.statusText}`,
           },
         ],
@@ -312,7 +312,7 @@ Status: ${existingResponse.data.status}`,
     return {
       content: [
         {
-          type: 'text',
+          type: "text",
           text: `Data API has been provisioned **without a pre-configured JWKS**.
 
 Use this URL to access your Neon Data API:
@@ -335,7 +335,7 @@ ${response.data.url}
 
   // Build the request payload for neon_auth or external
   const requestPayload: {
-    auth_provider?: 'neon_auth' | 'external';
+    auth_provider?: "neon_auth" | "external";
     jwks_url?: string;
     provider_name?: string;
     jwt_audience?: string;
@@ -358,7 +358,7 @@ ${response.data.url}
     projectId,
     resolvedBranchId,
     defaultDatabase.name,
-    requestPayload
+    requestPayload,
   );
 
   // Handle 409 - Data API already exists
@@ -368,12 +368,12 @@ ${response.data.url}
       const existingResponse = await neonClient.getProjectBranchDataApi(
         projectId,
         resolvedBranchId,
-        defaultDatabase.name
+        defaultDatabase.name,
       );
       return {
         content: [
           {
-            type: 'text',
+            type: "text",
             text: `Data API already provisioned for this database.
 
 Use this URL to access your Neon Data API:
@@ -389,8 +389,8 @@ Status: ${existingResponse.data.status}`,
       return {
         content: [
           {
-            type: 'text',
-            text: 'Data API already provisioned for this database.',
+            type: "text",
+            text: "Data API already provisioned for this database.",
           },
         ],
       };
@@ -402,7 +402,7 @@ Status: ${existingResponse.data.status}`,
       isError: true,
       content: [
         {
-          type: 'text',
+          type: "text",
           text: `Failed to provision Data API. Error: ${response.statusText}`,
         },
       ],
@@ -411,20 +411,20 @@ Status: ${existingResponse.data.status}`,
 
   // Build success message based on configuration
   let authMessage: string;
-  if (authProvider === 'neon_auth') {
+  if (authProvider === "neon_auth") {
     authMessage = provisionNeonAuthFirst
-      ? 'Neon Auth has been provisioned and configured as the authentication provider. JWTs from your Neon Auth setup will be validated automatically.'
-      : 'Authentication is configured to use Neon Auth. JWTs from your Neon Auth setup will be validated automatically.';
+      ? "Neon Auth has been provisioned and configured as the authentication provider. JWTs from your Neon Auth setup will be validated automatically."
+      : "Authentication is configured to use Neon Auth. JWTs from your Neon Auth setup will be validated automatically.";
   } else {
     authMessage = `Authentication is configured to use external provider${
-      providerName ? ` (${providerName})` : ''
+      providerName ? ` (${providerName})` : ""
     }. JWTs will be validated against the provided JWKS URL.`;
   }
 
   return {
     content: [
       {
-        type: 'text',
+        type: "text",
         text: `Data API has been successfully provisioned for your Neon database.
 
 Use this URL to access your Neon Data API:

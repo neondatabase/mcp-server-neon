@@ -52,13 +52,13 @@ Created Next.js App Router API routes to replace Express endpoints:
 The `mcp-handler` library provides the core MCP functionality:
 
 ```typescript
-import { createMcpHandler, withMcpAuth } from 'mcp-handler';
+import { createMcpHandler, withMcpAuth } from "mcp-handler";
 
 const handler = createMcpHandler(serverFactory, tools, options, {
   redisUrl: process.env.KV_URL || process.env.REDIS_URL,
-  basePath: '/api',
+  basePath: "/api",
   maxDuration: 300,
-  verboseLogs: process.env.NODE_ENV !== 'production',
+  verboseLogs: process.env.NODE_ENV !== "production",
 });
 
 const authHandler = withMcpAuth(handler, verifyToken, authOptions);
@@ -100,10 +100,10 @@ Converted all `.js` extensions to extensionless imports for Next.js/bundler comp
 
 ```typescript
 // Before
-import { logger } from '../utils/logger.js';
+import { logger } from "../utils/logger.js";
 
 // After
-import { logger } from '../utils/logger';
+import { logger } from "../utils/logger";
 ```
 
 ### 7. Vercel Functions Integration (`@vercel/functions`)
@@ -115,8 +115,8 @@ Added `@vercel/functions` package for serverless lifecycle management:
 Vercel serverless functions terminate immediately after returning a response. The `waitUntil` function extends the function lifecycle to allow background tasks (like analytics) to complete:
 
 ```typescript
-import { waitUntil } from '@vercel/functions';
-import { flushAnalytics } from '../../../mcp-src/analytics/analytics';
+import { waitUntil } from "@vercel/functions";
+import { flushAnalytics } from "../../../mcp-src/analytics/analytics";
 
 // Inside request handlers
 waitUntil(flushAnalytics());
@@ -158,6 +158,7 @@ export const flushAnalytics = async (): Promise<void> => {
 ```
 
 Key changes:
+
 - `flushAt: 1` ensures events are sent immediately (serverless functions may terminate before batched events are sent)
 - `flushAnalytics()` called via `waitUntil()` before function termination
 
@@ -243,10 +244,10 @@ Fixed type exports in `tools/index.ts`:
 
 ```typescript
 // Before
-export { ToolHandlers, ToolHandlerExtended } from './types.js';
+export { ToolHandlers, ToolHandlerExtended } from "./types.js";
 
 // After
-export type { ToolHandlers, ToolHandlerExtended } from './types';
+export type { ToolHandlers, ToolHandlerExtended } from "./types";
 ```
 
 ### 15. Vercel Environment Variable Handling
@@ -259,7 +260,7 @@ export const SERVER_HOST =
   process.env.SERVER_HOST ||
   (process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000');
+    : "http://localhost:3000");
 ```
 
 Vercel automatically provides `VERCEL_URL` - the deployment URL (e.g., `my-app-abc123.vercel.app`).
@@ -282,19 +283,19 @@ Vercel handles deployments automatically via GitHub integration (no manual workf
 
 Required for Vercel deployment:
 
-| Variable              | Description                                                    |
-| --------------------- | -------------------------------------------------------------- |
-| `SERVER_HOST`         | Server URL (falls back to `VERCEL_URL`)                        |
-| `VERCEL_URL`          | Auto-provided by Vercel - deployment URL                       |
-| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL                                        |
-| `CLIENT_ID`           | OAuth client ID                                                |
-| `CLIENT_SECRET`       | OAuth client secret                                            |
-| `COOKIE_SECRET`       | Secret for signed cookies                                      |
-| `KV_URL`              | Redis URL for session storage (Vercel KV / Upstash)            |
-| `REDIS_URL`           | Redis URL fallback for local development                       |
-| `OAUTH_DATABASE_URL`  | Postgres URL for token storage                                 |
-| `SENTRY_DSN`          | Sentry error tracking DSN                                      |
-| `ANALYTICS_WRITE_KEY` | Segment analytics write key                                    |
+| Variable              | Description                                         |
+| --------------------- | --------------------------------------------------- |
+| `SERVER_HOST`         | Server URL (falls back to `VERCEL_URL`)             |
+| `VERCEL_URL`          | Auto-provided by Vercel - deployment URL            |
+| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL                             |
+| `CLIENT_ID`           | OAuth client ID                                     |
+| `CLIENT_SECRET`       | OAuth client secret                                 |
+| `COOKIE_SECRET`       | Secret for signed cookies                           |
+| `KV_URL`              | Redis URL for session storage (Vercel KV / Upstash) |
+| `REDIS_URL`           | Redis URL fallback for local development            |
+| `OAUTH_DATABASE_URL`  | Postgres URL for token storage                      |
+| `SENTRY_DSN`          | Sentry error tracking DSN                           |
+| `ANALYTICS_WRITE_KEY` | Segment analytics write key                         |
 
 ### 17. Backwards Compatible Rewrites
 
@@ -311,6 +312,7 @@ async rewrites() {
 ```
 
 This allows existing MCP client configurations to continue working without changes:
+
 - `/mcp` → `/api/mcp` (Streamable HTTP transport)
 - `/sse` → `/api/sse` (Server-Sent Events transport)
 - `/health` → `/api/health` (Health check endpoint)
@@ -326,8 +328,9 @@ landing/app/api/callback/route.ts  →  landing/app/callback/route.ts
 ```
 
 Updated redirect URI in `lib/oauth/client.ts`:
+
 ```typescript
-const REDIRECT_URI = `${SERVER_HOST}/callback`;  // Was /api/callback
+const REDIRECT_URI = `${SERVER_HOST}/callback`; // Was /api/callback
 ```
 
 **Important:** The callback URL must be allowlisted in the upstream OAuth provider (Neon OAuth).
@@ -349,15 +352,15 @@ const handleRequest = (req: Request) => {
   const url = new URL(req.url);
 
   // Normalize legacy paths to canonical /api/* paths
-  if (url.pathname === '/mcp') url.pathname = '/api/mcp';
-  else if (url.pathname === '/sse') url.pathname = '/api/sse';
+  if (url.pathname === "/mcp") url.pathname = "/api/mcp";
+  else if (url.pathname === "/sse") url.pathname = "/api/sse";
 
   const normalizedReq = new Request(url.toString(), {
     method: req.method,
     headers: req.headers,
     body: req.body,
     // @ts-expect-error duplex is required for streaming bodies
-    duplex: 'half',
+    duplex: "half",
   });
 
   return authHandler(normalizedReq);
@@ -428,7 +431,7 @@ persistMigrationToMemory(migrationId, { ... });
 
 ```typescript
 // OLD: Just migration ID (broken in serverless)
-complete_database_migration({ migrationId: "uuid" })
+complete_database_migration({ migrationId: "uuid" });
 
 // NEW: All context passed back (works everywhere)
 complete_database_migration({
@@ -438,8 +441,8 @@ complete_database_migration({
   projectId: "proj-xxx",
   temporaryBranchId: "br-xxx",
   parentBranchId: "br-main",
-  applyChanges: true
-})
+  applyChanges: true,
+});
 ```
 
 ## Notes

@@ -1,8 +1,8 @@
-import { Api } from '@neondatabase/api-client';
-import { ToolHandlerExtraParams } from '../types';
-import { startSpan } from '@sentry/node';
-import { getDefaultDatabase } from '../utils';
-import { getDefaultBranch, getOnlyProject } from './utils';
+import { Api } from "@neondatabase/api-client";
+import { ToolHandlerExtraParams } from "../types";
+import { startSpan } from "@sentry/node";
+import { getDefaultDatabase } from "../utils";
+import { getDefaultBranch, getOnlyProject } from "./utils";
 
 export async function handleGetConnectionString(
   {
@@ -23,7 +23,7 @@ export async function handleGetConnectionString(
 ) {
   return await startSpan(
     {
-      name: 'get_connection_string',
+      name: "get_connection_string",
     },
     async () => {
       // If projectId is not provided, get the first project but only if there is only one project

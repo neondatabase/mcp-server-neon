@@ -1,19 +1,19 @@
-import { isAxiosError } from 'axios';
-import { NeonDbError } from '@neondatabase/serverless';
-import { logger } from '../utils/logger';
-import { captureException } from '@sentry/node';
+import { isAxiosError } from "axios";
+import { NeonDbError } from "@neondatabase/serverless";
+import { logger } from "../utils/logger";
+import { captureException } from "@sentry/node";
 
 export class InvalidArgumentError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'InvalidArgumentError';
+    this.name = "InvalidArgumentError";
   }
 }
 
 export class NotFoundError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'NotFoundError';
+    this.name = "NotFoundError";
   }
 }
 
@@ -25,16 +25,16 @@ export function isClientError(
   );
 }
 
-export function errorResponse(error: unknown) {
+function errorResponse(error: unknown) {
   return {
     isError: true,
     content: [
       {
-        type: 'text' as const,
+        type: "text" as const,
         text:
           error instanceof Error
             ? `${error.name}: ${error.message}`
-            : 'Unknown error',
+            : "Unknown error",
       },
     ],
   };
@@ -56,22 +56,22 @@ export function handleToolError(
       isError: true,
       content: [
         {
-          type: 'text' as const,
+          type: "text" as const,
           text: error.response.data.message,
         },
         {
-          type: 'text' as const,
+          type: "text" as const,
           text: `[${error.response.statusText}] ${error.message}`,
         },
       ],
     };
   } else {
     const errorContext = { ...properties, ...(traceId && { traceId }) };
-    logger.error('Tool call error:', {
+    logger.error("Tool call error:", {
       error:
         error instanceof Error
           ? `${error.name}: ${error.message}`
-          : 'Unknown error',
+          : "Unknown error",
       ...errorContext,
     });
     captureException(error, { extra: errorContext });

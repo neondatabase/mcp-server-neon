@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { logger } from '../mcp-src/utils/logger';
+import { NextResponse } from "next/server";
+import { logger } from "../mcp-src/utils/logger";
 
 type OAuthErrorResponse = {
   error: string;
@@ -18,15 +18,15 @@ export function handleOAuthError(
   error: unknown,
   context: string,
 ): NextResponse<OAuthErrorResponse> {
-  const message = error instanceof Error ? error.message : 'Unknown error';
+  const message = error instanceof Error ? error.message : "Unknown error";
   logger.error(`${context}:`, { message, error });
 
   // ResponseBodyError from openid-client (upstream OAuth errors)
   if (
     error &&
-    typeof error === 'object' &&
-    'code' in error &&
-    (error as { code: string }).code === 'RESPONSE_BODY_ERROR'
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code: string }).code === "RESPONSE_BODY_ERROR"
   ) {
     const oauthError = error as {
       error?: string;
@@ -38,7 +38,7 @@ export function handleOAuthError(
 
     return NextResponse.json(
       {
-        error: oauthError.error ?? 'upstream_error',
+        error: oauthError.error ?? "upstream_error",
         error_description: oauthError.error_description,
       },
       { status: responseStatus },
@@ -46,22 +46,22 @@ export function handleOAuthError(
   }
 
   // Network errors
-  if (error instanceof TypeError && message.includes('fetch')) {
+  if (error instanceof TypeError && message.includes("fetch")) {
     return NextResponse.json(
       {
-        error: 'upstream_unavailable',
-        error_description: 'Failed to connect to authorization server',
+        error: "upstream_unavailable",
+        error_description: "Failed to connect to authorization server",
       },
       { status: 502 },
     );
   }
 
   // JSON parse errors
-  if (error instanceof SyntaxError && message.includes('JSON')) {
+  if (error instanceof SyntaxError && message.includes("JSON")) {
     return NextResponse.json(
       {
-        error: 'invalid_request',
-        error_description: 'Invalid JSON in request body',
+        error: "invalid_request",
+        error_description: "Invalid JSON in request body",
       },
       { status: 400 },
     );
@@ -69,7 +69,7 @@ export function handleOAuthError(
 
   // Internal server errors
   return NextResponse.json(
-    { error: 'server_error', error_description: 'Internal server error' },
+    { error: "server_error", error_description: "Internal server error" },
     { status: 500 },
   );
 }

@@ -1,11 +1,11 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { Api, Organization, ProjectListItem } from '@neondatabase/api-client';
-import { Branch } from '@neondatabase/api-client';
-import { searchInputSchema } from '../toolsSchema';
-import { z } from 'zod';
-import { ToolHandlerExtraParams } from '../types';
-import { handleListProjects } from './list-projects';
-import { CONSOLE_URLS, generateConsoleUrl } from './urls';
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { Api, Organization, ProjectListItem } from "@neondatabase/api-client";
+import { Branch } from "@neondatabase/api-client";
+import { searchInputSchema } from "../toolsSchema";
+import { z } from "zod";
+import { ToolHandlerExtraParams } from "../types";
+import { handleListProjects } from "./list-projects";
+import { CONSOLE_URLS, generateConsoleUrl } from "./urls";
 
 type SearchProps = z.infer<typeof searchInputSchema>;
 
@@ -18,7 +18,7 @@ type SearchResult = {
   id: SearchResultId;
   title: string;
   url: string;
-  type: 'organization' | 'project' | 'branch';
+  type: "organization" | "project" | "branch";
 };
 
 const matches = (
@@ -78,7 +78,7 @@ export async function handleSearch(
           url: generateConsoleUrl(CONSOLE_URLS.ORGANIZATION, {
             orgId: org.id,
           }),
-          type: 'organization',
+          type: "organization",
         });
       }
 
@@ -124,7 +124,7 @@ export async function handleSearch(
     return {
       content: [
         {
-          type: 'text',
+          type: "text",
           text: JSON.stringify(results, null, 2),
         },
       ],
@@ -134,8 +134,8 @@ export async function handleSearch(
       isError: true,
       content: [
         {
-          type: 'text',
-          text: `Failed to search: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          type: "text",
+          text: `Failed to search: ${error instanceof Error ? error.message : "Unknown error"}`,
         },
       ],
     };
@@ -156,7 +156,7 @@ const searchProjectsAndBranches = async (
         url: generateConsoleUrl(CONSOLE_URLS.PROJECT, {
           projectId: project.id,
         }),
-        type: 'project',
+        type: "project",
       });
     }
   });
@@ -190,7 +190,7 @@ const searchBranches = async (
           projectId,
           branchId: branch.id,
         }),
-        type: 'branch',
+        type: "branch",
       }));
   } catch {
     // Ignore if we fail to fetch branches

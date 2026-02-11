@@ -1,10 +1,10 @@
-import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
-import { Api, Organization, Branch } from '@neondatabase/api-client';
-import { ToolHandlerExtraParams } from './types';
-import { NotFoundError } from '../server/errors';
+import { NEON_DEFAULT_DATABASE_NAME } from "../constants";
+import { Api, Organization, Branch } from "@neondatabase/api-client";
+import { ToolHandlerExtraParams } from "./types";
+import { NotFoundError } from "../server/errors";
 
 export const splitSqlStatements = (sql: string) => {
-  return sql.split(';').filter(Boolean);
+  return sql.split(";").filter(Boolean);
 };
 
 export const DESCRIBE_DATABASE_STATEMENTS = [
@@ -125,7 +125,7 @@ export async function getDefaultDatabase(
   );
   const databases = data.databases;
   if (databases.length === 0) {
-    throw new NotFoundError('No databases found in your project branch');
+    throw new NotFoundError("No databases found in your project branch");
   }
 
   if (databaseName) {
@@ -175,7 +175,7 @@ export async function getOrgByOrgIdOrDefault(
 
   // 1. Filter organizations by managed_by==console, if there is only one organization, return that
   const consoleOrganizations = organizations.filter(
-    (org) => org.managed_by === 'console',
+    (org) => org.managed_by === "console",
   );
 
   if (consoleOrganizations.length === 1) {
@@ -189,7 +189,7 @@ export async function getOrgByOrgIdOrDefault(
 
   // 3. If there are no organizations at all, then throw error saying there are no organizations
   if (organizations.length === 0) {
-    throw new NotFoundError('No organizations found for this user');
+    throw new NotFoundError("No organizations found for this user");
   }
 
   // 4. If there are multiple organizations, then throw error mentioning list of all these orgs (unfiltered)
@@ -197,7 +197,7 @@ export async function getOrgByOrgIdOrDefault(
     .map(
       (org) => `- ${org.name} (ID: ${org.id}) [managed by: ${org.managed_by}]`,
     )
-    .join('\n');
+    .join("\n");
   throw new NotFoundError(
     `Multiple organizations found. Please specify the org_id parameter with one of the following organization IDs:\n${orgList}`,
   );
@@ -219,58 +219,30 @@ export function filterOrganizations(
 }
 
 /**
- * Checks if a string looks like a branch ID based on the neonctl format
- * Branch IDs have format like "br-small-term-683261" (br- prefix + haiku pattern)
- */
-export function looksLikeBranchId(branch: string): boolean {
-  const HAIKU_REGEX = /^[a-z0-9]+-[a-z0-9]+-[a-z0-9]+$/;
-  return branch.startsWith('br-') && HAIKU_REGEX.test(branch.substring(3));
-}
-
-/**
- * Checks if a string looks like a project ID based on format from console
- * Project IDs have format like "small-term-683261"
- */
-export function looksLikeProjectId(projectId: string): boolean {
-  const HAIKU_REGEX = /^[a-zA-Z]+-[a-zA-Z]+-[0-9]{8}$/;
-  return HAIKU_REGEX.test(projectId);
-}
-
-/**
- * Resolves a branch name or ID to the actual branch ID
- * If the input looks like a branch ID, returns it as-is
- * Otherwise, searches for a branch with matching name and returns its ID
+ * Resolves a branch name or ID to the actual branch ID.
+ * Tries matching by ID first, then by name.
  */
 export async function resolveBranchId(
   branchNameOrId: string,
   projectId: string,
   neonClient: Api<unknown>,
 ): Promise<{ branchId: string; branches: Branch[] }> {
-  // Get all branches (we'll need this data anyway)
   const branchResponse = await neonClient.listProjectBranches({
     projectId,
   });
   const branches = branchResponse.data.branches;
 
-  if (looksLikeBranchId(branchNameOrId)) {
-    // Verify the branch ID actually exists
-    const branch = branches.find((b) => b.id === branchNameOrId);
-    if (!branch) {
-      throw new NotFoundError(
-        `Branch ID "${branchNameOrId}" not found in project ${projectId}`,
-      );
-    }
-    return { branchId: branchNameOrId, branches };
-  }
+  // Try by ID first, then by name
+  const byId = branches.find((b) => b.id === branchNameOrId);
+  if (byId) return { branchId: byId.id, branches };
 
-  // Search by name
-  const branch = branches.find((b) => b.name === branchNameOrId);
-  if (!branch) {
-    const availableBranches = branches.map((b) => b.name).join(', ');
-    throw new NotFoundError(
-      `Branch name "${branchNameOrId}" not found in project ${projectId}.\nAvailable branches: ${availableBranches}`,
-    );
-  }
+  const byName = branches.find((b) => b.name === branchNameOrId);
+  if (byName) return { branchId: byName.id, branches };
 
-  return { branchId: branch.id, branches };
+  const availableBranches = branches
+    .map((b) => `${b.name} (${b.id})`)
+    .join(", ");
+  throw new NotFoundError(
+    `Branch "${branchNameOrId}" not found in project ${projectId}.\nAvailable branches: ${availableBranches}`,
+  );
 }

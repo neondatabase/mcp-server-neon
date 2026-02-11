@@ -1,6 +1,7 @@
 # Neon MCP Server - Landing & Remote Server
 
 This directory contains:
+
 1. **Landing Page**: Marketing site for the Neon MCP Server
 2. **Remote MCP Server**: Vercel-hosted serverless MCP server accessible at `mcp.neon.tech`
 
@@ -32,6 +33,7 @@ The server supports read-only mode to restrict available tools. Priority for det
 Available scopes: `read`, `write`, `*`
 
 During OAuth authorization, users see a permissions dialog where they can:
+
 - **Read-only**: Always granted (view projects, run queries)
 - **Full access**: Optional checkbox (create/delete resources, migrations)
 
