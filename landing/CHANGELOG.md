@@ -1,7 +1,9 @@
 # Changelog
 
-# [Unreleased]
+# [0.8.0]
 
+- Feat: Add `list_docs_resources` and `get_doc_resource` tools for browsing and fetching Neon documentation pages
+- Remove `load_resource` tool in favor of `list_docs_resources` and `get_doc_resource`
 - Feat: Add `provision_neon_data_api` tool for HTTP-based database access with JWT authentication
 - Feat: Add traceId for request correlation across logs, analytics, and error reports
 - Feat: Add MCP tool annotations (title, readOnlyHint, destructiveHint, idempotentHint, openWorldHint)

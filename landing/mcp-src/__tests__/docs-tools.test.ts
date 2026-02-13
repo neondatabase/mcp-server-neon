@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NEON_HANDLERS } from '../tools/tools';
 import { NEON_DOCS_INDEX_URL, NEON_DOCS_BASE_URL } from '../resources';
+import { InvalidArgumentError, NotFoundError } from '../server/errors';
 
 // Type for the tool result returned by handlers
 type ToolResult = {
@@ -47,14 +48,29 @@ describe('list_docs_resources handler', () => {
     expect(result.content[0].text).toBe(mockIndex);
   });
 
-  it('throws on non-OK response', async () => {
+  it('throws NotFoundError on 404 response', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response('Not Found', { status: 404, statusText: 'Not Found' }),
     );
 
     await expect(
       NEON_HANDLERS.list_docs_resources({} as never, {} as never, {} as never),
-    ).rejects.toThrow('Failed to fetch Neon docs index: 404 Not Found');
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it('throws generic Error on 500 response', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response('Internal Error', {
+        status: 500,
+        statusText: 'Internal Server Error',
+      }),
+    );
+
+    await expect(
+      NEON_HANDLERS.list_docs_resources({} as never, {} as never, {} as never),
+    ).rejects.toThrow(
+      'Failed to fetch Neon docs index: 500 Internal Server Error',
+    );
   });
 
   it('throws on network error', async () => {
@@ -131,7 +147,7 @@ describe('get_doc_resource handler', () => {
     );
   });
 
-  it('throws on 404 response', async () => {
+  it('throws NotFoundError on 404 response', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response('Not Found', { status: 404, statusText: 'Not Found' }),
     );
@@ -142,12 +158,10 @@ describe('get_doc_resource handler', () => {
         {} as never,
         {} as never,
       ),
-    ).rejects.toThrow(
-      'Failed to fetch doc page "docs/nonexistent.md": 404 Not Found',
-    );
+    ).rejects.toThrow(NotFoundError);
   });
 
-  it('throws on 500 response', async () => {
+  it('throws generic Error on 500 response', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response('Internal Error', {
         status: 500,
@@ -176,6 +190,85 @@ describe('get_doc_resource handler', () => {
         {} as never,
       ),
     ).rejects.toThrow('DNS failure');
+  });
+
+  describe('slug validation', () => {
+    it('rejects slugs with path traversal (..) as InvalidArgumentError', async () => {
+      await expect(
+        NEON_HANDLERS.get_doc_resource(
+          { params: { slug: '../../../etc/passwd' } } as never,
+          {} as never,
+          {} as never,
+        ),
+      ).rejects.toThrow(InvalidArgumentError);
+
+      // fetch should never be called
+      expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
+    });
+
+    it('rejects slugs with embedded path traversal', async () => {
+      await expect(
+        NEON_HANDLERS.get_doc_resource(
+          { params: { slug: 'docs/../../../secret' } } as never,
+          {} as never,
+          {} as never,
+        ),
+      ).rejects.toThrow(
+        'Invalid doc slug: path traversal ("..") is not allowed',
+      );
+    });
+
+    it('rejects slugs with absolute URLs (://) as InvalidArgumentError', async () => {
+      await expect(
+        NEON_HANDLERS.get_doc_resource(
+          { params: { slug: 'https://evil.com/malicious' } } as never,
+          {} as never,
+          {} as never,
+        ),
+      ).rejects.toThrow(InvalidArgumentError);
+
+      expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
+    });
+
+    it('rejects slugs starting with / as InvalidArgumentError', async () => {
+      await expect(
+        NEON_HANDLERS.get_doc_resource(
+          { params: { slug: '/etc/passwd' } } as never,
+          {} as never,
+          {} as never,
+        ),
+      ).rejects.toThrow(InvalidArgumentError);
+
+      expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
+    });
+
+    it('rejects protocol-relative URLs (//)', async () => {
+      await expect(
+        NEON_HANDLERS.get_doc_resource(
+          { params: { slug: '//evil.com/malicious' } } as never,
+          {} as never,
+          {} as never,
+        ),
+      ).rejects.toThrow('Invalid doc slug: slug must not start with "/"');
+
+      expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
+    });
+
+    it('accepts valid doc slugs', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(
+        new Response('content', { status: 200 }),
+      );
+
+      await NEON_HANDLERS.get_doc_resource(
+        { params: { slug: 'docs/guides/prisma' } } as never,
+        {} as never,
+        {} as never,
+      );
+
+      expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
+        `${NEON_DOCS_BASE_URL}/docs/guides/prisma.md`,
+      );
+    });
   });
 });
 

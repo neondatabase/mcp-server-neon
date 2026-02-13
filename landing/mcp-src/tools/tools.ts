@@ -1069,6 +1069,9 @@ async function handleListSharedProjects(
 async function handleListDocsResources() {
   const response = await fetch(NEON_DOCS_INDEX_URL);
   if (!response.ok) {
+    if (response.status === 404) {
+      throw new NotFoundError('Neon docs index not found');
+    }
     throw new Error(
       `Failed to fetch Neon docs index: ${response.status} ${response.statusText}`,
     );
@@ -1076,12 +1079,34 @@ async function handleListDocsResources() {
   return response.text();
 }
 
+function validateDocSlug(slug: string): void {
+  if (slug.includes('..')) {
+    throw new InvalidArgumentError(
+      'Invalid doc slug: path traversal ("..") is not allowed',
+    );
+  }
+  if (slug.includes('://')) {
+    throw new InvalidArgumentError(
+      'Invalid doc slug: absolute URLs are not allowed',
+    );
+  }
+  if (slug.startsWith('/')) {
+    throw new InvalidArgumentError(
+      'Invalid doc slug: slug must not start with "/"',
+    );
+  }
+}
+
 async function handleGetDocResource({ slug }: { slug: string }) {
+  validateDocSlug(slug);
   // Ensure the slug ends with .md for the new docs format
   const mdSlug = slug.endsWith('.md') ? slug : `${slug}.md`;
   const url = `${NEON_DOCS_BASE_URL}/${mdSlug}`;
   const response = await fetch(url);
   if (!response.ok) {
+    if (response.status === 404) {
+      throw new NotFoundError(`Doc page not found: "${mdSlug}"`);
+    }
     throw new Error(
       `Failed to fetch doc page "${mdSlug}": ${response.status} ${response.statusText}`,
     );

@@ -180,7 +180,7 @@ You can enable read-only mode in two ways:
 - `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`
 - `list_slow_queries`, `explain_sql_statement`
 - `get_connection_string`
-- `search`, `fetch`, `load_resource`
+- `search`, `fetch`, `list_docs_resources`, `get_doc_resource`
 
 **Tools requiring write access:**
 
@@ -318,7 +318,8 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 
 **Documentation and Resources:**
 
-- **`load_resource`**: Loads comprehensive Neon documentation and usage guidelines, including the "neon-get-started" guide for setup, configuration, and best practices.
+- **`list_docs_resources`**: Lists all available Neon documentation pages by fetching the index from `https://neon.com/docs/llms.txt`. Returns page URLs and titles that can be fetched individually using the `get_doc_resource` tool.
+- **`get_doc_resource`**: Fetches a specific Neon documentation page as markdown content. Use the `list_docs_resources` tool first to discover available page slugs, then pass the slug to this tool.
 
 ## Migrations
 

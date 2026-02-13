@@ -93,11 +93,6 @@ describe('docs tools definitions', () => {
     expect(getDocTool!.annotations.destructiveHint).toBe(false);
     expect(getDocTool!.annotations.idempotentHint).toBe(true);
   });
-
-  it('load_resource tool no longer exists', () => {
-    const oldTool = NEON_TOOLS.find((t) => t.name === 'load_resource');
-    expect(oldTool).toBeUndefined();
-  });
 });
 
 describe('read-only safety consistency', () => {
