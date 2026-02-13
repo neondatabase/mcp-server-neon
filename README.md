@@ -265,6 +265,26 @@ If you are using Windows and encounter issues while adding the MCP server, you m
 
 The Neon MCP Server provides the following actions, which are exposed as "tools" to MCP Clients. You can use these tools to interact with your Neon projects and databases using natural language commands.
 
+### Tool Scope Metadata
+
+Each tool definition includes a `scope` category used for grant-based tool filtering and consent UX. Current categories are:
+
+- `projects`
+- `branches`
+- `schema`
+- `querying`
+- `performance`
+- `neon_auth`
+- `data_api`
+- `docs`
+- `null` (always-available tools such as `search` and `fetch`)
+
+Notes:
+
+- `compare_database_schema` is categorized under `schema`.
+- `provision_neon_data_api` is categorized under `data_api` (separate from `neon_auth`).
+- Read-only enforcement still relies on `readOnlySafe` and server-side read-only logic; `scope` is category metadata, not a standalone read/write switch.
+
 **Project Management:**
 
 - **`list_projects`**: Lists the first 10 Neon projects in your account, providing a summary of each project. If you can't find a specific project, increase the limit by passing a higher value to the `limit` parameter.

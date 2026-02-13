@@ -4,6 +4,8 @@
 
 - Feat: Add `list_docs_resources` and `get_doc_resource` tools for browsing and fetching Neon documentation pages
 - Remove `load_resource` tool in favor of `list_docs_resources` and `get_doc_resource`
+- Feat: Add `scope` metadata to all tool definitions for grant category filtering (`projects`, `branches`, `schema`, `querying`, `performance`, `neon_auth`, `data_api`, `docs`)
+- Improvement: Refine scope mapping by assigning `compare_database_schema` to `schema` and `provision_neon_data_api` to dedicated `data_api` scope
 - Feat: Add `provision_neon_data_api` tool for HTTP-based database access with JWT authentication
 - Feat: Add traceId for request correlation across logs, analytics, and error reports
 - Feat: Add MCP tool annotations (title, readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
