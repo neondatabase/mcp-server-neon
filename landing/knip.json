@@ -3,5 +3,5 @@
   "project": ["**/*.{ts,tsx}", "!**/*.d.ts"],
   "ignore": [".next/**", "dist/**", "build/**", "out/**"],
   "ignoreDependencies": ["tailwindcss", "postcss"],
-  "ignoreBinaries": ["esbuild", "tsx"]
+  "ignoreBinaries": []
 }

@@ -10,11 +10,9 @@
 
 **Neon MCP Server** is an open-source tool that lets you interact with your Neon Postgres databases in **natural language**.
 
-[![npm version](https://img.shields.io/npm/v/@neondatabase/mcp-server-neon)](https://www.npmjs.com/package/@neondatabase/mcp-server-neon)
-[![npm downloads](https://img.shields.io/npm/dt/@neondatabase/mcp-server-neon)](https://www.npmjs.com/package/@neondatabase/mcp-server-neon)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-The Model Context Protocol (MCP) is a [standardized protocol](https://modelcontextprotocol.io/introduction) designed to manage context between large language models (LLMs) and external systems. This repository offers an installer and an MCP Server for [Neon](https://neon.tech).
+The Model Context Protocol (MCP) is a [standardized protocol](https://modelcontextprotocol.io/introduction) designed to manage context between large language models (LLMs) and external systems. This repository provides a remote MCP Server for [Neon](https://neon.tech).
 
 Neon's MCP server acts as a bridge between natural language requests and the [Neon API](https://api-docs.neon.tech/reference/getting-started-with-neon-api). Built upon MCP, it translates your requests into the necessary API calls, enabling you to manage tasks such as creating projects and branches, running queries, and performing database migrations seamlessly.
 
@@ -46,15 +44,12 @@ There are a few options for setting up the Neon MCP Server:
 1. **Quick Setup with API Key (Cursor, VS Code, and Claude Code):** Run [`neonctl@latest init`](https://neon.com/docs/reference/cli-init) to automatically configure Neon's MCP Server, [agent skills](https://github.com/neondatabase/agent-skills), and VS Code extension with one command.
 2. **Remote MCP Server (OAuth Based Authentication):** Connect to Neon's managed MCP server using OAuth for authentication. This method is more convenient as it eliminates the need to manage API keys. Additionally, you will automatically receive the latest features and improvements as soon as they are released.
 3. **Remote MCP Server (API Key Based Authentication):** Connect to Neon's managed MCP server using API key for authentication. This method is useful if you want to connect a remote agent to Neon where OAuth is not available. Additionally, you will automatically receive the latest features and improvements as soon as they are released.
-4. **Local MCP Server:** Run the Neon MCP server locally on your machine, authenticating with a Neon API key.
 
 ### Prerequisites
 
 - An MCP Client application.
 - A [Neon account](https://console.neon.tech/signup).
 - **Node.js (>= v18.0.0):** Download from [nodejs.org](https://nodejs.org).
-
-For Local MCP Server setup, you also need a Neon API key. See [Neon API Keys documentation](https://neon.tech/docs/manage/api-keys) for instructions on generating one.
 
 For development, you'll also need [Bun](https://bun.sh) installed.
 
@@ -126,28 +121,6 @@ Alternatively, you can add the following "Neon" entry to your client's MCP serve
 
 > Provide an organization's API key to limit access to projects under the organization only.
 
-### Option 4. Local MCP Server
-
-Run the Neon MCP server on your local machine with your Neon API key. This method allows you to manage your Neon projects and databases without relying on a remote MCP server.
-
-[Create a Neon API key](https://console.neon.tech/app/settings?modal=create_api_key) in the Neon Console. Next, add the following JSON configuration within the `mcpServers` section of your client's `mcp_config` file, replacing `<YOUR_NEON_API_KEY>` with your actual Neon API key:
-
-```json
-{
-  "mcpServers": {
-    "neon": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@neondatabase/mcp-server-neon",
-        "start",
-        "<YOUR_NEON_API_KEY>"
-      ]
-    }
-  }
-}
-```
-
 ### Read-Only Mode
 
 **Read-Only Mode:** Restricts which tools are available, disabling write operations like creating projects, branches, or running migrations. Read-only tools include listing projects, describing schemas, querying data, and viewing performance metrics.
@@ -200,53 +173,6 @@ Run the following command to add the Neon MCP Server for all detected agents and
 
 ```bash
 npx add-mcp https://mcp.neon.tech/sse --type sse
-```
-
-### Troubleshooting
-
-If your client does not use `JSON` for configuration of MCP servers (such as older versions of Cursor), you can use the following command when prompted:
-
-```bash
-npx -y @neondatabase/mcp-server-neon start <YOUR_NEON_API_KEY>
-```
-
-#### Troubleshooting on Windows
-
-If you are using Windows and encounter issues while adding the MCP server, you might need to use the Command Prompt (`cmd`) or Windows Subsystem for Linux (`wsl`) to run the necessary commands. Your configuration setup may resemble the following:
-
-```json
-{
-  "mcpServers": {
-    "neon": {
-      "command": "cmd",
-      "args": [
-        "/c",
-        "npx",
-        "-y",
-        "@neondatabase/mcp-server-neon",
-        "start",
-        "<YOUR_NEON_API_KEY>"
-      ]
-    }
-  }
-}
-```
-
-```json
-{
-  "mcpServers": {
-    "neon": {
-      "command": "wsl",
-      "args": [
-        "npx",
-        "-y",
-        "@neondatabase/mcp-server-neon",
-        "start",
-        "<YOUR_NEON_API_KEY>"
-      ]
-    }
-  }
-}
 ```
 
 ## Guides
@@ -353,7 +279,7 @@ This project uses [Bun](https://bun.sh) as the package manager and runtime.
 
 ## Project Structure
 
-The MCP server code lives in the `landing/` directory, which is a Next.js application deployed to Vercel. The same codebase also produces the CLI published to npm as `@neondatabase/mcp-server-neon`.
+The MCP server code lives in the `landing/` directory, which is a Next.js application deployed to Vercel at `mcp.neon.tech`.
 
 ```bash
 cd landing
@@ -365,12 +291,6 @@ bun install
 ```bash
 # Start the Next.js dev server (for the remote MCP server)
 bun run dev
-
-# Build the CLI for local testing
-bun run build:cli
-
-# Run the CLI locally
-bun run start:cli $NEON_API_KEY
 ```
 
 ## Linting and Type Checking
@@ -413,8 +333,3 @@ Testing strategy:
 - Use **unit** tests for pure logic and edge cases.
 - Avoid relying on third-party uptime in merge-gating tests; mock external dependencies in integration/unit tiers.
 
-## Testing with Claude Desktop
-
-1. Build the CLI: `bun run build:cli`
-2. Configure Claude Desktop to use your local build
-3. Restart Claude Desktop after each rebuild
