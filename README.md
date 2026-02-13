@@ -180,7 +180,7 @@ You can enable read-only mode in two ways:
 - `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`
 - `list_slow_queries`, `explain_sql_statement`
 - `get_connection_string`
-- `search`, `fetch`, `load_resource`
+- `search`, `fetch`, `list_docs_resources`, `get_doc_resource`
 
 **Tools requiring write access:**
 
@@ -318,7 +318,8 @@ The Neon MCP Server provides the following actions, which are exposed as "tools"
 
 **Documentation and Resources:**
 
-- **`load_resource`**: Loads comprehensive Neon documentation and usage guidelines, including the "neon-get-started" guide for setup, configuration, and best practices.
+- **`list_docs_resources`**: Lists all available Neon documentation pages by fetching the index from `https://neon.com/docs/llms.txt`. Returns page URLs and titles that can be fetched individually using the `get_doc_resource` tool.
+- **`get_doc_resource`**: Fetches a specific Neon documentation page as markdown content. Use the `list_docs_resources` tool first to discover available page slugs, then pass the slug to this tool.
 
 ## Migrations
 
@@ -358,6 +359,39 @@ bun run start:cli $NEON_API_KEY
 bun run lint
 bun run typecheck
 ```
+
+## Testing Pyramid
+
+All tests run from `landing/`.
+
+```bash
+cd landing
+
+# Unit tests
+bun run test:unit
+
+# Integration tests
+bun run test:integration
+
+# MCP protocol end-to-end tests (real MCP client/server tool calls)
+bun run test:e2e:mcp
+
+# Website end-to-end tests (Playwright)
+bun run test:e2e:web
+
+# Full end-to-end suite
+bun run test:e2e
+
+# Full test pyramid (unit + integration + e2e)
+bun run test:all
+```
+
+Testing strategy:
+
+- Prefer **E2E** for transport/protocol and user-visible behavior.
+- Use **integration** tests for deterministic tool contracts and workflow behavior.
+- Use **unit** tests for pure logic and edge cases.
+- Avoid relying on third-party uptime in merge-gating tests; mock external dependencies in integration/unit tiers.
 
 ## Testing with Claude Desktop
 

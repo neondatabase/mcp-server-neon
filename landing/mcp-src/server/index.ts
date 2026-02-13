@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { NEON_RESOURCES } from '../resources';
 import { NEON_PROMPTS, getPromptTemplate } from '../prompts';
 import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools/index';
 import { logger } from '../utils/logger';
@@ -25,7 +24,6 @@ export const createMcpServer = (context: ServerContext) => {
     {
       capabilities: {
         tools: {},
-        resources: {},
         prompts: {
           listChanged: true,
         },
@@ -139,38 +137,6 @@ export const createMcpServer = (context: ServerContext) => {
             }
           },
         );
-      },
-    );
-  });
-
-  // Register resources
-  NEON_RESOURCES.forEach((resource) => {
-    server.resource(
-      resource.name,
-      resource.uri,
-      {
-        description: resource.description,
-        mimeType: resource.mimeType,
-      },
-      async (url) => {
-        const traceId = generateTraceId();
-        const properties = { resource_name: resource.name, traceId };
-        logger.info('resource call:', properties);
-        setSentryTags(context);
-        track({
-          userId: context.account.id,
-          event: 'resource_call',
-          properties,
-          context: { client: context.client, app: context.app },
-        });
-        try {
-          return await resource.handler(url);
-        } catch (error) {
-          captureException(error, {
-            extra: properties,
-          });
-          throw error;
-        }
       },
     );
   });

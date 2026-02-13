@@ -1,6 +1,6 @@
 {
   "name": "@neondatabase/mcp-server-neon",
-  "version": "0.6.4",
+  "version": "0.8.0",
   "description": "MCP server for interacting with Neon Management API and databases",
   "license": "MIT",
   "author": "Neon, Inc. (https://neon.com/)",
@@ -26,8 +26,13 @@
     "fmt": "prettier -w .",
     "fmt:check": "prettier --check .",
     "test": "vitest run",
+    "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.e2e.test.ts\"",
+    "test:integration": "vitest run integration.test.ts",
+    "test:e2e:mcp": "vitest run e2e.test.ts",
+    "test:e2e:web": "playwright test",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "bun run test:e2e:mcp && bun run test:e2e:web",
+    "test:all": "bun run test:unit && bun run test:integration && bun run test:e2e",
     "postinstall": "patch-package",
     "prepublishOnly": "npx tsx scripts/before-publish.ts"
   },
