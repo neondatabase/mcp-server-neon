@@ -8,7 +8,6 @@ export {
   NEON_API_HOST,
   ANALYTICS_WRITE_KEY,
   SENTRY_DSN,
-  NODE_ENV,
   NEON_CONSOLE_HOST,
   type Environment,
 } from '../lib/config';

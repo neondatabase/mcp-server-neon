@@ -30,7 +30,6 @@ export const SENTRY_DSN =
 
 // Environment
 export type Environment = 'development' | 'production' | 'preview';
-export const NODE_ENV = (process.env.NODE_ENV ?? 'production') as Environment;
 
 // Derived values
 export const NEON_CONSOLE_HOST = NEON_API_HOST.replace(/\/api\/v2$/, '');
