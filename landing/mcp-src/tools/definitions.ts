@@ -1,5 +1,6 @@
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
+import type { ScopeCategory } from '../utils/grant-context';
 import {
   completeDatabaseMigrationInputSchema,
   completeQueryTuningInputSchema,
@@ -35,6 +36,7 @@ import {
 export const NEON_TOOLS = [
   {
     name: 'list_projects' as const,
+    scope: 'projects' as const satisfies ScopeCategory,
     description: `Lists the first 10 Neon projects in your account. If you can't find the project, increase the limit by passing a higher value to the \`limit\` parameter. Optionally filter by project name or ID using the \`search\` parameter.`,
     inputSchema: listProjectsInputSchema,
     readOnlySafe: true,
@@ -48,6 +50,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'list_organizations' as const,
+    scope: 'projects' as const satisfies ScopeCategory,
     description: `Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the \`search\` parameter.`,
     inputSchema: listOrganizationsInputSchema,
     readOnlySafe: true,
@@ -61,6 +64,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'list_shared_projects' as const,
+    scope: 'projects' as const satisfies ScopeCategory,
     description: `Lists projects that have been shared with the current user. These are projects that the user has been granted access to collaborate on. Optionally filter by project name or ID using the \`search\` parameter.`,
     inputSchema: listSharedProjectsInputSchema,
     readOnlySafe: true,
@@ -74,6 +78,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'create_project' as const,
+    scope: 'projects' as const satisfies ScopeCategory,
     description:
       'Create a new Neon project. If someone is trying to create a database, use this tool.',
     inputSchema: createProjectInputSchema,
@@ -88,6 +93,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'delete_project' as const,
+    scope: 'projects' as const satisfies ScopeCategory,
     description: 'Delete a Neon project',
     inputSchema: deleteProjectInputSchema,
     readOnlySafe: false,
@@ -101,6 +107,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'describe_project' as const,
+    scope: 'projects' as const satisfies ScopeCategory,
     description: 'Describes a Neon project',
     inputSchema: describeProjectInputSchema,
     readOnlySafe: true,
@@ -114,6 +121,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'run_sql' as const,
+    scope: 'querying' as const satisfies ScopeCategory,
     description: `
     <use_case>
       Use this tool to execute a single SQL statement against a Neon database.
@@ -136,6 +144,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'run_sql_transaction' as const,
+    scope: 'querying' as const satisfies ScopeCategory,
     description: `
     <use_case>
       Use this tool to execute a SQL transaction against a Neon database, should be used for multiple SQL statements.
@@ -158,6 +167,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'describe_table_schema' as const,
+    scope: 'schema' as const satisfies ScopeCategory,
     description: 'Describe the schema of a table in a Neon database',
     inputSchema: describeTableSchemaInputSchema,
     readOnlySafe: true,
@@ -171,6 +181,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'get_database_tables' as const,
+    scope: 'schema' as const satisfies ScopeCategory,
     description: 'Get all tables in a Neon database',
     inputSchema: getDatabaseTablesInputSchema,
     readOnlySafe: true,
@@ -184,6 +195,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'create_branch' as const,
+    scope: 'branches' as const satisfies ScopeCategory,
     description: 'Create a branch in a Neon project',
     inputSchema: createBranchInputSchema,
     readOnlySafe: false,
@@ -197,6 +209,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'prepare_database_migration' as const,
+    scope: 'querying' as const satisfies ScopeCategory,
     readOnlySafe: false,
     description: `
   <use_case>
@@ -335,6 +348,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'complete_database_migration' as const,
+    scope: 'querying' as const satisfies ScopeCategory,
     description: `Complete a database migration by applying changes to the main branch and cleaning up the temporary branch.
 
     <important_notes>
@@ -365,6 +379,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'describe_branch' as const,
+    scope: 'branches' as const satisfies ScopeCategory,
     description:
       'Get a tree view of all objects in a branch, including databases, schemas, tables, views, and functions',
     inputSchema: describeBranchInputSchema,
@@ -379,6 +394,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'delete_branch' as const,
+    scope: 'branches' as const satisfies ScopeCategory,
     description: 'Delete a branch from a Neon project',
     inputSchema: deleteBranchInputSchema,
     readOnlySafe: false,
@@ -392,6 +408,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'reset_from_parent' as const,
+    scope: 'branches' as const satisfies ScopeCategory,
     description: `Resets a branch to match its parent's current state, effectively discarding all changes made on the branch. To avoid data loss, provide a name to preserve the changes in a new branch using \`preserveUnderName\` parameter. This tool is commonly used to create fresh development branches from updated parent branch, undo experimental changes, or restore a branch to a known good state. Warning: This operation will discard all changes if \`preserveUnderName\` is not provided.`,
     inputSchema: resetFromParentInputSchema,
     readOnlySafe: false,
@@ -405,6 +422,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'get_connection_string' as const,
+    scope: 'branches' as const satisfies ScopeCategory,
     description:
       'Get a PostgreSQL connection string for a Neon database with all parameters being optional',
     inputSchema: getConnectionStringInputSchema,
@@ -419,6 +437,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'provision_neon_auth' as const,
+    scope: 'neon_auth' as const satisfies ScopeCategory,
     inputSchema: provisionNeonAuthInputSchema,
     readOnlySafe: false,
     description: `
@@ -450,6 +469,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'provision_neon_data_api' as const,
+    scope: 'neon_auth' as const satisfies ScopeCategory,
     inputSchema: provisionNeonDataApiInputSchema,
     readOnlySafe: false,
     description: `
@@ -502,6 +522,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'explain_sql_statement' as const,
+    scope: 'performance' as const satisfies ScopeCategory,
     description:
       'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
     inputSchema: explainSqlStatementInputSchema,
@@ -516,6 +537,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'prepare_query_tuning' as const,
+    scope: 'performance' as const satisfies ScopeCategory,
     readOnlySafe: false,
     description: `
   <use_case>
@@ -673,6 +695,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'complete_query_tuning' as const,
+    scope: 'performance' as const satisfies ScopeCategory,
     readOnlySafe: false,
     description: `Complete a query tuning session by either applying the changes to the main branch or discarding them. 
     <important_notes>
@@ -710,6 +733,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'list_slow_queries' as const,
+    scope: 'performance' as const satisfies ScopeCategory,
     description: `
     <use_case>
       Use this tool to list slow queries from your Neon database.
@@ -731,6 +755,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'list_branch_computes' as const,
+    scope: 'branches' as const satisfies ScopeCategory,
     description: 'Lists compute endpoints for a project or specific branch',
     inputSchema: listBranchComputesInputSchema,
     readOnlySafe: true,
@@ -744,6 +769,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'compare_database_schema' as const,
+    scope: 'querying' as const satisfies ScopeCategory,
     readOnlySafe: true,
     description: `
     <use_case>
@@ -1021,6 +1047,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'search' as const,
+    scope: null,
     description: `Searches across all user organizations, projects, and branches that match the query. Returns a list of objects with id, title, and url. This tool searches through all accessible resources and provides direct links to the Neon Console.`,
     inputSchema: searchInputSchema,
     readOnlySafe: true,
@@ -1034,6 +1061,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'fetch' as const,
+    scope: null,
     description: `Fetches detailed information about a specific organization, project, or branch using the ID returned by the search tool. This tool provides comprehensive information about Neon resources for detailed analysis and management.`,
     inputSchema: fetchInputSchema,
     readOnlySafe: true,
@@ -1047,6 +1075,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'list_docs_resources' as const,
+    scope: 'docs' as const satisfies ScopeCategory,
     description: `
   <use_case>
     Lists all available Neon documentation pages by fetching the index from https://neon.com/docs/llms.txt.
@@ -1083,6 +1112,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'get_doc_resource' as const,
+    scope: 'docs' as const satisfies ScopeCategory,
     description: `
   <use_case>
     Fetches a specific Neon documentation page as markdown content.
