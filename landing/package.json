@@ -25,6 +25,8 @@
     "typecheck": "tsc --noEmit",
     "fmt": "prettier -w .",
     "fmt:check": "prettier --check .",
+    "knip": "knip",
+    "knip:fix": "knip --fix",
     "test": "vitest run",
     "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.e2e.test.ts\"",
     "test:integration": "vitest run integration.test.ts",
@@ -58,7 +60,6 @@
     "zod": "^3"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/he": "^1.2.3",
@@ -69,6 +70,7 @@
     "dotenv": "^17.2.4",
     "eslint": "^9",
     "eslint-config-next": "^16.1.1",
+    "knip": "^5.83.1",
     "patch-package": "^8.0.1",
     "prettier": "^3.8.1",
     "tailwindcss": "^4",

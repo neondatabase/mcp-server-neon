@@ -4,7 +4,7 @@ import { addBreadcrumb } from '@sentry/node';
 import { identify } from '../analytics/analytics';
 import { logger } from '../utils/logger';
 
-export type Account = {
+type Account = {
   id: string;
   name: string;
   email?: string;

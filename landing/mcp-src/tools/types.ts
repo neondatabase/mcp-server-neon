@@ -7,7 +7,7 @@ import { ClientApplication } from '../utils/client-application';
 
 // Extract the tool names as a union type
 type NeonToolName = (typeof NEON_TOOLS)[number]['name'];
-export type ToolParams<T extends NeonToolName = NeonToolName> = Extract<
+type ToolParams<T extends NeonToolName = NeonToolName> = Extract<
   (typeof NEON_TOOLS)[number],
   { name: T }
 >['inputSchema'];
