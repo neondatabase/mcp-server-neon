@@ -360,6 +360,39 @@ bun run lint
 bun run typecheck
 ```
 
+## Testing Pyramid
+
+All tests run from `landing/`.
+
+```bash
+cd landing
+
+# Unit tests
+bun run test:unit
+
+# Integration tests
+bun run test:integration
+
+# MCP protocol end-to-end tests (real MCP client/server tool calls)
+bun run test:e2e:mcp
+
+# Website end-to-end tests (Playwright)
+bun run test:e2e:web
+
+# Full end-to-end suite
+bun run test:e2e
+
+# Full test pyramid (unit + integration + e2e)
+bun run test:all
+```
+
+Testing strategy:
+
+- Prefer **E2E** for transport/protocol and user-visible behavior.
+- Use **integration** tests for deterministic tool contracts and workflow behavior.
+- Use **unit** tests for pure logic and edge cases.
+- Avoid relying on third-party uptime in merge-gating tests; mock external dependencies in integration/unit tiers.
+
 ## Testing with Claude Desktop
 
 1. Build the CLI: `bun run build:cli`

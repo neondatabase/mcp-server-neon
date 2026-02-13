@@ -30,11 +30,11 @@ jobs:
         run: bun run fmt:check
       - name: Lint
         run: bun run lint
-      - name: Unit tests
-        run: bun run test
+      - name: Unit and integration tests
+        run: bun run test:unit && bun run test:integration
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-      - name: E2E tests
+      - name: E2E tests (MCP + website)
         run: bun run test:e2e
       - name: Build
         run: bun run build

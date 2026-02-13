@@ -70,24 +70,56 @@ bun run typecheck
 ```bash
 cd landing
 
-# Run unit tests (vitest)
-bun run test
+# Run unit tests
+bun run test:unit
 
-# Run unit tests in watch mode
-bun run test:watch
+# Run integration tests
+bun run test:integration
 
-# Run e2e tests (playwright — starts Next.js dev server automatically)
+# Run MCP protocol e2e tests (real tool calls over MCP protocol)
+bun run test:e2e:mcp
+
+# Run website e2e tests (Playwright)
+bun run test:e2e:web
+
+# Run all e2e tests
 bun run test:e2e
+
+# Run full test pyramid (used in CI before merge)
+bun run test:all
+
+# Watch mode for Vitest
+bun run test:watch
 ```
 
-**Unit tests** use [Vitest](https://vitest.dev/) and live in `mcp-src/__tests__/`. Configuration is in `landing/vitest.config.ts`. Tests follow the `*.test.ts` naming convention.
+### Testing Pyramid Rules
+
+The repository follows this hierarchy:
+
+1. **E2E first** (highest confidence):
+   - `test:e2e:mcp`: MCP client + server protocol tests that perform real tool calls.
+   - `test:e2e:web`: Playwright tests for website and HTTP endpoints.
+2. **Integration second**:
+   - Deterministic handler contract tests, typically with mocked external dependencies.
+3. **Unit third**:
+   - Fast tests for pure logic and validation edge cases.
+
+Use file naming to classify tiers:
+
+- `*.e2e.test.ts` for MCP protocol end-to-end tests
+- `*.integration.test.ts` for integration tests
+- `*.test.ts` for unit tests
+
+Merge-gating tests must be deterministic. Do not make third-party uptime (for example, external docs websites) a required CI dependency.
+
+**Unit and integration tests** use [Vitest](https://vitest.dev/) and live in `mcp-src/__tests__/`. Configuration is in `landing/vitest.config.ts`.
 
 **E2E tests** use [Playwright](https://playwright.dev/) and live in `landing/e2e/`. Configuration is in `landing/playwright.config.ts`.
 
 - **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com) and generates a random `COOKIE_SECRET`. Both are written to `.env.e2e` (gitignored) and passed to the Next.js dev server.
 - **No secrets needed**: The e2e infrastructure is fully self-contained. Instagres databases expire after 72 hours; no explicit teardown is required.
 - **Reuse across runs**: If `.env.e2e` already exists, global-setup reuses it instead of re-provisioning. Delete the file to force a fresh database.
-- **CI**: Playwright chromium is installed and e2e tests run automatically in the PR workflow.
+- **CI**: The PR workflow runs format, lint, unit+integration tests, MCP e2e tests, website e2e tests, and build before merge.
 
 ## Architecture
 
@@ -249,8 +281,10 @@ landing/                  # Next.js app (main project)
 │   ├── config.ts       # Centralized configuration
 │   └── oauth/          # OAuth utilities for Next.js
 ├── mcp-src/            # MCP server source code
-│   ├── __tests__/      # Vitest unit tests
-│   │   └── initConfig.test.ts  # CLI argument parsing tests
+│   ├── __tests__/      # Vitest unit/integration/MCP e2e tests
+│   │   ├── *.test.ts              # Unit tests
+│   │   ├── *.integration.test.ts  # Integration tests
+│   │   └── *.e2e.test.ts          # MCP protocol e2e tests
 │   ├── cli.ts          # CLI entry point (stdio transport)
 │   ├── server/         # MCP server factory
 │   │   ├── index.ts    # Server creation and tool registration

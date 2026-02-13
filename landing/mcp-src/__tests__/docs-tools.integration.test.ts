@@ -1,5 +1,5 @@
 /**
- * Contract tests for docs tool handlers.
+ * Integration-level contract tests for docs tool handlers.
  *
  * These tests intentionally avoid external network dependencies. They verify the
  * MCP tool interface and expected cross-tool workflow by mocking fetch calls.
@@ -17,7 +17,7 @@ type ToolResult = {
 
 const originalFetch = globalThis.fetch;
 
-describe('docs tools contract tests (no external network)', () => {
+describe('docs tools integration contracts (no external network)', () => {
   beforeEach(() => {
     globalThis.fetch = vi.fn();
   });

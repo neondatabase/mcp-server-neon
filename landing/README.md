@@ -52,6 +52,50 @@ bun dev
 bun run build
 ```
 
+## Testing Pyramid
+
+This repository follows an explicit testing pyramid:
+
+1. **E2E first**: validate user-visible behavior and MCP protocol integration.
+2. **Integration second**: validate tool contracts and cross-tool workflows without external dependencies.
+3. **Unit last**: validate edge-case logic and invariants quickly.
+
+### Test Tiers
+
+- **Website E2E (Playwright)**: tests in `landing/e2e/` (HTTP endpoints, OAuth discovery, routing).
+- **MCP E2E (Vitest + MCP protocol)**: tests in `landing/mcp-src/__tests__/*.e2e.test.ts`, using an MCP client and in-memory transport to perform real tool calls.
+- **Integration (Vitest)**: tests in `landing/mcp-src/__tests__/*.integration.test.ts`, using deterministic mocks for external systems.
+- **Unit (Vitest)**: tests in `landing/mcp-src/__tests__/*.test.ts` (excluding integration/e2e files).
+
+### Commands
+
+```bash
+# Unit only
+bun run test:unit
+
+# Integration only
+bun run test:integration
+
+# MCP protocol e2e only
+bun run test:e2e:mcp
+
+# Website e2e only
+bun run test:e2e:web
+
+# All e2e
+bun run test:e2e
+
+# Full pyramid (used in CI before merge)
+bun run test:all
+```
+
+### Rules for New Tests
+
+- Prefer E2E tests when behavior crosses transport/protocol boundaries.
+- Do not make third-party availability a merge blocker; use integration mocks for external systems.
+- Add integration tests for tool contracts (inputs, outputs, error mapping).
+- Add unit tests for pure logic, validation, and edge cases.
+
 ## Environment Variables
 
 Required for the remote MCP server:
