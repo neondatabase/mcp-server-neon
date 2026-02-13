@@ -5,11 +5,6 @@
 
 // Re-export all config values from centralized config
 export {
-  SERVER_HOST,
-  UPSTREAM_OAUTH_HOST,
-  CLIENT_ID,
-  CLIENT_SECRET,
-  COOKIE_SECRET,
   NEON_API_HOST,
   ANALYTICS_WRITE_KEY,
   SENTRY_DSN,

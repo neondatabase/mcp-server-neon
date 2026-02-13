@@ -102,7 +102,7 @@ export const isClientAlreadyApproved = async (
 /**
  * Creates a signed cookie value with the updated approved clients list.
  */
-export const createApprovedClientsCookieValue = async (
+const createApprovedClientsCookieValue = async (
   existingCookie: string,
   clientId: string,
   cookieSecret: string,
@@ -142,5 +142,3 @@ export const updateApprovedClientsCookie = async (
     path: '/',
   });
 };
-
-export { COOKIE_NAME };

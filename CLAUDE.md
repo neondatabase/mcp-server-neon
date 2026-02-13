@@ -63,6 +63,12 @@ bun run lint:fix
 
 # Type check
 bun run typecheck
+
+# Check for unused code and dependencies
+bun run knip
+
+# Auto-fix unused exports/dependencies
+bun run knip:fix
 ```
 
 ### Testing

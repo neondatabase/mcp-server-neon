@@ -12,7 +12,7 @@ export const SCOPE_DEFINITIONS = {
   },
 } as const;
 
-export type ReadOnlyContext = {
+type ReadOnlyContext = {
   headerValue?: string | null;
   scope?: string | string[] | null;
 };
