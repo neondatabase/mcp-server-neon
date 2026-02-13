@@ -11,6 +11,7 @@ export const SCOPE_CATEGORIES = [
   'querying',
   'performance',
   'neon_auth',
+  'data_api',
   'docs',
 ] as const;
 
@@ -50,6 +51,11 @@ export const SCOPE_CATEGORY_DEFINITIONS: Record<
     label: 'Neon Auth',
     description:
       'Provision authentication infrastructure by integrating with Auth providers.',
+  },
+  data_api: {
+    label: 'Data API',
+    description:
+      'Provision and configure the Neon Data API for HTTP-based database access.',
   },
   docs: {
     label: 'Documentation and Resources',

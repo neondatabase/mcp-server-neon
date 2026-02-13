@@ -478,7 +478,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'provision_neon_data_api' as const,
-    scope: 'neon_auth',
+    scope: 'data_api',
     inputSchema: provisionNeonDataApiInputSchema,
     readOnlySafe: false,
     description: `
@@ -778,7 +778,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'compare_database_schema' as const,
-    scope: 'querying',
+    scope: 'schema',
     readOnlySafe: true,
     description: `
     <use_case>
