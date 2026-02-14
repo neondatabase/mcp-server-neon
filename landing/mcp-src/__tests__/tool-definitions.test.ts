@@ -9,16 +9,36 @@
 import { describe, it, expect } from 'vitest';
 import { NEON_TOOLS } from '../tools/definitions';
 import { NEON_HANDLERS } from '../tools/tools';
+import { SCOPE_CATEGORIES } from '../utils/grant-context';
 
 describe('NEON_TOOLS definitions', () => {
   it('has 29 tools', () => {
     expect(NEON_TOOLS).toHaveLength(29);
   });
 
-  it('every tool has a name and readOnlySafe flag', () => {
+  it('every tool has a name, scope (or null), and readOnlySafe flag', () => {
     for (const tool of NEON_TOOLS) {
       expect(tool.name).toBeTruthy();
+      expect(
+        tool.scope === null || SCOPE_CATEGORIES.includes(tool.scope),
+        `${tool.name} has invalid scope: ${String(tool.scope)}`,
+      ).toBe(true);
       expect(typeof tool.readOnlySafe).toBe('boolean');
+    }
+  });
+
+  it('every scope category is used by at least one tool', () => {
+    const usedScopes = new Set(
+      NEON_TOOLS.map((tool) => tool.scope).filter(
+        (scope): scope is (typeof SCOPE_CATEGORIES)[number] => scope !== null,
+      ),
+    );
+
+    for (const scope of SCOPE_CATEGORIES) {
+      expect(
+        usedScopes.has(scope),
+        `No tool is assigned to scope category "${scope}"`,
+      ).toBe(true);
     }
   });
 
