@@ -101,7 +101,6 @@ jobs:
                - Unnecessary data fetching
 
             5. **Testing Gaps**
-               - Missing Braintrust evaluations for new tools
                - Uncovered edge cases in existing tests
                - Integration test scenarios missing
 

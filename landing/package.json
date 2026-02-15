@@ -7,24 +7,17 @@
   "homepage": "https://github.com/neondatabase/mcp-server-neon/",
   "bugs": "https://github.com/neondatabase/mcp-server-neon/issues",
   "type": "module",
-  "bin": {
-    "mcp-server-neon": "./dist/cli/cli.js"
-  },
-  "files": [
-    "dist/cli",
-    "CHANGELOG.md"
-  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:cli": "npx esbuild mcp-src/cli.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/cli/cli.js --banner:js='#!/usr/bin/env node' --packages=external && chmod +x dist/cli/cli.js",
     "start": "next start",
-    "start:cli": "node dist/cli/cli.js start",
     "lint": "eslint .",
     "lint:fix": "eslint --fix . && prettier -w .",
     "typecheck": "tsc --noEmit",
     "fmt": "prettier -w .",
     "fmt:check": "prettier --check .",
+    "knip": "knip",
+    "knip:fix": "knip --fix",
     "test": "vitest run",
     "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.e2e.test.ts\"",
     "test:integration": "vitest run integration.test.ts",
@@ -32,9 +25,7 @@
     "test:e2e:web": "playwright test",
     "test:watch": "vitest",
     "test:e2e": "bun run test:e2e:mcp && bun run test:e2e:web",
-    "test:all": "bun run test:unit && bun run test:integration && bun run test:e2e",
-    "postinstall": "patch-package",
-    "prepublishOnly": "npx tsx scripts/before-publish.ts"
+    "test:all": "bun run test:unit && bun run test:integration && bun run test:e2e"
   },
   "dependencies": {
     "@keyv/postgres": "2.1.2",
@@ -45,7 +36,6 @@
     "@sentry/node": "9.19.0",
     "@vercel/functions": "^3.3.4",
     "axios": "^1.7.9",
-    "chalk": "^5.4.1",
     "he": "^1.2.0",
     "keyv": "5.3.2",
     "mcp-handler": "1.0.6",
@@ -58,7 +48,6 @@
     "zod": "^3"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/he": "^1.2.3",
@@ -69,7 +58,7 @@
     "dotenv": "^17.2.4",
     "eslint": "^9",
     "eslint-config-next": "^16.1.1",
-    "patch-package": "^8.0.1",
+    "knip": "^5.83.1",
     "prettier": "^3.8.1",
     "tailwindcss": "^4",
     "typescript": "^5",

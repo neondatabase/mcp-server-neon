@@ -24,7 +24,7 @@ function createTestContext(overrides?: Partial<ServerContext>): ServerContext {
     },
     app: {
       name: 'mcp-server-neon',
-      transport: 'stdio',
+      transport: 'stream',
       environment: 'development',
       version: 'test',
     },

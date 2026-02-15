@@ -1,9 +1,8 @@
-# Neon MCP Server - Landing & Remote Server
+# Neon MCP Server - Remote Server
 
-This directory contains:
+This directory contains the **Remote MCP Server**: a Vercel-hosted serverless MCP server accessible at `mcp.neon.tech`.
 
-1. **Landing Page**: Marketing site for the Neon MCP Server
-2. **Remote MCP Server**: Vercel-hosted serverless MCP server accessible at `mcp.neon.tech`
+> **Note:** The root `/` path redirects to the [Neon MCP Server documentation](https://neon.tech/docs/ai/neon-mcp-server). There is no landing page.
 
 ## Architecture
 
@@ -62,10 +61,10 @@ This repository follows an explicit testing pyramid:
 
 ### Test Tiers
 
-- **Website E2E (Playwright)**: tests in `landing/e2e/` (HTTP endpoints, OAuth discovery, routing).
-- **MCP E2E (Vitest + MCP protocol)**: tests in `landing/mcp-src/__tests__/*.e2e.test.ts`, using an MCP client and in-memory transport to perform real tool calls.
-- **Integration (Vitest)**: tests in `landing/mcp-src/__tests__/*.integration.test.ts`, using deterministic mocks for external systems.
-- **Unit (Vitest)**: tests in `landing/mcp-src/__tests__/*.test.ts` (excluding integration/e2e files).
+- **Website E2E (Playwright)**: tests in `e2e/` (HTTP endpoints, OAuth discovery, routing).
+- **MCP E2E (Vitest + MCP protocol)**: tests in `mcp-src/__tests__/*.e2e.test.ts`, using an MCP client and in-memory transport to perform real tool calls.
+- **Integration (Vitest)**: tests in `mcp-src/__tests__/*.integration.test.ts`, using deterministic mocks for external systems.
+- **Unit (Vitest)**: tests in `mcp-src/__tests__/*.test.ts` (excluding integration/e2e files).
 
 ### Commands
 
