@@ -17,7 +17,7 @@ export const SCOPE_CATEGORIES = [
 
 export type ScopeCategory = (typeof SCOPE_CATEGORIES)[number];
 
-export const SCOPE_CATEGORY_DEFINITIONS: Record<
+const SCOPE_CATEGORY_DEFINITIONS: Record<
   ScopeCategory,
   { label: string; description: string; sensitive?: boolean }
 > = {
