@@ -5,7 +5,7 @@
 
 import { neon } from '@neondatabase/serverless';
 
-export type TableDescription = {
+type TableDescription = {
   columns: ColumnDescription[];
   indexes: IndexDescription[];
   constraints: ConstraintDescription[];
@@ -14,7 +14,7 @@ export type TableDescription = {
   totalSize: string;
 };
 
-export type ColumnDescription = {
+type ColumnDescription = {
   name: string;
   type: string;
   nullable: boolean;
@@ -22,19 +22,19 @@ export type ColumnDescription = {
   description: string | null;
 };
 
-export type IndexDescription = {
+type IndexDescription = {
   name: string;
   definition: string;
   size: string;
 };
 
-export type ConstraintDescription = {
+type ConstraintDescription = {
   name: string;
   type: string;
   definition: string;
 };
 
-export const DESCRIBE_TABLE_STATEMENTS = [
+const DESCRIBE_TABLE_STATEMENTS = [
   // Get column information
   `
   SELECT 

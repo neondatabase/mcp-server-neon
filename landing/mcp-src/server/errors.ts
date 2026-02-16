@@ -17,7 +17,7 @@ export class NotFoundError extends Error {
   }
 }
 
-export function isClientError(
+function isClientError(
   error: unknown,
 ): error is InvalidArgumentError | NotFoundError {
   return (
@@ -25,7 +25,7 @@ export function isClientError(
   );
 }
 
-export function errorResponse(error: unknown) {
+function errorResponse(error: unknown) {
   return {
     isError: true,
     content: [

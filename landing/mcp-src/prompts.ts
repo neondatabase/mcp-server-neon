@@ -3,7 +3,7 @@ import { fetchRawGithubContent } from './resources';
 import { ToolHandlerExtraParams } from './tools/types';
 import { ClientApplication } from './utils/client-application';
 
-export const setupNeonAuthViteReactArgsSchema = {
+const setupNeonAuthViteReactArgsSchema = {
   projectId: z
     .string()
     .optional()

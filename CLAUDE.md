@@ -4,11 +4,9 @@ This file provides guidance to AI agents when working with code in this reposito
 
 ## Project Overview
 
-This is the **Neon MCP Server** - a Model Context Protocol server that bridges natural language requests to the Neon API, enabling LLMs to manage Neon Postgres databases through conversational commands. The project implements both local (stdio) and remote (SSE/Streamable HTTP) MCP server transports with OAuth authentication support.
+This is the **Neon MCP Server** - a Model Context Protocol server that bridges natural language requests to the Neon API, enabling LLMs to manage Neon Postgres databases through conversational commands. The project implements remote (SSE/Streamable HTTP) MCP server transports with OAuth authentication support.
 
-**Architecture Note**: The entire project is a unified Next.js application in the `landing/` directory that serves dual purposes:
-1. **Remote MCP Server**: Deployed on Vercel serverless infrastructure, accessible at `mcp.neon.tech`
-2. **Local MCP CLI**: Published as `@neondatabase/mcp-server-neon` npm package, runs locally via stdio transport
+**Architecture Note**: The project is a Next.js application in the `landing/` directory deployed on Vercel serverless infrastructure, accessible at `mcp.neon.tech`.
 
 ## Development Commands
 
@@ -22,27 +20,7 @@ bun install
 
 # Start the Next.js dev server (for the remote MCP server)
 bun run dev
-
-# Build the CLI for local testing
-bun run build:cli
-
-# Run the CLI locally with API key
-bun run start:cli $NEON_API_KEY
-
-# Or run the built CLI directly
-node dist/cli/cli.js start <NEON_API_KEY>
 ```
-
-### Development with MCP CLI Client
-
-The fastest way to iterate on the MCP Server is using the `mcp-client/` CLI:
-
-```bash
-cd landing && bun install && bun run build:cli
-cd ../mcp-client && NEON_API_KEY=<your-key> npm run start:mcp-server-neon
-```
-
-This provides an interactive terminal to test MCP tools without restarting Claude Desktop.
 
 ### Formatting, Linting, and Type Checking
 
@@ -63,6 +41,12 @@ bun run lint:fix
 
 # Type check
 bun run typecheck
+
+# Check for unused code and dependencies
+bun run knip
+
+# Auto-fix unused exports/dependencies
+bun run knip:fix
 ```
 
 ### Testing
@@ -144,24 +128,19 @@ Merge-gating tests must be deterministic. Do not make third-party uptime (for ex
    - `toolsSchema.ts`: Zod schemas for tool input validation
    - `handlers/`: Individual tool handler implementations organized by feature
 
-3. **CLI Entry Point (`landing/mcp-src/cli.ts`)**
-
-   - Entry point for the npm package CLI
-   - Handles stdio transport for local MCP clients (Claude Desktop, Cursor)
-
-4. **Remote Transport (`landing/app/api/[transport]/route.ts`)**
+3. **Remote Transport (`landing/app/api/[transport]/route.ts`)**
 
    - Next.js API route handling SSE and Streamable HTTP transports
    - Uses `mcp-handler` library for serverless MCP protocol handling
 
-5. **OAuth System (`landing/lib/oauth/` and `landing/mcp-src/oauth/`)**
+4. **OAuth System (`landing/lib/oauth/` and `landing/mcp-src/oauth/`)**
 
    - OAuth 2.0 server implementation for remote MCP authentication
    - Integrates with Neon's OAuth provider (UPSTREAM_OAUTH_HOST)
    - Token persistence using Keyv with Postgres backend
    - Cookie-based client approval tracking
 
-6. **Resources (`landing/mcp-src/resources.ts`)**
+5. **Resources (`landing/mcp-src/resources.ts`)**
    - MCP resources that provide read-only context (like "getting started" guides)
    - Registered alongside tools but don't execute operations
 
@@ -251,7 +230,7 @@ export const NEON_HANDLERS = {
 
 See `landing/.env.local.example` for all configuration options. Key variables:
 
-- `NEON_API_KEY`: Required for local development and testing
+- `NEON_API_KEY`: Required for running tests (unit, integration, e2e)
 - `OAUTH_DATABASE_URL`: Required for remote MCP server with OAuth
 - `COOKIE_SECRET`: Required for remote MCP server OAuth flow
 - `CLIENT_ID` / `CLIENT_SECRET`: OAuth client credentials
@@ -285,13 +264,13 @@ landing/                  # Next.js app (main project)
 │   │   ├── *.test.ts              # Unit tests
 │   │   ├── *.integration.test.ts  # Integration tests
 │   │   └── *.e2e.test.ts          # MCP protocol e2e tests
-│   ├── cli.ts          # CLI entry point (stdio transport)
 │   ├── server/         # MCP server factory
 │   │   ├── index.ts    # Server creation and tool registration
 │   │   ├── api.ts      # Neon API client factory
 │   │   ├── account.ts  # Account resolution (user/org/project-scoped)
 │   │   └── errors.ts   # Error handling utilities
 │   ├── tools/          # Tool definitions and handlers
+│   │   ├── index.ts       # Re-exports definitions and handlers
 │   │   ├── definitions.ts  # Tool definitions (NEON_TOOLS) with annotations
 │   │   ├── tools.ts       # Tool handlers mapping (NEON_HANDLERS)
 │   │   ├── toolsSchema.ts # Zod schemas for tool inputs
@@ -301,8 +280,6 @@ landing/                  # Next.js app (main project)
 │   ├── oauth/          # OAuth model and KV store
 │   ├── analytics/      # Segment analytics
 │   ├── sentry/         # Sentry error tracking
-│   ├── transports/     # Transport implementations
-│   │   └── stdio.ts    # Stdio transport for CLI
 │   ├── types/          # Shared TypeScript types
 │   ├── utils/          # Shared utilities
 │   │   ├── read-only.ts    # Read-only mode detection, scope definitions
@@ -322,8 +299,6 @@ landing/                  # Next.js app (main project)
 ├── vercel.json         # Vercel deployment config
 └── vercel-migration.md # Migration documentation
 
-mcp-client/             # CLI client for testing
-
 dev-notes/              # Developer notes and solution documentation
 └── *.md               # Problem solutions, fixes, and technical decisions
 ```
@@ -331,10 +306,6 @@ dev-notes/              # Developer notes and solution documentation
 ## Important Notes
 
 - **TypeScript Configuration**: Uses `bundler` module resolution for Next.js compatibility. Imports use extensionless paths (no `.js` suffix).
-
-- **Building**: The CLI build uses esbuild to bundle `mcp-src/cli.ts` into a standalone executable at `dist/cli/cli.js`.
-
-- **Logger Behavior**: In stdio mode, the logger is silenced to prevent stderr pollution. In server mode, logging is active.
 
 - **Migration Pattern**: Tools like `prepare_database_migration` and `prepare_query_tuning` create temporary branches and return all context (branch IDs, SQL, database name, etc.) in the response. The LLM must pass this context back to subsequent `complete_*` tools. No state is stored server-side, enabling serverless deployment.
 

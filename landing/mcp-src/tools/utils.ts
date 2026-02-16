@@ -222,18 +222,9 @@ export function filterOrganizations(
  * Checks if a string looks like a branch ID based on the neonctl format
  * Branch IDs have format like "br-small-term-683261" (br- prefix + haiku pattern)
  */
-export function looksLikeBranchId(branch: string): boolean {
+function looksLikeBranchId(branch: string): boolean {
   const HAIKU_REGEX = /^[a-z0-9]+-[a-z0-9]+-[a-z0-9]+$/;
   return branch.startsWith('br-') && HAIKU_REGEX.test(branch.substring(3));
-}
-
-/**
- * Checks if a string looks like a project ID based on format from console
- * Project IDs have format like "small-term-683261"
- */
-export function looksLikeProjectId(projectId: string): boolean {
-  const HAIKU_REGEX = /^[a-zA-Z]+-[a-zA-Z]+-[0-9]{8}$/;
-  return HAIKU_REGEX.test(projectId);
 }
 
 /**

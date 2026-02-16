@@ -30,6 +30,8 @@ jobs:
         run: bun run fmt:check
       - name: Lint
         run: bun run lint
+      - name: Check unused code and dependencies
+        run: bun run knip
       - name: Unit and integration tests
         run: bun run test:unit && bun run test:integration
       - name: Install Playwright browsers
