@@ -7,9 +7,9 @@
  * - Project-scoped mode: hiding project-agnostic tools and removing projectId from schemas
  */
 
-import { z } from "zod";
-import type { GrantContext, ScopeCategory } from "../utils/grant-context";
-import { NEON_TOOLS } from "./definitions";
+import { z } from 'zod';
+import type { GrantContext, ScopeCategory } from '../utils/grant-context';
+import { NEON_TOOLS } from './definitions';
 
 export type NeonTool = (typeof NEON_TOOLS)[number];
 
@@ -18,11 +18,11 @@ export type NeonTool = (typeof NEON_TOOLS)[number];
  * These tools don't make sense when the agent is scoped to a single project.
  */
 const PROJECT_AGNOSTIC_TOOLS: ReadonlySet<string> = new Set([
-  "list_projects",
-  "list_organizations",
-  "list_shared_projects",
-  "create_project",
-  "delete_project",
+  'list_projects',
+  'list_organizations',
+  'list_shared_projects',
+  'create_project',
+  'delete_project',
 ]);
 
 /**
@@ -30,8 +30,8 @@ const PROJECT_AGNOSTIC_TOOLS: ReadonlySet<string> = new Set([
  * These are discovery/navigation tools the LLM needs to function.
  */
 const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
-  "search",
-  "fetch",
+  'search',
+  'fetch',
 ]);
 
 /**
@@ -39,8 +39,8 @@ const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
  * Project creation and deletion are disabled for safe development.
  */
 const LOCAL_DEV_BLOCKED_TOOLS: ReadonlySet<string> = new Set([
-  "create_project",
-  "delete_project",
+  'create_project',
+  'delete_project',
 ]);
 
 /**
@@ -68,20 +68,20 @@ function applyPresetFilter(
   grant: GrantContext,
 ): NeonTool[] {
   switch (grant.preset) {
-    case "full_access":
+    case 'full_access':
       return [...tools];
 
-    case "production_use":
+    case 'production_use':
       // Only read-safe tools
       return tools.filter(
         (tool) => tool.readOnlySafe || ALWAYS_AVAILABLE_TOOLS.has(tool.name),
       );
 
-    case "local_development":
+    case 'local_development':
       // Everything except project create/delete
       return tools.filter((tool) => !LOCAL_DEV_BLOCKED_TOOLS.has(tool.name));
 
-    case "custom":
+    case 'custom':
       // Filter by scope categories
       return applyCustomScopeFilter(tools, grant.scopes);
   }
@@ -143,12 +143,12 @@ function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
   if (!(schema instanceof z.ZodObject)) return null;
 
   const shape = schema.shape as Record<string, z.ZodTypeAny>;
-  if (!("projectId" in shape)) return null;
+  if (!('projectId' in shape)) return null;
 
   // Build a new shape without projectId
   const newShape: Record<string, z.ZodTypeAny> = {};
   for (const [key, value] of Object.entries(shape)) {
-    if (key !== "projectId") {
+    if (key !== 'projectId') {
       newShape[key] = value;
     }
   }
@@ -198,11 +198,11 @@ export function getAccessControlWarnings(
 
   // readOnly explicitly set to false but production_use preset already
   // restricts to read-only tools — the readOnly flag has no additional effect.
-  if (!readOnly && grant.preset === "production_use") {
+  if (!readOnly && grant.preset === 'production_use') {
     warnings.push(
       '⚠️ Warning: Read-only mode is set to false, but the "production_use" preset ' +
-        "already restricts tools to the read-only set. " +
-        "The read-only flag has no additional effect with this preset.",
+        'already restricts tools to the read-only set. ' +
+        'The read-only flag has no additional effect with this preset.',
     );
   }
 
@@ -210,14 +210,14 @@ export function getAccessControlWarnings(
   // This typically means X-Neon-Preset: custom was sent without X-Neon-Scopes,
   // or all scope values were invalid.
   if (
-    grant.preset === "custom" &&
+    grant.preset === 'custom' &&
     (!grant.scopes || grant.scopes.length === 0)
   ) {
     warnings.push(
       '⚠️ Warning: The "custom" preset is active but no valid scope categories are set. ' +
         'Only the "search" and "fetch" tools are available. ' +
         'Add scope categories via the X-Neon-Scopes header (e.g., "querying,schema") ' +
-        "to enable additional tools.",
+        'to enable additional tools.',
     );
   }
 

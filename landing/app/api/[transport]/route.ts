@@ -1,56 +1,56 @@
 // Initialize Sentry (must be first import)
-import "../../../mcp-src/sentry/instrument";
+import '../../../mcp-src/sentry/instrument';
 
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import { createMcpHandler, withMcpAuth } from "mcp-handler";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { captureException, startSpan } from "@sentry/node";
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import { createMcpHandler, withMcpAuth } from 'mcp-handler';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { captureException, startSpan } from '@sentry/node';
 
-import { NEON_PROMPTS, getPromptTemplate } from "../../../mcp-src/prompts";
-import { NEON_HANDLERS, NEON_TOOLS } from "../../../mcp-src/tools/index";
-import { createNeonClient } from "../../../mcp-src/server/api";
-import pkg from "../../../package.json";
-import { handleToolError } from "../../../mcp-src/server/errors";
-import type { ToolHandlerExtraParams } from "../../../mcp-src/tools/types";
-import { detectClientApplication } from "../../../mcp-src/utils/client-application";
-import { isReadOnly } from "../../../mcp-src/utils/read-only";
-import type { AuthContext } from "../../../mcp-src/types/auth";
-import { logger } from "../../../mcp-src/utils/logger";
-import { generateTraceId } from "../../../mcp-src/utils/trace";
-import { waitUntil } from "@vercel/functions";
-import { track, flushAnalytics } from "../../../mcp-src/analytics/analytics";
-import { resolveAccountFromAuth } from "../../../mcp-src/server/account";
-import { model } from "../../../mcp-src/oauth/model";
-import { getApiKeys, type ApiKeyRecord } from "../../../mcp-src/oauth/kv-store";
-import { setSentryTags } from "../../../mcp-src/sentry/utils";
-import type { ServerContext, AppContext } from "../../../mcp-src/types/context";
+import { NEON_PROMPTS, getPromptTemplate } from '../../../mcp-src/prompts';
+import { NEON_HANDLERS, NEON_TOOLS } from '../../../mcp-src/tools/index';
+import { createNeonClient } from '../../../mcp-src/server/api';
+import pkg from '../../../package.json';
+import { handleToolError } from '../../../mcp-src/server/errors';
+import type { ToolHandlerExtraParams } from '../../../mcp-src/tools/types';
+import { detectClientApplication } from '../../../mcp-src/utils/client-application';
+import { isReadOnly } from '../../../mcp-src/utils/read-only';
+import type { AuthContext } from '../../../mcp-src/types/auth';
+import { logger } from '../../../mcp-src/utils/logger';
+import { generateTraceId } from '../../../mcp-src/utils/trace';
+import { waitUntil } from '@vercel/functions';
+import { track, flushAnalytics } from '../../../mcp-src/analytics/analytics';
+import { resolveAccountFromAuth } from '../../../mcp-src/server/account';
+import { model } from '../../../mcp-src/oauth/model';
+import { getApiKeys, type ApiKeyRecord } from '../../../mcp-src/oauth/kv-store';
+import { setSentryTags } from '../../../mcp-src/sentry/utils';
+import type { ServerContext, AppContext } from '../../../mcp-src/types/context';
 import {
   resolveGrantFromHeaders,
   resolveGrantFromToken,
   DEFAULT_GRANT,
   type GrantContext,
-} from "../../../mcp-src/utils/grant-context";
+} from '../../../mcp-src/utils/grant-context';
 import {
   filterToolsForGrant,
   getAvailableTools,
   getAccessControlWarnings,
   injectProjectId,
-} from "../../../mcp-src/tools/grant-filter";
+} from '../../../mcp-src/tools/grant-filter';
 import {
   enforceProtectedBranches,
   GrantViolationError,
-} from "../../../mcp-src/tools/grant-enforcement";
+} from '../../../mcp-src/tools/grant-enforcement';
 
 type AuthenticatedExtra = {
   authInfo?: AuthInfo & {
     extra?: {
       apiKey?: string;
-      account?: AuthContext["extra"]["account"];
+      account?: AuthContext['extra']['account'];
       readOnly?: boolean;
       grant?: GrantContext;
-      client?: AuthContext["extra"]["client"];
-      transport?: AppContext["transport"];
+      client?: AuthContext['extra']['client'];
+      transport?: AppContext['transport'];
       userAgent?: string;
     };
   };
@@ -62,17 +62,17 @@ type AuthenticatedExtra = {
 const handler = createMcpHandler(
   (server: McpServer) => {
     // Request-scoped mutable state (isolated per server instance)
-    let clientName = "unknown";
+    let clientName = 'unknown';
     let clientApplication = detectClientApplication(clientName);
     let hasTrackedServerInit = false;
     let lastKnownContext: ServerContext | undefined;
 
     // Default app context for analytics/Sentry (used in onerror fallback)
     const defaultAppContext: AppContext = {
-      name: "mcp-server-neon",
-      transport: "sse",
+      name: 'mcp-server-neon',
+      transport: 'sse',
       environment: (process.env.NODE_ENV ??
-        "production") as AppContext["environment"],
+        'production') as AppContext['environment'],
       version: pkg.version,
     };
 
@@ -88,13 +88,13 @@ const handler = createMcpHandler(
         readOnly: String(context.readOnly ?? false),
         preset: grant.preset,
         projectScoped: String(!!grant.projectId),
-        protectedBranches: grant.protectedBranches?.join(",") ?? "none",
-        customScopes: grant.scopes?.join(",") ?? "all",
+        protectedBranches: grant.protectedBranches?.join(',') ?? 'none',
+        customScopes: grant.scopes?.join(',') ?? 'all',
       };
 
       track({
         userId: context.account.id,
-        event: "server_init",
+        event: 'server_init',
         properties,
         context: {
           client: context.client,
@@ -102,7 +102,7 @@ const handler = createMcpHandler(
         },
       });
       waitUntil(flushAnalytics());
-      logger.info("Server initialized:", {
+      logger.info('Server initialized:', {
         clientName,
         clientApplication,
         readOnly: context.readOnly,
@@ -114,7 +114,7 @@ const handler = createMcpHandler(
     async function getAuthContext(extra: AuthenticatedExtra) {
       const authInfo = extra.authInfo;
       if (!authInfo?.extra?.apiKey || !authInfo?.extra?.account) {
-        throw new Error("Authentication required");
+        throw new Error('Authentication required');
       }
 
       const apiKey = authInfo.extra.apiKey;
@@ -122,7 +122,7 @@ const handler = createMcpHandler(
       const readOnly = authInfo.extra.readOnly ?? false;
       const grant = { ...(authInfo.extra.grant ?? DEFAULT_GRANT) };
       const client = authInfo.extra.client;
-      const transport = authInfo.extra.transport ?? "sse";
+      const transport = authInfo.extra.transport ?? 'sse';
       const neonClient = createNeonClient(apiKey);
 
       // Validate project ID against the Neon API if one was provided
@@ -138,17 +138,17 @@ const handler = createMcpHandler(
       }
 
       // Use User-Agent as clientName fallback if MCP handshake hasn't provided it yet
-      if (clientName === "unknown" && authInfo.extra.userAgent) {
+      if (clientName === 'unknown' && authInfo.extra.userAgent) {
         clientName = authInfo.extra.userAgent;
         clientApplication = detectClientApplication(clientName);
       }
 
       // Create dynamic appContext with actual transport
       const dynamicAppContext: AppContext = {
-        name: "mcp-server-neon",
+        name: 'mcp-server-neon',
         transport,
         environment: (process.env.NODE_ENV ??
-          "production") as AppContext["environment"],
+          'production') as AppContext['environment'],
         version: pkg.version,
       };
 
@@ -179,7 +179,7 @@ const handler = createMcpHandler(
     // Set up lifecycle hooks for client detection and error handling
     server.server.oninitialized = () => {
       const clientInfo = server.server.getClientVersion();
-      logger.info("MCP oninitialized:", {
+      logger.info('MCP oninitialized:', {
         clientInfo,
         hasName: !!clientInfo?.name,
         currentClientName: clientName,
@@ -196,14 +196,14 @@ const handler = createMcpHandler(
     };
 
     server.server.onerror = (error: unknown) => {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      logger.error("Server error:", {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Server error:', {
         message,
         error,
       });
 
       // Use last known context if available, otherwise use defaults
-      const userId = lastKnownContext?.account?.id ?? "unknown";
+      const userId = lastKnownContext?.account?.id ?? 'unknown';
       const contexts = {
         app: lastKnownContext?.app ?? defaultAppContext,
         client: lastKnownContext?.client,
@@ -218,7 +218,7 @@ const handler = createMcpHandler(
 
       track({
         userId,
-        event: "server_error",
+        event: 'server_error',
         properties: { message, error, eventId },
         context: contexts,
       });
@@ -259,7 +259,7 @@ const handler = createMcpHandler(
               isError: true,
               content: [
                 {
-                  type: "text" as const,
+                  type: 'text' as const,
                   text: `Tool "${tool.name}" is not available in read-only mode`,
                 },
               ],
@@ -274,12 +274,12 @@ const handler = createMcpHandler(
               isError: true,
               content: [
                 {
-                  type: "text" as const,
+                  type: 'text' as const,
                   text:
                     `Tool "${tool.name}" is not available with the current preset "${grant.preset}"` +
                     (grant.scopes
-                      ? ` and scopes [${grant.scopes.join(", ")}]`
-                      : ""),
+                      ? ` and scopes [${grant.scopes.join(', ')}]`
+                      : ''),
                 },
               ],
             };
@@ -288,7 +288,7 @@ const handler = createMcpHandler(
           const traceId = generateTraceId();
           return await startSpan(
             {
-              name: "tool_call",
+              name: 'tool_call',
               attributes: {
                 tool_name: tool.name,
                 trace_id: traceId,
@@ -304,12 +304,12 @@ const handler = createMcpHandler(
                 traceId,
               };
 
-              logger.info("tool call:", properties);
+              logger.info('tool call:', properties);
               setSentryTags(context);
 
               track({
                 userId: account.id,
-                event: "tool_call",
+                event: 'tool_call',
                 properties,
                 context: {
                   client,
@@ -343,7 +343,7 @@ const handler = createMcpHandler(
                   extraArgs,
                 );
                 if (result.isError) {
-                  logger.warn("tool error response:", {
+                  logger.warn('tool error response:', {
                     ...properties,
                     isError: true,
                     contentLength: result.content?.length,
@@ -359,7 +359,7 @@ const handler = createMcpHandler(
                 if (accessControlWarnings.length > 0 && result.content) {
                   result.content.push(
                     ...accessControlWarnings.map((w: string) => ({
-                      type: "text" as const,
+                      type: 'text' as const,
                       text: w,
                     })),
                   );
@@ -372,7 +372,7 @@ const handler = createMcpHandler(
                     isError: true,
                     content: [
                       {
-                        type: "text" as const,
+                        type: 'text' as const,
                         text: error.message,
                       },
                     ],
@@ -380,7 +380,7 @@ const handler = createMcpHandler(
                 }
                 span.setStatus({ code: 2 });
                 const errorResult = handleToolError(error, properties, traceId);
-                logger.warn("tool error response:", {
+                logger.warn('tool error response:', {
                   ...properties,
                   isError: true,
                   contentLength: errorResult.content?.length,
@@ -421,12 +421,12 @@ const handler = createMcpHandler(
             clientName: cName,
             traceId,
           };
-          logger.info("prompt call:", properties);
+          logger.info('prompt call:', properties);
           setSentryTags(context);
 
           track({
             userId: account.id,
-            event: "prompt_call",
+            event: 'prompt_call',
             properties,
             context: { client, app: context.app },
           });
@@ -447,9 +447,9 @@ const handler = createMcpHandler(
             return {
               messages: [
                 {
-                  role: "user" as const,
+                  role: 'user' as const,
                   content: {
-                    type: "text" as const,
+                    type: 'text' as const,
                     text: template,
                   },
                 },
@@ -507,7 +507,7 @@ const handler = createMcpHandler(
               name,
               title: tool.title,
               description: tool.description,
-              inputSchema: tool.inputSchema ?? { type: "object" as const },
+              inputSchema: tool.inputSchema ?? { type: 'object' as const },
               annotations: tool.annotations,
               execution: tool.execution,
               _meta: tool._meta,
@@ -523,7 +523,7 @@ const handler = createMcpHandler(
               name,
               title: tool.title,
               description: tool.description,
-              inputSchema: tool.inputSchema ?? { type: "object" as const },
+              inputSchema: tool.inputSchema ?? { type: 'object' as const },
               annotations: tool.annotations,
               execution: tool.execution,
               _meta: tool._meta,
@@ -537,7 +537,7 @@ const handler = createMcpHandler(
   },
   {
     serverInfo: {
-      name: "mcp-server-neon",
+      name: 'mcp-server-neon',
       version: pkg.version,
     },
     capabilities: {
@@ -550,29 +550,29 @@ const handler = createMcpHandler(
   },
   {
     redisUrl: process.env.KV_URL || process.env.REDIS_URL,
-    basePath: "/api",
+    basePath: '/api',
     maxDuration: 800, // Fluid Compute - up to 800s for SSE connections
-    verboseLogs: process.env.NODE_ENV !== "production",
+    verboseLogs: process.env.NODE_ENV !== 'production',
     onEvent: (event) => {
       switch (event.type) {
-        case "SESSION_STARTED":
-          logger.info("MCP session started", {
+        case 'SESSION_STARTED':
+          logger.info('MCP session started', {
             sessionId: event.sessionId,
             transport: event.transport,
             clientInfo: event.clientInfo,
           });
           break;
 
-        case "SESSION_ENDED":
-          logger.info("MCP session ended", {
+        case 'SESSION_ENDED':
+          logger.info('MCP session ended', {
             sessionId: event.sessionId,
             transport: event.transport,
           });
           break;
 
-        case "REQUEST_COMPLETED":
-          if (event.status === "error") {
-            logger.warn("MCP request failed", {
+        case 'REQUEST_COMPLETED':
+          if (event.status === 'error') {
+            logger.warn('MCP request failed', {
               sessionId: event.sessionId,
               requestId: event.requestId,
               method: event.method,
@@ -581,21 +581,21 @@ const handler = createMcpHandler(
           }
           break;
 
-        case "ERROR":
+        case 'ERROR':
           const isConnectionError =
-            typeof event.error === "string"
-              ? event.error.includes("No connection established")
-              : event.error?.message?.includes("No connection established");
+            typeof event.error === 'string'
+              ? event.error.includes('No connection established')
+              : event.error?.message?.includes('No connection established');
 
           if (isConnectionError) {
-            logger.warn("MCP connection lost", {
+            logger.warn('MCP connection lost', {
               sessionId: event.sessionId,
               source: event.source,
               severity: event.severity,
               context: event.context,
             });
-          } else if (event.severity === "fatal") {
-            logger.error("MCP fatal error", {
+          } else if (event.severity === 'fatal') {
+            logger.error('MCP fatal error', {
               sessionId: event.sessionId,
               error: event.error,
               source: event.source,
@@ -625,11 +625,11 @@ const fetchAccountDetails = async (
   try {
     const cached = await getApiKeys().get(accessToken);
     if (cached) {
-      logger.info("API key cache hit", { accountId: cached.account.id });
+      logger.info('API key cache hit', { accountId: cached.account.id });
       return cached;
     }
   } catch (error) {
-    logger.warn("API key cache read failed", { error });
+    logger.warn('API key cache read failed', { error });
   }
 
   // 2. Cache miss - verify with Neon API
@@ -653,11 +653,11 @@ const fetchAccountDetails = async (
       getApiKeys()
         .set(accessToken, record, API_KEY_CACHE_TTL_MS)
         .catch((err) => {
-          logger.warn("API key cache write failed", { err });
+          logger.warn('API key cache write failed', { err });
         }),
     );
 
-    logger.info("API key cache miss, verified and cached", {
+    logger.info('API key cache miss, verified and cached', {
       accountId: account.id,
     });
     return record;
@@ -666,7 +666,7 @@ const fetchAccountDetails = async (
       response?: { status?: number; data?: unknown };
       message?: string;
     };
-    logger.error("API key verification failed", {
+    logger.error('API key verification failed', {
       message: axiosError.message,
       status: axiosError.response?.status,
       data: axiosError.response?.data,
@@ -680,14 +680,14 @@ const verifyToken = async (
   req: Request,
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> => {
-  const userAgent = req.headers.get("user-agent") || undefined;
-  const neonReadOnlyHeader = req.headers.get("x-neon-read-only");
-  const readOnlyHeader = req.headers.get("x-read-only");
+  const userAgent = req.headers.get('user-agent') || undefined;
+  const neonReadOnlyHeader = req.headers.get('x-neon-read-only');
+  const readOnlyHeader = req.headers.get('x-read-only');
 
-  logger.info("verifyToken called", {
+  logger.info('verifyToken called', {
     hasBearerToken: !!bearerToken,
     bearerTokenLength: bearerToken?.length ?? 0,
-    tokenPrefix: bearerToken?.substring(0, 10) ?? "none",
+    tokenPrefix: bearerToken?.substring(0, 10) ?? 'none',
     userAgent,
   });
 
@@ -697,9 +697,9 @@ const verifyToken = async (
 
   // Detect transport from URL pathname
   const url = new URL(req.url);
-  const transport: AppContext["transport"] = url.pathname.includes("/mcp")
-    ? "stream"
-    : "sse";
+  const transport: AppContext['transport'] = url.pathname.includes('/mcp')
+    ? 'stream'
+    : 'sse';
 
   // Parse grant context from X-Neon-* headers (used only for API key path;
   // OAuth tokens use their stored grant from the consent flow instead)
@@ -715,7 +715,7 @@ const verifyToken = async (
       // Expiration is checked by withMcpAuth using expiresAt field
       // which returns proper RFC-compliant 401 with WWW-Authenticate header
 
-      logger.info("OAuth token found", { clientId: token.client.id });
+      logger.info('OAuth token found', { clientId: token.client.id });
 
       // OAuth tokens always use the stored grant from the consent flow.
       // Headers are fully ignored — grant is immutable until re-authentication.
@@ -734,7 +734,7 @@ const verifyToken = async (
         token: token.accessToken,
         scopes: Array.isArray(token.scope)
           ? token.scope
-          : (token.scope?.split(" ") ?? ["read", "write"]),
+          : (token.scope?.split(' ') ?? ['read', 'write']),
         clientId: token.client.id,
         expiresAt: token.expires_at
           ? Math.floor(token.expires_at / 1000)
@@ -759,14 +759,14 @@ const verifyToken = async (
       };
     }
   } catch (error) {
-    logger.warn("OAuth token lookup failed, trying API key path", { error });
+    logger.warn('OAuth token lookup failed, trying API key path', { error });
   }
 
   // ============================================
   // PATH 2: Not an OAuth token - try API key
   // (For direct API key usage)
   // ============================================
-  logger.info("Trying API key verification path", {
+  logger.info('Trying API key verification path', {
     tokenPrefix: bearerToken.substring(0, 10),
   });
 
@@ -784,8 +784,8 @@ const verifyToken = async (
 
   return {
     token: bearerToken,
-    scopes: ["*"], // API keys get all scopes
-    clientId: "api-key", // Literal string
+    scopes: ['*'], // API keys get all scopes
+    clientId: 'api-key', // Literal string
     extra: {
       account: apiKeyRecord.account,
       apiKey: bearerToken,
@@ -800,7 +800,7 @@ const verifyToken = async (
 // Wrap with authentication
 const authHandler = withMcpAuth(handler, verifyToken, {
   required: true,
-  resourceMetadataPath: "/.well-known/oauth-protected-resource",
+  resourceMetadataPath: '/.well-known/oauth-protected-resource',
 });
 
 // Normalize legacy paths (/mcp, /sse) to canonical /api/* paths
@@ -813,10 +813,10 @@ const authHandler = withMcpAuth(handler, verifyToken, {
 const handleRequest = (req: Request) => {
   const url = new URL(req.url);
 
-  if (url.pathname === "/mcp") {
-    url.pathname = "/api/mcp";
-  } else if (url.pathname === "/sse") {
-    url.pathname = "/api/sse";
+  if (url.pathname === '/mcp') {
+    url.pathname = '/api/mcp';
+  } else if (url.pathname === '/sse') {
+    url.pathname = '/api/sse';
   }
 
   const normalizedReq = new Request(url.toString(), {
@@ -824,7 +824,7 @@ const handleRequest = (req: Request) => {
     headers: req.headers,
     body: req.body,
     // @ts-expect-error duplex is required for streaming bodies
-    duplex: "half",
+    duplex: 'half',
   });
 
   return authHandler(normalizedReq);

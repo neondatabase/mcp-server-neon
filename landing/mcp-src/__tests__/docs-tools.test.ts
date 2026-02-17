@@ -33,12 +33,7 @@ describe('list_docs_resources handler', () => {
       new Response(mockIndex, { status: 200 }),
     );
 
-    const result = (await NEON_HANDLERS.list_docs_resources(
-      // list_docs_resources takes no params
-      {} as never,
-      {} as never,
-      {} as never,
-    )) as ToolResult;
+    const result = (await NEON_HANDLERS.list_docs_resources()) as ToolResult;
 
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
       NEON_DOCS_INDEX_URL,
@@ -53,9 +48,9 @@ describe('list_docs_resources handler', () => {
       new Response('Not Found', { status: 404, statusText: 'Not Found' }),
     );
 
-    await expect(
-      NEON_HANDLERS.list_docs_resources({} as never, {} as never, {} as never),
-    ).rejects.toThrow(NotFoundError);
+    await expect(NEON_HANDLERS.list_docs_resources()).rejects.toThrow(
+      NotFoundError,
+    );
   });
 
   it('throws generic Error on 500 response', async () => {
@@ -66,9 +61,7 @@ describe('list_docs_resources handler', () => {
       }),
     );
 
-    await expect(
-      NEON_HANDLERS.list_docs_resources({} as never, {} as never, {} as never),
-    ).rejects.toThrow(
+    await expect(NEON_HANDLERS.list_docs_resources()).rejects.toThrow(
       'Failed to fetch Neon docs index: 500 Internal Server Error',
     );
   });
@@ -78,9 +71,9 @@ describe('list_docs_resources handler', () => {
       new Error('Network unreachable'),
     );
 
-    await expect(
-      NEON_HANDLERS.list_docs_resources({} as never, {} as never, {} as never),
-    ).rejects.toThrow('Network unreachable');
+    await expect(NEON_HANDLERS.list_docs_resources()).rejects.toThrow(
+      'Network unreachable',
+    );
   });
 });
 
@@ -99,11 +92,9 @@ describe('get_doc_resource handler', () => {
       new Response(mockContent, { status: 200 }),
     );
 
-    const result = (await NEON_HANDLERS.get_doc_resource(
-      { params: { slug: 'docs/connect/connection-pooling.md' } } as never,
-      {} as never,
-      {} as never,
-    )) as ToolResult;
+    const result = (await NEON_HANDLERS.get_doc_resource({
+      params: { slug: 'docs/connect/connection-pooling.md' },
+    })) as ToolResult;
 
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
       `${NEON_DOCS_BASE_URL}/docs/connect/connection-pooling.md`,
@@ -119,11 +110,9 @@ describe('get_doc_resource handler', () => {
       new Response(mockContent, { status: 200 }),
     );
 
-    const result = (await NEON_HANDLERS.get_doc_resource(
-      { params: { slug: 'docs/guides/prisma' } } as never,
-      {} as never,
-      {} as never,
-    )) as ToolResult;
+    const result = (await NEON_HANDLERS.get_doc_resource({
+      params: { slug: 'docs/guides/prisma' },
+    })) as ToolResult;
 
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
       `${NEON_DOCS_BASE_URL}/docs/guides/prisma.md`,
@@ -136,11 +125,9 @@ describe('get_doc_resource handler', () => {
       new Response('content', { status: 200 }),
     );
 
-    await NEON_HANDLERS.get_doc_resource(
-      { params: { slug: 'docs/guides/prisma.md' } } as never,
-      {} as never,
-      {} as never,
-    );
+    await NEON_HANDLERS.get_doc_resource({
+      params: { slug: 'docs/guides/prisma.md' },
+    });
 
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
       `${NEON_DOCS_BASE_URL}/docs/guides/prisma.md`,
@@ -153,11 +140,9 @@ describe('get_doc_resource handler', () => {
     );
 
     await expect(
-      NEON_HANDLERS.get_doc_resource(
-        { params: { slug: 'docs/nonexistent.md' } } as never,
-        {} as never,
-        {} as never,
-      ),
+      NEON_HANDLERS.get_doc_resource({
+        params: { slug: 'docs/nonexistent.md' },
+      }),
     ).rejects.toThrow(NotFoundError);
   });
 
@@ -170,11 +155,7 @@ describe('get_doc_resource handler', () => {
     );
 
     await expect(
-      NEON_HANDLERS.get_doc_resource(
-        { params: { slug: 'docs/broken.md' } } as never,
-        {} as never,
-        {} as never,
-      ),
+      NEON_HANDLERS.get_doc_resource({ params: { slug: 'docs/broken.md' } }),
     ).rejects.toThrow(
       'Failed to fetch doc page "docs/broken.md": 500 Internal Server Error',
     );
@@ -184,22 +165,16 @@ describe('get_doc_resource handler', () => {
     vi.mocked(globalThis.fetch).mockRejectedValue(new Error('DNS failure'));
 
     await expect(
-      NEON_HANDLERS.get_doc_resource(
-        { params: { slug: 'docs/test.md' } } as never,
-        {} as never,
-        {} as never,
-      ),
+      NEON_HANDLERS.get_doc_resource({ params: { slug: 'docs/test.md' } }),
     ).rejects.toThrow('DNS failure');
   });
 
   describe('slug validation', () => {
     it('rejects slugs with path traversal (..) as InvalidArgumentError', async () => {
       await expect(
-        NEON_HANDLERS.get_doc_resource(
-          { params: { slug: '../../../etc/passwd' } } as never,
-          {} as never,
-          {} as never,
-        ),
+        NEON_HANDLERS.get_doc_resource({
+          params: { slug: '../../../etc/passwd' },
+        }),
       ).rejects.toThrow(InvalidArgumentError);
 
       // fetch should never be called
@@ -208,11 +183,9 @@ describe('get_doc_resource handler', () => {
 
     it('rejects slugs with embedded path traversal', async () => {
       await expect(
-        NEON_HANDLERS.get_doc_resource(
-          { params: { slug: 'docs/../../../secret' } } as never,
-          {} as never,
-          {} as never,
-        ),
+        NEON_HANDLERS.get_doc_resource({
+          params: { slug: 'docs/../../../secret' },
+        }),
       ).rejects.toThrow(
         'Invalid doc slug: path traversal ("..") is not allowed',
       );
@@ -220,11 +193,9 @@ describe('get_doc_resource handler', () => {
 
     it('rejects slugs with absolute URLs (://) as InvalidArgumentError', async () => {
       await expect(
-        NEON_HANDLERS.get_doc_resource(
-          { params: { slug: 'https://evil.com/malicious' } } as never,
-          {} as never,
-          {} as never,
-        ),
+        NEON_HANDLERS.get_doc_resource({
+          params: { slug: 'https://evil.com/malicious' },
+        }),
       ).rejects.toThrow(InvalidArgumentError);
 
       expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
@@ -232,11 +203,7 @@ describe('get_doc_resource handler', () => {
 
     it('rejects slugs starting with / as InvalidArgumentError', async () => {
       await expect(
-        NEON_HANDLERS.get_doc_resource(
-          { params: { slug: '/etc/passwd' } } as never,
-          {} as never,
-          {} as never,
-        ),
+        NEON_HANDLERS.get_doc_resource({ params: { slug: '/etc/passwd' } }),
       ).rejects.toThrow(InvalidArgumentError);
 
       expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
@@ -244,11 +211,9 @@ describe('get_doc_resource handler', () => {
 
     it('rejects protocol-relative URLs (//)', async () => {
       await expect(
-        NEON_HANDLERS.get_doc_resource(
-          { params: { slug: '//evil.com/malicious' } } as never,
-          {} as never,
-          {} as never,
-        ),
+        NEON_HANDLERS.get_doc_resource({
+          params: { slug: '//evil.com/malicious' },
+        }),
       ).rejects.toThrow('Invalid doc slug: slug must not start with "/"');
 
       expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
@@ -259,11 +224,9 @@ describe('get_doc_resource handler', () => {
         new Response('content', { status: 200 }),
       );
 
-      await NEON_HANDLERS.get_doc_resource(
-        { params: { slug: 'docs/guides/prisma' } } as never,
-        {} as never,
-        {} as never,
-      );
+      await NEON_HANDLERS.get_doc_resource({
+        params: { slug: 'docs/guides/prisma' },
+      });
 
       expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
         `${NEON_DOCS_BASE_URL}/docs/guides/prisma.md`,
