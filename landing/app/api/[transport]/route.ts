@@ -4,6 +4,7 @@ import '../../../mcp-src/sentry/instrument';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { captureException, startSpan } from '@sentry/node';
 
 import { NEON_PROMPTS, getPromptTemplate } from '../../../mcp-src/prompts';
@@ -24,6 +25,22 @@ import { model } from '../../../mcp-src/oauth/model';
 import { getApiKeys, type ApiKeyRecord } from '../../../mcp-src/oauth/kv-store';
 import { setSentryTags } from '../../../mcp-src/sentry/utils';
 import type { ServerContext, AppContext } from '../../../mcp-src/types/context';
+import {
+  resolveGrantFromHeaders,
+  resolveGrantFromToken,
+  DEFAULT_GRANT,
+  type GrantContext,
+} from '../../../mcp-src/utils/grant-context';
+import {
+  filterToolsForGrant,
+  getAvailableTools,
+  getAccessControlWarnings,
+  injectProjectId,
+} from '../../../mcp-src/tools/grant-filter';
+import {
+  enforceProtectedBranches,
+  GrantViolationError,
+} from '../../../mcp-src/tools/grant-enforcement';
 
 type AuthenticatedExtra = {
   authInfo?: AuthInfo & {
@@ -31,6 +48,7 @@ type AuthenticatedExtra = {
       apiKey?: string;
       account?: AuthContext['extra']['account'];
       readOnly?: boolean;
+      grant?: GrantContext;
       client?: AuthContext['extra']['client'];
       transport?: AppContext['transport'];
       userAgent?: string;
@@ -63,10 +81,15 @@ const handler = createMcpHandler(
       if (hasTrackedServerInit) return;
       hasTrackedServerInit = true;
 
+      const grant = context.grant ?? DEFAULT_GRANT;
       const properties = {
         clientName,
         clientApplication,
         readOnly: String(context.readOnly ?? false),
+        preset: grant.preset,
+        projectScoped: String(!!grant.projectId),
+        protectedBranches: grant.protectedBranches?.join(',') ?? 'none',
+        customScopes: grant.scopes?.join(',') ?? 'all',
       };
 
       track({
@@ -83,11 +106,12 @@ const handler = createMcpHandler(
         clientName,
         clientApplication,
         readOnly: context.readOnly,
+        grant,
       });
     }
 
     // Helper function to get Neon client and context from auth info
-    function getAuthContext(extra: AuthenticatedExtra) {
+    async function getAuthContext(extra: AuthenticatedExtra) {
       const authInfo = extra.authInfo;
       if (!authInfo?.extra?.apiKey || !authInfo?.extra?.account) {
         throw new Error('Authentication required');
@@ -96,9 +120,22 @@ const handler = createMcpHandler(
       const apiKey = authInfo.extra.apiKey;
       const account = authInfo.extra.account;
       const readOnly = authInfo.extra.readOnly ?? false;
+      const grant = { ...(authInfo.extra.grant ?? DEFAULT_GRANT) };
       const client = authInfo.extra.client;
       const transport = authInfo.extra.transport ?? 'sse';
       const neonClient = createNeonClient(apiKey);
+
+      // Validate project ID against the Neon API if one was provided
+      if (grant.projectId) {
+        try {
+          await neonClient.getProject(grant.projectId);
+        } catch {
+          logger.warn(
+            `Project ID "${grant.projectId}" could not be verified — falling back to unscoped access.`,
+          );
+          grant.projectId = null;
+        }
+      }
 
       // Use User-Agent as clientName fallback if MCP handshake hasn't provided it yet
       if (clientName === 'unknown' && authInfo.extra.userAgent) {
@@ -122,6 +159,7 @@ const handler = createMcpHandler(
         app: dynamicAppContext,
         readOnly,
         client,
+        grant,
       };
       lastKnownContext = context;
 
@@ -129,6 +167,7 @@ const handler = createMcpHandler(
         apiKey,
         account,
         readOnly,
+        grant,
         neonClient,
         clientApplication,
         clientName,
@@ -203,12 +242,13 @@ const handler = createMcpHandler(
           const {
             account,
             readOnly,
+            grant,
             neonClient,
             clientApplication: clientApp,
             clientName: cName,
             client,
             context,
-          } = getAuthContext(extra as AuthenticatedExtra);
+          } = await getAuthContext(extra as AuthenticatedExtra);
 
           // Track server_init on first authenticated request (after client detection)
           trackServerInit(context);
@@ -221,6 +261,25 @@ const handler = createMcpHandler(
                 {
                   type: 'text' as const,
                   text: `Tool "${tool.name}" is not available in read-only mode`,
+                },
+              ],
+            };
+          }
+
+          // Check grant-based tool access (runtime filtering for remote server)
+          const allowedTools = filterToolsForGrant(NEON_TOOLS, grant);
+          const isAllowed = allowedTools.some((t) => t.name === tool.name);
+          if (!isAllowed) {
+            return {
+              isError: true,
+              content: [
+                {
+                  type: 'text' as const,
+                  text:
+                    `Tool "${tool.name}" is not available with the current preset "${grant.preset}"` +
+                    (grant.scopes
+                      ? ` and scopes [${grant.scopes.join(', ')}]`
+                      : ''),
                 },
               ],
             };
@@ -239,6 +298,8 @@ const handler = createMcpHandler(
               const properties = {
                 tool_name: tool.name,
                 readOnly: String(readOnly),
+                preset: grant.preset,
+                projectScoped: String(!!grant.projectId),
                 clientName: cName,
                 traceId,
               };
@@ -266,9 +327,23 @@ const handler = createMcpHandler(
               };
 
               try {
+                // Inject projectId if in project-scoped mode
+                const effectiveArgs = injectProjectId(
+                  (args ?? {}) as Record<string, unknown>,
+                  grant,
+                );
+
+                // Enforce protected branch restrictions
+                await enforceProtectedBranches(
+                  grant,
+                  tool.name,
+                  effectiveArgs,
+                  neonClient,
+                );
+
                 // Wrap args in { params } structure expected by handlers
                 const result = await (toolHandler as any)(
-                  { params: args },
+                  { params: effectiveArgs },
                   neonClient,
                   extraArgs,
                 );
@@ -280,8 +355,34 @@ const handler = createMcpHandler(
                     firstContentType: result.content?.[0]?.type,
                   });
                 }
+
+                // Append access control warnings to tool response
+                const accessControlWarnings = getAccessControlWarnings(
+                  grant,
+                  readOnly,
+                );
+                if (accessControlWarnings.length > 0 && result.content) {
+                  result.content.push(
+                    ...accessControlWarnings.map((w: string) => ({
+                      type: 'text' as const,
+                      text: w,
+                    })),
+                  );
+                }
+
                 return result;
               } catch (error) {
+                if (error instanceof GrantViolationError) {
+                  return {
+                    isError: true,
+                    content: [
+                      {
+                        type: 'text' as const,
+                        text: error.message,
+                      },
+                    ],
+                  };
+                }
                 span.setStatus({ code: 2 });
                 const errorResult = handleToolError(error, properties, traceId);
                 logger.warn('tool error response:', {
@@ -314,7 +415,7 @@ const handler = createMcpHandler(
             clientName: cName,
             client,
             context,
-          } = getAuthContext(extra as AuthenticatedExtra);
+          } = await getAuthContext(extra as AuthenticatedExtra);
 
           // Track server_init on first authenticated request
           trackServerInit(context);
@@ -368,6 +469,76 @@ const handler = createMcpHandler(
         },
       );
     });
+
+    // Override tools/list to filter tools based on the authenticated user's grant context.
+    // By default, the MCP SDK returns ALL registered tools. Since the remote server
+    // registers all tools upfront (shared across sessions), we need to filter per-request
+    // so each user only sees tools they can actually use.
+    server.server.setRequestHandler(
+      ListToolsRequestSchema,
+      async (_request, extra) => {
+        // Access the SDK's internal registered tools (already JSON-schema-converted)
+        const registeredTools = (server as unknown as Record<string, unknown>)
+          ._registeredTools as Record<
+          string,
+          {
+            enabled: boolean;
+            title?: string;
+            description?: string;
+            inputSchema?: unknown;
+            outputSchema?: unknown;
+            annotations?: unknown;
+            execution?: unknown;
+            _meta?: unknown;
+          }
+        >;
+
+        try {
+          const { readOnly, grant } = await getAuthContext(
+            extra as AuthenticatedExtra,
+          );
+
+          // Get the names of tools available for this user's grant + read-only context
+          const availableToolNames: Set<string> = new Set(
+            getAvailableTools(grant, readOnly).map((t) => t.name),
+          );
+
+          // Filter the registered tools (which have already-converted JSON schemas)
+          const tools = Object.entries(registeredTools)
+            .filter(
+              ([name, tool]) => tool.enabled && availableToolNames.has(name),
+            )
+            .map(([name, tool]) => ({
+              name,
+              title: tool.title,
+              description: tool.description,
+              inputSchema: tool.inputSchema ?? { type: 'object' as const },
+              annotations: tool.annotations,
+              execution: tool.execution,
+              _meta: tool._meta,
+              ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+            }));
+
+          return { tools };
+        } catch {
+          // If auth fails (e.g., unauthenticated request), fall back to showing all enabled tools
+          const tools = Object.entries(registeredTools)
+            .filter(([, tool]) => tool.enabled)
+            .map(([name, tool]) => ({
+              name,
+              title: tool.title,
+              description: tool.description,
+              inputSchema: tool.inputSchema ?? { type: 'object' as const },
+              annotations: tool.annotations,
+              execution: tool.execution,
+              _meta: tool._meta,
+              ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+            }));
+
+          return { tools };
+        }
+      },
+    );
   },
   {
     serverInfo: {
@@ -376,6 +547,7 @@ const handler = createMcpHandler(
     },
     capabilities: {
       tools: {},
+      resources: {},
       prompts: {
         listChanged: true,
       },
@@ -514,6 +686,7 @@ const verifyToken = async (
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> => {
   const userAgent = req.headers.get('user-agent') || undefined;
+  const neonReadOnlyHeader = req.headers.get('x-neon-read-only');
   const readOnlyHeader = req.headers.get('x-read-only');
 
   logger.info('verifyToken called', {
@@ -533,6 +706,10 @@ const verifyToken = async (
     ? 'stream'
     : 'sse';
 
+  // Parse grant context from X-Neon-* headers (used only for API key path;
+  // OAuth tokens use their stored grant from the consent flow instead)
+  const grant = resolveGrantFromHeaders(req.headers);
+
   // ============================================
   // PATH 1: Check OAuth tokens table FIRST
   // (For users who authenticated via OAuth flow)
@@ -545,10 +722,16 @@ const verifyToken = async (
 
       logger.info('OAuth token found', { clientId: token.client.id });
 
-      // Determine read-only mode from header and OAuth scope
+      // OAuth tokens always use the stored grant from the consent flow.
+      // Headers are fully ignored — grant is immutable until re-authentication.
+      const effectiveGrant = resolveGrantFromToken(
+        token as { grant?: GrantContext },
+      );
+
+      // Read-only is determined only by stored OAuth scope and grant preset (no headers)
       const readOnly = isReadOnly({
-        headerValue: readOnlyHeader,
         scope: token.scope,
+        grant: effectiveGrant,
       });
 
       // Return auth from stored token (0 API calls!)
@@ -570,6 +753,7 @@ const verifyToken = async (
           },
           apiKey: bearerToken,
           readOnly,
+          grant: effectiveGrant,
           client: {
             id: token.client.id,
             name: token.client.client_name,
@@ -596,9 +780,11 @@ const verifyToken = async (
     return undefined;
   }
 
-  // Determine read-only mode from header only (API keys don't have OAuth scopes)
+  // Determine read-only mode from header and grant preset
   const readOnly = isReadOnly({
+    neonHeaderValue: neonReadOnlyHeader,
     headerValue: readOnlyHeader,
+    grant,
   });
 
   return {
@@ -609,6 +795,7 @@ const verifyToken = async (
       account: apiKeyRecord.account,
       apiKey: bearerToken,
       readOnly,
+      grant,
       transport,
       userAgent,
     },
