@@ -169,7 +169,12 @@ export const createMcpServer = async (context: ServerContext) => {
               );
 
               // Enforce protected branch restrictions
-              enforceProtectedBranches(grant, tool.name, effectiveArgs);
+              await enforceProtectedBranches(
+                grant,
+                tool.name,
+                effectiveArgs,
+                neonClient,
+              );
 
               const result = await toolHandler(
                 effectiveArgs as typeof args,

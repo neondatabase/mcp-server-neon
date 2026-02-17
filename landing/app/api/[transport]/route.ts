@@ -334,7 +334,12 @@ const handler = createMcpHandler(
                 );
 
                 // Enforce protected branch restrictions
-                enforceProtectedBranches(grant, tool.name, effectiveArgs);
+                await enforceProtectedBranches(
+                  grant,
+                  tool.name,
+                  effectiveArgs,
+                  neonClient,
+                );
 
                 // Wrap args in { params } structure expected by handlers
                 const result = await (toolHandler as any)(
