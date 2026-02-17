@@ -34,81 +34,6 @@ export const SCOPE_CATEGORIES = [
 export type ScopeCategory = (typeof SCOPE_CATEGORIES)[number];
 
 /**
- * Metadata for each scope category (for OAuth consent UI and documentation).
- */
-export const SCOPE_CATEGORY_DEFINITIONS: Record<
-  ScopeCategory,
-  { label: string; description: string; sensitive?: boolean }
-> = {
-  projects: {
-    label: 'Project Management',
-    description:
-      'Create, delete, list, and search Neon projects and organizations across your account.',
-  },
-  branches: {
-    label: 'Branch Management',
-    description:
-      'Create, delete, and manage database branches for development, testing, or migrations.',
-  },
-  schema: {
-    label: 'Schema and Table Inspection',
-    description:
-      'List tables and inspect schema definitions to understand your database structure.',
-  },
-  querying: {
-    label: 'SQL Query Execution',
-    description:
-      'Execute SQL queries, transactions, and database migrations against your databases.',
-    sensitive: true,
-  },
-  performance: {
-    label: 'Query Performance Optimization',
-    description:
-      'Analyze slow queries and test performance optimizations on temporary branches.',
-  },
-  neon_auth: {
-    label: 'Neon Auth',
-    description:
-      'Provision authentication infrastructure by integrating with Auth providers.',
-  },
-  data_api: {
-    label: 'Data API',
-    description:
-      'Provision and configure the Neon Data API for HTTP-based database access.',
-  },
-  docs: {
-    label: 'Documentation and Resources',
-    description: 'Access Neon documentation, setup guides, and best practices.',
-  },
-};
-
-/**
- * Preset metadata for OAuth consent UI.
- */
-export const PRESET_DEFINITIONS: Record<
-  Preset,
-  { label: string; description: string }
-> = {
-  local_development: {
-    label: 'Local Development',
-    description:
-      'Full development access with branch management and SQL execution.',
-  },
-  production_use: {
-    label: 'Production Use',
-    description: 'Read-only access for schema inspection and documentation.',
-  },
-  full_access: {
-    label: 'Full Access',
-    description: 'Full access including project deletion. Use with caution.',
-  },
-  custom: {
-    label: 'Custom',
-    description: 'Select specific tool categories to enable.',
-  },
-};
-
-/**
  * Default branch names considered "production" when protect-production is set to "true".
  */
 export const DEFAULT_PROTECTED_BRANCHES = [
@@ -236,13 +161,6 @@ export function resolveGrantFromHeaders(headers: Headers): GrantContext {
 /**
  * CLI grant arguments parsed from command-line flags.
  */
-export type CliGrantArgs = {
-  preset?: string;
-  scopes?: string;
-  projectId?: string;
-  protectProduction?: string;
-};
-
 /**
  * Resolve grant context from CLI flags (stdio mode).
  *
@@ -250,7 +168,12 @@ export type CliGrantArgs = {
  * - --scopes implies custom preset
  * - --preset without --scopes uses the specified preset
  */
-export function resolveGrantFromCliArgs(args: CliGrantArgs): GrantContext {
+export function resolveGrantFromCliArgs(args: {
+  preset?: string;
+  scopes?: string;
+  projectId?: string;
+  protectProduction?: string;
+}): GrantContext {
   const scopes = parseScopeCategories(args.scopes ?? null);
   const protectedBranches = parseProtectedBranches(
     args.protectProduction ?? null,
