@@ -27,6 +27,8 @@ const BRANCH_SENSITIVE_TOOLS: ReadonlyMap<string, string> = new Map([
   ['reset_from_parent', 'branchIdOrName'],
   ['run_sql', 'branchId'],
   ['run_sql_transaction', 'branchId'],
+  ['complete_database_migration', 'parentBranchId'],
+  ['complete_query_tuning', 'branchId'],
 ]);
 
 /**

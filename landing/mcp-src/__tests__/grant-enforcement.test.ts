@@ -121,6 +121,22 @@ describe('enforceProtectedBranches – branch-sensitive tools (protected)', () =
     ).toThrow(GrantViolationError);
   });
 
+  it('throws for complete_database_migration targeting a protected parent branch', () => {
+    expect(() =>
+      enforceProtectedBranches(protectedGrant, 'complete_database_migration', {
+        parentBranchId: 'main',
+      }),
+    ).toThrow(GrantViolationError);
+  });
+
+  it('throws for complete_query_tuning targeting a protected branch', () => {
+    expect(() =>
+      enforceProtectedBranches(protectedGrant, 'complete_query_tuning', {
+        branchId: 'prod',
+      }),
+    ).toThrow(GrantViolationError);
+  });
+
   it('error message includes branch name and tool name', () => {
     try {
       enforceProtectedBranches(protectedGrant, 'delete_branch', {
@@ -205,6 +221,22 @@ describe('enforceProtectedBranches – non-protected branches', () => {
     expect(() =>
       enforceProtectedBranches(protectedGrant, 'run_sql', {
         branchId: 123,
+      }),
+    ).not.toThrow();
+  });
+
+  it('allows complete_database_migration on non-protected parent branch', () => {
+    expect(() =>
+      enforceProtectedBranches(protectedGrant, 'complete_database_migration', {
+        parentBranchId: 'feature-branch',
+      }),
+    ).not.toThrow();
+  });
+
+  it('allows complete_query_tuning on non-protected branch', () => {
+    expect(() =>
+      enforceProtectedBranches(protectedGrant, 'complete_query_tuning', {
+        branchId: 'dev-branch',
       }),
     ).not.toThrow();
   });
