@@ -306,6 +306,7 @@ dev-notes/              # Developer notes and solution documentation
 ## Important Notes
 
 - **TypeScript Configuration**: Uses `bundler` module resolution for Next.js compatibility. Imports use extensionless paths (no `.js` suffix).
+- **Registry metadata version sync**: Keep root `server.json` `version` in sync with `landing/package.json` `version`. CI enforces this via the PR workflow.
 
 - **Migration Pattern**: Tools like `prepare_database_migration` and `prepare_query_tuning` create temporary branches and return all context (branch IDs, SQL, database name, etc.) in the response. The LLM must pass this context back to subsequent `complete_*` tools. No state is stored server-side, enabling serverless deployment.
 
