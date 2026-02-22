@@ -45,23 +45,6 @@
           "default": "false"
         }
       ]
-    },
-    {
-      "type": "sse",
-      "url": "https://mcp.neon.tech/sse",
-      "headers": [
-        {
-          "name": "Authorization",
-          "description": "Optional Bearer token with a Neon API key.",
-          "isSecret": true
-        },
-        {
-          "name": "x-read-only",
-          "description": "Optional header to enable read-only mode for tool filtering.",
-          "format": "boolean",
-          "default": "false"
-        }
-      ]
     }
   ]
 }
