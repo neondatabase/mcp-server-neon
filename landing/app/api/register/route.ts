@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { model } from '../../../mcp-src/oauth/model';
 import { generateRandomString } from '../../../mcp-src/oauth/utils';
 import { handleOAuthError } from '../../../lib/errors';
@@ -9,7 +9,6 @@ const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
 
 export async function POST(request: NextRequest) {
-  logger.debug('POST handler entered', { url: request.url });
   try {
     const payload = await request.json();
 
@@ -19,7 +18,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (payload.client_name === undefined) {
-      return NextResponse.json(
+      return Response.json(
         {
           error: 'invalid_request',
           error_description: 'client_name is required',
@@ -29,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (payload.redirect_uris === undefined) {
-      return NextResponse.json(
+      return Response.json(
         {
           error: 'invalid_request',
           error_description: 'redirect_uris is required',
@@ -44,7 +43,7 @@ export async function POST(request: NextRequest) {
         SUPPORTED_GRANT_TYPES.includes(grant),
       )
     ) {
-      return NextResponse.json(
+      return Response.json(
         {
           error: 'invalid_request',
           error_description:
@@ -60,7 +59,7 @@ export async function POST(request: NextRequest) {
         SUPPORTED_RESPONSE_TYPES.includes(responseType),
       )
     ) {
-      return NextResponse.json(
+      return Response.json(
         {
           error: 'invalid_request',
           error_description:
@@ -105,59 +104,20 @@ export async function POST(request: NextRequest) {
       tokenEndpointAuthMethod: responseBody.token_endpoint_auth_method,
     });
 
-    logger.debug('about to create NextResponse.json', {
-      responseBodyKeys: Object.keys(responseBody),
-      clientId,
-      hasClientSecret: !!responseBody.client_secret,
-    });
-
-    let response: NextResponse;
-    try {
-      logger.debug('calling NextResponse.json');
-      response = NextResponse.json(responseBody);
-      logger.debug('NextResponse.json succeeded', {
-        responseType: typeof response,
-        responseStatus: response?.status,
-        isResponse: response instanceof Response,
-      });
-    } catch (jsonError) {
-      logger.error('NextResponse.json threw error', {
-        error:
-          jsonError instanceof Error ? jsonError.message : String(jsonError),
-        stack: jsonError instanceof Error ? jsonError.stack : undefined,
-      });
-      throw jsonError;
-    }
-
-    logger.debug('about to return response', {
-      responseExists: !!response,
-      responseType: typeof response,
-    });
-
-    return response;
+    return Response.json(responseBody);
   } catch (error: unknown) {
-    logger.debug('catch block entered', {
-      errorType: typeof error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorName: error instanceof Error ? error.name : undefined,
-    });
     logger.error('caught error in register handler', {
       error,
       errorType: typeof error,
       errorMessage: error instanceof Error ? error.message : String(error),
       errorStack: error instanceof Error ? error.stack : undefined,
     });
-    const errorResponse = handleOAuthError(error, 'Client registration error');
-    logger.debug('returning from catch block', {
-      errorResponseExists: !!errorResponse,
-      errorResponseType: typeof errorResponse,
-    });
-    return errorResponse;
+    return handleOAuthError(error, 'Client registration error');
   }
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, {
+  return new Response(null, {
     status: 204,
     headers: {
       'Access-Control-Allow-Origin': '*',
