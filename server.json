@@ -1,0 +1,50 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.neon/mcp",
+  "title": "Neon",
+  "description": "Official Neon MCP server for managing Neon projects and Postgres databases.",
+  "repository": {
+    "url": "https://github.com/neondatabase/mcp-server-neon",
+    "source": "github",
+    "subfolder": "landing"
+  },
+  "version": "0.8.0",
+  "websiteUrl": "https://neon.tech/docs/ai/neon-mcp-server",
+  "icons": [
+    {
+      "src": "https://neon.com/brand/neon-logo-light-color.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ],
+      "theme": "light"
+    },
+    {
+      "src": "https://neon.com/brand/neon-logo-dark-color.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ],
+      "theme": "dark"
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.neon.tech/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Optional Bearer token with a Neon API key.",
+          "isSecret": true
+        },
+        {
+          "name": "x-read-only",
+          "description": "Optional header to enable read-only mode for tool filtering.",
+          "format": "boolean",
+          "default": "false"
+        }
+      ]
+    }
+  ]
+}
