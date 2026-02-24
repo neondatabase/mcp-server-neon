@@ -143,6 +143,8 @@ You can enable read-only mode in two ways:
 }
 ```
 
+When `X-Neon-Read-Only: true` (or legacy `x-read-only: true`) is sent to the authorize endpoint, the OAuth permissions dialog defaults to read-only by rendering "Full access" unchecked.
+
 > **Note:** Read-only mode restricts which _tools_ are available, not the SQL content. The `run_sql` tool remains available and can execute any SQL including INSERT/UPDATE/DELETE. For true read-only SQL access, use database roles with restricted permissions.
 
 <details>

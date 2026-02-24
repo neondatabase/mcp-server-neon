@@ -38,6 +38,8 @@ During OAuth authorization, users see a permissions dialog where they can:
 - **Read-only**: Always granted (view projects, run queries)
 - **Full access**: Optional checkbox (create/delete resources, migrations)
 
+If `X-Neon-Read-Only: true` (or legacy `x-read-only: true`) is present on the authorize request, the "Full access" checkbox defaults to unchecked.
+
 The `/.well-known/oauth-authorization-server` endpoint exposes `scopes_supported` for client discovery.
 
 ## Development

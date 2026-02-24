@@ -9,6 +9,7 @@ import {
 import { COOKIE_SECRET } from '../../../lib/config';
 import { handleOAuthError } from '../../../lib/errors';
 import {
+  isReadOnly,
   hasWriteScope,
   SCOPE_DEFINITIONS,
   SUPPORTED_SCOPES,
@@ -53,9 +54,13 @@ const parseAuthRequest = (
  * Renders the scope selection UI.
  * Read access is always granted. Write access is always shown as an option.
  */
-function renderScopeSection(requestedScopes: string[]): string {
+function renderScopeSection(
+  requestedScopes: string[],
+  defaultReadOnly: boolean,
+): string {
   const writeChecked =
-    requestedScopes.length === 0 || hasWriteScope(requestedScopes);
+    !defaultReadOnly &&
+    (requestedScopes.length === 0 || hasWriteScope(requestedScopes));
 
   // Read access is always granted (hidden input ensures it's submitted)
   let html = `<input type="hidden" name="scopes" value="read" />`;
@@ -99,6 +104,7 @@ const renderApprovalDialog = (
   },
   state: string,
   requestedScopes: string[],
+  defaultReadOnly: boolean,
 ) => {
   const clientName = he.escape(client.client_name || 'A new MCP Client');
   const website = client.client_uri ? he.escape(client.client_uri) : undefined;
@@ -383,7 +389,7 @@ const renderApprovalDialog = (
         <input type="hidden" name="state" value="${he.escape(state)}" />
         <div class="scope-section">
           <div class="scope-section-title">Permissions:</div>
-          ${renderScopeSection(requestedScopes)}
+          ${renderScopeSection(requestedScopes, defaultReadOnly)}
         </div>
         <div class="actions">
           <button type="button" class="button button-secondary" onclick="window.history.back()">Cancel</button>
@@ -430,6 +436,11 @@ export async function GET(request: NextRequest) {
       redirectUri: requestParams.redirectUri,
       responseType: requestParams.responseType,
       scope: requestParams.scope,
+    });
+
+    const defaultReadOnly = isReadOnly({
+      neonHeaderValue: request.headers.get('x-neon-read-only'),
+      headerValue: request.headers.get('x-read-only'),
     });
 
     if (!client) {
@@ -488,6 +499,7 @@ export async function GET(request: NextRequest) {
       client,
       btoa(JSON.stringify(requestParams)),
       requestParams.scope,
+      defaultReadOnly,
     );
   } catch (error: unknown) {
     return handleOAuthError(error, 'Authorization error');
