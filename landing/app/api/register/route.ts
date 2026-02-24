@@ -1,4 +1,4 @@
-import type { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { model } from '../../../mcp-src/oauth/model';
 import { generateRandomString } from '../../../mcp-src/oauth/utils';
 import { handleOAuthError } from '../../../lib/errors';
@@ -18,23 +18,33 @@ export async function POST(request: NextRequest) {
     });
 
     if (payload.client_name === undefined) {
-      return Response.json(
+      const response = NextResponse.json(
         {
           error: 'invalid_request',
           error_description: 'client_name is required',
         },
         { status: 400 },
       );
+      logger.debug('register validation failed', {
+        reason: 'client_name_missing',
+        status: response.status,
+      });
+      return response;
     }
 
     if (payload.redirect_uris === undefined) {
-      return Response.json(
+      const response = NextResponse.json(
         {
           error: 'invalid_request',
           error_description: 'redirect_uris is required',
         },
         { status: 400 },
       );
+      logger.debug('register validation failed', {
+        reason: 'redirect_uris_missing',
+        status: response.status,
+      });
+      return response;
     }
 
     if (
@@ -43,7 +53,7 @@ export async function POST(request: NextRequest) {
         SUPPORTED_GRANT_TYPES.includes(grant),
       )
     ) {
-      return Response.json(
+      const response = NextResponse.json(
         {
           error: 'invalid_request',
           error_description:
@@ -51,6 +61,11 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 },
       );
+      logger.debug('register validation failed', {
+        reason: 'grant_types_invalid',
+        status: response.status,
+      });
+      return response;
     }
 
     if (
@@ -59,7 +74,7 @@ export async function POST(request: NextRequest) {
         SUPPORTED_RESPONSE_TYPES.includes(responseType),
       )
     ) {
-      return Response.json(
+      const response = NextResponse.json(
         {
           error: 'invalid_request',
           error_description:
@@ -67,6 +82,11 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 },
       );
+      logger.debug('register validation failed', {
+        reason: 'response_types_invalid',
+        status: response.status,
+      });
+      return response;
     }
 
     const clientId = generateRandomString(8);
@@ -104,7 +124,14 @@ export async function POST(request: NextRequest) {
       tokenEndpointAuthMethod: responseBody.token_endpoint_auth_method,
     });
 
-    return Response.json(responseBody);
+    const response = NextResponse.json(responseBody);
+    logger.debug('register response built', {
+      responseKind: 'NextResponse',
+      status: response.status,
+      hasContentType: !!response.headers.get('content-type'),
+      contentType: response.headers.get('content-type'),
+    });
+    return response;
   } catch (error: unknown) {
     logger.error('caught error in register handler', {
       error,
@@ -112,12 +139,19 @@ export async function POST(request: NextRequest) {
       errorMessage: error instanceof Error ? error.message : String(error),
       errorStack: error instanceof Error ? error.stack : undefined,
     });
-    return handleOAuthError(error, 'Client registration error');
+    const errorResponse = handleOAuthError(error, 'Client registration error');
+    logger.debug('register error response built', {
+      responseKind: 'NextResponse',
+      status: errorResponse.status,
+      hasContentType: !!errorResponse.headers.get('content-type'),
+      contentType: errorResponse.headers.get('content-type'),
+    });
+    return errorResponse;
   }
 }
 
 export async function OPTIONS() {
-  return new Response(null, {
+  return new NextResponse(null, {
     status: 204,
     headers: {
       'Access-Control-Allow-Origin': '*',

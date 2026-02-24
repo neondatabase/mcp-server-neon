@@ -9,7 +9,7 @@ const PORT = process.env.E2E_PORT ?? '3100';
 const BASE_URL = `http://localhost:${PORT}`;
 
 /**
- * Load env vars from .env.e2e (written by global-setup.ts).
+ * Load env vars from .env.e2e (written by e2e setup).
  * These are passed to the webServer so the Next.js dev server
  * has a working OAUTH_DATABASE_URL.
  */
@@ -44,9 +44,7 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
-    // Env vars are set by globalSetup on process.env, which the webServer
-    // subprocess inherits. We also try to load .env.e2e here for the case
-    // where it already exists from a previous run.
+    // Load fresh values from .env.e2e for the webServer subprocess.
     env: loadE2eEnv(),
   },
 });

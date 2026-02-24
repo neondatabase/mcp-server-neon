@@ -10,6 +10,7 @@
 import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
+import { neon } from '@neondatabase/serverless';
 
 const ENV_FILE = path.resolve(import.meta.dirname, '..', '.env.e2e');
 
@@ -42,6 +43,19 @@ async function provisionInstagresDb(): Promise<string> {
   return data.connection_string;
 }
 
+async function isDatabaseReachable(connectionString: string): Promise<boolean> {
+  try {
+    const sql = neon(connectionString);
+    await sql`SELECT 1`;
+    return true;
+  } catch (error) {
+    console.warn('[e2e-setup] Existing OAUTH_DATABASE_URL is unreachable', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
 export default async function globalSetup() {
   let connectionString: string | undefined;
   let cookieSecret: string | undefined;
@@ -52,11 +66,19 @@ export default async function globalSetup() {
     const dbMatch = content.match(/OAUTH_DATABASE_URL=(.+)/);
     const secretMatch = content.match(/COOKIE_SECRET=(.+)/);
     if (dbMatch?.[1]) {
-      console.log(
-        '[e2e-setup] Using existing .env.e2e (delete to re-provision)',
-      );
-      connectionString = dbMatch[1].trim();
-      cookieSecret = secretMatch?.[1]?.trim();
+      const existingConnectionString = dbMatch[1].trim();
+      const canReuse = await isDatabaseReachable(existingConnectionString);
+      if (canReuse) {
+        console.log(
+          '[e2e-setup] Using existing .env.e2e (delete to re-provision)',
+        );
+        connectionString = existingConnectionString;
+        cookieSecret = secretMatch?.[1]?.trim();
+      } else {
+        console.log(
+          '[e2e-setup] Existing .env.e2e is invalid, provisioning fresh database',
+        );
+      }
     }
   }
 

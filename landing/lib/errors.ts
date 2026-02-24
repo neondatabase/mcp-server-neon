@@ -36,40 +36,64 @@ export function handleOAuthError(
     const upstreamStatus = oauthError.status ?? 500;
     const responseStatus = upstreamStatus >= 500 ? 502 : 400;
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         error: oauthError.error ?? 'upstream_error',
         error_description: oauthError.error_description,
       },
       { status: responseStatus },
     );
+    logger.debug('handleOAuthError returning upstream response', {
+      context,
+      status: response.status,
+      error: oauthError.error ?? 'upstream_error',
+    });
+    return response;
   }
 
   // Network errors
   if (error instanceof TypeError && message.includes('fetch')) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         error: 'upstream_unavailable',
         error_description: 'Failed to connect to authorization server',
       },
       { status: 502 },
     );
+    logger.debug('handleOAuthError returning network response', {
+      context,
+      status: response.status,
+      error: 'upstream_unavailable',
+    });
+    return response;
   }
 
   // JSON parse errors
   if (error instanceof SyntaxError && message.includes('JSON')) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         error: 'invalid_request',
         error_description: 'Invalid JSON in request body',
       },
       { status: 400 },
     );
+    logger.debug('handleOAuthError returning json-parse response', {
+      context,
+      status: response.status,
+      error: 'invalid_request',
+    });
+    return response;
   }
 
   // Internal server errors
-  return NextResponse.json(
+  const response = NextResponse.json(
     { error: 'server_error', error_description: 'Internal server error' },
     { status: 500 },
   );
+  logger.debug('handleOAuthError returning generic response', {
+    context,
+    status: response.status,
+    error: 'server_error',
+  });
+  return response;
 }

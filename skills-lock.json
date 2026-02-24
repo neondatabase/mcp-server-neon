@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "claimable-postgres": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "computedHash": "50cfca401785b544dc51181067164d555f06131b9c73fe5583f9f2eae8494eae"
+    }
+  }
+}
