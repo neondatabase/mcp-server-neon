@@ -10,6 +10,8 @@ import {
   getTokens,
   getRefreshTokens,
   getAuthorizationCodes,
+  getClientRegisterHeaders,
+  ClientRegisterHeadersRecord,
   RefreshToken,
 } from './kv-store';
 
@@ -23,6 +25,22 @@ class Model implements AuthorizationCodeModel {
   saveClient: (client: Client) => Promise<Client> = async (client) => {
     await getClients().set(client.id, client);
     return client;
+  };
+  saveClientRegisterHeaders: (
+    clientId: string,
+    headers: Record<string, string>,
+  ) => Promise<ClientRegisterHeadersRecord> = async (clientId, headers) => {
+    const record: ClientRegisterHeadersRecord = {
+      headers,
+      createdAt: Date.now(),
+    };
+    await getClientRegisterHeaders().set(clientId, record);
+    return record;
+  };
+  getClientRegisterHeaders: (
+    clientId: string,
+  ) => Promise<ClientRegisterHeadersRecord | undefined> = async (clientId) => {
+    return getClientRegisterHeaders().get(clientId);
   };
   saveToken: (token: Token) => Promise<Token> = async (token) => {
     await getTokens().set(token.accessToken, token);

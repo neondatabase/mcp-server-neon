@@ -8,13 +8,23 @@ import type { Client } from 'oauth2-server';
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
 
+function getRequestHeadersObject(request: NextRequest): Record<string, string> {
+  const headers: Record<string, string> = {};
+  request.headers.forEach((value, key) => {
+    headers[key.toLowerCase()] = value;
+  });
+  return headers;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
+    const requestHeaders = getRequestHeadersObject(request);
 
     logger.info('request to register client', {
       name: payload.client_name,
       client_uri: payload.client_uri,
+      headers: requestHeaders,
     });
 
     if (payload.client_name === undefined) {
@@ -102,6 +112,7 @@ export async function POST(request: NextRequest) {
 
     logger.debug('before model.saveClient', { clientId: client.id });
     await model.saveClient(client);
+    await model.saveClientRegisterHeaders(clientId, requestHeaders);
     logger.debug('after model.saveClient completed', { clientId: client.id });
 
     logger.info('new client registered', {
@@ -156,7 +167,8 @@ export async function OPTIONS() {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers':
+        'Content-Type, Authorization, X-Neon-Read-Only, x-read-only',
     },
   });
 }

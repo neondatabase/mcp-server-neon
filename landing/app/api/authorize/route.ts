@@ -438,9 +438,26 @@ export async function GET(request: NextRequest) {
       scope: requestParams.scope,
     });
 
+    const savedRegisterHeaders = await model.getClientRegisterHeaders(clientId);
+    const savedHeaders = savedRegisterHeaders?.headers ?? {};
+    const neonReadOnlyHeader =
+      request.headers.get('x-neon-read-only') ??
+      savedHeaders['x-neon-read-only'];
+    const legacyReadOnlyHeader =
+      request.headers.get('x-read-only') ?? savedHeaders['x-read-only'];
+
     const defaultReadOnly = isReadOnly({
-      neonHeaderValue: request.headers.get('x-neon-read-only'),
-      headerValue: request.headers.get('x-read-only'),
+      neonHeaderValue: neonReadOnlyHeader,
+      headerValue: legacyReadOnlyHeader,
+    });
+
+    logger.info('Authorize read-only context', {
+      clientId,
+      neonReadOnlyHeader,
+      legacyReadOnlyHeader,
+      hasSavedRegisterHeaders: !!savedRegisterHeaders,
+      savedRegisterHeadersCreatedAt: savedRegisterHeaders?.createdAt,
+      defaultReadOnly,
     });
 
     if (!client) {

@@ -6,6 +6,7 @@ import { model } from '../oauth/model';
 vi.mock('../oauth/model', () => ({
   model: {
     saveClient: vi.fn(),
+    saveClientRegisterHeaders: vi.fn(),
   },
 }));
 
@@ -17,11 +18,15 @@ const VALID_PAYLOAD = {
   token_endpoint_auth_method: 'none',
 };
 
-function buildRequest(body: unknown): NextRequest {
+function buildRequest(
+  body: unknown,
+  headers: Record<string, string> = {},
+): NextRequest {
   return new NextRequest('http://localhost/api/register', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
+      ...headers,
     },
     body: JSON.stringify(body),
   });
@@ -31,10 +36,21 @@ describe('/api/register route integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(model.saveClient).mockImplementation(async (client) => client);
+    vi.mocked(model.saveClientRegisterHeaders).mockImplementation(
+      async (_clientId, requestHeaders) => ({
+        headers: requestHeaders,
+        createdAt: Date.now(),
+      }),
+    );
   });
 
-  it('returns a valid response and registration payload for a valid request', async () => {
-    const response = await POST(buildRequest(VALID_PAYLOAD));
+  it('returns a valid response and stores register headers for a valid request', async () => {
+    const response = await POST(
+      buildRequest(VALID_PAYLOAD, {
+        'X-Neon-Read-Only': 'true',
+        'x-read-only': 'false',
+      }),
+    );
     const body = (await response.json()) as {
       client_id: string;
       client_secret: string;
@@ -47,6 +63,13 @@ describe('/api/register route integration', () => {
     expect(body.client_secret).toBeTypeOf('string');
     expect(body.token_endpoint_auth_method).toBe('none');
     expect(vi.mocked(model.saveClient)).toHaveBeenCalledOnce();
+    expect(vi.mocked(model.saveClientRegisterHeaders)).toHaveBeenCalledWith(
+      body.client_id,
+      expect.objectContaining({
+        'x-neon-read-only': 'true',
+        'x-read-only': 'false',
+      }),
+    );
   });
 
   it('returns 400 when client_name is missing', async () => {
@@ -125,6 +148,12 @@ describe('/api/register route integration', () => {
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
     expect(response.headers.get('access-control-allow-methods')).toContain(
       'POST',
+    );
+    expect(response.headers.get('access-control-allow-headers')).toContain(
+      'X-Neon-Read-Only',
+    );
+    expect(response.headers.get('access-control-allow-headers')).toContain(
+      'x-read-only',
     );
   });
 });

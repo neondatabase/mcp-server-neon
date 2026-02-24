@@ -47,6 +47,17 @@ export const getAuthorizationCodes = createLazyKeyv<AuthorizationCode>(
   'Authorization codes',
 );
 
+export type ClientRegisterHeadersRecord = {
+  headers: Record<string, string>;
+  createdAt: number;
+};
+
+export const getClientRegisterHeaders =
+  createLazyKeyv<ClientRegisterHeadersRecord>(
+    'client_register_headers',
+    'Client register headers',
+  );
+
 export type ApiKeyRecord = {
   apiKey: string;
   authMethod: AuthDetailsResponse['auth_method'];

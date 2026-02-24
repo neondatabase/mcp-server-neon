@@ -7,6 +7,7 @@ import { isClientAlreadyApproved } from '../../lib/oauth/cookies';
 vi.mock('../oauth/model', () => ({
   model: {
     getClient: vi.fn(),
+    getClientRegisterHeaders: vi.fn(),
   },
 }));
 
@@ -60,6 +61,7 @@ describe('/api/authorize route integration', () => {
     vi.mocked(model.getClient).mockResolvedValue(
       VALID_CLIENT as unknown as Awaited<ReturnType<typeof model.getClient>>,
     );
+    vi.mocked(model.getClientRegisterHeaders).mockResolvedValue(undefined);
     vi.mocked(isClientAlreadyApproved).mockResolvedValue(false);
   });
 
@@ -105,6 +107,55 @@ describe('/api/authorize route integration', () => {
         'x-read-only': 'true',
       }),
     );
+    const html = await response.text();
+    const writeCheckbox = extractWriteCheckbox(html);
+
+    expect(response.status).toBe(200);
+    expect(writeCheckbox).toContain('checked');
+  });
+
+  it('defaults Full access to unchecked from saved register X-Neon-Read-Only header', async () => {
+    vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
+      headers: {
+        'x-neon-read-only': 'true',
+      },
+      createdAt: Date.now(),
+    });
+
+    const response = await GET(buildAuthorizeRequest());
+    const html = await response.text();
+    const writeCheckbox = extractWriteCheckbox(html);
+
+    expect(response.status).toBe(200);
+    expect(writeCheckbox).not.toContain('checked');
+  });
+
+  it('defaults Full access to unchecked from saved register x-read-only header', async () => {
+    vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
+      headers: {
+        'x-read-only': 'true',
+      },
+      createdAt: Date.now(),
+    });
+
+    const response = await GET(buildAuthorizeRequest());
+    const html = await response.text();
+    const writeCheckbox = extractWriteCheckbox(html);
+
+    expect(response.status).toBe(200);
+    expect(writeCheckbox).not.toContain('checked');
+  });
+
+  it('uses saved X-Neon-Read-Only precedence over saved x-read-only', async () => {
+    vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
+      headers: {
+        'x-neon-read-only': 'false',
+        'x-read-only': 'true',
+      },
+      createdAt: Date.now(),
+    });
+
+    const response = await GET(buildAuthorizeRequest());
     const html = await response.text();
     const writeCheckbox = extractWriteCheckbox(html);
 
