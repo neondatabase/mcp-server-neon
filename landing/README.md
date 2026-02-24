@@ -25,9 +25,8 @@ The server supports read-only mode to restrict available tools. Priority for det
 
 1. **`X-Neon-Read-Only` header**: Explicit override (`true`/`false`)
 2. **`x-read-only` header** (legacy): Backwards-compatible synonym
-3. **Grant preset**: `production_use` forces read-only
-4. **OAuth scope**: If token has only `read` scope (no `write` or `*`), read-only is enabled
-5. **Default**: Read-write access
+3. **OAuth scope**: If token has only `read` scope (no `write` or `*`), read-only is enabled
+4. **Default**: Read-write access
 
 ### OAuth Scopes
 

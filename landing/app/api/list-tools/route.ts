@@ -10,7 +10,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers':
-    'X-Neon-Preset, X-Neon-Scopes, X-Neon-Project-Id, X-Neon-Protect-Production, X-Neon-Read-Only, x-read-only',
+    'X-Neon-Scopes, X-Neon-Project-Id, X-Neon-Read-Only, x-read-only',
 };
 
 /**
@@ -27,10 +27,8 @@ export function OPTIONS() {
  * No authentication required — this is a stateless preview of tool visibility.
  *
  * Accepts the same X-Neon-* headers as the MCP server:
- *   - X-Neon-Preset: full_access | local_development | production_use
- *   - X-Neon-Scopes: comma-separated scope categories (overrides preset to "custom")
+ *   - X-Neon-Scopes: comma-separated scope categories
  *   - X-Neon-Project-Id: scope to a single project
- *   - X-Neon-Protect-Production: true | branch names
  *   - X-Neon-Read-Only / x-read-only: true | false
  */
 export function GET(req: Request) {
@@ -39,7 +37,6 @@ export function GET(req: Request) {
   const readOnly = isReadOnly({
     neonHeaderValue: req.headers.get('x-neon-read-only'),
     headerValue: req.headers.get('x-read-only'),
-    grant,
   });
 
   const tools = getAvailableTools(grant, readOnly);

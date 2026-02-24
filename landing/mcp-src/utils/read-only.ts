@@ -1,5 +1,3 @@
-import type { GrantContext } from './grant-context';
-
 export const SUPPORTED_SCOPES = ['read', 'write', '*'] as const;
 
 export const SCOPE_DEFINITIONS = {
@@ -20,7 +18,6 @@ export type ReadOnlyContext = {
   /** Value of the legacy x-read-only header (backwards-compatible synonym). */
   headerValue?: string | null;
   scope?: string | string[] | null;
-  grant?: GrantContext;
 };
 
 function normalizeScope(scope: string | string[] | null | undefined): string[] {
@@ -56,7 +53,7 @@ function parseReadOnlyHeader(
 
 /**
  * Determines if the request should operate in read-only mode.
- * Priority: X-Neon-Read-Only > x-read-only > grant preset > OAuth scope > default (false)
+ * Priority: X-Neon-Read-Only > x-read-only > OAuth scope > default (false)
  */
 export function isReadOnly(context: ReadOnlyContext): boolean {
   // Priority 1: X-Neon-Read-Only header (canonical)
@@ -71,12 +68,7 @@ export function isReadOnly(context: ReadOnlyContext): boolean {
     return legacyResult;
   }
 
-  // Priority 3: Grant preset (production_use = read-only)
-  if (context.grant?.preset === 'production_use') {
-    return true;
-  }
-
-  // Priority 4: OAuth scope
+  // Priority 3: OAuth scope
   if (context.scope !== undefined && context.scope !== null) {
     return isScopeReadOnly(context.scope);
   }

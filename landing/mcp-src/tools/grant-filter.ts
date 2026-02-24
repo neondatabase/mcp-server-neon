@@ -2,8 +2,7 @@
  * Tool filtering based on grant context.
  *
  * Handles:
- * - Preset-based tool filtering (local_development, production_use, full_access, custom)
- * - Scope-category-based filtering (for custom preset)
+ * - Scope-category-based filtering
  * - Project-scoped mode: hiding project-agnostic tools and removing projectId from schemas
  */
 
@@ -11,7 +10,7 @@ import { z } from 'zod';
 import type { GrantContext, ScopeCategory } from '../utils/grant-context';
 import { NEON_TOOLS } from './definitions';
 
-export type NeonTool = (typeof NEON_TOOLS)[number];
+type NeonTool = (typeof NEON_TOOLS)[number];
 
 /**
  * Tools that are hidden when in project-scoped mode.
@@ -35,19 +34,10 @@ const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Tools blocked by the local_development preset.
- * Project creation and deletion are disabled for safe development.
- */
-const LOCAL_DEV_BLOCKED_TOOLS: ReadonlySet<string> = new Set([
-  'create_project',
-  'delete_project',
-]);
-
-/**
  * Filter tools based on the grant context.
  *
  * Returns a new array of tools with:
- * 1. Preset-based filtering applied
+ * 1. Scope-category filtering applied
  * 2. Project-agnostic tools removed (if project-scoped)
  * 3. projectId removed from schemas (if project-scoped)
  */
@@ -55,47 +45,23 @@ export function filterToolsForGrant(
   tools: readonly NeonTool[],
   grant: GrantContext,
 ): NeonTool[] {
-  let filtered = applyPresetFilter(tools, grant);
+  let filtered = applyScopeCategoryFilter(tools, grant.scopes);
   filtered = applyProjectScopeFilter(filtered, grant);
   return filtered;
 }
 
 /**
- * Apply preset-based filtering.
+ * Filter tools by scope categories.
  */
-function applyPresetFilter(
-  tools: readonly NeonTool[],
-  grant: GrantContext,
-): NeonTool[] {
-  switch (grant.preset) {
-    case 'full_access':
-      return [...tools];
-
-    case 'production_use':
-      // Only read-safe tools
-      return tools.filter(
-        (tool) => tool.readOnlySafe || ALWAYS_AVAILABLE_TOOLS.has(tool.name),
-      );
-
-    case 'local_development':
-      // Everything except project create/delete
-      return tools.filter((tool) => !LOCAL_DEV_BLOCKED_TOOLS.has(tool.name));
-
-    case 'custom':
-      // Filter by scope categories
-      return applyCustomScopeFilter(tools, grant.scopes);
-  }
-}
-
-/**
- * Filter tools by scope categories (custom preset).
- */
-function applyCustomScopeFilter(
+function applyScopeCategoryFilter(
   tools: readonly NeonTool[],
   scopes: ScopeCategory[] | null,
 ): NeonTool[] {
-  if (!scopes || scopes.length === 0) {
-    // No scopes specified with custom preset = no tools (except always-available)
+  if (scopes === null) {
+    return [...tools];
+  }
+  if (scopes.length === 0) {
+    // Header was present but no valid categories were supplied.
     return tools.filter((tool) => ALWAYS_AVAILABLE_TOOLS.has(tool.name));
   }
 
@@ -169,7 +135,7 @@ function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
  * - The /api/list-tools REST endpoint for previewing tool visibility
  *
  * Combines two filtering stages:
- * 1. Grant-based filtering (presets, custom scopes, project scoping)
+ * 1. Grant-based filtering (scope categories + project scoping)
  * 2. Read-only filtering (strips non-readOnlySafe tools when read-only is active)
  */
 export function getAvailableTools(
@@ -192,29 +158,15 @@ export function getAvailableTools(
  */
 export function getAccessControlWarnings(
   grant: GrantContext,
-  readOnly: boolean,
+  _readOnly: boolean,
 ): string[] {
+  void _readOnly;
   const warnings: string[] = [];
 
-  // readOnly explicitly set to false but production_use preset already
-  // restricts to read-only tools — the readOnly flag has no additional effect.
-  if (!readOnly && grant.preset === 'production_use') {
+  // X-Neon-Scopes was provided but no valid scope categories were recognized.
+  if (grant.scopes !== null && grant.scopes.length === 0) {
     warnings.push(
-      '⚠️ Warning: Read-only mode is set to false, but the "production_use" preset ' +
-        'already restricts tools to the read-only set. ' +
-        'The read-only flag has no additional effect with this preset.',
-    );
-  }
-
-  // custom preset with null or empty scopes = nearly locked out (only search + fetch).
-  // This typically means X-Neon-Preset: custom was sent without X-Neon-Scopes,
-  // or all scope values were invalid.
-  if (
-    grant.preset === 'custom' &&
-    (!grant.scopes || grant.scopes.length === 0)
-  ) {
-    warnings.push(
-      '⚠️ Warning: The "custom" preset is active but no valid scope categories are set. ' +
+      '⚠️ Warning: No valid scope categories are set. ' +
         'Only the "search" and "fetch" tools are available. ' +
         'Add scope categories via the X-Neon-Scopes header (e.g., "querying,schema") ' +
         'to enable additional tools.',

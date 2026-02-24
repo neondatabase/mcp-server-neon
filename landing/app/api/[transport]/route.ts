@@ -37,10 +37,6 @@ import {
   getAccessControlWarnings,
   injectProjectId,
 } from '../../../mcp-src/tools/grant-filter';
-import {
-  enforceProtectedBranches,
-  GrantViolationError,
-} from '../../../mcp-src/tools/grant-enforcement';
 
 type AuthenticatedExtra = {
   authInfo?: AuthInfo & {
@@ -86,9 +82,7 @@ const handler = createMcpHandler(
         clientName,
         clientApplication,
         readOnly: String(context.readOnly ?? false),
-        preset: grant.preset,
         projectScoped: String(!!grant.projectId),
-        protectedBranches: grant.protectedBranches?.join(',') ?? 'none',
         customScopes: grant.scopes?.join(',') ?? 'all',
       };
 
@@ -275,11 +269,9 @@ const handler = createMcpHandler(
               content: [
                 {
                   type: 'text' as const,
-                  text:
-                    `Tool "${tool.name}" is not available with the current preset "${grant.preset}"` +
-                    (grant.scopes
-                      ? ` and scopes [${grant.scopes.join(', ')}]`
-                      : ''),
+                  text: grant.scopes
+                    ? `Tool "${tool.name}" is not available with the current scopes [${grant.scopes.join(', ')}]`
+                    : `Tool "${tool.name}" is not available with the current access controls`,
                 },
               ],
             };
@@ -298,7 +290,6 @@ const handler = createMcpHandler(
               const properties = {
                 tool_name: tool.name,
                 readOnly: String(readOnly),
-                preset: grant.preset,
                 projectScoped: String(!!grant.projectId),
                 clientName: cName,
                 traceId,
@@ -333,14 +324,6 @@ const handler = createMcpHandler(
                   grant,
                 );
 
-                // Enforce protected branch restrictions
-                await enforceProtectedBranches(
-                  grant,
-                  tool.name,
-                  effectiveArgs,
-                  neonClient,
-                );
-
                 // Wrap args in { params } structure expected by handlers
                 const result = await (toolHandler as any)(
                   { params: effectiveArgs },
@@ -372,17 +355,6 @@ const handler = createMcpHandler(
 
                 return result;
               } catch (error) {
-                if (error instanceof GrantViolationError) {
-                  return {
-                    isError: true,
-                    content: [
-                      {
-                        type: 'text' as const,
-                        text: error.message,
-                      },
-                    ],
-                  };
-                }
                 span.setStatus({ code: 2 });
                 const errorResult = handleToolError(error, properties, traceId);
                 logger.warn('tool error response:', {
@@ -728,10 +700,9 @@ const verifyToken = async (
         token as { grant?: GrantContext },
       );
 
-      // Read-only is determined only by stored OAuth scope and grant preset (no headers)
+      // Read-only is determined only by stored OAuth scope (no headers)
       const readOnly = isReadOnly({
         scope: token.scope,
-        grant: effectiveGrant,
       });
 
       // Return auth from stored token (0 API calls!)
@@ -780,11 +751,10 @@ const verifyToken = async (
     return undefined;
   }
 
-  // Determine read-only mode from header and grant preset
+  // Determine read-only mode from headers.
   const readOnly = isReadOnly({
     neonHeaderValue: neonReadOnlyHeader,
     headerValue: readOnlyHeader,
-    grant,
   });
 
   return {

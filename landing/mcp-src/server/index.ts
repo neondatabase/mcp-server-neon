@@ -19,10 +19,6 @@ import {
   getAccessControlWarnings,
   injectProjectId,
 } from '../tools/grant-filter';
-import {
-  enforceProtectedBranches,
-  GrantViolationError,
-} from '../tools/grant-enforcement';
 import pkg from '../../package.json';
 
 export const createMcpServer = async (context: ServerContext) => {
@@ -70,9 +66,7 @@ export const createMcpServer = async (context: ServerContext) => {
         clientName,
         clientApplication,
         readOnly: String(context.readOnly ?? false),
-        preset: grant.preset,
         projectScoped: String(!!grant.projectId),
-        protectedBranches: grant.protectedBranches?.join(',') ?? 'none',
         customScopes: grant.scopes?.join(',') ?? 'all',
       },
       context: {
@@ -137,7 +131,6 @@ export const createMcpServer = async (context: ServerContext) => {
             const properties = {
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
-              preset: grant.preset,
               projectScoped: String(!!grant.projectId),
               clientName,
               traceId,
@@ -168,14 +161,6 @@ export const createMcpServer = async (context: ServerContext) => {
                 grant,
               );
 
-              // Enforce protected branch restrictions
-              await enforceProtectedBranches(
-                grant,
-                tool.name,
-                effectiveArgs,
-                neonClient,
-              );
-
               const result = await toolHandler(
                 effectiveArgs as typeof args,
                 neonClient,
@@ -194,17 +179,6 @@ export const createMcpServer = async (context: ServerContext) => {
 
               return result;
             } catch (error) {
-              if (error instanceof GrantViolationError) {
-                return {
-                  content: [
-                    {
-                      type: 'text' as const,
-                      text: error.message,
-                    },
-                  ],
-                  isError: true,
-                };
-              }
               span.setStatus({
                 code: 2,
               });

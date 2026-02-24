@@ -121,14 +121,16 @@ Alternatively, you can add the following "Neon" entry to your client's MCP serve
 
 > Provide an organization's API key to limit access to projects under the organization only.
 
-### Read-Only Mode
+### Scopes and Read-Only Mode
 
-**Read-Only Mode:** Restricts which tools are available, disabling write operations like creating projects, branches, or running migrations. Read-only tools include listing projects, describing schemas, querying data, and viewing performance metrics.
+Neon MCP supports OAuth scopes `read`, `write`, and `*` (`*` means both). Your MCP client can request these scopes directly, or you can make the selection in the OAuth permissions UI.
 
-You can enable read-only mode in two ways:
+**Read-only mode** restricts which tools are available, disabling write operations like creating projects, branches, or running migrations. Read-only tools include listing projects, describing schemas, querying data, and viewing performance metrics.
 
-1. **OAuth Scope Selection (Recommended):** When connecting via OAuth, uncheck "Full access" during authorization to operate in read-only mode.
-2. **Header Override:** Add the `X-Neon-Read-Only` header to your configuration:
+You can set read-only mode in two ways:
+
+1. **OAuth scope selection (recommended):** In OAuth, select read-only by unchecking **Full access** in the authorization UI.
+2. **`X-Neon-Read-Only` header:** Add `X-Neon-Read-Only: true` to your MCP server configuration:
 
 ```json
 {
@@ -143,7 +145,12 @@ You can enable read-only mode in two ways:
 }
 ```
 
-When `X-Neon-Read-Only: true` (or legacy `x-read-only: true`) is sent to the authorize endpoint, the OAuth permissions dialog defaults to read-only by rendering "Full access" unchecked.
+How the header behaves:
+
+- **API key flow:** `X-Neon-Read-Only` is the way to enable read-only mode (there is no OAuth scope exchange in this flow).
+- **OAuth flow:** `X-Neon-Read-Only: true` behaves like `scope=read` for the default consent setting (Full access starts unchecked), but the user can still override this in the OAuth UI before approving.
+
+Legacy header `x-read-only` is also supported.
 
 > **Note:** Read-only mode restricts which _tools_ are available, not the SQL content. The `run_sql` tool remains available and can execute any SQL including INSERT/UPDATE/DELETE. For true read-only SQL access, use database roles with restricted permissions.
 

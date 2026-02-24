@@ -73,8 +73,8 @@ describe('/api/register route integration', () => {
   });
 
   it('returns 400 when client_name is missing', async () => {
-    const { client_name: _clientName, ...payloadWithoutClientName } =
-      VALID_PAYLOAD;
+    const { client_name, ...payloadWithoutClientName } = VALID_PAYLOAD;
+    void client_name;
 
     const response = await POST(buildRequest(payloadWithoutClientName));
     const body = (await response.json()) as {
@@ -89,8 +89,8 @@ describe('/api/register route integration', () => {
   });
 
   it('returns 400 when redirect_uris is missing', async () => {
-    const { redirect_uris: _redirectUris, ...payloadWithoutRedirectUris } =
-      VALID_PAYLOAD;
+    const { redirect_uris, ...payloadWithoutRedirectUris } = VALID_PAYLOAD;
+    void redirect_uris;
 
     const response = await POST(buildRequest(payloadWithoutRedirectUris));
     const body = (await response.json()) as {
