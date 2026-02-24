@@ -128,7 +128,7 @@ Alternatively, you can add the following "Neon" entry to your client's MCP serve
 You can enable read-only mode in two ways:
 
 1. **OAuth Scope Selection (Recommended):** When connecting via OAuth, uncheck "Full access" during authorization to operate in read-only mode.
-2. **Header Override:** Add the `x-read-only` header to your configuration:
+2. **Header Override:** Add the `X-Neon-Read-Only` header to your configuration:
 
 ```json
 {
@@ -136,7 +136,7 @@ You can enable read-only mode in two ways:
     "Neon": {
       "url": "https://mcp.neon.tech/mcp",
       "headers": {
-        "x-read-only": "true"
+        "X-Neon-Read-Only": "true"
       }
     }
   }
@@ -316,14 +316,14 @@ bun run test:integration
 # MCP protocol end-to-end tests (real MCP client/server tool calls)
 bun run test:e2e:mcp
 
-# Website end-to-end tests (Playwright)
+# Website end-to-end tests (Playwright; provisions/validates ephemeral DB first)
 bun run test:e2e:web
 
 # Full end-to-end suite
 bun run test:e2e
 
-# Full test pyramid (unit + integration + e2e)
-bun run test:all
+# Full test pyramid (unit + integration + e2e; used in CI)
+bun run test
 ```
 
 Testing strategy:
@@ -332,4 +332,3 @@ Testing strategy:
 - Use **integration** tests for deterministic tool contracts and workflow behavior.
 - Use **unit** tests for pure logic and edge cases.
 - Avoid relying on third-party uptime in merge-gating tests; mock external dependencies in integration/unit tiers.
-

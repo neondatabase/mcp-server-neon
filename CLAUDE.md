@@ -54,6 +54,9 @@ bun run knip:fix
 ```bash
 cd landing
 
+# Run full test suite (unit + integration + e2e; used in CI)
+bun run test
+
 # Run unit tests
 bun run test:unit
 
@@ -63,17 +66,11 @@ bun run test:integration
 # Run MCP protocol e2e tests (real tool calls over MCP protocol)
 bun run test:e2e:mcp
 
-# Run website e2e tests (Playwright)
+# Run website e2e tests (Playwright; provisions/validates ephemeral DB first)
 bun run test:e2e:web
 
 # Run all e2e tests
 bun run test:e2e
-
-# Run full test pyramid (used in CI before merge)
-bun run test:all
-
-# Watch mode for Vitest
-bun run test:watch
 ```
 
 ### Testing Pyramid Rules
@@ -103,7 +100,7 @@ Merge-gating tests must be deterministic. Do not make third-party uptime (for ex
 - **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com) and generates a random `COOKIE_SECRET`. Both are written to `.env.e2e` (gitignored) and passed to the Next.js dev server.
 - **No secrets needed**: The e2e infrastructure is fully self-contained. Instagres databases expire after 72 hours; no explicit teardown is required.
 - **Reuse across runs**: If `.env.e2e` already exists, global-setup reuses it instead of re-provisioning. Delete the file to force a fresh database.
-- **CI**: The PR workflow runs format, lint, unit+integration tests, MCP e2e tests, website e2e tests, and build before merge.
+- **CI**: The PR workflow runs format, lint, knip, `bun run test`, and build before merge.
 
 ## Architecture
 
@@ -152,7 +149,7 @@ Merge-gating tests must be deterministic. Do not make third-party uptime (for ex
 
 - **Stateless Design**: The server is designed for serverless deployment. Tools like migrations and query tuning create temporary branches but do NOT store state in memory. Instead, all context (branch IDs, migration SQL, etc.) is returned to the LLM, which passes it back to subsequent tool calls. This enables horizontal scaling on Vercel.
 
-- **Read-Only Mode** (`landing/mcp-src/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. Read-only mode is determined by priority: `X-READ-ONLY` header > OAuth scope (only `read` scope = read-only) > default (false). The module also exports `SCOPE_DEFINITIONS` for human-readable scope labels and `hasWriteScope()` to check for write permissions.
+- **Read-Only Mode** (`landing/mcp-src/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. Read-only mode is determined by priority: `X-Neon-Read-Only` header > `x-read-only` header (legacy) > grant preset (`production_use`) > OAuth scope (only `read` scope = read-only) > default (false). The module also exports `SCOPE_DEFINITIONS` for human-readable scope labels and `hasWriteScope()` to check for write permissions.
 
 - **MCP Tool Annotations**: All tools include MCP-standard annotations for client hints:
   - `title`: Human-readable tool name
@@ -410,8 +407,7 @@ This repository uses an enhanced Claude Code Review workflow that provides inlin
 
 - Formatting: `bun run fmt:check` (checked by pr.yml)
 - Linting: `bun run lint` (checked by pr.yml)
-- Unit tests: `bun run test` (vitest, checked by pr.yml)
-- E2E tests: `bun run test:e2e` (playwright, checked by pr.yml)
+- Tests: `bun run test` (unit + integration + MCP e2e + website e2e, checked by `pr.yml`)
 - Building: `bun run build` (checked by pr.yml)
 
 ### Review Process

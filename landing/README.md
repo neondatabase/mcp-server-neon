@@ -23,9 +23,11 @@ The remote MCP server is deployed on Vercel's serverless infrastructure using Ne
 
 The server supports read-only mode to restrict available tools. Priority for determining read-only status:
 
-1. **`X-READ-ONLY` header**: Explicit override (`true`/`false`)
-2. **OAuth scope**: If token has only `read` scope (no `write` or `*`), read-only is enabled
-3. **Default**: Read-write access
+1. **`X-Neon-Read-Only` header**: Explicit override (`true`/`false`)
+2. **`x-read-only` header** (legacy): Backwards-compatible synonym
+3. **Grant preset**: `production_use` forces read-only
+4. **OAuth scope**: If token has only `read` scope (no `write` or `*`), read-only is enabled
+5. **Default**: Read-write access
 
 ### OAuth Scopes
 
@@ -78,14 +80,14 @@ bun run test:integration
 # MCP protocol e2e only
 bun run test:e2e:mcp
 
-# Website e2e only
+# Website e2e only (provisions/validates ephemeral DB first)
 bun run test:e2e:web
 
 # All e2e
 bun run test:e2e
 
 # Full pyramid (used in CI before merge)
-bun run test:all
+bun run test
 ```
 
 ### Rules for New Tests
