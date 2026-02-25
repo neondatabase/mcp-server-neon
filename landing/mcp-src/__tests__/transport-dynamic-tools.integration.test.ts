@@ -48,7 +48,7 @@ const { POST } = await import('../../app/api/[transport]/route');
 type TokenShape = {
   accessToken: string;
   scope: string;
-  client: { id: string; client_name: string };
+  client: { id: string; client_name: string; grants: string[] };
   user: { id: string; name: string; email: string };
   grant?: GrantContext;
 };
@@ -61,7 +61,7 @@ function buildOAuthToken(
   return {
     accessToken,
     scope,
-    client: { id: 'client-1', client_name: 'Cursor' },
+    client: { id: 'client-1', client_name: 'Cursor', grants: ['*'] },
     user: { id: 'user-1', name: 'User', email: 'user@example.com' },
     grant,
   };
@@ -158,7 +158,7 @@ describe('transport dynamic tool composition', () => {
           scopes: null,
         });
       }
-      return null;
+      return undefined;
     });
 
     const unscopedTools = await listToolsForToken(unscopedToken);
@@ -197,7 +197,7 @@ describe('transport dynamic tool composition', () => {
       if (token === readOnlyToken) {
         return buildOAuthToken(readOnlyToken, 'read');
       }
-      return null;
+      return undefined;
     });
 
     const fullAccessTools = await listToolsForToken(fullAccessToken);
