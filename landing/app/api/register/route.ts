@@ -7,6 +7,7 @@ import type { Client } from 'oauth2-server';
 
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
+const DEBUG_RUN_ID = 'register-project-id-500';
 
 function getRequestHeadersObject(request: NextRequest): Record<string, string> {
   const headers: Record<string, string> = {};
@@ -16,10 +17,55 @@ function getRequestHeadersObject(request: NextRequest): Record<string, string> {
   return headers;
 }
 
+function emitAgentDebugLog(payload: {
+  hypothesisId: string;
+  location: string;
+  message: string;
+  data: Record<string, unknown>;
+}) {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/3825217b-2560-43d0-8a8b-fb137ff631ed', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      runId: DEBUG_RUN_ID,
+      hypothesisId: payload.hypothesisId,
+      location: payload.location,
+      message: payload.message,
+      data: payload.data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+}
+
 export async function POST(request: NextRequest) {
+  let exitPath = 'uninitialized';
+  let exitStatus: number | null = null;
   try {
+    // #region agent log
+    emitAgentDebugLog({
+      hypothesisId: 'H1',
+      location: 'app/api/register/route.ts:POST:entry',
+      message: 'register POST handler entered',
+      data: { method: request.method, hasBody: true },
+    });
+    // #endregion
+
     const payload = await request.json();
     const requestHeaders = getRequestHeadersObject(request);
+    // #region agent log
+    emitAgentDebugLog({
+      hypothesisId: 'H2',
+      location: 'app/api/register/route.ts:POST:after_json',
+      message: 'parsed register payload and headers',
+      data: {
+        payloadKeys: Object.keys(payload ?? {}),
+        headerCount: Object.keys(requestHeaders).length,
+        hasProjectHeader: 'x-neon-project-id' in requestHeaders,
+      },
+    });
+    // #endregion
 
     logger.info('request to register client', {
       name: payload.client_name,
@@ -39,6 +85,8 @@ export async function POST(request: NextRequest) {
         reason: 'client_name_missing',
         status: response.status,
       });
+      exitPath = 'validation_client_name';
+      exitStatus = response.status;
       return response;
     }
 
@@ -54,6 +102,8 @@ export async function POST(request: NextRequest) {
         reason: 'redirect_uris_missing',
         status: response.status,
       });
+      exitPath = 'validation_redirect_uris';
+      exitStatus = response.status;
       return response;
     }
 
@@ -75,6 +125,8 @@ export async function POST(request: NextRequest) {
         reason: 'grant_types_invalid',
         status: response.status,
       });
+      exitPath = 'validation_grant_types';
+      exitStatus = response.status;
       return response;
     }
 
@@ -96,6 +148,8 @@ export async function POST(request: NextRequest) {
         reason: 'response_types_invalid',
         status: response.status,
       });
+      exitPath = 'validation_response_types';
+      exitStatus = response.status;
       return response;
     }
 
@@ -111,6 +165,17 @@ export async function POST(request: NextRequest) {
     };
 
     logger.debug('before model.saveClient', { clientId: client.id });
+    // #region agent log
+    emitAgentDebugLog({
+      hypothesisId: 'H3',
+      location: 'app/api/register/route.ts:POST:before_save',
+      message: 'about to persist client and registration headers',
+      data: {
+        clientId,
+        tokenEndpointAuthMethod: client.tokenEndpointAuthMethod,
+      },
+    });
+    // #endregion
     await model.saveClient(client);
     await model.saveClientRegisterHeaders(clientId, requestHeaders);
     logger.debug('after model.saveClient completed', { clientId: client.id });
@@ -142,6 +207,19 @@ export async function POST(request: NextRequest) {
       hasContentType: !!response.headers.get('content-type'),
       contentType: response.headers.get('content-type'),
     });
+    // #region agent log
+    emitAgentDebugLog({
+      hypothesisId: 'H1',
+      location: 'app/api/register/route.ts:POST:success_return',
+      message: 'returning successful register response',
+      data: {
+        status: response.status,
+        responseHasContentType: !!response.headers.get('content-type'),
+      },
+    });
+    // #endregion
+    exitPath = 'success';
+    exitStatus = response.status;
     return response;
   } catch (error: unknown) {
     logger.error('caught error in register handler', {
@@ -157,7 +235,29 @@ export async function POST(request: NextRequest) {
       hasContentType: !!errorResponse.headers.get('content-type'),
       contentType: errorResponse.headers.get('content-type'),
     });
+    // #region agent log
+    emitAgentDebugLog({
+      hypothesisId: 'H4',
+      location: 'app/api/register/route.ts:POST:catch_return',
+      message: 'returning error response from catch block',
+      data: {
+        status: errorResponse.status,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      },
+    });
+    // #endregion
+    exitPath = 'catch';
+    exitStatus = errorResponse.status;
     return errorResponse;
+  } finally {
+    // #region agent log
+    emitAgentDebugLog({
+      hypothesisId: 'H1',
+      location: 'app/api/register/route.ts:POST:finally',
+      message: 'register POST handler exiting',
+      data: { exitPath, exitStatus },
+    });
+    // #endregion
   }
 }
 
