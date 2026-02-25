@@ -1,6 +1,6 @@
 import { KeyvPostgres } from '@keyv/postgres';
 import { logger } from '../utils/logger';
-import { AuthorizationCode, Client, Token } from 'oauth2-server';
+import type { AuthorizationCode, Client, Token } from 'oauth2-server';
 import Keyv from 'keyv';
 import { AuthContext } from '../types/auth';
 import { AuthDetailsResponse } from '@neondatabase/api-client';
