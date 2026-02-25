@@ -48,7 +48,7 @@ function buildContext(overrides: Partial<ServerContext> = {}): ServerContext {
     },
     app: {
       name: 'test-app',
-      transport: 'stdio',
+      transport: 'stream',
       environment: 'development',
       version: '0.0.0-test',
     },

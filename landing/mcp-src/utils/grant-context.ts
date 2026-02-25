@@ -5,7 +5,6 @@
  *
  * Grant context can be resolved from:
  * - X-Neon-* HTTP headers (API key mode)
- * - CLI flags (stdio mode)
  * - OAuth token grant field (OAuth mode)
  * - Future: neon:mcp claims in ID token
  */
@@ -31,7 +30,7 @@ export type GrantContext = {
 };
 
 /**
- * The default grant context when no headers, flags, or token grant is provided.
+ * The default grant context when no headers or token grant is provided.
  * Full access and no project scoping.
  */
 export const DEFAULT_GRANT: GrantContext = {
@@ -74,27 +73,6 @@ export function resolveGrantFromHeaders(headers: Headers): GrantContext {
 
   const scopes = parseScopeCategories(scopesHeader);
   const projectId = projectIdHeader?.trim() || null;
-
-  return {
-    projectId,
-    scopes,
-  };
-}
-
-/**
- * CLI grant arguments parsed from command-line flags.
- */
-/**
- * Resolve grant context from CLI flags (stdio mode).
- *
- * Supports project and scope-category flags only.
- */
-export function resolveGrantFromCliArgs(args: {
-  scopes?: string;
-  projectId?: string;
-}): GrantContext {
-  const scopes = parseScopeCategories(args.scopes ?? null);
-  const projectId = args.projectId?.trim() || null;
 
   return {
     projectId,

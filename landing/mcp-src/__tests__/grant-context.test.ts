@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolveGrantFromHeaders,
-  resolveGrantFromCliArgs,
   resolveGrantFromToken,
   parseScopeCategories,
   DEFAULT_GRANT,
@@ -66,24 +65,6 @@ describe('resolveGrantFromHeaders', () => {
     expect(resolveGrantFromHeaders(headers({ 'x-neon-scopes': '' }))).toEqual(
       DEFAULT_GRANT,
     );
-  });
-});
-
-describe('resolveGrantFromCliArgs', () => {
-  it('returns default grant for empty args', () => {
-    expect(resolveGrantFromCliArgs({})).toEqual(DEFAULT_GRANT);
-  });
-
-  it('parses scopes and project id from cli args', () => {
-    expect(
-      resolveGrantFromCliArgs({
-        scopes: 'querying,schema',
-        projectId: 'proj-1',
-      }),
-    ).toEqual({
-      projectId: 'proj-1',
-      scopes: ['querying', 'schema'],
-    });
   });
 });
 
