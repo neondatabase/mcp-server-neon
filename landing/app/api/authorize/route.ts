@@ -16,6 +16,10 @@ import {
 } from '../../../mcp-src/utils/read-only';
 import { logger } from '../../../mcp-src/utils/logger';
 import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
+import {
+  resolveGrantFromHeaders,
+  type GrantContext,
+} from '../../../mcp-src/utils/grant-context';
 
 export type DownstreamAuthRequest = {
   responseType: string;
@@ -23,6 +27,7 @@ export type DownstreamAuthRequest = {
   redirectUri: string;
   scope: string[];
   state: string;
+  grant?: GrantContext;
   codeChallenge?: string;
   codeChallengeMethod?: string;
 };
@@ -440,11 +445,17 @@ export async function GET(request: NextRequest) {
 
     const savedRegisterHeaders = await model.getClientRegisterHeaders(clientId);
     const savedHeaders = savedRegisterHeaders?.headers ?? {};
+    const effectiveHeaders = new Headers(savedHeaders);
+    request.headers.forEach((value, key) => {
+      effectiveHeaders.set(key, value);
+    });
+
     const neonReadOnlyHeader =
-      request.headers.get('x-neon-read-only') ??
+      effectiveHeaders.get('x-neon-read-only') ??
       savedHeaders['x-neon-read-only'];
     const legacyReadOnlyHeader =
-      request.headers.get('x-read-only') ?? savedHeaders['x-read-only'];
+      effectiveHeaders.get('x-read-only') ?? savedHeaders['x-read-only'];
+    const grant = resolveGrantFromHeaders(effectiveHeaders);
 
     const defaultReadOnly = isReadOnly({
       neonHeaderValue: neonReadOnlyHeader,
@@ -458,7 +469,10 @@ export async function GET(request: NextRequest) {
       hasSavedRegisterHeaders: !!savedRegisterHeaders,
       savedRegisterHeadersCreatedAt: savedRegisterHeaders?.createdAt,
       defaultReadOnly,
+      grant,
     });
+
+    requestParams.grant = grant;
 
     if (!client) {
       logger.warn('Client not found', { clientId });

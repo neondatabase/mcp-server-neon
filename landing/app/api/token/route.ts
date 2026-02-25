@@ -191,6 +191,7 @@ export async function POST(request: NextRequest) {
         client: client,
         user: authorizationCode.user,
         scope: authorizationCode.scope,
+        grant: authorizationCode.grant,
       });
 
       await model.saveRefreshToken({
@@ -359,6 +360,7 @@ export async function POST(request: NextRequest) {
         client: client,
         user: oldToken.user,
         scope: oldToken.scope,
+        grant: oldToken.grant,
       });
 
       await model.saveRefreshToken({
