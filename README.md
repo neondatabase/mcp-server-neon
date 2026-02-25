@@ -152,6 +152,11 @@ How the header behaves:
 
 Legacy header `x-read-only` is also supported.
 
+> [!IMPORTANT]
+> If you change MCP configuration files (for example, toggling read-only mode or switching to a project-scoped setup), those changes only take effect for the **OAuth flow** after you log out and log back in.
+> OAuth permissions/scopes are bound to the session when a new OAuth token is created.
+> This does **not** apply to the API key flow.
+
 > **Note:** Read-only mode restricts which _tools_ are available, not the SQL content. The `run_sql` tool remains available and can execute any SQL including INSERT/UPDATE/DELETE. For true read-only SQL access, use database roles with restricted permissions.
 
 <details>
