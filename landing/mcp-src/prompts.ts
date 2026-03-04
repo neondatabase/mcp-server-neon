@@ -1,4 +1,7 @@
-import { z } from 'zod';
+// Keep prompt arg schemas on zod/v3 for the same MCP SDK compatibility reason
+// described in toolsSchema.ts. This avoids type-identity regressions in
+// `server.registerPrompt(...)` during production builds.
+import { z } from 'zod/v3';
 import { fetchRawGithubContent } from './resources';
 import { ToolHandlerExtraParams } from './tools/types';
 import { ClientApplication } from './utils/client-application';
@@ -31,7 +34,11 @@ export const NEON_PROMPTS = [
       'Interactive guide for setting up Neon Auth in a Vite+React project. Walks through provisioning, package installation, client setup, and UI components.',
     argsSchema: setupNeonAuthViteReactArgsSchema,
   },
-] as const;
+] as const satisfies ReadonlyArray<{
+  name: string;
+  description: string;
+  argsSchema?: Record<string, z.ZodTypeAny>;
+}>;
 
 function getClientSpecificInstructions(clientApplication: ClientApplication) {
   switch (clientApplication) {

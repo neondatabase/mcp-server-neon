@@ -1,6 +1,7 @@
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
 import type { ScopeCategory } from '../utils/grant-context';
+import type { ZodTypeAny } from 'zod/v3';
 import {
   completeDatabaseMigrationInputSchema,
   completeQueryTuningInputSchema,
@@ -37,7 +38,7 @@ type NeonToolDefinition = {
   name: string;
   scope: ScopeCategory | null;
   description: string;
-  inputSchema: unknown;
+  inputSchema: ZodTypeAny;
   readOnlySafe: boolean;
   annotations: ToolAnnotations;
 };

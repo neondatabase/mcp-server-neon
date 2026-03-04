@@ -6,7 +6,7 @@
  * - Project-scoped mode: hiding project-agnostic tools and removing projectId from schemas
  */
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { GrantContext, ScopeCategory } from '../utils/grant-context';
 import { NEON_TOOLS } from './definitions';
 

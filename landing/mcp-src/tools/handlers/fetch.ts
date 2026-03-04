@@ -1,7 +1,7 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Api, MemberWithUser, ProjectListItem } from '@neondatabase/api-client';
 import { fetchInputSchema } from '../toolsSchema';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { handleDescribeProject } from './decribe-project';
 import { handleDescribeBranch } from './describe-branch';
 import { ToolHandlerExtraParams } from '../types';

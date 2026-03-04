@@ -243,6 +243,9 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
           tool.name,
           {
             description: tool.description,
+            // NOTE: This intentionally stays strongly typed (no cast). If this starts failing
+            // after an SDK upgrade, treat it as a schema-type compatibility regression between
+            // MCP SDK zod-compat types and our tool schema definitions.
             inputSchema: tool.inputSchema,
           },
           async (args: any, extra: any) => {
@@ -364,6 +367,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
           prompt.name,
           {
             description: prompt.description,
+            // Same compatibility guardrail as tool registration above.
             argsSchema: prompt.argsSchema,
           },
           async (args: any, extra: any) => {

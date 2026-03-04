@@ -2,7 +2,14 @@ import {
   ListProjectsParams,
   ListSharedProjectsParams,
 } from '@neondatabase/api-client';
-import { z } from 'zod';
+// IMPORTANT: Use zod/v3 types for MCP registration compatibility.
+// @modelcontextprotocol/sdk@1.25.x accepts schemas typed through its zod-compat layer
+// (zod/v3 or zod/v4/core). Using plain `zod` imports here can create type-identity
+// mismatches at registerTool/registerPrompt boundaries in Next.js builds.
+//
+// Revisit this once the MCP SDK publishes a single-zod type surface that no longer
+// requires cross-version compatibility shims.
+import { z } from 'zod/v3';
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
 
 type ZodObjectParams<T> = z.ZodObject<{ [key in keyof T]: z.ZodType<T[key]> }>;

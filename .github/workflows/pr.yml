@@ -41,5 +41,11 @@ jobs:
         run: bun run test
       - name: Build
         env:
+          # Next.js + TypeScript can exceed default Node heap in CI due to dependency
+          # type graph size (not app code size). We observed OOM in this step while
+          # `next build` was in "Running TypeScript".
+          #
+          # Revisit/reduce this when dependency typing pressure drops (e.g. after SDK/type
+          # surface simplifications) and CI proves stable without this bump.
           NODE_OPTIONS: --max-old-space-size=4096
         run: bun run build
