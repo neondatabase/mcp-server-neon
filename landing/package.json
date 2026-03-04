@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@keyv/postgres": "2.1.2",
-    "@modelcontextprotocol/sdk": "^1.25.1",
+    "@modelcontextprotocol/sdk": "1.25.3",
     "@neondatabase/api-client": "2.5.0",
     "@neondatabase/serverless": "1.0.0",
     "@segment/analytics-node": "2.2.1",
