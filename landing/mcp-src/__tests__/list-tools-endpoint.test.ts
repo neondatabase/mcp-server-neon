@@ -111,12 +111,13 @@ describe('/api/list-tools endpoint', () => {
       expect(Array.isArray(body.tools)).toBe(true);
       expect(typeof body.readOnly).toBe('boolean');
       expect(body.grant).toBeDefined();
-      expect(body.grant.projectId === null || typeof body.grant.projectId === 'string').toBe(
-        true,
-      );
-      expect(body.grant.scopes === null || Array.isArray(body.grant.scopes)).toBe(
-        true,
-      );
+      expect(
+        body.grant.projectId === null ||
+          typeof body.grant.projectId === 'string',
+      ).toBe(true);
+      expect(
+        body.grant.scopes === null || Array.isArray(body.grant.scopes),
+      ).toBe(true);
     }
   });
 });
