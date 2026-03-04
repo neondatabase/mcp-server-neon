@@ -86,4 +86,37 @@ describe('/api/list-tools endpoint', () => {
       'X-Neon-Scopes, X-Neon-Project-Id, X-Neon-Read-Only, x-read-only',
     );
   });
+
+  it('returns valid responses across repeated mixed-header requests', async () => {
+    const headerSets: Record<string, string>[] = [
+      {},
+      { 'X-Neon-Project-Id': 'proj-123' },
+      { 'X-Neon-Scopes': 'querying' },
+      { 'X-Neon-Read-Only': 'true' },
+      {
+        'X-Neon-Project-Id': 'proj-123',
+        'X-Neon-Scopes': 'querying,schema',
+      },
+      { 'X-Neon-Scopes': 'not-a-real-scope' },
+    ];
+
+    const runs = Array.from({ length: 200 }, (_, i) =>
+      callListTools(headerSets[i % headerSets.length]),
+    );
+
+    const bodies = await Promise.all(runs);
+    expect(bodies).toHaveLength(200);
+
+    for (const body of bodies) {
+      expect(Array.isArray(body.tools)).toBe(true);
+      expect(typeof body.readOnly).toBe('boolean');
+      expect(body.grant).toBeDefined();
+      expect(body.grant.projectId === null || typeof body.grant.projectId === 'string').toBe(
+        true,
+      );
+      expect(body.grant.scopes === null || Array.isArray(body.grant.scopes)).toBe(
+        true,
+      );
+    }
+  });
 });
