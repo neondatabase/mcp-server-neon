@@ -5,6 +5,7 @@ import {
   getAvailableTools,
   getAccessControlWarnings,
 } from '../../../mcp-src/tools/grant-filter';
+import { logger } from '../../../mcp-src/utils/logger';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -32,28 +33,64 @@ export function OPTIONS() {
  *   - X-Neon-Read-Only / x-read-only: true | false
  */
 export function GET(req: Request) {
-  const grant = resolveGrantFromHeaders(req.headers);
-
-  const readOnly = isReadOnly({
-    neonHeaderValue: req.headers.get('x-neon-read-only'),
-    headerValue: req.headers.get('x-read-only'),
-  });
-
-  const tools = getAvailableTools(grant, readOnly);
-  const warnings = getAccessControlWarnings(grant, readOnly);
-
-  const body = {
-    grant,
-    readOnly,
-    ...(warnings.length > 0 ? { warnings } : {}),
-    tools: tools.map((tool) => ({
-      name: tool.name,
-      title: tool.annotations?.title ?? tool.name,
-      scope: tool.scope,
-      readOnlySafe: tool.readOnlySafe,
-      description: tool.description,
-    })),
+  let phase = 'resolve_grant';
+  const startedAt = Date.now();
+  const requestHeaders = {
+    xNeonScopes: req.headers.get('x-neon-scopes'),
+    xNeonProjectId: req.headers.get('x-neon-project-id'),
+    xNeonReadOnly: req.headers.get('x-neon-read-only'),
+    xReadOnly: req.headers.get('x-read-only'),
   };
 
-  return NextResponse.json(body, { headers: CORS_HEADERS });
+  try {
+    const grant = resolveGrantFromHeaders(req.headers);
+
+    phase = 'resolve_read_only';
+    const readOnly = isReadOnly({
+      neonHeaderValue: requestHeaders.xNeonReadOnly,
+      headerValue: requestHeaders.xReadOnly,
+    });
+
+    phase = 'get_available_tools';
+    const tools = getAvailableTools(grant, readOnly);
+
+    phase = 'get_access_control_warnings';
+    const warnings = getAccessControlWarnings(grant, readOnly);
+
+    phase = 'build_response_body';
+    const body = {
+      grant,
+      readOnly,
+      ...(warnings.length > 0 ? { warnings } : {}),
+      tools: tools.map((tool) => ({
+        name: tool.name,
+        title: tool.annotations?.title ?? tool.name,
+        scope: tool.scope,
+        readOnlySafe: tool.readOnlySafe,
+        description: tool.description,
+      })),
+    };
+
+    return NextResponse.json(body, { headers: CORS_HEADERS });
+  } catch (error) {
+    const durationMs = Date.now() - startedAt;
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error('list_tools_request_failed', {
+      phase,
+      durationMs,
+      requestHeaders,
+      errorName: err.name,
+      errorMessage: err.message,
+      errorStack: err.stack,
+    });
+
+    return NextResponse.json(
+      {
+        error: 'list_tools_failed',
+        phase,
+        message: err.message,
+      },
+      { status: 500, headers: CORS_HEADERS },
+    );
+  }
 }
