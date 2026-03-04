@@ -65,9 +65,18 @@ describe('MCP server e2e tool calls', () => {
     await withConnectedClient(createTestContext(), async (client) => {
       const result = await client.listTools();
       const toolNames = result.tools.map((tool) => tool.name);
+      const docsTool = result.tools.find(
+        (tool) => tool.name === 'list_docs_resources',
+      );
 
       expect(toolNames).toContain('list_docs_resources');
       expect(toolNames).toContain('get_doc_resource');
+      // Regression guard: MCP listTools must return JSON Schema, not raw Zod
+      // internals. Raw Zod objects can cause runtime failures for some clients.
+      expect(docsTool?.inputSchema).toMatchObject({
+        type: 'object',
+      });
+      expect(String(docsTool?.inputSchema)).not.toContain('_def');
     });
   });
 
