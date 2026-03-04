@@ -5,6 +5,8 @@ import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { normalizeObjectSchema } from '@modelcontextprotocol/sdk/server/zod-compat.js';
+import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-schema-compat.js';
 import { captureException, startSpan } from '@sentry/node';
 import crypto from 'crypto';
 
@@ -436,34 +438,26 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
       // Override tools/list to return the same context-scoped surface that was
       // registered for this handler instance.
       server.server.setRequestHandler(ListToolsRequestSchema, async () => {
-        // Access the SDK's internal registered tools (already JSON-schema-converted)
-        const registeredTools = (server as unknown as Record<string, unknown>)
-          ._registeredTools as Record<
-          string,
-          {
-            enabled: boolean;
-            title?: string;
-            description?: string;
-            inputSchema?: unknown;
-            outputSchema?: unknown;
-            annotations?: unknown;
-            execution?: unknown;
-            _meta?: unknown;
-          }
-        >;
+        // Avoid relying on MCP SDK private fields (`_registeredTools`), which can
+        // change across SDK versions and break request handling. Build the list from
+        // our canonical tool definitions and convert schemas explicitly.
+        const tools = composedTools.map((tool) => {
+          const normalizedSchema = normalizeObjectSchema(tool.inputSchema);
+          const inputSchema = normalizedSchema
+            ? toJsonSchemaCompat(normalizedSchema, {
+                strictUnions: true,
+                pipeStrategy: 'input',
+              })
+            : { type: 'object' as const };
 
-        const tools = Object.entries(registeredTools)
-          .filter(([, tool]) => tool.enabled)
-          .map(([name, tool]) => ({
-            name,
-            title: tool.title,
+          return {
+            name: tool.name,
+            title: tool.annotations?.title,
             description: tool.description,
-            inputSchema: tool.inputSchema ?? { type: 'object' as const },
+            inputSchema,
             annotations: tool.annotations,
-            execution: tool.execution,
-            _meta: tool._meta,
-            ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
-          }));
+          };
+        });
 
         return { tools };
       });
