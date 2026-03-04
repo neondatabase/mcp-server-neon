@@ -12,3 +12,8 @@ build/
 # claude 
 plans
 .serena
+.vercel
+
+.codex
+.cursor/mcp.json
+.mcp.json
