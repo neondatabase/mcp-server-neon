@@ -1,8 +1,9 @@
-import { Api } from '@neondatabase/api-client';
+import { Api, EndpointType } from '@neondatabase/api-client';
 import { ToolHandlerExtraParams } from '../types';
 import { startSpan } from '@sentry/node';
 import { getDefaultDatabase } from '../utils';
 import { getDefaultBranch, getOnlyProject } from './utils';
+import { InvalidArgumentError } from '../../server/errors';
 
 export async function handleGetConnectionString(
   {
@@ -21,6 +22,9 @@ export async function handleGetConnectionString(
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
 ) {
+  const readOnlyReplicaError =
+    'this MCP server is in read-only mode and no read replica endpoint can be found - create a read replica first using the Neon UI to enable get_connection_string in read-only mode or remove the read-only mode configuration (HTTP header, OAuth scope settings)';
+
   return await startSpan(
     {
       name: 'get_connection_string',
@@ -35,6 +39,26 @@ export async function handleGetConnectionString(
       if (!branchId) {
         const defaultBranch = await getDefaultBranch(projectId, neonClient);
         branchId = defaultBranch.id;
+      }
+
+      // In read-only mode this tool must only return a DSN for a read replica
+      // endpoint associated with the selected branch.
+      if (extra.readOnly) {
+        const branchEndpoints = await neonClient.listProjectBranchEndpoints(
+          projectId,
+          branchId,
+        );
+        const readOnlyEndpoint = branchEndpoints.data.endpoints.find(
+          (endpoint) =>
+            endpoint.type === EndpointType.ReadOnly &&
+            endpoint.disabled !== true,
+        );
+
+        if (!readOnlyEndpoint) {
+          throw new InvalidArgumentError(readOnlyReplicaError);
+        }
+
+        computeId = readOnlyEndpoint.id;
       }
 
       // If databaseName is not provided, use default `neondb` or first database

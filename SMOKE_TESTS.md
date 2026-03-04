@@ -107,7 +107,17 @@ Expected:
 Expected:
 - Either valid results, or a clear prerequisite error (e.g. missing `pg_stat_statements`).
 
-## 10) Cleanup
+## 10) Read-Only Connection String Guard
+
+- Enable read-only mode for the MCP server context (HTTP header or OAuth `read` scope)
+- `neon-preview.get_connection_string` against a branch that has a read replica endpoint
+- `neon-preview.get_connection_string` against a branch that does not have a read replica endpoint
+
+Expected:
+- With a read replica: tool returns a URI bound to a `read_only` endpoint.
+- Without a read replica: tool fails with guidance to create a read replica (or disable read-only mode).
+
+## 11) Cleanup
 
 - `neon-preview.delete_branch` for test child branch(es)
 - `neon-preview.delete_project` for test project
