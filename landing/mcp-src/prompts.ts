@@ -5,6 +5,7 @@ import { z } from 'zod/v3';
 import { fetchRawGithubContent } from './resources';
 import { ToolHandlerExtraParams } from './tools/types';
 import { ClientApplication } from './utils/client-application';
+import { GrantContext, ScopeCategory } from './utils/grant-context';
 
 const setupNeonAuthViteReactArgsSchema = {
   projectId: z
@@ -30,15 +31,33 @@ const setupNeonAuthViteReactArgsSchema = {
 export const NEON_PROMPTS = [
   {
     name: 'setup-neon-auth',
+    scope: 'neon_auth' as const,
     description:
       'Interactive guide for setting up Neon Auth in a Vite+React project. Walks through provisioning, package installation, client setup, and UI components.',
     argsSchema: setupNeonAuthViteReactArgsSchema,
   },
 ] as const satisfies ReadonlyArray<{
   name: string;
+  scope: ScopeCategory | null;
   description: string;
   argsSchema?: Record<string, z.ZodTypeAny>;
 }>;
+
+export function getAvailablePrompts(
+  grant: GrantContext,
+): ReadonlyArray<(typeof NEON_PROMPTS)[number]> {
+  if (grant.scopes === null) {
+    return NEON_PROMPTS;
+  }
+  if (grant.scopes.length === 0) {
+    return [];
+  }
+
+  const scopeSet = new Set(grant.scopes);
+  return NEON_PROMPTS.filter(
+    (prompt) => prompt.scope === null || scopeSet.has(prompt.scope),
+  );
+}
 
 function getClientSpecificInstructions(clientApplication: ClientApplication) {
   switch (clientApplication) {

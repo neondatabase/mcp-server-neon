@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { NEON_PROMPTS, getPromptTemplate } from '../prompts';
+import { getAvailablePrompts, getPromptTemplate } from '../prompts';
 import { NEON_HANDLERS, ToolHandlerExtended } from '../tools/index';
 import { logger } from '../utils/logger';
 import { generateTraceId } from '../utils/trace';
@@ -191,7 +191,8 @@ export const createMcpServer = async (context: ServerContext) => {
   });
 
   // Register prompts
-  NEON_PROMPTS.forEach((prompt) => {
+  const availablePrompts = getAvailablePrompts(grant);
+  availablePrompts.forEach((prompt) => {
     server.prompt(
       prompt.name,
       prompt.description,

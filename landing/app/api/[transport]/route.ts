@@ -10,7 +10,10 @@ import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-sc
 import { captureException, startSpan } from '@sentry/node';
 import crypto from 'crypto';
 
-import { NEON_PROMPTS, getPromptTemplate } from '../../../mcp-src/prompts';
+import {
+  getAvailablePrompts,
+  getPromptTemplate,
+} from '../../../mcp-src/prompts';
 import { NEON_HANDLERS } from '../../../mcp-src/tools/index';
 import { createNeonClient } from '../../../mcp-src/server/api';
 import pkg from '../../../package.json';
@@ -360,8 +363,9 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         );
       });
 
-      // Register all prompts
-      NEON_PROMPTS.forEach((prompt) => {
+      // Register prompts for this specific auth context.
+      const composedPrompts = getAvailablePrompts(staticToolContext.grant);
+      composedPrompts.forEach((prompt) => {
         server.registerPrompt(
           prompt.name,
           {
