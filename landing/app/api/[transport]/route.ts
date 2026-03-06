@@ -39,7 +39,7 @@ import {
   getAccessControlWarnings,
   injectProjectId,
 } from '../../../mcp-src/tools/grant-filter';
-import { assert } from '../../../lib/assert.js';
+import { assert } from '../../../lib/assert';
 
 type AuthenticatedExtra = {
   authInfo?: AuthInfo & {
