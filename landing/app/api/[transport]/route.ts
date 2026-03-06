@@ -13,7 +13,6 @@ import crypto from 'crypto';
 import { NEON_PROMPTS, getPromptTemplate } from '../../../mcp-src/prompts';
 import {
   NEON_HANDLERS,
-  composeToolsForContext,
 } from '../../../mcp-src/tools/index';
 import { createNeonClient } from '../../../mcp-src/server/api';
 import pkg from '../../../package.json';
@@ -38,9 +37,11 @@ import {
   type GrantContext,
 } from '../../../mcp-src/utils/grant-context';
 import {
+  getAvailableTools,
   getAccessControlWarnings,
   injectProjectId,
 } from '../../../mcp-src/tools/grant-filter';
+import { assert } from '../../../lib/assert.js';
 
 type AuthenticatedExtra = {
   authInfo?: AuthInfo & {
@@ -229,7 +230,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         waitUntil(flushAnalytics());
       };
 
-      const composedTools = composeToolsForContext(
+      const composedTools = getAvailableTools(
         staticToolContext.grant,
         staticToolContext.readOnly,
       );
@@ -237,9 +238,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
       // Register tools for this specific auth context.
       composedTools.forEach((tool) => {
         const toolHandler = NEON_HANDLERS[tool.name];
-        if (!toolHandler) {
-          throw new Error(`Handler for tool ${tool.name} not found`);
-        }
+        assert(toolHandler, `Handler for tool ${tool.name} not found`);
 
         server.registerTool(
           tool.name,
@@ -723,6 +722,7 @@ const verifyToken = async (
   };
 };
 
+// Cache TTL for dynamic handler (5 minutes)
 const DYNAMIC_HANDLER_CACHE_TTL_MS = 5 * 60 * 1000;
 const dynamicHandlerCache = new Map<
   string,
@@ -741,6 +741,9 @@ function getStaticToolContext(req: Request): StaticToolContext {
   const authInfo = req.auth;
   const authExtra = authInfo?.extra;
   const grantFromAuth = authExtra?.grant as Partial<GrantContext> | undefined;
+  // Backward compatibility: older tokens may not have persisted grant context.
+  // Remove this DEFAULT_GRANT fallback once all active tokens are guaranteed to include grant.
+  // Then replace with assert(grantFromAuth, 'grantFromAuth is required');
   const grant: GrantContext =
     grantFromAuth &&
     typeof grantFromAuth === 'object' &&
@@ -760,9 +763,10 @@ function getStaticToolContext(req: Request): StaticToolContext {
 
 function getDynamicHandlerCacheKey(req: Request): string {
   const authInfo = req.auth;
+  assert(authInfo?.token, 'authInfo token is required');
   const staticToolContext = getStaticToolContext(req);
   const rawKey = JSON.stringify({
-    token: authInfo?.token ?? 'no-token',
+    token: authInfo?.token,
     readOnly: staticToolContext.readOnly,
     grant: staticToolContext.grant,
   });
