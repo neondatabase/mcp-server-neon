@@ -1,15 +1,12 @@
 # Changelog
 
-# [0.8.1]
+# [1.0.0]
 
-- Feat: Add remote grant-context runtime controls for scope-category/project constraints with read-only header support
-- Feat: Add `/api/list-tools` endpoint to preview effective tool availability from `X-Neon-*` and read-only headers
-- Feat: Add comprehensive grant/read-only test coverage (unit, integration, MCP e2e, and web e2e list-tools checks)
-- Feat: OAuth authorize UI now supports read-only defaults from `X-Neon-Read-Only` / `x-read-only` headers
-- Feat: Persist OAuth register request header context by `client_id` and apply it on `/api/authorize` when browser requests do not carry custom headers
-- Improvement: Add register/authorize integration and end-to-end OAuth contract tests for header precedence and fallback behavior
-- Improvement: Expose grant capability metadata (`x-neon-scope-categories`) in OAuth authorization server metadata
-- Chore: Sync MCP registry version metadata with package version (`0.8.1`)
+- Existing clients remain compatible, with new options to scope access by project and capability categories.
+- Added support for grant-aware tool filtering via `X-Neon-*` headers, including read-only mode controls.
+- Added `/api/list-tools` so clients can preview exactly which tools are available for a given scope/read-only configuration.
+- OAuth authorization now preserves and applies client registration context, including read-only defaults, for more predictable permissions UX.
+- OAuth metadata now advertises supported grant scope categories for better client discovery.
 
 # [0.8.0]
 
