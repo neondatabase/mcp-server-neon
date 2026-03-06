@@ -28,7 +28,7 @@ describe('filterToolsForGrant', () => {
       grant({ scopes: ['querying'] }),
     );
     const names = tools.map((t) => t.name);
-    expect(tools).toHaveLength(6);
+    expect(tools).toHaveLength(10);
     expect(names).toContain('run_sql');
     expect(names).toContain('search');
     expect(names).toContain('fetch');
@@ -57,7 +57,7 @@ describe('filterToolsForGrant', () => {
       NEON_TOOLS,
       grant({ projectId: 'proj-123', scopes: ['querying'] }),
     );
-    expect(tools).toHaveLength(6);
+    expect(tools).toHaveLength(10);
     expect(tools.map((t) => t.name)).toContain('run_sql');
   });
 });
@@ -65,7 +65,7 @@ describe('filterToolsForGrant', () => {
 describe('getAvailableTools', () => {
   it('applies read-only filter after grant filtering', () => {
     const tools = getAvailableTools(grant({ scopes: ['querying'] }), true);
-    expect(tools).toHaveLength(4);
+    expect(tools).toHaveLength(6);
     for (const tool of tools) {
       expect(tool.readOnlySafe).toBe(true);
     }
@@ -116,7 +116,6 @@ describe('scope coverage sanity', () => {
       'branches',
       'schema',
       'querying',
-      'performance',
       'neon_auth',
       'data_api',
       'docs',

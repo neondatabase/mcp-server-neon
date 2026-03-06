@@ -36,7 +36,7 @@ describe('/api/list-tools endpoint', () => {
   it('filters by scopes when X-Neon-Scopes is present', async () => {
     const body = await callListTools({ 'X-Neon-Scopes': 'querying' });
     expect(body.grant.scopes).toEqual(['querying']);
-    expect(body.tools).toHaveLength(6);
+    expect(body.tools).toHaveLength(10);
   });
 
   it('returns only always-available tools when scopes are all invalid', async () => {

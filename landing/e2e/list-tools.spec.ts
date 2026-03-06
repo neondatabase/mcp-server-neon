@@ -27,14 +27,14 @@ test.describe('/api/list-tools endpoint', () => {
     expect(body.warnings).toBeUndefined();
   });
 
-  test('returns 6 tools for X-Neon-Scopes: querying', async ({ request }) => {
+  test('returns 10 tools for X-Neon-Scopes: querying', async ({ request }) => {
     const response = await request.get('/api/list-tools', {
       headers: { 'X-Neon-Scopes': 'querying' },
     });
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(6);
+    expect(body.tools).toHaveLength(10);
     expect(body.grant.scopes).toEqual(['querying']);
   });
 

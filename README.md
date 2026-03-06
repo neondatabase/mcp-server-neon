@@ -229,7 +229,6 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 - `branches`
 - `schema`
 - `querying`
-- `performance`
 - `neon_auth`
 - `data_api`
 - `docs`
@@ -272,7 +271,7 @@ Notes:
 - **`prepare_database_migration`**: Initiates a database migration process. Critically, it creates a temporary branch to apply and test the migration safely before affecting the main branch.
 - **`complete_database_migration`**: Finalizes and applies a prepared database migration to the main branch. This action merges changes from the temporary migration branch and cleans up temporary resources.
 
-**Query Performance Optimization:**
+**SQL Querying and Optimization:**
 
 - **`list_slow_queries`**: Identifies performance bottlenecks by finding the slowest queries in a database. Requires the pg_stat_statements extension.
 - **`explain_sql_statement`**: Provides detailed execution plans for SQL queries to help identify performance bottlenecks.

@@ -532,7 +532,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'explain_sql_statement' as const,
-    scope: 'performance',
+    scope: 'querying',
     description:
       'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
     inputSchema: explainSqlStatementInputSchema,
@@ -547,7 +547,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'prepare_query_tuning' as const,
-    scope: 'performance',
+    scope: 'querying',
     readOnlySafe: false,
     description: `
   <use_case>
@@ -705,7 +705,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'complete_query_tuning' as const,
-    scope: 'performance',
+    scope: 'querying',
     readOnlySafe: false,
     description: `Complete a query tuning session by either applying the changes to the main branch or discarding them. 
     <important_notes>
@@ -743,7 +743,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'list_slow_queries' as const,
-    scope: 'performance',
+    scope: 'querying',
     description: `
     <use_case>
       Use this tool to list slow queries from your Neon database.
