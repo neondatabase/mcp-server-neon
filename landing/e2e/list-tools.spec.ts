@@ -38,14 +38,14 @@ test.describe('/api/list-tools endpoint', () => {
     expect(body.grant.scopes).toEqual(['querying']);
   });
 
-  test('returns 24 tools for project-scoped mode', async ({ request }) => {
+  test('returns 22 tools for project-scoped mode', async ({ request }) => {
     const response = await request.get('/api/list-tools', {
       headers: { 'X-Neon-Project-Id': 'proj-123' },
     });
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(24);
+    expect(body.tools).toHaveLength(22);
     expect(body.grant.projectId).toBe('proj-123');
 
     // Project-agnostic tools should be hidden
@@ -54,6 +54,8 @@ test.describe('/api/list-tools endpoint', () => {
     expect(names).not.toContain('list_organizations');
     expect(names).not.toContain('create_project');
     expect(names).not.toContain('delete_project');
+    expect(names).not.toContain('search');
+    expect(names).not.toContain('fetch');
   });
 
   test('returns 18 tools for X-Neon-Read-Only: true', async ({ request }) => {

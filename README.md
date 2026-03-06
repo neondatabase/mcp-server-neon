@@ -232,13 +232,14 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 - `neon_auth`
 - `data_api`
 - `docs`
-- `null` (always-available tools such as `search` and `fetch`)
+- `null` (tools without a scope category)
 
 Notes:
 
 - `compare_database_schema` is categorized under `schema`.
 - `provision_neon_data_api` is categorized under `data_api` (separate from `neon_auth`).
 - Read-only enforcement still relies on `readOnlySafe` and server-side read-only logic; `scope` is category metadata, not a standalone read/write switch.
+- In project-scoped mode (`X-Neon-Project-Id`), `search` and `fetch` are not available.
 
 **Project Management:**
 

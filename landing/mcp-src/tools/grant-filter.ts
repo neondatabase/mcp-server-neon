@@ -25,6 +25,14 @@ const PROJECT_AGNOSTIC_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Additional tools hidden in project-scoped mode.
+ */
+const PROJECT_SCOPED_EXCLUDED_TOOLS: ReadonlySet<string> = new Set([
+  'search',
+  'fetch',
+]);
+
+/**
  * Tools that are always available regardless of scope categories.
  * These are discovery/navigation tools the LLM needs to function.
  */
@@ -79,8 +87,8 @@ function applyScopeCategoryFilter(
 
 /**
  * Apply project-scoped filtering.
- * When a projectId is set, hide project-agnostic tools and
- * remove projectId from tool schemas.
+ * When a projectId is set, hide project-agnostic tools, hide
+ * excluded discovery tools, and remove projectId from tool schemas.
  */
 function applyProjectScopeFilter(
   tools: NeonTool[],
@@ -89,7 +97,11 @@ function applyProjectScopeFilter(
   if (!grant.projectId) return tools;
 
   return tools
-    .filter((tool) => !PROJECT_AGNOSTIC_TOOLS.has(tool.name))
+    .filter(
+      (tool) =>
+        !PROJECT_AGNOSTIC_TOOLS.has(tool.name) &&
+        !PROJECT_SCOPED_EXCLUDED_TOOLS.has(tool.name),
+    )
     .map((tool) => {
       const modified = removeProjectIdFromSchema(tool);
       return modified ?? tool;
@@ -165,9 +177,12 @@ export function getAccessControlWarnings(
 
   // X-Neon-Scopes was provided but no valid scope categories were recognized.
   if (grant.scopes !== null && grant.scopes.length === 0) {
+    const discoveryToolsText = grant.projectId
+      ? 'No tools are available.'
+      : 'Only the "search" and "fetch" tools are available.';
     warnings.push(
       '⚠️ Warning: No valid scope categories are set. ' +
-        'Only the "search" and "fetch" tools are available. ' +
+        `${discoveryToolsText} ` +
         'Add scope categories via the X-Neon-Scopes header (e.g., "querying,schema") ' +
         'to enable additional tools.',
     );

@@ -49,10 +49,12 @@ describe('/api/list-tools endpoint', () => {
   it('filters project-agnostic tools in project-scoped mode', async () => {
     const body = await callListTools({ 'X-Neon-Project-Id': 'proj-123' });
     expect(body.grant.projectId).toBe('proj-123');
-    expect(body.tools).toHaveLength(24);
+    expect(body.tools).toHaveLength(22);
     const names = body.tools.map((t) => t.name);
     expect(names).not.toContain('list_projects');
     expect(names).not.toContain('create_project');
+    expect(names).not.toContain('search');
+    expect(names).not.toContain('fetch');
   });
 
   it('filters to readOnlySafe tools with X-Neon-Read-Only=true', async () => {

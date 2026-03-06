@@ -46,9 +46,11 @@ describe('filterToolsForGrant', () => {
       grant({ projectId: 'proj-123', scopes: null }),
     );
     const names = tools.map((t) => t.name);
-    expect(tools).toHaveLength(24);
+    expect(tools).toHaveLength(22);
     expect(names).not.toContain('list_projects');
     expect(names).not.toContain('create_project');
+    expect(names).not.toContain('search');
+    expect(names).not.toContain('fetch');
     expect(names).toContain('describe_project');
   });
 
@@ -57,8 +59,11 @@ describe('filterToolsForGrant', () => {
       NEON_TOOLS,
       grant({ projectId: 'proj-123', scopes: ['querying'] }),
     );
-    expect(tools).toHaveLength(10);
-    expect(tools.map((t) => t.name)).toContain('run_sql');
+    expect(tools).toHaveLength(8);
+    const names = tools.map((t) => t.name);
+    expect(names).toContain('run_sql');
+    expect(names).not.toContain('search');
+    expect(names).not.toContain('fetch');
   });
 });
 
@@ -82,6 +87,15 @@ describe('getAccessControlWarnings', () => {
     const warnings = getAccessControlWarnings(grant({ scopes: [] }), false);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('No valid scope categories');
+  });
+
+  it('warns with no-tools message when project-scoped and scopes are invalid', () => {
+    const warnings = getAccessControlWarnings(
+      grant({ projectId: 'proj-123', scopes: [] }),
+      false,
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('No tools are available.');
   });
 
   it('returns no warnings for null or valid scopes', () => {
