@@ -434,7 +434,7 @@ export const NEON_TOOLS = [
     name: 'get_connection_string' as const,
     scope: 'branches',
     description:
-      'Get a PostgreSQL connection string for a Neon database with all parameters being optional',
+      'Get a PostgreSQL connection string for a Neon database with all parameters optional. In read-only mode, this tool can only return connection strings for read-replica endpoints. If no read replica exists and the user needs a setup DATABASE_URL, explain that limitation and guide them to https://console.neon.tech to copy the DATABASE_URL manually.',
     inputSchema: getConnectionStringInputSchema,
     readOnlySafe: true,
     annotations: {
