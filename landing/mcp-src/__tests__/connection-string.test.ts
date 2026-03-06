@@ -40,6 +40,7 @@ describe('handleGetConnectionString', () => {
       },
       neonClient as unknown as Parameters<typeof handleGetConnectionString>[1],
       { readOnly: true } as ToolHandlerExtraParams,
+      { enforceReadOnlyReplica: true },
     );
 
     expect(neonClient.listProjectBranchEndpoints).toHaveBeenCalledWith(
@@ -86,6 +87,7 @@ describe('handleGetConnectionString', () => {
           typeof handleGetConnectionString
         >[1],
         { readOnly: true } as ToolHandlerExtraParams,
+        { enforceReadOnlyReplica: true },
       ),
     ).rejects.toThrow(new InvalidArgumentError(READ_ONLY_REPLICA_ERROR));
 
@@ -119,5 +121,34 @@ describe('handleGetConnectionString', () => {
       }),
     );
     expect(result.computeId).toBe('ep-explicit');
+  });
+
+  it('does not require a read replica for non-connection-string consumers in read-only mode', async () => {
+    const neonClient = {
+      listProjectBranchEndpoints: vi.fn(),
+      getConnectionUri: vi.fn().mockResolvedValue({
+        data: { uri: 'postgresql://example' },
+      }),
+    };
+
+    const result = await handleGetConnectionString(
+      {
+        projectId: 'project-1',
+        branchId: 'branch-1',
+        computeId: 'ep-read-write',
+        databaseName: 'neondb',
+        roleName: 'neondb_owner',
+      },
+      neonClient as unknown as Parameters<typeof handleGetConnectionString>[1],
+      { readOnly: true } as ToolHandlerExtraParams,
+    );
+
+    expect(neonClient.listProjectBranchEndpoints).not.toHaveBeenCalled();
+    expect(neonClient.getConnectionUri).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint_id: 'ep-read-write',
+      }),
+    );
+    expect(result.computeId).toBe('ep-read-write');
   });
 });

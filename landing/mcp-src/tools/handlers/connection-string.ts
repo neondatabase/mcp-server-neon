@@ -21,6 +21,9 @@ export async function handleGetConnectionString(
   },
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
+  options?: {
+    enforceReadOnlyReplica?: boolean;
+  },
 ) {
   const readOnlyReplicaError =
     'this MCP server is in read-only mode and no read replica endpoint can be found - create a read replica first using the Neon UI to enable get_connection_string in read-only mode or remove the read-only mode configuration (HTTP header, OAuth scope settings)';
@@ -41,9 +44,10 @@ export async function handleGetConnectionString(
         branchId = defaultBranch.id;
       }
 
-      // In read-only mode this tool must only return a DSN for a read replica
-      // endpoint associated with the selected branch.
-      if (extra.readOnly) {
+      // Only enforce read-replica endpoint selection for the
+      // get_connection_string tool. Other read-only-safe tools can run against
+      // a read-write endpoint because query-level protections prevent writes.
+      if (extra.readOnly && options?.enforceReadOnlyReplica) {
         const branchEndpoints = await neonClient.listProjectBranchEndpoints(
           projectId,
           branchId,
