@@ -5,6 +5,7 @@ type ListToolsResponse = {
   grant: {
     projectId: string | null;
     scopes: string[] | null;
+    invalidProjectId?: boolean;
   };
   readOnly: boolean;
   warnings?: string[];
@@ -30,7 +31,11 @@ describe('/api/list-tools endpoint', () => {
     const body = await callListTools();
     expect(body.tools).toHaveLength(29);
     expect(body.readOnly).toBe(false);
-    expect(body.grant).toEqual({ projectId: null, scopes: null });
+    expect(body.grant).toEqual({
+      projectId: null,
+      scopes: null,
+      invalidProjectId: false,
+    });
   });
 
   it('filters by scopes when X-Neon-Scopes is present', async () => {

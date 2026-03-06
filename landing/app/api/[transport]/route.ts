@@ -134,11 +134,12 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         if (grant.projectId) {
           try {
             await neonClient.getProject(grant.projectId);
+            grant.invalidProjectId = false;
           } catch {
             logger.warn(
-              `Project ID "${grant.projectId}" could not be verified — falling back to unscoped access.`,
+              `Project ID "${grant.projectId}" could not be verified — keeping project-scoped access.`,
             );
-            grant.projectId = null;
+            grant.invalidProjectId = true;
           }
         }
 
@@ -754,6 +755,7 @@ function getStaticToolContext(req: Request): StaticToolContext {
       ? {
           projectId: grantFromAuth.projectId ?? null,
           scopes: grantFromAuth.scopes ?? null,
+          invalidProjectId: grantFromAuth.invalidProjectId ?? false,
         }
       : DEFAULT_GRANT;
 

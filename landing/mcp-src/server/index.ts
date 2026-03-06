@@ -49,11 +49,12 @@ export const createMcpServer = async (context: ServerContext) => {
   if (grant.projectId) {
     try {
       await neonClient.getProject(grant.projectId);
+      grant.invalidProjectId = false;
     } catch {
       logger.warn(
-        `Project ID "${grant.projectId}" could not be verified — falling back to unscoped access.`,
+        `Project ID "${grant.projectId}" could not be verified — keeping project-scoped access.`,
       );
-      grant.projectId = null;
+      grant.invalidProjectId = true;
     }
   }
 

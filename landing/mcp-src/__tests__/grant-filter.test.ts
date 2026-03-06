@@ -12,6 +12,7 @@ function grant(overrides: Partial<GrantContext> = {}): GrantContext {
   return {
     projectId: null,
     scopes: null,
+    invalidProjectId: false,
     ...overrides,
   };
 }
@@ -105,6 +106,16 @@ describe('getAccessControlWarnings', () => {
     expect(
       getAccessControlWarnings(grant({ scopes: ['schema'] }), false),
     ).toEqual([]);
+  });
+
+  it('warns when project id validation fails but scope stays constrained', () => {
+    const warnings = getAccessControlWarnings(
+      grant({ projectId: 'proj-invalid', invalidProjectId: true }),
+      false,
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('could not be verified');
+    expect(warnings[0]).toContain('remains project-scoped');
   });
 });
 
