@@ -11,9 +11,7 @@ import { captureException, startSpan } from '@sentry/node';
 import crypto from 'crypto';
 
 import { NEON_PROMPTS, getPromptTemplate } from '../../../mcp-src/prompts';
-import {
-  NEON_HANDLERS,
-} from '../../../mcp-src/tools/index';
+import { NEON_HANDLERS } from '../../../mcp-src/tools/index';
 import { createNeonClient } from '../../../mcp-src/server/api';
 import pkg from '../../../package.json';
 import { handleToolError } from '../../../mcp-src/server/errors';
