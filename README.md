@@ -189,6 +189,22 @@ Run the following command to add the Neon MCP Server for all detected agents and
 npx add-mcp https://mcp.neon.tech/sse --type sse
 ```
 
+## Remote Server Architecture
+
+The remote server runs as a Next.js App Router application on Vercel at `mcp.neon.tech`.
+
+> [!NOTE]
+> The root `/` path redirects to [Neon MCP Server docs](https://neon.tech/docs/ai/neon-mcp-server). There is no landing page.
+
+Core implementation areas:
+
+- `landing/app/api/[transport]/route.ts`: MCP transport endpoint for Streamable HTTP (`/mcp`) and SSE (`/sse`)
+- `landing/app/api/authorize/`, `landing/app/callback/`, `landing/app/api/token/`, `landing/app/api/revoke/`: OAuth flow endpoints
+- `landing/app/.well-known/`: OAuth discovery metadata endpoints
+- `landing/mcp-src/`: MCP server, tools, handlers, analytics, and Sentry integration
+- `landing/lib/`: Next.js-compatible helpers (OAuth, configuration, error handling)
+- `landing/mcp-src/utils/read-only.ts`: read-only mode and scope handling
+
 ## Guides
 
 - [Neon MCP Server Guide](https://neon.tech/docs/ai/neon-mcp-server)
@@ -314,6 +330,26 @@ bun run lint
 bun run typecheck
 ```
 
+## Environment Variables
+
+Required for remote server runtime:
+
+| Variable              | Description                           |
+| --------------------- | ------------------------------------- |
+| `SERVER_HOST`         | Server URL (defaults to `VERCEL_URL`) |
+| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL               |
+| `CLIENT_ID`           | OAuth client ID                       |
+| `CLIENT_SECRET`       | OAuth client secret                   |
+| `COOKIE_SECRET`       | Secret for signed cookies             |
+| `KV_URL`              | Vercel KV (Upstash Redis) URL         |
+| `OAUTH_DATABASE_URL`  | Postgres URL for token storage        |
+
+Optional:
+
+| Variable    | Description                                                                       |
+| ----------- | --------------------------------------------------------------------------------- |
+| `LOG_LEVEL` | Winston log level: `error`, `warn`, `info` (default), `debug`, `verbose`, `silly` |
+
 ## Testing Pyramid
 
 All tests run from `landing/`.
@@ -346,3 +382,7 @@ Testing strategy:
 - Use **integration** tests for deterministic tool contracts and workflow behavior.
 - Use **unit** tests for pure logic and edge cases.
 - Avoid relying on third-party uptime in merge-gating tests; mock external dependencies in integration/unit tiers.
+
+## Deployment
+
+Vercel deploys the remote server automatically from the repository branch configuration. Preview environments are available for pull requests.
