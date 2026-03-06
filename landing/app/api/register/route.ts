@@ -7,104 +7,50 @@ import type { Client } from 'oauth2-server';
 
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
-const DEBUG_RUN_ID = 'register-project-id-500';
-
-function getRequestHeadersObject(request: NextRequest): Record<string, string> {
-  const headers: Record<string, string> = {};
-  request.headers.forEach((value, key) => {
-    headers[key.toLowerCase()] = value;
-  });
-  return headers;
-}
-
-function emitAgentDebugLog(payload: {
-  hypothesisId: string;
-  location: string;
-  message: string;
-  data: Record<string, unknown>;
-}) {
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/3825217b-2560-43d0-8a8b-fb137ff631ed', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      runId: DEBUG_RUN_ID,
-      hypothesisId: payload.hypothesisId,
-      location: payload.location,
-      message: payload.message,
-      data: payload.data,
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-}
 
 export async function POST(request: NextRequest) {
-  let exitPath = 'uninitialized';
-  let exitStatus: number | null = null;
   try {
-    // #region agent log
-    emitAgentDebugLog({
-      hypothesisId: 'H1',
-      location: 'app/api/register/route.ts:POST:entry',
-      message: 'register POST handler entered',
-      data: { method: request.method, hasBody: true },
-    });
-    // #endregion
-
     const payload = await request.json();
-    const requestHeaders = getRequestHeadersObject(request);
-    // #region agent log
-    emitAgentDebugLog({
-      hypothesisId: 'H2',
-      location: 'app/api/register/route.ts:POST:after_json',
-      message: 'parsed register payload and headers',
-      data: {
-        payloadKeys: Object.keys(payload ?? {}),
-        headerCount: Object.keys(requestHeaders).length,
-        hasProjectHeader: 'x-neon-project-id' in requestHeaders,
-      },
+    const requestHeaders: Record<string, string> = {};
+    request.headers.forEach((value, key) => {
+      requestHeaders[key.toLowerCase()] = value;
     });
-    // #endregion
 
     logger.info('request to register client', {
       name: payload.client_name,
       client_uri: payload.client_uri,
-      headers: requestHeaders,
+      grantHeaders: {
+        xNeonReadOnly: requestHeaders['x-neon-read-only'],
+        xReadOnly: requestHeaders['x-read-only'],
+        xNeonProjectId: requestHeaders['x-neon-project-id'],
+        xNeonScopes: requestHeaders['x-neon-scopes'],
+      },
     });
 
     if (payload.client_name === undefined) {
-      const response = NextResponse.json(
+      logger.warn('Client registration validation failed', {
+        reason: 'client_name_missing',
+      });
+      return NextResponse.json(
         {
           error: 'invalid_request',
           error_description: 'client_name is required',
         },
         { status: 400 },
       );
-      logger.debug('register validation failed', {
-        reason: 'client_name_missing',
-        status: response.status,
-      });
-      exitPath = 'validation_client_name';
-      exitStatus = response.status;
-      return response;
     }
 
     if (payload.redirect_uris === undefined) {
-      const response = NextResponse.json(
+      logger.warn('Client registration validation failed', {
+        reason: 'redirect_uris_missing',
+      });
+      return NextResponse.json(
         {
           error: 'invalid_request',
           error_description: 'redirect_uris is required',
         },
         { status: 400 },
       );
-      logger.debug('register validation failed', {
-        reason: 'redirect_uris_missing',
-        status: response.status,
-      });
-      exitPath = 'validation_redirect_uris';
-      exitStatus = response.status;
-      return response;
     }
 
     if (
@@ -113,7 +59,10 @@ export async function POST(request: NextRequest) {
         SUPPORTED_GRANT_TYPES.includes(grant),
       )
     ) {
-      const response = NextResponse.json(
+      logger.warn('Client registration validation failed', {
+        reason: 'grant_types_invalid',
+      });
+      return NextResponse.json(
         {
           error: 'invalid_request',
           error_description:
@@ -121,13 +70,6 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 },
       );
-      logger.debug('register validation failed', {
-        reason: 'grant_types_invalid',
-        status: response.status,
-      });
-      exitPath = 'validation_grant_types';
-      exitStatus = response.status;
-      return response;
     }
 
     if (
@@ -136,7 +78,10 @@ export async function POST(request: NextRequest) {
         SUPPORTED_RESPONSE_TYPES.includes(responseType),
       )
     ) {
-      const response = NextResponse.json(
+      logger.warn('Client registration validation failed', {
+        reason: 'response_types_invalid',
+      });
+      return NextResponse.json(
         {
           error: 'invalid_request',
           error_description:
@@ -144,13 +89,6 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 },
       );
-      logger.debug('register validation failed', {
-        reason: 'response_types_invalid',
-        status: response.status,
-      });
-      exitPath = 'validation_response_types';
-      exitStatus = response.status;
-      return response;
     }
 
     const clientId = generateRandomString(8);
@@ -164,21 +102,8 @@ export async function POST(request: NextRequest) {
       registrationDate: Math.floor(Date.now() / 1000),
     };
 
-    logger.debug('before model.saveClient', { clientId: client.id });
-    // #region agent log
-    emitAgentDebugLog({
-      hypothesisId: 'H3',
-      location: 'app/api/register/route.ts:POST:before_save',
-      message: 'about to persist client and registration headers',
-      data: {
-        clientId,
-        tokenEndpointAuthMethod: client.tokenEndpointAuthMethod,
-      },
-    });
-    // #endregion
     await model.saveClient(client);
     await model.saveClientRegisterHeaders(clientId, requestHeaders);
-    logger.debug('after model.saveClient completed', { clientId: client.id });
 
     logger.info('new client registered', {
       clientId,
@@ -200,27 +125,7 @@ export async function POST(request: NextRequest) {
       tokenEndpointAuthMethod: responseBody.token_endpoint_auth_method,
     });
 
-    const response = NextResponse.json(responseBody);
-    logger.debug('register response built', {
-      responseKind: 'NextResponse',
-      status: response.status,
-      hasContentType: !!response.headers.get('content-type'),
-      contentType: response.headers.get('content-type'),
-    });
-    // #region agent log
-    emitAgentDebugLog({
-      hypothesisId: 'H1',
-      location: 'app/api/register/route.ts:POST:success_return',
-      message: 'returning successful register response',
-      data: {
-        status: response.status,
-        responseHasContentType: !!response.headers.get('content-type'),
-      },
-    });
-    // #endregion
-    exitPath = 'success';
-    exitStatus = response.status;
-    return response;
+    return NextResponse.json(responseBody);
   } catch (error: unknown) {
     logger.error('caught error in register handler', {
       error,
@@ -228,36 +133,7 @@ export async function POST(request: NextRequest) {
       errorMessage: error instanceof Error ? error.message : String(error),
       errorStack: error instanceof Error ? error.stack : undefined,
     });
-    const errorResponse = handleOAuthError(error, 'Client registration error');
-    logger.debug('register error response built', {
-      responseKind: 'NextResponse',
-      status: errorResponse.status,
-      hasContentType: !!errorResponse.headers.get('content-type'),
-      contentType: errorResponse.headers.get('content-type'),
-    });
-    // #region agent log
-    emitAgentDebugLog({
-      hypothesisId: 'H4',
-      location: 'app/api/register/route.ts:POST:catch_return',
-      message: 'returning error response from catch block',
-      data: {
-        status: errorResponse.status,
-        errorMessage: error instanceof Error ? error.message : String(error),
-      },
-    });
-    // #endregion
-    exitPath = 'catch';
-    exitStatus = errorResponse.status;
-    return errorResponse;
-  } finally {
-    // #region agent log
-    emitAgentDebugLog({
-      hypothesisId: 'H1',
-      location: 'app/api/register/route.ts:POST:finally',
-      message: 'register POST handler exiting',
-      data: { exitPath, exitStatus },
-    });
-    // #endregion
+    return handleOAuthError(error, 'Client registration error');
   }
 }
 
