@@ -103,7 +103,7 @@ export const NEON_TOOLS = [
   {
     name: 'delete_project' as const,
     scope: 'projects',
-    description: 'Delete a Neon project',
+    description: 'Delete a Neon project. This action is irreversible. Use describe_project first to review the project and its branches before deleting.',
     inputSchema: deleteProjectInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -117,7 +117,7 @@ export const NEON_TOOLS = [
   {
     name: 'describe_project' as const,
     scope: 'projects',
-    description: 'Describes a Neon project',
+    description: 'Get details about a Neon project, including its name and a list of all branches. Use this to find branch IDs before running queries or to verify project contents before modifications.',
     inputSchema: describeProjectInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -191,7 +191,7 @@ export const NEON_TOOLS = [
   {
     name: 'get_database_tables' as const,
     scope: 'schema',
-    description: 'Get all tables in a Neon database',
+    description: 'List all tables in a Neon database. Use this to discover available tables before writing SQL queries with run_sql.',
     inputSchema: getDatabaseTablesInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -205,7 +205,7 @@ export const NEON_TOOLS = [
   {
     name: 'create_branch' as const,
     scope: 'branches',
-    description: 'Create a branch in a Neon project',
+    description: 'Create a new branch in a Neon project. Branches are isolated copies of the database that can be used for development, testing, or safe schema migrations. Returns the new branch ID and name.',
     inputSchema: createBranchInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -404,7 +404,7 @@ export const NEON_TOOLS = [
   {
     name: 'delete_branch' as const,
     scope: 'branches',
-    description: 'Delete a branch from a Neon project',
+    description: 'Delete a branch from a Neon project. This permanently removes the branch and all its data.',
     inputSchema: deleteBranchInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -533,7 +533,7 @@ export const NEON_TOOLS = [
     name: 'explain_sql_statement' as const,
     scope: 'performance',
     description:
-      'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
+      'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANALYZE...) in the database',
     inputSchema: explainSqlStatementInputSchema,
     readOnlySafe: true,
     annotations: {
