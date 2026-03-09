@@ -158,7 +158,37 @@ export function getAvailableTools(
   if (readOnly) {
     tools = tools.filter((tool) => tool.readOnlySafe);
   }
-  return tools;
+  const descriptionNotices: string[] = [];
+  if (readOnly) {
+    descriptionNotices.push(
+      'Notice: The MCP server is currently configured with read-only permissions. ' +
+        'All write-access tools have been removed. All remaining tools are limited to read-only operations ' +
+        '(for example, read-only SQL queries). Do not try to work around this restriction; it is intentional. ' +
+        'If the user requests changes to Neon resources, inform them about the read-only configuration. ' +
+        'The user can remove read-only mode by removing the x-neon-read-only header from the MCP configuration, ' +
+        'or by logging out and back in with OAuth and selecting full access.',
+    );
+  }
+  if (grant.projectId) {
+    descriptionNotices.push(
+      `Notice: The MCP server is currently configured and scoped to one project only (${grant.projectId}). ` +
+        'Project management tools have been removed. All remaining tools are scoped to this project and can only interact with it. ' +
+        'This is intentional. If the user requests changes to another project, inform them about the project-scoping configuration. ' +
+        'The user can remove project scoping by removing the x-neon-project-id header from the MCP configuration, ' +
+        'and by logging out and back in after removing the flag when using OAuth.',
+    );
+  }
+
+  if (descriptionNotices.length === 0) return tools;
+
+  const noticesSuffix = `\n\n<notice>\n${descriptionNotices.join('\n\n')}\n</notice>`;
+  return tools.map(
+    (tool) =>
+      ({
+        ...tool,
+        description: `${tool.description}${noticesSuffix}`,
+      }) as NeonTool,
+  );
 }
 
 /**

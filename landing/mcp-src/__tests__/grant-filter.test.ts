@@ -81,6 +81,27 @@ describe('getAvailableTools', () => {
     const tools = getAvailableTools(grant(), false);
     expect(tools).toHaveLength(NEON_TOOLS.length);
   });
+
+  it('appends read-only notice to tool descriptions when read-only is enabled', () => {
+    const tools = getAvailableTools(grant(), true);
+    expect(tools.length).toBeGreaterThan(0);
+    for (const tool of tools) {
+      expect(tool.description).toContain(
+        'configured with read-only permissions',
+      );
+      expect(tool.description).toContain('<notice>');
+    }
+  });
+
+  it('appends project-scoped notice with project id to tool descriptions', () => {
+    const tools = getAvailableTools(grant({ projectId: 'proj-123' }), false);
+    expect(tools.length).toBeGreaterThan(0);
+    for (const tool of tools) {
+      expect(tool.description).toContain(
+        'configured and scoped to one project only (proj-123)',
+      );
+    }
+  });
 });
 
 describe('getAccessControlWarnings', () => {
@@ -99,7 +120,7 @@ describe('getAccessControlWarnings', () => {
     expect(warnings[0]).toContain('No tools are available.');
   });
 
-  it('returns no warnings for null or valid scopes', () => {
+  it('returns no warnings for null or valid scopes when no access restrictions are set', () => {
     expect(getAccessControlWarnings(grant({ scopes: null }), false)).toEqual(
       [],
     );
