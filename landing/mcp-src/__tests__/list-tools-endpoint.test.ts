@@ -5,7 +5,6 @@ type ListToolsResponse = {
   grant: {
     projectId: string | null;
     scopes: string[] | null;
-    invalidProjectId?: boolean;
   };
   readOnly: boolean;
   warnings?: string[];
@@ -34,7 +33,6 @@ describe('/api/list-tools endpoint', () => {
     expect(body.grant).toEqual({
       projectId: null,
       scopes: null,
-      invalidProjectId: false,
     });
   });
 

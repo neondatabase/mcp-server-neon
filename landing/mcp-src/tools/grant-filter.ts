@@ -218,14 +218,6 @@ export function getAccessControlWarnings(
     );
   }
 
-  if (grant.projectId && grant.invalidProjectId) {
-    warnings.push(
-      `⚠️ Warning: The configured project ID "${grant.projectId}" could not be verified. ` +
-        'The server remains project-scoped, and tools that require this project may fail ' +
-        'until X-Neon-Project-Id is corrected.',
-    );
-  }
-
   return warnings;
 }
 

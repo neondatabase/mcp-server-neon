@@ -3,10 +3,6 @@ import type { GrantContext } from '../utils/grant-context';
 import type { ServerContext } from '../types/context';
 import { NEON_TOOLS } from '../tools/definitions';
 
-const mockGetProject = vi
-  .fn()
-  .mockResolvedValue({ data: { project: { id: 'mock-project' } } });
-
 vi.mock('../analytics/analytics', () => ({
   track: vi.fn(),
 }));
@@ -33,9 +29,7 @@ vi.mock('../utils/logger', () => ({
 }));
 
 vi.mock('../server/api', () => ({
-  createNeonClient: () => ({
-    getProject: mockGetProject,
-  }),
+  createNeonClient: () => ({}),
 }));
 
 const { createMcpServer } = await import('../server/index');
@@ -69,9 +63,6 @@ function getRegisteredToolNames(
 describe('createMcpServer grant + read-only integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetProject.mockResolvedValue({
-      data: { project: { id: 'mock-project' } },
-    });
   });
 
   it('registers all tools with default grant', async () => {
@@ -99,21 +90,6 @@ describe('createMcpServer grant + read-only integration', () => {
   it('hides project-agnostic tools in project-scoped mode', async () => {
     const grant: GrantContext = {
       projectId: 'proj-123',
-      scopes: null,
-    };
-    const server = await createMcpServer(buildContext({ grant }));
-    const names = getRegisteredToolNames(server);
-
-    expect(names).not.toContain('list_projects');
-    expect(names).not.toContain('create_project');
-    expect(names).toContain('describe_project');
-    expect(names).toContain('run_sql');
-  });
-
-  it('keeps project-scoped filtering when project validation fails', async () => {
-    mockGetProject.mockRejectedValueOnce(new Error('project not found'));
-    const grant: GrantContext = {
-      projectId: 'proj-missing',
       scopes: null,
     };
     const server = await createMcpServer(buildContext({ grant }));

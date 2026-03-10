@@ -26,8 +26,6 @@ export type GrantContext = {
   projectId: string | null;
   /** Scope categories. null means all categories are allowed. */
   scopes: ScopeCategory[] | null;
-  /** True when project ID validation against Neon API failed. */
-  invalidProjectId?: boolean;
 };
 
 /**
@@ -37,7 +35,6 @@ export type GrantContext = {
 export const DEFAULT_GRANT: GrantContext = {
   projectId: null,
   scopes: null,
-  invalidProjectId: false,
 };
 
 function isValidScopeCategory(value: string): value is ScopeCategory {
@@ -79,7 +76,6 @@ export function resolveGrantFromHeaders(headers: Headers): GrantContext {
   return {
     projectId,
     scopes,
-    invalidProjectId: false,
   };
 }
 
@@ -94,7 +90,6 @@ export function resolveGrantFromToken(token: {
     return {
       projectId: token.grant.projectId ?? null,
       scopes: token.grant.scopes ?? null,
-      invalidProjectId: token.grant.invalidProjectId ?? false,
     };
   }
   return { ...DEFAULT_GRANT };

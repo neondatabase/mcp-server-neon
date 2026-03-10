@@ -45,19 +45,6 @@ export const createMcpServer = async (context: ServerContext) => {
 
   const grant = { ...(context.grant ?? DEFAULT_GRANT) };
 
-  // Validate project ID against the Neon API if one was provided
-  if (grant.projectId) {
-    try {
-      await neonClient.getProject(grant.projectId);
-      grant.invalidProjectId = false;
-    } catch {
-      logger.warn(
-        `Project ID "${grant.projectId}" could not be verified — keeping project-scoped access.`,
-      );
-      grant.invalidProjectId = true;
-    }
-  }
-
   // Track server initialization
   const trackServerInit = () => {
     track({

@@ -8,7 +8,6 @@ import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { normalizeObjectSchema } from '@modelcontextprotocol/sdk/server/zod-compat.js';
 import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-schema-compat.js';
 import { captureException, startSpan } from '@sentry/node';
-import crypto from 'crypto';
 
 import {
   getAvailablePrompts,
@@ -129,19 +128,6 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         const client = authInfo.extra.client;
         const transport = authInfo.extra.transport ?? 'sse';
         const neonClient = createNeonClient(apiKey);
-
-        // Validate project ID against the Neon API if one was provided
-        if (grant.projectId) {
-          try {
-            await neonClient.getProject(grant.projectId);
-            grant.invalidProjectId = false;
-          } catch {
-            logger.warn(
-              `Project ID "${grant.projectId}" could not be verified — keeping project-scoped access.`,
-            );
-            grant.invalidProjectId = true;
-          }
-        }
 
         // Use User-Agent as clientName fallback if MCP handshake hasn't provided it yet
         if (clientName === 'unknown' && authInfo.extra.userAgent) {
@@ -725,21 +711,6 @@ const verifyToken = async (
   };
 };
 
-// Cache TTL for dynamic handler (5 minutes)
-const DYNAMIC_HANDLER_CACHE_TTL_MS = 5 * 60 * 1000;
-const dynamicHandlerCache = new Map<
-  string,
-  { handler: (req: Request) => Promise<Response>; createdAt: number }
->();
-
-function cleanupDynamicHandlerCache(now: number): void {
-  for (const [key, entry] of dynamicHandlerCache.entries()) {
-    if (now - entry.createdAt > DYNAMIC_HANDLER_CACHE_TTL_MS) {
-      dynamicHandlerCache.delete(key);
-    }
-  }
-}
-
 function getStaticToolContext(req: Request): StaticToolContext {
   const authInfo = req.auth;
   const authExtra = authInfo?.extra;
@@ -755,7 +726,6 @@ function getStaticToolContext(req: Request): StaticToolContext {
       ? {
           projectId: grantFromAuth.projectId ?? null,
           scopes: grantFromAuth.scopes ?? null,
-          invalidProjectId: grantFromAuth.invalidProjectId ?? false,
         }
       : DEFAULT_GRANT;
 
@@ -765,40 +735,10 @@ function getStaticToolContext(req: Request): StaticToolContext {
   };
 }
 
-function getDynamicHandlerCacheKey(req: Request): string {
-  const authInfo = req.auth;
-  assert(authInfo?.token, 'authInfo token is required');
-  const staticToolContext = getStaticToolContext(req);
-  const rawKey = JSON.stringify({
-    token: authInfo?.token,
-    readOnly: staticToolContext.readOnly,
-    grant: staticToolContext.grant,
-  });
-
-  return crypto.createHash('sha256').update(rawKey).digest('hex');
-}
-
-function getContextualHandler(
-  req: Request,
-): (req: Request) => Promise<Response> {
-  const now = Date.now();
-  cleanupDynamicHandlerCache(now);
-
-  const key = getDynamicHandlerCacheKey(req);
-  const cached = dynamicHandlerCache.get(key);
-  if (cached) {
-    return cached.handler;
-  }
-
-  const handler = createContextualMcpHandler(getStaticToolContext(req));
-  dynamicHandlerCache.set(key, { handler, createdAt: now });
-  return handler;
-}
-
 // Wrap with authentication. After auth is resolved, route to a context-scoped
 // MCP handler whose registered tools match the token grant/read-only context.
 const authHandler = withMcpAuth(
-  (req) => getContextualHandler(req)(req),
+  (req) => createContextualMcpHandler(getStaticToolContext(req))(req),
   verifyToken,
   {
     required: true,

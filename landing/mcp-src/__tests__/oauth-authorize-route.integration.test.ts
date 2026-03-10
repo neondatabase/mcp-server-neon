@@ -65,7 +65,6 @@ function decodeState(html: string): {
   grant?: {
     projectId: string | null;
     scopes: string[] | null;
-    invalidProjectId?: boolean;
   };
 } {
   return JSON.parse(atob(extractEncodedState(html)));
@@ -193,7 +192,6 @@ describe('/api/authorize route integration', () => {
     expect(state.grant).toEqual({
       projectId: 'proj_current',
       scopes: ['querying', 'schema'],
-      invalidProjectId: false,
     });
   });
 
@@ -214,7 +212,6 @@ describe('/api/authorize route integration', () => {
     expect(state.grant).toEqual({
       projectId: 'proj_saved',
       scopes: ['querying', 'branches'],
-      invalidProjectId: false,
     });
   });
 
@@ -240,7 +237,6 @@ describe('/api/authorize route integration', () => {
     expect(state.grant).toEqual({
       projectId: 'proj_current',
       scopes: ['schema'],
-      invalidProjectId: false,
     });
   });
 });

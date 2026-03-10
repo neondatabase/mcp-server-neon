@@ -49,7 +49,6 @@ describe('resolveGrantFromHeaders', () => {
     ).toEqual({
       projectId: 'proj-123',
       scopes: null,
-      invalidProjectId: false,
     });
   });
 
@@ -59,7 +58,6 @@ describe('resolveGrantFromHeaders', () => {
     ).toEqual({
       projectId: null,
       scopes: ['schema', 'docs'],
-      invalidProjectId: false,
     });
   });
 
@@ -84,17 +82,6 @@ describe('resolveGrantFromToken', () => {
     expect(resolveGrantFromToken({ grant: tokenGrant })).toEqual({
       projectId: 'proj-from-token',
       scopes: ['branches'],
-      invalidProjectId: false,
     });
-  });
-
-  it('preserves invalidProjectId flag from token grant', () => {
-    const tokenGrant: GrantContext = {
-      projectId: 'proj-invalid',
-      scopes: null,
-      invalidProjectId: true,
-    };
-
-    expect(resolveGrantFromToken({ grant: tokenGrant })).toEqual(tokenGrant);
   });
 });
