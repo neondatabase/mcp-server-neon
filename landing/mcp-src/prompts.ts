@@ -28,7 +28,7 @@ export const NEON_PROMPTS = [
   {
     name: 'setup-neon-auth',
     description:
-      'Interactive guide for setting up Neon Auth in a Vite+React project. Walks through provisioning, package installation, client setup, and UI components.',
+      'Launch an interactive setup wizard for configuring Neon Auth in a Vite+React project. Use when the user wants to integrate authentication from scratch with guided provisioning, package installation, and component setup. Do not use when you need to manage existing projects or run database operations (use create_project or run_sql instead). Accepts `project_path` (optional directory path) and `skip_deps` (optional boolean to skip dependency installation). e.g., project_path="./my-app" or skip_deps=true for existing setups. Raises an error if the target directory lacks valid Vite+React project structure or package.json.',
     argsSchema: setupNeonAuthViteReactArgsSchema,
   },
 ] as const;
@@ -73,7 +73,7 @@ const COMMON_FOLLOW_INSTRUCTIONS = (clientApplication: ClientApplication) => `
 - **Apply & Discard:** Extract only what is needed for the current task.
 
 ## ENFORCEMENT
-⚠️ You MUST follow these rules. If you skip documentation lookup, you are breaking protocol.
+⚠� You MUST follow these rules. If you skip documentation lookup, you are breaking protocol.
 `;
 
 export const getPromptTemplate = async (
