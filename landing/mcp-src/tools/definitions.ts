@@ -46,7 +46,7 @@ export const NEON_TOOLS = [
   {
     name: 'list_projects' as const,
     scope: 'projects',
-    description: `Lists the first 10 Neon projects in your account. If you can't find the project, increase the limit by passing a higher value to the \`limit\` parameter. Optionally filter by project name or ID using the \`search\` parameter.`,
+    description: `List the first 10 Neon projects in your account. Use when the user wants to browse, review, or find their existing Neon projects by name or ID. Do not use when you need projects shared with you by others (use list_shared_projects instead). Accepts `limit` (optional integer to retrieve more than 10 projects), e.g., limit=25 to get the first 25 projects. Raises an error if authentication credentials are invalid or expired.`limit\` parameter. Optionally filter by project name or ID using the \`search\` parameter.`,
     inputSchema: listProjectsInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -60,7 +60,7 @@ export const NEON_TOOLS = [
   {
     name: 'list_organizations' as const,
     scope: 'projects',
-    description: `Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the \`search\` parameter.`,
+    description: `List all organizations that the current user has access to in their Neon account. Use when the user wants to browse available organizations, check organization membership, or find a specific organization by name or ID. Accepts optional `name` and `id` parameters for filtering results. e.g., name="my-company" or id="org-12345". Do not use when you need to list projects within an organization (use list_projects instead). Returns an error if the authentication token lacks organization read permissions.`search\` parameter.`,
     inputSchema: listOrganizationsInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -74,7 +74,7 @@ export const NEON_TOOLS = [
   {
     name: 'list_shared_projects' as const,
     scope: 'projects',
-    description: `Lists projects that have been shared with the current user. These are projects that the user has been granted access to collaborate on. Optionally filter by project name or ID using the \`search\` parameter.`,
+    description: `List projects that have been shared with the current user for collaboration access. Use when the user wants to view projects they can collaborate on but don't own directly. Do not use when you need to see your own created projects (use list_projects instead). Accepts optional `project_name` or `project_id` filters to narrow results. e.g., project_name="analytics-dashboard" or project_id="proj_abc123". Returns an error if authentication credentials are invalid or expired.`search\` parameter.`,
     inputSchema: listSharedProjectsInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -89,7 +89,7 @@ export const NEON_TOOLS = [
     name: 'create_project' as const,
     scope: 'projects',
     description:
-      'Create a new Neon project. If someone is trying to create a database, use this tool.',
+      'Create a new Neon project with default database and compute settings. Use when the user wants to set up a fresh PostgreSQL environment or start a new application project. Do not use when you need to work with existing projects (use list_projects or describe_project instead). Accepts `name` (required), `region` (optional), and `org_id` (optional for organization assignment). e.g., name="my-app-db", region="us-east-1". Raises an error if the project name already exists or if you exceed your account's project limit.',
     inputSchema: createProjectInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -103,7 +103,7 @@ export const NEON_TOOLS = [
   {
     name: 'delete_project' as const,
     scope: 'projects',
-    description: 'Delete a Neon project',
+    description: 'Delete a Neon project permanently from your account. Use when the user wants to completely remove a project and all its associated databases, branches, and data. Do not use when you only need to remove a specific branch (use delete_branch instead). Accepts `project_id` (required string), e.g., "ep-cool-darkness-123456". Raises an error if the project does not exist or you lack deletion permissions.',
     inputSchema: deleteProjectInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -117,7 +117,7 @@ export const NEON_TOOLS = [
   {
     name: 'describe_project' as const,
     scope: 'projects',
-    description: 'Describes a Neon project',
+    description: 'Retrieve the details and configuration of a specific Neon project. Use when the user wants to view project metadata, settings, or technical specifications for an existing project. Do not use when you need to see all projects in your account (use list_projects instead). Accepts `project_id` (required string), e.g., "ep-cool-darkness-123456". Raises an error if the project ID does not exist or you lack access permissions.',
     inputSchema: describeProjectInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -177,7 +177,7 @@ export const NEON_TOOLS = [
   {
     name: 'describe_table_schema' as const,
     scope: 'schema',
-    description: 'Describe the schema of a table in a Neon database',
+    description: 'Retrieve the column structure, data types, and constraints of a specific table in a Neon database. Use when the user wants to examine table definitions, understand column properties, or review schema details for a particular table. Do not use when you need to see all tables in a database (use get_database_tables instead) or execute queries against the table data (use run_sql instead). Accepts `project_id` (required), `database_name` (required), and `table_name` (required), e.g., project_id="prj_abc123", table_name="users". Raises an error if the table does not exist or the database connection fails.',
     inputSchema: describeTableSchemaInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -191,7 +191,7 @@ export const NEON_TOOLS = [
   {
     name: 'get_database_tables' as const,
     scope: 'schema',
-    description: 'Get all tables in a Neon database',
+    description: 'List all tables in a Neon database. Use when the user wants to explore database structure, review available tables, or understand the schema layout. Do not use when you need detailed column information for a specific table (use describe_table_schema instead). Accepts `project_id` (required) and `branch_id` (optional, defaults to main branch). e.g., project_id="ep-cool-darkness-123456", branch_id="br-wispy-meadow-a5xp9hi". Raises an error if the project does not exist or access is denied.',
     inputSchema: getDatabaseTablesInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -205,7 +205,7 @@ export const NEON_TOOLS = [
   {
     name: 'create_branch' as const,
     scope: 'branches',
-    description: 'Create a branch in a Neon project',
+    description: 'Create a new branch in a Neon project for database development or testing. Use when the user wants to create an isolated environment for schema changes, data experiments, or feature development. Do not use when you need to view existing branches (use describe_branch instead) or remove branches (use delete_branch instead). Accepts `project_id` (required), `branch_name` (required), and `parent_branch` (optional, defaults to main branch). e.g., project_id="prj_abc123", branch_name="feature-auth", parent_branch="main". Raises an error if the project does not exist or branch name already exists.',
     inputSchema: createBranchInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -390,7 +390,7 @@ export const NEON_TOOLS = [
     name: 'describe_branch' as const,
     scope: 'branches',
     description:
-      'Get a tree view of all objects in a branch, including databases, schemas, tables, views, and functions',
+      'Get a hierarchical tree view of all database objects in a Neon branch, including databases, schemas, tables, views, and functions. Use when the user wants to explore or audit the complete structure and organization of database objects within a specific branch. Do not use when you only need table names (use get_database_tables instead) or specific table details (use describe_table_schema instead). Accepts `project_id` (required) and `branch_id` (required), e.g., project_id="prj_abc123", branch_id="br_main_456". Raises an error if the branch does not exist or access is denied.',
     inputSchema: describeBranchInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -404,7 +404,7 @@ export const NEON_TOOLS = [
   {
     name: 'delete_branch' as const,
     scope: 'branches',
-    description: 'Delete a branch from a Neon project',
+    description: 'Delete a branch from a Neon project. Use when the user wants to remove an unused development branch or clean up completed feature branches. Do not use when you need to delete the entire project (use delete_project instead). Accepts `project_id` (required) and `branch_id` (required). e.g., project_id="ep-cool-darkness-123456", branch_id="br-aged-salad-a5xbr9". Raises an error if the branch is the primary branch or contains active compute endpoints.',
     inputSchema: deleteBranchInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -418,7 +418,7 @@ export const NEON_TOOLS = [
   {
     name: 'reset_from_parent' as const,
     scope: 'branches',
-    description: `Resets a branch to match its parent's current state, effectively discarding all changes made on the branch. To avoid data loss, provide a name to preserve the changes in a new branch using \`preserveUnderName\` parameter. This tool is commonly used to create fresh development branches from updated parent branch, undo experimental changes, or restore a branch to a known good state. Warning: This operation will discard all changes if \`preserveUnderName\` is not provided.`,
+    description: `Reset a branch to match its parent's current state, effectively discarding all changes made on the branch. Use when the user wants to undo all commits and modifications on a feature branch and start fresh from the parent. Do not use when you need to create a new branch from scratch (use create_branch instead). Accepts `branch_name` (optional, to preserve current changes in a new branch before reset). e.g., providing "backup-branch" will save current work before resetting. Raises an error if the branch does not exist or has no parent branch configured.`preserveUnderName\` parameter. This tool is commonly used to create fresh development branches from updated parent branch, undo experimental changes, or restore a branch to a known good state. Warning: This operation will discard all changes if \`preserveUnderName\` is not provided.`,
     inputSchema: resetFromParentInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -433,7 +433,7 @@ export const NEON_TOOLS = [
     name: 'get_connection_string' as const,
     scope: 'branches',
     description:
-      'Get a PostgreSQL connection string for a Neon database with all parameters being optional',
+      'Retrieve a PostgreSQL connection string for a Neon database. Use when the user wants to connect to their database from external applications or tools that require connection parameters. Do not use when you need to execute SQL queries directly (use run_sql instead). Accepts optional parameters for `project_id`, `database_name`, `branch_name`, and `role_name` to customize the connection. e.g., project_id="ep-cool-darkness-123456", database_name="neondb", branch_name="main". Returns an error if the specified project or branch does not exist.',
     inputSchema: getConnectionStringInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -533,7 +533,7 @@ export const NEON_TOOLS = [
     name: 'explain_sql_statement' as const,
     scope: 'performance',
     description:
-      'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
+      'Analyze the PostgreSQL query execution plan for a SQL statement by running EXPLAIN (ANALYZE, BUFFERS) against the database. Use when the user wants to understand query performance, identify bottlenecks, or optimize slow database operations. Do not use when you need to execute the query for results (use run_sql instead). Accepts `sql` (required string containing the SELECT, INSERT, UPDATE, or DELETE statement to analyze), e.g., "SELECT * FROM users WHERE created_at > '2024-01-01'". Returns detailed execution plan with timing, cost estimates, and buffer usage statistics. Raises an error if the SQL statement contains syntax errors or references non-existent tables.',
     inputSchema: explainSqlStatementInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -765,7 +765,7 @@ export const NEON_TOOLS = [
   {
     name: 'list_branch_computes' as const,
     scope: 'branches',
-    description: 'Lists compute endpoints for a project or specific branch',
+    description: 'List compute endpoints for a Neon project or specific branch. Use when the user wants to view available database connections, check compute status, or troubleshoot connectivity issues. Accepts `project_id` (required) and `branch_id` (optional to filter by specific branch). e.g., project_id="ep-cool-darkness-123456" or branch_id="br-wispy-meadow-a5xp9hi7". Do not use when you need general project information (use describe_project instead). Returns an error if the project does not exist or you lack access permissions.',
     inputSchema: listBranchComputesInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -1057,7 +1057,7 @@ export const NEON_TOOLS = [
   {
     name: 'search' as const,
     scope: null,
-    description: `Searches across all user organizations, projects, and branches that match the query. Returns a list of objects with id, title, and url. This tool searches through all accessible resources and provides direct links to the Neon Console.`,
+    description: `Search across all user organizations, projects, and branches that match a query term. Use when the user wants to find specific Neon resources by name or keyword across their entire account. Accepts `query` (required string) to match against resource names and metadata. Returns objects with id, title, and url for direct Console access. e.g., query="production" to find all production-related projects and branches. Do not use when you need to list all projects without filtering (use list_projects instead) or when searching within a specific project's branches (use describe_project instead). Fails if the query string is empty or contains only whitespace.`,
     inputSchema: searchInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -1071,7 +1071,7 @@ export const NEON_TOOLS = [
   {
     name: 'fetch' as const,
     scope: null,
-    description: `Fetches detailed information about a specific organization, project, or branch using the ID returned by the search tool. This tool provides comprehensive information about Neon resources for detailed analysis and management.`,
+    description: `Fetch detailed information about a specific Neon organization, project, or branch using its unique identifier. Use when the user wants to retrieve comprehensive details about a specific resource for analysis or management purposes. Do not use when you need to list multiple resources (use list_projects, list_organizations, or describe_project instead). Accepts `resource_id` (required string) and `resource_type` (required: "organization", "project", or "branch"). e.g., resource_id="proj_abc123", resource_type="project". Raises an error if the resource ID does not exist or you lack access permissions.`,
     inputSchema: fetchInputSchema,
     readOnlySafe: true,
     annotations: {
