@@ -238,20 +238,6 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
             inputSchema: tool.inputSchema,
           },
           async (args: any, extra: any) => {
-            const {
-              account,
-              readOnly,
-              grant,
-              neonClient,
-              clientApplication: clientApp,
-              clientName: cName,
-              client,
-              context,
-            } = await getAuthContext(extra as AuthenticatedExtra);
-
-            // Track server_init on first authenticated request (after client detection)
-            trackServerInit(context);
-
             const traceId = generateTraceId();
             return await startSpan(
               {
@@ -262,6 +248,20 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                 },
               },
               async (span) => {
+                const {
+                  account,
+                  readOnly,
+                  grant,
+                  neonClient,
+                  clientApplication: clientApp,
+                  clientName: cName,
+                  client,
+                  context,
+                } = await getAuthContext(extra as AuthenticatedExtra);
+
+                // Track server_init on first authenticated request (after client detection)
+                trackServerInit(context);
+
                 const properties = {
                   tool_name: tool.name,
                   readOnly: String(readOnly),

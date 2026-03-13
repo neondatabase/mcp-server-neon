@@ -230,8 +230,5 @@ export function injectProjectId(
   grant: GrantContext,
 ): Record<string, unknown> {
   if (!grant.projectId) return args;
-
-  // Only inject if the tool would normally accept a projectId
-  // The handler expects it even though it was removed from the schema
   return { ...args, projectId: grant.projectId };
 }
