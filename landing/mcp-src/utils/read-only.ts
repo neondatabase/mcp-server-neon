@@ -12,7 +12,10 @@ export const SCOPE_DEFINITIONS = {
   },
 } as const;
 
-type ReadOnlyContext = {
+export type ReadOnlyContext = {
+  /** Value of the X-Neon-Read-Only header (canonical). */
+  neonHeaderValue?: string | null;
+  /** Value of the legacy x-read-only header (backwards-compatible synonym). */
   headerValue?: string | null;
   scope?: string | string[] | null;
 };
@@ -45,19 +48,27 @@ function parseReadOnlyHeader(
   if (headerValue === null || headerValue === undefined) {
     return undefined;
   }
-  return headerValue.toLowerCase() === 'true';
+  return headerValue.trim().toLowerCase() === 'true';
 }
 
 /**
  * Determines if the request should operate in read-only mode.
- * Priority: X-READ-ONLY header > OAuth scope > default (false)
+ * Priority: X-Neon-Read-Only > x-read-only > OAuth scope > default (false)
  */
 export function isReadOnly(context: ReadOnlyContext): boolean {
-  const headerResult = parseReadOnlyHeader(context.headerValue);
-  if (headerResult !== undefined) {
-    return headerResult;
+  // Priority 1: X-Neon-Read-Only header (canonical)
+  const neonResult = parseReadOnlyHeader(context.neonHeaderValue);
+  if (neonResult !== undefined) {
+    return neonResult;
   }
 
+  // Priority 2: x-read-only header (legacy synonym)
+  const legacyResult = parseReadOnlyHeader(context.headerValue);
+  if (legacyResult !== undefined) {
+    return legacyResult;
+  }
+
+  // Priority 3: OAuth scope
   if (context.scope !== undefined && context.scope !== null) {
     return isScopeReadOnly(context.scope);
   }

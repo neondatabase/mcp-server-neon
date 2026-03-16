@@ -19,11 +19,11 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.2.13'
+          bun-version: "1.2.13"
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Validate server.json version sync
@@ -35,11 +35,17 @@ jobs:
         run: bun run lint
       - name: Check unused code and dependencies
         run: bun run knip
-      - name: Unit and integration tests
-        run: bun run test:unit && bun run test:integration
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-      - name: E2E tests (MCP + website)
-        run: bun run test:e2e
+      - name: Run tests
+        run: bun run test
       - name: Build
+        env:
+          # Next.js + TypeScript can exceed default Node heap in CI due to dependency
+          # type graph size (not app code size). We observed OOM in this step while
+          # `next build` was in "Running TypeScript".
+          #
+          # Revisit/reduce this when dependency typing pressure drops (e.g. after SDK/type
+          # surface simplifications) and CI proves stable without this bump.
+          NODE_OPTIONS: --max-old-space-size=4096
         run: bun run build

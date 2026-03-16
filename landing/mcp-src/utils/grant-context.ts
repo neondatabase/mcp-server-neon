@@ -1,15 +1,19 @@
 /**
- * Scope categories used to annotate tool definitions.
+ * Grant context for fine-grained tool access control.
  *
- * This file intentionally contains metadata only for PR 5.
- * Runtime grant resolution and enforcement are added in later PRs.
+ * Supports per-category scope control and project scoping.
+ *
+ * Grant context can be resolved from:
+ * - X-Neon-* HTTP headers (API key mode)
+ * - OAuth token grant field (OAuth mode)
+ * - Future: neon:mcp claims in ID token
  */
+
 export const SCOPE_CATEGORIES = [
   'projects',
   'branches',
   'schema',
   'querying',
-  'performance',
   'neon_auth',
   'data_api',
   'docs',
@@ -17,48 +21,76 @@ export const SCOPE_CATEGORIES = [
 
 export type ScopeCategory = (typeof SCOPE_CATEGORIES)[number];
 
-const SCOPE_CATEGORY_DEFINITIONS: Record<
-  ScopeCategory,
-  { label: string; description: string; sensitive?: boolean }
-> = {
-  projects: {
-    label: 'Project Management',
-    description:
-      'Create, delete, list, and search Neon projects and organizations across your account.',
-  },
-  branches: {
-    label: 'Branch Management',
-    description:
-      'Create, delete, and manage database branches for development, testing, or migrations.',
-  },
-  schema: {
-    label: 'Schema and Table Inspection',
-    description:
-      'List tables and inspect schema definitions to understand your database structure.',
-  },
-  querying: {
-    label: 'SQL Query Execution',
-    description:
-      'Execute SQL queries, transactions, and database migrations against your databases.',
-    sensitive: true,
-  },
-  performance: {
-    label: 'Query Performance Optimization',
-    description:
-      'Analyze slow queries and test performance optimizations on temporary branches.',
-  },
-  neon_auth: {
-    label: 'Neon Auth',
-    description:
-      'Provision authentication infrastructure by integrating with Auth providers.',
-  },
-  data_api: {
-    label: 'Data API',
-    description:
-      'Provision and configure the Neon Data API for HTTP-based database access.',
-  },
-  docs: {
-    label: 'Documentation and Resources',
-    description: 'Access Neon documentation, setup guides, and best practices.',
-  },
+export type GrantContext = {
+  /** Single project ID for project-scoped access, or null for all projects. */
+  projectId: string | null;
+  /** Scope categories. null means all categories are allowed. */
+  scopes: ScopeCategory[] | null;
 };
+
+/**
+ * The default grant context when no headers or token grant is provided.
+ * Full access and no project scoping.
+ */
+export const DEFAULT_GRANT: GrantContext = {
+  projectId: null,
+  scopes: null,
+};
+
+function isValidScopeCategory(value: string): value is ScopeCategory {
+  return SCOPE_CATEGORIES.includes(value as ScopeCategory);
+}
+
+/**
+ * Parse the X-Neon-Scopes header value into an array of valid scope categories.
+ *
+ * - "projects,branches,querying" -> ['projects', 'branches', 'querying']
+ * - Invalid values are silently filtered out.
+ * - If the header is present but all values are invalid, returns [] (empty array).
+ *   This results in no scoped tools (except always-available ones).
+ * - If the header is absent (null/undefined/empty), returns null.
+ */
+export function parseScopeCategories(
+  value: string | null | undefined,
+): ScopeCategory[] | null {
+  if (!value) return null;
+
+  const categories = value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(isValidScopeCategory);
+
+  return categories;
+}
+
+/**
+ * Resolve grant context from HTTP headers (API key mode).
+ */
+export function resolveGrantFromHeaders(headers: Headers): GrantContext {
+  const scopesHeader = headers.get('x-neon-scopes');
+  const projectIdHeader = headers.get('x-neon-project-id');
+
+  const scopes = parseScopeCategories(scopesHeader);
+  const projectId = projectIdHeader?.trim() || null;
+
+  return {
+    projectId,
+    scopes,
+  };
+}
+
+/**
+ * Resolve grant context from a stored OAuth token.
+ * If the token has a grant field, use it. Otherwise, fall back to defaults.
+ */
+export function resolveGrantFromToken(token: {
+  grant?: GrantContext;
+}): GrantContext {
+  if (token.grant) {
+    return {
+      projectId: token.grant.projectId ?? null,
+      scopes: token.grant.scopes ?? null,
+    };
+  }
+  return { ...DEFAULT_GRANT };
+}

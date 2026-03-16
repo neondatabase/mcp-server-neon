@@ -9,16 +9,28 @@ const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
 
 export async function POST(request: NextRequest) {
-  logger.debug('POST handler entered', { url: request.url });
   try {
     const payload = await request.json();
+    const requestHeaders: Record<string, string> = {};
+    request.headers.forEach((value, key) => {
+      requestHeaders[key.toLowerCase()] = value;
+    });
 
     logger.info('request to register client', {
       name: payload.client_name,
       client_uri: payload.client_uri,
+      grantHeaders: {
+        xNeonReadOnly: requestHeaders['x-neon-read-only'],
+        xReadOnly: requestHeaders['x-read-only'],
+        xNeonProjectId: requestHeaders['x-neon-project-id'],
+        xNeonScopes: requestHeaders['x-neon-scopes'],
+      },
     });
 
     if (payload.client_name === undefined) {
+      logger.warn('Client registration validation failed', {
+        reason: 'client_name_missing',
+      });
       return NextResponse.json(
         {
           error: 'invalid_request',
@@ -29,6 +41,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (payload.redirect_uris === undefined) {
+      logger.warn('Client registration validation failed', {
+        reason: 'redirect_uris_missing',
+      });
       return NextResponse.json(
         {
           error: 'invalid_request',
@@ -44,6 +59,9 @@ export async function POST(request: NextRequest) {
         SUPPORTED_GRANT_TYPES.includes(grant),
       )
     ) {
+      logger.warn('Client registration validation failed', {
+        reason: 'grant_types_invalid',
+      });
       return NextResponse.json(
         {
           error: 'invalid_request',
@@ -60,6 +78,9 @@ export async function POST(request: NextRequest) {
         SUPPORTED_RESPONSE_TYPES.includes(responseType),
       )
     ) {
+      logger.warn('Client registration validation failed', {
+        reason: 'response_types_invalid',
+      });
       return NextResponse.json(
         {
           error: 'invalid_request',
@@ -81,9 +102,8 @@ export async function POST(request: NextRequest) {
       registrationDate: Math.floor(Date.now() / 1000),
     };
 
-    logger.debug('before model.saveClient', { clientId: client.id });
     await model.saveClient(client);
-    logger.debug('after model.saveClient completed', { clientId: client.id });
+    await model.saveClientRegisterHeaders(clientId, requestHeaders);
 
     logger.info('new client registered', {
       clientId,
@@ -105,54 +125,15 @@ export async function POST(request: NextRequest) {
       tokenEndpointAuthMethod: responseBody.token_endpoint_auth_method,
     });
 
-    logger.debug('about to create NextResponse.json', {
-      responseBodyKeys: Object.keys(responseBody),
-      clientId,
-      hasClientSecret: !!responseBody.client_secret,
-    });
-
-    let response: NextResponse;
-    try {
-      logger.debug('calling NextResponse.json');
-      response = NextResponse.json(responseBody);
-      logger.debug('NextResponse.json succeeded', {
-        responseType: typeof response,
-        responseStatus: response?.status,
-        isResponse: response instanceof Response,
-      });
-    } catch (jsonError) {
-      logger.error('NextResponse.json threw error', {
-        error:
-          jsonError instanceof Error ? jsonError.message : String(jsonError),
-        stack: jsonError instanceof Error ? jsonError.stack : undefined,
-      });
-      throw jsonError;
-    }
-
-    logger.debug('about to return response', {
-      responseExists: !!response,
-      responseType: typeof response,
-    });
-
-    return response;
+    return NextResponse.json(responseBody);
   } catch (error: unknown) {
-    logger.debug('catch block entered', {
-      errorType: typeof error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorName: error instanceof Error ? error.name : undefined,
-    });
     logger.error('caught error in register handler', {
       error,
       errorType: typeof error,
       errorMessage: error instanceof Error ? error.message : String(error),
       errorStack: error instanceof Error ? error.stack : undefined,
     });
-    const errorResponse = handleOAuthError(error, 'Client registration error');
-    logger.debug('returning from catch block', {
-      errorResponseExists: !!errorResponse,
-      errorResponseType: typeof errorResponse,
-    });
-    return errorResponse;
+    return handleOAuthError(error, 'Client registration error');
   }
 }
 
@@ -162,7 +143,8 @@ export async function OPTIONS() {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers':
+        'Content-Type, Authorization, X-Neon-Read-Only, x-read-only',
     },
   });
 }

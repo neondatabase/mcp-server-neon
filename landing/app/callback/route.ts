@@ -6,6 +6,7 @@ import { createNeonClient } from '../../mcp-src/server/api';
 import { resolveAccountFromAuth } from '../../mcp-src/server/account';
 import { handleOAuthError } from '../../lib/errors';
 import type { AuthorizationCode } from 'oauth2-server';
+import type { GrantContext } from '../../mcp-src/utils/grant-context';
 
 type DownstreamAuthRequest = {
   responseType: string;
@@ -13,6 +14,7 @@ type DownstreamAuthRequest = {
   redirectUri: string;
   scope: string[];
   state: string;
+  grant?: GrantContext;
   codeChallenge?: string;
   codeChallengeMethod?: string;
 };
@@ -91,6 +93,7 @@ export async function GET(request: NextRequest) {
       },
       code_challenge: requestParams.codeChallenge,
       code_challenge_method: requestParams.codeChallengeMethod,
+      grant: requestParams.grant,
     };
 
     await model.saveAuthorizationCode(authCodeData);

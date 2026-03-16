@@ -1,4 +1,5 @@
 import { Environment } from '../constants';
+import type { GrantContext } from '../utils/grant-context';
 import { AuthContext } from './auth';
 
 export type AppContext = {
@@ -15,4 +16,5 @@ export type ServerContext = {
   app: AppContext;
   readOnly?: AuthContext['extra']['readOnly'];
   userAgent?: string;
+  grant?: GrantContext;
 };

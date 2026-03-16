@@ -1,6 +1,6 @@
 {
   "name": "@neondatabase/mcp-server-neon",
-  "version": "0.8.0",
+  "version": "1.0.0",
   "description": "MCP server for interacting with Neon Management API and databases",
   "license": "MIT",
   "author": "Neon, Inc. (https://neon.com/)",
@@ -18,18 +18,16 @@
     "fmt:check": "prettier --check .",
     "knip": "knip",
     "knip:fix": "knip --fix",
-    "test": "vitest run",
+    "test": "bun run test:unit && bun run test:integration && bun run test:e2e",
     "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.e2e.test.ts\"",
-    "test:integration": "vitest run integration.test.ts",
-    "test:e2e:mcp": "vitest run e2e.test.ts",
-    "test:e2e:web": "playwright test",
-    "test:watch": "vitest",
-    "test:e2e": "bun run test:e2e:mcp && bun run test:e2e:web",
-    "test:all": "bun run test:unit && bun run test:integration && bun run test:e2e"
+    "test:integration": "vitest run mcp-src/__tests__/*.integration.test.ts",
+    "test:e2e:mcp": "vitest run mcp-src/__tests__/*.e2e.test.ts",
+    "test:e2e:web": "bun run scripts/e2e-setup.ts && playwright test",
+    "test:e2e": "bun run test:e2e:mcp && bun run test:e2e:web"
   },
   "dependencies": {
     "@keyv/postgres": "2.1.2",
-    "@modelcontextprotocol/sdk": "^1.25.1",
+    "@modelcontextprotocol/sdk": "1.25.3",
     "@neondatabase/api-client": "2.5.0",
     "@neondatabase/serverless": "1.0.0",
     "@segment/analytics-node": "2.2.1",
@@ -45,7 +43,7 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "winston": "3.17.0",
-    "zod": "^3"
+    "zod": "4.3.6"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

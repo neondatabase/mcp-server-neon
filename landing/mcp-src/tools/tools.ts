@@ -1520,6 +1520,7 @@ You MUST follow these steps:
       },
       neonClient,
       extra,
+      { enforceReadOnlyReplica: true },
     );
     return {
       content: [

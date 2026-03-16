@@ -1,6 +1,7 @@
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
 import type { ScopeCategory } from '../utils/grant-context';
+import type { ZodTypeAny } from 'zod/v3';
 import {
   completeDatabaseMigrationInputSchema,
   completeQueryTuningInputSchema,
@@ -37,7 +38,7 @@ type NeonToolDefinition = {
   name: string;
   scope: ScopeCategory | null;
   description: string;
-  inputSchema: unknown;
+  inputSchema: ZodTypeAny;
   readOnlySafe: boolean;
   annotations: ToolAnnotations;
 };
@@ -433,7 +434,7 @@ export const NEON_TOOLS = [
     name: 'get_connection_string' as const,
     scope: 'branches',
     description:
-      'Get a PostgreSQL connection string for a Neon database with all parameters being optional',
+      'Get a PostgreSQL connection string for a Neon database with all parameters optional. In read-only mode, this tool can only return connection strings for read-replica endpoints. If no read replica exists and the user needs a setup DATABASE_URL, explain that limitation and guide them to https://console.neon.tech to copy the DATABASE_URL manually.',
     inputSchema: getConnectionStringInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -531,7 +532,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'explain_sql_statement' as const,
-    scope: 'performance',
+    scope: 'querying',
     description:
       'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
     inputSchema: explainSqlStatementInputSchema,
@@ -546,7 +547,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'prepare_query_tuning' as const,
-    scope: 'performance',
+    scope: 'querying',
     readOnlySafe: false,
     description: `
   <use_case>
@@ -704,7 +705,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'complete_query_tuning' as const,
-    scope: 'performance',
+    scope: 'querying',
     readOnlySafe: false,
     description: `Complete a query tuning session by either applying the changes to the main branch or discarding them. 
     <important_notes>
@@ -742,7 +743,7 @@ export const NEON_TOOLS = [
   },
   {
     name: 'list_slow_queries' as const,
-    scope: 'performance',
+    scope: 'querying',
     description: `
     <use_case>
       Use this tool to list slow queries from your Neon database.

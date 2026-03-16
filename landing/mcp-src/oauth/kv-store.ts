@@ -1,6 +1,6 @@
 import { KeyvPostgres } from '@keyv/postgres';
 import { logger } from '../utils/logger';
-import { AuthorizationCode, Client, Token } from 'oauth2-server';
+import type { AuthorizationCode, Client, Token } from 'oauth2-server';
 import Keyv from 'keyv';
 import { AuthContext } from '../types/auth';
 import { AuthDetailsResponse } from '@neondatabase/api-client';
@@ -46,6 +46,17 @@ export const getAuthorizationCodes = createLazyKeyv<AuthorizationCode>(
   'authorization_codes',
   'Authorization codes',
 );
+
+export type ClientRegisterHeadersRecord = {
+  headers: Record<string, string>;
+  createdAt: number;
+};
+
+export const getClientRegisterHeaders =
+  createLazyKeyv<ClientRegisterHeadersRecord>(
+    'client_register_headers',
+    'Client register headers',
+  );
 
 export type ApiKeyRecord = {
   apiKey: string;

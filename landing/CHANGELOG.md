@@ -1,5 +1,13 @@
 # Changelog
 
+# [1.0.0]
+
+- Existing clients remain compatible, with new options to scope access by project and capability categories.
+- Added support for grant-aware tool filtering via `X-Neon-*` headers, including read-only mode controls.
+- Added `/api/list-tools` so clients can preview exactly which tools are available for a given scope/read-only configuration.
+- OAuth authorization now preserves and applies client registration context, including read-only defaults, for more predictable permissions UX.
+- OAuth metadata now advertises supported grant scope categories for better client discovery.
+
 # [0.8.0]
 
 - Feat: Add `list_docs_resources` and `get_doc_resource` tools for browsing and fetching Neon documentation pages

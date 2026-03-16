@@ -121,14 +121,16 @@ Alternatively, you can add the following "Neon" entry to your client's MCP serve
 
 > Provide an organization's API key to limit access to projects under the organization only.
 
-### Read-Only Mode
+### Scopes and Read-Only Mode
 
-**Read-Only Mode:** Restricts which tools are available, disabling write operations like creating projects, branches, or running migrations. Read-only tools include listing projects, describing schemas, querying data, and viewing performance metrics.
+Neon MCP supports OAuth scopes `read`, `write`, and `*` (`*` means both). Your MCP client can request these scopes directly, or you can make the selection in the OAuth permissions UI.
 
-You can enable read-only mode in two ways:
+**Read-only mode** restricts which tools are available, disabling write operations like creating projects, branches, or running migrations. Read-only tools include listing projects, describing schemas, querying data, and viewing performance metrics.
 
-1. **OAuth Scope Selection (Recommended):** When connecting via OAuth, uncheck "Full access" during authorization to operate in read-only mode.
-2. **Header Override:** Add the `x-read-only` header to your configuration:
+You can set read-only mode in two ways:
+
+1. **OAuth scope selection (recommended):** In OAuth, select read-only by unchecking **Full access** in the authorization UI.
+2. **`X-Neon-Read-Only` header:** Add `X-Neon-Read-Only: true` to your MCP server configuration:
 
 ```json
 {
@@ -136,12 +138,24 @@ You can enable read-only mode in two ways:
     "Neon": {
       "url": "https://mcp.neon.tech/mcp",
       "headers": {
-        "x-read-only": "true"
+        "X-Neon-Read-Only": "true"
       }
     }
   }
 }
 ```
+
+How the header behaves:
+
+- **API key flow:** `X-Neon-Read-Only` is the way to enable read-only mode (there is no OAuth scope exchange in this flow).
+- **OAuth flow:** `X-Neon-Read-Only: true` behaves like `scope=read` for the default consent setting (Full access starts unchecked), but the user can still override this in the OAuth UI before approving.
+
+Legacy header `x-read-only` is also supported.
+
+> [!IMPORTANT]
+> If you change MCP configuration files (for example, toggling read-only mode or switching to a project-scoped setup), those changes only take effect for the **OAuth flow** after you log out and log back in.
+> OAuth permissions/scopes are bound to the session when a new OAuth token is created.
+> This does **not** apply to the API key flow.
 
 > **Note:** Read-only mode restricts which _tools_ are available, not the SQL content. The `run_sql` tool remains available and can execute any SQL including INSERT/UPDATE/DELETE. For true read-only SQL access, use database roles with restricted permissions.
 
@@ -175,6 +189,22 @@ Run the following command to add the Neon MCP Server for all detected agents and
 npx add-mcp https://mcp.neon.tech/sse --type sse
 ```
 
+## Remote Server Architecture
+
+The remote server runs as a Next.js App Router application on Vercel at `mcp.neon.tech`.
+
+> [!NOTE]
+> The root `/` path redirects to [Neon MCP Server docs](https://neon.tech/docs/ai/neon-mcp-server). There is no landing page.
+
+Core implementation areas:
+
+- `landing/app/api/[transport]/route.ts`: MCP transport endpoint for Streamable HTTP (`/mcp`) and SSE (`/sse`)
+- `landing/app/api/authorize/`, `landing/app/callback/`, `landing/app/api/token/`, `landing/app/api/revoke/`: OAuth flow endpoints
+- `landing/app/.well-known/`: OAuth discovery metadata endpoints
+- `landing/mcp-src/`: MCP server, tools, handlers, analytics, and Sentry integration
+- `landing/lib/`: Next.js-compatible helpers (OAuth, configuration, error handling)
+- `landing/mcp-src/utils/read-only.ts`: read-only mode and scope handling
+
 ## Guides
 
 - [Neon MCP Server Guide](https://neon.tech/docs/ai/neon-mcp-server)
@@ -199,17 +229,17 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 - `branches`
 - `schema`
 - `querying`
-- `performance`
 - `neon_auth`
 - `data_api`
 - `docs`
-- `null` (always-available tools such as `search` and `fetch`)
+- `null` (tools without a scope category)
 
 Notes:
 
 - `compare_database_schema` is categorized under `schema`.
 - `provision_neon_data_api` is categorized under `data_api` (separate from `neon_auth`).
 - Read-only enforcement still relies on `readOnlySafe` and server-side read-only logic; `scope` is category metadata, not a standalone read/write switch.
+- In project-scoped mode (`X-Neon-Project-Id`), `search` and `fetch` are not available.
 
 **Project Management:**
 
@@ -242,7 +272,7 @@ Notes:
 - **`prepare_database_migration`**: Initiates a database migration process. Critically, it creates a temporary branch to apply and test the migration safely before affecting the main branch.
 - **`complete_database_migration`**: Finalizes and applies a prepared database migration to the main branch. This action merges changes from the temporary migration branch and cleans up temporary resources.
 
-**Query Performance Optimization:**
+**SQL Querying and Optimization:**
 
 - **`list_slow_queries`**: Identifies performance bottlenecks by finding the slowest queries in a database. Requires the pg_stat_statements extension.
 - **`explain_sql_statement`**: Provides detailed execution plans for SQL queries to help identify performance bottlenecks.
@@ -300,6 +330,26 @@ bun run lint
 bun run typecheck
 ```
 
+## Environment Variables
+
+Required for remote server runtime:
+
+| Variable              | Description                           |
+| --------------------- | ------------------------------------- |
+| `SERVER_HOST`         | Server URL (defaults to `VERCEL_URL`) |
+| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL               |
+| `CLIENT_ID`           | OAuth client ID                       |
+| `CLIENT_SECRET`       | OAuth client secret                   |
+| `COOKIE_SECRET`       | Secret for signed cookies             |
+| `KV_URL`              | Vercel KV (Upstash Redis) URL         |
+| `OAUTH_DATABASE_URL`  | Postgres URL for token storage        |
+
+Optional:
+
+| Variable    | Description                                                                       |
+| ----------- | --------------------------------------------------------------------------------- |
+| `LOG_LEVEL` | Winston log level: `error`, `warn`, `info` (default), `debug`, `verbose`, `silly` |
+
 ## Testing Pyramid
 
 All tests run from `landing/`.
@@ -316,14 +366,14 @@ bun run test:integration
 # MCP protocol end-to-end tests (real MCP client/server tool calls)
 bun run test:e2e:mcp
 
-# Website end-to-end tests (Playwright)
+# Website end-to-end tests (Playwright; provisions/validates ephemeral DB first)
 bun run test:e2e:web
 
 # Full end-to-end suite
 bun run test:e2e
 
-# Full test pyramid (unit + integration + e2e)
-bun run test:all
+# Full test pyramid (unit + integration + e2e; used in CI)
+bun run test
 ```
 
 Testing strategy:
@@ -333,3 +383,6 @@ Testing strategy:
 - Use **unit** tests for pure logic and edge cases.
 - Avoid relying on third-party uptime in merge-gating tests; mock external dependencies in integration/unit tiers.
 
+## Deployment
+
+Vercel deploys the remote server automatically from the repository branch configuration. Preview environments are available for pull requests.

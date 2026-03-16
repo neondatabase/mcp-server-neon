@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { NEON_PROMPTS, getPromptTemplate } from '../prompts';
-import { NEON_HANDLERS, NEON_TOOLS, ToolHandlerExtended } from '../tools/index';
+import { getAvailablePrompts, getPromptTemplate } from '../prompts';
+import { NEON_HANDLERS, ToolHandlerExtended } from '../tools/index';
 import { logger } from '../utils/logger';
 import { generateTraceId } from '../utils/trace';
 import { createNeonClient } from './api';
@@ -13,9 +13,15 @@ import { setSentryTags } from '../sentry/utils';
 import { ToolHandlerExtraParams } from '../tools/types';
 import { handleToolError } from './errors';
 import { detectClientApplication } from '../utils/client-application';
+import { DEFAULT_GRANT } from '../utils/grant-context';
+import {
+  getAvailableTools,
+  getAccessControlWarnings,
+  injectProjectId,
+} from '../tools/grant-filter';
 import pkg from '../../package.json';
 
-export const createMcpServer = (context: ServerContext) => {
+export const createMcpServer = async (context: ServerContext) => {
   const server = new McpServer(
     {
       name: 'mcp-server-neon',
@@ -37,6 +43,8 @@ export const createMcpServer = (context: ServerContext) => {
   let clientName = context.userAgent ?? 'unknown';
   let clientApplication = detectClientApplication(clientName);
 
+  const grant = { ...(context.grant ?? DEFAULT_GRANT) };
+
   // Track server initialization
   const trackServerInit = () => {
     track({
@@ -46,6 +54,8 @@ export const createMcpServer = (context: ServerContext) => {
         clientName,
         clientApplication,
         readOnly: String(context.readOnly ?? false),
+        projectScoped: String(!!grant.projectId),
+        customScopes: grant.scopes?.join(',') ?? 'all',
       },
       context: {
         client: context.client,
@@ -56,6 +66,7 @@ export const createMcpServer = (context: ServerContext) => {
       clientName,
       clientApplication,
       readOnly: context.readOnly,
+      grant,
     });
   };
 
@@ -72,10 +83,13 @@ export const createMcpServer = (context: ServerContext) => {
     trackServerInit();
   };
 
-  // Filter tools based on read-only mode
-  const availableTools = context.readOnly
-    ? NEON_TOOLS.filter((tool) => tool.readOnlySafe)
-    : NEON_TOOLS;
+  // Filter tools based on grant context (presets, scopes, project scoping)
+  // and read-only mode (for backwards compatibility with X-Neon-Read-Only header / OAuth scopes)
+  const readOnly = context.readOnly ?? false;
+  const availableTools = getAvailableTools(grant, readOnly);
+
+  // Compute access control warnings once (appended to every tool response)
+  const accessControlWarnings = getAccessControlWarnings(grant, readOnly);
 
   // Register tools
   availableTools.forEach((tool) => {
@@ -105,6 +119,7 @@ export const createMcpServer = (context: ServerContext) => {
             const properties = {
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
+              projectScoped: String(!!grant.projectId),
               clientName,
               traceId,
             };
@@ -128,7 +143,29 @@ export const createMcpServer = (context: ServerContext) => {
               clientApplication,
             };
             try {
-              return await toolHandler(args, neonClient, extraArgs);
+              // Inject projectId if in project-scoped mode
+              const effectiveArgs = injectProjectId(
+                args as Record<string, unknown>,
+                grant,
+              );
+
+              const result = await toolHandler(
+                effectiveArgs as typeof args,
+                neonClient,
+                extraArgs,
+              );
+
+              // Append access control warnings to tool response
+              if (accessControlWarnings.length > 0) {
+                result.content.push(
+                  ...accessControlWarnings.map((w) => ({
+                    type: 'text' as const,
+                    text: w,
+                  })),
+                );
+              }
+
+              return result;
             } catch (error) {
               span.setStatus({
                 code: 2,
@@ -142,7 +179,8 @@ export const createMcpServer = (context: ServerContext) => {
   });
 
   // Register prompts
-  NEON_PROMPTS.forEach((prompt) => {
+  const availablePrompts = getAvailablePrompts(grant);
+  availablePrompts.forEach((prompt) => {
     server.prompt(
       prompt.name,
       prompt.description,

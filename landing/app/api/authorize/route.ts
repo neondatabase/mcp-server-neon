@@ -9,12 +9,17 @@ import {
 import { COOKIE_SECRET } from '../../../lib/config';
 import { handleOAuthError } from '../../../lib/errors';
 import {
+  isReadOnly,
   hasWriteScope,
   SCOPE_DEFINITIONS,
   SUPPORTED_SCOPES,
 } from '../../../mcp-src/utils/read-only';
 import { logger } from '../../../mcp-src/utils/logger';
 import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
+import {
+  resolveGrantFromHeaders,
+  type GrantContext,
+} from '../../../mcp-src/utils/grant-context';
 
 export type DownstreamAuthRequest = {
   responseType: string;
@@ -22,6 +27,7 @@ export type DownstreamAuthRequest = {
   redirectUri: string;
   scope: string[];
   state: string;
+  grant?: GrantContext;
   codeChallenge?: string;
   codeChallengeMethod?: string;
 };
@@ -53,9 +59,13 @@ const parseAuthRequest = (
  * Renders the scope selection UI.
  * Read access is always granted. Write access is always shown as an option.
  */
-function renderScopeSection(requestedScopes: string[]): string {
+function renderScopeSection(
+  requestedScopes: string[],
+  defaultReadOnly: boolean,
+): string {
   const writeChecked =
-    requestedScopes.length === 0 || hasWriteScope(requestedScopes);
+    !defaultReadOnly &&
+    (requestedScopes.length === 0 || hasWriteScope(requestedScopes));
 
   // Read access is always granted (hidden input ensures it's submitted)
   let html = `<input type="hidden" name="scopes" value="read" />`;
@@ -99,6 +109,7 @@ const renderApprovalDialog = (
   },
   state: string,
   requestedScopes: string[],
+  defaultReadOnly: boolean,
 ) => {
   const clientName = he.escape(client.client_name || 'A new MCP Client');
   const website = client.client_uri ? he.escape(client.client_uri) : undefined;
@@ -383,7 +394,7 @@ const renderApprovalDialog = (
         <input type="hidden" name="state" value="${he.escape(state)}" />
         <div class="scope-section">
           <div class="scope-section-title">Permissions:</div>
-          ${renderScopeSection(requestedScopes)}
+          ${renderScopeSection(requestedScopes, defaultReadOnly)}
         </div>
         <div class="actions">
           <button type="button" class="button button-secondary" onclick="window.history.back()">Cancel</button>
@@ -431,6 +442,37 @@ export async function GET(request: NextRequest) {
       responseType: requestParams.responseType,
       scope: requestParams.scope,
     });
+
+    const savedRegisterHeaders = await model.getClientRegisterHeaders(clientId);
+    const savedHeaders = savedRegisterHeaders?.headers ?? {};
+    const effectiveHeaders = new Headers(savedHeaders);
+    request.headers.forEach((value, key) => {
+      effectiveHeaders.set(key, value);
+    });
+
+    const neonReadOnlyHeader =
+      effectiveHeaders.get('x-neon-read-only') ??
+      savedHeaders['x-neon-read-only'];
+    const legacyReadOnlyHeader =
+      effectiveHeaders.get('x-read-only') ?? savedHeaders['x-read-only'];
+    const grant = resolveGrantFromHeaders(effectiveHeaders);
+
+    const defaultReadOnly = isReadOnly({
+      neonHeaderValue: neonReadOnlyHeader,
+      headerValue: legacyReadOnlyHeader,
+    });
+
+    logger.info('Authorize read-only context', {
+      clientId,
+      neonReadOnlyHeader,
+      legacyReadOnlyHeader,
+      hasSavedRegisterHeaders: !!savedRegisterHeaders,
+      savedRegisterHeadersCreatedAt: savedRegisterHeaders?.createdAt,
+      defaultReadOnly,
+      grant,
+    });
+
+    requestParams.grant = grant;
 
     if (!client) {
       logger.warn('Client not found', { clientId });
@@ -488,6 +530,7 @@ export async function GET(request: NextRequest) {
       client,
       btoa(JSON.stringify(requestParams)),
       requestParams.scope,
+      defaultReadOnly,
     );
   } catch (error: unknown) {
     return handleOAuthError(error, 'Authorization error');

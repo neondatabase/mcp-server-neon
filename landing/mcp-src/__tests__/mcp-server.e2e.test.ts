@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 import { createMcpServer } from '../server/index';
 import type { ServerContext } from '../types/context';
@@ -36,7 +36,7 @@ async function withConnectedClient<T>(
   context: ServerContext,
   run: (client: Client) => Promise<T>,
 ): Promise<T> {
-  const server = createMcpServer(context);
+  const server = await createMcpServer(context);
   const client = new Client({ name: 'test-client', version: '1.0.0' });
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
@@ -65,9 +65,18 @@ describe('MCP server e2e tool calls', () => {
     await withConnectedClient(createTestContext(), async (client) => {
       const result = await client.listTools();
       const toolNames = result.tools.map((tool) => tool.name);
+      const docsTool = result.tools.find(
+        (tool) => tool.name === 'list_docs_resources',
+      );
 
       expect(toolNames).toContain('list_docs_resources');
       expect(toolNames).toContain('get_doc_resource');
+      // Regression guard: MCP listTools must return JSON Schema, not raw Zod
+      // internals. Raw Zod objects can cause runtime failures for some clients.
+      expect(docsTool?.inputSchema).toMatchObject({
+        type: 'object',
+      });
+      expect(String(docsTool?.inputSchema)).not.toContain('_def');
     });
   });
 
@@ -83,13 +92,14 @@ describe('MCP server e2e tool calls', () => {
         name: 'list_docs_resources',
         arguments: { params: {} },
       });
+      const content = result.content as Array<{ type: string; text?: string }>;
 
       expect(result.isError).not.toBe(true);
-      expect(result.content[0]).toMatchObject({
+      expect(content[0]).toMatchObject({
         type: 'text',
       });
-      if (result.content[0].type === 'text') {
-        expect(result.content[0].text).toContain('AI Concepts');
+      if (content[0].type === 'text') {
+        expect(content[0].text).toContain('AI Concepts');
       }
     });
   });
@@ -104,12 +114,13 @@ describe('MCP server e2e tool calls', () => {
         name: 'get_doc_resource',
         arguments: { params: { slug: 'docs/guides/prisma' } },
       });
+      const content = result.content as Array<{ type: string; text?: string }>;
 
       expect(result.isError).not.toBe(true);
       expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
         'https://neon.com/docs/guides/prisma.md',
       );
-      expect(result.content[0].type).toBe('text');
+      expect(content[0].type).toBe('text');
     });
   });
 
@@ -119,11 +130,12 @@ describe('MCP server e2e tool calls', () => {
         name: 'get_doc_resource',
         arguments: { params: { slug: 'https://evil.example/bad' } },
       });
+      const content = result.content as Array<{ type: string; text?: string }>;
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].type).toBe('text');
-      if (result.content[0].type === 'text') {
-        expect(result.content[0].text).toContain(
+      expect(content[0].type).toBe('text');
+      if (content[0].type === 'text') {
+        expect(content[0].text).toContain(
           'Invalid doc slug: absolute URLs are not allowed',
         );
       }
