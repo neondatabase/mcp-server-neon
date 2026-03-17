@@ -75,8 +75,10 @@ export async function GET(request: NextRequest) {
     // Resolve account info (no identify here - happens in token exchange)
     const userInfo = await resolveAccountFromAuth(auth, neonClient);
 
-    // Resolve grant context from saved registration headers (not from state,
-    // to keep the upstream OAuth state parameter unchanged)
+    // Resolve grant context from saved registration headers. Grant context
+    // (scope categories, read-only mode, project-id scoping) is an MCP-layer
+    // concept and must not leak into the upstream OAuth state parameter, which
+    // is forwarded verbatim to the Neon console backend.
     const savedRegisterHeaders = await model.getClientRegisterHeaders(clientId);
     const savedHeaders = savedRegisterHeaders?.headers ?? {};
     const grant = resolveGrantFromHeaders(new Headers(savedHeaders));
