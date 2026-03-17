@@ -16,10 +16,7 @@ import {
 } from '../../../mcp-src/utils/read-only';
 import { logger } from '../../../mcp-src/utils/logger';
 import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
-import {
-  resolveGrantFromHeaders,
-  type GrantContext,
-} from '../../../mcp-src/utils/grant-context';
+import { resolveGrantFromHeaders } from '../../../mcp-src/utils/grant-context';
 
 export type DownstreamAuthRequest = {
   responseType: string;
@@ -27,7 +24,6 @@ export type DownstreamAuthRequest = {
   redirectUri: string;
   scope: string[];
   state: string;
-  grant?: GrantContext;
   codeChallenge?: string;
   codeChallengeMethod?: string;
 };
@@ -471,8 +467,6 @@ export async function GET(request: NextRequest) {
       defaultReadOnly,
       grant,
     });
-
-    requestParams.grant = grant;
 
     if (!client) {
       logger.warn('Client not found', { clientId });

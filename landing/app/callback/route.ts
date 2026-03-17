@@ -6,7 +6,7 @@ import { createNeonClient } from '../../mcp-src/server/api';
 import { resolveAccountFromAuth } from '../../mcp-src/server/account';
 import { handleOAuthError } from '../../lib/errors';
 import type { AuthorizationCode } from 'oauth2-server';
-import type { GrantContext } from '../../mcp-src/utils/grant-context';
+import { resolveGrantFromHeaders } from '../../mcp-src/utils/grant-context';
 
 type DownstreamAuthRequest = {
   responseType: string;
@@ -14,7 +14,6 @@ type DownstreamAuthRequest = {
   redirectUri: string;
   scope: string[];
   state: string;
-  grant?: GrantContext;
   codeChallenge?: string;
   codeChallengeMethod?: string;
 };
@@ -76,6 +75,12 @@ export async function GET(request: NextRequest) {
     // Resolve account info (no identify here - happens in token exchange)
     const userInfo = await resolveAccountFromAuth(auth, neonClient);
 
+    // Resolve grant context from saved registration headers (not from state,
+    // to keep the upstream OAuth state parameter unchanged)
+    const savedRegisterHeaders = await model.getClientRegisterHeaders(clientId);
+    const savedHeaders = savedRegisterHeaders?.headers ?? {};
+    const grant = resolveGrantFromHeaders(new Headers(savedHeaders));
+
     // Save the authorization code with associated data
     const authCodeData: AuthorizationCode = {
       authorizationCode: authCode,
@@ -93,7 +98,7 @@ export async function GET(request: NextRequest) {
       },
       code_challenge: requestParams.codeChallenge,
       code_challenge_method: requestParams.codeChallengeMethod,
-      grant: requestParams.grant,
+      grant,
     };
 
     await model.saveAuthorizationCode(authCodeData);
