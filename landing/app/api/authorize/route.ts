@@ -16,7 +16,6 @@ import {
 } from '../../../mcp-src/utils/read-only';
 import { logger } from '../../../mcp-src/utils/logger';
 import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
-import { resolveGrantFromHeaders } from '../../../mcp-src/utils/grant-context';
 
 export type DownstreamAuthRequest = {
   responseType: string;
@@ -446,26 +445,12 @@ export async function GET(request: NextRequest) {
       effectiveHeaders.set(key, value);
     });
 
-    const neonReadOnlyHeader =
-      effectiveHeaders.get('x-neon-read-only') ??
-      savedHeaders['x-neon-read-only'];
-    const legacyReadOnlyHeader =
-      effectiveHeaders.get('x-read-only') ?? savedHeaders['x-read-only'];
-    const grant = resolveGrantFromHeaders(effectiveHeaders);
-
     const defaultReadOnly = isReadOnly({
-      neonHeaderValue: neonReadOnlyHeader,
-      headerValue: legacyReadOnlyHeader,
-    });
-
-    logger.info('Authorize read-only context', {
-      clientId,
-      neonReadOnlyHeader,
-      legacyReadOnlyHeader,
-      hasSavedRegisterHeaders: !!savedRegisterHeaders,
-      savedRegisterHeadersCreatedAt: savedRegisterHeaders?.createdAt,
-      defaultReadOnly,
-      grant,
+      neonHeaderValue:
+        effectiveHeaders.get('x-neon-read-only') ??
+        savedHeaders['x-neon-read-only'],
+      headerValue:
+        effectiveHeaders.get('x-read-only') ?? savedHeaders['x-read-only'],
     });
 
     if (!client) {
