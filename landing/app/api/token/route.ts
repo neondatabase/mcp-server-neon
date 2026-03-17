@@ -1,14 +1,201 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
+import { Client } from 'oauth2-server';
 import { model } from '../../../mcp-src/oauth/model';
 import { exchangeRefreshToken } from '../../../lib/oauth/client';
 import { verifyPKCE } from '../../../mcp-src/oauth/utils';
 import { identify, flushAnalytics } from '../../../mcp-src/analytics/analytics';
 import { handleOAuthError } from '../../../lib/errors';
 import { logger } from '../../../mcp-src/utils/logger';
+import { singleflight } from '../../../mcp-src/utils/singleflight';
 
 const toSeconds = (ms: number): number => Math.floor(ms / 1000);
 const toMilliseconds = (seconds: number): number => seconds * 1000;
+
+type RefreshTokenResult = {
+  access_token: string;
+  expires_in: number;
+  token_type: 'bearer';
+  refresh_token: string;
+  scope?: string | string[];
+};
+
+class RefreshError extends Error {
+  constructor(
+    public readonly oauthError: string,
+    public readonly description: string,
+    public readonly statusCode: number,
+  ) {
+    super(description);
+    this.name = 'RefreshError';
+  }
+}
+
+async function executeRefresh(
+  refreshToken: string,
+  client: Client,
+): Promise<RefreshTokenResult> {
+  const providedRefreshToken = await model.getRefreshToken(refreshToken);
+  if (!providedRefreshToken) {
+    logger.warn('Refresh token not found in storage');
+    throw new RefreshError(
+      'invalid_grant',
+      'Invalid or expired refresh token',
+      400,
+    );
+  }
+
+  const oldToken = await model.getAccessToken(providedRefreshToken.accessToken);
+  if (!oldToken) {
+    logger.warn('Access token for refresh token not found, cleaning up');
+    await model.deleteRefreshToken(providedRefreshToken);
+    throw new RefreshError(
+      'invalid_grant',
+      'Invalid or expired refresh token',
+      400,
+    );
+  }
+
+  if (oldToken.client.id !== client.id) {
+    logger.warn('Client mismatch for refresh token', {
+      tokenClientId: oldToken.client.id,
+      requestClientId: client.id,
+    });
+    throw new RefreshError(
+      'invalid_grant',
+      'Invalid or expired refresh token',
+      400,
+    );
+  }
+
+  let upstreamToken: Awaited<ReturnType<typeof exchangeRefreshToken>>;
+  try {
+    logger.info('Exchanging refresh token with upstream');
+    upstreamToken = await exchangeRefreshToken(
+      providedRefreshToken.refreshToken,
+    );
+    logger.info('Upstream token exchange successful');
+  } catch (error) {
+    const isClientError =
+      error instanceof Error &&
+      'status' in error &&
+      typeof (error as { status: unknown }).status === 'number' &&
+      (error as { status: number }).status >= 400 &&
+      (error as { status: number }).status < 500;
+
+    logger.error('Upstream refresh token exchange failed', {
+      error: error instanceof Error ? error.message : error,
+      clientId: client.id,
+      isClientError,
+    });
+
+    if (isClientError) {
+      await model.deleteToken(oldToken);
+      await model.deleteRefreshToken(providedRefreshToken);
+      throw new RefreshError(
+        'invalid_grant',
+        'Invalid or expired refresh token',
+        400,
+      );
+    }
+
+    throw new RefreshError(
+      'server_error',
+      'Temporary error refreshing token, please retry',
+      503,
+    );
+  }
+
+  const now = Date.now();
+  const expiresAt = now + toMilliseconds(upstreamToken.expiresIn() ?? 0);
+
+  const newRefreshToken =
+    upstreamToken.refresh_token ?? providedRefreshToken.refreshToken;
+
+  if (!upstreamToken.access_token) {
+    logger.error('Upstream token missing access_token', {
+      hasAccessToken: !!upstreamToken.access_token,
+      hasRefreshToken: !!upstreamToken.refresh_token,
+    });
+    throw new RefreshError(
+      'server_error',
+      'Invalid token response from upstream',
+      502,
+    );
+  }
+
+  logger.info('Saving new tokens from refresh');
+  const token = await model.saveToken({
+    accessToken: upstreamToken.access_token,
+    refreshToken: newRefreshToken,
+    expires_at: expiresAt,
+    client: client,
+    user: oldToken.user,
+    scope: oldToken.scope,
+    grant: oldToken.grant,
+  });
+
+  await model.saveRefreshToken({
+    refreshToken: newRefreshToken,
+    accessToken: token.accessToken,
+  });
+
+  if (!token.accessToken) {
+    logger.error('Saved token missing accessToken after saveToken', {
+      hasAccessToken: !!token.accessToken,
+      hasRefreshToken: !!token.refreshToken,
+    });
+    throw new RefreshError('server_error', 'Failed to save token', 500);
+  }
+
+  const expiresIn = toSeconds(expiresAt - now);
+  if (!Number.isFinite(expiresIn)) {
+    logger.error('Invalid expiresIn calculated', { expiresAt, now, expiresIn });
+    throw new RefreshError('server_error', 'Invalid token expiration', 500);
+  }
+
+  const scope = oldToken.scope;
+  const scopeValue =
+    typeof scope === 'string' || Array.isArray(scope) ? scope : undefined;
+
+  const result: RefreshTokenResult = {
+    access_token: token.accessToken,
+    expires_in: expiresIn,
+    token_type: 'bearer',
+    refresh_token: token.refreshToken ?? newRefreshToken,
+    scope: scopeValue,
+  };
+
+  // Cache the result for cross-instance deduplication (short TTL, best-effort).
+  // Must complete before deleting old tokens so concurrent/cross-instance callers
+  // can read the cached result if they hit RefreshError.
+  await model
+    .saveRefreshResult(refreshToken, {
+      accessToken: result.access_token,
+      refreshToken: result.refresh_token,
+      expiresAt,
+      scope: scopeValue,
+    })
+    .catch((err) => {
+      logger.warn('Failed to cache refresh result', { err });
+    });
+
+  await model.deleteToken(oldToken);
+  if (newRefreshToken !== providedRefreshToken.refreshToken) {
+    await model.deleteRefreshToken(providedRefreshToken);
+  }
+  logger.info('Refresh token exchanged successfully');
+
+  logger.info('Building refresh token response', {
+    hasAccessToken: !!result.access_token,
+    hasRefreshToken: !!result.refresh_token,
+    expiresIn: result.expires_in,
+    scopeType: typeof result.scope,
+    scopeIsArray: Array.isArray(result.scope),
+  });
+
+  return result;
+}
 
 const extractClientCredentials = (
   request: NextRequest,
@@ -243,193 +430,43 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const providedRefreshToken = await model.getRefreshToken(refreshToken);
-      if (!providedRefreshToken) {
-        logger.warn('Refresh token not found in storage');
-        return NextResponse.json(
-          {
-            error: 'invalid_grant',
-            error_description: 'Invalid refresh token',
-          },
-          { status: 400 },
-        );
-      }
-
-      const oldToken = await model.getAccessToken(
-        providedRefreshToken.accessToken,
-      );
-      if (!oldToken) {
-        logger.warn('Access token for refresh token not found, cleaning up');
-        // Refresh token is missing its counter access token, delete it
-        await model.deleteRefreshToken(providedRefreshToken);
-        return NextResponse.json(
-          {
-            error: 'invalid_grant',
-            error_description: 'Invalid refresh token',
-          },
-          { status: 400 },
-        );
-      }
-
-      if (oldToken.client.id !== client.id) {
-        logger.warn('Client mismatch for refresh token', {
-          tokenClientId: oldToken.client.id,
-          requestClientId: client.id,
-        });
-        return NextResponse.json(
-          {
-            error: 'invalid_grant',
-            error_description: 'Invalid refresh token',
-          },
-          { status: 400 },
-        );
-      }
-
-      let upstreamToken;
       try {
-        logger.info('Exchanging refresh token with upstream');
-        upstreamToken = await exchangeRefreshToken(
-          providedRefreshToken.refreshToken,
+        // Singleflight: concurrent requests on the same instance share one
+        // execution. The first caller does the upstream exchange; others
+        // await the same Promise.
+        const result = await singleflight(`refresh:${refreshToken}`, () =>
+          executeRefresh(refreshToken, client),
         );
-        logger.info('Upstream token exchange successful');
+        logger.info('Returning refresh token response');
+        return NextResponse.json(result);
       } catch (error) {
-        const isClientError =
-          error instanceof Error &&
-          'status' in error &&
-          typeof (error as { status: unknown }).status === 'number' &&
-          (error as { status: number }).status >= 400 &&
-          (error as { status: number }).status < 500;
-
-        logger.error('Upstream refresh token exchange failed', {
-          error: error instanceof Error ? error.message : error,
-          clientId: client.id,
-          isClientError,
-        });
-
-        if (isClientError) {
-          // Only delete tokens on explicit 4xx rejection (invalid/revoked)
-          await model.deleteToken(oldToken);
-          await model.deleteRefreshToken(providedRefreshToken);
+        // Cross-instance fallback: if another instance already completed the
+        // refresh, the distributed cache will have the result.
+        if (error instanceof RefreshError) {
+          const cached = await model
+            .getRefreshResult(refreshToken)
+            .catch(() => undefined);
+          if (cached) {
+            logger.info('Returning cached refresh result (cross-instance hit)');
+            return NextResponse.json({
+              access_token: cached.accessToken,
+              expires_in: toSeconds(cached.expiresAt - Date.now()),
+              token_type: 'bearer' as const,
+              refresh_token: cached.refreshToken,
+              scope: cached.scope,
+            });
+          }
 
           return NextResponse.json(
             {
-              error: 'invalid_grant',
-              error_description: 'Refresh token is expired or revoked',
+              error: error.oauthError,
+              error_description: error.description,
             },
-            { status: 400 },
+            { status: error.statusCode },
           );
         }
-
-        // Transient error (5xx, network) - don't delete tokens, return server error
-        return NextResponse.json(
-          {
-            error: 'server_error',
-            error_description: 'Temporary error refreshing token, please retry',
-          },
-          { status: 503 },
-        );
+        throw error;
       }
-
-      const now = Date.now();
-      const expiresAt = now + toMilliseconds(upstreamToken.expiresIn() ?? 0);
-
-      // Use new refresh token if provided, otherwise keep the old one
-      const newRefreshToken =
-        upstreamToken.refresh_token ?? providedRefreshToken.refreshToken;
-
-      // Validate upstream token has required fields
-      if (!upstreamToken.access_token) {
-        logger.error('Upstream token missing access_token', {
-          hasAccessToken: !!upstreamToken.access_token,
-          hasRefreshToken: !!upstreamToken.refresh_token,
-        });
-        return NextResponse.json(
-          {
-            error: 'server_error',
-            error_description: 'Invalid token response from upstream',
-          },
-          { status: 502 },
-        );
-      }
-
-      logger.info('Saving new tokens from refresh');
-      const token = await model.saveToken({
-        accessToken: upstreamToken.access_token,
-        refreshToken: newRefreshToken,
-        expires_at: expiresAt,
-        client: client,
-        user: oldToken.user,
-        scope: oldToken.scope,
-        grant: oldToken.grant,
-      });
-
-      await model.saveRefreshToken({
-        refreshToken: newRefreshToken,
-        accessToken: token.accessToken,
-      });
-
-      // Delete the old tokens
-      await model.deleteToken(oldToken);
-      await model.deleteRefreshToken(providedRefreshToken);
-      logger.info('Refresh token exchanged successfully');
-
-      // Validate saved token has required fields
-      if (!token.accessToken) {
-        logger.error('Saved token missing accessToken after saveToken', {
-          hasAccessToken: !!token.accessToken,
-          hasRefreshToken: !!token.refreshToken,
-        });
-        return NextResponse.json(
-          {
-            error: 'server_error',
-            error_description: 'Failed to save token',
-          },
-          { status: 500 },
-        );
-      }
-
-      // Calculate expires_in and validate it's a valid number
-      const expiresIn = toSeconds(expiresAt - now);
-      if (!Number.isFinite(expiresIn)) {
-        logger.error('Invalid expiresIn calculated', {
-          expiresAt,
-          now,
-          expiresIn,
-        });
-        return NextResponse.json(
-          {
-            error: 'server_error',
-            error_description: 'Invalid token expiration',
-          },
-          { status: 500 },
-        );
-      }
-
-      // Ensure scope is serializable (string, array of strings, or undefined)
-      const scope = oldToken.scope;
-      const scopeValue =
-        typeof scope === 'string' || Array.isArray(scope) ? scope : undefined;
-
-      // Build response object explicitly to ensure serializable values
-      const responseBody = {
-        access_token: token.accessToken,
-        expires_in: expiresIn,
-        token_type: 'bearer' as const,
-        refresh_token: token.refreshToken ?? newRefreshToken,
-        scope: scopeValue,
-      };
-
-      logger.info('Building refresh token response', {
-        hasAccessToken: !!responseBody.access_token,
-        hasRefreshToken: !!responseBody.refresh_token,
-        expiresIn: responseBody.expires_in,
-        scopeType: typeof responseBody.scope,
-        scopeIsArray: Array.isArray(responseBody.scope),
-      });
-
-      const response = NextResponse.json(responseBody);
-      logger.info('Returning refresh token response');
-      return response;
     }
 
     logger.warn('Invalid grant type', { grantType });
