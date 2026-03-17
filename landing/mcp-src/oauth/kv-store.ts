@@ -58,6 +58,19 @@ export const getClientRegisterHeaders =
     'Client register headers',
   );
 
+/** Cached outcome of a refresh token exchange for cross-instance deduplication. */
+export type RefreshResult = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  scope?: string | string[];
+};
+
+export const getRefreshResults = createLazyKeyv<RefreshResult>(
+  'refresh_results',
+  'Refresh results (cached refresh token exchange outcome)',
+);
+
 export type ApiKeyRecord = {
   apiKey: string;
   authMethod: AuthDetailsResponse['auth_method'];
