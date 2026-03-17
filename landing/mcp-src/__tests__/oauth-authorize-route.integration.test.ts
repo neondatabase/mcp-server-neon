@@ -61,12 +61,7 @@ function extractEncodedState(html: string): string {
   return match![1];
 }
 
-function decodeState(html: string): {
-  grant?: {
-    projectId: string | null;
-    scopes: string[] | null;
-  };
-} {
+function decodeState(html: string): Record<string, unknown> {
   return JSON.parse(atob(extractEncodedState(html)));
 }
 
@@ -178,7 +173,7 @@ describe('/api/authorize route integration', () => {
     expect(writeCheckbox).toContain('checked');
   });
 
-  it('persists grant context from current authorize headers into state', async () => {
+  it('does not embed grant context in the upstream OAuth state parameter', async () => {
     const response = await GET(
       buildAuthorizeRequest({
         'X-Neon-Scopes': 'querying,schema',
@@ -189,13 +184,10 @@ describe('/api/authorize route integration', () => {
     const state = decodeState(html);
 
     expect(response.status).toBe(200);
-    expect(state.grant).toEqual({
-      projectId: 'proj_current',
-      scopes: ['querying', 'schema'],
-    });
+    expect(state).not.toHaveProperty('grant');
   });
 
-  it('uses saved register grant headers when authorize request has none', async () => {
+  it('does not embed saved register grant headers in state', async () => {
     vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
       headers: {
         'x-neon-scopes': 'querying,branches',
@@ -209,34 +201,6 @@ describe('/api/authorize route integration', () => {
     const state = decodeState(html);
 
     expect(response.status).toBe(200);
-    expect(state.grant).toEqual({
-      projectId: 'proj_saved',
-      scopes: ['querying', 'branches'],
-    });
-  });
-
-  it('current authorize grant headers take precedence over saved register headers', async () => {
-    vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
-      headers: {
-        'x-neon-scopes': 'branches',
-        'x-neon-project-id': 'proj_saved',
-      },
-      createdAt: Date.now(),
-    });
-
-    const response = await GET(
-      buildAuthorizeRequest({
-        'X-Neon-Scopes': 'schema',
-        'X-Neon-Project-Id': 'proj_current',
-      }),
-    );
-    const html = await response.text();
-    const state = decodeState(html);
-
-    expect(response.status).toBe(200);
-    expect(state.grant).toEqual({
-      projectId: 'proj_current',
-      scopes: ['schema'],
-    });
+    expect(state).not.toHaveProperty('grant');
   });
 });
