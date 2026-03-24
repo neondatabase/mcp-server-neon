@@ -18,9 +18,19 @@ type ListToolsResponse = {
 };
 
 async function callListTools(
-  headers: Record<string, string> = {},
+  queryParams: Record<string, string | string[]> = {},
 ): Promise<ListToolsResponse> {
-  const req = new Request('http://localhost/api/list-tools', { headers });
+  const url = new URL('http://localhost/api/list-tools');
+  for (const [key, value] of Object.entries(queryParams)) {
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        url.searchParams.append(key, v);
+      }
+    } else {
+      url.searchParams.set(key, value);
+    }
+  }
+  const req = new Request(url.toString());
   const res = await GET(req);
   return res.json() as Promise<ListToolsResponse>;
 }
@@ -36,21 +46,21 @@ describe('/api/list-tools endpoint', () => {
     });
   });
 
-  it('filters by scopes when X-Neon-Scopes is present', async () => {
-    const body = await callListTools({ 'X-Neon-Scopes': 'querying' });
+  it('filters by scopes when category param is present', async () => {
+    const body = await callListTools({ category: 'querying' });
     expect(body.grant.scopes).toEqual(['querying']);
     expect(body.tools).toHaveLength(10);
   });
 
   it('returns only always-available tools when scopes are all invalid', async () => {
-    const body = await callListTools({ 'X-Neon-Scopes': 'foo,bar' });
+    const body = await callListTools({ category: 'foo,bar' });
     expect(body.grant.scopes).toEqual([]);
     expect(body.tools.map((t) => t.name).sort()).toEqual(['fetch', 'search']);
     expect(body.warnings?.[0]).toContain('No valid scope categories');
   });
 
   it('filters project-agnostic tools in project-scoped mode', async () => {
-    const body = await callListTools({ 'X-Neon-Project-Id': 'proj-123' });
+    const body = await callListTools({ projectId: 'proj-123' });
     expect(body.grant.projectId).toBe('proj-123');
     expect(body.tools).toHaveLength(22);
     const names = body.tools.map((t) => t.name);
@@ -60,8 +70,8 @@ describe('/api/list-tools endpoint', () => {
     expect(names).not.toContain('fetch');
   });
 
-  it('filters to readOnlySafe tools with X-Neon-Read-Only=true', async () => {
-    const body = await callListTools({ 'X-Neon-Read-Only': 'true' });
+  it('filters to readOnlySafe tools with readonly=true', async () => {
+    const body = await callListTools({ readonly: 'true' });
     expect(body.readOnly).toBe(true);
     expect(body.tools).toHaveLength(18);
     for (const tool of body.tools) {
@@ -70,16 +80,24 @@ describe('/api/list-tools endpoint', () => {
   });
 
   it('supports legacy x-read-only header', async () => {
-    const body = await callListTools({ 'x-read-only': 'true' });
+    const url = new URL('http://localhost/api/list-tools');
+    const req = new Request(url.toString(), {
+      headers: { 'x-read-only': 'true' },
+    });
+    const res = await GET(req);
+    const body = (await res.json()) as ListToolsResponse;
     expect(body.readOnly).toBe(true);
     expect(body.tools).toHaveLength(18);
   });
 
-  it('X-Neon-Read-Only takes precedence over x-read-only', async () => {
-    const body = await callListTools({
-      'X-Neon-Read-Only': 'false',
-      'x-read-only': 'true',
+  it('readonly query param takes precedence over x-read-only header', async () => {
+    const url = new URL('http://localhost/api/list-tools');
+    url.searchParams.set('readonly', 'false');
+    const req = new Request(url.toString(), {
+      headers: { 'x-read-only': 'true' },
     });
+    const res = await GET(req);
+    const body = (await res.json()) as ListToolsResponse;
     expect(body.readOnly).toBe(false);
     expect(body.tools).toHaveLength(29);
   });
@@ -87,26 +105,24 @@ describe('/api/list-tools endpoint', () => {
   it('OPTIONS returns expected CORS allow-headers', () => {
     const res = OPTIONS();
     const allowed = res.headers.get('Access-Control-Allow-Headers') ?? '';
-    expect(allowed).toBe(
-      'X-Neon-Scopes, X-Neon-Project-Id, X-Neon-Read-Only, x-read-only',
-    );
+    expect(allowed).toBe('x-read-only');
   });
 
-  it('returns valid responses across repeated mixed-header requests', async () => {
-    const headerSets: Record<string, string>[] = [
+  it('returns valid responses across repeated mixed-param requests', async () => {
+    const paramSets: Record<string, string | string[]>[] = [
       {},
-      { 'X-Neon-Project-Id': 'proj-123' },
-      { 'X-Neon-Scopes': 'querying' },
-      { 'X-Neon-Read-Only': 'true' },
+      { projectId: 'proj-123' },
+      { category: 'querying' },
+      { readonly: 'true' },
       {
-        'X-Neon-Project-Id': 'proj-123',
-        'X-Neon-Scopes': 'querying,schema',
+        projectId: 'proj-123',
+        category: 'querying,schema',
       },
-      { 'X-Neon-Scopes': 'not-a-real-scope' },
+      { category: 'not-a-real-scope' },
     ];
 
     const runs = Array.from({ length: 200 }, (_, i) =>
-      callListTools(headerSets[i % headerSets.length]),
+      callListTools(paramSets[i % paramSets.length]),
     );
 
     const bodies = await Promise.all(runs);

@@ -440,17 +440,10 @@ export async function GET(request: NextRequest) {
 
     const savedRegisterHeaders = await model.getClientRegisterHeaders(clientId);
     const savedHeaders = savedRegisterHeaders?.headers ?? {};
-    const effectiveHeaders = new Headers(savedHeaders);
-    request.headers.forEach((value, key) => {
-      effectiveHeaders.set(key, value);
-    });
 
     const defaultReadOnly = isReadOnly({
-      neonHeaderValue:
-        effectiveHeaders.get('x-neon-read-only') ??
-        savedHeaders['x-neon-read-only'],
       headerValue:
-        effectiveHeaders.get('x-read-only') ?? savedHeaders['x-read-only'],
+        request.headers.get('x-read-only') ?? savedHeaders['x-read-only'],
     });
 
     if (!client) {

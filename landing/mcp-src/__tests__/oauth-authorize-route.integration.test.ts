@@ -84,55 +84,12 @@ describe('/api/authorize route integration', () => {
     expect(writeCheckbox).toContain('checked');
   });
 
-  it('defaults Full access to unchecked when X-Neon-Read-Only is true', async () => {
-    const response = await GET(
-      buildAuthorizeRequest({
-        'X-Neon-Read-Only': 'true',
-      }),
-    );
-    const html = await response.text();
-    const writeCheckbox = extractWriteCheckbox(html);
-
-    expect(response.status).toBe(200);
-    expect(writeCheckbox).not.toContain('checked');
-  });
-
   it('defaults Full access to unchecked when x-read-only is true', async () => {
     const response = await GET(
       buildAuthorizeRequest({
         'x-read-only': 'true',
       }),
     );
-    const html = await response.text();
-    const writeCheckbox = extractWriteCheckbox(html);
-
-    expect(response.status).toBe(200);
-    expect(writeCheckbox).not.toContain('checked');
-  });
-
-  it('uses X-Neon-Read-Only precedence over x-read-only for checkbox default', async () => {
-    const response = await GET(
-      buildAuthorizeRequest({
-        'X-Neon-Read-Only': 'false',
-        'x-read-only': 'true',
-      }),
-    );
-    const html = await response.text();
-    const writeCheckbox = extractWriteCheckbox(html);
-
-    expect(response.status).toBe(200);
-    expect(writeCheckbox).toContain('checked');
-  });
-
-  it('defaults Full access to unchecked from saved register X-Neon-Read-Only header', async () => {
-    vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
-      headers: {
-        'x-neon-read-only': 'true',
-      },
-      createdAt: Date.now(),
-    });
-
-    const response = await GET(buildAuthorizeRequest());
     const html = await response.text();
     const writeCheckbox = extractWriteCheckbox(html);
 
@@ -156,46 +113,7 @@ describe('/api/authorize route integration', () => {
     expect(writeCheckbox).not.toContain('checked');
   });
 
-  it('uses saved X-Neon-Read-Only precedence over saved x-read-only', async () => {
-    vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
-      headers: {
-        'x-neon-read-only': 'false',
-        'x-read-only': 'true',
-      },
-      createdAt: Date.now(),
-    });
-
-    const response = await GET(buildAuthorizeRequest());
-    const html = await response.text();
-    const writeCheckbox = extractWriteCheckbox(html);
-
-    expect(response.status).toBe(200);
-    expect(writeCheckbox).toContain('checked');
-  });
-
   it('does not embed grant context in the upstream OAuth state parameter', async () => {
-    const response = await GET(
-      buildAuthorizeRequest({
-        'X-Neon-Scopes': 'querying,schema',
-        'X-Neon-Project-Id': 'proj_current',
-      }),
-    );
-    const html = await response.text();
-    const state = decodeState(html);
-
-    expect(response.status).toBe(200);
-    expect(state).not.toHaveProperty('grant');
-  });
-
-  it('does not embed saved register grant headers in state', async () => {
-    vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
-      headers: {
-        'x-neon-scopes': 'querying,branches',
-        'x-neon-project-id': 'proj_saved',
-      },
-      createdAt: Date.now(),
-    });
-
     const response = await GET(buildAuthorizeRequest());
     const html = await response.text();
     const state = decodeState(html);

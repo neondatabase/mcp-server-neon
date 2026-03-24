@@ -4,9 +4,8 @@
  * Supports per-category scope control and project scoping.
  *
  * Grant context can be resolved from:
- * - X-Neon-* HTTP headers (API key mode)
- * - OAuth token grant field (OAuth mode)
- * - Future: neon:mcp claims in ID token
+ * - URL query params (transport-time, highest priority)
+ * - OAuth token grant field (stored token fallback)
  */
 
 export const SCOPE_CATEGORIES = [
@@ -29,7 +28,7 @@ export type GrantContext = {
 };
 
 /**
- * The default grant context when no headers or token grant is provided.
+ * The default grant context when no query params or token grant is provided.
  * Full access and no project scoping.
  */
 export const DEFAULT_GRANT: GrantContext = {
@@ -42,13 +41,13 @@ function isValidScopeCategory(value: string): value is ScopeCategory {
 }
 
 /**
- * Parse the X-Neon-Scopes header value into an array of valid scope categories.
+ * Parse scope categories from a comma-separated string.
  *
  * - "projects,branches,querying" -> ['projects', 'branches', 'querying']
  * - Invalid values are silently filtered out.
- * - If the header is present but all values are invalid, returns [] (empty array).
+ * - If the input is present but all values are invalid, returns [] (empty array).
  *   This results in no scoped tools (except always-available ones).
- * - If the header is absent (null/undefined/empty), returns null.
+ * - If the input is absent (null/undefined/empty), returns null.
  */
 export function parseScopeCategories(
   value: string | null | undefined,
@@ -64,19 +63,27 @@ export function parseScopeCategories(
 }
 
 /**
- * Resolve grant context from HTTP headers (API key mode).
+ * Resolve grant context from URL search params (transport-time).
+ *
+ * Supports both repeated params (?category=a&category=b) and
+ * comma-separated values (?category=a,b).
  */
-export function resolveGrantFromHeaders(headers: Headers): GrantContext {
-  const scopesHeader = headers.get('x-neon-scopes');
-  const projectIdHeader = headers.get('x-neon-project-id');
-
-  const scopes = parseScopeCategories(scopesHeader);
-  const projectId = projectIdHeader?.trim() || null;
-
-  return {
-    projectId,
-    scopes,
-  };
+export function resolveGrantFromSearchParams(
+  params: URLSearchParams,
+): GrantContext {
+  const rawCategories = params.getAll('category');
+  const allCategories = rawCategories.flatMap((v) =>
+    v
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  const scopes =
+    allCategories.length > 0
+      ? allCategories.filter(isValidScopeCategory)
+      : null;
+  const projectId = params.get('projectId')?.trim() || null;
+  return { projectId, scopes };
 }
 
 /**
@@ -93,4 +100,18 @@ export function resolveGrantFromToken(token: {
     };
   }
   return { ...DEFAULT_GRANT };
+}
+
+/**
+ * Merge two grant contexts. The primary (URL params) wins when present,
+ * falling back to the fallback (stored token grant).
+ */
+export function mergeGrant(
+  primary: GrantContext,
+  fallback: GrantContext,
+): GrantContext {
+  return {
+    projectId: primary.projectId ?? fallback.projectId,
+    scopes: primary.scopes ?? fallback.scopes,
+  };
 }

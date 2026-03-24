@@ -31,8 +31,9 @@ import { getApiKeys, type ApiKeyRecord } from '../../../mcp-src/oauth/kv-store';
 import { setSentryTags } from '../../../mcp-src/sentry/utils';
 import type { ServerContext, AppContext } from '../../../mcp-src/types/context';
 import {
-  resolveGrantFromHeaders,
+  resolveGrantFromSearchParams,
   resolveGrantFromToken,
+  mergeGrant,
   DEFAULT_GRANT,
   type GrantContext,
 } from '../../../mcp-src/utils/grant-context';
@@ -597,7 +598,6 @@ const verifyToken = async (
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> => {
   const userAgent = req.headers.get('user-agent') || undefined;
-  const neonReadOnlyHeader = req.headers.get('x-neon-read-only');
   const readOnlyHeader = req.headers.get('x-read-only');
 
   logger.info('verifyToken called', {
@@ -611,15 +611,15 @@ const verifyToken = async (
     return undefined;
   }
 
-  // Detect transport from URL pathname
+  // Detect transport from URL pathname and parse query params
   const url = new URL(req.url);
   const transport: AppContext['transport'] = url.pathname.includes('/mcp')
     ? 'stream'
     : 'sse';
 
-  // Parse grant context from X-Neon-* headers (used only for API key path;
-  // OAuth tokens use their stored grant from the consent flow instead)
-  const grant = resolveGrantFromHeaders(req.headers);
+  const searchParams = url.searchParams;
+  const readOnlyQueryParam = searchParams.get('readonly');
+  const urlGrant = resolveGrantFromSearchParams(searchParams);
 
   // ============================================
   // PATH 1: Check OAuth tokens table FIRST
@@ -633,14 +633,13 @@ const verifyToken = async (
 
       logger.info('OAuth token found', { clientId: token.client.id });
 
-      // OAuth tokens always use the stored grant from the consent flow.
-      // Headers are fully ignored — grant is immutable until re-authentication.
-      const effectiveGrant = resolveGrantFromToken(
+      const tokenGrant = resolveGrantFromToken(
         token as { grant?: GrantContext },
       );
+      const effectiveGrant = mergeGrant(urlGrant, tokenGrant);
 
-      // Read-only is determined only by stored OAuth scope (no headers)
       const readOnly = isReadOnly({
+        queryParamValue: readOnlyQueryParam,
         scope: token.scope,
       });
 
@@ -690,9 +689,8 @@ const verifyToken = async (
     return undefined;
   }
 
-  // Determine read-only mode from headers.
   const readOnly = isReadOnly({
-    neonHeaderValue: neonReadOnlyHeader,
+    queryParamValue: readOnlyQueryParam,
     headerValue: readOnlyHeader,
   });
 
@@ -704,7 +702,7 @@ const verifyToken = async (
       account: apiKeyRecord.account,
       apiKey: bearerToken,
       readOnly,
-      grant,
+      grant: urlGrant,
       transport,
       userAgent,
     },

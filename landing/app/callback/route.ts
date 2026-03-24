@@ -6,7 +6,7 @@ import { createNeonClient } from '../../mcp-src/server/api';
 import { resolveAccountFromAuth } from '../../mcp-src/server/account';
 import { handleOAuthError } from '../../lib/errors';
 import type { AuthorizationCode } from 'oauth2-server';
-import { resolveGrantFromHeaders } from '../../mcp-src/utils/grant-context';
+import { DEFAULT_GRANT } from '../../mcp-src/utils/grant-context';
 
 type DownstreamAuthRequest = {
   responseType: string;
@@ -75,13 +75,10 @@ export async function GET(request: NextRequest) {
     // Resolve account info (no identify here - happens in token exchange)
     const userInfo = await resolveAccountFromAuth(auth, neonClient);
 
-    // Resolve grant context from saved registration headers. Grant context
-    // (scope categories, read-only mode, project-id scoping) is an MCP-layer
-    // concept and must not leak into the upstream OAuth state parameter, which
-    // is forwarded verbatim to the Neon console backend.
-    const savedRegisterHeaders = await model.getClientRegisterHeaders(clientId);
-    const savedHeaders = savedRegisterHeaders?.headers ?? {};
-    const grant = resolveGrantFromHeaders(new Headers(savedHeaders));
+    // Grant context is now resolved at transport time from URL query params,
+    // so we store DEFAULT_GRANT here. Existing tokens with stored grant still
+    // work via resolveGrantFromToken fallback at transport time.
+    const grant = DEFAULT_GRANT;
 
     // Save the authorization code with associated data
     const authCodeData: AuthorizationCode = {
