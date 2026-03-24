@@ -22,6 +22,33 @@ function toOriginString(serverHost: string): string {
   return normalizeServerOrigin(serverHost).origin;
 }
 
+function firstForwardedValue(value: string | null): string | null {
+  if (!value) return null;
+  const first = value.split(',')[0]?.trim();
+  return first || null;
+}
+
+function resolveRequestOrigin(
+  request: Request,
+  fallbackServerHost = SERVER_HOST,
+): string {
+  const requestUrl = new URL(request.url);
+  const forwardedHost = firstForwardedValue(
+    request.headers.get('x-forwarded-host'),
+  );
+  const hostHeader = firstForwardedValue(request.headers.get('host'));
+  const authority = forwardedHost ?? hostHeader ?? requestUrl.host;
+  if (!authority) {
+    return toOriginString(fallbackServerHost);
+  }
+
+  const forwardedProto = firstForwardedValue(
+    request.headers.get('x-forwarded-proto'),
+  );
+  const protocol = forwardedProto === 'https' ? 'https:' : 'https:';
+  return new URL(`${protocol}//${authority}`).origin;
+}
+
 function composeResourceIdentifier(
   origin: string,
   pathname: string,
@@ -57,6 +84,13 @@ export function getHostLevelResourceIdentifier(
   return toOriginString(serverHost);
 }
 
+export function getHostLevelResourceIdentifierFromRequest(
+  request: Request,
+  fallbackServerHost = SERVER_HOST,
+): string {
+  return resolveRequestOrigin(request, fallbackServerHost);
+}
+
 /**
  * Derives the protected resource identifier from a metadata request URL.
  * Example:
@@ -64,14 +98,17 @@ export function getHostLevelResourceIdentifier(
  * -> https://host/mcp?readonly=true
  */
 export function deriveResourceIdentifierFromMetadataRequest(
-  requestUrl: string,
-  serverHost = SERVER_HOST,
+  request: Request,
+  fallbackServerHost = SERVER_HOST,
 ): string {
-  const url = new URL(requestUrl);
-  const origin = toOriginString(serverHost);
+  const url = new URL(request.url);
+  const origin = resolveRequestOrigin(request, fallbackServerHost);
 
   if (url.pathname === PROTECTED_RESOURCE_METADATA_PATH) {
-    return getHostLevelResourceIdentifier(serverHost);
+    return getHostLevelResourceIdentifierFromRequest(
+      request,
+      fallbackServerHost,
+    );
   }
 
   const derivedPrefix = `${PROTECTED_RESOURCE_METADATA_PATH}/`;
@@ -92,11 +129,11 @@ export function deriveResourceIdentifierFromMetadataRequest(
  * -> https://host/.well-known/oauth-protected-resource/mcp?readonly=true
  */
 export function buildResourceMetadataUrlForResourceRequest(
-  requestUrl: string,
-  serverHost = SERVER_HOST,
+  request: Request,
+  fallbackServerHost = SERVER_HOST,
 ): string {
-  const url = new URL(requestUrl);
-  const origin = toOriginString(serverHost);
+  const url = new URL(request.url);
+  const origin = resolveRequestOrigin(request, fallbackServerHost);
 
   if (url.pathname === '/' && !url.search) {
     return `${origin}${PROTECTED_RESOURCE_METADATA_PATH}`;

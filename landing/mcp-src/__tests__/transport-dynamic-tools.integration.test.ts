@@ -292,9 +292,10 @@ describe('transport dynamic tool composition', () => {
   it('emits resource_metadata for the exact requested resource path and query', async () => {
     vi.mocked(model.getAccessToken).mockResolvedValue(undefined);
 
-    const req = new Request('http://localhost/mcp?readonly=true', {
+    const req = new Request('http://localhost:3100/mcp?readonly=true', {
       method: 'POST',
       headers: {
+        host: 'localhost:3100',
         Authorization: 'Bearer invalid-token',
         'Content-Type': 'application/json',
         Accept: 'application/json, text/event-stream',
@@ -311,7 +312,7 @@ describe('transport dynamic tool composition', () => {
     expect(res.status).toBe(401);
     const challenge = res.headers.get('WWW-Authenticate');
     expect(challenge).toContain(
-      'resource_metadata="https://localhost:3000/.well-known/oauth-protected-resource/mcp?readonly=true"',
+      'resource_metadata="https://localhost:3100/.well-known/oauth-protected-resource/mcp?readonly=true"',
     );
   });
 });

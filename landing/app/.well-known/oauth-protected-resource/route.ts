@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import {
-  getHostLevelResourceIdentifier,
+  getHostLevelResourceIdentifierFromRequest,
   parseResourceIdentifier,
 } from '@/lib/oauth/protected-resource-metadata';
 
-export async function GET() {
-  const resource = getHostLevelResourceIdentifier();
+export async function GET(request: Request) {
+  const resource = getHostLevelResourceIdentifierFromRequest(request);
   const parsedResource = parseResourceIdentifier(resource);
 
   return NextResponse.json({

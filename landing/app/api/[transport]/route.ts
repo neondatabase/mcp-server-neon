@@ -744,7 +744,7 @@ const authHandler = withMcpAuth(
 
 function rewriteResourceMetadataHeader(
   response: Response,
-  requestUrl: URL,
+  request: Request,
 ): Response {
   if (response.status !== 401) {
     return response;
@@ -755,9 +755,8 @@ function rewriteResourceMetadataHeader(
     return response;
   }
 
-  const resourceMetadataUrl = buildResourceMetadataUrlForResourceRequest(
-    requestUrl.toString(),
-  );
+  const resourceMetadataUrl =
+    buildResourceMetadataUrlForResourceRequest(request);
 
   const updatedHeader = /resource_metadata="[^"]*"/.test(wwwAuthenticate)
     ? wwwAuthenticate.replace(
@@ -788,7 +787,6 @@ function rewriteResourceMetadataHeader(
 // requests to /mcp would get 404 after OAuth (before auth, withMcpAuth
 // returns 401 before pathname matching happens).
 const handleRequest = (req: Request) => {
-  const originalUrl = new URL(req.url);
   const url = new URL(req.url);
 
   if (url.pathname === '/mcp') {
@@ -808,10 +806,10 @@ const handleRequest = (req: Request) => {
   const response = authHandler(normalizedReq);
   if (response instanceof Promise) {
     return response.then((resolved) =>
-      rewriteResourceMetadataHeader(resolved, originalUrl),
+      rewriteResourceMetadataHeader(resolved, req),
     );
   }
-  return rewriteResourceMetadataHeader(response, originalUrl);
+  return rewriteResourceMetadataHeader(response, req);
 };
 
 export { handleRequest as GET, handleRequest as POST, handleRequest as DELETE };

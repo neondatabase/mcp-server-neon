@@ -5,7 +5,7 @@ import {
 } from '@/lib/oauth/protected-resource-metadata';
 
 export async function GET(request: Request) {
-  const resource = deriveResourceIdentifierFromMetadataRequest(request.url);
+  const resource = deriveResourceIdentifierFromMetadataRequest(request);
   const parsedResource = parseResourceIdentifier(resource);
 
   return NextResponse.json({
