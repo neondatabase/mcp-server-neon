@@ -4,8 +4,9 @@
  * Supports per-category scope control and project scoping.
  *
  * Grant context can be resolved from:
- * - URL query params (transport-time, highest priority)
- * - OAuth token grant field (stored token fallback)
+ * - OAuth resource URI query params (authorize-time)
+ * - OAuth token grant field (runtime)
+ * - Direct MCP URL query params for API key auth (runtime)
  */
 
 export const SCOPE_CATEGORIES = [
@@ -63,7 +64,7 @@ export function parseScopeCategories(
 }
 
 /**
- * Resolve grant context from URL search params (transport-time).
+ * Resolve grant context from URL search params.
  *
  * Supports both repeated params (?category=a&category=b) and
  * comma-separated values (?category=a,b).
@@ -87,6 +88,27 @@ export function resolveGrantFromSearchParams(
 }
 
 /**
+ * Resolve grant context from an OAuth resource URI.
+ *
+ * RFC 8707 allows query params in resource URIs when they are used to scope
+ * application access. We use `category` and `projectId` query params for this.
+ */
+export function resolveGrantFromResourceUri(
+  resource: string | null | undefined,
+): GrantContext {
+  if (!resource) {
+    return { ...DEFAULT_GRANT };
+  }
+
+  const resourceUrl = new URL(resource);
+  if (resourceUrl.hash) {
+    throw new Error('OAuth resource URI must not include a fragment');
+  }
+
+  return resolveGrantFromSearchParams(resourceUrl.searchParams);
+}
+
+/**
  * Resolve grant context from a stored OAuth token.
  * If the token has a grant field, use it. Otherwise, fall back to defaults.
  */
@@ -100,18 +122,4 @@ export function resolveGrantFromToken(token: {
     };
   }
   return { ...DEFAULT_GRANT };
-}
-
-/**
- * Merge two grant contexts. The primary (URL params) wins when present,
- * falling back to the fallback (stored token grant).
- */
-export function mergeGrant(
-  primary: GrantContext,
-  fallback: GrantContext,
-): GrantContext {
-  return {
-    projectId: primary.projectId ?? fallback.projectId,
-    scopes: primary.scopes ?? fallback.scopes,
-  };
 }

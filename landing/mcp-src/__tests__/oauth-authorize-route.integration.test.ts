@@ -29,6 +29,7 @@ const VALID_CLIENT = {
 function buildAuthorizeRequest(
   headers: Record<string, string> = {},
   scope = 'read write',
+  extraParams: Record<string, string> = {},
 ): NextRequest {
   const params = new URLSearchParams({
     response_type: 'code',
@@ -36,6 +37,7 @@ function buildAuthorizeRequest(
     redirect_uri: VALID_CLIENT.redirect_uris[0],
     scope,
     state: 'test-state',
+    ...extraParams,
   });
 
   return new NextRequest(
@@ -120,5 +122,32 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(200);
     expect(state).not.toHaveProperty('grant');
+  });
+
+  it('preserves resource parameter in encoded state for callback grant resolution', async () => {
+    const resource =
+      'https://mcp.neon.tech/mcp?projectId=proj-123&category=schema';
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+    const html = await response.text();
+    const state = decodeState(html);
+
+    expect(response.status).toBe(200);
+    expect(state).toHaveProperty('resource', resource);
+  });
+
+  it('returns invalid_target when resource parameter is malformed', async () => {
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', {
+        resource: '/mcp?category=schema',
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_target',
+      error_description: 'Invalid resource parameter',
+    });
   });
 });

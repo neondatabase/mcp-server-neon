@@ -72,8 +72,9 @@ async function mcpCall(
   method: string,
   id: number,
   params?: unknown,
+  queryString = '',
 ) {
-  const req = new Request('http://localhost/api/mcp', {
+  const req = new Request(`http://localhost/api/mcp${queryString}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${bearerToken}`,
@@ -209,5 +210,43 @@ describe('transport dynamic tool composition', () => {
     expect(fullNames.has('create_project')).toBe(true);
     expect(readOnlyNames.has('create_project')).toBe(false);
     expect(readOnlyNames.has('list_projects')).toBe(true);
+  });
+
+  it('ignores runtime URL grant params for OAuth tokens', async () => {
+    const oauthToken = 'oauth-unscoped-with-query';
+
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write', {
+        projectId: null,
+        scopes: null,
+      }) as never,
+    );
+
+    await mcpCall(
+      oauthToken,
+      'initialize',
+      10,
+      {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: 'test-client', version: '1.0.0' },
+      },
+      '?projectId=proj_123',
+    );
+
+    await mcpCall(
+      oauthToken,
+      'tools/call',
+      11,
+      {
+        name: 'run_sql',
+        arguments: { sql: 'select 1' },
+      },
+      '?projectId=proj_123',
+    );
+
+    // If query params were merged at runtime, run_sql would receive injected projectId.
+    // OAuth must only use the grant persisted from authorize/token flow.
+    expect(runSqlSpy).toHaveBeenCalledTimes(0);
   });
 });

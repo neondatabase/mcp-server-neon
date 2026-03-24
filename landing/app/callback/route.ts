@@ -6,7 +6,10 @@ import { createNeonClient } from '../../mcp-src/server/api';
 import { resolveAccountFromAuth } from '../../mcp-src/server/account';
 import { handleOAuthError } from '../../lib/errors';
 import type { AuthorizationCode } from 'oauth2-server';
-import { DEFAULT_GRANT } from '../../mcp-src/utils/grant-context';
+import {
+  resolveGrantFromResourceUri,
+  type GrantContext,
+} from '../../mcp-src/utils/grant-context';
 
 type DownstreamAuthRequest = {
   responseType: string;
@@ -14,6 +17,7 @@ type DownstreamAuthRequest = {
   redirectUri: string;
   scope: string[];
   state: string;
+  resource?: string;
   codeChallenge?: string;
   codeChallengeMethod?: string;
 };
@@ -75,10 +79,19 @@ export async function GET(request: NextRequest) {
     // Resolve account info (no identify here - happens in token exchange)
     const userInfo = await resolveAccountFromAuth(auth, neonClient);
 
-    // Grant context is now resolved at transport time from URL query params,
-    // so we store DEFAULT_GRANT here. Existing tokens with stored grant still
-    // work via resolveGrantFromToken fallback at transport time.
-    const grant = DEFAULT_GRANT;
+    // Persist grant context resolved from OAuth resource URI at authorize time.
+    let grant: GrantContext;
+    try {
+      grant = resolveGrantFromResourceUri(requestParams.resource);
+    } catch {
+      return NextResponse.json(
+        {
+          error: 'invalid_target',
+          error_description: 'Invalid resource parameter',
+        },
+        { status: 400 },
+      );
+    }
 
     // Save the authorization code with associated data
     const authCodeData: AuthorizationCode = {

@@ -16,6 +16,7 @@ import {
 } from '../../../mcp-src/utils/read-only';
 import { logger } from '../../../mcp-src/utils/logger';
 import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
+import { resolveGrantFromResourceUri } from '../../../mcp-src/utils/grant-context';
 
 export type DownstreamAuthRequest = {
   responseType: string;
@@ -23,6 +24,7 @@ export type DownstreamAuthRequest = {
   redirectUri: string;
   scope: string[];
   state: string;
+  resource?: string;
   codeChallenge?: string;
   codeChallengeMethod?: string;
 };
@@ -35,6 +37,7 @@ const parseAuthRequest = (
   const redirectUri = searchParams.get('redirect_uri') || '';
   const scope = searchParams.get('scope') || '';
   const state = searchParams.get('state') || '';
+  const resource = searchParams.get('resource') || undefined;
   const codeChallenge = searchParams.get('code_challenge') || undefined;
   const codeChallengeMethod =
     searchParams.get('code_challenge_method') || 'plain';
@@ -45,6 +48,7 @@ const parseAuthRequest = (
     redirectUri,
     scope: scope.split(' ').filter(Boolean),
     state,
+    resource,
     codeChallenge,
     codeChallengeMethod,
   };
@@ -427,6 +431,18 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const requestParams = parseAuthRequest(searchParams);
+    // Validate resource URI early so malformed values fail at authorize time.
+    try {
+      resolveGrantFromResourceUri(requestParams.resource);
+    } catch {
+      return NextResponse.json(
+        {
+          error: 'invalid_target',
+          error_description: 'Invalid resource parameter',
+        },
+        { status: 400 },
+      );
+    }
 
     const clientId = requestParams.clientId;
     const client = await model.getClient(clientId, '');

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolveGrantFromSearchParams,
+  resolveGrantFromResourceUri,
   resolveGrantFromToken,
-  mergeGrant,
   parseScopeCategories,
   DEFAULT_GRANT,
   type GrantContext,
@@ -137,56 +137,43 @@ describe('resolveGrantFromToken', () => {
   });
 });
 
-describe('mergeGrant', () => {
-  it('uses primary values when both are present', () => {
-    const primary: GrantContext = {
-      projectId: 'proj-url',
-      scopes: ['schema'],
-    };
-    const fallback: GrantContext = {
-      projectId: 'proj-token',
-      scopes: ['querying'],
-    };
+describe('resolveGrantFromResourceUri', () => {
+  it('returns default grant when resource is absent', () => {
+    expect(resolveGrantFromResourceUri(undefined)).toEqual(DEFAULT_GRANT);
+    expect(resolveGrantFromResourceUri(null)).toEqual(DEFAULT_GRANT);
+  });
 
-    expect(mergeGrant(primary, fallback)).toEqual({
-      projectId: 'proj-url',
-      scopes: ['schema'],
+  it('parses grant query params from resource URI', () => {
+    expect(
+      resolveGrantFromResourceUri(
+        'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying,schema',
+      ),
+    ).toEqual({
+      projectId: 'proj-123',
+      scopes: ['querying', 'schema'],
     });
   });
 
-  it('falls back when primary has nulls', () => {
-    const primary: GrantContext = {
+  it('throws when resource URI includes a fragment', () => {
+    expect(() =>
+      resolveGrantFromResourceUri('https://mcp.neon.tech/mcp#fragment'),
+    ).toThrow('OAuth resource URI must not include a fragment');
+  });
+
+  it('throws when resource URI is not absolute', () => {
+    expect(() =>
+      resolveGrantFromResourceUri('/mcp?category=querying'),
+    ).toThrow();
+  });
+
+  it('ignores non-grant query params in resource URI', () => {
+    expect(
+      resolveGrantFromResourceUri(
+        'https://mcp.neon.tech/mcp?readonly=true&foo=bar',
+      ),
+    ).toEqual({
       projectId: null,
       scopes: null,
-    };
-    const fallback: GrantContext = {
-      projectId: 'proj-token',
-      scopes: ['querying'],
-    };
-
-    expect(mergeGrant(primary, fallback)).toEqual({
-      projectId: 'proj-token',
-      scopes: ['querying'],
     });
-  });
-
-  it('uses partial primary + partial fallback', () => {
-    const primary: GrantContext = {
-      projectId: 'proj-url',
-      scopes: null,
-    };
-    const fallback: GrantContext = {
-      projectId: null,
-      scopes: ['querying'],
-    };
-
-    expect(mergeGrant(primary, fallback)).toEqual({
-      projectId: 'proj-url',
-      scopes: ['querying'],
-    });
-  });
-
-  it('returns default when both are default', () => {
-    expect(mergeGrant(DEFAULT_GRANT, DEFAULT_GRANT)).toEqual(DEFAULT_GRANT);
   });
 });

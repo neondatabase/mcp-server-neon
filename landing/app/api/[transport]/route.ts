@@ -33,7 +33,6 @@ import type { ServerContext, AppContext } from '../../../mcp-src/types/context';
 import {
   resolveGrantFromSearchParams,
   resolveGrantFromToken,
-  mergeGrant,
   DEFAULT_GRANT,
   type GrantContext,
 } from '../../../mcp-src/utils/grant-context';
@@ -619,7 +618,6 @@ const verifyToken = async (
 
   const searchParams = url.searchParams;
   const readOnlyQueryParam = searchParams.get('readonly');
-  const urlGrant = resolveGrantFromSearchParams(searchParams);
 
   // ============================================
   // PATH 1: Check OAuth tokens table FIRST
@@ -636,7 +634,6 @@ const verifyToken = async (
       const tokenGrant = resolveGrantFromToken(
         token as { grant?: GrantContext },
       );
-      const effectiveGrant = mergeGrant(urlGrant, tokenGrant);
 
       const readOnly = isReadOnly({
         queryParamValue: readOnlyQueryParam,
@@ -662,7 +659,7 @@ const verifyToken = async (
           },
           apiKey: bearerToken,
           readOnly,
-          grant: effectiveGrant,
+          grant: tokenGrant,
           client: {
             id: token.client.id,
             name: token.client.client_name,
@@ -693,6 +690,7 @@ const verifyToken = async (
     queryParamValue: readOnlyQueryParam,
     headerValue: readOnlyHeader,
   });
+  const urlGrant = resolveGrantFromSearchParams(searchParams);
 
   return {
     token: bearerToken,
