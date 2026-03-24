@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { GET } from '../../app/api/authorize/route';
 import { model } from '../oauth/model';
 import { isClientAlreadyApproved } from '../../lib/oauth/cookies';
+import { upstreamAuth } from '../../lib/oauth/client';
 
 vi.mock('../oauth/model', () => ({
   model: {
@@ -14,6 +15,10 @@ vi.mock('../oauth/model', () => ({
 vi.mock('../../lib/oauth/cookies', () => ({
   isClientAlreadyApproved: vi.fn(),
   updateApprovedClientsCookie: vi.fn(),
+}));
+
+vi.mock('../../lib/oauth/client', () => ({
+  upstreamAuth: vi.fn(async () => new URL('https://oauth.example/authorize')),
 }));
 
 const VALID_CLIENT = {
@@ -149,5 +154,18 @@ describe('/api/authorize route integration', () => {
       error: 'invalid_target',
       error_description: 'Invalid resource parameter',
     });
+  });
+
+  it('forwards resource parameter to upstream OAuth when client is pre-approved', async () => {
+    const resource =
+      'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying';
+    vi.mocked(isClientAlreadyApproved).mockResolvedValue(true);
+
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+
+    expect(response.status).toBe(307);
+    expect(upstreamAuth).toHaveBeenCalledWith(expect.any(String), resource);
   });
 });

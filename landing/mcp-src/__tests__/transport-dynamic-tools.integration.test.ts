@@ -249,4 +249,43 @@ describe('transport dynamic tool composition', () => {
     // OAuth must only use the grant persisted from authorize/token flow.
     expect(runSqlSpy).toHaveBeenCalledTimes(0);
   });
+
+  it('ignores runtime readonly query param for OAuth tokens', async () => {
+    const readOnlyToken = 'oauth-readonly-with-query';
+
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(readOnlyToken, 'read') as never,
+    );
+
+    await mcpCall(
+      readOnlyToken,
+      'initialize',
+      20,
+      {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: 'test-client', version: '1.0.0' },
+      },
+      '?readonly=false',
+    );
+
+    const list = await mcpCall(
+      readOnlyToken,
+      'tools/list',
+      21,
+      {},
+      '?readonly=false',
+    );
+    expect(list.status).toBe(200);
+
+    const listBody = list.body as {
+      error?: unknown;
+      result: { tools: Array<{ name: string }> };
+    };
+    expect(listBody.error).toBeUndefined();
+
+    const toolNames = new Set(listBody.result.tools.map((t) => t.name));
+    // If readonly query params overrode OAuth scopes, this would appear.
+    expect(toolNames.has('create_project')).toBe(false);
+  });
 });

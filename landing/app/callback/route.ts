@@ -49,10 +49,13 @@ export async function GET(request: NextRequest) {
     const currentUrl = new URL(request.url);
     currentUrl.protocol = 'https:'; // Force HTTPS for production
 
-    // Exchange the upstream authorization code for tokens
-    const tokens = await exchangeCode(currentUrl, state);
-
     const requestParams = decodeAuthParams(state);
+    // Exchange the upstream authorization code for tokens
+    const tokens = await exchangeCode(
+      currentUrl,
+      state,
+      requestParams.resource,
+    );
 
     const clientId = requestParams.clientId;
     const client = await model.getClient(clientId, '');

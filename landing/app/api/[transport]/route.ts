@@ -636,7 +636,6 @@ const verifyToken = async (
       );
 
       const readOnly = isReadOnly({
-        queryParamValue: readOnlyQueryParam,
         scope: token.scope,
       });
 

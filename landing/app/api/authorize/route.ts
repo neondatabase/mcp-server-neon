@@ -510,7 +510,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (await isClientAlreadyApproved(client.id, COOKIE_SECRET)) {
-      const authUrl = await upstreamAuth(btoa(JSON.stringify(requestParams)));
+      const authUrl = await upstreamAuth(
+        btoa(JSON.stringify(requestParams)),
+        requestParams.resource,
+      );
       return NextResponse.redirect(authUrl.href);
     }
 
@@ -564,7 +567,7 @@ export async function POST(request: NextRequest) {
 
     // Re-encode state with updated scopes
     const updatedState = btoa(JSON.stringify(requestParams));
-    const authUrl = await upstreamAuth(updatedState);
+    const authUrl = await upstreamAuth(updatedState, requestParams.resource);
     return NextResponse.redirect(authUrl.href);
   } catch (error: unknown) {
     return handleOAuthError(error, 'Authorization error');
