@@ -42,6 +42,7 @@ import {
   injectProjectId,
 } from '../../../mcp-src/tools/grant-filter';
 import { assert } from '../../../lib/assert';
+import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
 
 type AuthenticatedExtra = {
   authInfo?: AuthInfo & {
@@ -741,6 +742,44 @@ const authHandler = withMcpAuth(
   },
 );
 
+function rewriteResourceMetadataHeader(
+  response: Response,
+  requestUrl: URL,
+): Response {
+  if (response.status !== 401) {
+    return response;
+  }
+
+  const wwwAuthenticate = response.headers.get('WWW-Authenticate');
+  if (!wwwAuthenticate) {
+    return response;
+  }
+
+  const resourceMetadataUrl = buildResourceMetadataUrlForResourceRequest(
+    requestUrl.toString(),
+  );
+
+  const updatedHeader = /resource_metadata="[^"]*"/.test(wwwAuthenticate)
+    ? wwwAuthenticate.replace(
+        /resource_metadata="[^"]*"/,
+        `resource_metadata="${resourceMetadataUrl}"`,
+      )
+    : `${wwwAuthenticate}, resource_metadata="${resourceMetadataUrl}"`;
+
+  if (updatedHeader === wwwAuthenticate) {
+    return response;
+  }
+
+  const headers = new Headers(response.headers);
+  headers.set('WWW-Authenticate', updatedHeader);
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 // Normalize legacy paths (/mcp, /sse) to canonical /api/* paths
 // for mcp-handler's exact pathname matching.
 //
@@ -749,6 +788,7 @@ const authHandler = withMcpAuth(
 // requests to /mcp would get 404 after OAuth (before auth, withMcpAuth
 // returns 401 before pathname matching happens).
 const handleRequest = (req: Request) => {
+  const originalUrl = new URL(req.url);
   const url = new URL(req.url);
 
   if (url.pathname === '/mcp') {
@@ -765,7 +805,13 @@ const handleRequest = (req: Request) => {
     duplex: 'half',
   });
 
-  return authHandler(normalizedReq);
+  const response = authHandler(normalizedReq);
+  if (response instanceof Promise) {
+    return response.then((resolved) =>
+      rewriteResourceMetadataHeader(resolved, originalUrl),
+    );
+  }
+  return rewriteResourceMetadataHeader(response, originalUrl);
 };
 
 export { handleRequest as GET, handleRequest as POST, handleRequest as DELETE };

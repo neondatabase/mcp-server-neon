@@ -36,8 +36,23 @@ test.describe('Smoke tests', () => {
     expect(response.status()).toBe(200);
 
     const body = await response.json();
-    expect(body.resource).toBeDefined();
-    expect(body.authorization_servers).toBeDefined();
+    expect(body.resource).toMatch(/^https:\/\//);
+    expect(body.resource).not.toContain('/mcp');
+    expect(body.authorization_servers).toEqual([new URL(body.resource).origin]);
+  });
+
+  test('GET path-derived protected resource metadata keeps exact path+query identity', async ({
+    request,
+  }) => {
+    const response = await request.get(
+      '/.well-known/oauth-protected-resource/mcp?readonly=true',
+    );
+    expect(response.status()).toBe(200);
+
+    const body = await response.json();
+    expect(body.resource).toMatch(/^https:\/\//);
+    expect(body.resource.endsWith('/mcp?readonly=true')).toBeTruthy();
+    expect(body.authorization_servers).toEqual([new URL(body.resource).origin]);
   });
 
   test('/ redirects to Neon docs', async ({ request }) => {

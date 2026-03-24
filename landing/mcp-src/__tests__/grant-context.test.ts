@@ -166,6 +166,12 @@ describe('resolveGrantFromResourceUri', () => {
     ).toThrow();
   });
 
+  it('throws when resource URI is not https', () => {
+    expect(() =>
+      resolveGrantFromResourceUri('http://mcp.neon.tech/mcp?category=querying'),
+    ).toThrow('OAuth resource URI must use HTTPS');
+  });
+
   it('ignores non-grant query params in resource URI', () => {
     expect(
       resolveGrantFromResourceUri(

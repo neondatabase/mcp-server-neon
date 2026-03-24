@@ -1,3 +1,5 @@
+import { parseResourceIdentifier } from '../../lib/oauth/protected-resource-metadata';
+
 /**
  * Grant context for fine-grained tool access control.
  *
@@ -100,10 +102,7 @@ export function resolveGrantFromResourceUri(
     return { ...DEFAULT_GRANT };
   }
 
-  const resourceUrl = new URL(resource);
-  if (resourceUrl.hash) {
-    throw new Error('OAuth resource URI must not include a fragment');
-  }
+  const resourceUrl = parseResourceIdentifier(resource);
 
   return resolveGrantFromSearchParams(resourceUrl.searchParams);
 }

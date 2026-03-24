@@ -126,6 +126,22 @@ describe('/callback route integration', () => {
     expect(model.saveAuthorizationCode).not.toHaveBeenCalled();
   });
 
+  it('returns invalid_target when resource URI is not https and KV context missing', async () => {
+    const state = buildState({
+      resource: 'http://mcp.neon.tech/mcp?projectId=proj-123',
+    });
+    vi.mocked(model.getClientAuthContext).mockResolvedValue(undefined);
+
+    const response = await GET(buildRequest(state));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_target',
+      error_description: 'Invalid resource parameter',
+    });
+    expect(model.saveAuthorizationCode).not.toHaveBeenCalled();
+  });
+
   it('stores default grant when resource URI is omitted', async () => {
     const state = buildState();
     vi.mocked(model.getClientAuthContext).mockResolvedValue(undefined);

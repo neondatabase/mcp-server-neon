@@ -125,6 +125,19 @@ describe('/api/authorize route integration', () => {
     expect(writeCheckbox).not.toContain('checked');
   });
 
+  it('defaults Full access to unchecked when readonly=true is passed via resource query', async () => {
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', {
+        resource: 'https://mcp.neon.tech/mcp?readonly=true',
+      }),
+    );
+    const html = await response.text();
+    const writeCheckbox = extractWriteCheckbox(html);
+
+    expect(response.status).toBe(200);
+    expect(writeCheckbox).not.toContain('checked');
+  });
+
   it('defaults Full access to unchecked from saved register x-read-only header', async () => {
     vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
       headers: {
@@ -186,6 +199,20 @@ describe('/api/authorize route integration', () => {
     const response = await GET(
       buildAuthorizeRequest({}, 'read write', {
         resource: '/mcp?category=schema',
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_target',
+      error_description: 'Invalid resource parameter',
+    });
+  });
+
+  it('returns invalid_target when resource parameter is not https', async () => {
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', {
+        resource: 'http://mcp.neon.tech/mcp?category=schema',
       }),
     );
 
