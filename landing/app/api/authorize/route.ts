@@ -16,7 +16,11 @@ import {
 } from '../../../mcp-src/utils/read-only';
 import { logger } from '../../../mcp-src/utils/logger';
 import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
-import { resolveGrantFromResourceUri } from '../../../mcp-src/utils/grant-context';
+import {
+  DEFAULT_GRANT,
+  resolveGrantFromResourceUri,
+  type GrantContext,
+} from '../../../mcp-src/utils/grant-context';
 
 export type DownstreamAuthRequest = {
   responseType: string;
@@ -27,6 +31,16 @@ export type DownstreamAuthRequest = {
   resource?: string;
   codeChallenge?: string;
   codeChallengeMethod?: string;
+};
+
+const resolveQueryParamReadOnlyFromResource = (
+  resource: string | undefined,
+): string | null => {
+  if (!resource) {
+    return null;
+  }
+
+  return new URL(resource).searchParams.get('readonly');
 };
 
 const parseAuthRequest = (
@@ -431,9 +445,14 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const requestParams = parseAuthRequest(searchParams);
-    // Validate resource URI early so malformed values fail at authorize time.
+    // Parse resource URI early so malformed values fail at authorize time.
+    let resourceGrant: GrantContext = { ...DEFAULT_GRANT };
+    let resourceReadOnlyQueryParam: string | null = null;
     try {
-      resolveGrantFromResourceUri(requestParams.resource);
+      resourceGrant = resolveGrantFromResourceUri(requestParams.resource);
+      resourceReadOnlyQueryParam = resolveQueryParamReadOnlyFromResource(
+        requestParams.resource,
+      );
     } catch {
       return NextResponse.json(
         {
@@ -458,9 +477,17 @@ export async function GET(request: NextRequest) {
     const savedHeaders = savedRegisterHeaders?.headers ?? {};
 
     const defaultReadOnly = isReadOnly({
+      queryParamValue: resourceReadOnlyQueryParam,
       headerValue:
         request.headers.get('x-read-only') ?? savedHeaders['x-read-only'],
     });
+    const requestedScopes =
+      requestParams.scope.length > 0 ? requestParams.scope : ['read', 'write'];
+    const effectiveScopes = defaultReadOnly
+      ? ['read']
+      : hasWriteScope(requestedScopes)
+        ? ['read', 'write']
+        : ['read'];
 
     if (!client) {
       logger.warn('Client not found', { clientId });
@@ -509,18 +536,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    await model.saveClientAuthContext(clientId, {
+      grant: resourceGrant,
+      scope: effectiveScopes,
+      readOnly: !hasWriteScope(effectiveScopes),
+    });
+
     if (await isClientAlreadyApproved(client.id, COOKIE_SECRET)) {
-      const authUrl = await upstreamAuth(
-        btoa(JSON.stringify(requestParams)),
-        requestParams.resource,
-      );
+      requestParams.scope = effectiveScopes;
+      const authUrl = await upstreamAuth(btoa(JSON.stringify(requestParams)));
       return NextResponse.redirect(authUrl.href);
     }
 
     return renderApprovalDialog(
       client,
       btoa(JSON.stringify(requestParams)),
-      requestParams.scope,
+      effectiveScopes,
       defaultReadOnly,
     );
   } catch (error: unknown) {
@@ -562,12 +593,20 @@ export async function POST(request: NextRequest) {
 
     // Update scopes with user selection
     requestParams.scope = validScopes;
+    const grant = requestParams.resource
+      ? resolveGrantFromResourceUri(requestParams.resource)
+      : { ...DEFAULT_GRANT };
+    await model.saveClientAuthContext(requestParams.clientId, {
+      grant,
+      scope: validScopes,
+      readOnly: !hasWriteScope(validScopes),
+    });
 
     await updateApprovedClientsCookie(requestParams.clientId, COOKIE_SECRET);
 
     // Re-encode state with updated scopes
     const updatedState = btoa(JSON.stringify(requestParams));
-    const authUrl = await upstreamAuth(updatedState, requestParams.resource);
+    const authUrl = await upstreamAuth(updatedState);
     return NextResponse.redirect(authUrl.href);
   } catch (error: unknown) {
     return handleOAuthError(error, 'Authorization error');

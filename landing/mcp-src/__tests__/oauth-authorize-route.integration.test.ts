@@ -9,6 +9,7 @@ vi.mock('../oauth/model', () => ({
   model: {
     getClient: vi.fn(),
     getClientRegisterHeaders: vi.fn(),
+    saveClientAuthContext: vi.fn(),
   },
 }));
 
@@ -79,6 +80,13 @@ describe('/api/authorize route integration', () => {
       VALID_CLIENT as unknown as Awaited<ReturnType<typeof model.getClient>>,
     );
     vi.mocked(model.getClientRegisterHeaders).mockResolvedValue(undefined);
+    vi.mocked(model.saveClientAuthContext).mockResolvedValue({
+      grant: { projectId: null, scopes: null },
+      scope: ['read', 'write'],
+      readOnly: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as never);
     vi.mocked(isClientAlreadyApproved).mockResolvedValue(false);
   });
 
@@ -142,6 +150,25 @@ describe('/api/authorize route integration', () => {
     expect(state).toHaveProperty('resource', resource);
   });
 
+  it('persists parsed resource grant context in client auth context KV', async () => {
+    const resource =
+      'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying,schema';
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(model.saveClientAuthContext)).toHaveBeenCalledWith(
+      VALID_CLIENT.id,
+      expect.objectContaining({
+        grant: {
+          projectId: 'proj-123',
+          scopes: ['querying', 'schema'],
+        },
+      }),
+    );
+  });
+
   it('returns invalid_target when resource parameter is malformed', async () => {
     const response = await GET(
       buildAuthorizeRequest({}, 'read write', {
@@ -156,7 +183,7 @@ describe('/api/authorize route integration', () => {
     });
   });
 
-  it('forwards resource parameter to upstream OAuth when client is pre-approved', async () => {
+  it('does not forward resource parameter to upstream OAuth when client is pre-approved', async () => {
     const resource =
       'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying';
     vi.mocked(isClientAlreadyApproved).mockResolvedValue(true);
@@ -166,6 +193,6 @@ describe('/api/authorize route integration', () => {
     );
 
     expect(response.status).toBe(307);
-    expect(upstreamAuth).toHaveBeenCalledWith(expect.any(String), resource);
+    expect(upstreamAuth).toHaveBeenCalledWith(expect.any(String));
   });
 });

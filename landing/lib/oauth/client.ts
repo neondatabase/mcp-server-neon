@@ -59,41 +59,23 @@ const getUpstreamConfig = async (): Promise<Configuration> => {
   return cachedConfig;
 };
 
-export const upstreamAuth = async (state: string, resource?: string) => {
+export const upstreamAuth = async (state: string) => {
   const config = await getUpstreamConfig();
-  const params: Record<string, string> = {
+  return buildAuthorizationUrl(config, {
     redirect_uri: REDIRECT_URI,
     token_endpoint_auth_method: 'client_secret_post',
     scope: NEON_MCP_SCOPES.join(' '),
     response_type: 'code',
     state,
-  };
-
-  if (resource) {
-    params.resource = resource;
-  }
-
-  return buildAuthorizationUrl(config, params);
+  });
 };
 
-export const exchangeCode = async (
-  currentUrl: URL,
-  state: string,
-  resource?: string,
-) => {
+export const exchangeCode = async (currentUrl: URL, state: string) => {
   const config = await getUpstreamConfig();
-  const checks = {
+  return await authorizationCodeGrant(config, currentUrl, {
     expectedState: state,
     idTokenExpected: true,
-  };
-
-  if (resource) {
-    return await authorizationCodeGrant(config, currentUrl, checks, {
-      resource,
-    });
-  }
-
-  return await authorizationCodeGrant(config, currentUrl, checks);
+  });
 };
 
 export const exchangeRefreshToken = async (token: string) => {

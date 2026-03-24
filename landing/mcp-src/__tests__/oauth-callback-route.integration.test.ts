@@ -8,6 +8,8 @@ import { resolveAccountFromAuth } from '../server/account';
 vi.mock('../oauth/model', () => ({
   model: {
     getClient: vi.fn(),
+    getClientAuthContext: vi.fn(),
+    deleteClientAuthContext: vi.fn(),
     saveAuthorizationCode: vi.fn(),
   },
 }));
@@ -71,19 +73,35 @@ describe('/callback route integration', () => {
       email: 'user@example.com',
       isOrg: false,
     } as never);
+    vi.mocked(model.getClientAuthContext).mockResolvedValue({
+      grant: { projectId: null, scopes: null },
+      scope: ['read', 'write'],
+      readOnly: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as never);
+    vi.mocked(model.deleteClientAuthContext).mockResolvedValue(true);
   });
 
-  it('persists grant resolved from OAuth resource URI and forwards resource to token exchange', async () => {
+  it('uses persisted client auth context grant and scope from KV', async () => {
     const resource =
       'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying,schema';
     const state = buildState({ resource });
+    vi.mocked(model.getClientAuthContext).mockResolvedValue({
+      grant: { projectId: 'proj-123', scopes: ['querying', 'schema'] },
+      scope: ['read'],
+      readOnly: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as never);
 
     const response = await GET(buildRequest(state));
 
     expect(response.status).toBe(307);
-    expect(exchangeCode).toHaveBeenCalledWith(expect.any(URL), state, resource);
+    expect(exchangeCode).toHaveBeenCalledWith(expect.any(URL), state);
     expect(model.saveAuthorizationCode).toHaveBeenCalledWith(
       expect.objectContaining({
+        scope: 'read',
         grant: {
           projectId: 'proj-123',
           scopes: ['querying', 'schema'],
@@ -92,10 +110,11 @@ describe('/callback route integration', () => {
     );
   });
 
-  it('returns invalid_target when resource URI is malformed', async () => {
+  it('returns invalid_target when resource URI is malformed and KV context missing', async () => {
     const state = buildState({
       resource: '/mcp?projectId=proj-123',
     });
+    vi.mocked(model.getClientAuthContext).mockResolvedValue(undefined);
 
     const response = await GET(buildRequest(state));
 
@@ -109,6 +128,7 @@ describe('/callback route integration', () => {
 
   it('stores default grant when resource URI is omitted', async () => {
     const state = buildState();
+    vi.mocked(model.getClientAuthContext).mockResolvedValue(undefined);
 
     const response = await GET(buildRequest(state));
 

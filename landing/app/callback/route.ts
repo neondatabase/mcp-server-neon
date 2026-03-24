@@ -7,6 +7,7 @@ import { resolveAccountFromAuth } from '../../mcp-src/server/account';
 import { handleOAuthError } from '../../lib/errors';
 import type { AuthorizationCode } from 'oauth2-server';
 import {
+  DEFAULT_GRANT,
   resolveGrantFromResourceUri,
   type GrantContext,
 } from '../../mcp-src/utils/grant-context';
@@ -51,11 +52,7 @@ export async function GET(request: NextRequest) {
 
     const requestParams = decodeAuthParams(state);
     // Exchange the upstream authorization code for tokens
-    const tokens = await exchangeCode(
-      currentUrl,
-      state,
-      requestParams.resource,
-    );
+    const tokens = await exchangeCode(currentUrl, state);
 
     const clientId = requestParams.clientId;
     const client = await model.getClient(clientId, '');
@@ -82,19 +79,28 @@ export async function GET(request: NextRequest) {
     // Resolve account info (no identify here - happens in token exchange)
     const userInfo = await resolveAccountFromAuth(auth, neonClient);
 
-    // Persist grant context resolved from OAuth resource URI at authorize time.
-    let grant: GrantContext;
-    try {
-      grant = resolveGrantFromResourceUri(requestParams.resource);
-    } catch {
-      return NextResponse.json(
-        {
-          error: 'invalid_target',
-          error_description: 'Invalid resource parameter',
-        },
-        { status: 400 },
-      );
+    const storedContext = await model.getClientAuthContext(clientId);
+
+    // Source of truth is KV context written during /authorize.
+    // Keep state-derived values only as a fallback for backward compatibility.
+    let grant: GrantContext = storedContext?.grant ?? { ...DEFAULT_GRANT };
+    if (!storedContext && requestParams.resource) {
+      try {
+        grant = resolveGrantFromResourceUri(requestParams.resource);
+      } catch {
+        return NextResponse.json(
+          {
+            error: 'invalid_target',
+            error_description: 'Invalid resource parameter',
+          },
+          { status: 400 },
+        );
+      }
     }
+    const finalScopes =
+      storedContext?.scope && storedContext.scope.length > 0
+        ? storedContext.scope
+        : requestParams.scope;
 
     // Save the authorization code with associated data
     const authCodeData: AuthorizationCode = {
@@ -102,7 +108,7 @@ export async function GET(request: NextRequest) {
       expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
       createdAt: Date.now(),
       redirectUri: requestParams.redirectUri,
-      scope: requestParams.scope.join(' '),
+      scope: finalScopes.join(' '),
       client: client,
       user: userInfo,
       token: {
@@ -117,6 +123,7 @@ export async function GET(request: NextRequest) {
     };
 
     await model.saveAuthorizationCode(authCodeData);
+    await model.deleteClientAuthContext(clientId);
 
     // Redirect back to client with auth code
     const redirectUrl = new URL(requestParams.redirectUri);

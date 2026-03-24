@@ -4,6 +4,7 @@ import type { AuthorizationCode, Client, Token } from 'oauth2-server';
 import Keyv from 'keyv';
 import { AuthContext } from '../types/auth';
 import { AuthDetailsResponse } from '@neondatabase/api-client';
+import type { GrantContext } from '../utils/grant-context';
 
 const SCHEMA = 'mcpauth';
 
@@ -65,3 +66,16 @@ export type ApiKeyRecord = {
 };
 
 export const getApiKeys = createLazyKeyv<ApiKeyRecord>('api_keys', 'API keys');
+
+export type ClientAuthContextRecord = {
+  grant: GrantContext;
+  scope: string[];
+  readOnly: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export const getClientAuthContexts = createLazyKeyv<ClientAuthContextRecord>(
+  'client_auth_contexts',
+  'Client auth contexts',
+);
