@@ -112,6 +112,19 @@ describe('/api/authorize route integration', () => {
     expect(writeCheckbox).not.toContain('checked');
   });
 
+  it('defaults Full access to unchecked when readonly query param is true', async () => {
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', {
+        readonly: 'true',
+      }),
+    );
+    const html = await response.text();
+    const writeCheckbox = extractWriteCheckbox(html);
+
+    expect(response.status).toBe(200);
+    expect(writeCheckbox).not.toContain('checked');
+  });
+
   it('defaults Full access to unchecked from saved register x-read-only header', async () => {
     vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
       headers: {

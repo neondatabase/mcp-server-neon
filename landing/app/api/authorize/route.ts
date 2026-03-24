@@ -33,13 +33,17 @@ export type DownstreamAuthRequest = {
   codeChallengeMethod?: string;
 };
 
-const resolveQueryParamReadOnlyFromResource = (
+const resolveQueryParamReadOnly = (
+  searchParams: URLSearchParams,
   resource: string | undefined,
 ): string | null => {
+  const directReadOnly = searchParams.get('readonly');
+  if (directReadOnly !== null) {
+    return directReadOnly;
+  }
   if (!resource) {
     return null;
   }
-
   return new URL(resource).searchParams.get('readonly');
 };
 
@@ -450,7 +454,8 @@ export async function GET(request: NextRequest) {
     let resourceReadOnlyQueryParam: string | null = null;
     try {
       resourceGrant = resolveGrantFromResourceUri(requestParams.resource);
-      resourceReadOnlyQueryParam = resolveQueryParamReadOnlyFromResource(
+      resourceReadOnlyQueryParam = resolveQueryParamReadOnly(
+        searchParams,
         requestParams.resource,
       );
     } catch {
