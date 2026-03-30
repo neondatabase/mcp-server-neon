@@ -386,3 +386,5 @@ Testing strategy:
 ## Deployment
 
 Vercel deploys the remote server automatically from the repository branch configuration. Preview environments are available for pull requests.
+
+A hosted deployment is also available on [Fronteir AI](https://fronteir.ai/mcp/neondatabase-mcp-server-neon).
