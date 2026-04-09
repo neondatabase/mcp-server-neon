@@ -2,13 +2,7 @@ name: Claude Code Review
 
 on:
   pull_request:
-    types: [opened] # Only run when PR is first created, not on every commit
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    types: [opened]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -22,8 +16,6 @@ concurrency:
 
 jobs:
   claude-review:
-    # For automatic runs: only allow members/collaborators/owners
-    # For manual runs: always allow (since only repo members can trigger workflows)
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
@@ -37,18 +29,17 @@ jobs:
       contents: read
       pull-requests: write
       issues: read
-      id-token: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 1
           ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/head', github.event.inputs.pr_number) || '' }}
 
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@0ee1beea589a67d33340072691a5d42abec7ae6b # v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -166,6 +157,4 @@ jobs:
             - **Be project-aware**: Use CLAUDE.md patterns and terminology
             - **Don't duplicate**: Skip issues automated tools will catch
 
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://docs.claude.com/en/docs/claude-code/cli-reference for available options
           claude_args: '--allowed-tools "Bash(gh:*)"'
