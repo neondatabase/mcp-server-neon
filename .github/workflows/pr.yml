@@ -33,8 +33,8 @@ jobs:
           echo "//databricks.jfrog.io/artifactory/api/npm/db-npm/:_authToken=${{ steps.setup-jfrog.outputs.oidc-token }}" >> .npmrc
       - name: Debug TLS and registry
         run: |
-          echo "=== .npmrc ==="
-          cat .npmrc
+          echo "=== .npmrc (landing/) ==="
+          cat landing/.npmrc || echo "NOT FOUND"
           echo ""
           echo "=== CA cert file exists? ==="
           ls -la /etc/ssl/certs/ca-certificates.crt 2>&1 || echo "NOT FOUND"
