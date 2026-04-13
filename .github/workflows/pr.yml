@@ -70,7 +70,7 @@ jobs:
         env:
           BUN_CONFIG_REGISTRY: https://databricks.jfrog.io/artifactory/api/npm/db-npm/
           NODE_EXTRA_CA_CERTS: /etc/ssl/certs/ca-certificates.crt
-        run: bun install --frozen-lockfile
+        run: bun install
       - name: Validate server.json version sync
         run: |
           node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const server=JSON.parse(fs.readFileSync('../server.json','utf8')); if (pkg.version !== server.version) { console.error('Version mismatch: landing/package.json=' + pkg.version + ' server.json=' + server.version); process.exit(1); }"
