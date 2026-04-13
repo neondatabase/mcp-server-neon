@@ -31,7 +31,6 @@ jobs:
         run: |
           echo "registry=https://databricks.jfrog.io/artifactory/api/npm/db-npm/" >> .npmrc
           echo "//databricks.jfrog.io/artifactory/api/npm/db-npm/:_authToken=${{ steps.setup-jfrog.outputs.oidc-token }}" >> .npmrc
-        working-directory: .
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
