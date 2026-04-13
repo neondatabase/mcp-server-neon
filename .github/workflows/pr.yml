@@ -36,20 +36,14 @@ jobs:
           echo "=== .npmrc (landing/) ==="
           cat landing/.npmrc || echo "NOT FOUND"
           echo ""
-          echo "=== CA cert file exists? ==="
-          ls -la /etc/ssl/certs/ca-certificates.crt 2>&1 || echo "NOT FOUND"
+          echo "=== JFrog manifest tarball URL check ==="
+          curl -s "https://databricks.jfrog.io/artifactory/api/npm/db-npm/zod/4.3.6" 2>&1 | grep -o '"tarball":"[^"]*"' | head -3 || echo "curl to JFrog manifest failed"
           echo ""
-          echo "=== Proxy env vars ==="
-          env | grep -i proxy || echo "no proxy vars"
+          echo "=== npm config get registry ==="
+          npm config get registry 2>&1 || true
           echo ""
-          echo "=== curl to npm registry ==="
-          curl -sI --connect-timeout 5 https://registry.npmjs.org/ 2>&1 | head -5 || echo "curl failed"
-          echo ""
-          echo "=== curl to JFrog ==="
-          curl -sI --connect-timeout 5 https://databricks.jfrog.io/ 2>&1 | head -5 || echo "curl failed"
-          echo ""
-          echo "=== curl verbose to npm (show TLS) ==="
-          curl -v --connect-timeout 5 https://registry.npmjs.org/ 2>&1 | grep -i "SSL\|certificate\|issuer\|subject\|verify" | head -10 || true
+          echo "=== bun env check ==="
+          echo "BUN_CONFIG_REGISTRY=$BUN_CONFIG_REGISTRY"
         working-directory: .
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
