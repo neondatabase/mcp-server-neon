@@ -12,6 +12,13 @@ fi
 
 REGISTRY=$(npm config get registry 2>/dev/null || echo "https://registry.npmjs.org/")
 
+if echo "$REGISTRY" | grep -q "registry.npmjs.org"; then
+  echo "Error: registry.npmjs.org is not reachable from this network." >&2
+  echo "Configure an npm registry proxy in your global ~/.npmrc:" >&2
+  echo '  registry=https://your-npm-proxy.example.com/' >&2
+  exit 1
+fi
+
 cat > bunfig.toml << EOF
 [install]
 registry = "$REGISTRY"
