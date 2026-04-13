@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
-# Generates bunfig.toml for bun to use the Databricks npm proxy.
-# Run once after cloning, or any time bunfig.toml is missing.
-#
+# Generates bunfig.toml so bun uses the same registry as npm.
+# Reads the registry from npm config (global ~/.npmrc or defaults).
 # CI runners generate their own bunfig.toml (see .github/workflows/pr.yml).
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if [ -f bunfig.toml ]; then
-  echo "bunfig.toml already exists, skipping."
   exit 0
 fi
 
-cat > bunfig.toml << 'EOF'
-[install]
-registry = "https://npm-proxy.dev.databricks.com/"
-EOF
+REGISTRY=$(npm config get registry 2>/dev/null || echo "https://registry.npmjs.org/")
 
-echo "Created bunfig.toml with Databricks npm proxy."
+cat > bunfig.toml << EOF
+[install]
+registry = "$REGISTRY"
+EOF
