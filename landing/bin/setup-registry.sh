@@ -23,9 +23,9 @@ if echo "$REGISTRY" | grep -q "registry.npmjs.org"; then
   echo "Error: bun install requires an npm registry proxy on this network." >&2
   echo "" >&2
   echo "Fix with one of:" >&2
-  echo "  1. Set for this project:  echo 'registry=https://your-proxy.example.com/' >> ~/.npmrc" >&2
-  echo "  2. Set for this session:  BUN_CONFIG_REGISTRY=https://your-proxy.example.com/ bun install" >&2
-  echo "  3. Create manually:      echo '[install]' > bunfig.toml && echo 'registry = \"https://your-proxy.example.com/\"' >> bunfig.toml" >&2
+  echo "  1. Set globally:      echo 'registry=https://your-proxy.example.com/' >> ~/.npmrc" >&2
+  echo "  2. Set for session:   BUN_CONFIG_REGISTRY=https://your-proxy.example.com/ bun install" >&2
+  echo "  3. Create manually:   echo '[install]' > bunfig.toml && echo 'registry = \"https://your-proxy.example.com/\"' >> bunfig.toml" >&2
   exit 1
 fi
 
