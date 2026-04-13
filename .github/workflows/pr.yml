@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   lint-and-build:
@@ -20,17 +19,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - name: Setup JFrog CLI with OIDC
-        id: setup-jfrog
-        uses: jfrog/setup-jfrog-cli@279b1f629f43dd5bc658d8361ac4802a7ef8d2d5 # v4.9.1
-        env:
-          JF_URL: https://databricks.jfrog.io
-        with:
-          oidc-provider-name: github-actions
-      - name: Configure npm registry for JFrog
-        run: |
-          printf 'save-exact=true\nregistry=https://databricks.jfrog.io/artifactory/api/npm/db-npm/\n' > .npmrc
-          echo "//databricks.jfrog.io/artifactory/api/npm/db-npm/:_authToken=${{ steps.setup-jfrog.outputs.oidc-token }}" >> .npmrc
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -48,12 +36,11 @@ jobs:
             bun-${{ runner.os }}-
       - name: Install dependencies
         run: |
-          printf '[install]\nregistry = "https://databricks.jfrog.io/artifactory/api/npm/db-npm/"\n' > bunfig.toml
           rm -f bun.lock
           bun install
       - name: Validate server.json version sync
         run: |
-          node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const server=JSON.parse(fs.readFileSync('../server.json','utf8')); if (pkg.version !== server.version) { console.error('Version mismatch: landing/package.json=' + pkg.version + ' server.json=' + server.version); process.exit(1); }"
+          node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const server=JSON.parse(fs.readFileSync('../server.json','utf8')); if (pkg.version !== server.version) { console.error('Version mismatch: landing/package.json=' + pkg.version + ' server.version=' + server.version); process.exit(1); }"
       - name: Format check
         run: bun run fmt:check
       - name: Lint
