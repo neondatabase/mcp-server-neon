@@ -8,6 +8,7 @@
   "bugs": "https://github.com/neondatabase/mcp-server-neon/issues",
   "type": "module",
   "scripts": {
+    "preinstall": "[ -f bunfig.toml ] || ./bin/setup-registry.sh",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
