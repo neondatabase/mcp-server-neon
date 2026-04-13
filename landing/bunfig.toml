@@ -1,2 +1,5 @@
 [install]
 registry = "https://npm-proxy.dev.databricks.com/"
+
+[install.scopes]
+"@neondatabase" = "https://npm-proxy.dev.databricks.com/"
