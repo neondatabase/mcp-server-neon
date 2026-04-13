@@ -51,6 +51,7 @@ jobs:
       - name: Install dependencies
         env:
           BUN_CONFIG_REGISTRY: https://databricks.jfrog.io/artifactory/api/npm/db-npm/
+          NODE_EXTRA_CA_CERTS: /etc/ssl/certs/ca-certificates.crt
         run: bun install --frozen-lockfile
       - name: Validate server.json version sync
         run: |
