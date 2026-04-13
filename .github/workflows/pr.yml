@@ -47,9 +47,8 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-
       - name: Install dependencies
-        env:
-          BUN_CONFIG_REGISTRY: https://databricks.jfrog.io/artifactory/api/npm/db-npm/
         run: |
+          printf '[install]\nregistry = "https://databricks.jfrog.io/artifactory/api/npm/db-npm/"\n' > bunfig.toml
           rm -f bun.lock
           bun install
       - name: Validate server.json version sync
