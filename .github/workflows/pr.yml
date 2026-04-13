@@ -29,7 +29,7 @@ jobs:
           oidc-provider-name: github-actions
       - name: Configure npm registry for JFrog
         run: |
-          printf '\nregistry=https://databricks.jfrog.io/artifactory/api/npm/db-npm/\n' >> .npmrc
+          printf 'save-exact=true\nregistry=https://databricks.jfrog.io/artifactory/api/npm/db-npm/\n' > .npmrc
           echo "//databricks.jfrog.io/artifactory/api/npm/db-npm/:_authToken=${{ steps.setup-jfrog.outputs.oidc-token }}" >> .npmrc
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
