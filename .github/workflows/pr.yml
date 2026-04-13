@@ -31,8 +31,26 @@ jobs:
         run: |
           printf '\nregistry=https://databricks.jfrog.io/artifactory/api/npm/db-npm/\n' >> .npmrc
           echo "//databricks.jfrog.io/artifactory/api/npm/db-npm/:_authToken=${{ steps.setup-jfrog.outputs.oidc-token }}" >> .npmrc
-      - name: Debug .npmrc
-        run: cat .npmrc
+      - name: Debug TLS and registry
+        run: |
+          echo "=== .npmrc ==="
+          cat .npmrc
+          echo ""
+          echo "=== CA cert file exists? ==="
+          ls -la /etc/ssl/certs/ca-certificates.crt 2>&1 || echo "NOT FOUND"
+          echo ""
+          echo "=== Proxy env vars ==="
+          env | grep -i proxy || echo "no proxy vars"
+          echo ""
+          echo "=== curl to npm registry ==="
+          curl -sI --connect-timeout 5 https://registry.npmjs.org/ 2>&1 | head -5 || echo "curl failed"
+          echo ""
+          echo "=== curl to JFrog ==="
+          curl -sI --connect-timeout 5 https://databricks.jfrog.io/ 2>&1 | head -5 || echo "curl failed"
+          echo ""
+          echo "=== curl verbose to npm (show TLS) ==="
+          curl -v --connect-timeout 5 https://registry.npmjs.org/ 2>&1 | grep -i "SSL\|certificate\|issuer\|subject\|verify" | head -10 || true
+        working-directory: .
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
