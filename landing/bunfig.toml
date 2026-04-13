@@ -1,0 +1,2 @@
+[install]
+registry = "https://npm-proxy.dev.databricks.com/"
