@@ -64,8 +64,8 @@ jobs:
 
             ## What's Already Automated (Don't Review)
 
-            - ❌ Lint errors → `bun run lint` (automated by pr.yml)
-            - ❌ Build failures → `bun run build` (automated by pr.yml)
+            - ❌ Lint errors → `pnpm run lint` (automated by pr.yml)
+            - ❌ Build failures → `pnpm run build` (automated by pr.yml)
             - ❌ Formatting issues → Automated
 
             ## Focus Your Review On (Significant Issues Only)
