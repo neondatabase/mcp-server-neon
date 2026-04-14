@@ -12,6 +12,8 @@ This is the **Neon MCP Server** - a Model Context Protocol server that bridges n
 
 All commands should be run from the `landing/` directory. The project uses [pnpm](https://pnpm.io) as the package manager, pinned via Corepack. Run `corepack enable` to activate it.
 
+> **Troubleshooting:** If `pnpm install` fails with registry or network errors, check whether your npm registry is configured to use the Databricks proxy. Set the registry in `~/.npmrc` or `landing/.npmrc`.
+
 ### Building and Running
 
 ```bash
