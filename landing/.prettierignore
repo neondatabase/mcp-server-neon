@@ -3,7 +3,7 @@ node_modules/
 dist/
 build/
 out/
-bun.lock
+pnpm-lock.yaml
 coverage/
 .vercel/
 patches/

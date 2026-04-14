@@ -58,4 +58,4 @@ jobs:
           additional_permissions: |
             actions: read
 
-          claude_args: '--allowed-tools "Read,Glob,Grep,Bash(gh:*),Bash(bun run:*),Bash(git diff:*),Bash(git log:*),Bash(git status)"'
+          claude_args: '--allowed-tools "Read,Glob,Grep,Bash(gh:*),Bash(pnpm:*),Bash(git diff:*),Bash(git log:*),Bash(git status)"'

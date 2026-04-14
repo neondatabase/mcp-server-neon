@@ -51,7 +51,7 @@ There are a few options for setting up the Neon MCP Server:
 - A [Neon account](https://console.neon.tech/signup).
 - **Node.js (>= v18.0.0):** Download from [nodejs.org](https://nodejs.org).
 
-For development, you'll also need [Bun](https://bun.sh) installed.
+For development, you'll need Node.js 22+ (pnpm is provided via Corepack — run `corepack enable` to activate it).
 
 ### Option 1. Quick Setup with API Key
 
@@ -305,7 +305,7 @@ The "Start" command accepts a migration and runs it in a new temporary branch. U
 
 # Development
 
-This project uses [Bun](https://bun.sh) as the package manager and runtime.
+This project uses [pnpm](https://pnpm.io) as the package manager, pinned via Corepack.
 
 ## Project Structure
 
@@ -313,21 +313,22 @@ The MCP server code lives in the `landing/` directory, which is a Next.js applic
 
 ```bash
 cd landing
-bun install
+corepack enable
+pnpm install
 ```
 
 ## Local Development
 
 ```bash
 # Start the Next.js dev server (for the remote MCP server)
-bun run dev
+pnpm run dev
 ```
 
 ## Linting and Type Checking
 
 ```bash
-bun run lint
-bun run typecheck
+pnpm run lint
+pnpm run typecheck
 ```
 
 ## Environment Variables
@@ -358,22 +359,22 @@ All tests run from `landing/`.
 cd landing
 
 # Unit tests
-bun run test:unit
+pnpm run test:unit
 
 # Integration tests
-bun run test:integration
+pnpm run test:integration
 
 # MCP protocol end-to-end tests (real MCP client/server tool calls)
-bun run test:e2e:mcp
+pnpm run test:e2e:mcp
 
 # Website end-to-end tests (Playwright; provisions/validates ephemeral DB first)
-bun run test:e2e:web
+pnpm run test:e2e:web
 
 # Full end-to-end suite
-bun run test:e2e
+pnpm run test:e2e
 
 # Full test pyramid (unit + integration + e2e; used in CI)
-bun run test
+pnpm run test
 ```
 
 Testing strategy:
