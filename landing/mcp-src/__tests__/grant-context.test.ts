@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  resolveGrantFromHeaders,
+  resolveGrantFromSearchParams,
+  resolveGrantFromResourceUri,
   resolveGrantFromToken,
   parseScopeCategories,
   DEFAULT_GRANT,
@@ -34,35 +35,85 @@ describe('parseScopeCategories', () => {
   });
 });
 
-describe('resolveGrantFromHeaders', () => {
-  function headers(map: Record<string, string>): Headers {
-    return new Headers(map);
+describe('resolveGrantFromSearchParams', () => {
+  function params(entries: Record<string, string | string[]>): URLSearchParams {
+    const sp = new URLSearchParams();
+    for (const [key, value] of Object.entries(entries)) {
+      if (Array.isArray(value)) {
+        for (const v of value) {
+          sp.append(key, v);
+        }
+      } else {
+        sp.set(key, value);
+      }
+    }
+    return sp;
   }
 
-  it('returns default grant when no headers are present', () => {
-    expect(resolveGrantFromHeaders(headers({}))).toEqual(DEFAULT_GRANT);
+  it('returns default grant when no params are present', () => {
+    expect(resolveGrantFromSearchParams(new URLSearchParams())).toEqual(
+      DEFAULT_GRANT,
+    );
   });
 
-  it('extracts project id and trims whitespace', () => {
+  it('extracts projectId and trims whitespace', () => {
     expect(
-      resolveGrantFromHeaders(headers({ 'x-neon-project-id': '  proj-123  ' })),
+      resolveGrantFromSearchParams(params({ projectId: '  proj-123  ' })),
     ).toEqual({
       projectId: 'proj-123',
       scopes: null,
     });
   });
 
-  it('uses parsed scopes when X-Neon-Scopes is provided', () => {
+  it('parses repeated category params', () => {
     expect(
-      resolveGrantFromHeaders(headers({ 'x-neon-scopes': 'schema,docs' })),
+      resolveGrantFromSearchParams(params({ category: ['schema', 'docs'] })),
     ).toEqual({
       projectId: null,
       scopes: ['schema', 'docs'],
     });
   });
 
-  it('treats empty X-Neon-Scopes as absent', () => {
-    expect(resolveGrantFromHeaders(headers({ 'x-neon-scopes': '' }))).toEqual(
+  it('parses comma-separated category param', () => {
+    expect(
+      resolveGrantFromSearchParams(params({ category: 'schema,docs' })),
+    ).toEqual({
+      projectId: null,
+      scopes: ['schema', 'docs'],
+    });
+  });
+
+  it('handles mixed repeated and comma-separated categories', () => {
+    expect(
+      resolveGrantFromSearchParams(
+        params({ category: ['schema,querying', 'docs'] }),
+      ),
+    ).toEqual({
+      projectId: null,
+      scopes: ['schema', 'querying', 'docs'],
+    });
+  });
+
+  it('filters invalid categories', () => {
+    expect(
+      resolveGrantFromSearchParams(params({ category: 'schema,invalid' })),
+    ).toEqual({
+      projectId: null,
+      scopes: ['schema'],
+    });
+  });
+
+  it('returns empty scopes array when all categories are invalid', () => {
+    expect(
+      resolveGrantFromSearchParams(params({ category: 'foo,bar' })),
+    ).toEqual({
+      projectId: null,
+      scopes: [],
+    });
+  });
+
+  it('treats empty category as absent', () => {
+    expect(resolveGrantFromSearchParams(params({ category: '' }))).toEqual(
       DEFAULT_GRANT,
     );
   });
@@ -82,6 +133,53 @@ describe('resolveGrantFromToken', () => {
     expect(resolveGrantFromToken({ grant: tokenGrant })).toEqual({
       projectId: 'proj-from-token',
       scopes: ['branches'],
+    });
+  });
+});
+
+describe('resolveGrantFromResourceUri', () => {
+  it('returns default grant when resource is absent', () => {
+    expect(resolveGrantFromResourceUri(undefined)).toEqual(DEFAULT_GRANT);
+    expect(resolveGrantFromResourceUri(null)).toEqual(DEFAULT_GRANT);
+  });
+
+  it('parses grant query params from resource URI', () => {
+    expect(
+      resolveGrantFromResourceUri(
+        'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying,schema',
+      ),
+    ).toEqual({
+      projectId: 'proj-123',
+      scopes: ['querying', 'schema'],
+    });
+  });
+
+  it('throws when resource URI includes a fragment', () => {
+    expect(() =>
+      resolveGrantFromResourceUri('https://mcp.neon.tech/mcp#fragment'),
+    ).toThrow('OAuth resource URI must not include a fragment');
+  });
+
+  it('throws when resource URI is not absolute', () => {
+    expect(() =>
+      resolveGrantFromResourceUri('/mcp?category=querying'),
+    ).toThrow();
+  });
+
+  it('throws when resource URI is not https', () => {
+    expect(() =>
+      resolveGrantFromResourceUri('http://mcp.neon.tech/mcp?category=querying'),
+    ).toThrow('OAuth resource URI must use HTTPS');
+  });
+
+  it('ignores non-grant query params in resource URI', () => {
+    expect(
+      resolveGrantFromResourceUri(
+        'https://mcp.neon.tech/mcp?readonly=true&foo=bar',
+      ),
+    ).toEqual({
+      projectId: null,
+      scopes: null,
     });
   });
 });

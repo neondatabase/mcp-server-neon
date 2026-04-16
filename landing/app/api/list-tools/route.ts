@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { resolveGrantFromHeaders } from '../../../mcp-src/utils/grant-context';
+import { resolveGrantFromSearchParams } from '../../../mcp-src/utils/grant-context';
 import { isReadOnly } from '../../../mcp-src/utils/read-only';
 import {
   getAvailableTools,
@@ -10,8 +10,7 @@ import { logger } from '../../../mcp-src/utils/logger';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers':
-    'X-Neon-Scopes, X-Neon-Project-Id, X-Neon-Read-Only, x-read-only',
+  'Access-Control-Allow-Headers': 'x-read-only',
 };
 
 /**
@@ -24,31 +23,28 @@ export function OPTIONS() {
 /**
  * GET /api/list-tools
  *
- * Returns the list of available MCP tools based on access-control headers.
+ * Returns the list of available MCP tools based on URL query params.
  * No authentication required — this is a stateless preview of tool visibility.
  *
- * Accepts the same X-Neon-* headers as the MCP server:
- *   - X-Neon-Scopes: comma-separated scope categories
- *   - X-Neon-Project-Id: scope to a single project
- *   - X-Neon-Read-Only / x-read-only: true | false
+ * Accepts URL query params:
+ *   - category: scope categories (repeated or comma-separated)
+ *   - projectId: scope to a single project
+ *   - readonly: true | false
+ *   - Also supports legacy x-read-only header
  */
 export function GET(req: Request) {
   let phase = 'resolve_grant';
   const startedAt = Date.now();
-  const requestHeaders = {
-    xNeonScopes: req.headers.get('x-neon-scopes'),
-    xNeonProjectId: req.headers.get('x-neon-project-id'),
-    xNeonReadOnly: req.headers.get('x-neon-read-only'),
-    xReadOnly: req.headers.get('x-read-only'),
-  };
+  const url = new URL(req.url);
+  const searchParams = url.searchParams;
 
   try {
-    const grant = resolveGrantFromHeaders(req.headers);
+    const grant = resolveGrantFromSearchParams(searchParams);
 
     phase = 'resolve_read_only';
     const readOnly = isReadOnly({
-      neonHeaderValue: requestHeaders.xNeonReadOnly,
-      headerValue: requestHeaders.xReadOnly,
+      queryParamValue: searchParams.get('readonly'),
+      headerValue: req.headers.get('x-read-only'),
     });
 
     phase = 'get_available_tools';
@@ -78,7 +74,6 @@ export function GET(req: Request) {
     logger.error('list_tools_request_failed', {
       phase,
       durationMs,
-      requestHeaders,
       errorName: err.name,
       errorMessage: err.message,
       errorStack: err.stack,

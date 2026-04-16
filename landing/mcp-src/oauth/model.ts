@@ -12,7 +12,9 @@ import {
   getRefreshResults,
   getAuthorizationCodes,
   getClientRegisterHeaders,
+  getClientAuthContexts,
   ClientRegisterHeadersRecord,
+  ClientAuthContextRecord,
   RefreshToken,
   RefreshResult,
 } from './kv-store';
@@ -43,6 +45,30 @@ class Model implements AuthorizationCodeModel {
     clientId: string,
   ) => Promise<ClientRegisterHeadersRecord | undefined> = async (clientId) => {
     return getClientRegisterHeaders().get(clientId);
+  };
+  saveClientAuthContext: (
+    clientId: string,
+    context: Omit<ClientAuthContextRecord, 'createdAt' | 'updatedAt'>,
+  ) => Promise<ClientAuthContextRecord> = async (clientId, context) => {
+    const existing = await getClientAuthContexts().get(clientId);
+    const now = Date.now();
+    const record: ClientAuthContextRecord = {
+      ...context,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    await getClientAuthContexts().set(clientId, record);
+    return record;
+  };
+  getClientAuthContext: (
+    clientId: string,
+  ) => Promise<ClientAuthContextRecord | undefined> = async (clientId) => {
+    return getClientAuthContexts().get(clientId);
+  };
+  deleteClientAuthContext: (clientId: string) => Promise<boolean> = async (
+    clientId,
+  ) => {
+    return getClientAuthContexts().delete(clientId);
   };
   saveToken: (token: Token) => Promise<Token> = async (token) => {
     await getTokens().set(token.accessToken, token);

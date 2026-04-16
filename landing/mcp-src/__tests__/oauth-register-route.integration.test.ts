@@ -47,8 +47,7 @@ describe('/api/register route integration', () => {
   it('returns a valid response and stores register headers for a valid request', async () => {
     const response = await POST(
       buildRequest(VALID_PAYLOAD, {
-        'X-Neon-Read-Only': 'true',
-        'x-read-only': 'false',
+        'x-read-only': 'true',
       }),
     );
     const body = (await response.json()) as {
@@ -66,8 +65,7 @@ describe('/api/register route integration', () => {
     expect(vi.mocked(model.saveClientRegisterHeaders)).toHaveBeenCalledWith(
       body.client_id,
       expect.objectContaining({
-        'x-neon-read-only': 'true',
-        'x-read-only': 'false',
+        'x-read-only': 'true',
       }),
     );
   });
@@ -148,9 +146,6 @@ describe('/api/register route integration', () => {
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
     expect(response.headers.get('access-control-allow-methods')).toContain(
       'POST',
-    );
-    expect(response.headers.get('access-control-allow-headers')).toContain(
-      'X-Neon-Read-Only',
     );
     expect(response.headers.get('access-control-allow-headers')).toContain(
       'x-read-only',

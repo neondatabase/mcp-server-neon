@@ -31,7 +31,7 @@ import { getApiKeys, type ApiKeyRecord } from '../../../mcp-src/oauth/kv-store';
 import { setSentryTags } from '../../../mcp-src/sentry/utils';
 import type { ServerContext, AppContext } from '../../../mcp-src/types/context';
 import {
-  resolveGrantFromHeaders,
+  resolveGrantFromSearchParams,
   resolveGrantFromToken,
   DEFAULT_GRANT,
   type GrantContext,
@@ -42,6 +42,7 @@ import {
   injectProjectId,
 } from '../../../mcp-src/tools/grant-filter';
 import { assert } from '../../../lib/assert';
+import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
 
 type AuthenticatedExtra = {
   authInfo?: AuthInfo & {
@@ -597,7 +598,6 @@ const verifyToken = async (
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> => {
   const userAgent = req.headers.get('user-agent') || undefined;
-  const neonReadOnlyHeader = req.headers.get('x-neon-read-only');
   const readOnlyHeader = req.headers.get('x-read-only');
 
   logger.info('verifyToken called', {
@@ -611,15 +611,14 @@ const verifyToken = async (
     return undefined;
   }
 
-  // Detect transport from URL pathname
+  // Detect transport from URL pathname and parse query params
   const url = new URL(req.url);
   const transport: AppContext['transport'] = url.pathname.includes('/mcp')
     ? 'stream'
     : 'sse';
 
-  // Parse grant context from X-Neon-* headers (used only for API key path;
-  // OAuth tokens use their stored grant from the consent flow instead)
-  const grant = resolveGrantFromHeaders(req.headers);
+  const searchParams = url.searchParams;
+  const readOnlyQueryParam = searchParams.get('readonly');
 
   // ============================================
   // PATH 1: Check OAuth tokens table FIRST
@@ -633,13 +632,10 @@ const verifyToken = async (
 
       logger.info('OAuth token found', { clientId: token.client.id });
 
-      // OAuth tokens always use the stored grant from the consent flow.
-      // Headers are fully ignored — grant is immutable until re-authentication.
-      const effectiveGrant = resolveGrantFromToken(
+      const tokenGrant = resolveGrantFromToken(
         token as { grant?: GrantContext },
       );
 
-      // Read-only is determined only by stored OAuth scope (no headers)
       const readOnly = isReadOnly({
         scope: token.scope,
       });
@@ -663,7 +659,7 @@ const verifyToken = async (
           },
           apiKey: bearerToken,
           readOnly,
-          grant: effectiveGrant,
+          grant: tokenGrant,
           client: {
             id: token.client.id,
             name: token.client.client_name,
@@ -690,11 +686,11 @@ const verifyToken = async (
     return undefined;
   }
 
-  // Determine read-only mode from headers.
   const readOnly = isReadOnly({
-    neonHeaderValue: neonReadOnlyHeader,
+    queryParamValue: readOnlyQueryParam,
     headerValue: readOnlyHeader,
   });
+  const urlGrant = resolveGrantFromSearchParams(searchParams);
 
   return {
     token: bearerToken,
@@ -704,7 +700,7 @@ const verifyToken = async (
       account: apiKeyRecord.account,
       apiKey: bearerToken,
       readOnly,
-      grant,
+      grant: urlGrant,
       transport,
       userAgent,
     },
@@ -746,6 +742,43 @@ const authHandler = withMcpAuth(
   },
 );
 
+function rewriteResourceMetadataHeader(
+  response: Response,
+  request: Request,
+): Response {
+  if (response.status !== 401) {
+    return response;
+  }
+
+  const wwwAuthenticate = response.headers.get('WWW-Authenticate');
+  if (!wwwAuthenticate) {
+    return response;
+  }
+
+  const resourceMetadataUrl =
+    buildResourceMetadataUrlForResourceRequest(request);
+
+  const updatedHeader = /resource_metadata="[^"]*"/.test(wwwAuthenticate)
+    ? wwwAuthenticate.replace(
+        /resource_metadata="[^"]*"/,
+        `resource_metadata="${resourceMetadataUrl}"`,
+      )
+    : `${wwwAuthenticate}, resource_metadata="${resourceMetadataUrl}"`;
+
+  if (updatedHeader === wwwAuthenticate) {
+    return response;
+  }
+
+  const headers = new Headers(response.headers);
+  headers.set('WWW-Authenticate', updatedHeader);
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 // Normalize legacy paths (/mcp, /sse) to canonical /api/* paths
 // for mcp-handler's exact pathname matching.
 //
@@ -770,7 +803,13 @@ const handleRequest = (req: Request) => {
     duplex: 'half',
   });
 
-  return authHandler(normalizedReq);
+  const response = authHandler(normalizedReq);
+  if (response instanceof Promise) {
+    return response.then((resolved) =>
+      rewriteResourceMetadataHeader(resolved, req),
+    );
+  }
+  return rewriteResourceMetadataHeader(response, req);
 };
 
 export { handleRequest as GET, handleRequest as POST, handleRequest as DELETE };

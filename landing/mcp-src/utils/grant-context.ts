@@ -1,12 +1,14 @@
+import { parseResourceIdentifier } from '../../lib/oauth/protected-resource-metadata';
+
 /**
  * Grant context for fine-grained tool access control.
  *
  * Supports per-category scope control and project scoping.
  *
  * Grant context can be resolved from:
- * - X-Neon-* HTTP headers (API key mode)
- * - OAuth token grant field (OAuth mode)
- * - Future: neon:mcp claims in ID token
+ * - OAuth resource URI query params (authorize-time)
+ * - OAuth token grant field (runtime)
+ * - Direct MCP URL query params for API key auth (runtime)
  */
 
 export const SCOPE_CATEGORIES = [
@@ -29,7 +31,7 @@ export type GrantContext = {
 };
 
 /**
- * The default grant context when no headers or token grant is provided.
+ * The default grant context when no query params or token grant is provided.
  * Full access and no project scoping.
  */
 export const DEFAULT_GRANT: GrantContext = {
@@ -42,13 +44,13 @@ function isValidScopeCategory(value: string): value is ScopeCategory {
 }
 
 /**
- * Parse the X-Neon-Scopes header value into an array of valid scope categories.
+ * Parse scope categories from a comma-separated string.
  *
  * - "projects,branches,querying" -> ['projects', 'branches', 'querying']
  * - Invalid values are silently filtered out.
- * - If the header is present but all values are invalid, returns [] (empty array).
+ * - If the input is present but all values are invalid, returns [] (empty array).
  *   This results in no scoped tools (except always-available ones).
- * - If the header is absent (null/undefined/empty), returns null.
+ * - If the input is absent (null/undefined/empty), returns null.
  */
 export function parseScopeCategories(
   value: string | null | undefined,
@@ -64,19 +66,45 @@ export function parseScopeCategories(
 }
 
 /**
- * Resolve grant context from HTTP headers (API key mode).
+ * Resolve grant context from URL search params.
+ *
+ * Supports both repeated params (?category=a&category=b) and
+ * comma-separated values (?category=a,b).
  */
-export function resolveGrantFromHeaders(headers: Headers): GrantContext {
-  const scopesHeader = headers.get('x-neon-scopes');
-  const projectIdHeader = headers.get('x-neon-project-id');
+export function resolveGrantFromSearchParams(
+  params: URLSearchParams,
+): GrantContext {
+  const rawCategories = params.getAll('category');
+  const allCategories = rawCategories.flatMap((v) =>
+    v
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  const scopes =
+    allCategories.length > 0
+      ? allCategories.filter(isValidScopeCategory)
+      : null;
+  const projectId = params.get('projectId')?.trim() || null;
+  return { projectId, scopes };
+}
 
-  const scopes = parseScopeCategories(scopesHeader);
-  const projectId = projectIdHeader?.trim() || null;
+/**
+ * Resolve grant context from an OAuth resource URI.
+ *
+ * RFC 8707 allows query params in resource URIs when they are used to scope
+ * application access. We use `category` and `projectId` query params for this.
+ */
+export function resolveGrantFromResourceUri(
+  resource: string | null | undefined,
+): GrantContext {
+  if (!resource) {
+    return { ...DEFAULT_GRANT };
+  }
 
-  return {
-    projectId,
-    scopes,
-  };
+  const resourceUrl = parseResourceIdentifier(resource);
+
+  return resolveGrantFromSearchParams(resourceUrl.searchParams);
 }
 
 /**

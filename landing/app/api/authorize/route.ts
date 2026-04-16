@@ -17,7 +17,8 @@ import {
 import { logger } from '../../../mcp-src/utils/logger';
 import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
 import {
-  resolveGrantFromHeaders,
+  DEFAULT_GRANT,
+  resolveGrantFromResourceUri,
   type GrantContext,
 } from '../../../mcp-src/utils/grant-context';
 
@@ -27,9 +28,23 @@ export type DownstreamAuthRequest = {
   redirectUri: string;
   scope: string[];
   state: string;
-  grant?: GrantContext;
+  resource?: string;
   codeChallenge?: string;
   codeChallengeMethod?: string;
+};
+
+const resolveQueryParamReadOnly = (
+  searchParams: URLSearchParams,
+  resource: string | undefined,
+): string | null => {
+  const directReadOnly = searchParams.get('readonly');
+  if (directReadOnly !== null) {
+    return directReadOnly;
+  }
+  if (!resource) {
+    return null;
+  }
+  return new URL(resource).searchParams.get('readonly');
 };
 
 const parseAuthRequest = (
@@ -40,6 +55,7 @@ const parseAuthRequest = (
   const redirectUri = searchParams.get('redirect_uri') || '';
   const scope = searchParams.get('scope') || '';
   const state = searchParams.get('state') || '';
+  const resource = searchParams.get('resource') || undefined;
   const codeChallenge = searchParams.get('code_challenge') || undefined;
   const codeChallengeMethod =
     searchParams.get('code_challenge_method') || 'plain';
@@ -50,6 +66,7 @@ const parseAuthRequest = (
     redirectUri,
     scope: scope.split(' ').filter(Boolean),
     state,
+    resource,
     codeChallenge,
     codeChallengeMethod,
   };
@@ -432,6 +449,24 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const requestParams = parseAuthRequest(searchParams);
+    // Parse resource URI early so malformed values fail at authorize time.
+    let resourceGrant: GrantContext = { ...DEFAULT_GRANT };
+    let resourceReadOnlyQueryParam: string | null = null;
+    try {
+      resourceGrant = resolveGrantFromResourceUri(requestParams.resource);
+      resourceReadOnlyQueryParam = resolveQueryParamReadOnly(
+        searchParams,
+        requestParams.resource,
+      );
+    } catch {
+      return NextResponse.json(
+        {
+          error: 'invalid_target',
+          error_description: 'Invalid resource parameter',
+        },
+        { status: 400 },
+      );
+    }
 
     const clientId = requestParams.clientId;
     const client = await model.getClient(clientId, '');
@@ -445,34 +480,19 @@ export async function GET(request: NextRequest) {
 
     const savedRegisterHeaders = await model.getClientRegisterHeaders(clientId);
     const savedHeaders = savedRegisterHeaders?.headers ?? {};
-    const effectiveHeaders = new Headers(savedHeaders);
-    request.headers.forEach((value, key) => {
-      effectiveHeaders.set(key, value);
-    });
-
-    const neonReadOnlyHeader =
-      effectiveHeaders.get('x-neon-read-only') ??
-      savedHeaders['x-neon-read-only'];
-    const legacyReadOnlyHeader =
-      effectiveHeaders.get('x-read-only') ?? savedHeaders['x-read-only'];
-    const grant = resolveGrantFromHeaders(effectiveHeaders);
 
     const defaultReadOnly = isReadOnly({
-      neonHeaderValue: neonReadOnlyHeader,
-      headerValue: legacyReadOnlyHeader,
+      queryParamValue: resourceReadOnlyQueryParam,
+      headerValue:
+        request.headers.get('x-read-only') ?? savedHeaders['x-read-only'],
     });
-
-    logger.info('Authorize read-only context', {
-      clientId,
-      neonReadOnlyHeader,
-      legacyReadOnlyHeader,
-      hasSavedRegisterHeaders: !!savedRegisterHeaders,
-      savedRegisterHeadersCreatedAt: savedRegisterHeaders?.createdAt,
-      defaultReadOnly,
-      grant,
-    });
-
-    requestParams.grant = grant;
+    const requestedScopes =
+      requestParams.scope.length > 0 ? requestParams.scope : ['read', 'write'];
+    const effectiveScopes = defaultReadOnly
+      ? ['read']
+      : hasWriteScope(requestedScopes)
+        ? ['read', 'write']
+        : ['read'];
 
     if (!client) {
       logger.warn('Client not found', { clientId });
@@ -521,7 +541,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    await model.saveClientAuthContext(clientId, {
+      grant: resourceGrant,
+      scope: effectiveScopes,
+      readOnly: !hasWriteScope(effectiveScopes),
+    });
+
     if (await isClientAlreadyApproved(client.id, COOKIE_SECRET)) {
+      requestParams.scope = effectiveScopes;
       const authUrl = await upstreamAuth(btoa(JSON.stringify(requestParams)));
       return NextResponse.redirect(authUrl.href);
     }
@@ -529,7 +556,7 @@ export async function GET(request: NextRequest) {
     return renderApprovalDialog(
       client,
       btoa(JSON.stringify(requestParams)),
-      requestParams.scope,
+      effectiveScopes,
       defaultReadOnly,
     );
   } catch (error: unknown) {
@@ -571,6 +598,14 @@ export async function POST(request: NextRequest) {
 
     // Update scopes with user selection
     requestParams.scope = validScopes;
+    const grant = requestParams.resource
+      ? resolveGrantFromResourceUri(requestParams.resource)
+      : { ...DEFAULT_GRANT };
+    await model.saveClientAuthContext(requestParams.clientId, {
+      grant,
+      scope: validScopes,
+      readOnly: !hasWriteScope(validScopes),
+    });
 
     await updateApprovedClientsCookie(requestParams.clientId, COOKIE_SECRET);
 
