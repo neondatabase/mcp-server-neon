@@ -274,7 +274,7 @@ Adapted CI/CD workflows for Vercel deployment:
 - **Removed** `koyeb-preview.yml` and `koyeb-prod.yml` (no longer needed)
 - **Updated** `pr.yml` to work from `landing/` directory:
   - Changed `working-directory` to `landing`
-  - Uses Node 22 and Bun 1.2.13
+  - Uses Node 22 and pnpm (pinned via Corepack)
   - Lint and build commands run in landing directory
 
 Vercel handles deployments automatically via GitHub integration (no manual workflows needed).
