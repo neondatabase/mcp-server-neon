@@ -165,7 +165,7 @@ export function getAvailableTools(
         'All write-access tools have been removed. All remaining tools are limited to read-only operations ' +
         '(for example, read-only SQL queries). Do not try to work around this restriction; it is intentional. ' +
         'If the user requests changes to Neon resources, inform them about the read-only configuration. ' +
-        'The user can remove read-only mode by removing the x-neon-read-only header from the MCP configuration, ' +
+        'The user can remove read-only mode by removing the readonly query param from the MCP server URL, ' +
         'or by logging out and back in with OAuth and selecting full access.',
     );
   }
@@ -174,8 +174,8 @@ export function getAvailableTools(
       `Notice: The MCP server is currently configured and scoped to one project only (${grant.projectId}). ` +
         'Project management tools have been removed. All remaining tools are scoped to this project and can only interact with it. ' +
         'This is intentional. If the user requests changes to another project, inform them about the project-scoping configuration. ' +
-        'The user can remove project scoping by removing the x-neon-project-id header from the MCP configuration, ' +
-        'and by logging out and back in after removing the flag when using OAuth.',
+        'The user can remove project scoping by removing the projectId query param from the MCP server URL, ' +
+        'and by logging out and back in after removing the param when using OAuth.',
     );
   }
 
@@ -213,7 +213,7 @@ export function getAccessControlWarnings(
     warnings.push(
       '⚠️ Warning: No valid scope categories are set. ' +
         `${discoveryToolsText} ` +
-        'Add scope categories via the X-Neon-Scopes header (e.g., "querying,schema") ' +
+        'Add scope categories via the category query param (e.g., "?category=querying&category=schema") ' +
         'to enable additional tools.',
     );
   }

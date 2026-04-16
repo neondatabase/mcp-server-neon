@@ -84,7 +84,7 @@ export const createMcpServer = async (context: ServerContext) => {
   };
 
   // Filter tools based on grant context (presets, scopes, project scoping)
-  // and read-only mode (for backwards compatibility with X-Neon-Read-Only header / OAuth scopes)
+  // and read-only mode (readonly query param / x-read-only header / OAuth scopes)
   const readOnly = context.readOnly ?? false;
   const availableTools = getAvailableTools(grant, readOnly);
 

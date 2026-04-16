@@ -27,12 +27,12 @@ describe('hasWriteScope', () => {
   });
 });
 
-describe('isReadOnly header precedence', () => {
-  it('uses X-Neon-Read-Only when present', () => {
-    expect(isReadOnly(ctx({ neonHeaderValue: 'true' }))).toBe(true);
-    expect(isReadOnly(ctx({ neonHeaderValue: 'false' }))).toBe(false);
+describe('isReadOnly query param precedence', () => {
+  it('uses readonly query param when present', () => {
+    expect(isReadOnly(ctx({ queryParamValue: 'true' }))).toBe(true);
+    expect(isReadOnly(ctx({ queryParamValue: 'false' }))).toBe(false);
     expect(
-      isReadOnly(ctx({ neonHeaderValue: 'false', headerValue: 'true' })),
+      isReadOnly(ctx({ queryParamValue: 'false', headerValue: 'true' })),
     ).toBe(false);
   });
 

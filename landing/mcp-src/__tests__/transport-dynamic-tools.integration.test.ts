@@ -72,8 +72,9 @@ async function mcpCall(
   method: string,
   id: number,
   params?: unknown,
+  queryString = '',
 ) {
-  const req = new Request('http://localhost/api/mcp', {
+  const req = new Request(`http://localhost/api/mcp${queryString}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${bearerToken}`,
@@ -209,5 +210,109 @@ describe('transport dynamic tool composition', () => {
     expect(fullNames.has('create_project')).toBe(true);
     expect(readOnlyNames.has('create_project')).toBe(false);
     expect(readOnlyNames.has('list_projects')).toBe(true);
+  });
+
+  it('ignores runtime URL grant params for OAuth tokens', async () => {
+    const oauthToken = 'oauth-unscoped-with-query';
+
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write', {
+        projectId: null,
+        scopes: null,
+      }) as never,
+    );
+
+    await mcpCall(
+      oauthToken,
+      'initialize',
+      10,
+      {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: 'test-client', version: '1.0.0' },
+      },
+      '?projectId=proj_123',
+    );
+
+    await mcpCall(
+      oauthToken,
+      'tools/call',
+      11,
+      {
+        name: 'run_sql',
+        arguments: { sql: 'select 1' },
+      },
+      '?projectId=proj_123',
+    );
+
+    // If query params were merged at runtime, run_sql would receive injected projectId.
+    // OAuth must only use the grant persisted from authorize/token flow.
+    expect(runSqlSpy).toHaveBeenCalledTimes(0);
+  });
+
+  it('ignores runtime readonly query param for OAuth tokens', async () => {
+    const readOnlyToken = 'oauth-readonly-with-query';
+
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(readOnlyToken, 'read') as never,
+    );
+
+    await mcpCall(
+      readOnlyToken,
+      'initialize',
+      20,
+      {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: 'test-client', version: '1.0.0' },
+      },
+      '?readonly=false',
+    );
+
+    const list = await mcpCall(
+      readOnlyToken,
+      'tools/list',
+      21,
+      {},
+      '?readonly=false',
+    );
+    expect(list.status).toBe(200);
+
+    const listBody = list.body as {
+      error?: unknown;
+      result: { tools: Array<{ name: string }> };
+    };
+    expect(listBody.error).toBeUndefined();
+
+    const toolNames = new Set(listBody.result.tools.map((t) => t.name));
+    // If readonly query params overrode OAuth scopes, this would appear.
+    expect(toolNames.has('create_project')).toBe(false);
+  });
+
+  it('emits resource_metadata for the exact requested resource path and query', async () => {
+    vi.mocked(model.getAccessToken).mockResolvedValue(undefined);
+
+    const req = new Request('http://localhost:3100/mcp?readonly=true', {
+      method: 'POST',
+      headers: {
+        host: 'localhost:3100',
+        Authorization: 'Bearer invalid-token',
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 99,
+        method: 'tools/list',
+        params: {},
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+    const challenge = res.headers.get('WWW-Authenticate');
+    expect(challenge).toContain(
+      'resource_metadata="https://localhost:3100/.well-known/oauth-protected-resource/mcp?readonly=true"',
+    );
   });
 });

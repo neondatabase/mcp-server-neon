@@ -13,8 +13,8 @@ export const SCOPE_DEFINITIONS = {
 } as const;
 
 export type ReadOnlyContext = {
-  /** Value of the X-Neon-Read-Only header (canonical). */
-  neonHeaderValue?: string | null;
+  /** Value of the readonly= URL query param (highest priority). */
+  queryParamValue?: string | null;
   /** Value of the legacy x-read-only header (backwards-compatible synonym). */
   headerValue?: string | null;
   scope?: string | string[] | null;
@@ -53,16 +53,16 @@ function parseReadOnlyHeader(
 
 /**
  * Determines if the request should operate in read-only mode.
- * Priority: X-Neon-Read-Only > x-read-only > OAuth scope > default (false)
+ * Priority: readonly query param > x-read-only header > OAuth scope > default (false)
  */
 export function isReadOnly(context: ReadOnlyContext): boolean {
-  // Priority 1: X-Neon-Read-Only header (canonical)
-  const neonResult = parseReadOnlyHeader(context.neonHeaderValue);
-  if (neonResult !== undefined) {
-    return neonResult;
+  // Priority 1: readonly query param
+  const queryResult = parseReadOnlyHeader(context.queryParamValue);
+  if (queryResult !== undefined) {
+    return queryResult;
   }
 
-  // Priority 2: x-read-only header (legacy synonym)
+  // Priority 2: x-read-only header (legacy)
   const legacyResult = parseReadOnlyHeader(context.headerValue);
   if (legacyResult !== undefined) {
     return legacyResult;

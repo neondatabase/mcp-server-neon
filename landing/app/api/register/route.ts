@@ -19,12 +19,6 @@ export async function POST(request: NextRequest) {
     logger.info('request to register client', {
       name: payload.client_name,
       client_uri: payload.client_uri,
-      grantHeaders: {
-        xNeonReadOnly: requestHeaders['x-neon-read-only'],
-        xReadOnly: requestHeaders['x-read-only'],
-        xNeonProjectId: requestHeaders['x-neon-project-id'],
-        xNeonScopes: requestHeaders['x-neon-scopes'],
-      },
     });
 
     if (payload.client_name === undefined) {
@@ -144,7 +138,7 @@ export async function OPTIONS() {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers':
-        'Content-Type, Authorization, X-Neon-Read-Only, x-read-only',
+        'Content-Type, Authorization, x-read-only',
     },
   });
 }

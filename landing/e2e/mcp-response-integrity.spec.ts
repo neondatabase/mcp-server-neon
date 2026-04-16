@@ -21,9 +21,9 @@ test.describe('MCP runtime response integrity regression', () => {
     }
 
     // The list-tools route was our easiest reproducer for the no-response regression.
-    const listTools = await request.get('/api/list-tools', {
-      headers: { 'X-Neon-Project-Id': 'proj-regression-check' },
-    });
+    const listTools = await request.get(
+      '/api/list-tools?projectId=proj-regression-check',
+    );
     expect(listTools.status()).toBe(200);
     const listToolsBody = await listTools.json();
     expect(Array.isArray(listToolsBody.tools)).toBe(true);

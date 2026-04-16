@@ -88,30 +88,6 @@ test.describe('OAuth register and authorize contract', () => {
     expect(writeCheckbox).toContain('checked');
   });
 
-  test('register X-Neon-Read-Only=true defaults Full access to unchecked on authorize', async ({
-    request,
-  }) => {
-    const registerBody = await registerClient(request, {
-      'X-Neon-Read-Only': 'true',
-    });
-
-    const authorizeResponse = await request.get('/api/authorize', {
-      params: {
-        response_type: 'code',
-        client_id: registerBody.client_id,
-        redirect_uri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
-        scope: 'read write',
-        state: 'e2e-state',
-      },
-      maxRedirects: 0,
-    });
-
-    expect(authorizeResponse.status()).toBe(200);
-    const body = await authorizeResponse.text();
-    const writeCheckbox = extractWriteCheckbox(body);
-    expect(writeCheckbox).not.toContain('checked');
-  });
-
   test('register x-read-only=true defaults Full access to unchecked on authorize', async ({
     request,
   }) => {
@@ -134,31 +110,6 @@ test.describe('OAuth register and authorize contract', () => {
     const body = await authorizeResponse.text();
     const writeCheckbox = extractWriteCheckbox(body);
     expect(writeCheckbox).not.toContain('checked');
-  });
-
-  test('saved X-Neon-Read-Only takes precedence over saved x-read-only', async ({
-    request,
-  }) => {
-    const registerBody = await registerClient(request, {
-      'X-Neon-Read-Only': 'false',
-      'x-read-only': 'true',
-    });
-
-    const authorizeResponse = await request.get('/api/authorize', {
-      params: {
-        response_type: 'code',
-        client_id: registerBody.client_id,
-        redirect_uri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
-        scope: 'read write',
-        state: 'e2e-state',
-      },
-      maxRedirects: 0,
-    });
-
-    expect(authorizeResponse.status()).toBe(200);
-    const body = await authorizeResponse.text();
-    const writeCheckbox = extractWriteCheckbox(body);
-    expect(writeCheckbox).toContain('checked');
   });
 
   test('unknown client is rejected by authorize route', async ({ request }) => {

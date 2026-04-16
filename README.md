@@ -75,6 +75,8 @@ Run the following command to add the Neon MCP Server for all detected agents and
 npx add-mcp https://mcp.neon.tech/mcp
 ```
 
+Add the `-g` flag to add the Neon MCP Server to the global MCP server list instead of project-scoped.
+
 Alternatively, you can add the following "Neon" entry to your client's MCP server configuration file (e.g., `mcp.json`, `mcp_config.json`):
 
 ```json
@@ -130,34 +132,66 @@ Neon MCP supports OAuth scopes `read`, `write`, and `*` (`*` means both). Your M
 You can set read-only mode in two ways:
 
 1. **OAuth scope selection (recommended):** In OAuth, select read-only by unchecking **Full access** in the authorization UI.
-2. **`X-Neon-Read-Only` header:** Add `X-Neon-Read-Only: true` to your MCP server configuration:
+2. **`readonly` query param:** Add `?readonly=true` to your MCP server URL:
 
 ```json
 {
   "mcpServers": {
     "Neon": {
-      "url": "https://mcp.neon.tech/mcp",
-      "headers": {
-        "X-Neon-Read-Only": "true"
-      }
+      "url": "https://mcp.neon.tech/mcp?readonly=true"
     }
   }
 }
 ```
 
-How the header behaves:
+How the query param behaves:
 
-- **API key flow:** `X-Neon-Read-Only` is the way to enable read-only mode (there is no OAuth scope exchange in this flow).
-- **OAuth flow:** `X-Neon-Read-Only: true` behaves like `scope=read` for the default consent setting (Full access starts unchecked), but the user can still override this in the OAuth UI before approving.
+- **API key flow:** `readonly=true` is the way to enable read-only mode (there is no OAuth scope exchange in this flow).
+- **OAuth flow:** `readonly=true` overrides the OAuth scope. Without it, read-only is determined by the scope selected in the OAuth consent UI.
 
-Legacy header `x-read-only` is also supported.
+Legacy HTTP header `x-read-only` is also supported as a fallback (lower priority than the query param).
 
-> [!IMPORTANT]
-> If you change MCP configuration files (for example, toggling read-only mode or switching to a project-scoped setup), those changes only take effect for the **OAuth flow** after you log out and log back in.
-> OAuth permissions/scopes are bound to the session when a new OAuth token is created.
-> This does **not** apply to the API key flow.
+> **Note:** Read-only mode restricts which _tools_ are available. Further, the `run_sql` tool remains available only for read-only queries.
 
-> **Note:** Read-only mode restricts which _tools_ are available, not the SQL content. The `run_sql` tool remains available and can execute any SQL including INSERT/UPDATE/DELETE. For true read-only SQL access, use database roles with restricted permissions.
+### URL Query Params for Access Control
+
+Grant context (scope categories, project scoping, read-only mode) is configured via URL query params on the MCP server URL. Config travels with every request and takes effect immediately — no re-auth needed.
+
+| Param       | Description                                            | Example                              |
+| ----------- | ------------------------------------------------------ | ------------------------------------ |
+| `readonly`  | Enable read-only mode (`true`/`false`)                 | `?readonly=true`                     |
+| `category`  | Restrict to specific tool categories (repeated or CSV) | `?category=querying&category=schema` |
+| `projectId` | Scope all operations to a single project               | `?projectId=proj-123`                |
+
+**Read-only + project-scoped example:**
+
+```json
+{
+  "mcpServers": {
+    "Neon": {
+      "url": "https://mcp.neon.tech/mcp?readonly=true&projectId=my-project-id"
+    }
+  }
+}
+```
+
+**Category-filtered example (only querying and schema tools):**
+
+```json
+{
+  "mcpServers": {
+    "Neon": {
+      "url": "https://mcp.neon.tech/mcp?category=querying&category=schema"
+    }
+  }
+}
+```
+
+You can preview which tools are visible for any configuration using the `/api/list-tools` endpoint (no auth required):
+
+```bash
+curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
+```
 
 <details>
 <summary><strong>Tools available in read-only mode</strong></summary>
@@ -239,7 +273,7 @@ Notes:
 - `compare_database_schema` is categorized under `schema`.
 - `provision_neon_data_api` is categorized under `data_api` (separate from `neon_auth`).
 - Read-only enforcement still relies on `readOnlySafe` and server-side read-only logic; `scope` is category metadata, not a standalone read/write switch.
-- In project-scoped mode (`X-Neon-Project-Id`), `search` and `fetch` are not available.
+- In project-scoped mode (`?projectId=...`), `search` and `fetch` are not available.
 
 **Project Management:**
 

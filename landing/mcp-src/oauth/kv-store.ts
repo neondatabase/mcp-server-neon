@@ -4,6 +4,7 @@ import type { AuthorizationCode, Client, Token } from 'oauth2-server';
 import Keyv from 'keyv';
 import { AuthContext } from '../types/auth';
 import { AuthDetailsResponse } from '@neondatabase/api-client';
+import type { GrantContext } from '../utils/grant-context';
 
 const SCHEMA = 'mcpauth';
 
@@ -58,6 +59,19 @@ export const getClientRegisterHeaders =
     'Client register headers',
   );
 
+/** Cached outcome of a refresh token exchange for cross-instance deduplication. */
+export type RefreshResult = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  scope?: string | string[];
+};
+
+export const getRefreshResults = createLazyKeyv<RefreshResult>(
+  'refresh_results',
+  'Refresh results (cached refresh token exchange outcome)',
+);
+
 export type ApiKeyRecord = {
   apiKey: string;
   authMethod: AuthDetailsResponse['auth_method'];
@@ -65,3 +79,16 @@ export type ApiKeyRecord = {
 };
 
 export const getApiKeys = createLazyKeyv<ApiKeyRecord>('api_keys', 'API keys');
+
+export type ClientAuthContextRecord = {
+  grant: GrantContext;
+  scope: string[];
+  readOnly: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export const getClientAuthContexts = createLazyKeyv<ClientAuthContextRecord>(
+  'client_auth_contexts',
+  'Client auth contexts',
+);
