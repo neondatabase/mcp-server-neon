@@ -236,6 +236,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
             // after an SDK upgrade, treat it as a schema-type compatibility regression between
             // MCP SDK zod-compat types and our tool schema definitions.
             inputSchema: tool.inputSchema,
+            annotations: tool.annotations,
           },
           async (args: any, extra: any) => {
             const traceId = generateTraceId();
