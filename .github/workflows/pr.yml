@@ -5,8 +5,14 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   lint-and-build:
+    permissions:
+      contents: read
+      id-token: write
     runs-on:
       group: neondatabase-protected-runner-group
       labels: linux-ubuntu-latest
@@ -15,37 +21,54 @@ jobs:
         working-directory: landing
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Setup JFrog CLI with OIDC
+        id: setup-jfrog
+        uses: jfrog/setup-jfrog-cli@279b1f629f43dd5bc658d8361ac4802a7ef8d2d5 # v4.9.1
+        env:
+          JF_URL: https://databricks.jfrog.io
+        with:
+          oidc-provider-name: github-actions
+      - name: Configure npm registry for JFrog
+        run: |
+          echo "::add-mask::${{ steps.setup-jfrog.outputs.oidc-token }}"
+          printf 'save-exact=true\nshamefully-hoist=true\nregistry=https://databricks.jfrog.io/artifactory/api/npm/db-npm/\n' > .npmrc
+          echo "//databricks.jfrog.io/artifactory/api/npm/db-npm/:_authToken=${{ steps.setup-jfrog.outputs.oidc-token }}" >> .npmrc
+          cp .npmrc ~/.npmrc
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
-          bun-version: "1.2.13"
+          package_json_file: landing/package.json
+      - name: Get pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+      - name: Cache pnpm dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('landing/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-${{ runner.os }}-
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
       - name: Validate server.json version sync
         run: |
           node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const server=JSON.parse(fs.readFileSync('../server.json','utf8')); if (pkg.version !== server.version) { console.error('Version mismatch: landing/package.json=' + pkg.version + ' server.json=' + server.version); process.exit(1); }"
       - name: Format check
-        run: bun run fmt:check
+        run: pnpm run fmt:check
       - name: Lint
-        run: bun run lint
+        run: pnpm run lint
       - name: Check unused code and dependencies
-        run: bun run knip
+        run: pnpm run knip
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
       - name: Run tests
-        run: bun run test
+        run: pnpm run test
       - name: Build
         env:
-          # Next.js + TypeScript can exceed default Node heap in CI due to dependency
-          # type graph size (not app code size). We observed OOM in this step while
-          # `next build` was in "Running TypeScript".
-          #
-          # Revisit/reduce this when dependency typing pressure drops (e.g. after SDK/type
-          # surface simplifications) and CI proves stable without this bump.
           NODE_OPTIONS: --max-old-space-size=4096
-        run: bun run build
+        run: pnpm run build

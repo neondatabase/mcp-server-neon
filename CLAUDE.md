@@ -10,16 +10,18 @@ This is the **Neon MCP Server** - a Model Context Protocol server that bridges n
 
 ## Development Commands
 
-All commands should be run from the `landing/` directory. The project uses [Bun](https://bun.sh) as the package manager.
+All commands should be run from the `landing/` directory. The project uses [pnpm](https://pnpm.io) as the package manager, pinned via Corepack. Run `corepack enable` to activate it.
+
+> **Troubleshooting:** If `pnpm install` fails with registry or network errors, check whether your npm registry is configured to use the Databricks proxy. Set the registry in `~/.npmrc` or `landing/.npmrc`.
 
 ### Building and Running
 
 ```bash
 cd landing
-bun install
+pnpm install
 
 # Start the Next.js dev server (for the remote MCP server)
-bun run dev
+pnpm run dev
 ```
 
 ### Formatting, Linting, and Type Checking
@@ -28,25 +30,25 @@ bun run dev
 cd landing
 
 # Check formatting (runs in CI)
-bun run fmt:check
+pnpm run fmt:check
 
 # Auto-fix formatting
-bun run fmt
+pnpm run fmt
 
 # Lint
-bun run lint
+pnpm run lint
 
 # Auto-fix lint + formatting together
-bun run lint:fix
+pnpm run lint:fix
 
 # Type check
-bun run typecheck
+pnpm run typecheck
 
 # Check for unused code and dependencies
-bun run knip
+pnpm run knip
 
 # Auto-fix unused exports/dependencies
-bun run knip:fix
+pnpm run knip:fix
 ```
 
 ### Testing
@@ -55,22 +57,22 @@ bun run knip:fix
 cd landing
 
 # Run full test suite (unit + integration + e2e; used in CI)
-bun run test
+pnpm run test
 
 # Run unit tests
-bun run test:unit
+pnpm run test:unit
 
 # Run integration tests
-bun run test:integration
+pnpm run test:integration
 
 # Run MCP protocol e2e tests (real tool calls over MCP protocol)
-bun run test:e2e:mcp
+pnpm run test:e2e:mcp
 
 # Run website e2e tests (Playwright; provisions/validates ephemeral DB first)
-bun run test:e2e:web
+pnpm run test:e2e:web
 
 # Run all e2e tests
-bun run test:e2e
+pnpm run test:e2e
 ```
 
 ### Testing Pyramid Rules
@@ -100,7 +102,7 @@ Merge-gating tests must be deterministic. Do not make third-party uptime (for ex
 - **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com) and generates a random `COOKIE_SECRET`. Both are written to `.env.e2e` (gitignored) and passed to the Next.js dev server.
 - **No secrets needed**: The e2e infrastructure is fully self-contained. Instagres databases expire after 72 hours; no explicit teardown is required.
 - **Reuse across runs**: If `.env.e2e` already exists, global-setup reuses it instead of re-provisioning. Delete the file to force a fresh database.
-- **CI**: The PR workflow runs format, lint, knip, `bun run test`, and build before merge.
+- **CI**: The PR workflow runs format, lint, knip, `pnpm run test`, and build before merge.
 
 ## Architecture
 
@@ -405,10 +407,10 @@ This repository uses an enhanced Claude Code Review workflow that provides inlin
 
 ### What's Automated (Not Reviewed by Claude)
 
-- Formatting: `bun run fmt:check` (checked by pr.yml)
-- Linting: `bun run lint` (checked by pr.yml)
-- Tests: `bun run test` (unit + integration + MCP e2e + website e2e, checked by `pr.yml`)
-- Building: `bun run build` (checked by pr.yml)
+- Formatting: `pnpm run fmt:check` (checked by pr.yml)
+- Linting: `pnpm run lint` (checked by pr.yml)
+- Tests: `pnpm run test` (unit + integration + MCP e2e + website e2e, checked by `pr.yml`)
+- Building: `pnpm run build` (checked by pr.yml)
 
 ### Review Process
 
