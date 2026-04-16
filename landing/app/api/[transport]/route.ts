@@ -198,6 +198,7 @@ const handler = createMcpHandler(
         {
           description: tool.description,
           inputSchema: tool.inputSchema,
+          annotations: tool.annotations,
         },
         async (args: any, extra: any) => {
           const {
