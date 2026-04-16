@@ -9,10 +9,12 @@ import {
   getClients,
   getTokens,
   getRefreshTokens,
+  getRefreshResults,
   getAuthorizationCodes,
   getClientRegisterHeaders,
   ClientRegisterHeadersRecord,
   RefreshToken,
+  RefreshResult,
 } from './kv-store';
 
 class Model implements AuthorizationCodeModel {
@@ -98,6 +100,25 @@ class Model implements AuthorizationCodeModel {
     async (code) => {
       return getAuthorizationCodes().delete(code.authorizationCode);
     };
+
+  private static REFRESH_RESULT_TTL_MS = 60_000;
+
+  saveRefreshResult: (
+    oldRefreshToken: string,
+    result: RefreshResult,
+  ) => Promise<void> = async (oldRefreshToken, result) => {
+    await getRefreshResults().set(
+      oldRefreshToken,
+      result,
+      Model.REFRESH_RESULT_TTL_MS,
+    );
+  };
+
+  getRefreshResult: (
+    oldRefreshToken: string,
+  ) => Promise<RefreshResult | undefined> = async (oldRefreshToken) => {
+    return getRefreshResults().get(oldRefreshToken);
+  };
 }
 
 export const model = new Model();
