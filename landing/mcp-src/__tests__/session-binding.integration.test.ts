@@ -32,17 +32,15 @@ describeIfRedis('session-binding integration (real Redis)', () => {
   });
 
   it('bindSession → verifySession round-trips for the same identity', async () => {
-    const { bindSession, verifySession } = await import(
-      '../server/session-binding'
-    );
+    const { bindSession, verifySession } =
+      await import('../server/session-binding');
     await bindSession('sess-roundtrip', 'identity-A', 60);
     expect(await verifySession('sess-roundtrip', 'identity-A')).toBe(true);
   });
 
   it('verifySession rejects a different identity on the same sessionId', async () => {
-    const { bindSession, verifySession } = await import(
-      '../server/session-binding'
-    );
+    const { bindSession, verifySession } =
+      await import('../server/session-binding');
     await bindSession('sess-mismatch', 'identity-A', 60);
     expect(await verifySession('sess-mismatch', 'identity-B')).toBe(false);
   });
@@ -64,9 +62,8 @@ describeIfRedis('session-binding integration (real Redis)', () => {
   });
 
   it('releaseSession removes the binding', async () => {
-    const { bindSession, releaseSession, verifySession } = await import(
-      '../server/session-binding'
-    );
+    const { bindSession, releaseSession, verifySession } =
+      await import('../server/session-binding');
     await bindSession('sess-release', 'identity-A', 60);
     await releaseSession('sess-release');
     expect(await verifySession('sess-release', 'identity-A')).toBe(false);
@@ -74,9 +71,8 @@ describeIfRedis('session-binding integration (real Redis)', () => {
   });
 
   it('evaluateMessageOwnership returns pass when identity matches the live binding', async () => {
-    const { bindSession, evaluateMessageOwnership } = await import(
-      '../server/session-binding'
-    );
+    const { bindSession, evaluateMessageOwnership } =
+      await import('../server/session-binding');
     await bindSession('sess-pass', 'identity-A', 60);
     const r = await evaluateMessageOwnership(
       'POST',
@@ -88,9 +84,8 @@ describeIfRedis('session-binding integration (real Redis)', () => {
   });
 
   it('evaluateMessageOwnership returns 403 when caller is a different identity', async () => {
-    const { bindSession, evaluateMessageOwnership } = await import(
-      '../server/session-binding'
-    );
+    const { bindSession, evaluateMessageOwnership } =
+      await import('../server/session-binding');
     await bindSession('sess-attacker', 'identity-owner', 60);
     const r = await evaluateMessageOwnership(
       'POST',
@@ -103,9 +98,8 @@ describeIfRedis('session-binding integration (real Redis)', () => {
   });
 
   it('evaluateMessageOwnership returns 403 for a sessionId with no binding', async () => {
-    const { evaluateMessageOwnership } = await import(
-      '../server/session-binding'
-    );
+    const { evaluateMessageOwnership } =
+      await import('../server/session-binding');
     const r = await evaluateMessageOwnership(
       'POST',
       '/api/message',
@@ -117,9 +111,8 @@ describeIfRedis('session-binding integration (real Redis)', () => {
   });
 
   it('binding expires after its TTL (short TTL sanity check)', async () => {
-    const { bindSession, verifySession } = await import(
-      '../server/session-binding'
-    );
+    const { bindSession, verifySession } =
+      await import('../server/session-binding');
     await bindSession('sess-expiry', 'identity-A', 1);
     expect(await verifySession('sess-expiry', 'identity-A')).toBe(true);
     await new Promise((r) => setTimeout(r, 1_200));

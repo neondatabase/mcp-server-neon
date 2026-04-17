@@ -207,9 +207,9 @@ describe('bindSession / verifySession / releaseSession', () => {
   });
 
   it('retries the connect after a failed initial connect (no sticky rejection)', async () => {
-    connectSpy.mockRejectedValueOnce(new Error('transient')).mockResolvedValue(
-      undefined,
-    );
+    connectSpy
+      .mockRejectedValueOnce(new Error('transient'))
+      .mockResolvedValue(undefined);
     setSpy.mockResolvedValue('OK');
     const { bindSession } = await loadModule();
 

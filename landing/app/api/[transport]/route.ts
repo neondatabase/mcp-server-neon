@@ -845,7 +845,8 @@ const authHandler = withMcpAuth(
     const identity = deriveIdentity(req.auth);
     const rejection = await checkSessionOwnership(req, identity);
     if (rejection) return rejection;
-    const run = () => createContextualMcpHandler(getStaticToolContext(req))(req);
+    const run = () =>
+      createContextualMcpHandler(getStaticToolContext(req))(req);
     return identity ? identityContext.run(identity, run) : run();
   },
   verifyToken,
