@@ -1,6 +1,7 @@
 // Initialize Sentry (must be first import)
 import '../../../mcp-src/sentry/instrument';
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -43,6 +44,24 @@ import {
 } from '../../../mcp-src/tools/grant-filter';
 import { assert } from '../../../lib/assert';
 import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
+import {
+  bindSession,
+  deriveIdentity,
+  evaluateMessageOwnership,
+  releaseSession,
+  shouldRejectEnvelope,
+} from '../../../mcp-src/server/session-binding';
+
+// Carries the authenticated caller's identity fingerprint from post-auth into
+// the mcp-handler onEvent callback (where `SESSION_STARTED` fires with the
+// newly-generated sessionId). ALS propagates through the library's awaits.
+const identityContext = new AsyncLocalStorage<string>();
+
+// SSE streams live up to this many seconds on Vercel Fluid Compute. Used both
+// as mcp-handler's `maxDuration` and (plus a buffer) as the TTL for session
+// bindings in Redis.
+const SSE_MAX_DURATION_SEC = 800;
+const SESSION_BINDING_TTL_SEC = SSE_MAX_DURATION_SEC + 70;
 
 type AuthenticatedExtra = {
   authInfo?: AuthInfo & {
@@ -63,9 +82,36 @@ type AuthenticatedExtra = {
 type StaticToolContext = {
   grant: GrantContext;
   readOnly: boolean;
+  // Identity fingerprint of the SSE connection owner, captured at handler
+  // construction. Each tool call compares `extra.authInfo`'s identity against
+  // this. Mismatches indicate a Redis envelope was routed into a stream it
+  // does not belong to — defense in depth on top of the POST-side check.
+  sseOwnerIdentity: string | null;
 };
 
 function createContextualMcpHandler(staticToolContext: StaticToolContext) {
+  const { sseOwnerIdentity } = staticToolContext;
+
+  // Verifies that the caller baked into an incoming MCP envelope (tool or
+  // prompt call) matches the identity captured when the SSE stream was
+  // established. See StaticToolContext.sseOwnerIdentity for rationale.
+  // Throws on mismatch — the MCP SDK translates this into a JSON-RPC error
+  // on the caller's channel rather than returning any tool output.
+  const assertEnvelopeMatches = (
+    extra: AuthenticatedExtra,
+    invocationName: string,
+  ): void => {
+    if (!shouldRejectEnvelope(sseOwnerIdentity, extra.authInfo)) return;
+    logger.error('envelope identity mismatch — dropping invocation', {
+      invocation: invocationName,
+      hasCallerIdentity: deriveIdentity(extra.authInfo) !== null,
+    });
+    captureException(new Error('SSE envelope identity mismatch'), {
+      tags: { invocation: invocationName },
+    });
+    throw new Error('Session identity mismatch; request dropped');
+  };
+
   return createMcpHandler(
     (server: McpServer) => {
       // Request-scoped mutable state (isolated per server instance)
@@ -240,6 +286,9 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
             annotations: tool.annotations,
           },
           async (args: any, extra: any) => {
+            const typedExtra = extra as AuthenticatedExtra;
+            assertEnvelopeMatches(typedExtra, tool.name);
+
             const traceId = generateTraceId();
             return await startSpan(
               {
@@ -259,7 +308,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   clientName: cName,
                   client,
                   context,
-                } = await getAuthContext(extra as AuthenticatedExtra);
+                } = await getAuthContext(typedExtra);
 
                 // Track server_init on first authenticated request (after client detection)
                 trackServerInit(context);
@@ -363,6 +412,9 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
             argsSchema: prompt.argsSchema,
           },
           async (args: any, extra: any) => {
+            const typedExtra = extra as AuthenticatedExtra;
+            assertEnvelopeMatches(typedExtra, `prompt:${prompt.name}`);
+
             const {
               account,
               readOnly,
@@ -370,7 +422,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
               clientName: cName,
               client,
               context,
-            } = await getAuthContext(extra as AuthenticatedExtra);
+            } = await getAuthContext(typedExtra);
 
             // Track server_init on first authenticated request
             trackServerInit(context);
@@ -468,24 +520,51 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
     {
       redisUrl: process.env.KV_URL || process.env.REDIS_URL,
       basePath: '/api',
-      maxDuration: 800, // Fluid Compute - up to 800s for SSE connections
+      maxDuration: SSE_MAX_DURATION_SEC, // Fluid Compute ceiling for SSE connections
       verboseLogs: process.env.NODE_ENV !== 'production',
       onEvent: (event) => {
         switch (event.type) {
-          case 'SESSION_STARTED':
+          case 'SESSION_STARTED': {
             logger.info('MCP session started', {
               sessionId: event.sessionId,
               transport: event.transport,
               clientInfo: event.clientInfo,
             });
+            const identity = identityContext.getStore();
+            if (event.sessionId && identity) {
+              waitUntil(
+                bindSession(
+                  event.sessionId,
+                  identity,
+                  SESSION_BINDING_TTL_SEC,
+                ).catch((err) => {
+                  logger.error('session-binding bind failed', {
+                    sessionId: event.sessionId,
+                    err,
+                  });
+                }),
+              );
+            }
             break;
+          }
 
-          case 'SESSION_ENDED':
+          case 'SESSION_ENDED': {
             logger.info('MCP session ended', {
               sessionId: event.sessionId,
               transport: event.transport,
             });
+            if (event.sessionId) {
+              waitUntil(
+                releaseSession(event.sessionId).catch((err) => {
+                  logger.error('session-binding release failed', {
+                    sessionId: event.sessionId,
+                    err,
+                  });
+                }),
+              );
+            }
             break;
+          }
 
           case 'REQUEST_COMPLETED':
             if (event.status === 'error') {
@@ -729,13 +808,46 @@ function getStaticToolContext(req: Request): StaticToolContext {
   return {
     grant,
     readOnly: authExtra?.readOnly === true,
+    sseOwnerIdentity: deriveIdentity(authInfo),
   };
+}
+
+// Session-binding check for POSTs to the SSE message endpoint. Verifies that
+// the caller owns the sessionId they're posting to before the library routes
+// the message into the SSE owner's stream. The decision logic lives in
+// `evaluateMessageOwnership` so it can be unit-tested in isolation; this
+// function is just the Request → Response adapter.
+async function checkSessionOwnership(
+  req: Request,
+  identity: string | null,
+): Promise<Response | null> {
+  const url = new URL(req.url);
+  const sessionId = url.searchParams.get('sessionId');
+  const result = await evaluateMessageOwnership(
+    req.method,
+    url.pathname,
+    sessionId,
+    identity,
+  );
+  if (result.kind !== 'reject') return null;
+  if (result.status === 403) {
+    logger.warn('session-binding mismatch on POST /message', { sessionId });
+  } else if (result.status === 503) {
+    logger.error('session-binding verify failed; denying', { sessionId });
+  }
+  return new Response(result.reason, { status: result.status });
 }
 
 // Wrap with authentication. After auth is resolved, route to a context-scoped
 // MCP handler whose registered tools match the token grant/read-only context.
 const authHandler = withMcpAuth(
-  (req) => createContextualMcpHandler(getStaticToolContext(req))(req),
+  async (req) => {
+    const identity = deriveIdentity(req.auth);
+    const rejection = await checkSessionOwnership(req, identity);
+    if (rejection) return rejection;
+    const run = () => createContextualMcpHandler(getStaticToolContext(req))(req);
+    return identity ? identityContext.run(identity, run) : run();
+  },
   verifyToken,
   {
     required: true,
