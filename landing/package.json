@@ -43,6 +43,7 @@
     "openid-client": "6.3.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "redis": "^4.6.0",
     "winston": "3.17.0",
     "zod": "4.3.6"
   },

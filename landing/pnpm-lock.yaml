@@ -56,6 +56,9 @@ importers:
       react-dom:
         specifier: 19.2.3
         version: 19.2.3(react@19.2.3)
+      redis:
+        specifier: ^4.6.0
+        version: 4.7.1
       winston:
         specifier: 3.17.0
         version: 3.17.0
