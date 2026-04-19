@@ -8,25 +8,62 @@ import type { GrantContext } from '../utils/grant-context';
 
 const SCHEMA = 'mcpauth';
 
+// Errors where the cached pg pool is likely poisoned and a fresh Keyv
+// instance (new pool, fresh env read) is worth trying. Pure config errors
+// (wrong URL in env) will still fail after reinit - the cooldown below
+// prevents hot-looping in that case.
+const REINIT_ERROR_PATTERNS: readonly RegExp[] = [
+  /password authentication failed/i,
+  /terminating connection/i,
+  /connection terminated/i,
+  /ECONNRESET/,
+  /ECONNREFUSED/,
+  /ETIMEDOUT/,
+  /ENOTFOUND/,
+];
+
+const REINIT_COOLDOWN_MS = 60_000;
+
+export const shouldReinitKeyv = (err: unknown): boolean => {
+  const msg = err instanceof Error ? err.message : String(err);
+  return REINIT_ERROR_PATTERNS.some((re) => re.test(msg));
+};
+
 const createLazyKeyv = <T>(table: string, errorLabel: string) => {
   let instance: Keyv<T> | null = null;
-  return () => {
-    if (!instance) {
-      logger.info(`initializing keyv for ${table}`);
-      instance = new Keyv<T>({
-        store: new KeyvPostgres({
-          connectionString: process.env.OAUTH_DATABASE_URL,
-          schema: SCHEMA,
-          table,
-        }),
+  let lastReinitAt = 0;
+
+  const build = (): Keyv<T> => {
+    logger.info(`initializing keyv for ${table}`);
+    const inst = new Keyv<T>({
+      store: new KeyvPostgres({
+        connectionString: process.env.OAUTH_DATABASE_URL,
+        schema: SCHEMA,
+        table,
+      }),
+    });
+    inst.on('error', (err) => {
+      logger.error(`${errorLabel} keyv error:`, { err });
+      if (instance !== inst) return;
+      if (!shouldReinitKeyv(err)) return;
+      const now = Date.now();
+      if (now - lastReinitAt < REINIT_COOLDOWN_MS) return;
+      lastReinitAt = now;
+      instance = null;
+      logger.warn(
+        `${errorLabel} keyv: dropping cached instance to reinit on next call`,
+      );
+      inst.disconnect().catch((disconnectErr) => {
+        logger.warn(`${errorLabel} keyv: error disconnecting stale instance`, {
+          err: disconnectErr,
+        });
       });
-      instance.on('error', (err) => {
-        logger.error(`${errorLabel} keyv error:`, { err });
-      });
-      logger.info(`keyv initialized for ${table}`);
-    }
-    return instance;
+    });
+    logger.info(`keyv initialized for ${table}`);
+    return inst;
   };
+
+  return () => (instance ??= build());
 };
 
 export const getClients = createLazyKeyv<Client>('clients', 'Clients');
