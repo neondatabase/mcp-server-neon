@@ -5,8 +5,30 @@ import type { AuthContext } from '../types/auth';
 import { logger } from '../utils/logger';
 
 const SESSION_KEY_PREFIX = 'mcp:session:';
+const REDIS_OP_TIMEOUT_MS = 500;
+const MISSING_BINDING_RETRY_DELAY_MS = 100;
 
 let clientPromise: Promise<RedisClientType> | null = null;
+
+function withTimeout<T>(promise: Promise<T>, op: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`session-binding ${op} timed out`));
+    }, REDIS_OP_TIMEOUT_MS);
+    // Don't keep the process alive solely for this timer.
+    timer.unref?.();
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
 
 function getRedis(): Promise<RedisClientType> {
   if (clientPromise) return clientPromise;
@@ -43,6 +65,11 @@ function getRedis(): Promise<RedisClientType> {
  * (account, bearer-token) pair so that a POST from a different account — or
  * the same account presenting a different token — cannot inject into this
  * SSE stream even if the sessionId leaks.
+ *
+ * Identity changes when the bearer token rotates (OAuth refresh, key
+ * rotation). A POST arriving on a live SSE after the caller's bearer rotated
+ * will return 403; clients must re-establish the SSE rather than retrying
+ * the POST.
  */
 export function deriveIdentity(authInfo: AuthInfo | undefined): string | null {
   const extra = authInfo?.extra as AuthContext['extra'] | undefined;
@@ -70,7 +97,10 @@ export async function bindSession(
   ttlSec: number,
 ): Promise<void> {
   const redis = await getRedis();
-  await redis.set(sessionKey(sessionId), identity, { EX: ttlSec });
+  await withTimeout(
+    redis.set(sessionKey(sessionId), identity, { EX: ttlSec }),
+    'set',
+  );
 }
 
 export async function verifySession(
@@ -78,7 +108,7 @@ export async function verifySession(
   identity: string,
 ): Promise<boolean> {
   const redis = await getRedis();
-  const stored = await redis.get(sessionKey(sessionId));
+  const stored = await withTimeout(redis.get(sessionKey(sessionId)), 'get');
   if (!stored) return false;
   const a = Buffer.from(stored);
   const b = Buffer.from(identity);
@@ -88,7 +118,7 @@ export async function verifySession(
 
 export async function releaseSession(sessionId: string): Promise<void> {
   const redis = await getRedis();
-  await redis.del(sessionKey(sessionId));
+  await withTimeout(redis.del(sessionKey(sessionId)), 'del');
 }
 
 export type MessageOwnershipResult =
@@ -97,10 +127,11 @@ export type MessageOwnershipResult =
   | { kind: 'reject'; status: 401 | 403 | 503; reason: string };
 
 /**
- * Pure decision for whether a POST to the SSE message endpoint is allowed to
- * proceed. Returns `pass` only when the caller's identity matches the binding
- * stored under the provided sessionId. Extracted from the route handler so
- * it can be exercised without spinning up the MCP handler.
+ * Decides whether a POST to the SSE message endpoint is allowed to proceed.
+ * Reads the Redis-backed session binding and returns `pass` only when the
+ * caller's identity matches the binding stored under the provided sessionId.
+ * Extracted from the route handler so the decision logic can be exercised
+ * without spinning up the MCP handler.
  */
 export async function evaluateMessageOwnership(
   method: string,
@@ -119,8 +150,29 @@ export async function evaluateMessageOwnership(
     };
   }
   try {
-    const ok = await verifySession(sessionId, identity);
-    if (!ok) {
+    const redis = await getRedis();
+    let stored = await withTimeout(redis.get(sessionKey(sessionId)), 'get');
+    if (stored === null) {
+      // Race: a legitimate first POST can land before the SESSION_STARTED
+      // bindSession write committed (waitUntil schedules it asynchronously).
+      // Retry once with a short delay before refusing.
+      await new Promise((resolve) => {
+        const t = setTimeout(resolve, MISSING_BINDING_RETRY_DELAY_MS);
+        t.unref?.();
+      });
+      stored = await withTimeout(redis.get(sessionKey(sessionId)), 'get');
+      if (stored === null) {
+        return {
+          kind: 'reject',
+          status: 403,
+          reason: 'Session binding not found',
+        };
+      }
+    }
+    const a = Buffer.from(stored);
+    const b = Buffer.from(identity);
+    const matches = a.length === b.length && timingSafeEqual(a, b);
+    if (!matches) {
       return {
         kind: 'reject',
         status: 403,

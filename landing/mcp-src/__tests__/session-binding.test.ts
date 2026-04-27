@@ -219,6 +219,31 @@ describe('bindSession / verifySession / releaseSession', () => {
     await expect(bindSession('s', 'id', 60)).resolves.toBeUndefined();
     expect(connectSpy).toHaveBeenCalledTimes(2);
   });
+
+  it('concurrent first callers both reject when the initial connect fails, then a later call succeeds', async () => {
+    // Documented behavior from the in-code comment: callers that latched the
+    // in-flight clientPromise before connect rejected will share that
+    // rejection. After the catch clears `clientPromise`, the next call gets a
+    // fresh client.
+    connectSpy
+      .mockRejectedValueOnce(new Error('transient'))
+      .mockResolvedValue(undefined);
+    setSpy.mockResolvedValue('OK');
+    const { bindSession } = await loadModule();
+
+    const [a, b] = await Promise.allSettled([
+      bindSession('s', 'id', 60),
+      bindSession('s', 'id', 60),
+    ]);
+    expect(a.status).toBe('rejected');
+    expect(b.status).toBe('rejected');
+    if (a.status === 'rejected') expect(String(a.reason)).toMatch(/transient/);
+    if (b.status === 'rejected') expect(String(b.reason)).toMatch(/transient/);
+
+    // Third call after the catch clears clientPromise gets a fresh client.
+    await expect(bindSession('s', 'id', 60)).resolves.toBeUndefined();
+    expect(connectSpy).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('evaluateMessageOwnership (POST /message 403 gate)', () => {
@@ -367,5 +392,91 @@ describe('shouldRejectEnvelope (SSE-side defense)', () => {
     const { shouldRejectEnvelope, deriveIdentity } = await loadModule();
     const owner = deriveIdentity(buildAuthInfo());
     expect(shouldRejectEnvelope(owner, undefined)).toBe(true);
+  });
+});
+
+/**
+ * Simulates the route's registered tool handler short-circuit pattern:
+ *
+ *   if (checkEnvelopeMatches(extra, tool.name)) return { content: [] };
+ *   // ... real handler runs
+ *
+ * The wrapper exists in `route.ts` as a closure over `sseOwnerIdentity`, so we
+ * recreate the same pattern here against `shouldRejectEnvelope` to lock the
+ * contract: mismatch → no-op result; match → handler is invoked.
+ */
+describe('shouldRejectEnvelope via simulated registered handler', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  function makeWrappedHandler(
+    sseOwnerIdentity: string | null,
+    inner: (extra: { authInfo?: AuthInfo }) => {
+      content: Array<{ type: 'text'; text: string }>;
+      isError?: boolean;
+    },
+    shouldReject: (owner: string | null, info: AuthInfo | undefined) => boolean,
+  ) {
+    return (extra: { authInfo?: AuthInfo }) => {
+      if (shouldReject(sseOwnerIdentity, extra.authInfo)) {
+        return { content: [], isError: false } as const;
+      }
+      return inner(extra);
+    };
+  }
+
+  it('short-circuits with empty content when envelope identity does not match the SSE owner', async () => {
+    const { shouldRejectEnvelope, deriveIdentity } = await loadModule();
+    const innerSpy = vi.fn(() => ({
+      content: [{ type: 'text' as const, text: 'real result' }],
+    }));
+    const ownerIdentity = deriveIdentity(
+      buildAuthInfo({ accountId: 'acct_X' }),
+    );
+    const handler = makeWrappedHandler(
+      ownerIdentity,
+      innerSpy,
+      shouldRejectEnvelope,
+    );
+
+    const attackerInfo = buildAuthInfo({ accountId: 'acct_Y' });
+    const result = handler({ authInfo: attackerInfo });
+
+    expect(result).toEqual({ content: [], isError: false });
+    expect(innerSpy).not.toHaveBeenCalled();
+  });
+
+  it('invokes the inner handler when envelope identity matches', async () => {
+    const { shouldRejectEnvelope, deriveIdentity } = await loadModule();
+    const innerSpy = vi.fn(() => ({
+      content: [{ type: 'text' as const, text: 'real result' }],
+    }));
+    const ownerIdentity = deriveIdentity(
+      buildAuthInfo({ accountId: 'acct_X' }),
+    );
+    const handler = makeWrappedHandler(
+      ownerIdentity,
+      innerSpy,
+      shouldRejectEnvelope,
+    );
+
+    const matchingInfo = buildAuthInfo({ accountId: 'acct_X' });
+    const result = handler({ authInfo: matchingInfo });
+
+    expect(result.content).toEqual([{ type: 'text', text: 'real result' }]);
+    expect(innerSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes through when SSE owner identity is unknown (no check)', async () => {
+    const { shouldRejectEnvelope } = await loadModule();
+    const innerSpy = vi.fn(() => ({
+      content: [{ type: 'text' as const, text: 'unguarded' }],
+    }));
+    const handler = makeWrappedHandler(null, innerSpy, shouldRejectEnvelope);
+
+    handler({ authInfo: buildAuthInfo() });
+
+    expect(innerSpy).toHaveBeenCalledTimes(1);
   });
 });

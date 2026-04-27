@@ -52,6 +52,13 @@ import {
   shouldRejectEnvelope,
 } from '../../../mcp-src/server/session-binding';
 
+class SessionIdentityMismatchError extends Error {
+  constructor() {
+    super('Session identity mismatch; request dropped');
+    this.name = 'SessionIdentityMismatchError';
+  }
+}
+
 // Carries the authenticated caller's identity fingerprint from post-auth into
 // the mcp-handler onEvent callback (where `SESSION_STARTED` fires with the
 // newly-generated sessionId). ALS propagates through the library's awaits.
@@ -95,21 +102,22 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
   // Verifies that the caller baked into an incoming MCP envelope (tool or
   // prompt call) matches the identity captured when the SSE stream was
   // established. See StaticToolContext.sseOwnerIdentity for rationale.
-  // Throws on mismatch — the MCP SDK translates this into a JSON-RPC error
-  // on the caller's channel rather than returning any tool output.
-  const assertEnvelopeMatches = (
+  // Returns true on mismatch so the registered handler can short-circuit
+  // with a no-op result rather than emitting a JSON-RPC error onto the SSE
+  // owner's channel (which is the victim, not the attacker).
+  const checkEnvelopeMatches = (
     extra: AuthenticatedExtra,
     invocationName: string,
-  ): void => {
-    if (!shouldRejectEnvelope(sseOwnerIdentity, extra.authInfo)) return;
+  ): boolean => {
+    if (!shouldRejectEnvelope(sseOwnerIdentity, extra.authInfo)) return false;
     logger.error('envelope identity mismatch — dropping invocation', {
       invocation: invocationName,
       hasCallerIdentity: deriveIdentity(extra.authInfo) !== null,
     });
-    captureException(new Error('SSE envelope identity mismatch'), {
+    captureException(new SessionIdentityMismatchError(), {
       tags: { invocation: invocationName },
     });
-    throw new Error('Session identity mismatch; request dropped');
+    return true;
   };
 
   return createMcpHandler(
@@ -287,7 +295,12 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
           },
           async (args: any, extra: any) => {
             const typedExtra = extra as AuthenticatedExtra;
-            assertEnvelopeMatches(typedExtra, tool.name);
+            if (checkEnvelopeMatches(typedExtra, tool.name)) {
+              // Silently drop the misrouted invocation. Returning a non-error
+              // empty result avoids leaking a JSON-RPC error onto the SSE
+              // owner's (victim's) channel.
+              return { content: [], isError: false } as const;
+            }
 
             const traceId = generateTraceId();
             return await startSpan(
@@ -413,7 +426,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
           },
           async (args: any, extra: any) => {
             const typedExtra = extra as AuthenticatedExtra;
-            assertEnvelopeMatches(typedExtra, `prompt:${prompt.name}`);
+            if (checkEnvelopeMatches(typedExtra, `prompt:${prompt.name}`)) {
+              // Silently drop the misrouted invocation; see tool handler note.
+              return { messages: [] } as const;
+            }
 
             const {
               account,
@@ -532,17 +548,20 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
             });
             const identity = identityContext.getStore();
             if (event.sessionId && identity) {
+              const sessionId = event.sessionId;
               waitUntil(
-                bindSession(
-                  event.sessionId,
-                  identity,
-                  SESSION_BINDING_TTL_SEC,
-                ).catch((err) => {
-                  logger.error('session-binding bind failed', {
-                    sessionId: event.sessionId,
-                    err,
-                  });
-                }),
+                bindSession(sessionId, identity, SESSION_BINDING_TTL_SEC).catch(
+                  (err) => {
+                    logger.error('session-binding bind failed', {
+                      sessionId,
+                      err,
+                    });
+                    captureException(err, {
+                      tags: { operation: 'bindSession' },
+                      extra: { sessionId },
+                    });
+                  },
+                ),
               );
             }
             break;
@@ -554,11 +573,16 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
               transport: event.transport,
             });
             if (event.sessionId) {
+              const sessionId = event.sessionId;
               waitUntil(
-                releaseSession(event.sessionId).catch((err) => {
+                releaseSession(sessionId).catch((err) => {
                   logger.error('session-binding release failed', {
-                    sessionId: event.sessionId,
+                    sessionId,
                     err,
+                  });
+                  captureException(err, {
+                    tags: { operation: 'releaseSession' },
+                    extra: { sessionId },
                   });
                 }),
               );
@@ -831,11 +855,23 @@ async function checkSessionOwnership(
   );
   if (result.kind !== 'reject') return null;
   if (result.status === 403) {
-    logger.warn('session-binding mismatch on POST /message', { sessionId });
+    logger.warn('session-binding mismatch on POST /message', {
+      sessionId,
+      reason: result.reason,
+    });
   } else if (result.status === 503) {
     logger.error('session-binding verify failed; denying', { sessionId });
   }
-  return new Response(result.reason, { status: result.status });
+  const code =
+    result.status === 403
+      ? 'session_not_owned'
+      : result.status === 503
+        ? 'session_verification_unavailable'
+        : 'caller_identity_unavailable';
+  return new Response(JSON.stringify({ error: result.reason, code }), {
+    status: result.status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 // Wrap with authentication. After auth is resolved, route to a context-scoped
