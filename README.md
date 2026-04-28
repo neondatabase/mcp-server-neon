@@ -7,6 +7,7 @@
 # Neon MCP Server
 
 [![Install MCP Server in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en-US/install-mcp?name=Neon&config=eyJ1cmwiOiJodHRwczovL21jcC5uZW9uLnRlY2gvbWNwIn0%3D)
+[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=Neon&config=%7B%22url%22%3A%20%22https%3A//mcp.neon.tech/mcp%22%7D)
 
 **Neon MCP Server** is an open-source tool that lets you interact with your Neon Postgres databases in **natural language**.
 
@@ -89,6 +90,20 @@ Alternatively, you can add the following "Neon" entry to your client's MCP serve
   }
 }
 ```
+
+**Kiro:** Add the following to your Kiro MCP config file (`~/.kiro/settings/mcp.json` for global, or `.kiro/settings/mcp.json` for project-scoped):
+
+```json
+{
+  "mcpServers": {
+    "Neon": {
+      "url": "https://mcp.neon.tech/mcp"
+    }
+  }
+}
+```
+
+Or use the one-click install button at the top of this README. For more information, see the [Kiro MCP documentation](https://kiro.dev/docs/mcp/).
 
 - Restart or refresh your MCP client.
 - An OAuth window will open in your browser. Follow the prompts to authorize your MCP client to access your Neon account.
