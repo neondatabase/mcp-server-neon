@@ -308,6 +308,7 @@ describe('evaluateMessageOwnership (POST /message 403 gate)', () => {
     );
     expect(r.kind).toBe('reject');
     if (r.kind === 'reject') expect(r.status).toBe(403);
+    expect(getSpy).toHaveBeenCalledTimes(1);
   });
 
   it('rejects with 403 when caller identity differs from bound owner', async () => {

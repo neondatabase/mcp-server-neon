@@ -6,7 +6,6 @@ import { logger } from '../utils/logger';
 
 const SESSION_KEY_PREFIX = 'mcp:session:';
 const REDIS_OP_TIMEOUT_MS = 500;
-const MISSING_BINDING_RETRY_DELAY_MS = 100;
 
 let clientPromise: Promise<RedisClientType> | null = null;
 
@@ -151,23 +150,13 @@ export async function evaluateMessageOwnership(
   }
   try {
     const redis = await getRedis();
-    let stored = await withTimeout(redis.get(sessionKey(sessionId)), 'get');
+    const stored = await withTimeout(redis.get(sessionKey(sessionId)), 'get');
     if (stored === null) {
-      // Race: a legitimate first POST can land before the SESSION_STARTED
-      // bindSession write committed (waitUntil schedules it asynchronously).
-      // Retry once with a short delay before refusing.
-      await new Promise((resolve) => {
-        const t = setTimeout(resolve, MISSING_BINDING_RETRY_DELAY_MS);
-        t.unref?.();
-      });
-      stored = await withTimeout(redis.get(sessionKey(sessionId)), 'get');
-      if (stored === null) {
-        return {
-          kind: 'reject',
-          status: 403,
-          reason: 'Session binding not found',
-        };
-      }
+      return {
+        kind: 'reject',
+        status: 403,
+        reason: 'Session binding not found',
+      };
     }
     const a = Buffer.from(stored);
     const b = Buffer.from(identity);

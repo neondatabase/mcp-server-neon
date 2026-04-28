@@ -85,7 +85,7 @@ async function postMessage(token: string, sessionId: string) {
   return { status: res.status, body };
 }
 
-describe('route session-binding wiring (POST /api/message)', () => {
+describe('route session-binding wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setSpy.mockReset();
@@ -93,6 +93,7 @@ describe('route session-binding wiring (POST /api/message)', () => {
     delSpy.mockReset();
     connectSpy.mockReset();
     connectSpy.mockResolvedValue(undefined);
+    setSpy.mockResolvedValue('OK');
     process.env.KV_URL = 'redis://localhost:6379';
   });
 
@@ -100,12 +101,12 @@ describe('route session-binding wiring (POST /api/message)', () => {
     vi.mocked(model.getAccessToken).mockResolvedValue(
       buildOAuthToken('token-A', 'user-A') as never,
     );
-    // Both the initial lookup and the retry return null (no binding).
     getSpy.mockResolvedValue(null);
 
     const { status, body } = await postMessage('token-A', 'sess-unbound');
 
     expect(status).toBe(403);
+    expect(getSpy).toHaveBeenCalledTimes(1);
     expect(body).toEqual({
       error: 'Session binding not found',
       code: 'session_not_owned',
