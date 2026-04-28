@@ -56,6 +56,9 @@ importers:
       react-dom:
         specifier: 19.2.3
         version: 19.2.3(react@19.2.3)
+      redis:
+        specifier: 4.6.0
+        version: 4.6.0
       winston:
         specifier: 3.17.0
         version: 3.17.0
@@ -1186,27 +1189,27 @@ packages:
     peerDependencies:
       '@redis/client': ^1.0.0
 
-  '@redis/client@1.6.1':
-    resolution: {integrity: sha512-/KCsg3xSlR+nCK8/8ZYSknYxvXHwubJrU82F3Lm1Fp6789VQ0/3RJKfsmRXjqfaTA++23CvC3hqmqe/2GEt6Kw==}
+  '@redis/client@1.5.0':
+    resolution: {integrity: sha512-MafrVNQ5LSnii1yYIlzjbz3i6Bw8c9RZkV3g7jNd3As/A1vo6UIn0+29ii631oKxIA+nAEMeACh6+9k9+iup1A==}
     engines: {node: '>=14'}
 
-  '@redis/graph@1.1.1':
-    resolution: {integrity: sha512-FEMTcTHZozZciLRl6GiiIB4zGm5z5F3F6a6FZCyrfxdKOhFlGkiAqlexWMBzCi4DcRoyiOsuLfW+cjlGWyExOw==}
+  '@redis/graph@1.1.0':
+    resolution: {integrity: sha512-16yZWngxyXPd+MJxeSr0dqh2AIOi8j9yXKcKCwVaKDbH3HTuETpDVPcLujhFYVPtYrngSco31BUcSa9TH31Gqg==}
     peerDependencies:
       '@redis/client': ^1.0.0
 
-  '@redis/json@1.0.7':
-    resolution: {integrity: sha512-6UyXfjVaTBTJtKNG4/9Z8PSpKE6XgSyEb8iwaqDcy+uKrd/DGYHTWkUdnQDyzm727V7p21WUMhsqz5oy65kPcQ==}
+  '@redis/json@1.0.4':
+    resolution: {integrity: sha512-LUZE2Gdrhg0Rx7AN+cZkb1e6HjoSKaeeW8rYnt89Tly13GBI5eP4CwDVr+MY8BAYfCg4/N15OUrtLoona9uSgw==}
     peerDependencies:
       '@redis/client': ^1.0.0
 
-  '@redis/search@1.2.0':
-    resolution: {integrity: sha512-tYoDBbtqOVigEDMAcTGsRlMycIIjwMCgD8eR2t0NANeQmgK/lvxNAvYyb6bZDD4frHRhIHkJu2TBRvB0ERkOmw==}
+  '@redis/search@1.1.1':
+    resolution: {integrity: sha512-pqCXTc5e7wJJgUuJiC3hBgfoFRoPxYzwn0BEfKgejTM7M/9zP3IpUcqcjgfp8hF+LoV8rHZzcNTz7V+pEIY7LQ==}
     peerDependencies:
       '@redis/client': ^1.0.0
 
-  '@redis/time-series@1.1.0':
-    resolution: {integrity: sha512-c1Q99M5ljsIuc4YdaCwfUEXsofakb9c8+Zse2qxTadu8TalLXuAESzLvFAvNVbkmSlvlzIQOLpBCmWI9wTOt+g==}
+  '@redis/time-series@1.0.4':
+    resolution: {integrity: sha512-ThUIgo2U/g7cCuZavucQTQzA9g9JbDDY2f64u3AbAoz/8vE2lt2U37LamDUVChhaDA3IRT9R6VvJwqnUfTJzng==}
     peerDependencies:
       '@redis/client': ^1.0.0
 
@@ -3269,8 +3272,8 @@ packages:
     resolution: {integrity: sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA==}
     engines: {node: '>= 6'}
 
-  redis@4.7.1:
-    resolution: {integrity: sha512-S1bJDnqLftzHXHP8JsT5II/CtHWQrASX5K96REjWjlmWKrviSOLWmM7QnRLstAWsu1VBBV1ffV6DzCvxNP0UJQ==}
+  redis@4.6.0:
+    resolution: {integrity: sha512-QTlRvQtfRM9ZxFRfBmd8UsGGrKZil/cAwlbDTnaSKirCUMfWgXjKQ4VlkhmNBc3mnAbbSgeYw9zs/HcfYGd1Cw==}
 
   reflect.getprototypeof@1.0.10:
     resolution: {integrity: sha512-00o4I+DVrefhv+nX0ulyi3biSHCPDe+yLv5o/p6d/UVlirijB8E16FtfwSAi4g3tcqrQ4lRAqQSoFEZJehYEcw==}
@@ -4707,31 +4710,31 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@redis/bloom@1.2.0(@redis/client@1.6.1)':
+  '@redis/bloom@1.2.0(@redis/client@1.5.0)':
     dependencies:
-      '@redis/client': 1.6.1
+      '@redis/client': 1.5.0
 
-  '@redis/client@1.6.1':
+  '@redis/client@1.5.0':
     dependencies:
       cluster-key-slot: 1.1.2
       generic-pool: 3.9.0
       yallist: 4.0.0
 
-  '@redis/graph@1.1.1(@redis/client@1.6.1)':
+  '@redis/graph@1.1.0(@redis/client@1.5.0)':
     dependencies:
-      '@redis/client': 1.6.1
+      '@redis/client': 1.5.0
 
-  '@redis/json@1.0.7(@redis/client@1.6.1)':
+  '@redis/json@1.0.4(@redis/client@1.5.0)':
     dependencies:
-      '@redis/client': 1.6.1
+      '@redis/client': 1.5.0
 
-  '@redis/search@1.2.0(@redis/client@1.6.1)':
+  '@redis/search@1.1.1(@redis/client@1.5.0)':
     dependencies:
-      '@redis/client': 1.6.1
+      '@redis/client': 1.5.0
 
-  '@redis/time-series@1.1.0(@redis/client@1.6.1)':
+  '@redis/time-series@1.0.4(@redis/client@1.5.0)':
     dependencies:
-      '@redis/client': 1.6.1
+      '@redis/client': 1.5.0
 
   '@rollup/rollup-android-arm-eabi@4.60.1':
     optional: true
@@ -6595,7 +6598,7 @@ snapshots:
       '@modelcontextprotocol/sdk': 1.25.3(hono@4.12.11)(zod@4.3.6)
       chalk: 5.6.2
       commander: 11.1.0
-      redis: 4.7.1
+      redis: 4.6.0
     optionalDependencies:
       next: 16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
 
@@ -6962,14 +6965,14 @@ snapshots:
       string_decoder: 1.3.0
       util-deprecate: 1.0.2
 
-  redis@4.7.1:
+  redis@4.6.0:
     dependencies:
-      '@redis/bloom': 1.2.0(@redis/client@1.6.1)
-      '@redis/client': 1.6.1
-      '@redis/graph': 1.1.1(@redis/client@1.6.1)
-      '@redis/json': 1.0.7(@redis/client@1.6.1)
-      '@redis/search': 1.2.0(@redis/client@1.6.1)
-      '@redis/time-series': 1.1.0(@redis/client@1.6.1)
+      '@redis/bloom': 1.2.0(@redis/client@1.5.0)
+      '@redis/client': 1.5.0
+      '@redis/graph': 1.1.0(@redis/client@1.5.0)
+      '@redis/json': 1.0.4(@redis/client@1.5.0)
+      '@redis/search': 1.1.1(@redis/client@1.5.0)
+      '@redis/time-series': 1.0.4(@redis/client@1.5.0)
 
   reflect.getprototypeof@1.0.10:
     dependencies:
