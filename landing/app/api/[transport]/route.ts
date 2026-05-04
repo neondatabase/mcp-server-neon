@@ -14,6 +14,10 @@ import {
   getPromptTemplate,
 } from '../../../mcp-src/prompts';
 import { NEON_HANDLERS } from '../../../mcp-src/tools/index';
+import {
+  getDocResource,
+  listDocsResources,
+} from '../../../mcp-src/tools/handlers/docs';
 import { createNeonClient } from '../../../mcp-src/server/api';
 import pkg from '../../../package.json';
 import { handleToolError } from '../../../mcp-src/server/errors';
@@ -540,6 +544,16 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 // "always available" search/fetch tools (which require Neon API auth) are
 // not surfaced anonymously.
 const DOCS_ONLY_TOOLS = NEON_TOOLS.filter((tool) => tool.scope === 'docs');
+function getDocsOnlyToolDefinition(
+  name: 'list_docs_resources' | 'get_doc_resource',
+) {
+  const tool = DOCS_ONLY_TOOLS.find((tool) => tool.name === name);
+  assert(tool, `${name} tool definition not found`);
+  return tool;
+}
+
+const listDocsResourcesTool = getDocsOnlyToolDefinition('list_docs_resources');
+const getDocResourceTool = getDocsOnlyToolDefinition('get_doc_resource');
 
 const ANONYMOUS_DOCS_USER_ID = 'anonymous-docs';
 
@@ -554,94 +568,88 @@ const docsOnlyAppContext: AppContext = {
 function createDocsOnlyMcpHandler() {
   return createMcpHandler(
     (server: McpServer) => {
-      DOCS_ONLY_TOOLS.forEach((tool) => {
-        const toolHandler = NEON_HANDLERS[tool.name];
-        assert(toolHandler, `Handler for tool ${tool.name} not found`);
-
-        server.registerTool(
-          tool.name,
+      async function runDocsTool(
+        toolName: 'list_docs_resources' | 'get_doc_resource',
+        call: () => Promise<string>,
+      ) {
+        const traceId = generateTraceId();
+        return await startSpan(
           {
-            description: tool.description,
-            inputSchema: tool.inputSchema,
-            annotations: tool.annotations,
+            name: 'tool_call',
+            attributes: {
+              tool_name: toolName,
+              trace_id: traceId,
+              docs_only: true,
+            },
           },
-          async (args: any) => {
-            const traceId = generateTraceId();
-            return await startSpan(
-              {
-                name: 'tool_call',
-                attributes: {
-                  tool_name: tool.name,
-                  trace_id: traceId,
-                  docs_only: true,
-                },
-              },
-              async (span) => {
-                const properties = {
-                  tool_name: tool.name,
-                  readOnly: 'true',
-                  projectScoped: 'false',
-                  clientName: 'anonymous-docs',
-                  traceId,
-                  docsOnly: 'true',
-                };
+          async (span) => {
+            const properties = {
+              tool_name: toolName,
+              readOnly: 'true',
+              projectScoped: 'false',
+              clientName: 'anonymous-docs',
+              traceId,
+              docsOnly: 'true',
+            };
 
-                logger.info('tool call (docs-only):', properties);
+            logger.info('tool call (docs-only):', properties);
 
-                track({
-                  anonymousId: ANONYMOUS_DOCS_USER_ID,
-                  event: 'tool_call',
-                  properties,
-                  context: { app: docsOnlyAppContext },
-                });
-                waitUntil(flushAnalytics());
+            track({
+              anonymousId: ANONYMOUS_DOCS_USER_ID,
+              event: 'tool_call',
+              properties,
+              context: { app: docsOnlyAppContext },
+            });
+            waitUntil(flushAnalytics());
 
-                try {
-                  // Docs handlers don't read neonClient or extra; we still
-                  // have to satisfy the function signature.
-                  const result = await (toolHandler as any)(
-                    { params: (args ?? {}) as Record<string, unknown> },
-                    undefined,
-                    {
-                      account: {
-                        id: ANONYMOUS_DOCS_USER_ID,
-                        name: 'Anonymous Docs',
-                        email: '',
-                        isOrg: false,
-                      },
-                      readOnly: true,
-                      clientApplication: 'other',
-                    },
-                  );
-                  if (result.isError) {
-                    logger.warn('tool error response (docs-only):', {
-                      ...properties,
-                      isError: true,
-                      contentLength: result.content?.length,
-                      firstContentType: result.content?.[0]?.type,
-                    });
-                  }
-                  return result;
-                } catch (error) {
-                  span.setStatus({ code: 2 });
-                  const errorResult = handleToolError(
-                    error,
-                    properties,
-                    traceId,
-                  );
-                  logger.warn('tool error response (docs-only):', {
-                    ...properties,
-                    isError: true,
-                    contentLength: errorResult.content?.length,
-                    firstContentType: errorResult.content?.[0]?.type,
-                  });
-                  return errorResult;
-                }
-              },
-            );
+            try {
+              const text = await call();
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text,
+                  },
+                ],
+              };
+            } catch (error) {
+              span.setStatus({ code: 2 });
+              const errorResult = handleToolError(error, properties, traceId);
+              logger.warn('tool error response (docs-only):', {
+                ...properties,
+                isError: true,
+                contentLength: errorResult.content?.length,
+                firstContentType: errorResult.content?.[0]?.type,
+              });
+              return errorResult;
+            }
           },
         );
-      });
+      }
+
+      server.registerTool(
+        listDocsResourcesTool.name,
+        {
+          description: listDocsResourcesTool.description,
+          inputSchema: listDocsResourcesTool.inputSchema,
+          annotations: listDocsResourcesTool.annotations,
+        },
+        async () =>
+          runDocsTool(listDocsResourcesTool.name, () => listDocsResources()),
+      );
+
+      server.registerTool(
+        getDocResourceTool.name,
+        {
+          description: getDocResourceTool.description,
+          inputSchema: getDocResourceTool.inputSchema,
+          annotations: getDocResourceTool.annotations,
+        },
+        async (args: { slug: string }) =>
+          runDocsTool(getDocResourceTool.name, () =>
+            getDocResource({ slug: args.slug }),
+          ),
+      );
 
       server.server.setRequestHandler(ListToolsRequestSchema, async () => {
         const tools = DOCS_ONLY_TOOLS.map((tool) => {
