@@ -15,6 +15,7 @@ The Neon MCP Server enables Large Language Models to manage Neon Postgres databa
 
 - **NPM Package**: @neondatabase/mcp-server-neon
 - **Remote MCP**: Connect via https://mcp.neon.tech/sse
+- **Docs-only (no auth)**: Connect via https://mcp.neon.tech/mcp?category=docs to use only the documentation tools (`list_docs_resources`, `get_doc_resource`) without an account or OAuth flow.
 
 ## Documentation
 

@@ -7,6 +7,7 @@
 - Added `/api/list-tools` so clients can preview exactly which tools are available for a given scope/read-only configuration.
 - OAuth authorization now preserves and applies client registration context, including read-only defaults, for more predictable permissions UX.
 - OAuth metadata now advertises supported grant scope categories for better client discovery.
+- Added an anonymous, no-OAuth docs endpoint: `mcp.neon.tech/mcp?category=docs` exposes only the `list_docs_resources` and `get_doc_resource` tools and bypasses OAuth entirely. Triggers strictly when `category=docs` is the only scope and no `projectId` is set; any other combination still requires authentication.
 
 # [0.8.0]
 

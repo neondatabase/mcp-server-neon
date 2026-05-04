@@ -31,6 +31,7 @@ import { getApiKeys, type ApiKeyRecord } from '../../../mcp-src/oauth/kv-store';
 import { setSentryTags } from '../../../mcp-src/sentry/utils';
 import type { ServerContext, AppContext } from '../../../mcp-src/types/context';
 import {
+  isDocsOnlyRequest,
   resolveGrantFromSearchParams,
   resolveGrantFromToken,
   DEFAULT_GRANT,
@@ -41,6 +42,7 @@ import {
   getAccessControlWarnings,
   injectProjectId,
 } from '../../../mcp-src/tools/grant-filter';
+import { NEON_TOOLS } from '../../../mcp-src/tools/definitions';
 import { assert } from '../../../lib/assert';
 import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
 
@@ -531,6 +533,198 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
   );
 }
 
+// The docs-only handler bypasses OAuth entirely. It only registers tools
+// scoped to the `docs` category, which currently fetch from neon.com via
+// global fetch and never touch the Neon API client. We deliberately avoid
+// going through `getAvailableTools` / `grant-filter` here so the
+// "always available" search/fetch tools (which require Neon API auth) are
+// not surfaced anonymously.
+const DOCS_ONLY_TOOLS = NEON_TOOLS.filter((tool) => tool.scope === 'docs');
+
+const ANONYMOUS_DOCS_USER_ID = 'anonymous-docs';
+
+const docsOnlyAppContext: AppContext = {
+  name: 'mcp-server-neon',
+  transport: 'stream',
+  environment: (process.env.NODE_ENV ??
+    'production') as AppContext['environment'],
+  version: pkg.version,
+};
+
+function createDocsOnlyMcpHandler() {
+  return createMcpHandler(
+    (server: McpServer) => {
+      DOCS_ONLY_TOOLS.forEach((tool) => {
+        const toolHandler = NEON_HANDLERS[tool.name];
+        assert(toolHandler, `Handler for tool ${tool.name} not found`);
+
+        server.registerTool(
+          tool.name,
+          {
+            description: tool.description,
+            inputSchema: tool.inputSchema,
+            annotations: tool.annotations,
+          },
+          async (args: any) => {
+            const traceId = generateTraceId();
+            return await startSpan(
+              {
+                name: 'tool_call',
+                attributes: {
+                  tool_name: tool.name,
+                  trace_id: traceId,
+                  docs_only: true,
+                },
+              },
+              async (span) => {
+                const properties = {
+                  tool_name: tool.name,
+                  readOnly: 'true',
+                  projectScoped: 'false',
+                  clientName: 'anonymous-docs',
+                  traceId,
+                  docsOnly: 'true',
+                };
+
+                logger.info('tool call (docs-only):', properties);
+
+                track({
+                  anonymousId: ANONYMOUS_DOCS_USER_ID,
+                  event: 'tool_call',
+                  properties,
+                  context: { app: docsOnlyAppContext },
+                });
+                waitUntil(flushAnalytics());
+
+                try {
+                  // Docs handlers don't read neonClient or extra; we still
+                  // have to satisfy the function signature.
+                  const result = await (toolHandler as any)(
+                    { params: (args ?? {}) as Record<string, unknown> },
+                    undefined,
+                    {
+                      account: {
+                        id: ANONYMOUS_DOCS_USER_ID,
+                        name: 'Anonymous Docs',
+                        email: '',
+                        isOrg: false,
+                      },
+                      readOnly: true,
+                      clientApplication: 'other',
+                    },
+                  );
+                  if (result.isError) {
+                    logger.warn('tool error response (docs-only):', {
+                      ...properties,
+                      isError: true,
+                      contentLength: result.content?.length,
+                      firstContentType: result.content?.[0]?.type,
+                    });
+                  }
+                  return result;
+                } catch (error) {
+                  span.setStatus({ code: 2 });
+                  const errorResult = handleToolError(
+                    error,
+                    properties,
+                    traceId,
+                  );
+                  logger.warn('tool error response (docs-only):', {
+                    ...properties,
+                    isError: true,
+                    contentLength: errorResult.content?.length,
+                    firstContentType: errorResult.content?.[0]?.type,
+                  });
+                  return errorResult;
+                }
+              },
+            );
+          },
+        );
+      });
+
+      server.server.setRequestHandler(ListToolsRequestSchema, async () => {
+        const tools = DOCS_ONLY_TOOLS.map((tool) => {
+          const normalizedSchema = normalizeObjectSchema(tool.inputSchema);
+          const inputSchema = normalizedSchema
+            ? toJsonSchemaCompat(normalizedSchema, {
+                strictUnions: true,
+                pipeStrategy: 'input',
+              })
+            : { type: 'object' as const };
+
+          return {
+            name: tool.name,
+            title: tool.annotations?.title,
+            description: tool.description,
+            inputSchema,
+            annotations: tool.annotations,
+          };
+        });
+
+        return { tools };
+      });
+    },
+    {
+      serverInfo: {
+        name: 'mcp-server-neon',
+        version: pkg.version,
+      },
+      capabilities: {
+        tools: {},
+      },
+    },
+    {
+      redisUrl: process.env.KV_URL || process.env.REDIS_URL,
+      basePath: '/api',
+      maxDuration: 800,
+      verboseLogs: process.env.NODE_ENV !== 'production',
+      onEvent: (event) => {
+        switch (event.type) {
+          case 'SESSION_STARTED':
+            logger.info('MCP docs-only session started', {
+              sessionId: event.sessionId,
+              transport: event.transport,
+              clientInfo: event.clientInfo,
+            });
+            break;
+          case 'SESSION_ENDED':
+            logger.info('MCP docs-only session ended', {
+              sessionId: event.sessionId,
+              transport: event.transport,
+            });
+            break;
+          case 'REQUEST_COMPLETED':
+            if (event.status === 'error') {
+              logger.warn('MCP docs-only request failed', {
+                sessionId: event.sessionId,
+                requestId: event.requestId,
+                method: event.method,
+                duration: event.duration,
+              });
+            }
+            break;
+          case 'ERROR':
+            if (event.severity === 'fatal') {
+              logger.error('MCP docs-only fatal error', {
+                sessionId: event.sessionId,
+                error: event.error,
+                source: event.source,
+                context: event.context,
+              });
+              captureException(
+                event.error instanceof Error
+                  ? event.error
+                  : new Error(String(event.error)),
+              );
+            }
+            break;
+        }
+      },
+    },
+  );
+}
+
 // Cache TTL for API key verification (5 minutes)
 // Balances security (revoked keys stop working soon) with performance (reduce API calls)
 const API_KEY_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -780,6 +974,16 @@ function rewriteResourceMetadataHeader(
   });
 }
 
+// Lazily-initialized docs-only handler. Built on first docs-only request
+// so module load doesn't pay the cost when the endpoint is never used.
+let docsOnlyHandler: ReturnType<typeof createDocsOnlyMcpHandler> | null = null;
+function getDocsOnlyHandler() {
+  if (!docsOnlyHandler) {
+    docsOnlyHandler = createDocsOnlyMcpHandler();
+  }
+  return docsOnlyHandler;
+}
+
 // Normalize legacy paths (/mcp, /sse) to canonical /api/* paths
 // for mcp-handler's exact pathname matching.
 //
@@ -803,6 +1007,13 @@ const handleRequest = (req: Request) => {
     // @ts-expect-error duplex is required for streaming bodies
     duplex: 'half',
   });
+
+  // Strict docs-only mode: bypass OAuth entirely so docs tools are usable
+  // without an account. Only triggers when the request is exactly
+  // ?category=docs (no other categories, no projectId).
+  if (isDocsOnlyRequest(url.searchParams)) {
+    return getDocsOnlyHandler()(normalizedReq);
+  }
 
   const response = authHandler(normalizedReq);
   if (response instanceof Promise) {
