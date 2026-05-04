@@ -127,7 +127,10 @@ class Model implements AuthorizationCodeModel {
       return getAuthorizationCodes().delete(code.authorizationCode);
     };
 
-  private static REFRESH_RESULT_TTL_MS = 60_000;
+  // Widens the cross-instance race window so a follower replaying a just-rotated
+  // refresh_token (laptop wake, transient network blip) still gets the cached
+  // result instead of a re-auth prompt.
+  private static REFRESH_RESULT_TTL_MS = 5 * 60_000;
 
   saveRefreshResult: (
     oldRefreshToken: string,
