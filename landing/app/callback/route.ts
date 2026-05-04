@@ -5,6 +5,7 @@ import { generateRandomString } from '../../mcp-src/oauth/utils';
 import { createNeonClient } from '../../mcp-src/server/api';
 import { resolveAccountFromAuth } from '../../mcp-src/server/account';
 import { handleOAuthError } from '../../lib/errors';
+import { logger } from '../../mcp-src/utils/logger';
 import type { AuthorizationCode } from 'oauth2-server';
 import {
   DEFAULT_GRANT,
@@ -74,7 +75,28 @@ export async function GET(request: NextRequest) {
     // Get auth details to determine account type (org vs personal)
     const neonClient = createNeonClient(tokens.access_token);
     const { data: auth } = await neonClient.getAuthDetails();
-    const expiresAt = Date.now() + toMilliseconds(tokens.expiresIn() ?? 0);
+    const upstreamExpiresIn = tokens.expiresIn();
+    if (upstreamExpiresIn === undefined) {
+      logger.error(
+        'Upstream omitted expires_in at callback; defaulting to 3600s',
+        { clientId },
+      );
+    }
+    const expiresAt = Date.now() + toMilliseconds(upstreamExpiresIn ?? 3600);
+
+    if (!tokens.refresh_token) {
+      logger.error(
+        'Upstream did not issue refresh_token at callback; offline_access likely missing from granted scopes',
+        { clientId, scope: tokens.scope },
+      );
+      return NextResponse.json(
+        {
+          error: 'server_error',
+          error_description: 'Upstream did not issue a refresh token',
+        },
+        { status: 502 },
+      );
+    }
 
     // Resolve account info (no identify here - happens in token exchange)
     const userInfo = await resolveAccountFromAuth(auth, neonClient);

@@ -107,7 +107,14 @@ async function executeRefresh(
   }
 
   const now = Date.now();
-  const expiresAt = now + toMilliseconds(upstreamToken.expiresIn() ?? 0);
+  const upstreamExpiresIn = upstreamToken.expiresIn();
+  if (upstreamExpiresIn === undefined) {
+    logger.error(
+      'Upstream omitted expires_in on refresh; defaulting to 3600s',
+      { clientId: client.id },
+    );
+  }
+  const expiresAt = now + toMilliseconds(upstreamExpiresIn ?? 3600);
 
   const newRefreshToken =
     upstreamToken.refresh_token ?? providedRefreshToken.refreshToken;
@@ -369,11 +376,26 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const upstreamRefreshToken = authorizationCode.token.refresh_token;
+      if (!upstreamRefreshToken) {
+        logger.error(
+          'Authorization code missing refresh_token; upstream did not issue one',
+          { clientId: client.id, userId: authorizationCode.user?.id },
+        );
+        return NextResponse.json(
+          {
+            error: 'server_error',
+            error_description: 'Upstream did not issue a refresh token',
+          },
+          { status: 502 },
+        );
+      }
+
       // Save the token
       logger.info('Saving token for authorization_code grant');
       const token = await model.saveToken({
         accessToken: authorizationCode.token.access_token,
-        refreshToken: authorizationCode.token.refresh_token,
+        refreshToken: upstreamRefreshToken,
         expires_at: authorizationCode.token.access_token_expires_at,
         client: client,
         user: authorizationCode.user,
@@ -382,7 +404,7 @@ export async function POST(request: NextRequest) {
       });
 
       await model.saveRefreshToken({
-        refreshToken: token.refreshToken ?? '',
+        refreshToken: upstreamRefreshToken,
         accessToken: token.accessToken,
       });
 
