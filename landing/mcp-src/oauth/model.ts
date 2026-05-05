@@ -10,6 +10,7 @@ import {
   getTokens,
   getRefreshTokens,
   getRefreshResults,
+  getRefreshFailures,
   getAuthorizationCodes,
   getClientRegisterHeaders,
   getClientAuthContexts,
@@ -17,6 +18,7 @@ import {
   ClientAuthContextRecord,
   RefreshToken,
   RefreshResult,
+  RefreshFailure,
 } from './kv-store';
 
 class Model implements AuthorizationCodeModel {
@@ -147,6 +149,28 @@ class Model implements AuthorizationCodeModel {
     oldRefreshToken: string,
   ) => Promise<RefreshResult | undefined> = async (oldRefreshToken) => {
     return getRefreshResults().get(oldRefreshToken);
+  };
+
+  // 4xx rejections won't recover — upstream has invalidated the token.
+  // 10 min is plenty to absorb retry storms without keeping stale entries
+  // around if a misbehaving client genuinely re-auths and starts over.
+  private static REFRESH_FAILURE_TTL_MS = 10 * 60_000;
+
+  saveRefreshFailure: (
+    refreshToken: string,
+    detail: RefreshFailure,
+  ) => Promise<void> = async (refreshToken, detail) => {
+    await getRefreshFailures().set(
+      refreshToken,
+      detail,
+      Model.REFRESH_FAILURE_TTL_MS,
+    );
+  };
+
+  getRefreshFailure: (
+    refreshToken: string,
+  ) => Promise<RefreshFailure | undefined> = async (refreshToken) => {
+    return getRefreshFailures().get(refreshToken);
   };
 }
 

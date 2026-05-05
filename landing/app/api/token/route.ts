@@ -31,6 +31,43 @@ class RefreshError extends Error {
   }
 }
 
+// Extracts structured details from openid-client errors so the upstream
+// failure log captures the actual OAuth `error` / `error_description` instead
+// of the generic "server responded with an error in the response body".
+function extractUpstreamErrorDetails(error: unknown): {
+  name?: string;
+  message?: string;
+  status?: number;
+  oauthError?: string;
+  oauthErrorDescription?: string;
+  cause?: string;
+} {
+  if (!(error instanceof Error)) return { message: String(error) };
+  const e = error as Error & {
+    status?: unknown;
+    error?: unknown;
+    error_description?: unknown;
+    cause?: unknown;
+  };
+  const asString = (v: unknown): string | undefined =>
+    typeof v === 'string' ? v : undefined;
+  const asNumber = (v: unknown): number | undefined =>
+    typeof v === 'number' ? v : undefined;
+  return {
+    name: e.name,
+    message: e.message,
+    status: asNumber(e.status),
+    oauthError: asString(e.error),
+    oauthErrorDescription: asString(e.error_description),
+    cause:
+      e.cause instanceof Error
+        ? `${e.cause.name}: ${e.cause.message}`
+        : e.cause !== undefined
+          ? String(e.cause)
+          : undefined,
+  };
+}
+
 async function executeRefresh(
   refreshToken: string,
   client: Client,
@@ -76,20 +113,32 @@ async function executeRefresh(
     );
     logger.info('Upstream token exchange successful');
   } catch (error) {
+    const details = extractUpstreamErrorDetails(error);
     const isClientError =
-      error instanceof Error &&
-      'status' in error &&
-      typeof (error as { status: unknown }).status === 'number' &&
-      (error as { status: number }).status >= 400 &&
-      (error as { status: number }).status < 500;
+      details.status !== undefined &&
+      details.status >= 400 &&
+      details.status < 500;
 
     logger.error('Upstream refresh token exchange failed', {
-      error: error instanceof Error ? error.message : error,
+      ...details,
       clientId: client.id,
       isClientError,
     });
 
     if (isClientError) {
+      // Cache the dead RT so subsequent retries from the same client
+      // (which we've observed firing 100-500 requests in sub-second bursts)
+      // get a fast 400 from KV instead of stampeding upstream.
+      await model
+        .saveRefreshFailure(refreshToken, {
+          failedAt: Date.now(),
+          oauthError: details.oauthError,
+          oauthErrorDescription: details.oauthErrorDescription,
+        })
+        .catch((err) => {
+          logger.warn('Failed to cache refresh failure', { err });
+        });
+
       await model.deleteToken(oldToken);
       await model.deleteRefreshToken(providedRefreshToken);
       throw new RefreshError(
@@ -447,6 +496,26 @@ export async function POST(request: NextRequest) {
           {
             error: 'invalid_request',
             error_description: 'refresh_token is required',
+          },
+          { status: 400 },
+        );
+      }
+
+      // Absorb retry storms: if upstream already rejected this RT recently,
+      // skip the singleflight + upstream call and return the cached failure.
+      const cachedFailure = await model
+        .getRefreshFailure(refreshToken)
+        .catch(() => undefined);
+      if (cachedFailure) {
+        logger.info('Refresh token in failure cache; rejecting fast', {
+          clientId: client.id,
+          ageMs: Date.now() - cachedFailure.failedAt,
+          oauthError: cachedFailure.oauthError,
+        });
+        return NextResponse.json(
+          {
+            error: 'invalid_grant',
+            error_description: 'Invalid or expired refresh token',
           },
           { status: 400 },
         );

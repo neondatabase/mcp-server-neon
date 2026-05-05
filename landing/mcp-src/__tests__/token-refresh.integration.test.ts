@@ -19,6 +19,8 @@ vi.mock('../oauth/model', () => ({
     deleteRefreshToken: vi.fn(),
     saveRefreshResult: vi.fn(),
     getRefreshResult: vi.fn(),
+    saveRefreshFailure: vi.fn(),
+    getRefreshFailure: vi.fn(),
   },
 }));
 
@@ -118,6 +120,8 @@ describe('Token refresh flow', () => {
     mockModel.deleteRefreshToken.mockResolvedValue(true);
     mockModel.saveRefreshResult.mockResolvedValue(undefined);
     mockModel.getRefreshResult.mockResolvedValue(undefined);
+    mockModel.saveRefreshFailure.mockResolvedValue(undefined);
+    mockModel.getRefreshFailure.mockResolvedValue(undefined);
   });
 
   it('happy path: refreshes token and returns new tokens', async () => {
@@ -267,6 +271,63 @@ describe('Token refresh flow', () => {
 
       expect(mockModel.deleteToken).not.toHaveBeenCalled();
       expect(mockModel.deleteRefreshToken).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('failure cache (retry storm absorption)', () => {
+    it('writes failure cache when upstream rejects with 4xx', async () => {
+      const upstreamError = new Error(
+        'server responded with an error in the response body',
+      ) as Error & {
+        status: number;
+        error?: string;
+        error_description?: string;
+      };
+      upstreamError.status = 400;
+      upstreamError.error = 'invalid_grant';
+      upstreamError.error_description = 'token expired';
+      mockExchange.mockRejectedValue(upstreamError);
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(400);
+
+      expect(mockModel.saveRefreshFailure).toHaveBeenCalledTimes(1);
+      const [token, detail] = mockModel.saveRefreshFailure.mock.calls[0];
+      expect(token).toBe('old-refresh-token');
+      expect(detail.oauthError).toBe('invalid_grant');
+      expect(detail.oauthErrorDescription).toBe('token expired');
+      expect(typeof detail.failedAt).toBe('number');
+    });
+
+    it('rejects fast without calling upstream when failure is cached', async () => {
+      mockModel.getRefreshFailure.mockResolvedValue({
+        failedAt: Date.now() - 5_000,
+        oauthError: 'invalid_grant',
+      });
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      const body = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(body.error).toBe('invalid_grant');
+
+      // Critical: upstream must not be touched, and we must not even consult
+      // the success cache or refresh-token store.
+      expect(mockExchange).not.toHaveBeenCalled();
+      expect(mockModel.getRefreshToken).not.toHaveBeenCalled();
+      expect(mockModel.getRefreshResult).not.toHaveBeenCalled();
+    });
+
+    it('does not cache failure on transient 5xx', async () => {
+      const upstreamError = new Error('Internal Server Error') as Error & {
+        status: number;
+      };
+      upstreamError.status = 503;
+      mockExchange.mockRejectedValue(upstreamError);
+
+      await POST(makeTokenRequest('old-refresh-token'));
+
+      expect(mockModel.saveRefreshFailure).not.toHaveBeenCalled();
     });
   });
 });
