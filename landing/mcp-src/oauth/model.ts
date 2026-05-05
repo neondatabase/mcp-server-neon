@@ -129,10 +129,16 @@ class Model implements AuthorizationCodeModel {
       return getAuthorizationCodes().delete(code.authorizationCode);
     };
 
-  // Widens the cross-instance race window so a follower replaying a just-rotated
-  // refresh_token (laptop wake, transient network blip) still gets the cached
-  // result instead of a re-auth prompt.
-  private static REFRESH_RESULT_TTL_MS = 5 * 60_000;
+  // Source-code analysis of Hydra v1.11.x confirmed `token_inactive` upstream
+  // errors are triggered by *refresh-token-reuse detection* — once Hydra sees
+  // the same RT twice (laptop wake, multiple Cursor windows, network blip
+  // mid-rotation) it revokes the entire chain and the user must re-auth.
+  // Returning the cached new pair instead of forwarding the stale RT upstream
+  // is the only thing keeping these clients from being kicked. Stretching the
+  // window from 5min to 30min catches restart/sleep scenarios; the cached
+  // access token has its own 1h `expires_at`, so worst case the client gets a
+  // ~30-min-old token that still has ~30 min of life.
+  private static REFRESH_RESULT_TTL_MS = 30 * 60_000;
 
   saveRefreshResult: (
     oldRefreshToken: string,
