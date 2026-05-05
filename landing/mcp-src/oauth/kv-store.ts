@@ -109,6 +109,23 @@ export const getRefreshResults = createLazyKeyv<RefreshResult>(
   'Refresh results (cached refresh token exchange outcome)',
 );
 
+/**
+ * Cached upstream rejection for a refresh token. Lets us short-circuit retry
+ * storms (clients have been observed firing 100–500 retries in sub-second
+ * bursts after an `invalid_grant`) without re-pinging upstream Hydra each
+ * time.
+ */
+export type RefreshFailure = {
+  failedAt: number;
+  oauthError?: string;
+  oauthErrorDescription?: string;
+};
+
+export const getRefreshFailures = createLazyKeyv<RefreshFailure>(
+  'refresh_failures',
+  'Refresh failures (cached dead refresh token rejections)',
+);
+
 export type ApiKeyRecord = {
   apiKey: string;
   authMethod: AuthDetailsResponse['auth_method'];
