@@ -48,6 +48,15 @@ vi.mock('@vercel/functions', () => ({
   waitUntil: vi.fn(),
 }));
 
+// Default: lock is a passthrough — keeps the existing tests focused on the
+// underlying refresh logic rather than the lock plumbing. The dedicated
+// `refresh-lock.test.ts` covers acquire/wait/release semantics.
+vi.mock('../oauth/refresh-lock', () => ({
+  withRefreshLock: vi.fn(async (_token: string, execute: () => unknown) =>
+    execute(),
+  ),
+}));
+
 import { POST } from '../../app/api/token/route';
 import { model } from '../oauth/model';
 import { exchangeRefreshToken } from '../../lib/oauth/client';
