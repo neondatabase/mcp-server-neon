@@ -57,6 +57,25 @@ vi.mock('../oauth/refresh-lock', () => ({
   ),
 }));
 
+// Spy on logger so SLO assertions can read what was emitted.
+const loggerInfoSpy = vi.fn();
+vi.mock('../utils/logger', () => ({
+  logger: {
+    info: (...args: unknown[]) => loggerInfoSpy(...args),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
+
+function lastSloLine(): string | undefined {
+  for (let i = loggerInfoSpy.mock.calls.length - 1; i >= 0; i--) {
+    const arg = loggerInfoSpy.mock.calls[i][0];
+    if (typeof arg === 'string' && arg.startsWith('[SLO] refresh ')) return arg;
+  }
+  return undefined;
+}
+
 import { POST } from '../../app/api/token/route';
 import { model } from '../oauth/model';
 import { exchangeRefreshToken } from '../../lib/oauth/client';
@@ -119,6 +138,7 @@ function makeUpstreamTokenResponse(overrides: Record<string, unknown> = {}) {
 describe('Token refresh flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    loggerInfoSpy.mockClear();
 
     mockModel.getClient.mockResolvedValue(TEST_CLIENT as any);
     mockModel.getRefreshToken.mockResolvedValue(TEST_REFRESH_TOKEN_RECORD);
@@ -383,6 +403,85 @@ describe('Token refresh flow', () => {
       const [, detail] = mockModel.saveRefreshFailure.mock.calls[0];
       expect(detail.oauthErrorDescription).toBe('client_mismatch');
       expect(mockExchange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('SLO instrumentation', () => {
+    it('happy path emits outcome=success', async () => {
+      mockExchange.mockResolvedValue(makeUpstreamTokenResponse() as never);
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(200);
+      const line = lastSloLine();
+      expect(line).toMatch(/outcome=success\b/);
+      expect(line).toMatch(/elapsedMs=\d+/);
+      expect(line).toMatch(/clientId=client-1/);
+    });
+
+    it('failure-cache fast-fail emits outcome=correct_invalid_grant', async () => {
+      mockModel.getRefreshFailure.mockResolvedValue({
+        failedAt: Date.now() - 5_000,
+        oauthError: 'invalid_grant',
+      });
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(400);
+      expect(lastSloLine()).toMatch(/outcome=correct_invalid_grant\b/);
+      expect(lastSloLine()).toMatch(/reason=failure_cache_hit/);
+    });
+
+    it('RT-not-found emits outcome=correct_invalid_grant', async () => {
+      mockModel.getRefreshToken.mockResolvedValue(undefined);
+      const response = await POST(makeTokenRequest('stale-rt'));
+      expect(response.status).toBe(400);
+      expect(lastSloLine()).toMatch(/outcome=correct_invalid_grant\b/);
+    });
+
+    it('upstream 4xx emits outcome=cliff_upstream', async () => {
+      const upstreamError = new Error('inactive') as Error & {
+        status: number;
+        error?: string;
+      };
+      upstreamError.status = 401;
+      upstreamError.error = 'token_inactive';
+      mockExchange.mockRejectedValue(upstreamError);
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(400);
+      expect(lastSloLine()).toMatch(/outcome=cliff_upstream\b/);
+    });
+
+    it('upstream 5xx emits outcome=transient_upstream_5xx', async () => {
+      const upstreamError = new Error('boom') as Error & { status: number };
+      upstreamError.status = 502;
+      mockExchange.mockRejectedValue(upstreamError);
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(503);
+      expect(lastSloLine()).toMatch(/outcome=transient_upstream_5xx\b/);
+    });
+
+    it('persist failure after upstream success emits outcome=transient_persist_failure', async () => {
+      mockExchange.mockResolvedValue(makeUpstreamTokenResponse() as never);
+      mockModel.saveToken.mockRejectedValue(new Error('postgres down'));
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(500);
+      expect(lastSloLine()).toMatch(/outcome=transient_persist_failure\b/);
+    });
+
+    it('missing refresh_token in body emits outcome=bad_request', async () => {
+      const body = new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: TEST_CLIENT.id,
+        client_secret: TEST_CLIENT.secret,
+      });
+      const req = new NextRequest('http://localhost/api/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      });
+      const response = await POST(req);
+      expect(response.status).toBe(400);
+      expect(lastSloLine()).toMatch(/outcome=bad_request\b/);
     });
   });
 });

@@ -21,15 +21,62 @@ type RefreshTokenResult = {
   scope?: string | string[];
 };
 
+/**
+ * Outcome bucket for the refresh-token SLO. See dev-notes/refresh-slo.md.
+ *
+ * - `success`                    — 200 returned (fresh upstream rotation OR
+ *                                  cached cross-instance hit). Counts good.
+ * - `correct_invalid_grant`      — 400; client presented a token we knew was
+ *                                  dead (RT-not-found, failure-cache hit, etc.)
+ *                                  Counts good — our system did the right thing.
+ * - `cliff_upstream`             — 4xx from upstream Hydra. Counts BAD —
+ *                                  the chain is now revoked, user must re-auth.
+ * - `transient_lock_timeout`     — 503 from lock-waiter timeout. Counts BAD.
+ * - `transient_persist_failure`  — KV write threw after upstream rotated.
+ *                                  Counts BAD — leaks rotation state.
+ * - `transient_upstream_5xx`     — upstream Hydra unavailable. Excluded from
+ *                                  SLO (provider issue).
+ * - `bad_request`                — request validation failure. Excluded.
+ */
+type SloOutcome =
+  | 'success'
+  | 'correct_invalid_grant'
+  | 'cliff_upstream'
+  | 'transient_lock_timeout'
+  | 'transient_persist_failure'
+  | 'transient_upstream_5xx'
+  | 'bad_request';
+
 class RefreshError extends Error {
   constructor(
     public readonly oauthError: string,
     public readonly description: string,
     public readonly statusCode: number,
+    public readonly sloOutcome: SloOutcome,
   ) {
     super(description);
     this.name = 'RefreshError';
   }
+}
+
+// Stable, greppable SLO metric line. Aggregator scripts parse the
+// `outcome=<bucket>` token; other fields are diagnostic context.
+function emitRefreshSlo(
+  outcome: SloOutcome,
+  startMs: number,
+  context: {
+    clientId?: string;
+    reason?: string;
+    upstreamOauthError?: string;
+  } = {},
+): void {
+  const elapsedMs = Date.now() - startMs;
+  const fields = [`outcome=${outcome}`, `elapsedMs=${elapsedMs}`];
+  if (context.clientId) fields.push(`clientId=${context.clientId}`);
+  if (context.reason) fields.push(`reason=${context.reason}`);
+  if (context.upstreamOauthError)
+    fields.push(`upstreamOauthError=${context.upstreamOauthError}`);
+  logger.info(`[SLO] refresh ${fields.join(' ')}`);
 }
 
 // Extracts structured details from openid-client errors so the upstream
@@ -104,6 +151,7 @@ async function executeRefresh(
       'invalid_grant',
       'Invalid or expired refresh token',
       400,
+      'correct_invalid_grant',
     );
   }
 
@@ -116,6 +164,7 @@ async function executeRefresh(
       'invalid_grant',
       'Invalid or expired refresh token',
       400,
+      'correct_invalid_grant',
     );
   }
 
@@ -129,6 +178,7 @@ async function executeRefresh(
       'invalid_grant',
       'Invalid or expired refresh token',
       400,
+      'correct_invalid_grant',
     );
   }
 
@@ -172,6 +222,7 @@ async function executeRefresh(
         'invalid_grant',
         'Invalid or expired refresh token',
         400,
+        'cliff_upstream',
       );
     }
 
@@ -179,6 +230,7 @@ async function executeRefresh(
       'server_error',
       'Temporary error refreshing token, please retry',
       503,
+      'transient_upstream_5xx',
     );
   }
 
@@ -204,37 +256,67 @@ async function executeRefresh(
       'server_error',
       'Invalid token response from upstream',
       502,
+      'transient_persist_failure',
     );
   }
 
+  // Persist the rotation result. If either save throws AFTER upstream already
+  // succeeded, Hydra has rotated the chain but the client never received the
+  // new pair — they'll retry with the now-dead RT and hit a real cliff.
+  // Surface as `transient_persist_failure` so the SLO captures it directly
+  // instead of leaking through as an opaque 500.
   logger.info('Saving new tokens from refresh');
-  const token = await model.saveToken({
-    accessToken: upstreamToken.access_token,
-    refreshToken: newRefreshToken,
-    expires_at: expiresAt,
-    client: client,
-    user: oldToken.user,
-    scope: oldToken.scope,
-    grant: oldToken.grant,
-  });
+  let token: Awaited<ReturnType<typeof model.saveToken>>;
+  try {
+    token = await model.saveToken({
+      accessToken: upstreamToken.access_token,
+      refreshToken: newRefreshToken,
+      expires_at: expiresAt,
+      client: client,
+      user: oldToken.user,
+      scope: oldToken.scope,
+      grant: oldToken.grant,
+    });
 
-  await model.saveRefreshToken({
-    refreshToken: newRefreshToken,
-    accessToken: token.accessToken,
-  });
+    await model.saveRefreshToken({
+      refreshToken: newRefreshToken,
+      accessToken: token.accessToken,
+    });
+  } catch (persistErr) {
+    logger.error('Persist after upstream rotation failed', {
+      err: persistErr instanceof Error ? persistErr.message : persistErr,
+      clientId: client.id,
+    });
+    throw new RefreshError(
+      'server_error',
+      'Failed to persist refreshed tokens',
+      500,
+      'transient_persist_failure',
+    );
+  }
 
   if (!token.accessToken) {
     logger.error('Saved token missing accessToken after saveToken', {
       hasAccessToken: !!token.accessToken,
       hasRefreshToken: !!token.refreshToken,
     });
-    throw new RefreshError('server_error', 'Failed to save token', 500);
+    throw new RefreshError(
+      'server_error',
+      'Failed to save token',
+      500,
+      'transient_persist_failure',
+    );
   }
 
   const expiresIn = toSeconds(expiresAt - now);
   if (!Number.isFinite(expiresIn)) {
     logger.error('Invalid expiresIn calculated', { expiresAt, now, expiresIn });
-    throw new RefreshError('server_error', 'Invalid token expiration', 500);
+    throw new RefreshError(
+      'server_error',
+      'Invalid token expiration',
+      500,
+      'transient_persist_failure',
+    );
   }
 
   const scope = oldToken.scope;
@@ -516,9 +598,14 @@ export async function POST(request: NextRequest) {
       });
     } else if (grantType === 'refresh_token') {
       logger.info('Processing refresh_token grant');
+      const sloStartMs = Date.now();
       const refreshToken = formData.get('refresh_token');
       if (!refreshToken) {
         logger.warn('Refresh token missing from request');
+        emitRefreshSlo('bad_request', sloStartMs, {
+          clientId: client.id,
+          reason: 'missing_refresh_token',
+        });
         return NextResponse.json(
           {
             error: 'invalid_request',
@@ -538,6 +625,11 @@ export async function POST(request: NextRequest) {
           clientId: client.id,
           ageMs: Date.now() - cachedFailure.failedAt,
           oauthError: cachedFailure.oauthError,
+        });
+        emitRefreshSlo('correct_invalid_grant', sloStartMs, {
+          clientId: client.id,
+          reason: 'failure_cache_hit',
+          upstreamOauthError: cachedFailure.oauthError,
         });
         return NextResponse.json(
           {
@@ -588,6 +680,7 @@ export async function POST(request: NextRequest) {
             'invalid_grant',
             'Invalid or expired refresh token',
             400,
+            'correct_invalid_grant',
           );
         }
         return checkSuccessCache();
@@ -612,6 +705,7 @@ export async function POST(request: NextRequest) {
           peekResolution,
         );
         logger.info('Returning refresh token response');
+        emitRefreshSlo('success', sloStartMs, { clientId: client.id });
         return NextResponse.json(result);
       } catch (error) {
         // Cross-instance fallback: if another instance already completed the
@@ -620,9 +714,16 @@ export async function POST(request: NextRequest) {
           const cached = await checkSuccessCache();
           if (cached) {
             logger.info('Returning cached refresh result (cross-instance hit)');
+            emitRefreshSlo('success', sloStartMs, {
+              clientId: client.id,
+              reason: 'cache_replay_after_error',
+            });
             return NextResponse.json(cached);
           }
 
+          emitRefreshSlo(error.sloOutcome, sloStartMs, {
+            clientId: client.id,
+          });
           return NextResponse.json(
             {
               error: error.oauthError,
@@ -638,6 +739,9 @@ export async function POST(request: NextRequest) {
           (error as { status: unknown }).status === 503
         ) {
           logger.info('Refresh lock waiter timed out; returning 503 for retry');
+          emitRefreshSlo('transient_lock_timeout', sloStartMs, {
+            clientId: client.id,
+          });
           return NextResponse.json(
             {
               error: 'temporarily_unavailable',
