@@ -69,6 +69,29 @@ function extractUpstreamErrorDetails(error: unknown): {
   };
 }
 
+// When a holder bails out before the upstream call (RT/AT not found in KV,
+// client mismatch, etc.), populate the failure cache too — otherwise concurrent
+// waiters time out with a 503 instead of getting the actual 400 invalid_grant.
+// Outcome of these checks is durable: an RT we don't have in storage will not
+// suddenly become valid, so caching is correct.
+async function cachePreUpstreamFailure(
+  refreshToken: string,
+  reason: string,
+): Promise<void> {
+  await model
+    .saveRefreshFailure(refreshToken, {
+      failedAt: Date.now(),
+      oauthError: 'invalid_grant',
+      oauthErrorDescription: reason,
+    })
+    .catch((err) => {
+      logger.warn('Failed to cache pre-upstream refresh failure', {
+        err,
+        reason,
+      });
+    });
+}
+
 async function executeRefresh(
   refreshToken: string,
   client: Client,
@@ -76,6 +99,7 @@ async function executeRefresh(
   const providedRefreshToken = await model.getRefreshToken(refreshToken);
   if (!providedRefreshToken) {
     logger.warn('Refresh token not found in storage');
+    await cachePreUpstreamFailure(refreshToken, 'rt_not_found_in_storage');
     throw new RefreshError(
       'invalid_grant',
       'Invalid or expired refresh token',
@@ -87,6 +111,7 @@ async function executeRefresh(
   if (!oldToken) {
     logger.warn('Access token for refresh token not found, cleaning up');
     await model.deleteRefreshToken(providedRefreshToken);
+    await cachePreUpstreamFailure(refreshToken, 'access_token_not_found');
     throw new RefreshError(
       'invalid_grant',
       'Invalid or expired refresh token',
@@ -99,6 +124,7 @@ async function executeRefresh(
       tokenClientId: oldToken.client.id,
       requestClientId: client.id,
     });
+    await cachePreUpstreamFailure(refreshToken, 'client_mismatch');
     throw new RefreshError(
       'invalid_grant',
       'Invalid or expired refresh token',
@@ -535,13 +561,36 @@ export async function POST(request: NextRequest) {
         scope: cached.scope,
       });
 
-      const peekCachedResult = async (): Promise<
+      // Used by the outer catch to fold a winning peer's success cache write
+      // into our own response — never throws.
+      const checkSuccessCache = async (): Promise<
         RefreshTokenResult | undefined
       > => {
         const cached = await model
           .getRefreshResult(refreshToken)
           .catch(() => undefined);
         return cached ? cachedToResponse(cached) : undefined;
+      };
+
+      // Used by the lock-waiter poll loop. The failure cache wins: if a peer
+      // marked this RT dead (either via an upstream 4xx or a pre-upstream
+      // RT-not-found / client-mismatch), throw RefreshError so the waiter
+      // surfaces 400 immediately instead of polling until the lock-wait
+      // timeout and surfacing 503.
+      const peekResolution = async (): Promise<
+        RefreshTokenResult | undefined
+      > => {
+        const failure = await model
+          .getRefreshFailure(refreshToken)
+          .catch(() => undefined);
+        if (failure) {
+          throw new RefreshError(
+            'invalid_grant',
+            'Invalid or expired refresh token',
+            400,
+          );
+        }
+        return checkSuccessCache();
       };
 
       try {
@@ -560,7 +609,7 @@ export async function POST(request: NextRequest) {
             singleflight(`refresh:${refreshToken}`, () =>
               executeRefresh(refreshToken, client),
             ),
-          peekCachedResult,
+          peekResolution,
         );
         logger.info('Returning refresh token response');
         return NextResponse.json(result);
@@ -568,7 +617,7 @@ export async function POST(request: NextRequest) {
         // Cross-instance fallback: if another instance already completed the
         // refresh, the distributed cache will have the result.
         if (error instanceof RefreshError) {
-          const cached = await peekCachedResult();
+          const cached = await checkSuccessCache();
           if (cached) {
             logger.info('Returning cached refresh result (cross-instance hit)');
             return NextResponse.json(cached);

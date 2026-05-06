@@ -339,4 +339,50 @@ describe('Token refresh flow', () => {
       expect(mockModel.saveRefreshFailure).not.toHaveBeenCalled();
     });
   });
+
+  describe('pre-upstream failure cache (waiter 503 → 400 fix)', () => {
+    it('caches failure when refresh_token is not in storage', async () => {
+      mockModel.getRefreshToken.mockResolvedValue(undefined);
+
+      const response = await POST(makeTokenRequest('stale-rt'));
+      expect(response.status).toBe(400);
+
+      expect(mockModel.saveRefreshFailure).toHaveBeenCalledTimes(1);
+      const [token, detail] = mockModel.saveRefreshFailure.mock.calls[0];
+      expect(token).toBe('stale-rt');
+      expect(detail.oauthError).toBe('invalid_grant');
+      expect(detail.oauthErrorDescription).toBe('rt_not_found_in_storage');
+      // Critical: upstream must NOT have been touched.
+      expect(mockExchange).not.toHaveBeenCalled();
+    });
+
+    it('caches failure when access_token for the refresh_token is missing', async () => {
+      mockModel.getAccessToken.mockResolvedValue(undefined);
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(400);
+
+      expect(mockModel.saveRefreshFailure).toHaveBeenCalledTimes(1);
+      const [, detail] = mockModel.saveRefreshFailure.mock.calls[0];
+      expect(detail.oauthErrorDescription).toBe('access_token_not_found');
+      // Existing cleanup behaviour preserved.
+      expect(mockModel.deleteRefreshToken).toHaveBeenCalledTimes(1);
+      expect(mockExchange).not.toHaveBeenCalled();
+    });
+
+    it('caches failure when client_id does not match the token', async () => {
+      mockModel.getAccessToken.mockResolvedValue({
+        ...TEST_OLD_ACCESS_TOKEN,
+        client: { ...TEST_CLIENT, id: 'different-client' },
+      } as never);
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(400);
+
+      expect(mockModel.saveRefreshFailure).toHaveBeenCalledTimes(1);
+      const [, detail] = mockModel.saveRefreshFailure.mock.calls[0];
+      expect(detail.oauthErrorDescription).toBe('client_mismatch');
+      expect(mockExchange).not.toHaveBeenCalled();
+    });
+  });
 });

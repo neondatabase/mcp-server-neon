@@ -446,6 +446,43 @@ describe('Concurrent refresh — race coverage', () => {
     // timeout in any healthy run.
     expect(p99).toBeLessThan(1_000);
   });
+
+  it('holder bails pre-upstream → waiters get 400 invalid_grant, not 503', async () => {
+    // Don't seed the RT — first arrival becomes the holder, hits
+    // "Refresh token not found in storage", caches the failure, and
+    // throws RefreshError before upstream. With the pre-upstream-failure
+    // cache fix, waiters peek the failure cache on their next poll and
+    // surface 400 instead of timing out to 503.
+    const N = 30;
+    const responses = await Promise.all(
+      Array.from({ length: N }, () => POST(makeRequest('rt-never-stored'))),
+    );
+
+    const statuses = responses.map((r) => r.status);
+    const codes = statuses.reduce(
+      (acc, s) => {
+        acc[s] = (acc[s] ?? 0) + 1;
+        return acc;
+      },
+      {} as Record<number, number>,
+    );
+
+    console.log(
+      `[bench] pre-upstream bail  N=${N}  upstream=${state.upstreamCalls}  ` +
+        `statuses=${JSON.stringify(codes)}`,
+    );
+
+    expect(state.upstreamCalls).toBe(0);
+    // The whole population should land on 400, none on 503.
+    expect(codes[400]).toBe(N);
+    expect(codes[503] ?? 0).toBe(0);
+
+    // Body should carry invalid_grant, not temporarily_unavailable.
+    const bodies = await Promise.all(responses.map((r) => r.json()));
+    const errors = new Set(bodies.map((b: { error: string }) => b.error));
+    expect(errors.size).toBe(1);
+    expect([...errors][0]).toBe('invalid_grant');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────
