@@ -8,6 +8,7 @@ import { identify, flushAnalytics } from '../../../mcp-src/analytics/analytics';
 import { handleOAuthError } from '../../../lib/errors';
 import { logger } from '../../../mcp-src/utils/logger';
 import { singleflight } from '../../../mcp-src/utils/singleflight';
+import { retryAsync } from '../../../mcp-src/utils/retry';
 import {
   withRefreshLock,
   signalTransientFailure,
@@ -268,54 +269,6 @@ async function executeRefresh(
     );
   }
 
-  // Persist the rotation result. If either save throws AFTER upstream already
-  // succeeded, Hydra has rotated the chain but the client never received the
-  // new pair — they'll retry with the now-dead RT and hit a real cliff.
-  // Surface as `transient_persist_failure` so the SLO captures it directly
-  // instead of leaking through as an opaque 500.
-  logger.info('Saving new tokens from refresh');
-  let token: Awaited<ReturnType<typeof model.saveToken>>;
-  try {
-    token = await model.saveToken({
-      accessToken: upstreamToken.access_token,
-      refreshToken: newRefreshToken,
-      expires_at: expiresAt,
-      client: client,
-      user: oldToken.user,
-      scope: oldToken.scope,
-      grant: oldToken.grant,
-    });
-
-    await model.saveRefreshToken({
-      refreshToken: newRefreshToken,
-      accessToken: token.accessToken,
-    });
-  } catch (persistErr) {
-    logger.error('Persist after upstream rotation failed', {
-      err: persistErr instanceof Error ? persistErr.message : persistErr,
-      clientId: client.id,
-    });
-    throw new RefreshError(
-      'server_error',
-      'Failed to persist refreshed tokens',
-      500,
-      'transient_persist_failure',
-    );
-  }
-
-  if (!token.accessToken) {
-    logger.error('Saved token missing accessToken after saveToken', {
-      hasAccessToken: !!token.accessToken,
-      hasRefreshToken: !!token.refreshToken,
-    });
-    throw new RefreshError(
-      'server_error',
-      'Failed to save token',
-      500,
-      'transient_persist_failure',
-    );
-  }
-
   const expiresIn = toSeconds(expiresAt - now);
   if (!Number.isFinite(expiresIn)) {
     logger.error('Invalid expiresIn calculated', { expiresAt, now, expiresIn });
@@ -331,17 +284,25 @@ async function executeRefresh(
   const scopeValue =
     typeof scope === 'string' || Array.isArray(scope) ? scope : undefined;
 
+  // Build the response from the upstream tokens directly. We commit to this
+  // exact pair regardless of what happens during persistence — the goal of
+  // the next phase is to make our local KV agree with what we tell the
+  // client, but if it can't, the client's tokens are still valid at upstream.
   const result: RefreshTokenResult = {
-    access_token: token.accessToken,
+    access_token: upstreamToken.access_token,
     expires_in: expiresIn,
     token_type: 'bearer',
-    refresh_token: token.refreshToken ?? newRefreshToken,
+    refresh_token: newRefreshToken,
     scope: scopeValue,
   };
 
-  // Cache the result for cross-instance deduplication (short TTL, best-effort).
-  // Must complete before deleting old tokens so concurrent/cross-instance callers
-  // can read the cached result if they hit RefreshError.
+  // Write the cross-instance success cache FIRST, before the local
+  // refresh_tokens persist. Reasoning: if persist fails after this point,
+  // peers (and this client's retries with the OLD refresh_token) can still
+  // serve the new pair from this cache via getRefreshResult. Without this
+  // ordering, a Postgres blip during persist would leak the rotation —
+  // Hydra has advanced but our system has no record, so any retry hits
+  // upstream again and gets `token_inactive`.
   await model
     .saveRefreshResult(refreshToken, {
       accessToken: result.access_token,
@@ -353,10 +314,63 @@ async function executeRefresh(
       logger.warn('Failed to cache refresh result', { err });
     });
 
-  await model.deleteToken(oldToken);
-  if (newRefreshToken !== providedRefreshToken.refreshToken) {
-    await model.deleteRefreshToken(providedRefreshToken);
+  // Persist the new pair into refresh_tokens with retry. Most persist
+  // failures are transient (Postgres connection blip, deadlock, brief
+  // unavailability) and clear within milliseconds. Three quick attempts
+  // with backoff catches that without piling latency on the success path.
+  //
+  // If all retries fail, throw `transient_persist_failure`. The route's
+  // outer catch will then see that the success cache (written above) has
+  // the rotation outcome and serve the client a 200 from cache — the
+  // "degraded" path. Throwing here is what gets the SLO bucket recorded
+  // correctly; the cache rescue is handled in the route layer.
+  logger.info('Saving new tokens from refresh');
+  try {
+    await retryAsync(
+      async () => {
+        const saved = await model.saveToken({
+          accessToken: upstreamToken.access_token,
+          refreshToken: newRefreshToken,
+          expires_at: expiresAt,
+          client: client,
+          user: oldToken.user,
+          scope: oldToken.scope,
+          grant: oldToken.grant,
+        });
+        await model.saveRefreshToken({
+          refreshToken: newRefreshToken,
+          accessToken: saved.accessToken,
+        });
+        if (!saved.accessToken) {
+          throw new Error('saveToken returned token without accessToken');
+        }
+      },
+      { attempts: 3, delaysMs: [50, 250], op: 'persist refresh result' },
+    );
+  } catch (persistErr) {
+    logger.error('Persist after upstream rotation failed (after retry)', {
+      err: persistErr instanceof Error ? persistErr.message : persistErr,
+      clientId: client.id,
+    });
+    throw new RefreshError(
+      'server_error',
+      'Failed to persist refreshed tokens',
+      500,
+      'transient_persist_failure',
+    );
   }
+
+  // Best-effort cleanup of old tokens. Errors are swallowed — they'll TTL
+  // out and the new tokens are already live.
+  await model.deleteToken(oldToken).catch((err) => {
+    logger.warn('Failed to delete old access token', { err });
+  });
+  if (newRefreshToken !== providedRefreshToken.refreshToken) {
+    await model.deleteRefreshToken(providedRefreshToken).catch((err) => {
+      logger.warn('Failed to delete old refresh token', { err });
+    });
+  }
+
   logger.info('Refresh token exchanged successfully');
 
   logger.info('Building refresh token response', {
@@ -727,14 +741,35 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(result);
       } catch (error) {
         // Cross-instance fallback: if another instance already completed the
-        // refresh, the distributed cache will have the result.
+        // refresh, the distributed cache will have the result. Also covers
+        // the persist-failure degrade path: executeRefresh writes the cache
+        // BEFORE the persist phase, so a persist failure leaves the cache
+        // populated and the client gets a clean 200 from here instead of a
+        // 500 + immediate cliff.
         if (error instanceof RefreshError) {
           const cached = await checkSuccessCache();
           if (cached) {
-            logger.info('Returning cached refresh result (cross-instance hit)');
-            emitRefreshSlo('success', sloStartMs, {
+            // Persist-failure is special: we want the SLO to count it as a
+            // bad outcome even though the user gets a 200. Without this
+            // override, the metric would silently mask Postgres degradation.
+            // Other RefreshError-with-cache cases are genuine cache replays.
+            const sloBucket: SloOutcome =
+              error.sloOutcome === 'transient_persist_failure'
+                ? 'transient_persist_failure'
+                : 'success';
+            logger.info(
+              'Returning cached refresh result (cross-instance hit)',
+              {
+                sloBucket,
+                underlyingOutcome: error.sloOutcome,
+              },
+            );
+            emitRefreshSlo(sloBucket, sloStartMs, {
               clientId: client.id,
-              reason: 'cache_replay_after_error',
+              reason:
+                error.sloOutcome === 'transient_persist_failure'
+                  ? 'recovered_via_cache'
+                  : 'cache_replay_after_error',
             });
             return NextResponse.json(cached);
           }

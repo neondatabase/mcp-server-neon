@@ -496,13 +496,41 @@ describe('Token refresh flow', () => {
       expect(lastSloLine()).toMatch(/outcome=transient_upstream_5xx\b/);
     });
 
-    it('persist failure after upstream success emits outcome=transient_persist_failure', async () => {
+    it('persist failure after upstream success degrades to 200 via cache + SLO captures persist-failure', async () => {
       mockExchange.mockResolvedValue(makeUpstreamTokenResponse() as never);
+      // saveToken fails on every retry attempt.
       mockModel.saveToken.mockRejectedValue(new Error('postgres down'));
+      // The success cache lookup in the route's outer catch finds the
+      // entry executeRefresh wrote BEFORE the persist phase.
+      mockModel.getRefreshResult.mockResolvedValue({
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+        expiresAt: Date.now() + 3600_000,
+        scope: 'read write',
+      });
 
       const response = await POST(makeTokenRequest('old-refresh-token'));
-      expect(response.status).toBe(500);
+      const body = await response.json();
+
+      // User-visible: success. They got tokens via the cross-instance cache.
+      expect(response.status).toBe(200);
+      expect(body.access_token).toBe('new-access-token');
+      // SLO: bad outcome counted, even though user got 200. This is the
+      // signal that lets us track Postgres degradation rates.
       expect(lastSloLine()).toMatch(/outcome=transient_persist_failure\b/);
+      expect(lastSloLine()).toMatch(/reason=recovered_via_cache/);
+    });
+
+    it('persist retry — succeeds on attempt 2 emits outcome=success', async () => {
+      mockExchange.mockResolvedValue(makeUpstreamTokenResponse() as never);
+      mockModel.saveToken
+        .mockRejectedValueOnce(new Error('transient blip'))
+        .mockImplementation(async (token: any) => token);
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(200);
+      expect(lastSloLine()).toMatch(/outcome=success\b/);
+      expect(mockModel.saveToken).toHaveBeenCalledTimes(2);
     });
 
     it('missing refresh_token in body emits outcome=bad_request', async () => {
