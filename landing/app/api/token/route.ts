@@ -8,6 +8,7 @@ import { identify, flushAnalytics } from '../../../mcp-src/analytics/analytics';
 import { handleOAuthError } from '../../../lib/errors';
 import { logger } from '../../../mcp-src/utils/logger';
 import { singleflight } from '../../../mcp-src/utils/singleflight';
+import { withRefreshLock } from '../../../mcp-src/oauth/refresh-lock';
 
 const toSeconds = (ms: number): number => Math.floor(ms / 1000);
 const toMilliseconds = (seconds: number): number => seconds * 1000;
@@ -521,12 +522,45 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const cachedToResponse = (cached: {
+        accessToken: string;
+        refreshToken: string;
+        expiresAt: number;
+        scope?: string | string[];
+      }): RefreshTokenResult => ({
+        access_token: cached.accessToken,
+        expires_in: toSeconds(cached.expiresAt - Date.now()),
+        token_type: 'bearer' as const,
+        refresh_token: cached.refreshToken,
+        scope: cached.scope,
+      });
+
+      const peekCachedResult = async (): Promise<
+        RefreshTokenResult | undefined
+      > => {
+        const cached = await model
+          .getRefreshResult(refreshToken)
+          .catch(() => undefined);
+        return cached ? cachedToResponse(cached) : undefined;
+      };
+
       try {
-        // Singleflight: concurrent requests on the same instance share one
-        // execution. The first caller does the upstream exchange; others
-        // await the same Promise.
-        const result = await singleflight(`refresh:${refreshToken}`, () =>
-          executeRefresh(refreshToken, client),
+        // Distributed lock + singleflight + cross-instance cache, in order:
+        //   - withRefreshLock holds a Redis lock so two Vercel instances
+        //     can't both forward the same RT to upstream Hydra and trigger
+        //     reuse-detection (which would revoke the entire chain).
+        //   - The peek closure lets a waiter return as soon as the lock
+        //     holder writes the success cache, avoiding the upstream call
+        //     entirely.
+        //   - Inside the lock, singleflight still dedups same-instance
+        //     concurrent calls so we don't spam Redis SET ops.
+        const result = await withRefreshLock(
+          refreshToken,
+          () =>
+            singleflight(`refresh:${refreshToken}`, () =>
+              executeRefresh(refreshToken, client),
+            ),
+          peekCachedResult,
         );
         logger.info('Returning refresh token response');
         return NextResponse.json(result);
@@ -534,18 +568,10 @@ export async function POST(request: NextRequest) {
         // Cross-instance fallback: if another instance already completed the
         // refresh, the distributed cache will have the result.
         if (error instanceof RefreshError) {
-          const cached = await model
-            .getRefreshResult(refreshToken)
-            .catch(() => undefined);
+          const cached = await peekCachedResult();
           if (cached) {
             logger.info('Returning cached refresh result (cross-instance hit)');
-            return NextResponse.json({
-              access_token: cached.accessToken,
-              expires_in: toSeconds(cached.expiresAt - Date.now()),
-              token_type: 'bearer' as const,
-              refresh_token: cached.refreshToken,
-              scope: cached.scope,
-            });
+            return NextResponse.json(cached);
           }
 
           return NextResponse.json(
@@ -554,6 +580,22 @@ export async function POST(request: NextRequest) {
               error_description: error.description,
             },
             { status: error.statusCode },
+          );
+        }
+        // Lock-wait timeout: surface as 503 so the client retries.
+        if (
+          error instanceof Error &&
+          'status' in error &&
+          (error as { status: unknown }).status === 503
+        ) {
+          logger.info('Refresh lock waiter timed out; returning 503 for retry');
+          return NextResponse.json(
+            {
+              error: 'temporarily_unavailable',
+              error_description:
+                'A refresh of this token is in progress; please retry shortly',
+            },
+            { status: 503 },
           );
         }
         throw error;

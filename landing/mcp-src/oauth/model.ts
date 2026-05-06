@@ -134,11 +134,15 @@ class Model implements AuthorizationCodeModel {
   // the same RT twice (laptop wake, multiple Cursor windows, network blip
   // mid-rotation) it revokes the entire chain and the user must re-auth.
   // Returning the cached new pair instead of forwarding the stale RT upstream
-  // is the only thing keeping these clients from being kicked. Stretching the
-  // window from 5min to 30min catches restart/sleep scenarios; the cached
-  // access token has its own 1h `expires_at`, so worst case the client gets a
-  // ~30-min-old token that still has ~30 min of life.
-  private static REFRESH_RESULT_TTL_MS = 30 * 60_000;
+  // is the only thing keeping these clients from being kicked.
+  //
+  // 24h widens the replay window past laptop-sleep / process-restart
+  // scenarios. The cached access token still carries its own 1h expiry, so a
+  // late cache hit returns an AT that may already be expired — the client
+  // will then refresh again with the cached RT, hitting the same chain
+  // forward. Storage cost is bounded by rotation frequency × 24h and is
+  // small in practice.
+  private static REFRESH_RESULT_TTL_MS = 24 * 60 * 60_000;
 
   saveRefreshResult: (
     oldRefreshToken: string,
