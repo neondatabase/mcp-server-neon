@@ -51,10 +51,16 @@ vi.mock('@vercel/functions', () => ({
 // Default: lock is a passthrough — keeps the existing tests focused on the
 // underlying refresh logic rather than the lock plumbing. The dedicated
 // `refresh-lock.test.ts` covers acquire/wait/release semantics.
+const mockSignalTransientFailure = vi.fn().mockResolvedValue(undefined);
+const mockPeekTransientFailure = vi.fn().mockResolvedValue(false);
 vi.mock('../oauth/refresh-lock', () => ({
   withRefreshLock: vi.fn(async (_token: string, execute: () => unknown) =>
     execute(),
   ),
+  signalTransientFailure: (...args: unknown[]) =>
+    mockSignalTransientFailure(...args),
+  peekTransientFailure: (...args: unknown[]) =>
+    mockPeekTransientFailure(...args),
 }));
 
 // Spy on logger so SLO assertions can read what was emitted.
@@ -300,6 +306,37 @@ describe('Token refresh flow', () => {
 
       expect(mockModel.deleteToken).not.toHaveBeenCalled();
       expect(mockModel.deleteRefreshToken).not.toHaveBeenCalled();
+    });
+
+    it('signals transient failure on upstream 5xx so waiters can exit early', async () => {
+      const upstreamError = new Error('Internal Server Error') as Error & {
+        status: number;
+      };
+      upstreamError.status = 500;
+      mockExchange.mockRejectedValue(upstreamError);
+      mockSignalTransientFailure.mockClear();
+
+      await POST(makeTokenRequest('old-refresh-token'));
+
+      expect(mockSignalTransientFailure).toHaveBeenCalledTimes(1);
+      expect(mockSignalTransientFailure).toHaveBeenCalledWith(
+        'old-refresh-token',
+      );
+    });
+
+    it('does not signal transient failure on upstream 4xx (it is a hard cliff, not transient)', async () => {
+      const upstreamError = new Error('inactive') as Error & {
+        status: number;
+        error?: string;
+      };
+      upstreamError.status = 401;
+      upstreamError.error = 'token_inactive';
+      mockExchange.mockRejectedValue(upstreamError);
+      mockSignalTransientFailure.mockClear();
+
+      await POST(makeTokenRequest('old-refresh-token'));
+
+      expect(mockSignalTransientFailure).not.toHaveBeenCalled();
     });
   });
 

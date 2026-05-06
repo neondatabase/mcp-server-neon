@@ -8,7 +8,11 @@ import { identify, flushAnalytics } from '../../../mcp-src/analytics/analytics';
 import { handleOAuthError } from '../../../lib/errors';
 import { logger } from '../../../mcp-src/utils/logger';
 import { singleflight } from '../../../mcp-src/utils/singleflight';
-import { withRefreshLock } from '../../../mcp-src/oauth/refresh-lock';
+import {
+  withRefreshLock,
+  signalTransientFailure,
+  peekTransientFailure,
+} from '../../../mcp-src/oauth/refresh-lock';
 
 const toSeconds = (ms: number): number => Math.floor(ms / 1000);
 const toMilliseconds = (seconds: number): number => seconds * 1000;
@@ -226,6 +230,10 @@ async function executeRefresh(
       );
     }
 
+    // Signal the lock waiters that the upstream is currently flaky so they
+    // exit their poll loop fast instead of timing out 5s later as 503s. The
+    // marker is short-lived (30s) so genuine recovery isn't masked.
+    await signalTransientFailure(refreshToken);
     throw new RefreshError(
       'server_error',
       'Temporary error refreshing token, please retry',
@@ -681,6 +689,16 @@ export async function POST(request: NextRequest) {
             'Invalid or expired refresh token',
             400,
             'correct_invalid_grant',
+          );
+        }
+        // Holder may have hit upstream 5xx and signalled "don't wait, retry
+        // shortly." Surface 503 immediately rather than polling for 5s.
+        if (await peekTransientFailure(refreshToken)) {
+          throw new RefreshError(
+            'server_error',
+            'Upstream temporarily unavailable; please retry',
+            503,
+            'transient_upstream_5xx',
           );
         }
         return checkSuccessCache();
