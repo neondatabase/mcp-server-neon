@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  isDocsOnlyRequest,
   resolveGrantFromSearchParams,
   resolveGrantFromResourceUri,
   resolveGrantFromToken,
@@ -181,5 +182,65 @@ describe('resolveGrantFromResourceUri', () => {
       projectId: null,
       scopes: null,
     });
+  });
+});
+
+describe('isDocsOnlyRequest', () => {
+  function params(entries: Record<string, string | string[]>): URLSearchParams {
+    const sp = new URLSearchParams();
+    for (const [key, value] of Object.entries(entries)) {
+      if (Array.isArray(value)) {
+        for (const v of value) {
+          sp.append(key, v);
+        }
+      } else {
+        sp.set(key, value);
+      }
+    }
+    return sp;
+  }
+
+  it('returns false for empty params', () => {
+    expect(isDocsOnlyRequest(new URLSearchParams())).toBe(false);
+  });
+
+  it('returns true for ?category=docs', () => {
+    expect(isDocsOnlyRequest(params({ category: 'docs' }))).toBe(true);
+  });
+
+  it('returns true for ?category=docs with whitespace', () => {
+    expect(isDocsOnlyRequest(params({ category: '  docs  ' }))).toBe(true);
+  });
+
+  it('returns false for category=docs combined with other categories (comma-separated)', () => {
+    expect(isDocsOnlyRequest(params({ category: 'docs,querying' }))).toBe(
+      false,
+    );
+  });
+
+  it('returns false for category=docs combined with other categories (repeated)', () => {
+    expect(isDocsOnlyRequest(params({ category: ['docs', 'querying'] }))).toBe(
+      false,
+    );
+  });
+
+  it('returns false for category=docs with a projectId', () => {
+    expect(
+      isDocsOnlyRequest(params({ category: 'docs', projectId: 'proj-1' })),
+    ).toBe(false);
+  });
+
+  it('returns false for category=querying alone', () => {
+    expect(isDocsOnlyRequest(params({ category: 'querying' }))).toBe(false);
+  });
+
+  it('returns false when no category is provided', () => {
+    expect(isDocsOnlyRequest(params({ readonly: 'true' }))).toBe(false);
+  });
+
+  it('returns true when other unrelated params are present', () => {
+    expect(
+      isDocsOnlyRequest(params({ category: 'docs', readonly: 'true' })),
+    ).toBe(true);
   });
 });

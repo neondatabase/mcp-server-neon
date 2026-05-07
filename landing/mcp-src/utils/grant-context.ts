@@ -90,6 +90,25 @@ export function resolveGrantFromSearchParams(
 }
 
 /**
+ * Returns true when the request is a strict docs-only MCP request:
+ * exactly one `category=docs` value and no `projectId`.
+ *
+ * This is the trigger for the anonymous (no-OAuth) docs endpoint.
+ * Any other category combination (or a projectId) keeps the standard
+ * authenticated flow.
+ */
+export function isDocsOnlyRequest(params: URLSearchParams): boolean {
+  const categories = params.getAll('category').flatMap((v) =>
+    v
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  const projectId = params.get('projectId')?.trim();
+  return categories.length === 1 && categories[0] === 'docs' && !projectId;
+}
+
+/**
  * Resolve grant context from an OAuth resource URI.
  *
  * RFC 8707 allows query params in resource URIs when they are used to scope

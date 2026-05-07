@@ -315,4 +315,37 @@ describe('transport dynamic tool composition', () => {
       'resource_metadata="https://localhost:3100/.well-known/oauth-protected-resource/mcp?readonly=true"',
     );
   });
+
+  it('?category=docs bypasses OAuth without an Authorization header', async () => {
+    // Critical contract: the docs-only branch in handleRequest routes the
+    // request to the no-auth handler and never consults model.getAccessToken.
+    // A regression that removes the bypass or routes through authHandler
+    // would surface here as a 401 with WWW-Authenticate set.
+    const getAccessTokenMock = vi.mocked(model.getAccessToken);
+    getAccessTokenMock.mockReset();
+
+    const req = new Request('http://localhost/api/mcp?category=docs', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'docs-only-integration', version: '1.0.0' },
+        },
+      }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBeLessThan(300);
+    expect(res.headers.get('WWW-Authenticate')).toBeNull();
+    expect(getAccessTokenMock).not.toHaveBeenCalled();
+  });
 });

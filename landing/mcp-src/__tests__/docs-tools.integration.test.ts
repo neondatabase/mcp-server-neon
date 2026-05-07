@@ -40,6 +40,7 @@ describe('docs tools integration contracts (no external network)', () => {
 
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
       NEON_DOCS_INDEX_URL,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(result.content).toHaveLength(1);
     expect(result.content[0].type).toBe('text');
@@ -69,10 +70,12 @@ describe('docs tools integration contracts (no external network)', () => {
     expect(vi.mocked(globalThis.fetch)).toHaveBeenNthCalledWith(
       1,
       NEON_DOCS_INDEX_URL,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(vi.mocked(globalThis.fetch)).toHaveBeenNthCalledWith(
       2,
       `${NEON_DOCS_BASE_URL}/docs/ai/ai-concepts.md`,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(docResult.content[0].text).toContain('AI Concepts');
   });
@@ -88,6 +91,7 @@ describe('docs tools integration contracts (no external network)', () => {
 
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
       `${NEON_DOCS_BASE_URL}/docs/get-started/signing-up.md`,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
