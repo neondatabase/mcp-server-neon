@@ -119,6 +119,7 @@ describe('MCP server e2e tool calls', () => {
       expect(result.isError).not.toBe(true);
       expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
         'https://neon.com/docs/guides/prisma.md',
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
       expect(content[0].type).toBe('text');
     });
