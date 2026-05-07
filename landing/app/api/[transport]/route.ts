@@ -53,6 +53,7 @@ import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/p
 import {
   bindSession,
   deriveIdentity,
+  emitSseBindOutcome,
   evaluateMessageOwnership,
   releaseSession,
   shouldRejectEnvelope,
@@ -190,6 +191,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
     invocationName: string,
   ): boolean => {
     if (!shouldRejectEnvelope(sseOwnerIdentity, extra.authInfo)) return false;
+    emitSseBindOutcome('envelope_mismatch', { invocation: invocationName });
     logger.error('envelope identity mismatch — dropping invocation', {
       invocation: invocationName,
       hasCallerIdentity: deriveIdentity(extra.authInfo) !== null,
