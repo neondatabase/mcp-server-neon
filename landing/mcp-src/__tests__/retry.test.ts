@@ -66,4 +66,56 @@ describe('retryAsync', () => {
     expect(elapsed).toBeLessThan(150);
     expect(fn).toHaveBeenCalledTimes(2);
   });
+
+  describe('shouldRetry predicate', () => {
+    it('does not retry when predicate returns false', async () => {
+      const fn = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('non-retryable'))
+        .mockResolvedValue('would-have-succeeded');
+      await expect(
+        retryAsync(fn, {
+          attempts: 3,
+          delaysMs: [1, 1],
+          op: 'test',
+          shouldRetry: () => false,
+        }),
+      ).rejects.toThrow('non-retryable');
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries only when predicate returns true', async () => {
+      const fn = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('retryable'))
+        .mockResolvedValue('ok');
+      const result = await retryAsync(fn, {
+        attempts: 3,
+        delaysMs: [1, 1],
+        op: 'test',
+        shouldRetry: (err) =>
+          err instanceof Error && err.message === 'retryable',
+      });
+      expect(result).toBe('ok');
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+
+    it('mid-stream non-retryable error stops the loop immediately', async () => {
+      const fn = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('retry me'))
+        .mockRejectedValueOnce(new Error('do NOT retry me'))
+        .mockResolvedValue('never reached');
+      await expect(
+        retryAsync(fn, {
+          attempts: 5,
+          delaysMs: [1, 1, 1, 1],
+          op: 'test',
+          shouldRetry: (err) =>
+            err instanceof Error && err.message === 'retry me',
+        }),
+      ).rejects.toThrow('do NOT retry me');
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+  });
 });

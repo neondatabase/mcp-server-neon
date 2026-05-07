@@ -496,6 +496,68 @@ describe('Token refresh flow', () => {
       expect(lastSloLine()).toMatch(/outcome=transient_upstream_5xx\b/);
     });
 
+    it('upstream HTTP 5xx is NOT retried (response means Hydra processed it)', async () => {
+      const upstreamError = new Error('boom') as Error & { status: number };
+      upstreamError.status = 502;
+      mockExchange.mockRejectedValue(upstreamError);
+
+      await POST(makeTokenRequest('old-refresh-token'));
+      // Single attempt only — the retryAsync.shouldRetry guard skips HTTP
+      // responses to avoid presenting an already-rotated RT.
+      expect(mockExchange).toHaveBeenCalledTimes(1);
+    });
+
+    it('upstream ECONNRESET emits outcome=transient_upstream_network', async () => {
+      // openid-client wraps fetch errors as TypeError "fetch failed" with
+      // .cause being the underlying Node error. Replicate that shape.
+      const inner = new Error('read ECONNRESET') as Error & { code?: string };
+      inner.code = 'ECONNRESET';
+      const wrapped = new TypeError('fetch failed') as TypeError & {
+        cause?: unknown;
+      };
+      wrapped.cause = inner;
+      mockExchange.mockRejectedValue(wrapped);
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(503);
+      expect(lastSloLine()).toMatch(/outcome=transient_upstream_network\b/);
+    });
+
+    it('upstream network error is retried, succeeds on attempt 2', async () => {
+      const inner = new Error('connect ETIMEDOUT') as Error & { code?: string };
+      inner.code = 'ETIMEDOUT';
+      const wrapped = new TypeError('fetch failed') as TypeError & {
+        cause?: unknown;
+      };
+      wrapped.cause = inner;
+      mockExchange
+        .mockRejectedValueOnce(wrapped)
+        .mockResolvedValue(makeUpstreamTokenResponse() as never);
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(200);
+      expect(lastSloLine()).toMatch(/outcome=success\b/);
+      expect(mockExchange).toHaveBeenCalledTimes(2);
+    });
+
+    it('upstream network error that survives all retries surfaces as transient_upstream_network', async () => {
+      const inner = new Error('getaddrinfo ENOTFOUND') as Error & {
+        code?: string;
+      };
+      inner.code = 'ENOTFOUND';
+      const wrapped = new TypeError('fetch failed') as TypeError & {
+        cause?: unknown;
+      };
+      wrapped.cause = inner;
+      mockExchange.mockRejectedValue(wrapped);
+
+      await POST(makeTokenRequest('old-refresh-token'));
+      // Two attempts (the retryAsync configured for upstream uses attempts=2),
+      // both fail, classify and emit.
+      expect(mockExchange).toHaveBeenCalledTimes(2);
+      expect(lastSloLine()).toMatch(/outcome=transient_upstream_network\b/);
+    });
+
     it('persist failure after upstream success degrades to 200 via cache + SLO captures persist-failure', async () => {
       mockExchange.mockResolvedValue(makeUpstreamTokenResponse() as never);
       // saveToken fails on every retry attempt.
