@@ -126,6 +126,42 @@ export type MessageOwnershipResult =
   | { kind: 'reject'; status: 401 | 403 | 503; reason: string };
 
 /**
+ * Outcome buckets for the SSE session-binding security signal. Mirrors the
+ * `[SLO] refresh outcome=...` shape used by /api/token so dashboards can grep
+ * with the same pipeline. Unlike the refresh metric this is *not* an SLO with
+ * a numerator/denominator target — `binding_missing` is mostly benign (stale
+ * reconnects after server-side SSE timeouts) and `bound_ok` volume tracks tool
+ * usage rather than user-experience health. The signal we actually alert on is
+ * `binding_mismatch` and `envelope_mismatch`: any non-zero count is interesting
+ * because the legitimate flow cannot produce them.
+ */
+export type SseBindOutcome =
+  | 'bound_ok'
+  | 'binding_missing'
+  | 'binding_mismatch'
+  | 'caller_unidentified'
+  | 'redis_error'
+  | 'envelope_mismatch';
+
+export function emitSseBindOutcome(
+  outcome: SseBindOutcome,
+  ctx: {
+    sessionId?: string | null;
+    path?: string;
+    invocation?: string;
+    elapsedMs?: number;
+  } = {},
+): void {
+  const parts = [`[SEC] sse-bind outcome=${outcome}`];
+  if (ctx.sessionId) parts.push(`sessionId=${ctx.sessionId}`);
+  if (ctx.invocation) parts.push(`invocation=${ctx.invocation}`);
+  if (ctx.path) parts.push(`path=${ctx.path}`);
+  if (typeof ctx.elapsedMs === 'number')
+    parts.push(`elapsedMs=${ctx.elapsedMs}`);
+  logger.info(parts.join(' '));
+}
+
+/**
  * Decides whether a POST to the SSE message endpoint is allowed to proceed.
  * Reads the Redis-backed session binding and returns `pass` only when the
  * caller's identity matches the binding stored under the provided sessionId.
@@ -141,7 +177,13 @@ export async function evaluateMessageOwnership(
   if (method !== 'POST' || !pathname.endsWith('/message') || !sessionId) {
     return { kind: 'not-applicable' };
   }
+  const start = Date.now();
+  const baseCtx = { sessionId, path: pathname };
   if (!identity) {
+    emitSseBindOutcome('caller_unidentified', {
+      ...baseCtx,
+      elapsedMs: Date.now() - start,
+    });
     return {
       kind: 'reject',
       status: 401,
@@ -152,6 +194,10 @@ export async function evaluateMessageOwnership(
     const redis = await getRedis();
     const stored = await withTimeout(redis.get(sessionKey(sessionId)), 'get');
     if (stored === null) {
+      emitSseBindOutcome('binding_missing', {
+        ...baseCtx,
+        elapsedMs: Date.now() - start,
+      });
       return {
         kind: 'reject',
         status: 403,
@@ -162,14 +208,26 @@ export async function evaluateMessageOwnership(
     const b = Buffer.from(identity);
     const matches = a.length === b.length && timingSafeEqual(a, b);
     if (!matches) {
+      emitSseBindOutcome('binding_mismatch', {
+        ...baseCtx,
+        elapsedMs: Date.now() - start,
+      });
       return {
         kind: 'reject',
         status: 403,
         reason: 'Session not owned by caller',
       };
     }
+    emitSseBindOutcome('bound_ok', {
+      ...baseCtx,
+      elapsedMs: Date.now() - start,
+    });
     return { kind: 'pass' };
   } catch {
+    emitSseBindOutcome('redis_error', {
+      ...baseCtx,
+      elapsedMs: Date.now() - start,
+    });
     // Fail closed: refuse rather than let the library dispatch based on an
     // unvalidated sessionId.
     return {

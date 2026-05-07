@@ -7,6 +7,10 @@ const setSpy = vi.fn();
 const getSpy = vi.fn();
 const delSpy = vi.fn();
 const connectSpy = vi.fn();
+const loggerInfoSpy = vi.fn();
+const loggerWarnSpy = vi.fn();
+const loggerErrorSpy = vi.fn();
+const loggerDebugSpy = vi.fn();
 
 vi.mock('redis', () => ({
   createClient: vi.fn(() => ({
@@ -17,6 +21,25 @@ vi.mock('redis', () => ({
     del: delSpy,
   })),
 }));
+
+vi.mock('../utils/logger', () => ({
+  logger: {
+    info: loggerInfoSpy,
+    warn: loggerWarnSpy,
+    error: loggerErrorSpy,
+    debug: loggerDebugSpy,
+  },
+}));
+
+function lastSseBindLine(): string | null {
+  for (let i = loggerInfoSpy.mock.calls.length - 1; i >= 0; i--) {
+    const arg = loggerInfoSpy.mock.calls[i]?.[0];
+    if (typeof arg === 'string' && arg.startsWith('[SEC] sse-bind ')) {
+      return arg;
+    }
+  }
+  return null;
+}
 
 // `session-binding` memoises the Redis client in a module-level promise, which
 // survives between tests unless we isolate the module. `vi.resetModules()` in
@@ -253,6 +276,9 @@ describe('evaluateMessageOwnership (POST /message 403 gate)', () => {
     getSpy.mockReset();
     connectSpy.mockReset();
     connectSpy.mockResolvedValue(undefined);
+    loggerInfoSpy.mockReset();
+    loggerWarnSpy.mockReset();
+    loggerErrorSpy.mockReset();
     process.env.KV_URL = 'redis://localhost:6379';
   });
 
@@ -347,6 +373,110 @@ describe('evaluateMessageOwnership (POST /message 403 gate)', () => {
     );
     expect(r.kind).toBe('reject');
     if (r.kind === 'reject') expect(r.status).toBe(503);
+  });
+});
+
+describe('evaluateMessageOwnership emits [SEC] sse-bind outcomes', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    setSpy.mockReset();
+    getSpy.mockReset();
+    connectSpy.mockReset();
+    connectSpy.mockResolvedValue(undefined);
+    loggerInfoSpy.mockReset();
+    process.env.KV_URL = 'redis://localhost:6379';
+  });
+
+  it('does NOT emit on not-applicable (GET, non-/message, missing sessionId)', async () => {
+    const { evaluateMessageOwnership } = await loadModule();
+    await evaluateMessageOwnership('GET', '/api/message', 'sess', 'id');
+    await evaluateMessageOwnership('POST', '/api/sse', 'sess', 'id');
+    await evaluateMessageOwnership('POST', '/api/message', null, 'id');
+    expect(lastSseBindLine()).toBeNull();
+  });
+
+  it('emits caller_unidentified when identity is null', async () => {
+    const { evaluateMessageOwnership } = await loadModule();
+    await evaluateMessageOwnership('POST', '/api/message', 'sess', null);
+    const line = lastSseBindLine();
+    expect(line).not.toBeNull();
+    expect(line).toContain('outcome=caller_unidentified');
+    expect(line).toContain('sessionId=sess');
+    expect(line).toContain('path=/api/message');
+    expect(line).toMatch(/elapsedMs=\d+/);
+  });
+
+  it('emits binding_missing when Redis returns null', async () => {
+    const { evaluateMessageOwnership } = await loadModule();
+    getSpy.mockResolvedValue(null);
+    await evaluateMessageOwnership(
+      'POST',
+      '/api/message',
+      'sess',
+      'identity-A',
+    );
+    expect(lastSseBindLine()).toContain('outcome=binding_missing');
+  });
+
+  it('emits binding_mismatch when stored identity differs', async () => {
+    const { evaluateMessageOwnership } = await loadModule();
+    getSpy.mockResolvedValue('identity-A');
+    await evaluateMessageOwnership(
+      'POST',
+      '/api/message',
+      'sess',
+      'identity-B',
+    );
+    expect(lastSseBindLine()).toContain('outcome=binding_mismatch');
+  });
+
+  it('emits bound_ok on identity match', async () => {
+    const { evaluateMessageOwnership } = await loadModule();
+    getSpy.mockResolvedValue('identity-A');
+    await evaluateMessageOwnership(
+      'POST',
+      '/api/message',
+      'sess',
+      'identity-A',
+    );
+    expect(lastSseBindLine()).toContain('outcome=bound_ok');
+  });
+
+  it('emits redis_error when Redis throws', async () => {
+    const { evaluateMessageOwnership } = await loadModule();
+    getSpy.mockRejectedValue(new Error('boom'));
+    await evaluateMessageOwnership(
+      'POST',
+      '/api/message',
+      'sess',
+      'identity-A',
+    );
+    expect(lastSseBindLine()).toContain('outcome=redis_error');
+  });
+});
+
+describe('emitSseBindOutcome formatting', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    loggerInfoSpy.mockReset();
+  });
+
+  it('emits a [SEC] sse-bind line with outcome and provided context fields', async () => {
+    const { emitSseBindOutcome } = await loadModule();
+    emitSseBindOutcome('envelope_mismatch', { invocation: 'list_projects' });
+    expect(loggerInfoSpy).toHaveBeenCalledTimes(1);
+    const line = loggerInfoSpy.mock.calls[0]?.[0];
+    expect(line).toBe(
+      '[SEC] sse-bind outcome=envelope_mismatch invocation=list_projects',
+    );
+  });
+
+  it('omits context fields that are not set', async () => {
+    const { emitSseBindOutcome } = await loadModule();
+    emitSseBindOutcome('bound_ok');
+    expect(loggerInfoSpy.mock.calls[0]?.[0]).toBe(
+      '[SEC] sse-bind outcome=bound_ok',
+    );
   });
 });
 
