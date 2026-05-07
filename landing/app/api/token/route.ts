@@ -39,8 +39,13 @@ type RefreshTokenResult = {
  * - `transient_lock_timeout`     — 503 from lock-waiter timeout. Counts BAD.
  * - `transient_persist_failure`  — KV write threw after upstream rotated.
  *                                  Counts BAD — leaks rotation state.
- * - `transient_upstream_5xx`     — upstream Hydra unavailable. Excluded from
- *                                  SLO (provider issue).
+ * - `transient_upstream_5xx`     — Hydra returned an HTTP 5xx response.
+ *                                  Excluded from SLO (provider issue).
+ * - `transient_upstream_network` — Network-level error reaching Hydra
+ *                                  (ECONNRESET, ETIMEDOUT, ENOTFOUND, etc.).
+ *                                  Distinguished from 5xx because it's
+ *                                  retryable from our side and a different
+ *                                  diagnostic category. Excluded from SLO.
  * - `bad_request`                — request validation failure. Excluded.
  */
 type SloOutcome =
@@ -50,7 +55,61 @@ type SloOutcome =
   | 'transient_lock_timeout'
   | 'transient_persist_failure'
   | 'transient_upstream_5xx'
+  | 'transient_upstream_network'
   | 'bad_request';
+
+// Network-layer error codes commonly observed talking to Hydra. Walking
+// the error chain catches openid-client's wrapping (TypeError "fetch failed"
+// with .cause containing the underlying Node error).
+const RETRYABLE_NETWORK_CODES = [
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ECONNABORTED',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EPIPE',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'UND_ERR_SOCKET',
+] as const;
+
+function findNetworkErrorCode(error: unknown): string | undefined {
+  let current: unknown = error;
+  // Cap iterations to avoid pathological cycles.
+  for (let depth = 0; depth < 8; depth++) {
+    if (!(current instanceof Error)) return undefined;
+    const e = current as Error & { code?: unknown; cause?: unknown };
+    if (typeof e.code === 'string') {
+      const match = RETRYABLE_NETWORK_CODES.find((c) => c === e.code);
+      if (match) return match;
+    }
+    const message = e.message ?? '';
+    const match = RETRYABLE_NETWORK_CODES.find((c) => message.includes(c));
+    if (match) return match;
+    current = e.cause;
+  }
+  return undefined;
+}
+
+/**
+ * Decides whether an upstream `exchangeRefreshToken` failure is safe to
+ * retry. We only retry errors with NO HTTP response — those are network-
+ * layer failures (DNS, TCP reset, timeout). HTTP 4xx/5xx responses mean
+ * Hydra processed the request and possibly rotated the RT; retrying could
+ * present an already-rotated token and trigger a cliff.
+ */
+function shouldRetryUpstreamError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  // Got a structured HTTP response → server processed it, don't retry.
+  if (
+    'status' in error &&
+    typeof (error as { status: unknown }).status === 'number'
+  ) {
+    return false;
+  }
+  return findNetworkErrorCode(error) !== undefined;
+}
 
 class RefreshError extends Error {
   constructor(
@@ -190,8 +249,18 @@ async function executeRefresh(
   let upstreamToken: Awaited<ReturnType<typeof exchangeRefreshToken>>;
   try {
     logger.info('Exchanging refresh token with upstream');
-    upstreamToken = await exchangeRefreshToken(
-      providedRefreshToken.refreshToken,
+    // Retry on network-layer errors (ECONNRESET, ETIMEDOUT, DNS, etc.) but
+    // never on HTTP responses — those mean Hydra processed the request and
+    // may have rotated the RT. Two attempts with a short backoff catches
+    // most TCP/connection blips without piling latency.
+    upstreamToken = await retryAsync(
+      () => exchangeRefreshToken(providedRefreshToken.refreshToken),
+      {
+        attempts: 2,
+        delaysMs: [200],
+        op: 'upstream refresh exchange',
+        shouldRetry: shouldRetryUpstreamError,
+      },
     );
     logger.info('Upstream token exchange successful');
   } catch (error) {
@@ -200,11 +269,13 @@ async function executeRefresh(
       details.status !== undefined &&
       details.status >= 400 &&
       details.status < 500;
+    const networkErrorCode = findNetworkErrorCode(error);
 
     logger.error('Upstream refresh token exchange failed', {
       ...details,
       clientId: client.id,
       isClientError,
+      networkErrorCode,
     });
 
     if (isClientError) {
@@ -235,6 +306,19 @@ async function executeRefresh(
     // exit their poll loop fast instead of timing out 5s later as 503s. The
     // marker is short-lived (30s) so genuine recovery isn't masked.
     await signalTransientFailure(refreshToken);
+
+    // Distinguish network-layer failures (no HTTP response) from HTTP 5xx
+    // for SLO bucketing. Both are excluded from the SLO denominator, but
+    // network-error volume tells us about TCP/DNS health vs Hydra-
+    // application health — useful when investigating provider issues.
+    if (networkErrorCode !== undefined) {
+      throw new RefreshError(
+        'server_error',
+        'Network error contacting upstream; please retry',
+        503,
+        'transient_upstream_network',
+      );
+    }
     throw new RefreshError(
       'server_error',
       'Temporary error refreshing token, please retry',

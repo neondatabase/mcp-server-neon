@@ -28,7 +28,8 @@ Where:
 | `cliff_upstream` | yes | **yes** | upstream returned `token_inactive` / `invalid_request` / similar 4xx. Hydra has revoked the chain; user must re-auth. **This is the cliff we've been fighting.** |
 | `transient_lock_timeout` | yes | **yes** | our lock-waiter polled out and returned 503. After PR #234 this should be 0; if non-zero, we have a regression. |
 | `transient_persist_failure` | yes | **yes** | upstream rotation succeeded but our KV write threw, so the client can't pick up the new pair and will retry the now-dead RT. Currently inferred from `token_inactive` events on RTs we've never written failures for; will become directly observable once instrumented. |
-| `transient_upstream_5xx` | **no** | n/a | upstream Hydra unavailable. Out of our control; clients retry. Excluded from SLO numerator and denominator. |
+| `transient_upstream_5xx` | **no** | n/a | Hydra returned an HTTP 5xx response. Out of our control; excluded. |
+| `transient_upstream_network` | **no** | n/a | Network-layer failure reaching Hydra (`ECONNRESET`, `ETIMEDOUT`, `ENOTFOUND`, `ECONNREFUSED`, etc., anywhere in the error-cause chain). The route wraps the upstream call in a 2-attempt retry on this category before classifying, so this bucket only counts errors that survived retry. Tracked separately from `transient_upstream_5xx` because the diagnostic vector differs — network volume points at TCP/DNS/peering health, 5xx volume points at Hydra-application health. Excluded from SLO. |
 | `bad_request` | **no** | n/a | malformed request (missing `refresh_token`, wrong content-type, etc.). Client error; excluded. |
 
 ### Why this shape

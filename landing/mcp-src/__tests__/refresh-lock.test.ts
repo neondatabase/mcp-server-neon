@@ -168,6 +168,30 @@ describe('withRefreshLock', () => {
     // Should bail out fast (one poll iteration), not wait the full ~5s.
     expect(elapsed).toBeLessThan(2_000);
   });
+
+  it('on lock disappears with cached result written in the gap, returns cached instead of 503', async () => {
+    // Regression for the production race: holder finishes (writes cache,
+    // releases lock) between the waiter's peekResult and redis.get within
+    // a single poll iteration. The waiter's redis.get sees null, but a
+    // peek RIGHT NOW would hit the cache. Pre-fix, the waiter bailed
+    // with 503 anyway; post-fix, the final peek before break catches it.
+    setSpy.mockResolvedValue(null); // not acquired
+    getSpy.mockResolvedValue(null); // lock released
+
+    let peekCount = 0;
+    const peek = vi.fn(async () => {
+      peekCount++;
+      // First peek (during normal poll) sees nothing. The final peek
+      // after redis.get returns null sees the just-written cache.
+      return peekCount >= 2 ? 'cached-by-peer' : undefined;
+    });
+
+    const { withRefreshLock } = await loadModule();
+    const result = await withRefreshLock('rt', vi.fn(), peek);
+
+    expect(result).toBe('cached-by-peer');
+    expect(peek).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('signalTransientFailure / peekTransientFailure', () => {
