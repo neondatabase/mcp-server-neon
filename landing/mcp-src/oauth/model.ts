@@ -136,13 +136,16 @@ class Model implements AuthorizationCodeModel {
   // Returning the cached new pair instead of forwarding the stale RT upstream
   // is the only thing keeping these clients from being kicked.
   //
-  // 24h widens the replay window past laptop-sleep / process-restart
-  // scenarios. The cached access token still carries its own 1h expiry, so a
-  // late cache hit returns an AT that may already be expired — the client
-  // will then refresh again with the cached RT, hitting the same chain
-  // forward. Storage cost is bounded by rotation frequency × 24h and is
-  // small in practice.
-  private static REFRESH_RESULT_TTL_MS = 24 * 60 * 60_000;
+  // 7 days catches the long-tail of "user opens Cursor after a multi-day
+  // pause" scenarios — post-deploy logs of #234 still showed ~30/hr cliffs
+  // dominated by clients presenting RTs from beyond the previous 24h
+  // window. Hydra's own RT lifespan is 30d; 7d sits comfortably inside
+  // that and bounds storage growth (one entry per rotation × 7d ≈ ~50MB
+  // at current traffic). The cached access token still carries its own
+  // 1h `expires_at`, so a late cache hit returns an AT the client will
+  // need to refresh again with the cached new RT — the chain holds
+  // forward without re-auth.
+  private static REFRESH_RESULT_TTL_MS = 7 * 24 * 60 * 60_000;
 
   saveRefreshResult: (
     oldRefreshToken: string,

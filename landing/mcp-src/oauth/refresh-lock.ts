@@ -25,6 +25,12 @@ const LOCK_POLL_INTERVAL_MS = 100;
 const LOCK_POLL_MAX_ATTEMPTS = 50; // ~5s total wait
 const REDIS_OP_TIMEOUT_MS = 500;
 
+const TRANSIENT_KEY_PREFIX = 'mcp:refresh-transient:';
+// Short — these are upstream 5xx-class errors that may recover. Long enough
+// to absorb a wave of waiters, short enough that the next legitimate refresh
+// attempt isn't masked.
+const TRANSIENT_TTL_MS = 30_000;
+
 let clientPromise: Promise<RedisClientType> | null = null;
 
 function withTimeout<T>(promise: Promise<T>, op: string): Promise<T> {
@@ -69,6 +75,53 @@ function getRedis(): Promise<RedisClientType> {
 
 function lockKey(refreshToken: string): string {
   return `${LOCK_KEY_PREFIX}${refreshToken}`;
+}
+
+function transientKey(refreshToken: string): string {
+  return `${TRANSIENT_KEY_PREFIX}${refreshToken}`;
+}
+
+/**
+ * Signal that the lock holder hit a transient (5xx-class) failure during the
+ * upstream call. Concurrent waiters poll this marker and exit early instead
+ * of waiting up to LOCK_POLL_MAX_ATTEMPTS × LOCK_POLL_INTERVAL_MS ≈ 5s and
+ * surfacing as 503 lock-timeout. Best-effort; failure to write is tolerable
+ * because the worst-case is just the existing lock-wait timeout path.
+ */
+export async function signalTransientFailure(
+  refreshToken: string,
+): Promise<void> {
+  try {
+    const redis = await getRedis();
+    await withTimeout(
+      redis.set(transientKey(refreshToken), '1', { PX: TRANSIENT_TTL_MS }),
+      'set-transient',
+    );
+  } catch (err) {
+    logger.warn('refresh-lock failed to signal transient failure', {
+      err: err instanceof Error ? err.message : err,
+    });
+  }
+}
+
+/**
+ * Check whether the lock holder recently signalled a transient failure for
+ * this refresh token. Returns false on any Redis error so callers default
+ * to the normal poll loop instead of erroring out.
+ */
+export async function peekTransientFailure(
+  refreshToken: string,
+): Promise<boolean> {
+  try {
+    const redis = await getRedis();
+    const v = await withTimeout(
+      redis.get(transientKey(refreshToken)),
+      'get-transient',
+    );
+    return v !== null;
+  } catch {
+    return false;
+  }
 }
 
 /** Atomic compare-and-delete so a slow holder can't release a TTL-replaced lock. */

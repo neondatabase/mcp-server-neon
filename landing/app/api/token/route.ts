@@ -8,7 +8,12 @@ import { identify, flushAnalytics } from '../../../mcp-src/analytics/analytics';
 import { handleOAuthError } from '../../../lib/errors';
 import { logger } from '../../../mcp-src/utils/logger';
 import { singleflight } from '../../../mcp-src/utils/singleflight';
-import { withRefreshLock } from '../../../mcp-src/oauth/refresh-lock';
+import { retryAsync } from '../../../mcp-src/utils/retry';
+import {
+  withRefreshLock,
+  signalTransientFailure,
+  peekTransientFailure,
+} from '../../../mcp-src/oauth/refresh-lock';
 
 const toSeconds = (ms: number): number => Math.floor(ms / 1000);
 const toMilliseconds = (seconds: number): number => seconds * 1000;
@@ -21,15 +26,62 @@ type RefreshTokenResult = {
   scope?: string | string[];
 };
 
+/**
+ * Outcome bucket for the refresh-token SLO. See dev-notes/refresh-slo.md.
+ *
+ * - `success`                    — 200 returned (fresh upstream rotation OR
+ *                                  cached cross-instance hit). Counts good.
+ * - `correct_invalid_grant`      — 400; client presented a token we knew was
+ *                                  dead (RT-not-found, failure-cache hit, etc.)
+ *                                  Counts good — our system did the right thing.
+ * - `cliff_upstream`             — 4xx from upstream Hydra. Counts BAD —
+ *                                  the chain is now revoked, user must re-auth.
+ * - `transient_lock_timeout`     — 503 from lock-waiter timeout. Counts BAD.
+ * - `transient_persist_failure`  — KV write threw after upstream rotated.
+ *                                  Counts BAD — leaks rotation state.
+ * - `transient_upstream_5xx`     — upstream Hydra unavailable. Excluded from
+ *                                  SLO (provider issue).
+ * - `bad_request`                — request validation failure. Excluded.
+ */
+type SloOutcome =
+  | 'success'
+  | 'correct_invalid_grant'
+  | 'cliff_upstream'
+  | 'transient_lock_timeout'
+  | 'transient_persist_failure'
+  | 'transient_upstream_5xx'
+  | 'bad_request';
+
 class RefreshError extends Error {
   constructor(
     public readonly oauthError: string,
     public readonly description: string,
     public readonly statusCode: number,
+    public readonly sloOutcome: SloOutcome,
   ) {
     super(description);
     this.name = 'RefreshError';
   }
+}
+
+// Stable, greppable SLO metric line. Aggregator scripts parse the
+// `outcome=<bucket>` token; other fields are diagnostic context.
+function emitRefreshSlo(
+  outcome: SloOutcome,
+  startMs: number,
+  context: {
+    clientId?: string;
+    reason?: string;
+    upstreamOauthError?: string;
+  } = {},
+): void {
+  const elapsedMs = Date.now() - startMs;
+  const fields = [`outcome=${outcome}`, `elapsedMs=${elapsedMs}`];
+  if (context.clientId) fields.push(`clientId=${context.clientId}`);
+  if (context.reason) fields.push(`reason=${context.reason}`);
+  if (context.upstreamOauthError)
+    fields.push(`upstreamOauthError=${context.upstreamOauthError}`);
+  logger.info(`[SLO] refresh ${fields.join(' ')}`);
 }
 
 // Extracts structured details from openid-client errors so the upstream
@@ -104,6 +156,7 @@ async function executeRefresh(
       'invalid_grant',
       'Invalid or expired refresh token',
       400,
+      'correct_invalid_grant',
     );
   }
 
@@ -116,6 +169,7 @@ async function executeRefresh(
       'invalid_grant',
       'Invalid or expired refresh token',
       400,
+      'correct_invalid_grant',
     );
   }
 
@@ -129,6 +183,7 @@ async function executeRefresh(
       'invalid_grant',
       'Invalid or expired refresh token',
       400,
+      'correct_invalid_grant',
     );
   }
 
@@ -172,13 +227,19 @@ async function executeRefresh(
         'invalid_grant',
         'Invalid or expired refresh token',
         400,
+        'cliff_upstream',
       );
     }
 
+    // Signal the lock waiters that the upstream is currently flaky so they
+    // exit their poll loop fast instead of timing out 5s later as 503s. The
+    // marker is short-lived (30s) so genuine recovery isn't masked.
+    await signalTransientFailure(refreshToken);
     throw new RefreshError(
       'server_error',
       'Temporary error refreshing token, please retry',
       503,
+      'transient_upstream_5xx',
     );
   }
 
@@ -204,54 +265,44 @@ async function executeRefresh(
       'server_error',
       'Invalid token response from upstream',
       502,
+      'transient_persist_failure',
     );
-  }
-
-  logger.info('Saving new tokens from refresh');
-  const token = await model.saveToken({
-    accessToken: upstreamToken.access_token,
-    refreshToken: newRefreshToken,
-    expires_at: expiresAt,
-    client: client,
-    user: oldToken.user,
-    scope: oldToken.scope,
-    grant: oldToken.grant,
-  });
-
-  await model.saveRefreshToken({
-    refreshToken: newRefreshToken,
-    accessToken: token.accessToken,
-  });
-
-  if (!token.accessToken) {
-    logger.error('Saved token missing accessToken after saveToken', {
-      hasAccessToken: !!token.accessToken,
-      hasRefreshToken: !!token.refreshToken,
-    });
-    throw new RefreshError('server_error', 'Failed to save token', 500);
   }
 
   const expiresIn = toSeconds(expiresAt - now);
   if (!Number.isFinite(expiresIn)) {
     logger.error('Invalid expiresIn calculated', { expiresAt, now, expiresIn });
-    throw new RefreshError('server_error', 'Invalid token expiration', 500);
+    throw new RefreshError(
+      'server_error',
+      'Invalid token expiration',
+      500,
+      'transient_persist_failure',
+    );
   }
 
   const scope = oldToken.scope;
   const scopeValue =
     typeof scope === 'string' || Array.isArray(scope) ? scope : undefined;
 
+  // Build the response from the upstream tokens directly. We commit to this
+  // exact pair regardless of what happens during persistence — the goal of
+  // the next phase is to make our local KV agree with what we tell the
+  // client, but if it can't, the client's tokens are still valid at upstream.
   const result: RefreshTokenResult = {
-    access_token: token.accessToken,
+    access_token: upstreamToken.access_token,
     expires_in: expiresIn,
     token_type: 'bearer',
-    refresh_token: token.refreshToken ?? newRefreshToken,
+    refresh_token: newRefreshToken,
     scope: scopeValue,
   };
 
-  // Cache the result for cross-instance deduplication (short TTL, best-effort).
-  // Must complete before deleting old tokens so concurrent/cross-instance callers
-  // can read the cached result if they hit RefreshError.
+  // Write the cross-instance success cache FIRST, before the local
+  // refresh_tokens persist. Reasoning: if persist fails after this point,
+  // peers (and this client's retries with the OLD refresh_token) can still
+  // serve the new pair from this cache via getRefreshResult. Without this
+  // ordering, a Postgres blip during persist would leak the rotation —
+  // Hydra has advanced but our system has no record, so any retry hits
+  // upstream again and gets `token_inactive`.
   await model
     .saveRefreshResult(refreshToken, {
       accessToken: result.access_token,
@@ -263,10 +314,63 @@ async function executeRefresh(
       logger.warn('Failed to cache refresh result', { err });
     });
 
-  await model.deleteToken(oldToken);
-  if (newRefreshToken !== providedRefreshToken.refreshToken) {
-    await model.deleteRefreshToken(providedRefreshToken);
+  // Persist the new pair into refresh_tokens with retry. Most persist
+  // failures are transient (Postgres connection blip, deadlock, brief
+  // unavailability) and clear within milliseconds. Three quick attempts
+  // with backoff catches that without piling latency on the success path.
+  //
+  // If all retries fail, throw `transient_persist_failure`. The route's
+  // outer catch will then see that the success cache (written above) has
+  // the rotation outcome and serve the client a 200 from cache — the
+  // "degraded" path. Throwing here is what gets the SLO bucket recorded
+  // correctly; the cache rescue is handled in the route layer.
+  logger.info('Saving new tokens from refresh');
+  try {
+    await retryAsync(
+      async () => {
+        const saved = await model.saveToken({
+          accessToken: upstreamToken.access_token,
+          refreshToken: newRefreshToken,
+          expires_at: expiresAt,
+          client: client,
+          user: oldToken.user,
+          scope: oldToken.scope,
+          grant: oldToken.grant,
+        });
+        await model.saveRefreshToken({
+          refreshToken: newRefreshToken,
+          accessToken: saved.accessToken,
+        });
+        if (!saved.accessToken) {
+          throw new Error('saveToken returned token without accessToken');
+        }
+      },
+      { attempts: 3, delaysMs: [50, 250], op: 'persist refresh result' },
+    );
+  } catch (persistErr) {
+    logger.error('Persist after upstream rotation failed (after retry)', {
+      err: persistErr instanceof Error ? persistErr.message : persistErr,
+      clientId: client.id,
+    });
+    throw new RefreshError(
+      'server_error',
+      'Failed to persist refreshed tokens',
+      500,
+      'transient_persist_failure',
+    );
   }
+
+  // Best-effort cleanup of old tokens. Errors are swallowed — they'll TTL
+  // out and the new tokens are already live.
+  await model.deleteToken(oldToken).catch((err) => {
+    logger.warn('Failed to delete old access token', { err });
+  });
+  if (newRefreshToken !== providedRefreshToken.refreshToken) {
+    await model.deleteRefreshToken(providedRefreshToken).catch((err) => {
+      logger.warn('Failed to delete old refresh token', { err });
+    });
+  }
+
   logger.info('Refresh token exchanged successfully');
 
   logger.info('Building refresh token response', {
@@ -516,9 +620,14 @@ export async function POST(request: NextRequest) {
       });
     } else if (grantType === 'refresh_token') {
       logger.info('Processing refresh_token grant');
+      const sloStartMs = Date.now();
       const refreshToken = formData.get('refresh_token');
       if (!refreshToken) {
         logger.warn('Refresh token missing from request');
+        emitRefreshSlo('bad_request', sloStartMs, {
+          clientId: client.id,
+          reason: 'missing_refresh_token',
+        });
         return NextResponse.json(
           {
             error: 'invalid_request',
@@ -538,6 +647,11 @@ export async function POST(request: NextRequest) {
           clientId: client.id,
           ageMs: Date.now() - cachedFailure.failedAt,
           oauthError: cachedFailure.oauthError,
+        });
+        emitRefreshSlo('correct_invalid_grant', sloStartMs, {
+          clientId: client.id,
+          reason: 'failure_cache_hit',
+          upstreamOauthError: cachedFailure.oauthError,
         });
         return NextResponse.json(
           {
@@ -588,6 +702,17 @@ export async function POST(request: NextRequest) {
             'invalid_grant',
             'Invalid or expired refresh token',
             400,
+            'correct_invalid_grant',
+          );
+        }
+        // Holder may have hit upstream 5xx and signalled "don't wait, retry
+        // shortly." Surface 503 immediately rather than polling for 5s.
+        if (await peekTransientFailure(refreshToken)) {
+          throw new RefreshError(
+            'server_error',
+            'Upstream temporarily unavailable; please retry',
+            503,
+            'transient_upstream_5xx',
           );
         }
         return checkSuccessCache();
@@ -612,17 +737,46 @@ export async function POST(request: NextRequest) {
           peekResolution,
         );
         logger.info('Returning refresh token response');
+        emitRefreshSlo('success', sloStartMs, { clientId: client.id });
         return NextResponse.json(result);
       } catch (error) {
         // Cross-instance fallback: if another instance already completed the
-        // refresh, the distributed cache will have the result.
+        // refresh, the distributed cache will have the result. Also covers
+        // the persist-failure degrade path: executeRefresh writes the cache
+        // BEFORE the persist phase, so a persist failure leaves the cache
+        // populated and the client gets a clean 200 from here instead of a
+        // 500 + immediate cliff.
         if (error instanceof RefreshError) {
           const cached = await checkSuccessCache();
           if (cached) {
-            logger.info('Returning cached refresh result (cross-instance hit)');
+            // Persist-failure is special: we want the SLO to count it as a
+            // bad outcome even though the user gets a 200. Without this
+            // override, the metric would silently mask Postgres degradation.
+            // Other RefreshError-with-cache cases are genuine cache replays.
+            const sloBucket: SloOutcome =
+              error.sloOutcome === 'transient_persist_failure'
+                ? 'transient_persist_failure'
+                : 'success';
+            logger.info(
+              'Returning cached refresh result (cross-instance hit)',
+              {
+                sloBucket,
+                underlyingOutcome: error.sloOutcome,
+              },
+            );
+            emitRefreshSlo(sloBucket, sloStartMs, {
+              clientId: client.id,
+              reason:
+                error.sloOutcome === 'transient_persist_failure'
+                  ? 'recovered_via_cache'
+                  : 'cache_replay_after_error',
+            });
             return NextResponse.json(cached);
           }
 
+          emitRefreshSlo(error.sloOutcome, sloStartMs, {
+            clientId: client.id,
+          });
           return NextResponse.json(
             {
               error: error.oauthError,
@@ -638,6 +792,9 @@ export async function POST(request: NextRequest) {
           (error as { status: unknown }).status === 503
         ) {
           logger.info('Refresh lock waiter timed out; returning 503 for retry');
+          emitRefreshSlo('transient_lock_timeout', sloStartMs, {
+            clientId: client.id,
+          });
           return NextResponse.json(
             {
               error: 'temporarily_unavailable',

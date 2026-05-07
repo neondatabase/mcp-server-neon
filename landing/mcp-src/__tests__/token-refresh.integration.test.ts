@@ -51,11 +51,36 @@ vi.mock('@vercel/functions', () => ({
 // Default: lock is a passthrough — keeps the existing tests focused on the
 // underlying refresh logic rather than the lock plumbing. The dedicated
 // `refresh-lock.test.ts` covers acquire/wait/release semantics.
+const mockSignalTransientFailure = vi.fn().mockResolvedValue(undefined);
+const mockPeekTransientFailure = vi.fn().mockResolvedValue(false);
 vi.mock('../oauth/refresh-lock', () => ({
   withRefreshLock: vi.fn(async (_token: string, execute: () => unknown) =>
     execute(),
   ),
+  signalTransientFailure: (...args: unknown[]) =>
+    mockSignalTransientFailure(...args),
+  peekTransientFailure: (...args: unknown[]) =>
+    mockPeekTransientFailure(...args),
 }));
+
+// Spy on logger so SLO assertions can read what was emitted.
+const loggerInfoSpy = vi.fn();
+vi.mock('../utils/logger', () => ({
+  logger: {
+    info: (...args: unknown[]) => loggerInfoSpy(...args),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
+
+function lastSloLine(): string | undefined {
+  for (let i = loggerInfoSpy.mock.calls.length - 1; i >= 0; i--) {
+    const arg = loggerInfoSpy.mock.calls[i][0];
+    if (typeof arg === 'string' && arg.startsWith('[SLO] refresh ')) return arg;
+  }
+  return undefined;
+}
 
 import { POST } from '../../app/api/token/route';
 import { model } from '../oauth/model';
@@ -119,6 +144,7 @@ function makeUpstreamTokenResponse(overrides: Record<string, unknown> = {}) {
 describe('Token refresh flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    loggerInfoSpy.mockClear();
 
     mockModel.getClient.mockResolvedValue(TEST_CLIENT as any);
     mockModel.getRefreshToken.mockResolvedValue(TEST_REFRESH_TOKEN_RECORD);
@@ -281,6 +307,37 @@ describe('Token refresh flow', () => {
       expect(mockModel.deleteToken).not.toHaveBeenCalled();
       expect(mockModel.deleteRefreshToken).not.toHaveBeenCalled();
     });
+
+    it('signals transient failure on upstream 5xx so waiters can exit early', async () => {
+      const upstreamError = new Error('Internal Server Error') as Error & {
+        status: number;
+      };
+      upstreamError.status = 500;
+      mockExchange.mockRejectedValue(upstreamError);
+      mockSignalTransientFailure.mockClear();
+
+      await POST(makeTokenRequest('old-refresh-token'));
+
+      expect(mockSignalTransientFailure).toHaveBeenCalledTimes(1);
+      expect(mockSignalTransientFailure).toHaveBeenCalledWith(
+        'old-refresh-token',
+      );
+    });
+
+    it('does not signal transient failure on upstream 4xx (it is a hard cliff, not transient)', async () => {
+      const upstreamError = new Error('inactive') as Error & {
+        status: number;
+        error?: string;
+      };
+      upstreamError.status = 401;
+      upstreamError.error = 'token_inactive';
+      mockExchange.mockRejectedValue(upstreamError);
+      mockSignalTransientFailure.mockClear();
+
+      await POST(makeTokenRequest('old-refresh-token'));
+
+      expect(mockSignalTransientFailure).not.toHaveBeenCalled();
+    });
   });
 
   describe('failure cache (retry storm absorption)', () => {
@@ -383,6 +440,113 @@ describe('Token refresh flow', () => {
       const [, detail] = mockModel.saveRefreshFailure.mock.calls[0];
       expect(detail.oauthErrorDescription).toBe('client_mismatch');
       expect(mockExchange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('SLO instrumentation', () => {
+    it('happy path emits outcome=success', async () => {
+      mockExchange.mockResolvedValue(makeUpstreamTokenResponse() as never);
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(200);
+      const line = lastSloLine();
+      expect(line).toMatch(/outcome=success\b/);
+      expect(line).toMatch(/elapsedMs=\d+/);
+      expect(line).toMatch(/clientId=client-1/);
+    });
+
+    it('failure-cache fast-fail emits outcome=correct_invalid_grant', async () => {
+      mockModel.getRefreshFailure.mockResolvedValue({
+        failedAt: Date.now() - 5_000,
+        oauthError: 'invalid_grant',
+      });
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(400);
+      expect(lastSloLine()).toMatch(/outcome=correct_invalid_grant\b/);
+      expect(lastSloLine()).toMatch(/reason=failure_cache_hit/);
+    });
+
+    it('RT-not-found emits outcome=correct_invalid_grant', async () => {
+      mockModel.getRefreshToken.mockResolvedValue(undefined);
+      const response = await POST(makeTokenRequest('stale-rt'));
+      expect(response.status).toBe(400);
+      expect(lastSloLine()).toMatch(/outcome=correct_invalid_grant\b/);
+    });
+
+    it('upstream 4xx emits outcome=cliff_upstream', async () => {
+      const upstreamError = new Error('inactive') as Error & {
+        status: number;
+        error?: string;
+      };
+      upstreamError.status = 401;
+      upstreamError.error = 'token_inactive';
+      mockExchange.mockRejectedValue(upstreamError);
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(400);
+      expect(lastSloLine()).toMatch(/outcome=cliff_upstream\b/);
+    });
+
+    it('upstream 5xx emits outcome=transient_upstream_5xx', async () => {
+      const upstreamError = new Error('boom') as Error & { status: number };
+      upstreamError.status = 502;
+      mockExchange.mockRejectedValue(upstreamError);
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(503);
+      expect(lastSloLine()).toMatch(/outcome=transient_upstream_5xx\b/);
+    });
+
+    it('persist failure after upstream success degrades to 200 via cache + SLO captures persist-failure', async () => {
+      mockExchange.mockResolvedValue(makeUpstreamTokenResponse() as never);
+      // saveToken fails on every retry attempt.
+      mockModel.saveToken.mockRejectedValue(new Error('postgres down'));
+      // The success cache lookup in the route's outer catch finds the
+      // entry executeRefresh wrote BEFORE the persist phase.
+      mockModel.getRefreshResult.mockResolvedValue({
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+        expiresAt: Date.now() + 3600_000,
+        scope: 'read write',
+      });
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      const body = await response.json();
+
+      // User-visible: success. They got tokens via the cross-instance cache.
+      expect(response.status).toBe(200);
+      expect(body.access_token).toBe('new-access-token');
+      // SLO: bad outcome counted, even though user got 200. This is the
+      // signal that lets us track Postgres degradation rates.
+      expect(lastSloLine()).toMatch(/outcome=transient_persist_failure\b/);
+      expect(lastSloLine()).toMatch(/reason=recovered_via_cache/);
+    });
+
+    it('persist retry — succeeds on attempt 2 emits outcome=success', async () => {
+      mockExchange.mockResolvedValue(makeUpstreamTokenResponse() as never);
+      mockModel.saveToken
+        .mockRejectedValueOnce(new Error('transient blip'))
+        .mockImplementation(async (token: any) => token);
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      expect(response.status).toBe(200);
+      expect(lastSloLine()).toMatch(/outcome=success\b/);
+      expect(mockModel.saveToken).toHaveBeenCalledTimes(2);
+    });
+
+    it('missing refresh_token in body emits outcome=bad_request', async () => {
+      const body = new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: TEST_CLIENT.id,
+        client_secret: TEST_CLIENT.secret,
+      });
+      const req = new NextRequest('http://localhost/api/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      });
+      const response = await POST(req);
+      expect(response.status).toBe(400);
+      expect(lastSloLine()).toMatch(/outcome=bad_request\b/);
     });
   });
 });

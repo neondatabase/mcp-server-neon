@@ -169,3 +169,41 @@ describe('withRefreshLock', () => {
     expect(elapsed).toBeLessThan(2_000);
   });
 });
+
+describe('signalTransientFailure / peekTransientFailure', () => {
+  it('signal writes to redis with 30s TTL', async () => {
+    setSpy.mockResolvedValue('OK');
+    const { signalTransientFailure } = await loadModule();
+    await signalTransientFailure('rt-flaky');
+
+    expect(setSpy).toHaveBeenCalledWith(
+      expect.stringContaining('mcp:refresh-transient:rt-flaky'),
+      '1',
+      expect.objectContaining({ PX: 30_000 }),
+    );
+  });
+
+  it('signal swallows redis errors so route logic continues', async () => {
+    setSpy.mockRejectedValue(new Error('redis exploded'));
+    const { signalTransientFailure } = await loadModule();
+    await expect(signalTransientFailure('rt-flaky')).resolves.toBeUndefined();
+  });
+
+  it('peek returns true when marker is present', async () => {
+    getSpy.mockResolvedValue('1');
+    const { peekTransientFailure } = await loadModule();
+    expect(await peekTransientFailure('rt-flaky')).toBe(true);
+  });
+
+  it('peek returns false when marker is absent', async () => {
+    getSpy.mockResolvedValue(null);
+    const { peekTransientFailure } = await loadModule();
+    expect(await peekTransientFailure('rt-flaky')).toBe(false);
+  });
+
+  it('peek defaults to false on redis error so caller falls back to normal poll', async () => {
+    getSpy.mockRejectedValue(new Error('boom'));
+    const { peekTransientFailure } = await loadModule();
+    expect(await peekTransientFailure('rt-flaky')).toBe(false);
+  });
+});
