@@ -10,6 +10,7 @@ import {
   getTokens,
   getRefreshTokens,
   getRefreshResults,
+  getRefreshFailures,
   getAuthorizationCodes,
   getClientRegisterHeaders,
   getClientAuthContexts,
@@ -17,6 +18,7 @@ import {
   ClientAuthContextRecord,
   RefreshToken,
   RefreshResult,
+  RefreshFailure,
 } from './kv-store';
 
 class Model implements AuthorizationCodeModel {
@@ -127,7 +129,23 @@ class Model implements AuthorizationCodeModel {
       return getAuthorizationCodes().delete(code.authorizationCode);
     };
 
-  private static REFRESH_RESULT_TTL_MS = 60_000;
+  // Source-code analysis of Hydra v1.11.x confirmed `token_inactive` upstream
+  // errors are triggered by *refresh-token-reuse detection* — once Hydra sees
+  // the same RT twice (laptop wake, multiple Cursor windows, network blip
+  // mid-rotation) it revokes the entire chain and the user must re-auth.
+  // Returning the cached new pair instead of forwarding the stale RT upstream
+  // is the only thing keeping these clients from being kicked.
+  //
+  // 7 days catches the long-tail of "user opens Cursor after a multi-day
+  // pause" scenarios — post-deploy logs of #234 still showed ~30/hr cliffs
+  // dominated by clients presenting RTs from beyond the previous 24h
+  // window. Hydra's own RT lifespan is 30d; 7d sits comfortably inside
+  // that and bounds storage growth (one entry per rotation × 7d ≈ ~50MB
+  // at current traffic). The cached access token still carries its own
+  // 1h `expires_at`, so a late cache hit returns an AT the client will
+  // need to refresh again with the cached new RT — the chain holds
+  // forward without re-auth.
+  private static REFRESH_RESULT_TTL_MS = 7 * 24 * 60 * 60_000;
 
   saveRefreshResult: (
     oldRefreshToken: string,
@@ -144,6 +162,28 @@ class Model implements AuthorizationCodeModel {
     oldRefreshToken: string,
   ) => Promise<RefreshResult | undefined> = async (oldRefreshToken) => {
     return getRefreshResults().get(oldRefreshToken);
+  };
+
+  // 4xx rejections won't recover — upstream has invalidated the token.
+  // 10 min is plenty to absorb retry storms without keeping stale entries
+  // around if a misbehaving client genuinely re-auths and starts over.
+  private static REFRESH_FAILURE_TTL_MS = 10 * 60_000;
+
+  saveRefreshFailure: (
+    refreshToken: string,
+    detail: RefreshFailure,
+  ) => Promise<void> = async (refreshToken, detail) => {
+    await getRefreshFailures().set(
+      refreshToken,
+      detail,
+      Model.REFRESH_FAILURE_TTL_MS,
+    );
+  };
+
+  getRefreshFailure: (
+    refreshToken: string,
+  ) => Promise<RefreshFailure | undefined> = async (refreshToken) => {
+    return getRefreshFailures().get(refreshToken);
   };
 }
 

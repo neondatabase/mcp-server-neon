@@ -1,6 +1,7 @@
 // Initialize Sentry (must be first import)
 import '../../../mcp-src/sentry/instrument';
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -49,6 +50,105 @@ import {
 import { NEON_TOOLS } from '../../../mcp-src/tools/definitions';
 import { assert } from '../../../lib/assert';
 import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
+import {
+  bindSession,
+  deriveIdentity,
+  evaluateMessageOwnership,
+  releaseSession,
+  shouldRejectEnvelope,
+} from '../../../mcp-src/server/session-binding';
+
+class SessionIdentityMismatchError extends Error {
+  constructor() {
+    super('Session identity mismatch; request dropped');
+    this.name = 'SessionIdentityMismatchError';
+  }
+}
+
+type Deferred<T> = {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: unknown) => void;
+};
+
+type SessionBindingContext = {
+  identity: string;
+  binding: Deferred<void>;
+  sessionId?: string;
+  sessionStarted: boolean;
+};
+
+type JsonErrorDefinition = {
+  status: number;
+  error: string;
+  code: string;
+};
+
+function createDeferred<T>(): Deferred<T> {
+  let resolve!: Deferred<T>['resolve'];
+  let reject!: Deferred<T>['reject'];
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+// Carries the authenticated caller's identity fingerprint from post-auth into
+// the mcp-handler onEvent callback (where `SESSION_STARTED` fires with the
+// newly-generated sessionId). ALS propagates through the library's awaits. For
+// SSE, the outer route waits on the same context before returning the stream, so
+// clients never receive a usable sessionId before Redis has the owner binding.
+const sessionBindingContext = new AsyncLocalStorage<SessionBindingContext>();
+
+// SSE streams live up to this many seconds on Vercel Fluid Compute. Used both
+// as mcp-handler's `maxDuration` and (plus a buffer) as the TTL for session
+// bindings in Redis.
+const SSE_MAX_DURATION_SEC = 800;
+const SESSION_BINDING_TTL_SEC = SSE_MAX_DURATION_SEC + 70;
+
+const ROUTE_PATHS = {
+  apiBase: '/api',
+  canonicalMcp: '/api/mcp',
+  canonicalSse: '/api/sse',
+  legacyMcp: '/mcp',
+  legacySse: '/sse',
+} as const;
+
+const SSE_CONNECTION_PATHS = new Set<string>([
+  ROUTE_PATHS.canonicalSse,
+  ROUTE_PATHS.legacySse,
+]);
+
+const JSON_RESPONSE_HEADERS = { 'Content-Type': 'application/json' } as const;
+
+const HTTP_STATUS = {
+  unauthorized: 401,
+  forbidden: 403,
+  serviceUnavailable: 503,
+} as const;
+
+const PROTECTED_RESOURCE_METADATA_PATH =
+  '/.well-known/oauth-protected-resource';
+
+const SESSION_ERROR_CODES = {
+  callerIdentityUnavailable: 'caller_identity_unavailable',
+  sessionBindingUnavailable: 'session_binding_unavailable',
+  sessionNotOwned: 'session_not_owned',
+  sessionVerificationUnavailable: 'session_verification_unavailable',
+} as const;
+
+const CALLER_IDENTITY_UNAVAILABLE_RESPONSE: JsonErrorDefinition = {
+  status: HTTP_STATUS.unauthorized,
+  error: 'Caller identity unavailable',
+  code: SESSION_ERROR_CODES.callerIdentityUnavailable,
+};
+
+const SESSION_BINDING_UNAVAILABLE_RESPONSE: JsonErrorDefinition = {
+  status: HTTP_STATUS.serviceUnavailable,
+  error: 'Session binding unavailable',
+  code: SESSION_ERROR_CODES.sessionBindingUnavailable,
+};
 
 type AuthenticatedExtra = {
   authInfo?: AuthInfo & {
@@ -69,9 +169,37 @@ type AuthenticatedExtra = {
 type StaticToolContext = {
   grant: GrantContext;
   readOnly: boolean;
+  // Identity fingerprint of the SSE connection owner, captured at handler
+  // construction. Each tool call compares `extra.authInfo`'s identity against
+  // this. Mismatches indicate a Redis envelope was routed into a stream it
+  // does not belong to — defense in depth on top of the POST-side check.
+  sseOwnerIdentity: string | null;
 };
 
 function createContextualMcpHandler(staticToolContext: StaticToolContext) {
+  const { sseOwnerIdentity } = staticToolContext;
+
+  // Verifies that the caller baked into an incoming MCP envelope (tool or
+  // prompt call) matches the identity captured when the SSE stream was
+  // established. See StaticToolContext.sseOwnerIdentity for rationale.
+  // Returns true on mismatch so the registered handler can short-circuit
+  // with a no-op result rather than emitting a JSON-RPC error onto the SSE
+  // owner's channel (which is the victim, not the attacker).
+  const checkEnvelopeMatches = (
+    extra: AuthenticatedExtra,
+    invocationName: string,
+  ): boolean => {
+    if (!shouldRejectEnvelope(sseOwnerIdentity, extra.authInfo)) return false;
+    logger.error('envelope identity mismatch — dropping invocation', {
+      invocation: invocationName,
+      hasCallerIdentity: deriveIdentity(extra.authInfo) !== null,
+    });
+    captureException(new SessionIdentityMismatchError(), {
+      tags: { invocation: invocationName },
+    });
+    return true;
+  };
+
   return createMcpHandler(
     (server: McpServer) => {
       // Request-scoped mutable state (isolated per server instance)
@@ -246,6 +374,14 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
             annotations: tool.annotations,
           },
           async (args: any, extra: any) => {
+            const typedExtra = extra as AuthenticatedExtra;
+            if (checkEnvelopeMatches(typedExtra, tool.name)) {
+              // Silently drop the misrouted invocation. Returning a non-error
+              // empty result avoids leaking a JSON-RPC error onto the SSE
+              // owner's (victim's) channel.
+              return { content: [], isError: false } as const;
+            }
+
             const traceId = generateTraceId();
             return await startSpan(
               {
@@ -265,7 +401,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   clientName: cName,
                   client,
                   context,
-                } = await getAuthContext(extra as AuthenticatedExtra);
+                } = await getAuthContext(typedExtra);
 
                 // Track server_init on first authenticated request (after client detection)
                 trackServerInit(context);
@@ -369,6 +505,12 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
             argsSchema: prompt.argsSchema,
           },
           async (args: any, extra: any) => {
+            const typedExtra = extra as AuthenticatedExtra;
+            if (checkEnvelopeMatches(typedExtra, `prompt:${prompt.name}`)) {
+              // Silently drop the misrouted invocation; see tool handler note.
+              return { messages: [] } as const;
+            }
+
             const {
               account,
               readOnly,
@@ -376,7 +518,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
               clientName: cName,
               client,
               context,
-            } = await getAuthContext(extra as AuthenticatedExtra);
+            } = await getAuthContext(typedExtra);
 
             // Track server_init on first authenticated request
             trackServerInit(context);
@@ -473,25 +615,74 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
     },
     {
       redisUrl: process.env.KV_URL || process.env.REDIS_URL,
-      basePath: '/api',
-      maxDuration: 800, // Fluid Compute - up to 800s for SSE connections
+      basePath: ROUTE_PATHS.apiBase,
+      maxDuration: SSE_MAX_DURATION_SEC, // Fluid Compute ceiling for SSE connections
       verboseLogs: process.env.NODE_ENV !== 'production',
       onEvent: (event) => {
         switch (event.type) {
-          case 'SESSION_STARTED':
+          case 'SESSION_STARTED': {
             logger.info('MCP session started', {
               sessionId: event.sessionId,
               transport: event.transport,
               clientInfo: event.clientInfo,
             });
+            const bindingContext = sessionBindingContext.getStore();
+            const identity = bindingContext?.identity;
+            if (event.sessionId && identity && bindingContext) {
+              const sessionId = event.sessionId;
+              bindingContext.sessionId = sessionId;
+              bindingContext.sessionStarted = true;
+              void bindSession(sessionId, identity, SESSION_BINDING_TTL_SEC)
+                .then(() => {
+                  bindingContext.binding.resolve();
+                })
+                .catch((err) => {
+                  logger.error('session-binding bind failed', {
+                    sessionId,
+                    err,
+                  });
+                  captureException(err, {
+                    tags: { operation: 'bindSession' },
+                    extra: { sessionId },
+                  });
+                  bindingContext.binding.reject(err);
+                });
+            } else if (bindingContext) {
+              const err = new Error('SESSION_STARTED missing sessionId');
+              logger.error('session-binding cannot bind SSE session', {
+                hasSessionId: !!event.sessionId,
+                hasIdentity: !!identity,
+              });
+              captureException(err, {
+                tags: { operation: 'bindSession' },
+              });
+              bindingContext.binding.reject(err);
+            }
             break;
+          }
 
-          case 'SESSION_ENDED':
+          case 'SESSION_ENDED': {
             logger.info('MCP session ended', {
               sessionId: event.sessionId,
               transport: event.transport,
             });
+            if (event.sessionId) {
+              const sessionId = event.sessionId;
+              waitUntil(
+                releaseSession(sessionId).catch((err) => {
+                  logger.error('session-binding release failed', {
+                    sessionId,
+                    err,
+                  });
+                  captureException(err, {
+                    tags: { operation: 'releaseSession' },
+                    extra: { sessionId },
+                  });
+                }),
+              );
+            }
             break;
+          }
 
           case 'REQUEST_COMPLETED':
             if (event.status === 'error') {
@@ -816,9 +1007,11 @@ const verifyToken = async (
 
   // Detect transport from URL pathname and parse query params
   const url = new URL(req.url);
-  const transport: AppContext['transport'] = url.pathname.includes('/mcp')
-    ? 'stream'
-    : 'sse';
+  const transport: AppContext['transport'] =
+    url.pathname === ROUTE_PATHS.canonicalMcp ||
+    url.pathname === ROUTE_PATHS.legacyMcp
+      ? 'stream'
+      : 'sse';
 
   const searchParams = url.searchParams;
   const readOnlyQueryParam = searchParams.get('readonly');
@@ -931,17 +1124,167 @@ function getStaticToolContext(req: Request): StaticToolContext {
   return {
     grant,
     readOnly: authExtra?.readOnly === true,
+    sseOwnerIdentity: deriveIdentity(authInfo),
   };
+}
+
+// Session-binding check for POSTs to the SSE message endpoint. Verifies that
+// the caller owns the sessionId they're posting to before the library routes
+// the message into the SSE owner's stream. The decision logic lives in
+// `evaluateMessageOwnership` so it can be unit-tested in isolation; this
+// function is just the Request → Response adapter.
+async function checkSessionOwnership(
+  req: Request,
+  identity: string | null,
+): Promise<Response | null> {
+  const url = new URL(req.url);
+  const sessionId = url.searchParams.get('sessionId');
+  const result = await evaluateMessageOwnership(
+    req.method,
+    url.pathname,
+    sessionId,
+    identity,
+  );
+  if (result.kind !== 'reject') return null;
+  if (result.status === HTTP_STATUS.forbidden) {
+    logger.warn('session-binding mismatch on POST /message', {
+      sessionId,
+      reason: result.reason,
+    });
+  } else if (result.status === HTTP_STATUS.serviceUnavailable) {
+    logger.error('session-binding verify failed; denying', { sessionId });
+  }
+  const code =
+    result.status === HTTP_STATUS.forbidden
+      ? SESSION_ERROR_CODES.sessionNotOwned
+      : result.status === HTTP_STATUS.serviceUnavailable
+        ? SESSION_ERROR_CODES.sessionVerificationUnavailable
+        : SESSION_ERROR_CODES.callerIdentityUnavailable;
+  return jsonErrorResponse({
+    status: result.status,
+    error: result.reason,
+    code,
+  });
+}
+
+function isSseConnectionRequest(req: Request): boolean {
+  const url = new URL(req.url);
+  return req.method === 'GET' && SSE_CONNECTION_PATHS.has(url.pathname);
+}
+
+function jsonErrorResponse({
+  status,
+  error,
+  code,
+}: JsonErrorDefinition): Response {
+  return new Response(JSON.stringify({ error, code }), {
+    status,
+    headers: JSON_RESPONSE_HEADERS,
+  });
+}
+
+function cloneRequestWithSignal(req: Request, signal: AbortSignal): Request {
+  const cloned = new Request(req, { signal });
+  cloned.auth = req.auth;
+  return cloned;
+}
+
+async function runSseAfterSessionBinding(
+  req: Request,
+  identity: string,
+): Promise<Response> {
+  const abortController = new AbortController();
+  const abortFromClient = () => abortController.abort();
+  if (req.signal.aborted) {
+    abortController.abort();
+  } else {
+    req.signal.addEventListener('abort', abortFromClient, { once: true });
+  }
+
+  const bindingContext: SessionBindingContext = {
+    identity,
+    binding: createDeferred<void>(),
+    sessionStarted: false,
+  };
+  const sseReq = cloneRequestWithSignal(req, abortController.signal);
+  const responsePromise = sessionBindingContext.run(bindingContext, () =>
+    createContextualMcpHandler(getStaticToolContext(sseReq))(sseReq),
+  );
+
+  try {
+    const firstResult = await Promise.race([
+      responsePromise.then(
+        (response) => ({ type: 'response' as const, response }),
+        (error) => ({ type: 'response-error' as const, error }),
+      ),
+      bindingContext.binding.promise.then(
+        () => ({ type: 'bound' as const }),
+        (error) => ({ type: 'bind-error' as const, error }),
+      ),
+    ]);
+
+    if (firstResult.type === 'response-error') {
+      throw firstResult.error;
+    }
+    if (firstResult.type === 'bind-error') {
+      abortController.abort();
+      void responsePromise.catch(() => undefined);
+      return jsonErrorResponse(SESSION_BINDING_UNAVAILABLE_RESPONSE);
+    }
+
+    const response =
+      firstResult.type === 'response'
+        ? firstResult.response
+        : await responsePromise;
+
+    if (bindingContext.sessionStarted) {
+      try {
+        await bindingContext.binding.promise;
+      } catch {
+        abortController.abort();
+        void responsePromise.catch(() => undefined);
+        return jsonErrorResponse(SESSION_BINDING_UNAVAILABLE_RESPONSE);
+      }
+      return response;
+    }
+
+    if (response.ok) {
+      const err = new Error('SSE response opened without session binding');
+      logger.error('session-binding missing SESSION_STARTED event; denying', {
+        status: response.status,
+      });
+      captureException(err, {
+        tags: { operation: 'bindSession' },
+      });
+      abortController.abort();
+      return jsonErrorResponse(SESSION_BINDING_UNAVAILABLE_RESPONSE);
+    }
+
+    return response;
+  } finally {
+    req.signal.removeEventListener('abort', abortFromClient);
+  }
 }
 
 // Wrap with authentication. After auth is resolved, route to a context-scoped
 // MCP handler whose registered tools match the token grant/read-only context.
 const authHandler = withMcpAuth(
-  (req) => createContextualMcpHandler(getStaticToolContext(req))(req),
+  async (req) => {
+    const identity = deriveIdentity(req.auth);
+    const rejection = await checkSessionOwnership(req, identity);
+    if (rejection) return rejection;
+    if (isSseConnectionRequest(req)) {
+      if (!identity) {
+        return jsonErrorResponse(CALLER_IDENTITY_UNAVAILABLE_RESPONSE);
+      }
+      return runSseAfterSessionBinding(req, identity);
+    }
+    return createContextualMcpHandler(getStaticToolContext(req))(req);
+  },
   verifyToken,
   {
     required: true,
-    resourceMetadataPath: '/.well-known/oauth-protected-resource',
+    resourceMetadataPath: PROTECTED_RESOURCE_METADATA_PATH,
   },
 );
 
@@ -949,7 +1292,7 @@ function rewriteResourceMetadataHeader(
   response: Response,
   request: Request,
 ): Response {
-  if (response.status !== 401) {
+  if (response.status !== HTTP_STATUS.unauthorized) {
     return response;
   }
 
@@ -1002,10 +1345,10 @@ function getDocsOnlyHandler() {
 const handleRequest = (req: Request) => {
   const url = new URL(req.url);
 
-  if (url.pathname === '/mcp') {
-    url.pathname = '/api/mcp';
-  } else if (url.pathname === '/sse') {
-    url.pathname = '/api/sse';
+  if (url.pathname === ROUTE_PATHS.legacyMcp) {
+    url.pathname = ROUTE_PATHS.canonicalMcp;
+  } else if (url.pathname === ROUTE_PATHS.legacySse) {
+    url.pathname = ROUTE_PATHS.canonicalSse;
   }
 
   const normalizedReq = new Request(url.toString(), {

@@ -131,6 +131,7 @@ Merge-gating tests must be deterministic. Do not make third-party uptime (for ex
 
    - Next.js API route handling SSE and Streamable HTTP transports
    - Uses `mcp-handler` library for serverless MCP protocol handling
+   - SSE sessions are bound to caller identity via `mcp-src/server/session-binding.ts` (Redis-backed; verifies the POST /message caller matches the GET /sse owner using a hashed binding key)
 
 4. **OAuth System (`landing/lib/oauth/` and `landing/mcp-src/oauth/`)**
 
@@ -142,6 +143,12 @@ Merge-gating tests must be deterministic. Do not make third-party uptime (for ex
 5. **Resources (`landing/mcp-src/resources.ts`)**
    - MCP resources that provide read-only context (like "getting started" guides)
    - Registered alongside tools but don't execute operations
+
+6. **Grant Context & Tool Filtering (`landing/mcp-src/utils/grant-context.ts`, `landing/mcp-src/tools/grant-filter.ts`)**
+   - Fine-grained access control beyond plain read/write: per-category scopes (`projects`, `branches`, `schema`, `querying`, `neon_auth`, `data_api`, `docs`) and optional project-scoping to a single `projectId`
+   - Grant resolved from OAuth resource URI query params (authorize-time), OAuth token grant field (runtime), or direct MCP URL query params for API-key auth
+   - `grant-filter.ts` filters `NEON_TOOLS` by scope category, hides project-agnostic tools in project-scoped mode, and strips `project_id` from input schemas when scoped
+   - Exposed publicly via `GET /api/list-tools` (stateless preview of tool visibility for a given grant)
 
 ### Key Architectural Patterns
 
@@ -247,16 +254,22 @@ landing/                  # Next.js app (main project)
 │   │   ├── token/      # OAuth token exchange
 │   │   ├── register/   # Dynamic client registration
 │   │   ├── revoke/     # OAuth token revocation
+│   │   ├── list-tools/ # Stateless tool-visibility preview (no auth)
 │   │   └── health/     # Health check endpoint
 │   ├── callback/       # OAuth callback handler
 │   └── .well-known/    # OAuth discovery endpoints
 │   # Note: Root `/` redirects to https://neon.tech/docs/ai/neon-mcp-server
 │   # (configured in next.config.ts). There is no landing page.
 ├── e2e/                # Playwright E2E tests
-│   ├── global-setup.ts # Instagres DB provisioning + secret generation
-│   └── smoke.spec.ts   # Smoke tests (health, OAuth discovery, redirect)
+│   ├── global-setup.ts             # Instagres DB provisioning + secret generation
+│   ├── smoke.spec.ts               # Smoke tests (health, OAuth discovery, redirect)
+│   ├── list-tools.spec.ts          # /api/list-tools visibility/grant tests
+│   ├── mcp-response-integrity.spec.ts # MCP transport response shape checks
+│   └── oauth-register-authorize.spec.ts # OAuth register + authorize flow
 ├── lib/                # Next.js-compatible utilities
+│   ├── assert.ts       # Type-narrowing assertion helper
 │   ├── config.ts       # Centralized configuration
+│   ├── errors.ts       # OAuth-aware HTTP error mapping for route handlers
 │   └── oauth/          # OAuth utilities for Next.js
 ├── mcp-src/            # MCP server source code
 │   ├── __tests__/      # Vitest unit/integration/MCP e2e tests
@@ -264,27 +277,32 @@ landing/                  # Next.js app (main project)
 │   │   ├── *.integration.test.ts  # Integration tests
 │   │   └── *.e2e.test.ts          # MCP protocol e2e tests
 │   ├── server/         # MCP server factory
-│   │   ├── index.ts    # Server creation and tool registration
-│   │   ├── api.ts      # Neon API client factory
-│   │   ├── account.ts  # Account resolution (user/org/project-scoped)
-│   │   └── errors.ts   # Error handling utilities
+│   │   ├── index.ts          # Server creation and tool registration
+│   │   ├── api.ts            # Neon API client factory
+│   │   ├── account.ts        # Account resolution (user/org/project-scoped)
+│   │   ├── errors.ts         # Error handling utilities
+│   │   └── session-binding.ts # Redis-backed SSE session-to-caller binding
 │   ├── tools/          # Tool definitions and handlers
-│   │   ├── index.ts       # Re-exports definitions and handlers
+│   │   ├── index.ts        # Re-exports definitions and handlers
 │   │   ├── definitions.ts  # Tool definitions (NEON_TOOLS) with annotations
-│   │   ├── tools.ts       # Tool handlers mapping (NEON_HANDLERS)
-│   │   ├── toolsSchema.ts # Zod schemas for tool inputs
-│   │   ├── handlers/      # Individual tool implementations
-│   │   ├── types.ts       # TypeScript types
-│   │   └── utils.ts       # Tool utilities
+│   │   ├── tools.ts        # Tool handlers mapping (NEON_HANDLERS)
+│   │   ├── toolsSchema.ts  # Zod schemas for tool inputs
+│   │   ├── grant-filter.ts # Filter NEON_TOOLS by grant context (scope categories, project scoping)
+│   │   ├── handlers/       # Individual tool implementations
+│   │   ├── types.ts        # TypeScript types
+│   │   └── utils.ts        # Tool utilities
 │   ├── oauth/          # OAuth model and KV store
 │   ├── analytics/      # Segment analytics
 │   ├── sentry/         # Sentry error tracking
 │   ├── types/          # Shared TypeScript types
 │   ├── utils/          # Shared utilities
-│   │   ├── read-only.ts    # Read-only mode detection, scope definitions
-│   │   ├── trace.ts        # TraceId generation for request correlation
-│   │   ├── client-application.ts  # Client application utilities
-│   │   └── logger.ts       # Logging utilities
+│   │   ├── read-only.ts          # Read-only mode detection, SUPPORTED_SCOPES
+│   │   ├── grant-context.ts      # Grant resolution + scope categories + project scoping
+│   │   ├── singleflight.ts       # Promise deduplication by key (concurrent-call coalescing)
+│   │   ├── trace.ts              # TraceId generation for request correlation
+│   │   ├── client-application.ts # Client application utilities
+│   │   └── logger.ts             # Logging utilities
+│   ├── describeUtils.ts # Postgres \d-style describe helpers (derived from @neondatabase/psql-describe)
 │   ├── resources.ts    # MCP resources
 │   ├── prompts.ts      # LLM prompts
 │   └── constants.ts    # Shared constants
@@ -334,18 +352,21 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 | `/api/token` | OAuth token exchange |
 | `/api/revoke` | OAuth token revocation |
 | `/api/register` | Dynamic client registration |
-| `/.well-known/oauth-authorization-server` | OAuth server metadata (includes `scopes_supported`) |
+| `/api/list-tools` | Stateless preview of available tools for a given grant (no auth) |
+| `/.well-known/oauth-authorization-server` | OAuth server metadata (includes `scopes_supported` and `x-neon-scope-categories`) |
 | `/.well-known/oauth-protected-resource` | OAuth protected resource metadata |
 
 ### OAuth Scopes
 
-The server supports three scopes: `read`, `write`, and `*`. These are exposed via the `/.well-known/oauth-authorization-server` endpoint's `scopes_supported` field.
+The server supports three top-level scopes: `read`, `write`, and `*`. These are exposed via the `/.well-known/oauth-authorization-server` endpoint's `scopes_supported` field.
 
 - **`read`**: Read-only access to Neon resources
 - **`write`**: Full access including create/delete operations
 - **`*`**: Wildcard, equivalent to full access
 
 During authorization, users can uncheck "Full access" to request only `read` scope, which enables read-only mode.
+
+In addition to the top-level scopes, the server exposes **scope categories** via the non-standard `x-neon-scope-categories` field on the same metadata document: `projects`, `branches`, `schema`, `querying`, `neon_auth`, `data_api`, `docs`. These drive fine-grained tool filtering (see Grant Context above) and can also constrain a token to a single project. See `landing/mcp-src/utils/grant-context.ts` for grant resolution.
 
 ### Environment Variables (Vercel)
 
