@@ -111,7 +111,13 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     expect(toolNames).toEqual(['get_doc_resource', 'list_docs_resources']);
   });
 
-  test('tools/call list_docs_resources returns the markdown index', async ({
+  // Skipped from merge-gating CI per CLAUDE.md ("Merge-gating tests must be
+  // deterministic. Do not make third-party uptime ... a required CI
+  // dependency."). The fetch to NEON_DOCS_INDEX_URL happens server-side in
+  // the dev server, so Playwright's request.route() cannot intercept it.
+  // Restore by stubbing at the dev-server level (e.g., a test-only env var
+  // that swaps NEON_DOCS_INDEX_URL with a local fixture URL).
+  test.skip('tools/call list_docs_resources returns the markdown index', async ({
     request,
   }) => {
     const response = await request.post('/mcp?category=docs', {
