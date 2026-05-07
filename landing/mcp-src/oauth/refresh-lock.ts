@@ -224,9 +224,14 @@ export async function withRefreshLock<T>(
       continue;
     }
     if (stillHeld === null) {
-      // Holder released without producing a cache result (crash / 4xx).
-      // Fall through to the not-acquired error so the client retries; the
-      // failure cache will short-circuit subsequent attempts.
+      // Holder released. They may have just written the cache or
+      // failure cache between our peek above and this check (the order
+      // is "peek then redis.get", so a holder finishing in that micro-
+      // window is invisible to the iteration's peek). One final peek
+      // before bailing closes the race; production showed ~1/hour
+      // false-503s from this exact scheduling pattern.
+      const finalPeek = await peekResult();
+      if (finalPeek !== undefined) return finalPeek;
       break;
     }
   }
