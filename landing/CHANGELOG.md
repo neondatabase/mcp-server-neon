@@ -1,5 +1,43 @@
 # Changelog
 
+# [NEXT]
+
+OAuth refresh-token chain stability — drove the reconstructed refresh-grant SLO from ~93% to 100% in production by closing the cross-instance reuse race and the surrounding cliff/retry-storm paths.
+
+Refresh-token reliability:
+
+- Singleflight intra-instance dedup: when N concurrent requests arrive on the same Vercel container with the same refresh token, only one forwards to Hydra and the others wait for the shared result, instead of all racing upstream.
+- Add a Redis-backed distributed lock around refresh-token rotation so two serverless instances handling the same refresh token no longer both forward to Hydra, which would detect token reuse and revoke the entire chain.
+- Extend the cross-instance success cache to 7 days and write it before persisting the rotated tokens; subsequent retries that arrive while persistence is in flight (or after persistence has failed) replay the cached result instead of presenting an already-rotated token upstream.
+- Cache upstream 4xx responses for 10 minutes and capture structured upstream-error details, so retry storms from a single client short-circuit at our layer instead of forwarding hundreds of redundant calls to Hydra.
+- Cache pre-upstream failure paths (refresh token not found, access token not found, client mismatch) so concurrent waiters resolve to a clean `400 invalid_grant` instead of timing out the lock with a `503`.
+- Retry the rotated-token persist phase and degrade to the success cache when the KV write keeps failing, so clients always pick up the new pair instead of presenting a now-dead refresh token.
+- Retry the upstream `/oauth2/token` exchange on network-layer failures (`ECONNRESET`, `ETIMEDOUT`, `ENOTFOUND`, `ECONNREFUSED`, `EAI_AGAIN`, `EPIPE`, `EHOSTUNREACH`, `ENETUNREACH`, `UND_ERR_SOCKET`); HTTP 4xx/5xx are intentionally not retried because Hydra may have already rotated.
+- Reject upstream responses missing `refresh_token` with `502` and apply a logged 1-hour floor when `expires_in` is missing, instead of minting already-expired tokens.
+- Close a lock-waiter micro-race where a holder finishing between the waiter's two polls left the waiter blind to the just-written cache, causing spurious `503`s.
+- Stop deleting the stored refresh token when the upstream rotation returned the same token value (no-op rotations no longer poison the KV between cache write and persist).
+- Reinitialize the OAuth Keyv (Postgres) store when connection errors indicate a poisoned pool, so credential rotation or terminated connections no longer break every request until the serverless container recycles.
+
+Auth correctness:
+
+- Stop embedding MCP-specific grant context (scope categories, read-only mode, project-id scoping) in the upstream OAuth `state` parameter; the Neon console OAuth backend doesn't understand those scopes and shouldn't see them. Grant context is now resolved from the saved client registration, OAuth resource URI, or MCP URL query params.
+- MCP-specific configuration moved from custom `X-Neon-*` headers to URL query parameters where appropriate, simplifying client wiring (the legacy `x-read-only` header still works).
+- Pass tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) through `registerTool` to the MCP response — they were defined but not actually surfaced to clients.
+
+Observability:
+
+- Emit a structured `[SLO] refresh outcome=<bucket> elapsedMs=<n> clientId=<id> ...` log line at every refresh-grant exit point. Buckets: `success`, `correct_invalid_grant`, `cliff_upstream`, `transient_lock_timeout`, `transient_persist_failure`, `transient_upstream_5xx`, `transient_upstream_network`, `bad_request`. The new `transient_upstream_network` bucket separates network-layer failures from HTTP 5xx so the diagnostic vector is preserved even though both are excluded from the SLO denominator.
+
+Transport security:
+
+- Bind SSE sessions to the caller identity that opened them. Previously any caller who knew or guessed a live `sessionId` could `POST /api/message` and inject responses into the victim's SSE stream; the binding key is hashed and stored in Redis alongside the existing session record.
+
+Other:
+
+- Serve the OpenAI Apps Challenge verification token at `/.well-known/openai-apps-challenge`.
+- Migrate the package manager from Bun to pnpm (pinned via Corepack); see `landing/CLAUDE.md` for development setup.
+- Add a one-click "Add to Kiro" install badge to the README.
+
 # [1.0.0]
 
 - Existing clients remain compatible, with new options to scope access by project and capability categories.
