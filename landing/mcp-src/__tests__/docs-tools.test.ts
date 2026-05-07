@@ -37,6 +37,7 @@ describe('list_docs_resources handler', () => {
 
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
       NEON_DOCS_INDEX_URL,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(result.content).toHaveLength(1);
     expect(result.content[0].type).toBe('text');
@@ -98,6 +99,7 @@ describe('get_doc_resource handler', () => {
 
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
       `${NEON_DOCS_BASE_URL}/docs/connect/connection-pooling.md`,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(result.content).toHaveLength(1);
     expect(result.content[0].type).toBe('text');
@@ -116,6 +118,7 @@ describe('get_doc_resource handler', () => {
 
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
       `${NEON_DOCS_BASE_URL}/docs/guides/prisma.md`,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(result.content[0].text).toBe(mockContent);
   });
@@ -131,6 +134,7 @@ describe('get_doc_resource handler', () => {
 
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
       `${NEON_DOCS_BASE_URL}/docs/guides/prisma.md`,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -230,6 +234,7 @@ describe('get_doc_resource handler', () => {
 
       expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
         `${NEON_DOCS_BASE_URL}/docs/guides/prisma.md`,
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     });
   });

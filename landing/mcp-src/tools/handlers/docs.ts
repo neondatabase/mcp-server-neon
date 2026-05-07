@@ -1,8 +1,16 @@
 import { NEON_DOCS_BASE_URL, NEON_DOCS_INDEX_URL } from '../../resources';
 import { InvalidArgumentError, NotFoundError } from '../../server/errors';
 
+// Hard cap on upstream docs fetches so a stalled neon.com response
+// cannot hold a Vercel concurrency slot for the full 800s function
+// duration. The docs-only endpoint is anonymous, so this is a reachable
+// vector without authentication.
+const DOCS_FETCH_TIMEOUT_MS = 10_000;
+
 export async function listDocsResources(): Promise<string> {
-  const response = await fetch(NEON_DOCS_INDEX_URL);
+  const response = await fetch(NEON_DOCS_INDEX_URL, {
+    signal: AbortSignal.timeout(DOCS_FETCH_TIMEOUT_MS),
+  });
   if (!response.ok) {
     if (response.status === 404) {
       throw new NotFoundError('Neon docs index not found');
@@ -40,7 +48,9 @@ export async function getDocResource({
   validateDocSlug(slug);
   const mdSlug = slug.endsWith('.md') ? slug : `${slug}.md`;
   const url = `${NEON_DOCS_BASE_URL}/${mdSlug}`;
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(DOCS_FETCH_TIMEOUT_MS),
+  });
   if (!response.ok) {
     if (response.status === 404) {
       throw new NotFoundError(`Doc page not found: "${mdSlug}"`);
