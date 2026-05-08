@@ -15,6 +15,7 @@ Refresh-token reliability:
 - Retry the upstream `/oauth2/token` exchange on network-layer failures (`ECONNRESET`, `ETIMEDOUT`, `ENOTFOUND`, `ECONNREFUSED`, `EAI_AGAIN`, `EPIPE`, `EHOSTUNREACH`, `ENETUNREACH`, `UND_ERR_SOCKET`); HTTP 4xx/5xx are intentionally not retried because Hydra may have already rotated.
 - Reject upstream responses missing `refresh_token` with `502` and apply a logged 1-hour floor when `expires_in` is missing, instead of minting already-expired tokens.
 - Close a lock-waiter micro-race where a holder finishing between the waiter's two polls left the waiter blind to the just-written cache, causing spurious `503`s.
+- Release the refresh lock and the transient-failure marker in a single atomic Lua eval. Previously the two were separate Redis SETs; on Upstash HA Redis a waiter's reads could land on different replicas and see the lock-release before the marker, falling through to a 5-second `transient_lock_timeout` instead of bailing fast as `transient_upstream_5xx`. The 2026-05-08 07:17 UTC Hydra burst exposed this with 12/12 cascaded lock-timeouts; the atomic release removes the replication window.
 - Stop deleting the stored refresh token when the upstream rotation returned the same token value (no-op rotations no longer poison the KV between cache write and persist).
 - Reinitialize the OAuth Keyv (Postgres) store when connection errors indicate a poisoned pool, so credential rotation or terminated connections no longer break every request until the serverless container recycles.
 

@@ -53,9 +53,18 @@ vi.mock('@vercel/functions', () => ({
 // `refresh-lock.test.ts` covers acquire/wait/release semantics.
 const mockSignalTransientFailure = vi.fn().mockResolvedValue(undefined);
 const mockPeekTransientFailure = vi.fn().mockResolvedValue(false);
+// Capture the ReleaseHint that executeRefresh mutates so tests can assert on
+// it (replaces the pre-atomic-Lua `signalTransientFailure` call signature).
+let lastReleaseHint: { markTransientForWaiters?: boolean } | undefined;
 vi.mock('../oauth/refresh-lock', () => ({
-  withRefreshLock: vi.fn(async (_token: string, execute: () => unknown) =>
-    execute(),
+  withRefreshLock: vi.fn(
+    async (
+      _token: string,
+      execute: (hint: { markTransientForWaiters?: boolean }) => unknown,
+    ) => {
+      lastReleaseHint = {};
+      return execute(lastReleaseHint);
+    },
   ),
   signalTransientFailure: (...args: unknown[]) =>
     mockSignalTransientFailure(...args),
@@ -308,23 +317,25 @@ describe('Token refresh flow', () => {
       expect(mockModel.deleteRefreshToken).not.toHaveBeenCalled();
     });
 
-    it('signals transient failure on upstream 5xx so waiters can exit early', async () => {
+    it('marks the release hint on upstream 5xx so the lock release also writes the transient marker atomically', async () => {
+      // executeRefresh now mutates the ReleaseHint passed by withRefreshLock
+      // instead of calling signalTransientFailure directly — see
+      // RELEASE_WITH_TRANSIENT_LUA in refresh-lock.ts. This test pins the
+      // contract: a 5xx upstream response must set markTransientForWaiters so
+      // waiters bail fast as transient_upstream_5xx instead of timing out.
       const upstreamError = new Error('Internal Server Error') as Error & {
         status: number;
       };
       upstreamError.status = 500;
       mockExchange.mockRejectedValue(upstreamError);
-      mockSignalTransientFailure.mockClear();
 
       await POST(makeTokenRequest('old-refresh-token'));
 
-      expect(mockSignalTransientFailure).toHaveBeenCalledTimes(1);
-      expect(mockSignalTransientFailure).toHaveBeenCalledWith(
-        'old-refresh-token',
-      );
+      expect(lastReleaseHint).toBeDefined();
+      expect(lastReleaseHint?.markTransientForWaiters).toBe(true);
     });
 
-    it('does not signal transient failure on upstream 4xx (it is a hard cliff, not transient)', async () => {
+    it('does not mark the release hint on upstream 4xx (it is a hard cliff, not transient)', async () => {
       const upstreamError = new Error('inactive') as Error & {
         status: number;
         error?: string;
@@ -332,11 +343,10 @@ describe('Token refresh flow', () => {
       upstreamError.status = 401;
       upstreamError.error = 'token_inactive';
       mockExchange.mockRejectedValue(upstreamError);
-      mockSignalTransientFailure.mockClear();
 
       await POST(makeTokenRequest('old-refresh-token'));
 
-      expect(mockSignalTransientFailure).not.toHaveBeenCalled();
+      expect(lastReleaseHint?.markTransientForWaiters).toBeUndefined();
     });
   });
 

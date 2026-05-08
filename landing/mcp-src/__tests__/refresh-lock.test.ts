@@ -169,6 +169,73 @@ describe('withRefreshLock', () => {
     expect(elapsed).toBeLessThan(2_000);
   });
 
+  it('on transient hint, releases via the atomic marker+release Lua script', async () => {
+    // Production race we're closing: holder hits upstream 5xx, sets the
+    // transient marker, then releases the lock. With two separate Redis SETs
+    // on Upstash HA, a waiter can see the lock-release on a replica that
+    // hasn't replicated the marker yet, fall through to lock_timeout instead
+    // of bailing as transient_upstream_5xx. The atomic Lua makes both
+    // observable simultaneously.
+    setSpy.mockResolvedValue('OK');
+    const { withRefreshLock } = await loadModule();
+    const execute = vi.fn(async (hint) => {
+      hint.markTransientForWaiters = true;
+      throw new Error('upstream 5xx');
+    });
+
+    await expect(
+      withRefreshLock('rt-flaky', execute, async () => undefined),
+    ).rejects.toThrow('upstream 5xx');
+
+    expect(evalSpy).toHaveBeenCalledTimes(1);
+    const evalArgs = evalSpy.mock.calls[0][1];
+    // Lua receives both lockKey and transientKey.
+    expect(evalArgs.keys).toEqual([
+      'mcp:refresh-lock:rt-flaky',
+      'mcp:refresh-transient:rt-flaky',
+    ]);
+    // arguments: [owner, '1', ttlMs]
+    const setOwner = setSpy.mock.calls[0][1];
+    expect(evalArgs.arguments[0]).toBe(setOwner);
+    expect(evalArgs.arguments[1]).toBe('1');
+    expect(evalArgs.arguments[2]).toMatch(/^\d+$/);
+    // The Lua script body should include both set+del so the release and
+    // marker write happen atomically.
+    const script = evalSpy.mock.calls[0][0] as string;
+    expect(script).toContain('redis.call("set", KEYS[2]');
+    expect(script).toContain('redis.call("del", KEYS[1])');
+  });
+
+  it('without transient hint, uses the plain release Lua (no marker keys)', async () => {
+    setSpy.mockResolvedValue('OK');
+    const { withRefreshLock } = await loadModule();
+    const execute = vi.fn().mockResolvedValue('ok');
+
+    await withRefreshLock('rt', execute, async () => undefined);
+
+    expect(evalSpy).toHaveBeenCalledTimes(1);
+    const evalArgs = evalSpy.mock.calls[0][1];
+    expect(evalArgs.keys).toEqual(['mcp:refresh-lock:rt']);
+    expect(evalArgs.arguments).toHaveLength(1); // just owner
+  });
+
+  it('hint applies even when execute throws after setting it', async () => {
+    setSpy.mockResolvedValue('OK');
+    const { withRefreshLock } = await loadModule();
+    const execute = vi.fn(async (hint) => {
+      hint.markTransientForWaiters = true;
+      throw new Error('upstream');
+    });
+
+    await expect(
+      withRefreshLock('rt', execute, async () => undefined),
+    ).rejects.toThrow('upstream');
+
+    // The atomic-with-marker variant should fire even on the throw path.
+    const script = evalSpy.mock.calls[0][0] as string;
+    expect(script).toContain('KEYS[2]');
+  });
+
   it('on lock disappears with cached result written in the gap, returns cached instead of 503', async () => {
     // Regression for the production race: holder finishes (writes cache,
     // releases lock) between the waiter's peekResult and redis.get within
