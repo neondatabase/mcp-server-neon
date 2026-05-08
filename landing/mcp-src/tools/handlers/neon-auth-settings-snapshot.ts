@@ -4,7 +4,7 @@ import { Api, NeonAuthEmailAndPasswordConfig } from '@neondatabase/api-client';
  * Canonical Neon Auth settings shape shared by get_neon_auth_config and
  * configure_neon_auth success responses (same keys configure reads/writes).
  */
-export type NeonAuthConfigurableSettings = {
+type NeonAuthConfigurableSettings = {
   trusted_redirect_uris: string[];
   allow_localhost: boolean | null;
   sign_in_with_email: boolean | null;
@@ -12,7 +12,7 @@ export type NeonAuthConfigurableSettings = {
   allow_sign_up_with_email: boolean | null;
 };
 
-export type NeonAuthConfigurableSettingsErrors = Partial<{
+type NeonAuthConfigurableSettingsErrors = Partial<{
   trusted_redirect_uris: string;
   allow_localhost: string;
   email_auth: string;
@@ -20,7 +20,7 @@ export type NeonAuthConfigurableSettingsErrors = Partial<{
 
 type Slice<T> = { status: number; statusText: string; data?: T };
 
-export function buildNeonAuthConfigurableSettingsFromSlices(
+function buildNeonAuthConfigurableSettingsFromSlices(
   domainsRes: Slice<{ domains: { domain: string }[] }>,
   localhostRes: Slice<{ allow_localhost: boolean }>,
   emailRes: Slice<NeonAuthEmailAndPasswordConfig>,
