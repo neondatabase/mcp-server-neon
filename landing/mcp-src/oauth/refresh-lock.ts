@@ -133,6 +133,28 @@ else
 end
 `;
 
+/**
+ * Atomic compare-and-delete + transient-marker write. Used when the holder
+ * exits via an upstream-5xx-class error: setting the marker and releasing the
+ * lock in a single Redis round-trip closes the race where a waiter sees the
+ * lock as released but the marker hasn't propagated yet (and falls through to
+ * a `transient_lock_timeout` instead of bailing fast as `transient_upstream_5xx`).
+ *
+ * Production observation: during a Hydra 5xx burst at 2026-05-08 07:17 UTC,
+ * 12/12 lock waiters hit their poll timeout despite the holder calling
+ * `signalTransientFailure` before throwing. Two non-atomic SETs on Upstash HA
+ * Redis can land on different replicas, so the waiter's `redis.get(lockKey)`
+ * sees the release before its `redis.get(transientKey)` sees the marker.
+ */
+const RELEASE_WITH_TRANSIENT_LUA = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  redis.call("set", KEYS[2], ARGV[2], "PX", ARGV[3])
+  return redis.call("del", KEYS[1])
+else
+  return 0
+end
+`;
+
 const sleep = (ms: number) =>
   new Promise<void>((r) => {
     const t = setTimeout(r, ms);
@@ -157,9 +179,20 @@ const sleep = (ms: number) =>
  * `peekResult` MUST be cheap and idempotent (it's called multiple times
  * during the wait loop).
  */
+/**
+ * Hint object passed to `execute` so the holder can request that the lock
+ * release also writes the transient-failure marker atomically. Set
+ * `markTransientForWaiters = true` when an upstream 5xx-class error is about
+ * to throw — this is the race-free replacement for calling
+ * `signalTransientFailure` separately.
+ */
+export type ReleaseHint = {
+  markTransientForWaiters?: boolean;
+};
+
 export async function withRefreshLock<T>(
   refreshToken: string,
-  execute: () => Promise<T>,
+  execute: (hint: ReleaseHint) => Promise<T>,
   peekResult: () => Promise<T | undefined>,
 ): Promise<T> {
   let redis: RedisClientType;
@@ -169,7 +202,9 @@ export async function withRefreshLock<T>(
     logger.warn('refresh-lock unavailable, falling back to direct execute', {
       err: err instanceof Error ? err.message : err,
     });
-    return execute();
+    // Fallback path: no lock acquired, no waiters to signal. The hint object
+    // exists only to satisfy the function contract; we discard it.
+    return execute({});
   }
 
   const key = lockKey(refreshToken);
@@ -185,26 +220,38 @@ export async function withRefreshLock<T>(
     logger.warn('refresh-lock acquire failed, falling back to direct execute', {
       err: err instanceof Error ? err.message : err,
     });
-    return execute();
+    return execute({});
   }
 
   if (acquired === 'OK') {
+    const hint: ReleaseHint = {};
     try {
       // A peer may have just released after writing the cache and before our
       // SET landed. Cheap to check; saves an upstream call when it hits.
       const fast = await peekResult();
       if (fast !== undefined) return fast;
-      return await execute();
+      return await execute(hint);
     } finally {
       try {
-        await withTimeout(
-          redis.eval(RELEASE_LUA, { keys: [key], arguments: [owner] }),
-          'release',
-        );
+        if (hint.markTransientForWaiters) {
+          await withTimeout(
+            redis.eval(RELEASE_WITH_TRANSIENT_LUA, {
+              keys: [key, transientKey(refreshToken)],
+              arguments: [owner, '1', String(TRANSIENT_TTL_MS)],
+            }),
+            'release-with-transient',
+          );
+        } else {
+          await withTimeout(
+            redis.eval(RELEASE_LUA, { keys: [key], arguments: [owner] }),
+            'release',
+          );
+        }
       } catch (err) {
         // Lock will TTL out; failing release is non-fatal.
         logger.warn('refresh-lock release failed', {
           err: err instanceof Error ? err.message : err,
+          markTransient: hint.markTransientForWaiters === true,
         });
       }
     }

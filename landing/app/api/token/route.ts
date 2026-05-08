@@ -11,7 +11,7 @@ import { singleflight } from '../../../mcp-src/utils/singleflight';
 import { retryAsync } from '../../../mcp-src/utils/retry';
 import {
   withRefreshLock,
-  signalTransientFailure,
+  type ReleaseHint,
   peekTransientFailure,
 } from '../../../mcp-src/oauth/refresh-lock';
 
@@ -206,6 +206,7 @@ async function cachePreUpstreamFailure(
 async function executeRefresh(
   refreshToken: string,
   client: Client,
+  hint: ReleaseHint,
 ): Promise<RefreshTokenResult> {
   const providedRefreshToken = await model.getRefreshToken(refreshToken);
   if (!providedRefreshToken) {
@@ -303,9 +304,14 @@ async function executeRefresh(
     }
 
     // Signal the lock waiters that the upstream is currently flaky so they
-    // exit their poll loop fast instead of timing out 5s later as 503s. The
-    // marker is short-lived (30s) so genuine recovery isn't masked.
-    await signalTransientFailure(refreshToken);
+    // exit their poll loop fast instead of timing out 5s later as 503s. We
+    // ride this on the lock release via an atomic Lua script (see
+    // RELEASE_WITH_TRANSIENT_LUA in refresh-lock.ts): writing the marker and
+    // releasing the lock as two separate Redis SETs lets a waiter on Upstash
+    // HA Redis see the release on a replica that hasn't replicated the
+    // marker yet, which manifested as 12 cascaded `transient_lock_timeout`
+    // events during the 2026-05-08 07:17 UTC Hydra burst.
+    hint.markTransientForWaiters = true;
 
     // Distinguish network-layer failures (no HTTP response) from HTTP 5xx
     // for SLO bucketing. Both are excluded from the SLO denominator, but
@@ -814,9 +820,9 @@ export async function POST(request: NextRequest) {
         //     concurrent calls so we don't spam Redis SET ops.
         const result = await withRefreshLock(
           refreshToken,
-          () =>
+          (hint) =>
             singleflight(`refresh:${refreshToken}`, () =>
-              executeRefresh(refreshToken, client),
+              executeRefresh(refreshToken, client, hint),
             ),
           peekResolution,
         );
