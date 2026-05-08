@@ -2,6 +2,6 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "project": ["**/*.{ts,tsx}", "!**/*.d.ts"],
   "ignore": [".next/**", "dist/**", "build/**", "out/**"],
-  "ignoreDependencies": ["tailwindcss", "postcss"],
-  "ignoreBinaries": []
+  "ignoreDependencies": ["tailwindcss", "postcss", "tsx"],
+  "ignoreBinaries": ["tsx"]
 }

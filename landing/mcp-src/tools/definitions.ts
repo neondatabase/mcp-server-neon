@@ -20,6 +20,8 @@ import {
   prepareDatabaseMigrationInputSchema,
   prepareQueryTuningInputSchema,
   provisionNeonAuthInputSchema,
+  configureNeonAuthInputSchema,
+  getNeonAuthConfigInputSchema,
   provisionNeonDataApiInputSchema,
   runSqlInputSchema,
   runSqlTransactionInputSchema,
@@ -472,6 +474,49 @@ export const NEON_TOOLS = [
     annotations: {
       title: 'Provision Neon Auth',
       readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'configure_neon_auth' as const,
+    scope: 'neon_auth',
+    inputSchema: configureNeonAuthInputSchema,
+    readOnlySafe: false,
+    description: `
+    Updates Neon Auth (Better Auth) settings for a branch after it is provisioned.
+
+    Success responses end with the same JSON field set as get_neon_auth_config: trusted_redirect_uris, allow_localhost, sign_in_with_email, verify_email_on_sign_up, allow_sign_up_with_email (optional _errors if a slice fails to reload).
+
+    Supported operations:
+    - add_redirect_uri / remove_redirect_uri: manage trusted redirect URIs (full URLs) for OAuth and email flows
+    - set_allow_localhost: allow or block localhost callbacks for development
+    - update_email_auth_settings: toggle email/password sign-in, verification email on sign-up, and whether new email sign-ups are allowed
+
+    Omit branchId to use the project default branch (same behavior as provision_neon_auth).
+    `,
+    annotations: {
+      title: 'Configure Neon Auth',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'get_neon_auth_config' as const,
+    scope: 'neon_auth',
+    inputSchema: getNeonAuthConfigInputSchema,
+    readOnlySafe: true,
+    description: `
+    Returns current Neon Auth (Better Auth) settings for a branch as JSON using the same keys configure_neon_auth reads and writes: trusted_redirect_uris, allow_localhost, sign_in_with_email, verify_email_on_sign_up, allow_sign_up_with_email. Optional _errors records partial fetch failures for a slice.
+
+    Omit branchId to use the project default branch. Requires Neon Auth to be provisioned (use provision_neon_auth first).
+    `,
+    annotations: {
+      title: 'Get Neon Auth configuration',
+      readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
       openWorldHint: false,
