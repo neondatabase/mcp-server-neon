@@ -20,6 +20,7 @@ import {
   prepareDatabaseMigrationInputSchema,
   prepareQueryTuningInputSchema,
   provisionNeonAuthInputSchema,
+  configureNeonAuthInputSchema,
   provisionNeonDataApiInputSchema,
   runSqlInputSchema,
   runSqlTransactionInputSchema,
@@ -474,6 +475,29 @@ export const NEON_TOOLS = [
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: true,
+      openWorldHint: false,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'configure_neon_auth' as const,
+    scope: 'neon_auth',
+    inputSchema: configureNeonAuthInputSchema,
+    readOnlySafe: false,
+    description: `
+    Updates Neon Auth (Better Auth) settings for a branch after it is provisioned.
+
+    Supported operations:
+    - add_redirect_uri / remove_redirect_uri: manage trusted redirect URIs (full URLs) for OAuth and email flows
+    - set_allow_localhost: allow or block localhost callbacks for development
+    - update_email_auth_settings: toggle email/password sign-in, verification email on sign-up, and whether new email sign-ups are allowed
+
+    Omit branchId to use the project default branch (same behavior as provision_neon_auth).
+    `,
+    annotations: {
+      title: 'Configure Neon Auth',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },

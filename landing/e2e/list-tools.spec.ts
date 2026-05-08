@@ -15,12 +15,12 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('/api/list-tools endpoint', () => {
-  test('returns all 29 tools with no params', async ({ request }) => {
+  test('returns all 30 tools with no params', async ({ request }) => {
     const response = await request.get('/api/list-tools');
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(29);
+    expect(body.tools).toHaveLength(30);
     expect(body.readOnly).toBe(false);
     expect(body.grant.scopes).toBeNull();
     expect(body.grant.projectId).toBeNull();
@@ -36,12 +36,12 @@ test.describe('/api/list-tools endpoint', () => {
     expect(body.grant.scopes).toEqual(['querying']);
   });
 
-  test('returns 22 tools for project-scoped mode', async ({ request }) => {
+  test('returns 23 tools for project-scoped mode', async ({ request }) => {
     const response = await request.get('/api/list-tools?projectId=proj-123');
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(22);
+    expect(body.tools).toHaveLength(23);
     expect(body.grant.projectId).toBe('proj-123');
 
     const names = body.tools.map((t: { name: string }) => t.name);

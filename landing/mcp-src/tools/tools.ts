@@ -12,6 +12,7 @@ import { InvalidArgumentError, NotFoundError } from '../server/errors';
 
 import { describeTable, formatTableDescription } from '../describeUtils';
 import { handleProvisionNeonAuth } from './handlers/neon-auth';
+import { handleConfigureNeonAuth } from './handlers/neon-auth-config';
 import { handleProvisionNeonDataApi } from './handlers/data-api';
 import { handleSearch } from './handlers/search';
 import { handleFetch } from './handlers/fetch';
@@ -1509,6 +1510,10 @@ You MUST follow these steps:
       extra,
     );
     return result;
+  },
+
+  configure_neon_auth: async ({ params }, neonClient, extra) => {
+    return handleConfigureNeonAuth(params, neonClient, extra);
   },
 
   provision_neon_data_api: async ({ params }, neonClient, extra) => {

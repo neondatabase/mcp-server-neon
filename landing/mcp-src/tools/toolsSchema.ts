@@ -233,6 +233,93 @@ export const provisionNeonAuthInputSchema = z.object({
     ),
 });
 
+export const configureNeonAuthInputSchema = z
+  .object({
+    operation: z
+      .enum([
+        'add_redirect_uri',
+        'remove_redirect_uri',
+        'set_allow_localhost',
+        'update_email_auth_settings',
+      ])
+      .describe('Which Neon Auth configuration change to apply'),
+    projectId: z.string().describe('Neon project ID'),
+    branchId: z
+      .string()
+      .optional()
+      .describe(
+        'Branch ID. If omitted, the project default branch is used (same as provision_neon_auth).',
+      ),
+    redirect_uri: z
+      .string()
+      .url()
+      .optional()
+      .describe(
+        'Full redirect URI (must be a valid URL). Required for add_redirect_uri and remove_redirect_uri. The Neon API stores trusted redirect entries as URIs.',
+      ),
+    allow_localhost: z
+      .boolean()
+      .optional()
+      .describe(
+        'Whether Neon Auth should allow localhost origins. Required for set_allow_localhost.',
+      ),
+    sign_in_with_email: z
+      .boolean()
+      .optional()
+      .describe(
+        'When set, toggles email-and-password sign-in (Neon Auth email/password enabled flag).',
+      ),
+    verify_email_on_sign_up: z
+      .boolean()
+      .optional()
+      .describe(
+        'When set, toggles sending a verification email when users sign up (send_verification_email_on_sign_up).',
+      ),
+    allow_sign_up_with_email: z
+      .boolean()
+      .optional()
+      .describe(
+        'When set, toggles whether new users can sign up with email and password (inverse of disable_sign_up).',
+      ),
+  })
+  .superRefine((val, ctx) => {
+    if (
+      val.operation === 'add_redirect_uri' ||
+      val.operation === 'remove_redirect_uri'
+    ) {
+      if (!val.redirect_uri) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'redirect_uri is required for this operation',
+          path: ['redirect_uri'],
+        });
+      }
+    }
+    if (val.operation === 'set_allow_localhost') {
+      if (val.allow_localhost === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'allow_localhost is required for this operation',
+          path: ['allow_localhost'],
+        });
+      }
+    }
+    if (val.operation === 'update_email_auth_settings') {
+      if (
+        val.sign_in_with_email === undefined &&
+        val.verify_email_on_sign_up === undefined &&
+        val.allow_sign_up_with_email === undefined
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'Provide at least one of sign_in_with_email, verify_email_on_sign_up, or allow_sign_up_with_email',
+          path: ['sign_in_with_email'],
+        });
+      }
+    }
+  });
+
 export const provisionNeonDataApiInputSchema = z
   .object({
     projectId: z
