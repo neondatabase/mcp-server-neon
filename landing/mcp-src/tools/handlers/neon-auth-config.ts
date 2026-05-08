@@ -11,7 +11,7 @@ import { ToolHandlerExtraParams } from '../types';
 
 type Props = z.infer<typeof configureNeonAuthInputSchema>;
 
-async function resolveBranchId(
+export async function resolveNeonAuthBranchId(
   projectId: string,
   branchId: string | undefined,
   neonClient: Api<unknown>,
@@ -48,7 +48,7 @@ export async function handleConfigureNeonAuth(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _extra: ToolHandlerExtraParams,
 ): Promise<CallToolResult> {
-  const branchId = await resolveBranchId(
+  const branchId = await resolveNeonAuthBranchId(
     props.projectId,
     props.branchId,
     neonClient,

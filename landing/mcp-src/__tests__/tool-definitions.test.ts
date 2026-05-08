@@ -12,8 +12,8 @@ import { NEON_HANDLERS } from '../tools/tools';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
 
 describe('NEON_TOOLS definitions', () => {
-  it('has 30 tools', () => {
-    expect(NEON_TOOLS).toHaveLength(30);
+  it('has 31 tools', () => {
+    expect(NEON_TOOLS).toHaveLength(31);
   });
 
   it('every tool has a name, scope (or null), and readOnlySafe flag', () => {

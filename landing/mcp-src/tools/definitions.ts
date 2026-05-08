@@ -21,6 +21,7 @@ import {
   prepareQueryTuningInputSchema,
   provisionNeonAuthInputSchema,
   configureNeonAuthInputSchema,
+  getNeonAuthConfigInputSchema,
   provisionNeonDataApiInputSchema,
   runSqlInputSchema,
   runSqlTransactionInputSchema,
@@ -498,6 +499,27 @@ export const NEON_TOOLS = [
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
+      openWorldHint: false,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'get_neon_auth_config' as const,
+    scope: 'neon_auth',
+    inputSchema: getNeonAuthConfigInputSchema,
+    readOnlySafe: true,
+    description: `
+    Returns the current Neon Auth (Better Auth) configuration for a branch: integration metadata (base URL, JWKS URL, database name),
+    trusted redirect URIs, allow-localhost flag, email-and-password auth settings, and OAuth social providers (client secrets are not returned; only whether one is configured).
+
+    Omit branchId to use the project default branch. Requires Neon Auth to be provisioned on the branch (same project/branch semantics as provision_neon_auth).
+
+    Email SMTP / provider credentials are not included; manage those in the Neon Console if needed.
+    `,
+    annotations: {
+      title: 'Get Neon Auth configuration',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },

@@ -320,6 +320,16 @@ export const configureNeonAuthInputSchema = z
     }
   });
 
+export const getNeonAuthConfigInputSchema = z.object({
+  projectId: z.string().describe('Neon project ID'),
+  branchId: z
+    .string()
+    .optional()
+    .describe(
+      'Branch ID. If omitted, the project default branch is used (same as provision_neon_auth).',
+    ),
+});
+
 export const provisionNeonDataApiInputSchema = z
   .object({
     projectId: z
