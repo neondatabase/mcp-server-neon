@@ -7,6 +7,10 @@ import {
 import { configureNeonAuthInputSchema } from '../toolsSchema';
 import { z } from 'zod/v3';
 import { getDefaultBranch } from './utils';
+import {
+  fetchNeonAuthConfigurableSettings,
+  stringifyNeonAuthConfigurableSettings,
+} from './neon-auth-settings-snapshot';
 import { ToolHandlerExtraParams } from '../types';
 
 type Props = z.infer<typeof configureNeonAuthInputSchema>;
@@ -21,25 +25,6 @@ export async function resolveNeonAuthBranchId(
   }
   const defaultBranch = await getDefaultBranch(projectId, neonClient);
   return defaultBranch.id;
-}
-
-async function formatTrustedRedirectDomains(
-  projectId: string,
-  branchId: string,
-  neonClient: Api<unknown>,
-): Promise<string> {
-  const listRes = await neonClient.listBranchNeonAuthTrustedDomains(
-    projectId,
-    branchId,
-  );
-  if (listRes.status !== 200) {
-    return '';
-  }
-  const lines = listRes.data.domains.map((d) => d.domain);
-  if (lines.length === 0) {
-    return 'Current trusted redirect URIs: (none)';
-  }
-  return `Current trusted redirect URIs:\n${lines.map((u) => `- ${u}`).join('\n')}`;
 }
 
 export async function handleConfigureNeonAuth(
@@ -75,16 +60,24 @@ export async function handleConfigureNeonAuth(
           ],
         };
       }
-      const listing = await formatTrustedRedirectDomains(
+      const { settings, errors } = await fetchNeonAuthConfigurableSettings(
+        neonClient,
         props.projectId,
         branchId,
-        neonClient,
       );
       return {
         content: [
           {
             type: 'text',
-            text: `Added trusted redirect URI:\n${props.redirect_uri}\n\n${listing}`,
+            text: [
+              `Added trusted redirect URI: ${props.redirect_uri}`,
+              '',
+              stringifyNeonAuthConfigurableSettings(
+                'Current Neon Auth settings (same fields as get_neon_auth_config):',
+                settings,
+                errors,
+              ),
+            ].join('\n'),
           },
         ],
       };
@@ -109,16 +102,24 @@ export async function handleConfigureNeonAuth(
           ],
         };
       }
-      const listing = await formatTrustedRedirectDomains(
+      const { settings, errors } = await fetchNeonAuthConfigurableSettings(
+        neonClient,
         props.projectId,
         branchId,
-        neonClient,
       );
       return {
         content: [
           {
             type: 'text',
-            text: `Removed trusted redirect URI:\n${props.redirect_uri}\n\n${listing}`,
+            text: [
+              `Removed trusted redirect URI: ${props.redirect_uri}`,
+              '',
+              stringifyNeonAuthConfigurableSettings(
+                'Current Neon Auth settings (same fields as get_neon_auth_config):',
+                settings,
+                errors,
+              ),
+            ].join('\n'),
           },
         ],
       };
@@ -140,11 +141,24 @@ export async function handleConfigureNeonAuth(
           ],
         };
       }
+      const { settings, errors } = await fetchNeonAuthConfigurableSettings(
+        neonClient,
+        props.projectId,
+        branchId,
+      );
       return {
         content: [
           {
             type: 'text',
-            text: `allow_localhost is now ${res.data.allow_localhost ? 'enabled' : 'disabled'} for this branch.`,
+            text: [
+              `allow_localhost is now ${res.data.allow_localhost ? 'enabled' : 'disabled'} for this branch.`,
+              '',
+              stringifyNeonAuthConfigurableSettings(
+                'Current Neon Auth settings (same fields as get_neon_auth_config):',
+                settings,
+                errors,
+              ),
+            ].join('\n'),
           },
         ],
       };
@@ -177,21 +191,23 @@ export async function handleConfigureNeonAuth(
           ],
         };
       }
-      const cfg = res.data;
+      const { settings, errors } = await fetchNeonAuthConfigurableSettings(
+        neonClient,
+        props.projectId,
+        branchId,
+      );
       return {
         content: [
           {
             type: 'text',
             text: [
-              'Updated email and password auth settings for this branch:',
-              `- sign_in_with_email (enabled): ${cfg.enabled}`,
-              `- verify_email_on_sign_up (send_verification_email_on_sign_up): ${cfg.send_verification_email_on_sign_up}`,
-              `- allow_sign_up_with_email (!(disable_sign_up)): ${!cfg.disable_sign_up}`,
+              'Updated email and password auth settings for this branch.',
               '',
-              'Other current values:',
-              `- require_email_verification: ${cfg.require_email_verification}`,
-              `- send_verification_email_on_sign_in: ${cfg.send_verification_email_on_sign_in}`,
-              `- email_verification_method: ${cfg.email_verification_method}`,
+              stringifyNeonAuthConfigurableSettings(
+                'Current Neon Auth settings (same fields as get_neon_auth_config):',
+                settings,
+                errors,
+              ),
             ].join('\n'),
           },
         ],

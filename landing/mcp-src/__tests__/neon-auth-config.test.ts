@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { NeonAuthSupportedAuthProvider } from '@neondatabase/api-client';
+import {
+  NeonAuthEmailVerificationMethod,
+  NeonAuthSupportedAuthProvider,
+} from '@neondatabase/api-client';
 import { configureNeonAuthInputSchema } from '../tools/toolsSchema';
 import { handleConfigureNeonAuth } from '../tools/handlers/neon-auth-config';
 import type { ToolHandlerExtraParams } from '../tools/types';
@@ -65,6 +68,22 @@ describe('handleConfigureNeonAuth', () => {
       }),
       addBranchNeonAuthTrustedDomain,
       listBranchNeonAuthTrustedDomains,
+      getNeonAuthAllowLocalhost: vi.fn().mockResolvedValue({
+        status: 200,
+        data: { allow_localhost: false },
+      }),
+      getNeonAuthEmailAndPasswordConfig: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          enabled: true,
+          email_verification_method: NeonAuthEmailVerificationMethod.Link,
+          require_email_verification: false,
+          auto_sign_in_after_verification: true,
+          send_verification_email_on_sign_up: false,
+          send_verification_email_on_sign_in: false,
+          disable_sign_up: false,
+        },
+      }),
     };
 
     const result = await handleConfigureNeonAuth(
@@ -92,6 +111,11 @@ describe('handleConfigureNeonAuth', () => {
       expect(result.content[0].text).toContain(
         'https://app.example.com/auth/callback',
       );
+      expect(result.content[0].text).toContain('"trusted_redirect_uris"');
+      expect(result.content[0].text).toContain('"allow_localhost"');
+      expect(result.content[0].text).toContain(
+        'same fields as get_neon_auth_config',
+      );
     }
   });
 
@@ -110,6 +134,26 @@ describe('handleConfigureNeonAuth', () => {
     });
     const neonClient = {
       updateNeonAuthEmailAndPasswordConfig,
+      listBranchNeonAuthTrustedDomains: vi.fn().mockResolvedValue({
+        status: 200,
+        data: { domains: [] },
+      }),
+      getNeonAuthAllowLocalhost: vi.fn().mockResolvedValue({
+        status: 200,
+        data: { allow_localhost: true },
+      }),
+      getNeonAuthEmailAndPasswordConfig: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          enabled: true,
+          email_verification_method: NeonAuthEmailVerificationMethod.Link,
+          require_email_verification: false,
+          auto_sign_in_after_verification: true,
+          send_verification_email_on_sign_up: true,
+          send_verification_email_on_sign_in: false,
+          disable_sign_up: false,
+        },
+      }),
     };
 
     await handleConfigureNeonAuth(

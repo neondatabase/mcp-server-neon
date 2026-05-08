@@ -1,8 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   NeonAuthEmailVerificationMethod,
-  NeonAuthOauthProviderId,
-  NeonAuthOauthProviderType,
   NeonAuthProviderProjectOwnedBy,
   NeonAuthSupportedAuthProvider,
 } from '@neondatabase/api-client';
@@ -11,8 +9,15 @@ import type { ToolHandlerExtraParams } from '../tools/types';
 
 const extra = {} as ToolHandlerExtraParams;
 
+function parseSettingsJson(text: string): Record<string, unknown> {
+  const start = text.indexOf('```json');
+  const end = text.lastIndexOf('```');
+  const raw = text.slice(start + '```json'.length, end).trim();
+  return JSON.parse(raw) as Record<string, unknown>;
+}
+
 describe('handleGetNeonAuthConfig', () => {
-  it('returns JSON summary on success and omits OAuth client secrets', async () => {
+  it('returns the same top-level keys as configure_neon_auth snapshots', async () => {
     const neonClient = {
       listProjectBranches: vi.fn().mockResolvedValue({
         data: { branches: [{ id: 'br-1', default: true }] },
@@ -57,19 +62,6 @@ describe('handleGetNeonAuthConfig', () => {
           disable_sign_up: false,
         },
       }),
-      listBranchNeonAuthOauthProviders: vi.fn().mockResolvedValue({
-        status: 200,
-        data: {
-          providers: [
-            {
-              id: NeonAuthOauthProviderId.Google,
-              type: NeonAuthOauthProviderType.Standard,
-              client_id: 'google-client-id',
-              client_secret: 'super-secret',
-            },
-          ],
-        },
-      }),
     };
 
     const result = await handleGetNeonAuthConfig(
@@ -81,12 +73,15 @@ describe('handleGetNeonAuthConfig', () => {
     expect(result.isError).toBeFalsy();
     expect(result.content[0].type).toBe('text');
     if (result.content[0].type === 'text') {
-      expect(result.content[0].text).toContain('Neon Auth configuration');
-      expect(result.content[0].text).toContain('"trusted_redirect_uris"');
-      expect(result.content[0].text).toContain(
-        '"client_secret_configured": true',
-      );
-      expect(result.content[0].text).not.toContain('super-secret');
+      const body = parseSettingsJson(result.content[0].text);
+      expect(body.trusted_redirect_uris).toEqual([
+        'https://app.example.com/callback',
+      ]);
+      expect(body.allow_localhost).toBe(true);
+      expect(body.sign_in_with_email).toBe(true);
+      expect(body.verify_email_on_sign_up).toBe(true);
+      expect(body.allow_sign_up_with_email).toBe(true);
+      expect(body._errors).toBeUndefined();
     }
   });
 

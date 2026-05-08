@@ -487,6 +487,8 @@ export const NEON_TOOLS = [
     description: `
     Updates Neon Auth (Better Auth) settings for a branch after it is provisioned.
 
+    Success responses end with the same JSON field set as get_neon_auth_config: trusted_redirect_uris, allow_localhost, sign_in_with_email, verify_email_on_sign_up, allow_sign_up_with_email (optional _errors if a slice fails to reload).
+
     Supported operations:
     - add_redirect_uri / remove_redirect_uri: manage trusted redirect URIs (full URLs) for OAuth and email flows
     - set_allow_localhost: allow or block localhost callbacks for development
@@ -508,12 +510,9 @@ export const NEON_TOOLS = [
     inputSchema: getNeonAuthConfigInputSchema,
     readOnlySafe: true,
     description: `
-    Returns the current Neon Auth (Better Auth) configuration for a branch: integration metadata (base URL, JWKS URL, database name),
-    trusted redirect URIs, allow-localhost flag, email-and-password auth settings, and OAuth social providers (client secrets are not returned; only whether one is configured).
+    Returns current Neon Auth (Better Auth) settings for a branch as JSON using the same keys configure_neon_auth reads and writes: trusted_redirect_uris, allow_localhost, sign_in_with_email, verify_email_on_sign_up, allow_sign_up_with_email. Optional _errors records partial fetch failures for a slice.
 
-    Omit branchId to use the project default branch. Requires Neon Auth to be provisioned on the branch (same project/branch semantics as provision_neon_auth).
-
-    Email SMTP / provider credentials are not included; manage those in the Neon Console if needed.
+    Omit branchId to use the project default branch. Requires Neon Auth to be provisioned (use provision_neon_auth first).
     `,
     annotations: {
       title: 'Get Neon Auth configuration',
