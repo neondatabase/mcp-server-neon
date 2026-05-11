@@ -20,6 +20,9 @@ vi.mock('openid-client', () => ({
   authorizationCodeGrant: authorizationCodeGrantMock,
   ClientSecretPost: clientSecretPostMock,
   refreshTokenGrant: refreshTokenGrantMock,
+  // The real openid-client exports `customFetch` as a Symbol; tests
+  // don't actually exercise the fetch path so any Symbol is fine.
+  customFetch: Symbol('customFetch'),
 }));
 
 vi.mock('../../lib/config', () => ({

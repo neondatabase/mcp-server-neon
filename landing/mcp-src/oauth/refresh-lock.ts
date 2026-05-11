@@ -20,9 +20,26 @@ import { createClient, type RedisClientType } from 'redis';
 import { logger } from '../utils/logger';
 
 const LOCK_KEY_PREFIX = 'mcp:refresh-lock:';
-const LOCK_TTL_MS = 30_000;
+// Short TTL so a vanished holder (Vercel function killed mid-flight by
+// the platform — OOM, container shutdown, host eviction) doesn't keep
+// waiters blocked for the previous 30s. The holder extends the TTL via a
+// heartbeat while it's still alive (see `runWithHeartbeat`), so legitimate
+// slow upstream calls don't get yanked. Sized at 2× HEARTBEAT_MS so one
+// missed heartbeat (Redis blip, event-loop stall) doesn't expire the lock.
+const LOCK_TTL_MS = 6_000;
+const LOCK_HEARTBEAT_MS = 2_500;
 const LOCK_POLL_INTERVAL_MS = 100;
-const LOCK_POLL_MAX_ATTEMPTS = 50; // ~5s total wait
+// ~8s total waiter budget. Sized to cover the holder's upstream-call cap
+// (UPSTREAM_REFRESH_TIMEOUT_MS in app/api/token/route.ts, ~4.5s) plus the
+// holder's lock-release + transient-marker write, plus a margin for the
+// waiter's own ~100ms poll granularity and Redis RTT. With this budget the
+// holder's atomic Lua release + transient marker always lands first; the
+// failure cache / marker then short-circuits the wait.
+const LOCK_POLL_MAX_ATTEMPTS = 80;
+// Cap total time a single waiter spends cycling through poll → takeover →
+// poll. Prevents a takeover that itself vanishes from feeding the next
+// waiter into another full poll loop.
+const WAITER_TOTAL_BUDGET_MS = 8_000;
 const REDIS_OP_TIMEOUT_MS = 500;
 
 const TRANSIENT_KEY_PREFIX = 'mcp:refresh-transient:';
@@ -155,11 +172,90 @@ else
 end
 `;
 
+/**
+ * Atomic compare-and-extend (PEXPIRE only if owner matches). The heartbeat
+ * uses this to extend the lock's TTL while the holder is alive, so a short
+ * LOCK_TTL_MS doesn't yank legitimate slow upstream calls. If we no longer
+ * own the lock (an extreme stall let it TTL-expire to a peer), we don't
+ * extend it — the new owner is in charge.
+ */
+const HEARTBEAT_LUA = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("pexpire", KEYS[1], ARGV[2])
+else
+  return 0
+end
+`;
+
 const sleep = (ms: number) =>
   new Promise<void>((r) => {
     const t = setTimeout(r, ms);
     t.unref?.();
   });
+
+/**
+ * Runs `execute` while keeping the lock TTL refreshed via a heartbeat, then
+ * releases the lock atomically — using either the plain release script or
+ * the release-with-transient-marker script depending on the hint.
+ *
+ * Heartbeat failures are non-fatal (logged). Two consecutive missed
+ * heartbeats let the lock TTL out — the cost is one extra waiter promotion,
+ * not a cliff (the takeover path in `withRefreshLock` handles this).
+ */
+async function runWithHeartbeat<T>(
+  redis: RedisClientType,
+  refreshToken: string,
+  owner: string,
+  hint: ReleaseHint,
+  execute: () => Promise<T>,
+): Promise<T> {
+  const lkey = lockKey(refreshToken);
+  let timer: ReturnType<typeof setInterval> | undefined = setInterval(() => {
+    // Fire-and-forget; failure means we missed a heartbeat.
+    withTimeout(
+      redis.eval(HEARTBEAT_LUA, {
+        keys: [lkey],
+        arguments: [owner, String(LOCK_TTL_MS)],
+      }),
+      'heartbeat',
+    ).catch((err) => {
+      logger.warn('refresh-lock heartbeat failed', {
+        err: err instanceof Error ? err.message : err,
+      });
+    });
+  }, LOCK_HEARTBEAT_MS);
+  timer.unref?.();
+  try {
+    return await execute();
+  } finally {
+    if (timer) {
+      clearInterval(timer);
+      timer = undefined;
+    }
+    try {
+      if (hint.markTransientForWaiters) {
+        await withTimeout(
+          redis.eval(RELEASE_WITH_TRANSIENT_LUA, {
+            keys: [lkey, transientKey(refreshToken)],
+            arguments: [owner, '1', String(TRANSIENT_TTL_MS)],
+          }),
+          'release-with-transient',
+        );
+      } else {
+        await withTimeout(
+          redis.eval(RELEASE_LUA, { keys: [lkey], arguments: [owner] }),
+          'release',
+        );
+      }
+    } catch (err) {
+      // Lock will TTL out fast (LOCK_TTL_MS); failing release is non-fatal.
+      logger.warn('refresh-lock release failed', {
+        err: err instanceof Error ? err.message : err,
+        markTransient: hint.markTransientForWaiters === true,
+      });
+    }
+  }
+}
 
 /**
  * Run `execute` while holding a cross-instance lock on `refreshToken`. Other
@@ -202,85 +298,99 @@ export async function withRefreshLock<T>(
     logger.warn('refresh-lock unavailable, falling back to direct execute', {
       err: err instanceof Error ? err.message : err,
     });
-    // Fallback path: no lock acquired, no waiters to signal. The hint object
-    // exists only to satisfy the function contract; we discard it.
+    // Fallback path: no lock, no waiters to signal. Hint discarded.
     return execute({});
   }
 
   const key = lockKey(refreshToken);
-  const owner = randomUUID();
+  const deadline = Date.now() + WAITER_TOTAL_BUDGET_MS;
+  // Try to acquire the lock; if held, poll. On the first poll iteration where
+  // we see the lock disappear without a cached result, attempt a takeover
+  // (single retry — don't infinite-loop if the lock keeps getting grabbed-
+  // and-vanished). Caps upstream calls at N+1 where N = number of vanished
+  // holders observed, in practice always 1.
+  let takeoverAttempted = false;
 
-  let acquired: string | null;
-  try {
-    acquired = await withTimeout(
-      redis.set(key, owner, { NX: true, PX: LOCK_TTL_MS }),
-      'set',
-    );
-  } catch (err) {
-    logger.warn('refresh-lock acquire failed, falling back to direct execute', {
-      err: err instanceof Error ? err.message : err,
-    });
-    return execute({});
-  }
-
-  if (acquired === 'OK') {
-    const hint: ReleaseHint = {};
+  while (Date.now() < deadline) {
+    let acquired: string | null;
+    const owner = randomUUID();
     try {
+      acquired = await withTimeout(
+        redis.set(key, owner, { NX: true, PX: LOCK_TTL_MS }),
+        'set',
+      );
+    } catch (err) {
+      logger.warn(
+        'refresh-lock acquire failed, falling back to direct execute',
+        { err: err instanceof Error ? err.message : err },
+      );
+      return execute({});
+    }
+
+    if (acquired === 'OK') {
       // A peer may have just released after writing the cache and before our
       // SET landed. Cheap to check; saves an upstream call when it hits.
       const fast = await peekResult();
-      if (fast !== undefined) return fast;
-      return await execute(hint);
-    } finally {
-      try {
-        if (hint.markTransientForWaiters) {
-          await withTimeout(
-            redis.eval(RELEASE_WITH_TRANSIENT_LUA, {
-              keys: [key, transientKey(refreshToken)],
-              arguments: [owner, '1', String(TRANSIENT_TTL_MS)],
-            }),
-            'release-with-transient',
-          );
-        } else {
+      if (fast !== undefined) {
+        // Best-effort release; we own a fresh lock no one is waiting on.
+        try {
           await withTimeout(
             redis.eval(RELEASE_LUA, { keys: [key], arguments: [owner] }),
             'release',
           );
+        } catch {
+          /* TTLs out fast */
         }
-      } catch (err) {
-        // Lock will TTL out; failing release is non-fatal.
-        logger.warn('refresh-lock release failed', {
-          err: err instanceof Error ? err.message : err,
-          markTransient: hint.markTransientForWaiters === true,
-        });
+        return fast;
+      }
+      if (takeoverAttempted) {
+        // Useful in log aggregation: how often does the vanished-holder
+        // pattern actually fire?
+        logger.info('refresh-lock waiter took over after holder vanished');
+      }
+      const hint: ReleaseHint = {};
+      // runWithHeartbeat keeps the short LOCK_TTL alive while execute runs,
+      // and on completion releases via the appropriate Lua based on hint.
+      return await runWithHeartbeat(redis, refreshToken, owner, hint, () =>
+        execute(hint),
+      );
+    }
+
+    // Another instance holds the lock. Poll for the result to materialize
+    // or for the lock to disappear (signalling holder death).
+    let lockDisappeared = false;
+    for (let i = 0; i < LOCK_POLL_MAX_ATTEMPTS; i++) {
+      if (Date.now() >= deadline) break;
+      await sleep(LOCK_POLL_INTERVAL_MS);
+      const cached = await peekResult();
+      if (cached !== undefined) return cached;
+      let stillHeld: string | null;
+      try {
+        stillHeld = await withTimeout(redis.get(key), 'get');
+      } catch {
+        // Transient get failure → keep waiting on the cache instead of
+        // stampeding upstream.
+        continue;
+      }
+      if (stillHeld === null) {
+        // Holder released (or vanished — heartbeat stopped firing and the
+        // short TTL expired). They may have just written the cache between
+        // our peek above and this check, so one final peek closes the race.
+        const finalPeek = await peekResult();
+        if (finalPeek !== undefined) return finalPeek;
+        lockDisappeared = true;
+        break;
       }
     }
-  }
 
-  // Another instance holds the lock. Wait for the result to materialize.
-  for (let i = 0; i < LOCK_POLL_MAX_ATTEMPTS; i++) {
-    await sleep(LOCK_POLL_INTERVAL_MS);
-    const cached = await peekResult();
-    if (cached !== undefined) return cached;
-    let stillHeld: string | null;
-    try {
-      stillHeld = await withTimeout(redis.get(key), 'get');
-    } catch {
-      // Treat transient get failure as "still held" so we keep waiting on
-      // the cache instead of stampeding upstream.
+    if (lockDisappeared && !takeoverAttempted) {
+      // Vanished-holder takeover: re-enter the outer loop to attempt a fresh
+      // SET NX. If we win, we run execute ourselves; if a peer beat us to
+      // it, we fall back into the poll loop against the new owner.
+      takeoverAttempted = true;
       continue;
     }
-    if (stillHeld === null) {
-      // Holder released. They may have just written the cache or
-      // failure cache between our peek above and this check (the order
-      // is "peek then redis.get", so a holder finishing in that micro-
-      // window is invisible to the iteration's peek). One final peek
-      // before bailing closes the race; production showed ~1/hour
-      // false-503s from this exact scheduling pattern.
-      const finalPeek = await peekResult();
-      if (finalPeek !== undefined) return finalPeek;
-      break;
-    }
+    break;
   }
 
   // We waited long enough and never saw a result. Surface a transient error
