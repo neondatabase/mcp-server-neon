@@ -1,9 +1,11 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import {
   discovery,
   buildAuthorizationUrl,
   authorizationCodeGrant,
   ClientSecretPost,
   refreshTokenGrant,
+  customFetch,
   type Configuration,
 } from 'openid-client';
 import {
@@ -12,6 +14,29 @@ import {
   SERVER_HOST,
   UPSTREAM_OAUTH_HOST,
 } from '../config';
+
+// Carries a per-call AbortSignal into the upstream fetch so callers can
+// cancel an in-flight `refreshTokenGrant` (Promise.race alone only unblocks
+// the await — the underlying socket stays open until the OS-level timeout).
+// The customFetch wrapper installed on the cached Configuration reads from
+// this ALS so we don't have to leak the signal as an explicit parameter
+// through openid-client's API surface.
+const upstreamAbortSignalContext = new AsyncLocalStorage<AbortSignal>();
+
+function combineSignals(
+  fromContext: AbortSignal | undefined,
+  fromInit: AbortSignal | null | undefined,
+): AbortSignal | undefined {
+  if (!fromContext) return fromInit ?? undefined;
+  if (!fromInit) return fromContext;
+  // Both present — abort if either fires. AbortSignal.any is Node 20+ (we run
+  // on Node 24 LTS on Vercel) but defend against missing implementation by
+  // falling back to the context signal, which is the one we care about.
+  const any = (
+    AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }
+  ).any;
+  return any ? any([fromContext, fromInit]) : fromContext;
+}
 
 const REDIRECT_URI = `${SERVER_HOST}/callback`;
 
@@ -54,6 +79,20 @@ const getUpstreamConfig = async (): Promise<Configuration> => {
     ClientSecretPost(CLIENT_SECRET),
     {},
   );
+  // Inject a per-call AbortSignal through openid-client's customFetch hook.
+  // The signal is read from ALS so callers (e.g. the timeout wrapper in
+  // /api/token) can actually cancel the in-flight fetch instead of just
+  // unblocking their await. The cached config is shared across requests, so
+  // ALS is the right scoping primitive.
+  (cachedConfig as unknown as Record<symbol, typeof globalThis.fetch>)[
+    customFetch
+  ] = (input, init) => {
+    const ctxSignal = upstreamAbortSignalContext.getStore();
+    return globalThis.fetch(input, {
+      ...(init ?? {}),
+      signal: combineSignals(ctxSignal, init?.signal),
+    });
+  };
   cacheTimestamp = now;
 
   return cachedConfig;
@@ -78,7 +117,16 @@ export const exchangeCode = async (currentUrl: URL, state: string) => {
   });
 };
 
-export const exchangeRefreshToken = async (token: string) => {
+export const exchangeRefreshToken = async (
+  token: string,
+  signal?: AbortSignal,
+) => {
   const config = await getUpstreamConfig();
-  return refreshTokenGrant(config, token);
+  if (!signal) return refreshTokenGrant(config, token);
+  // Run the grant inside the ALS-scoped signal so the customFetch hook
+  // attaches it to the underlying fetch. Cancellation now actually closes
+  // the socket — Promise.race alone only resolved the await wrapper.
+  return upstreamAbortSignalContext.run(signal, () =>
+    refreshTokenGrant(config, token),
+  );
 };

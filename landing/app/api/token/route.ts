@@ -18,6 +18,58 @@ import {
 const toSeconds = (ms: number): number => Math.floor(ms / 1000);
 const toMilliseconds = (seconds: number): number => seconds * 1000;
 
+// Cap each upstream refresh attempt. Production data: healthy success p99
+// is ~700ms; problematic upstream is bimodal — fast (<200ms) or slow
+// (4.5s–37s) — because Hydra holds connections open during 5xx bursts.
+// Capping at 4.5s forces a slow response into the 5xx code path before
+// waiters exhaust their ~8s lock-poll budget, so the lock release writes
+// the transient marker (atomic Lua) and waiters bail fast as
+// transient_upstream_5xx (excluded from SLO) instead of cascading into
+// transient_lock_timeout (counts BAD).
+const UPSTREAM_REFRESH_TIMEOUT_MS = 4_500;
+
+class UpstreamTimeoutError extends Error {
+  // Marker so `shouldRetryUpstreamError` can refuse retries (we don't know
+  // the server-side outcome) and so the catch in executeRefresh can route
+  // through the existing 5xx path.
+  readonly isUpstreamTimeout = true;
+  constructor(timeoutMs: number) {
+    super(`Upstream refresh timed out after ${timeoutMs}ms`);
+    this.name = 'UpstreamTimeoutError';
+  }
+}
+
+async function callUpstreamRefreshWithTimeout(
+  refreshToken: string,
+): Promise<Awaited<ReturnType<typeof exchangeRefreshToken>>> {
+  // AbortController cancels the underlying fetch when the timer fires, so
+  // we don't leak sockets to Hydra after our 4.5s budget. Without this,
+  // Promise.race only unblocks the await — the in-flight fetch keeps the
+  // connection open until the OS-level TCP timeout (minutes). The signal
+  // is plumbed through `exchangeRefreshToken` → openid-client's
+  // customFetch hook (see lib/oauth/client.ts).
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new UpstreamTimeoutError(UPSTREAM_REFRESH_TIMEOUT_MS));
+    }, UPSTREAM_REFRESH_TIMEOUT_MS);
+    timer.unref?.();
+  });
+  // Suppress the unhandled rejection if the underlying fetch loses the race
+  // and rejects later (e.g. with AbortError as a consequence of our abort).
+  // The Promise.race result is what we surface; this side effect is just
+  // best-effort socket cleanup.
+  const exchangePromise = exchangeRefreshToken(refreshToken, controller.signal);
+  exchangePromise.catch(() => {});
+  try {
+    return await Promise.race([exchangePromise, timeoutPromise]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 type RefreshTokenResult = {
   access_token: string;
   expires_in: number;
@@ -98,6 +150,11 @@ function findNetworkErrorCode(error: unknown): string | undefined {
  * layer failures (DNS, TCP reset, timeout). HTTP 4xx/5xx responses mean
  * Hydra processed the request and possibly rotated the RT; retrying could
  * present an already-rotated token and trigger a cliff.
+ *
+ * UpstreamTimeoutError is also non-retryable: when we cancel the call at
+ * UPSTREAM_REFRESH_TIMEOUT_MS we don't know if Hydra ignored us, returned
+ * 5xx, or rotated and we never saw the response. Retrying could present a
+ * token that was actually rotated server-side and cliff the chain.
  */
 function shouldRetryUpstreamError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
@@ -108,6 +165,8 @@ function shouldRetryUpstreamError(error: unknown): boolean {
   ) {
     return false;
   }
+  // Our own timeout — unknown server-side outcome, don't retry.
+  if (error instanceof UpstreamTimeoutError) return false;
   return findNetworkErrorCode(error) !== undefined;
 }
 
@@ -117,6 +176,13 @@ class RefreshError extends Error {
     public readonly description: string,
     public readonly statusCode: number,
     public readonly sloOutcome: SloOutcome,
+    // Optional: upstream's OAuth error code (e.g. `token_inactive`,
+    // `invalid_request`, `invalid_client`, `invalid_grant`). When present,
+    // the catch path forwards this into the SLO line so cliff_upstream
+    // events can be classified by upstream cause without re-grepping the
+    // sibling log lines. Plumbing added so the dashboard's bad-bucket drill-
+    // down can be a single grep | sort | uniq -c.
+    public readonly upstreamOauthError?: string,
   ) {
     super(description);
     this.name = 'RefreshError';
@@ -255,7 +321,7 @@ async function executeRefresh(
     // may have rotated the RT. Two attempts with a short backoff catches
     // most TCP/connection blips without piling latency.
     upstreamToken = await retryAsync(
-      () => exchangeRefreshToken(providedRefreshToken.refreshToken),
+      () => callUpstreamRefreshWithTimeout(providedRefreshToken.refreshToken),
       {
         attempts: 2,
         delaysMs: [200],
@@ -300,6 +366,7 @@ async function executeRefresh(
         'Invalid or expired refresh token',
         400,
         'cliff_upstream',
+        details.oauthError,
       );
     }
 
@@ -866,6 +933,7 @@ export async function POST(request: NextRequest) {
 
           emitRefreshSlo(error.sloOutcome, sloStartMs, {
             clientId: client.id,
+            upstreamOauthError: error.upstreamOauthError,
           });
           return NextResponse.json(
             {

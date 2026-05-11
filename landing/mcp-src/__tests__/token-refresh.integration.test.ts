@@ -348,6 +348,130 @@ describe('Token refresh flow', () => {
 
       expect(lastReleaseHint?.markTransientForWaiters).toBeUndefined();
     });
+
+    describe('upstream call timeout (slow Hydra cap)', () => {
+      // Production data shows Hydra holds connections open during 5xx bursts —
+      // 5xx events are bimodal (<200ms or 4-37s). Capping the upstream call
+      // at 4.5s forces the slow-mode response into the 5xx code path before
+      // waiters exhaust their lock-poll budget. The lock release then writes
+      // the transient marker (atomic Lua) and waiters bail fast as
+      // transient_upstream_5xx (excluded from SLO) instead of cascading into
+      // transient_lock_timeout (counts BAD).
+
+      it('exchange that exceeds 4.5s is cancelled and surfaces as transient_upstream_5xx', async () => {
+        vi.useFakeTimers();
+        try {
+          // Promise that never resolves — simulates Hydra holding the
+          // connection open (the production failure mode we're guarding
+          // against).
+          mockExchange.mockReturnValue(
+            new Promise(() => {
+              /* never resolves */
+            }) as never,
+          );
+
+          const responsePromise = POST(makeTokenRequest('old-refresh-token'));
+          // Advance past the 4.5s upstream cap.
+          await vi.advanceTimersByTimeAsync(5_000);
+
+          const response = await responsePromise;
+          expect(response.status).toBe(503);
+
+          const body = await response.json();
+          expect(body.error).toBe('server_error');
+
+          // Atomic Lua release path: the holder's catch sets
+          // markTransientForWaiters so waiters bail fast.
+          expect(lastReleaseHint?.markTransientForWaiters).toBe(true);
+
+          // SLO bucket: transient_upstream_5xx (excluded from SLO).
+          expect(lastSloLine()).toMatch(/outcome=transient_upstream_5xx\b/);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it('upstream timeout is NOT retried (server-side outcome unknown)', async () => {
+        vi.useFakeTimers();
+        try {
+          mockExchange.mockReturnValue(
+            new Promise(() => {
+              /* never resolves */
+            }) as never,
+          );
+
+          const responsePromise = POST(makeTokenRequest('old-refresh-token'));
+          await vi.advanceTimersByTimeAsync(5_000);
+          await responsePromise;
+
+          // Single attempt only — UpstreamTimeoutError is in the same
+          // non-retry category as HTTP responses: outcome unknown
+          // server-side, retrying could cliff the chain.
+          expect(mockExchange).toHaveBeenCalledTimes(1);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it('upstream timeout does NOT delete tokens (different from 4xx)', async () => {
+        vi.useFakeTimers();
+        try {
+          mockExchange.mockReturnValue(
+            new Promise(() => {
+              /* never resolves */
+            }) as never,
+          );
+
+          const responsePromise = POST(makeTokenRequest('old-refresh-token'));
+          await vi.advanceTimersByTimeAsync(5_000);
+          await responsePromise;
+
+          // Tokens stay alive — client retries should keep working once
+          // upstream recovers.
+          expect(mockModel.deleteToken).not.toHaveBeenCalled();
+          expect(mockModel.deleteRefreshToken).not.toHaveBeenCalled();
+          expect(mockModel.saveRefreshFailure).not.toHaveBeenCalled();
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it('exchange that completes inside the 4.5s budget is unaffected', async () => {
+        // Healthy success p99 in production is ~700ms; assert the happy
+        // path is not regressed by the new cap.
+        mockExchange.mockResolvedValue(makeUpstreamTokenResponse() as never);
+
+        const response = await POST(makeTokenRequest('old-refresh-token'));
+        expect(response.status).toBe(200);
+        expect(lastSloLine()).toMatch(/outcome=success\b/);
+      });
+
+      it('passes an AbortSignal to exchangeRefreshToken and aborts it on timeout (cancels in-flight socket)', async () => {
+        // Without an AbortController wired through, Promise.race just
+        // unblocks the await; the underlying fetch keeps the socket open
+        // until the OS-level timeout. This test pins the contract: the
+        // signal IS passed and IS aborted at the cap.
+        vi.useFakeTimers();
+        try {
+          let capturedSignal: AbortSignal | undefined;
+          mockExchange.mockImplementation((_token, signal) => {
+            capturedSignal = signal;
+            return new Promise(() => {
+              /* never resolves */
+            }) as never;
+          });
+
+          const responsePromise = POST(makeTokenRequest('old-refresh-token'));
+          await vi.advanceTimersByTimeAsync(5_000);
+          await responsePromise;
+
+          expect(capturedSignal).toBeDefined();
+          expect(capturedSignal?.aborted).toBe(true);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+    });
   });
 
   describe('failure cache (retry storm absorption)', () => {
@@ -482,7 +606,7 @@ describe('Token refresh flow', () => {
       expect(lastSloLine()).toMatch(/outcome=correct_invalid_grant\b/);
     });
 
-    it('upstream 4xx emits outcome=cliff_upstream', async () => {
+    it('upstream 4xx emits outcome=cliff_upstream with upstreamOauthError plumbed through', async () => {
       const upstreamError = new Error('inactive') as Error & {
         status: number;
         error?: string;
@@ -494,6 +618,11 @@ describe('Token refresh flow', () => {
       const response = await POST(makeTokenRequest('old-refresh-token'));
       expect(response.status).toBe(400);
       expect(lastSloLine()).toMatch(/outcome=cliff_upstream\b/);
+      // Inv 3 plumbing: cliff events now carry the upstream OAuth error
+      // code so cliff bursts can be classified by upstream cause via a
+      // single grep pipeline (token_inactive vs invalid_client vs
+      // invalid_request).
+      expect(lastSloLine()).toMatch(/upstreamOauthError=token_inactive\b/);
     });
 
     it('upstream 5xx emits outcome=transient_upstream_5xx', async () => {

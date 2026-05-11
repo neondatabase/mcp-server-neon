@@ -87,6 +87,10 @@ describe('withRefreshLock', () => {
       expect.any(String),
       expect.objectContaining({ NX: true, PX: expect.any(Number) }),
     );
+    // TTL is now short (heartbeat extends it during execute). Sanity-check
+    // it's <= 10s so we don't accidentally regress to the old 30s default.
+    expect(setSpy.mock.calls[0][2].PX).toBeGreaterThan(0);
+    expect(setSpy.mock.calls[0][2].PX).toBeLessThanOrEqual(10_000);
     expect(peek).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledTimes(1);
     // Release happens via Lua eval.
@@ -153,20 +157,124 @@ describe('withRefreshLock', () => {
     });
   }, 10_000);
 
-  it('on lock not acquired and lock disappears, breaks early and throws 503', async () => {
-    setSpy.mockResolvedValue(null);
-    getSpy.mockResolvedValue(null); // lock released without producing result
+  it('on lock not acquired and lock disappears (vanished holder), takes over and runs execute', async () => {
+    // Regression for the production "vanished holder" pattern (12 events
+    // in 17s at 2026-05-08T07:17 UTC, no accompanying upstream 5xx — most
+    // likely a Vercel function killed mid-flight by the platform). Pre-fix:
+    // waiter saw lock disappear, threw 503, every concurrent waiter on the
+    // same RT also 503'd. Post-fix: the next-up waiter SET NX onto the
+    // freed key and becomes the new holder, running execute itself.
+    let setCalls = 0;
+    setSpy.mockImplementation(async () => {
+      setCalls++;
+      // First SET fails (peer holds the lock); second SET succeeds (takeover).
+      return setCalls === 1 ? null : 'OK';
+    });
+    getSpy.mockResolvedValue(null); // lock disappeared mid-poll
 
     const { withRefreshLock } = await loadModule();
     const peek = vi.fn().mockResolvedValue(undefined);
+    const execute = vi.fn().mockResolvedValue('took-over');
 
     const start = Date.now();
-    await expect(withRefreshLock('rt', vi.fn(), peek)).rejects.toMatchObject({
+    const result = await withRefreshLock('rt', execute, peek);
+    const elapsed = Date.now() - start;
+
+    expect(result).toBe('took-over');
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(setCalls).toBe(2);
+    // Should detect vanish and take over within one poll iteration plus
+    // a Redis round-trip — well under the full waiter budget.
+    expect(elapsed).toBeLessThan(2_000);
+  });
+
+  it('on takeover, only one waiter wins SET NX; the loser falls back to polling the new owner', async () => {
+    // Two waiters race to take over after the holder vanishes. SET NX makes
+    // it mutually exclusive: only one wins. The loser sees acquired===null
+    // and resumes polling against the new owner. Guarantees execute() runs
+    // exactly once per token even with concurrent takeover attempts.
+    setSpy.mockResolvedValueOnce(null); // initial: peer holds
+    setSpy.mockResolvedValueOnce(null); // takeover: lost the race
+    let getCount = 0;
+    getSpy.mockImplementation(async () => {
+      getCount++;
+      // First call: lock vanished (triggers takeover attempt). Subsequent:
+      // the new holder is in place.
+      if (getCount === 1) return null;
+      return 'new-peer-owner';
+    });
+
+    const { withRefreshLock } = await loadModule();
+    let peekCount = 0;
+    const peek = vi.fn(async () => {
+      peekCount++;
+      // After enough polls, the new holder writes the cache.
+      return peekCount >= 3 ? 'cached-by-new-holder' : undefined;
+    });
+    const execute = vi.fn();
+
+    const result = await withRefreshLock('rt', execute, peek);
+    expect(result).toBe('cached-by-new-holder');
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('takeover fires at most once; if the takeover holder also vanishes, surfaces 503', async () => {
+    // Caps upstream calls at N+1 (where N = number of vanished holders).
+    let setCalls = 0;
+    setSpy.mockImplementation(async () => {
+      setCalls++;
+      return null; // never acquire
+    });
+    getSpy.mockResolvedValue(null); // every check sees lock gone
+
+    const { withRefreshLock } = await loadModule();
+    const peek = vi.fn().mockResolvedValue(undefined);
+    const execute = vi.fn();
+
+    await expect(withRefreshLock('rt', execute, peek)).rejects.toMatchObject({
       status: 503,
     });
-    const elapsed = Date.now() - start;
-    // Should bail out fast (one poll iteration), not wait the full ~5s.
-    expect(elapsed).toBeLessThan(2_000);
+    // 1 initial acquire + 1 takeover acquire = 2 total SETs (no 3rd).
+    expect(setCalls).toBe(2);
+    expect(execute).not.toHaveBeenCalled();
+  }, 12_000);
+
+  it('holder schedules a heartbeat that extends the lock TTL while execute is running', async () => {
+    // Verifies that runWithHeartbeat fires HEARTBEAT_LUA on a schedule, so
+    // legitimate slow upstream calls aren't yanked by the short LOCK_TTL_MS.
+    vi.useFakeTimers();
+    try {
+      setSpy.mockResolvedValue('OK');
+      evalSpy.mockResolvedValue(1);
+
+      const { withRefreshLock } = await loadModule();
+
+      let resolveExecute: (v: string) => void;
+      const execute = vi.fn(
+        () =>
+          new Promise<string>((res) => {
+            resolveExecute = res;
+          }),
+      );
+      const peek = vi.fn().mockResolvedValue(undefined);
+
+      const promise = withRefreshLock('rt', execute, peek);
+      // Let acquire + initial peek settle.
+      await vi.advanceTimersByTimeAsync(10);
+      // Heartbeat fires every ~2.5s. Advance 6s → expect ≥2 heartbeats.
+      await vi.advanceTimersByTimeAsync(6_000);
+      const heartbeatCalls = evalSpy.mock.calls.filter((c) =>
+        String(c[0]).includes('pexpire'),
+      );
+      expect(heartbeatCalls.length).toBeGreaterThanOrEqual(2);
+
+      resolveExecute!('done');
+      await vi.runOnlyPendingTimersAsync();
+      vi.useRealTimers();
+      await expect(promise).resolves.toBe('done');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('on transient hint, releases via the atomic marker+release Lua script', async () => {
