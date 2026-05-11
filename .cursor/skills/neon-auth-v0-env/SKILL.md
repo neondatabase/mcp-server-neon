@@ -1,10 +1,11 @@
 ---
 name: neon-auth-v0-env
 description: >-
-  Provisions Neon Auth on a Neon branch, whitelists the user’s v0 sandbox OAuth
-  redirect URL, then prints shell exports for NEON_AUTH_BASE_URL and a
-  63-bit AUTH_SECRET. Use when wiring v0 (Vercel) sandboxes to Neon Auth,
-  trusted redirect URIs, or local env vars for Better Auth against Neon.
+  Provisions Neon Auth on a Neon branch, adds the user’s v0 sandbox URL to the
+  Better Auth trusted-origins list, then prints shell exports for
+  NEON_AUTH_BASE_URL and a 63-bit AUTH_SECRET. Use when wiring v0 (Vercel)
+  sandboxes to Neon Auth, configuring trusted origins, or setting local env
+  vars for Better Auth against Neon.
 disable-model-invocation: true
 ---
 
@@ -16,12 +17,13 @@ Use the **Neon MCP** tools from this repo’s server (`provision_neon_auth`, `co
 
 - `PROJECT_ID` — Neon project id.
 - `BRANCH_ID` — optional; omit to use the default branch.
-- `V0_REDIRECT_URI` — **full HTTPS callback URL** the v0 sandbox uses for auth (must be a valid URL; Neon stores trusted entries as URIs). Example shapes (replace with the user’s real preview URL):
+- `V0_TRUSTED_ORIGIN` — the v0 sandbox URL to trust. Better Auth uses the trusted-origins list for both CSRF protection (validating the request `Origin`/`Referer` header) and as an allowlist for callback/redirect URLs the auth server will redirect users to (`callbackURL`, `redirectTo`, `errorCallbackURL`, `newUserCallbackURL`) across sign-in, OAuth provider, email verification, password reset, and magic-link flows. Common shapes (replace with the user’s real preview URL):
 
-  - `https://<preview-host>.vercel.app/api/auth/callback`
-  - `https://<preview-host>.vercel.app/callback`
+  - Full origin: `https://<preview-host>.vercel.app`
+  - Full callback URL: `https://<preview-host>.vercel.app/api/auth/callback`
+  - Wildcard pattern (covers all v0 previews for the project): `https://*.vercel.app`
 
-  If the user only has a v0 **origin** (no path), append the path their Better Auth / Auth.js handler actually uses (often `/api/auth/callback`).
+  Wildcards (`*`, `?`, `**`) and custom schemes (`myapp://`, `exp://...`) are accepted upstream — passing the broadest entry that matches the user’s preview hostname pattern usually saves repeated updates as preview URLs change.
 
 ## Workflow
 
@@ -31,19 +33,19 @@ Use the **Neon MCP** tools from this repo’s server (`provision_neon_auth`, `co
    - Args: `{ "projectId": "<PROJECT_ID>", "branchId": "<BRANCH_ID optional>" }`
    - From the result text, note **`base_url`** (Better Auth–compatible service URL for the branch).
 
-2. **Whitelist the v0 sandbox redirect URI**:
+2. **Add the v0 sandbox URL to Neon Auth’s trusted origins**:
 
    - Tool: `configure_neon_auth`
    - Args:
      ```json
      {
-       "operation": "add_redirect_uri",
+       "operation": "add_trusted_origin",
        "projectId": "<PROJECT_ID>",
        "branchId": "<BRANCH_ID optional>",
-       "redirect_uri": "<V0_REDIRECT_URI>"
+       "trusted_origin": "<V0_TRUSTED_ORIGIN>"
      }
      ```
-   - If the URI is already allowed, the tool may report success without error; treat as OK.
+   - If the value is already trusted, the tool may report success without error; treat as OK.
 
 3. **Read `base_url` / `jwks_url` (optional but recommended)**:
 
@@ -76,11 +78,11 @@ Use the **Neon MCP** tools from this repo’s server (`provision_neon_auth`, `co
 ## Checklist
 
 - [ ] `provision_neon_auth` succeeded (or already provisioned).
-- [ ] `add_redirect_uri` used the **exact** callback URL the browser will hit (scheme + host + path).
+- [ ] `add_trusted_origin` used a value that matches the URL the browser will actually hit (an origin, a full callback URL, or a wildcard pattern such as `https://*.vercel.app`).
 - [ ] `NEON_AUTH_BASE_URL` matches Neon’s **`base_url`** for that branch.
 - [ ] `AUTH_SECRET` generated with the 63-bit `node -e` snippet above.
 
 ## Notes
 
 - **Allow localhost** for local dev is separate; use `configure_neon_auth` with `operation: "set_allow_localhost"` only when needed.
-- v0 preview hostnames change per deployment; when the sandbox URL changes, **add** the new `redirect_uri` (and optionally remove old ones) with `configure_neon_auth`.
+- v0 preview hostnames change per deployment. Either trust a wildcard pattern up front (e.g. `https://*.vercel.app`), or, when a new preview lands, **add** the new value with `add_trusted_origin` (and optionally `remove_trusted_origin` for old ones) via `configure_neon_auth`.
