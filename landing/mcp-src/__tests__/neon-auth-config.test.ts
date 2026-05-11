@@ -37,9 +37,12 @@ describe('configureNeonAuthInputSchema', () => {
   });
 
   it.each([
-    ['plain origin', 'https://app.example.com'],
-    ['full URL with path', 'https://app.example.com/auth/callback'],
-    ['localhost with port', 'http://localhost:3000'],
+    ['https origin', 'https://app.example.com'],
+    ['https URL with path', 'https://app.example.com/auth/callback'],
+    ['http localhost with port', 'http://localhost:3000'],
+    ['http localhost without port', 'http://localhost'],
+    ['http 127.0.0.1 with port', 'http://127.0.0.1:8080'],
+    ['http IPv6 loopback', 'http://[::1]:3000'],
     ['single-segment wildcard subdomain', 'https://*.example.com'],
     ['cross-segment wildcard subdomain', 'https://**.example.com'],
     ['wildcard with port and path', 'exp://192.168.*.*:*/**'],
@@ -54,12 +57,34 @@ describe('configureNeonAuthInputSchema', () => {
   });
 
   it.each([
+    // Format-level rejects
     ['plain string', 'not-a-url'],
     ['no scheme', 'example.com'],
     ['scheme with no name', '://example.com'],
     ['scheme starting with digit', '1http://example.com'],
     ['leading whitespace', ' https://example.com'],
     ['empty string', ''],
+    // Security-level rejects: bare/TLD-only wildcards (match-everything CSRF holes)
+    ['host-only wildcard', 'https://*'],
+    ['host-only double wildcard', 'https://**'],
+    ['TLD-only wildcard .com', 'https://*.com'],
+    ['TLD-only wildcard .io', 'https://*.io'],
+    // Security-level rejects: empty host
+    ['https with no host', 'https://'],
+    ['https with port only', 'https://:8080'],
+    // Security-level rejects: non-localhost http
+    ['http to remote host', 'http://example.com'],
+    ['http subdomain wildcard', 'http://*.example.com'],
+    // Security-level rejects: dangerous schemes
+    ['file scheme', 'file:///etc/passwd'],
+    ['javascript scheme', 'javascript://example.com'],
+    ['data scheme via ://', 'data://text/plain,foo'],
+    ['vbscript scheme', 'vbscript://example.com'],
+    ['about scheme', 'about://blank'],
+    // Security-level rejects: control characters
+    ['embedded NUL', 'https://example.com\u0000evil.com'],
+    ['embedded tab', 'https://example.com\tevil.com'],
+    ['embedded DEL', 'https://example.com\u007Fevil.com'],
   ])(
     'rejects add_trusted_origin when trusted_origin is %s (%s)',
     (_label, value) => {
@@ -188,7 +213,7 @@ describe('handleConfigureNeonAuth', () => {
     expect(result.content[0].type).toBe('text');
     if (result.content[0].type === 'text') {
       const text = result.content[0].text;
-      expect(text).toContain('Added trusted origin');
+      expect(text).toContain('Requested add of trusted origin');
       expect(text).toContain('https://app.example.com/auth/callback');
       expect(text).toContain('"trusted_origins"');
       expect(text).toContain('"auth_methods"');
@@ -239,6 +264,14 @@ describe('handleConfigureNeonAuth', () => {
         domains: [{ domain: 'https://app.example.com/auth/callback' }],
       },
     );
+    if (result.content[0].type === 'text') {
+      // The Neon batch-delete API returns 200 even if the entry was absent,
+      // so the header must not claim definitive removal.
+      expect(result.content[0].text).toContain(
+        'Requested remove of trusted origin',
+      );
+      expect(result.content[0].text).not.toContain('Removed trusted origin:');
+    }
   });
 
   it('update_auth_methods maps friendly email_password fields to the Neon API patch shape', async () => {
@@ -350,5 +383,29 @@ describe('handleConfigureNeonAuth', () => {
       'br-1',
       { disable_sign_up: true },
     );
+  });
+
+  it('update_auth_methods throws if no method block can be applied (defense-in-depth against schema/handler skew)', async () => {
+    // Bypass the input schema to simulate a future state where a new method
+    // block (e.g. magic_link) is added to the schema but its corresponding
+    // handler arm has not been wired up yet. The handler must fail loudly
+    // instead of silently returning a "success" snapshot.
+    const neonClient = {
+      listProjectBranches: vi.fn().mockResolvedValue({
+        data: { branches: [{ id: 'br-default', default: true }] },
+      }),
+    };
+
+    await expect(
+      handleConfigureNeonAuth(
+        {
+          operation: 'update_auth_methods',
+          projectId: 'proj-1',
+          methods: { magic_link: { enabled: true } },
+        } as never,
+        neonClient as never,
+        extra,
+      ),
+    ).rejects.toThrow(/no handler applied for methods=magic_link/);
   });
 });

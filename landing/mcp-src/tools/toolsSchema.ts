@@ -1,6 +1,7 @@
 import {
   ListProjectsParams,
   ListSharedProjectsParams,
+  NeonAuthEmailVerificationMethod,
 } from '@neondatabase/api-client';
 // IMPORTANT: Use zod/v3 types for MCP registration compatibility.
 // @modelcontextprotocol/sdk@1.25.x accepts schemas typed through its zod-compat layer
@@ -260,10 +261,10 @@ const emailPasswordAuthMethodSchema = z
         'Whether to send a verification email when users sign in (Neon Auth `send_verification_email_on_sign_in`).',
       ),
     email_verification_method: z
-      .enum(['link', 'otp'])
+      .nativeEnum(NeonAuthEmailVerificationMethod)
       .optional()
       .describe(
-        'How verification emails are delivered: `link` sends a verification link, `otp` sends a one-time password (Neon Auth `email_verification_method`).',
+        'How verification emails are delivered: `link` sends a verification link, `otp` sends a one-time password. Sourced from the Neon Auth API enum `NeonAuthEmailVerificationMethod` so it stays in lockstep with the upstream SDK as new methods are added.',
       ),
     require_email_verification: z
       .boolean()
@@ -279,6 +280,81 @@ const emailPasswordAuthMethodSchema = z
       ),
   })
   .strict();
+
+/**
+ * Validates a `trusted_origin` value before it ever reaches the Neon API.
+ *
+ * Better Auth's `trustedOrigins` list is a security boundary (CSRF on the
+ * Origin/Referer header + allowlist for callback/redirect URLs in sign-in,
+ * OAuth, email verification, password reset, and magic-link flows). Bad
+ * entries here can broaden CSRF or open redirect surface, so we reject
+ * patterns that are almost never what a caller wants:
+ *
+ *   - Schemes that don't make sense for browser-driven auth callbacks
+ *     (`file:`, `data:`, `javascript:`, `vbscript:`, `about:`).
+ *   - Plain `http://` for anything other than `localhost`/`127.0.0.1`/`[::1]`.
+ *     Production callbacks should always be `https://`.
+ *   - Host-only or TLD-only wildcards: `https://*`, `https://**`,
+ *     `https://*.com`, `https://*.io`. These match-all patterns nullify
+ *     CSRF protection.
+ *   - Empty host (`https://`, `https://:8080`).
+ *   - Embedded ASCII control characters (NUL through US, plus DEL).
+ *
+ * Wildcards in subdomain position (`https://*.example.com`,
+ * `https://**.example.com`) and custom-scheme deeplinks (`myapp://`,
+ * `exp://...` patterns with embedded wildcards) are still accepted, matching
+ * what the upstream Neon API and Better Auth's `trustedOrigins` support.
+ */
+const TRUSTED_ORIGIN_BLOCKED_SCHEMES = new Set([
+  'file',
+  'data',
+  'javascript',
+  'vbscript',
+  'about',
+]);
+
+const TRUSTED_ORIGIN_LOCAL_HOST_RE = /^(localhost|127\.0\.0\.1|\[::1\])$/i;
+
+// Matches `*`, `**`, `*.com`, `*.io`, etc. (host-only or TLD-only wildcards).
+// Must NOT match `*.example.com` or `**.example.com`.
+const TRUSTED_ORIGIN_HOST_WILDCARD_RE = /^\*+(\.[a-z]{2,})?$/i;
+
+const TRUSTED_ORIGIN_SCHEME_PREFIX_RE = /^([a-zA-Z][a-zA-Z0-9+.\-]*):\/\/(.*)$/;
+
+function extractHttpHost(rest: string): string | null {
+  // Strip path/query/fragment first, then peel the port off, taking care of
+  // IPv6 bracketed-host syntax like `[::1]:3000` where splitting on `:` would
+  // otherwise truncate the address.
+  const hostWithPort = rest.split(/[/?#]/)[0];
+  if (hostWithPort.length === 0) return null;
+  if (hostWithPort.startsWith('[')) {
+    const closeIdx = hostWithPort.indexOf(']');
+    if (closeIdx === -1) return null;
+    return hostWithPort.substring(0, closeIdx + 1);
+  }
+  return hostWithPort.split(':')[0];
+}
+
+function isValidTrustedOrigin(v: string): boolean {
+  if (!v) return false;
+  if (v.trim() !== v) return false;
+  if (/[\u0000-\u001F\u007F]/.test(v)) return false;
+  const m = v.match(TRUSTED_ORIGIN_SCHEME_PREFIX_RE);
+  if (!m) return false;
+  const scheme = m[1].toLowerCase();
+  const rest = m[2];
+  if (TRUSTED_ORIGIN_BLOCKED_SCHEMES.has(scheme)) return false;
+  if (scheme === 'http' || scheme === 'https') {
+    if (rest.length === 0) return false;
+    const host = extractHttpHost(rest);
+    if (host === null || host.length === 0) return false;
+    if (TRUSTED_ORIGIN_HOST_WILDCARD_RE.test(host)) return false;
+    if (scheme === 'http' && !TRUSTED_ORIGIN_LOCAL_HOST_RE.test(host)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export const configureNeonAuthInputSchema = z
   .object({
@@ -300,13 +376,10 @@ export const configureNeonAuthInputSchema = z
     trusted_origin: z
       .string()
       .min(1)
-      .refine(
-        (v) => v.trim() === v && /^[a-zA-Z][a-zA-Z0-9+.\-]*:\/\//.test(v),
-        {
-          message:
-            'trusted_origin must include a scheme followed by "://" (e.g. https://app.example.com, https://*.example.com, or myapp://). No surrounding whitespace.',
-        },
-      )
+      .refine(isValidTrustedOrigin, {
+        message:
+          'trusted_origin must be a https:// URL or origin (wildcard subdomains allowed, e.g. https://*.example.com), an http://localhost (or 127.0.0.1/[::1]) origin, or a custom-scheme deeplink (e.g. myapp://, exp://...). Rejected: file:/data:/javascript:/vbscript:/about: schemes, non-localhost http://, host-only or TLD-only wildcards (https://*, https://**, https://*.com), empty host, surrounding whitespace, and ASCII control characters.',
+      })
       .optional()
       .describe(
         [
@@ -315,11 +388,11 @@ export const configureNeonAuthInputSchema = z
           '1. CSRF protection - validates the incoming request Origin/Referer header on state-changing endpoints (POST/PUT/PATCH/DELETE).',
           '2. URL allowlist - authorizes URLs your client passes via callbackURL, redirectTo, errorCallbackURL, and newUserCallbackURL across sign-in/sign-up, OAuth provider flows, email verification, password reset, and magic-link flows. Not just OAuth redirect_uri.',
           'Accepted formats (must include "<scheme>://"):',
-          '- Full origin: https://app.example.com',
-          '- Full URL with path: https://app.example.com/auth/callback',
-          '- Wildcard pattern: https://*.example.com (single-segment), https://**.example.com (cross-segment), exp://192.168.*.*:*/**',
-          '- Custom scheme: myapp://',
-          'See https://www.better-auth.com/docs/reference/options for canonical pattern syntax.',
+          '- https:// origin or full URL: https://app.example.com, https://app.example.com/auth/callback',
+          '- Subdomain wildcards: https://*.example.com (single-segment), https://**.example.com (cross-segment)',
+          '- Local development over plain http: http://localhost, http://localhost:3000, http://127.0.0.1[:port], http://[::1][:port]',
+          '- Custom-scheme deeplinks: myapp://, exp://192.168.*.*:*/**',
+          'Rejected: file:/data:/javascript:/vbscript:/about: schemes, non-localhost http://, host-only or TLD-only wildcards (https://*, https://**, https://*.com), and empty host. See https://www.better-auth.com/docs/reference/options for canonical pattern syntax.',
         ].join(' '),
       ),
     allow_localhost: z

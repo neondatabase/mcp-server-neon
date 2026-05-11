@@ -2,7 +2,6 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   Api,
   NeonAuthEmailAndPasswordConfigUpdate,
-  NeonAuthEmailVerificationMethod,
   NeonAuthSupportedAuthProvider,
 } from '@neondatabase/api-client';
 import { configureNeonAuthInputSchema } from '../toolsSchema';
@@ -77,10 +76,7 @@ function buildEmailPasswordPatch(
     patch.send_verification_email_on_sign_in = email.verify_email_on_sign_in;
   }
   if (email.email_verification_method !== undefined) {
-    patch.email_verification_method =
-      email.email_verification_method === 'otp'
-        ? NeonAuthEmailVerificationMethod.Otp
-        : NeonAuthEmailVerificationMethod.Link;
+    patch.email_verification_method = email.email_verification_method;
   }
   if (email.require_email_verification !== undefined) {
     patch.require_email_verification = email.require_email_verification;
@@ -125,11 +121,15 @@ export async function handleConfigureNeonAuth(
           ],
         };
       }
+      // The header echoes the caller's input rather than what the server
+      // ultimately stored: the Neon API may canonicalize the value (lowercase
+      // host, trim trailing slash, etc.). The snapshot rendered below is the
+      // source of truth.
       return snapshotMessage(
         neonClient,
         props.projectId,
         branchId,
-        `Added trusted origin: ${props.trusted_origin}`,
+        `Requested add of trusted origin: ${props.trusted_origin}`,
       );
     }
     case 'remove_trusted_origin': {
@@ -152,11 +152,14 @@ export async function handleConfigureNeonAuth(
           ],
         };
       }
+      // The Neon API's batch-delete returns 200 even when the requested
+      // entry was not present, so we cannot claim definitive removal here.
+      // The snapshot below is the source of truth for the resulting list.
       return snapshotMessage(
         neonClient,
         props.projectId,
         branchId,
-        `Removed trusted origin: ${props.trusted_origin}`,
+        `Requested remove of trusted origin: ${props.trusted_origin}`,
       );
     }
     case 'set_allow_localhost': {
@@ -186,8 +189,14 @@ export async function handleConfigureNeonAuth(
     case 'update_auth_methods': {
       const emailPassword = props.methods?.email_password;
       // The schema's superRefine guarantees at least one method block with at
-      // least one field. As we add more methods (magic_link, etc.), extend
-      // this branch with their corresponding API calls.
+      // least one field, but it doesn't know which blocks this handler can
+      // actually apply. As we add more methods to the schema (magic_link,
+      // etc.) we must extend this branch with their corresponding API call.
+      // The `applied` flag is defence-in-depth: if a future method is added
+      // to the schema without a matching handler arm here, we fail loudly
+      // instead of silently returning a "success" snapshot that didn't
+      // actually mutate anything upstream.
+      let applied = false;
       if (emailPassword) {
         const patch = buildEmailPasswordPatch(emailPassword);
         const res = await neonClient.updateNeonAuthEmailAndPasswordConfig(
@@ -206,6 +215,16 @@ export async function handleConfigureNeonAuth(
             ],
           };
         }
+        applied = true;
+      }
+      if (!applied) {
+        const requested =
+          Object.keys(props.methods ?? {}).join(',') || '<none>';
+        throw new Error(
+          `update_auth_methods: no handler applied for methods=${requested}. ` +
+            'This indicates a schema/handler skew — a method block was accepted ' +
+            'by the input schema but has no corresponding handler branch.',
+        );
       }
       return snapshotMessage(
         neonClient,

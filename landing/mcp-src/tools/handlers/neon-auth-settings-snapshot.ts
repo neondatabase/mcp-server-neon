@@ -1,4 +1,8 @@
-import { Api, NeonAuthEmailAndPasswordConfig } from '@neondatabase/api-client';
+import {
+  Api,
+  NeonAuthEmailAndPasswordConfig,
+  NeonAuthEmailVerificationMethod,
+} from '@neondatabase/api-client';
 
 /**
  * Canonical Neon Auth settings shape shared by get_neon_auth_config and
@@ -30,7 +34,10 @@ type EmailPasswordAuthMethodSnapshot = {
   allow_sign_up: boolean;
   verify_email_on_sign_up: boolean;
   verify_email_on_sign_in: boolean;
-  email_verification_method: 'link' | 'otp';
+  // Sourced directly from the SDK so a new upstream verification method
+  // (passkey, etc.) widens this type at compile time and surfaces in a TS
+  // diff rather than silently coercing through a local literal union.
+  email_verification_method: NeonAuthEmailVerificationMethod;
   require_email_verification: boolean;
   auto_sign_in_after_verification: boolean;
 };
