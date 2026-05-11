@@ -218,6 +218,7 @@ function extractUpstreamErrorDetails(error: unknown): {
   status?: number;
   oauthError?: string;
   oauthErrorDescription?: string;
+  upstreamUrl?: string;
   cause?: string;
 } {
   if (!(error instanceof Error)) return { message: String(error) };
@@ -231,18 +232,34 @@ function extractUpstreamErrorDetails(error: unknown): {
     typeof v === 'string' ? v : undefined;
   const asNumber = (v: unknown): number | undefined =>
     typeof v === 'number' ? v : undefined;
+
+  // openid-client's OperationProcessingError (notably the
+  // OAUTH_RESPONSE_IS_NOT_CONFORM variant) carries the upstream HTTP
+  // Response as `cause`. Previously we stringified it to "[object Response]",
+  // hiding the actual upstream status code (502, 504, etc.) — by far the
+  // most useful diagnostic on the most common production error. Walk the
+  // shape so we capture the status + url instead.
+  let status = asNumber(e.status);
+  let upstreamUrl: string | undefined;
+  let causeStr: string | undefined;
+  if (e.cause instanceof Response) {
+    status = status ?? e.cause.status;
+    upstreamUrl = e.cause.url || undefined;
+    causeStr = `Response status=${e.cause.status}`;
+  } else if (e.cause instanceof Error) {
+    causeStr = `${e.cause.name}: ${e.cause.message}`;
+  } else if (e.cause !== undefined) {
+    causeStr = String(e.cause);
+  }
+
   return {
     name: e.name,
     message: e.message,
-    status: asNumber(e.status),
+    status,
     oauthError: asString(e.error),
     oauthErrorDescription: asString(e.error_description),
-    cause:
-      e.cause instanceof Error
-        ? `${e.cause.name}: ${e.cause.message}`
-        : e.cause !== undefined
-          ? String(e.cause)
-          : undefined,
+    upstreamUrl,
+    cause: causeStr,
   };
 }
 
@@ -276,7 +293,11 @@ async function executeRefresh(
 ): Promise<RefreshTokenResult> {
   const providedRefreshToken = await model.getRefreshToken(refreshToken);
   if (!providedRefreshToken) {
-    logger.warn('Refresh token not found in storage');
+    // info, not warn: this is the canonical happy path for
+    // `correct_invalid_grant` (client presents an RT we've never seen / have
+    // already cleared from KV). Counted as "good" in the SLO. Warn-level
+    // pollutes error dashboards with normal traffic.
+    logger.info('Refresh token not found in storage');
     await cachePreUpstreamFailure(refreshToken, 'rt_not_found_in_storage');
     throw new RefreshError(
       'invalid_grant',
@@ -288,7 +309,10 @@ async function executeRefresh(
 
   const oldToken = await model.getAccessToken(providedRefreshToken.accessToken);
   if (!oldToken) {
-    logger.warn('Access token for refresh token not found, cleaning up');
+    // info, not warn: same `correct_invalid_grant` happy path as the RT
+    // missing branch above — AT was cleared out of KV (rotation cleanup or
+    // TTL); we tidy up and return a clean 400 invalid_grant.
+    logger.info('Access token for refresh token not found, cleaning up');
     await model.deleteRefreshToken(providedRefreshToken);
     await cachePreUpstreamFailure(refreshToken, 'access_token_not_found');
     throw new RefreshError(
