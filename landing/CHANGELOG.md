@@ -36,6 +36,7 @@ Observability:
 Transport security:
 
 - Bind SSE sessions to the caller identity that opened them. Previously any caller who knew or guessed a live `sessionId` could `POST /api/message` and inject responses into the victim's SSE stream; the binding key is hashed and stored in Redis alongside the existing session record.
+- Bind the SSE session-identity to the OAuth `client_id` instead of the bearer token. Hourly token refreshes (handled cleanly by the refresh-chain fixes above) used to rotate the bearer and so flip the identity hash, which caused the next `POST /api/message` to return a `403 session_not_owned` — Cursor's MCP client interpreted that as an auth failure and prompted the user to re-authenticate. `client_id` is stable across token rotations for a given registered MCP client, so the binding now survives refreshes; cross-account and cross-OAuth-client POSTs still mismatch as before.
 
 Other:
 
