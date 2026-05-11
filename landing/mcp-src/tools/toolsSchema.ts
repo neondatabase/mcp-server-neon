@@ -2,6 +2,7 @@ import {
   ListProjectsParams,
   ListSharedProjectsParams,
   NeonAuthEmailVerificationMethod,
+  NeonAuthOauthProviderId,
 } from '@neondatabase/api-client';
 // IMPORTANT: Use zod/v3 types for MCP registration compatibility.
 // @modelcontextprotocol/sdk@1.25.x accepts schemas typed through its zod-compat layer
@@ -281,6 +282,116 @@ const emailPasswordAuthMethodSchema = z
   })
   .strict();
 
+const oauthProviderConfigSchema = z
+  .object({
+    client_id: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'OAuth client ID issued by the upstream provider. Omit for shared mode (Neon-managed credentials).',
+      ),
+    client_secret: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'OAuth client secret issued by the upstream provider. Omit for shared mode (Neon-managed credentials). Never returned by get_neon_auth_config — that endpoint redacts secrets.',
+      ),
+    microsoft_tenant_id: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Microsoft Entra ID tenant ID. Only meaningful when oauth_provider="microsoft"; the upstream API will reject it for other providers.',
+      ),
+  })
+  .strict();
+
+// `update_email_provider` and `send_test_email` reuse the same SMTP fields.
+const standardEmailServerFields = {
+  host: z
+    .string()
+    .min(1)
+    .describe('SMTP server hostname (e.g. smtp.sendgrid.net).'),
+  port: z
+    .number()
+    .int()
+    .min(1)
+    .max(65535)
+    .describe('SMTP server port (commonly 25, 465, 587, or 2525).'),
+  username: z.string().min(1).describe('SMTP authentication username.'),
+  password: z
+    .string()
+    .min(1)
+    .describe(
+      'SMTP authentication password. Never returned by get_neon_auth_config — that endpoint redacts secrets.',
+    ),
+  sender_email: z
+    .string()
+    .email()
+    .describe(
+      'Default From: address for emails sent through this SMTP server. Must be an email the SMTP relay is authorized to send for.',
+    ),
+  sender_name: z
+    .string()
+    .min(1)
+    .describe('Default From: display name (e.g. "Acme Auth").'),
+};
+
+const emailProviderSchema = z
+  .discriminatedUnion('type', [
+    z
+      .object({
+        type: z.literal('standard'),
+        ...standardEmailServerFields,
+      })
+      .strict()
+      .describe(
+        'Bring-your-own SMTP server. Required: host, port, username, password, sender_email, sender_name.',
+      ),
+    z
+      .object({
+        type: z.literal('shared'),
+        sender_email: z
+          .string()
+          .email()
+          .optional()
+          .describe(
+            'Optional override for the From: address on the Neon-managed shared SMTP. If omitted, Neon picks a sensible default.',
+          ),
+        sender_name: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            'Optional override for the From: display name on the Neon-managed shared SMTP.',
+          ),
+      })
+      .strict()
+      .describe(
+        'Use Neon-managed shared SMTP — no credentials needed. Optionally override sender_email / sender_name.',
+      ),
+  ])
+  .describe(
+    'Email server configuration discriminated by `type`. "standard" = bring-your-own SMTP (full credentials required); "shared" = Neon-managed shared SMTP (credentials managed by Neon).',
+  );
+
+const sendTestEmailSchema = z
+  .object({
+    recipient_email: z
+      .string()
+      .email()
+      .min(1)
+      .max(256)
+      .describe('Email address to deliver the test message to.'),
+    ...standardEmailServerFields,
+  })
+  .strict()
+  .describe(
+    'Test SMTP credentials end-to-end before saving them. Sends a single message from sender_email to recipient_email through the supplied host/port/username/password. Does NOT read from or write to the saved email_provider config — pass the credentials you want to verify.',
+  );
+
 /**
  * Validates a `trusted_origin` value before it ever reaches the Neon API.
  *
@@ -364,6 +475,11 @@ export const configureNeonAuthInputSchema = z
         'remove_trusted_origin',
         'set_allow_localhost',
         'update_auth_methods',
+        'add_oauth_provider',
+        'update_oauth_provider',
+        'remove_oauth_provider',
+        'update_email_provider',
+        'send_test_email',
       ])
       .describe('Which Neon Auth configuration change to apply'),
     projectId: z.string().describe('Neon project ID'),
@@ -414,6 +530,27 @@ export const configureNeonAuthInputSchema = z
       .describe(
         'Authentication methods to update. Required for update_auth_methods. At least one method block with at least one field must be provided.',
       ),
+    oauth_provider: z
+      .nativeEnum(NeonAuthOauthProviderId)
+      .optional()
+      .describe(
+        'Identifier of the OAuth provider to add, update, or remove. Required for add_oauth_provider, update_oauth_provider, and remove_oauth_provider. Sourced from the SDK enum NeonAuthOauthProviderId so it stays in lockstep with the upstream provider list (currently includes google, github, microsoft, vercel).',
+      ),
+    oauth_provider_config: oauthProviderConfigSchema
+      .optional()
+      .describe(
+        'OAuth provider credentials. For add_oauth_provider, omit entirely (or pass an empty object) to use Neon-managed shared credentials; pass client_id+client_secret to use BYO credentials. For update_oauth_provider, pass at least one field — omitted fields are left unchanged.',
+      ),
+    email_provider: emailProviderSchema
+      .optional()
+      .describe(
+        'Email server configuration. Required for update_email_provider. The upstream PATCH endpoint replaces the saved configuration with the supplied discriminated union; partial within-type updates are not supported by the API.',
+      ),
+    test_email: sendTestEmailSchema
+      .optional()
+      .describe(
+        'SMTP credentials + recipient for a one-off test email. Required for send_test_email.',
+      ),
   })
   .superRefine((val, ctx) => {
     if (
@@ -460,6 +597,66 @@ export const configureNeonAuthInputSchema = z
             path: ['methods', methodName],
           });
         }
+      }
+    }
+    if (
+      val.operation === 'add_oauth_provider' ||
+      val.operation === 'update_oauth_provider' ||
+      val.operation === 'remove_oauth_provider'
+    ) {
+      if (val.oauth_provider === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'oauth_provider is required for this operation',
+          path: ['oauth_provider'],
+        });
+      }
+    }
+    if (val.operation === 'update_oauth_provider') {
+      const cfg = val.oauth_provider_config;
+      const hasAtLeastOneField =
+        cfg !== undefined && Object.values(cfg).some((v) => v !== undefined);
+      if (!hasAtLeastOneField) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'update_oauth_provider requires at least one field in oauth_provider_config (client_id, client_secret, or microsoft_tenant_id)',
+          path: ['oauth_provider_config'],
+        });
+      }
+    }
+    if (val.operation === 'add_oauth_provider') {
+      // Standard mode requires both id and secret to be set together; shared
+      // mode requires neither. Reject the half-set configurations early so
+      // upstream doesn't return an opaque 4xx.
+      const cfg = val.oauth_provider_config;
+      const hasId = cfg?.client_id !== undefined;
+      const hasSecret = cfg?.client_secret !== undefined;
+      if (hasId !== hasSecret) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'oauth_provider_config requires client_id and client_secret to be provided together for BYO ("standard") mode, or both omitted for Neon-managed ("shared") mode',
+          path: ['oauth_provider_config'],
+        });
+      }
+    }
+    if (val.operation === 'update_email_provider') {
+      if (val.email_provider === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'email_provider is required for this operation',
+          path: ['email_provider'],
+        });
+      }
+    }
+    if (val.operation === 'send_test_email') {
+      if (val.test_email === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'test_email is required for this operation',
+          path: ['test_email'],
+        });
       }
     }
   });
