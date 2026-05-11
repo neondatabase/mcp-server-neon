@@ -158,4 +158,104 @@ describe('/callback route integration', () => {
       }),
     );
   });
+
+  // === Upstream error redirect handling (RFC 6749 §4.1.2.1) ===
+  // Regression for the production "Missing code or state" bug: Hydra returns
+  // ?error=...&state=<ours> instead of ?code=...&state=...; we must relay
+  // to the downstream client's redirect_uri instead of swallowing.
+
+  function buildErrorRequest(
+    state: string,
+    error: string,
+    errorDescription?: string,
+  ): NextRequest {
+    const qs = new URLSearchParams({
+      error,
+      state,
+    });
+    if (errorDescription) qs.set('error_description', errorDescription);
+    return new NextRequest(`http://localhost/callback?${qs.toString()}`, {
+      method: 'GET',
+    });
+  }
+
+  it('relays upstream `error=error` (Hydra "unrecognizable") to client redirect_uri with state', async () => {
+    const state = buildState();
+    const response = await GET(
+      buildErrorRequest(state, 'error', 'The error is unrecognizable'),
+    );
+
+    expect(response.status).toBe(307);
+    const location = response.headers.get('location')!;
+    const url = new URL(location);
+    expect(url.origin + url.pathname).toBe('http://127.0.0.1:55667/callback');
+    expect(url.searchParams.get('error')).toBe('error');
+    expect(url.searchParams.get('error_description')).toBe(
+      'The error is unrecognizable',
+    );
+    expect(url.searchParams.get('state')).toBe('client-state');
+    // We must NOT call exchangeCode when an upstream error redirect arrives.
+    expect(exchangeCode).not.toHaveBeenCalled();
+  });
+
+  it('relays upstream `access_denied` to client redirect_uri (user clicked Cancel)', async () => {
+    const state = buildState();
+    const response = await GET(
+      buildErrorRequest(
+        state,
+        'access_denied',
+        'The resource owner denied the request',
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    const url = new URL(response.headers.get('location')!);
+    expect(url.searchParams.get('error')).toBe('access_denied');
+    expect(url.searchParams.get('state')).toBe('client-state');
+    expect(exchangeCode).not.toHaveBeenCalled();
+  });
+
+  it('falls back to JSON 400 when upstream error arrives without state', async () => {
+    const response = await GET(
+      new NextRequest('http://localhost/callback?error=server_error', {
+        method: 'GET',
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'server_error',
+      error_description: 'Upstream authorization failed',
+    });
+    expect(exchangeCode).not.toHaveBeenCalled();
+  });
+
+  it('falls back to JSON 400 when upstream error arrives with un-decodable state', async () => {
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/callback?error=invalid_scope&state=not%2Dbase64%21',
+        { method: 'GET' },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'invalid_scope',
+    });
+    expect(exchangeCode).not.toHaveBeenCalled();
+  });
+
+  it('still returns Missing code or state when nothing useful is in the query', async () => {
+    // Bare GET to /callback (direct navigation, prefetch, etc.). Must NOT
+    // be conflated with upstream-error or state-decode buckets.
+    const response = await GET(
+      new NextRequest('http://localhost/callback', { method: 'GET' }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_request',
+      error_description: 'Missing code or state',
+    });
+  });
 });
