@@ -17,7 +17,7 @@ function parseSettingsJson(text: string): Record<string, unknown> {
 }
 
 describe('handleGetNeonAuthConfig', () => {
-  it('returns the same top-level keys as configure_neon_auth snapshots', async () => {
+  it('returns integration, branch name, and configurable settings in one JSON object', async () => {
     const neonClient = {
       listProjectBranches: vi.fn().mockResolvedValue({
         data: { branches: [{ id: 'br-1', default: true }] },
@@ -33,6 +33,24 @@ describe('handleGetNeonAuthConfig', () => {
           owned_by: NeonAuthProviderProjectOwnedBy.Neon,
           jwks_url: 'https://jwks.example/',
           base_url: 'https://auth.example/',
+        },
+      }),
+      getProjectBranch: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          branch: {
+            id: 'br-1',
+            name: 'main',
+            project_id: 'p1',
+            parent_id: 'br-root',
+            default: true,
+            protected: false,
+            created_at: '',
+            updated_at: '',
+            compute_time_seconds: 0,
+            written_data_bytes: 0,
+            data_transfer_bytes: 0,
+          },
         },
       }),
       listBranchNeonAuthTrustedDomains: vi.fn().mockResolvedValue({
@@ -74,6 +92,22 @@ describe('handleGetNeonAuthConfig', () => {
     expect(result.content[0].type).toBe('text');
     if (result.content[0].type === 'text') {
       const body = parseSettingsJson(result.content[0].text);
+      expect(body.project_id).toBe('p1');
+      expect(body.branch_id).toBe('br-1');
+      expect(body.branch_name).toBe('main');
+      expect(body.base_url).toBe('https://auth.example/');
+      expect(body.jwks_url).toBe('https://jwks.example/');
+      expect(body.db_name).toBe('neondb');
+      expect(body.integration).toMatchObject({
+        auth_provider: NeonAuthSupportedAuthProvider.BetterAuth,
+        auth_provider_project_id: 'ap1',
+        branch_id: 'br-1',
+        db_name: 'neondb',
+        created_at: '2025-01-01T00:00:00.000Z',
+        owned_by: NeonAuthProviderProjectOwnedBy.Neon,
+        jwks_url: 'https://jwks.example/',
+        base_url: 'https://auth.example/',
+      });
       expect(body.trusted_redirect_uris).toEqual([
         'https://app.example.com/callback',
       ]);
