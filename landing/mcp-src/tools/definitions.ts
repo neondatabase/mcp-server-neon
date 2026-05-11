@@ -487,12 +487,12 @@ export const NEON_TOOLS = [
     description: `
     Updates Neon Auth (Better Auth) settings for a branch after it is provisioned.
 
-    Success responses end with the same configurable-settings JSON block as in get_neon_auth_config (trusted_redirect_uris, allow_localhost, sign_in_with_email, verify_email_on_sign_up, allow_sign_up_with_email; optional _errors if a slice fails to reload). Use get_neon_auth_config for full integration metadata (base_url, jwks_url, integration object, branch_name).
+    Success responses end with the same configurable-settings JSON block as in get_neon_auth_config (trusted_origins, allow_localhost, auth_methods.email_password; optional _errors if a slice fails to reload). Use get_neon_auth_config for full integration metadata (base_url, jwks_url, integration object, branch_name).
 
     Supported operations:
-    - add_redirect_uri / remove_redirect_uri: manage trusted redirect URIs (full URLs) for OAuth and email flows
-    - set_allow_localhost: allow or block localhost callbacks for development
-    - update_email_auth_settings: toggle email/password sign-in, verification email on sign-up, and whether new email sign-ups are allowed
+    - add_trusted_origin / remove_trusted_origin: manage Better Auth trusted origins. Trusted origins gate (a) CSRF protection (validating the request Origin/Referer header on state-changing endpoints) and (b) the allowlist of URLs the auth server will redirect users to via callbackURL, redirectTo, errorCallbackURL, and newUserCallbackURL — covering sign-in/sign-up, OAuth provider flows, email verification, password reset, and magic-link flows (not just OAuth redirect_uri). Pass the URL via "trusted_origin".
+    - set_allow_localhost: allow or block localhost origins for development. Pass the value via "allow_localhost".
+    - update_auth_methods: update authentication methods. Pass a "methods" object; today only "methods.email_password" is supported. Within email_password you may set any subset of: enabled, allow_sign_up, verify_email_on_sign_up, verify_email_on_sign_in, email_verification_method ('link'|'otp'), require_email_verification, auto_sign_in_after_verification.
 
     Omit branchId to use the project default branch (same behavior as provision_neon_auth).
     `,
@@ -510,7 +510,7 @@ export const NEON_TOOLS = [
     inputSchema: getNeonAuthConfigInputSchema,
     readOnlySafe: true,
     description: `
-    Returns Neon Auth (Better Auth) for a branch as one JSON object: integration metadata (base_url, jwks_url, db_name, auth_provider, branch_id, created_at, owned_by, transfer_status, auth_provider_project_id), branch_name from the Neon branch API, project_id and resolved branch_id, plus the same configurable fields as configure_neon_auth (trusted_redirect_uris, allow_localhost, sign_in_with_email, verify_email_on_sign_up, allow_sign_up_with_email). Top-level base_url, jwks_url, and db_name duplicate integration for quick copy. Optional _errors records partial fetch failures for configurable slices.
+    Returns Neon Auth (Better Auth) for a branch as one JSON object: integration metadata (base_url, jwks_url, db_name, auth_provider, branch_id, created_at, owned_by, transfer_status, auth_provider_project_id), branch_name from the Neon branch API, project_id and resolved branch_id, plus the same configurable fields as configure_neon_auth (trusted_origins, allow_localhost, auth_methods.email_password with enabled, allow_sign_up, verify_email_on_sign_up, verify_email_on_sign_in, email_verification_method, require_email_verification, auto_sign_in_after_verification). Top-level base_url, jwks_url, and db_name duplicate integration for quick copy. Optional _errors records partial fetch failures for configurable slices.
 
     Omit branchId to use the project default branch. Requires Neon Auth to be provisioned (use provision_neon_auth first).
     `,

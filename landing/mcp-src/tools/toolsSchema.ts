@@ -233,14 +233,61 @@ export const provisionNeonAuthInputSchema = z.object({
     ),
 });
 
+const emailPasswordAuthMethodSchema = z
+  .object({
+    enabled: z
+      .boolean()
+      .optional()
+      .describe(
+        'Whether email-and-password authentication is enabled (Neon Auth `enabled`).',
+      ),
+    allow_sign_up: z
+      .boolean()
+      .optional()
+      .describe(
+        'Whether new users can sign up with email and password. Maps to the inverse of Neon Auth `disable_sign_up`.',
+      ),
+    verify_email_on_sign_up: z
+      .boolean()
+      .optional()
+      .describe(
+        'Whether to send a verification email when users sign up (Neon Auth `send_verification_email_on_sign_up`).',
+      ),
+    verify_email_on_sign_in: z
+      .boolean()
+      .optional()
+      .describe(
+        'Whether to send a verification email when users sign in (Neon Auth `send_verification_email_on_sign_in`).',
+      ),
+    email_verification_method: z
+      .enum(['link', 'otp'])
+      .optional()
+      .describe(
+        'How verification emails are delivered: `link` sends a verification link, `otp` sends a one-time password (Neon Auth `email_verification_method`).',
+      ),
+    require_email_verification: z
+      .boolean()
+      .optional()
+      .describe(
+        'Whether email verification is required before users can sign in (Neon Auth `require_email_verification`).',
+      ),
+    auto_sign_in_after_verification: z
+      .boolean()
+      .optional()
+      .describe(
+        'Whether users are automatically signed in after verifying their email (Neon Auth `auto_sign_in_after_verification`).',
+      ),
+  })
+  .strict();
+
 export const configureNeonAuthInputSchema = z
   .object({
     operation: z
       .enum([
-        'add_redirect_uri',
-        'remove_redirect_uri',
+        'add_trusted_origin',
+        'remove_trusted_origin',
         'set_allow_localhost',
-        'update_email_auth_settings',
+        'update_auth_methods',
       ])
       .describe('Which Neon Auth configuration change to apply'),
     projectId: z.string().describe('Neon project ID'),
@@ -250,12 +297,30 @@ export const configureNeonAuthInputSchema = z
       .describe(
         'Branch ID. If omitted, the project default branch is used (same as provision_neon_auth).',
       ),
-    redirect_uri: z
+    trusted_origin: z
       .string()
-      .url()
+      .min(1)
+      .refine(
+        (v) => v.trim() === v && /^[a-zA-Z][a-zA-Z0-9+.\-]*:\/\//.test(v),
+        {
+          message:
+            'trusted_origin must include a scheme followed by "://" (e.g. https://app.example.com, https://*.example.com, or myapp://). No surrounding whitespace.',
+        },
+      )
       .optional()
       .describe(
-        'Full redirect URI (must be a valid URL). Required for add_redirect_uri and remove_redirect_uri. The Neon API stores trusted redirect entries as URIs.',
+        [
+          'Origin to add to (or remove from) the Better Auth trusted origins list. Required for add_trusted_origin and remove_trusted_origin.',
+          'Better Auth uses trusted origins for two purposes:',
+          '1. CSRF protection - validates the incoming request Origin/Referer header on state-changing endpoints (POST/PUT/PATCH/DELETE).',
+          '2. URL allowlist - authorizes URLs your client passes via callbackURL, redirectTo, errorCallbackURL, and newUserCallbackURL across sign-in/sign-up, OAuth provider flows, email verification, password reset, and magic-link flows. Not just OAuth redirect_uri.',
+          'Accepted formats (must include "<scheme>://"):',
+          '- Full origin: https://app.example.com',
+          '- Full URL with path: https://app.example.com/auth/callback',
+          '- Wildcard pattern: https://*.example.com (single-segment), https://**.example.com (cross-segment), exp://192.168.*.*:*/**',
+          '- Custom scheme: myapp://',
+          'See https://www.better-auth.com/docs/reference/options for canonical pattern syntax.',
+        ].join(' '),
       ),
     allow_localhost: z
       .boolean()
@@ -263,35 +328,30 @@ export const configureNeonAuthInputSchema = z
       .describe(
         'Whether Neon Auth should allow localhost origins. Required for set_allow_localhost.',
       ),
-    sign_in_with_email: z
-      .boolean()
+    methods: z
+      .object({
+        email_password: emailPasswordAuthMethodSchema
+          .optional()
+          .describe(
+            'Email and password authentication settings. Provide only the fields you want to change; omitted fields are left unchanged.',
+          ),
+      })
+      .strict()
       .optional()
       .describe(
-        'When set, toggles email-and-password sign-in (Neon Auth email/password enabled flag).',
-      ),
-    verify_email_on_sign_up: z
-      .boolean()
-      .optional()
-      .describe(
-        'When set, toggles sending a verification email when users sign up (send_verification_email_on_sign_up).',
-      ),
-    allow_sign_up_with_email: z
-      .boolean()
-      .optional()
-      .describe(
-        'When set, toggles whether new users can sign up with email and password (inverse of disable_sign_up).',
+        'Authentication methods to update. Required for update_auth_methods. At least one method block with at least one field must be provided.',
       ),
   })
   .superRefine((val, ctx) => {
     if (
-      val.operation === 'add_redirect_uri' ||
-      val.operation === 'remove_redirect_uri'
+      val.operation === 'add_trusted_origin' ||
+      val.operation === 'remove_trusted_origin'
     ) {
-      if (!val.redirect_uri) {
+      if (!val.trusted_origin) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'redirect_uri is required for this operation',
-          path: ['redirect_uri'],
+          message: 'trusted_origin is required for this operation',
+          path: ['trusted_origin'],
         });
       }
     }
@@ -304,18 +364,29 @@ export const configureNeonAuthInputSchema = z
         });
       }
     }
-    if (val.operation === 'update_email_auth_settings') {
-      if (
-        val.sign_in_with_email === undefined &&
-        val.verify_email_on_sign_up === undefined &&
-        val.allow_sign_up_with_email === undefined
-      ) {
+    if (val.operation === 'update_auth_methods') {
+      const methodBlocks = val.methods
+        ? Object.entries(val.methods).filter(([, v]) => v !== undefined)
+        : [];
+      if (methodBlocks.length === 0) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message:
-            'Provide at least one of sign_in_with_email, verify_email_on_sign_up, or allow_sign_up_with_email',
-          path: ['sign_in_with_email'],
+            'methods must include at least one method block (e.g. methods.email_password)',
+          path: ['methods'],
         });
+        return;
+      }
+      for (const [methodName, methodValue] of methodBlocks) {
+        const fields = Object.values(methodValue as Record<string, unknown>);
+        const hasAtLeastOneField = fields.some((v) => v !== undefined);
+        if (!hasAtLeastOneField) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `methods.${methodName} must include at least one field to update`,
+            path: ['methods', methodName],
+          });
+        }
       }
     }
   });

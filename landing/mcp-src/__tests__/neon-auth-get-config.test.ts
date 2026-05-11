@@ -108,13 +108,21 @@ describe('handleGetNeonAuthConfig', () => {
         jwks_url: 'https://jwks.example/',
         base_url: 'https://auth.example/',
       });
-      expect(body.trusted_redirect_uris).toEqual([
+      expect(body.trusted_origins).toEqual([
         'https://app.example.com/callback',
       ]);
       expect(body.allow_localhost).toBe(true);
-      expect(body.sign_in_with_email).toBe(true);
-      expect(body.verify_email_on_sign_up).toBe(true);
-      expect(body.allow_sign_up_with_email).toBe(true);
+      expect(body.auth_methods).toEqual({
+        email_password: {
+          enabled: true,
+          allow_sign_up: true,
+          verify_email_on_sign_up: true,
+          verify_email_on_sign_in: false,
+          email_verification_method: NeonAuthEmailVerificationMethod.Link,
+          require_email_verification: false,
+          auto_sign_in_after_verification: true,
+        },
+      });
       expect(body._errors).toBeUndefined();
     }
   });
