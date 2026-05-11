@@ -50,6 +50,7 @@ async function loadModule() {
 
 function buildAuthInfo(overrides?: {
   accountId?: string | null;
+  clientId?: unknown;
   apiKey?: unknown;
   extraMissing?: boolean;
 }): AuthInfo | undefined {
@@ -59,12 +60,14 @@ function buildAuthInfo(overrides?: {
   return {
     token: 't',
     scopes: [],
-    clientId: 'c',
+    clientId: overrides?.clientId === undefined ? 'c' : overrides.clientId,
     extra: {
       account:
         overrides?.accountId === null
           ? undefined
           : { id: overrides?.accountId ?? 'acct_123', name: 'A' },
+      // apiKey is kept on extra so the AuthContext shape stays realistic,
+      // but it's no longer part of the identity binding.
       apiKey: overrides?.apiKey === undefined ? 'sk_secret' : overrides.apiKey,
     },
   } as unknown as AuthInfo;
@@ -90,12 +93,22 @@ describe('deriveIdentity', () => {
     expect(deriveIdentity(buildAuthInfo({ accountId: null }))).toBeNull();
   });
 
-  it('returns null when apiKey is not a string', async () => {
+  it('returns null when clientId is not a string', async () => {
     const { deriveIdentity } = await loadModule();
-    expect(deriveIdentity(buildAuthInfo({ apiKey: null }))).toBeNull();
-    expect(deriveIdentity(buildAuthInfo({ apiKey: 42 }))).toBeNull();
-    expect(deriveIdentity(buildAuthInfo({ apiKey: undefined }))).toBeTruthy();
-    // ^ default 'sk_secret' kicks in; sanity check the fixture.
+    expect(deriveIdentity(buildAuthInfo({ clientId: null }))).toBeNull();
+    expect(deriveIdentity(buildAuthInfo({ clientId: 42 }))).toBeNull();
+    expect(deriveIdentity(buildAuthInfo({ clientId: undefined }))).toBeTruthy();
+    // ^ default 'c' kicks in; sanity check the fixture.
+  });
+
+  it('apiKey is ignored — same account + same clientId yields the same identity regardless of apiKey', async () => {
+    // Regression for the Cursor re-auth UX bug: identity must NOT flip when
+    // the bearer rotates within the same OAuth client. The whole point of
+    // this fix is that token rotation is transparent to the SSE binding.
+    const { deriveIdentity } = await loadModule();
+    const a = deriveIdentity(buildAuthInfo({ apiKey: 'sk_one' }));
+    const b = deriveIdentity(buildAuthInfo({ apiKey: 'sk_two' }));
+    expect(a).toBe(b);
   });
 
   it('produces a 32-char lowercase hex fingerprint', async () => {
@@ -118,16 +131,16 @@ describe('deriveIdentity', () => {
     expect(a).not.toBe(b);
   });
 
-  it('changes when apiKey changes (same account)', async () => {
+  it('changes when clientId changes (same account, different OAuth client)', async () => {
     const { deriveIdentity } = await loadModule();
-    const a = deriveIdentity(buildAuthInfo({ apiKey: 'sk_one' }));
-    const b = deriveIdentity(buildAuthInfo({ apiKey: 'sk_two' }));
+    const a = deriveIdentity(buildAuthInfo({ clientId: 'client_A' }));
+    const b = deriveIdentity(buildAuthInfo({ clientId: 'client_B' }));
     expect(a).not.toBe(b);
   });
 
-  it('does not leak the apiKey in the fingerprint', async () => {
+  it('does not leak the clientId in the fingerprint', async () => {
     const { deriveIdentity } = await loadModule();
-    const id = deriveIdentity(buildAuthInfo({ apiKey: 'sk_super_secret' }));
+    const id = deriveIdentity(buildAuthInfo({ clientId: 'super_secret_cli' }));
     expect(id).not.toContain('super');
     expect(id).not.toContain('secret');
   });
@@ -506,17 +519,40 @@ describe('shouldRejectEnvelope (SSE-side defense)', () => {
     ).toBe(true);
   });
 
-  it('rejects when caller is the same account but a different token', async () => {
+  it('rejects when caller is the same account but a different OAuth client', async () => {
     const { shouldRejectEnvelope, deriveIdentity } = await loadModule();
     const owner = deriveIdentity(
-      buildAuthInfo({ accountId: 'acct_X', apiKey: 'sk_one' }),
+      buildAuthInfo({ accountId: 'acct_X', clientId: 'client_one' }),
     );
     expect(
       shouldRejectEnvelope(
         owner,
-        buildAuthInfo({ accountId: 'acct_X', apiKey: 'sk_two' }),
+        buildAuthInfo({ accountId: 'acct_X', clientId: 'client_two' }),
       ),
     ).toBe(true);
+  });
+
+  it('accepts when caller is the same account + same OAuth client but a different bearer (token rotation)', async () => {
+    // Regression for the Cursor re-auth UX bug. Identity is now bound to
+    // clientId, not the bearer; same client + new bearer = same identity.
+    const { shouldRejectEnvelope, deriveIdentity } = await loadModule();
+    const owner = deriveIdentity(
+      buildAuthInfo({
+        accountId: 'acct_X',
+        clientId: 'cursor_xyz',
+        apiKey: 'sk_pre_refresh',
+      }),
+    );
+    expect(
+      shouldRejectEnvelope(
+        owner,
+        buildAuthInfo({
+          accountId: 'acct_X',
+          clientId: 'cursor_xyz',
+          apiKey: 'sk_post_refresh',
+        }),
+      ),
+    ).toBe(false);
   });
 
   it('rejects when caller auth info is missing entirely', async () => {

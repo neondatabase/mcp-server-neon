@@ -61,22 +61,34 @@ function getRedis(): Promise<RedisClientType> {
 
 /**
  * Stable identity fingerprint for a caller. Binds the SSE session to the
- * (account, bearer-token) pair so that a POST from a different account — or
- * the same account presenting a different token — cannot inject into this
- * SSE stream even if the sessionId leaks.
+ * (account, OAuth-client) pair so that a POST from a different account — or
+ * the same account presenting credentials registered to a different OAuth
+ * client — cannot inject into this SSE stream even if the sessionId leaks.
  *
- * Identity changes when the bearer token rotates (OAuth refresh, key
- * rotation). A POST arriving on a live SSE after the caller's bearer rotated
- * will return 403; clients must re-establish the SSE rather than retrying
- * the POST.
+ * Why `clientId` and not the bearer token: the bearer rotates on every
+ * OAuth refresh (~hourly for Cursor and similar). Binding to the bearer
+ * meant a legitimate same-client refresh broke the binding mid-stream and
+ * surfaced as a 403 on the next POST /message — which Cursor's MCP client
+ * interpreted as an auth failure and prompted the user to re-authenticate.
+ * Binding to `clientId` (the dynamic OAuth registration assigned via
+ * /api/register) keeps the identity stable across refreshes for the same
+ * registered MCP client, while still mismatching cross-account or
+ * cross-OAuth-client POSTs.
+ *
+ * For the API-key auth path, `clientId` is set to the literal `'api-key'`
+ * upstream (see route.ts), so the binding effectively becomes
+ * `(accountId, 'api-key')` — two API keys for the same account are no
+ * longer distinguished by this signal. That's an intentional trade: the
+ * public Neon API itself accepts any valid key for the account, so
+ * disambiguating between keys here added no real defense.
  */
 export function deriveIdentity(authInfo: AuthInfo | undefined): string | null {
   const extra = authInfo?.extra as AuthContext['extra'] | undefined;
   const accountId = extra?.account?.id;
-  const apiKey = extra?.apiKey;
-  if (!accountId || typeof apiKey !== 'string') return null;
+  const clientId = authInfo?.clientId;
+  if (!accountId || typeof clientId !== 'string') return null;
   return createHash('sha256')
-    .update(`${accountId}:${apiKey}`)
+    .update(`${accountId}:${clientId}`)
     .digest('hex')
     .slice(0, 32);
 }
