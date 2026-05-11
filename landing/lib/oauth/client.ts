@@ -84,10 +84,26 @@ const getUpstreamConfig = async (): Promise<Configuration> => {
   // /api/token) can actually cancel the in-flight fetch instead of just
   // unblocking their await. The cached config is shared across requests, so
   // ALS is the right scoping primitive.
+  //
+  // Critical: when no ALS signal is set (the vast majority of upstream
+  // calls — discovery, authorizationCodeGrant in /callback, refresh paths
+  // that don't pass a signal), this MUST be a pure pass-through. Earlier
+  // code spread `init` into a new object unconditionally, which broke the
+  // OAuth code-exchange path (Hydra responses came back as
+  // OAUTH_RESPONSE_IS_NOT_CONFORM / invalid_grant) for a subset of Vercel
+  // function instances whose cached Configuration carried that wrapper for
+  // the full 1-hour cache TTL. Pure pass-through means the only requests
+  // that traverse our wrapper logic are the ones that genuinely need it.
   (cachedConfig as unknown as Record<symbol, typeof globalThis.fetch>)[
     customFetch
   ] = (input, init) => {
     const ctxSignal = upstreamAbortSignalContext.getStore();
+    if (!ctxSignal) {
+      // No per-call signal to inject — defer to native fetch with the
+      // original args untouched. Preserves Request-object inputs, headers,
+      // body, signal, etc. exactly as openid-client constructed them.
+      return globalThis.fetch(input, init);
+    }
     return globalThis.fetch(input, {
       ...(init ?? {}),
       signal: combineSignals(ctxSignal, init?.signal),
