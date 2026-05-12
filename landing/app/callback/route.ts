@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { model } from '../../mcp-src/oauth/model';
+import {
+  isPgConnectFailure,
+  withPgConnectRetry,
+} from '../../mcp-src/oauth/kv-store';
 import { exchangeCode } from '../../lib/oauth/client';
 import { extractUpstreamErrorDetails } from '../../lib/oauth/upstream-error';
 import { generateRandomString } from '../../mcp-src/oauth/utils';
@@ -132,6 +136,11 @@ function buildClientErrorRedirect(
 
 export async function GET(request: NextRequest) {
   const sloStartMs = Date.now();
+  // Captured for the outer catch so an internal_error event carries a
+  // usable clientId in the SLO line. Without this, post-mortems on
+  // /callback failures (e.g. the 2026-05-12 OAUTH_DATABASE_URL compute
+  // scale-from-zero blip) can't be correlated to a specific user.
+  let clientIdForSlo: string | undefined;
   try {
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
@@ -247,6 +256,7 @@ export async function GET(request: NextRequest) {
     let requestParams: DownstreamAuthRequest;
     try {
       requestParams = decodeAuthParams(state);
+      clientIdForSlo = requestParams.clientId;
     } catch (decodeErr) {
       logger.error('Failed to decode state at /callback', {
         decodeErr:
@@ -289,7 +299,9 @@ export async function GET(request: NextRequest) {
     }
 
     const clientId = requestParams.clientId;
-    const client = await model.getClient(clientId, '');
+    const client = await withPgConnectRetry('callback.getClient', () =>
+      model.getClient(clientId, ''),
+    );
     if (!client) {
       logger.warn('Client not found at /callback', { clientId });
       emitAuthCallbackSlo('internal_error', sloStartMs, {
@@ -343,7 +355,10 @@ export async function GET(request: NextRequest) {
     // Resolve account info (no identify here - happens in token exchange)
     const userInfo = await resolveAccountFromAuth(auth, neonClient);
 
-    const storedContext = await model.getClientAuthContext(clientId);
+    const storedContext = await withPgConnectRetry(
+      'callback.getClientAuthContext',
+      () => model.getClientAuthContext(clientId),
+    );
 
     // Source of truth is KV context written during /authorize.
     // Keep state-derived values only as a fallback for backward compatibility.
@@ -390,8 +405,12 @@ export async function GET(request: NextRequest) {
       grant,
     };
 
-    await model.saveAuthorizationCode(authCodeData);
-    await model.deleteClientAuthContext(clientId);
+    await withPgConnectRetry('callback.saveAuthorizationCode', () =>
+      model.saveAuthorizationCode(authCodeData),
+    );
+    await withPgConnectRetry('callback.deleteClientAuthContext', () =>
+      model.deleteClientAuthContext(clientId),
+    );
 
     // Redirect back to client with auth code
     const redirectUrl = new URL(requestParams.redirectUri);
@@ -404,8 +423,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(redirectUrl.href);
   } catch (error: unknown) {
     // Catch-all for anything not classified above (KV failures, neon API
-    // errors, unexpected shapes from openid-client). Counts as bad.
-    emitAuthCallbackSlo('internal_error', sloStartMs);
+    // errors, unexpected shapes from openid-client). Counts as bad. We
+    // tag the reason field with a coarse fingerprint so dashboards can
+    // distinguish a PG compute hiccup from a generic exception without
+    // having to grep the raw error message.
+    const reason = isPgConnectFailure(error)
+      ? 'pg_connect_failure'
+      : error instanceof Error && error.name
+        ? error.name
+        : 'unknown';
+    emitAuthCallbackSlo('internal_error', sloStartMs, {
+      clientId: clientIdForSlo,
+      reason,
+    });
     return handleOAuthError(error, 'OAuth callback error');
   }
 }
