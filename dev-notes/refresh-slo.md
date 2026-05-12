@@ -65,14 +65,31 @@ Stable prefix `[SLO] refresh ` makes it cheap to filter via `vercel logs --query
 
 Buckets emitted: `success_fresh | success_cache_replay | correct_invalid_grant | cliff_upstream | transient_lock_timeout | transient_persist_failure | transient_upstream_5xx | bad_request`.
 
-### 2. Computation script
+### 2. How to compute it from logs
 
-`~/.neon-mcp-24h-debug/refresh-slo-compute.sh` queries Vercel logs over a configurable window, classifies each `[SLO] refresh` line by `outcome=`, and prints:
+The `[SLO] refresh outcome=…` lines are emitted at INFO level and stay in Vercel's log retention (~3 days). Pull them with the CLI and aggregate with the snippet below. The dominant `success` bucket eats the `--limit 5000` cap quickly; for windows longer than a few minutes, **issue one targeted query per outcome bucket** — rare buckets fit comfortably under the cap and expose the full window.
 
-- counts per bucket
+```bash
+# Run from landing/ so the Vercel project is detected.
+for q in "outcome=success" "outcome=correct_invalid_grant" \
+         "outcome=cliff_upstream" "outcome=transient_lock_timeout" \
+         "outcome=transient_persist_failure" "outcome=transient_upstream_5xx" \
+         "outcome=transient_upstream_network" "outcome=bad_request"; do
+  fname=$(echo "$q" | tr ':=' '__')
+  vercel logs --since 24h --environment production --no-follow --no-branch \
+    --limit 5000 --query "[SLO] refresh $q" --json 2>/dev/null \
+    > "/tmp/slo-${fname}.jsonl"
+done
+```
+
+Aggregate the per-bucket JSONL into:
+
+- counts per bucket (good / bad / excluded per the table above)
 - numerator / denominator / SLO percentage
 - error budget consumed for the window
 - top failing clients in each "bad" bucket
+
+The denominator query (`outcome=success`) is also subject to the cap — sample a known time slice (e.g. a 5-min window via `--since`/`--until`) to estimate the rate-per-minute, then project to the full window. Recent good-event rate has been ~22 events/min.
 
 ### 3. Alerting (later)
 

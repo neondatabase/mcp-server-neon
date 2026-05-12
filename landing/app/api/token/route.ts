@@ -3,6 +3,7 @@ import { waitUntil } from '@vercel/functions';
 import { Client } from 'oauth2-server';
 import { model } from '../../../mcp-src/oauth/model';
 import { exchangeRefreshToken } from '../../../lib/oauth/client';
+import { extractUpstreamErrorDetails } from '../../../lib/oauth/upstream-error';
 import { verifyPKCE } from '../../../mcp-src/oauth/utils';
 import { identify, flushAnalytics } from '../../../mcp-src/analytics/analytics';
 import { handleOAuthError } from '../../../lib/errors';
@@ -209,59 +210,8 @@ function emitRefreshSlo(
   logger.info(`[SLO] refresh ${fields.join(' ')}`);
 }
 
-// Extracts structured details from openid-client errors so the upstream
-// failure log captures the actual OAuth `error` / `error_description` instead
-// of the generic "server responded with an error in the response body".
-function extractUpstreamErrorDetails(error: unknown): {
-  name?: string;
-  message?: string;
-  status?: number;
-  oauthError?: string;
-  oauthErrorDescription?: string;
-  upstreamUrl?: string;
-  cause?: string;
-} {
-  if (!(error instanceof Error)) return { message: String(error) };
-  const e = error as Error & {
-    status?: unknown;
-    error?: unknown;
-    error_description?: unknown;
-    cause?: unknown;
-  };
-  const asString = (v: unknown): string | undefined =>
-    typeof v === 'string' ? v : undefined;
-  const asNumber = (v: unknown): number | undefined =>
-    typeof v === 'number' ? v : undefined;
-
-  // openid-client's OperationProcessingError (notably the
-  // OAUTH_RESPONSE_IS_NOT_CONFORM variant) carries the upstream HTTP
-  // Response as `cause`. Previously we stringified it to "[object Response]",
-  // hiding the actual upstream status code (502, 504, etc.) — by far the
-  // most useful diagnostic on the most common production error. Walk the
-  // shape so we capture the status + url instead.
-  let status = asNumber(e.status);
-  let upstreamUrl: string | undefined;
-  let causeStr: string | undefined;
-  if (e.cause instanceof Response) {
-    status = status ?? e.cause.status;
-    upstreamUrl = e.cause.url || undefined;
-    causeStr = `Response status=${e.cause.status}`;
-  } else if (e.cause instanceof Error) {
-    causeStr = `${e.cause.name}: ${e.cause.message}`;
-  } else if (e.cause !== undefined) {
-    causeStr = String(e.cause);
-  }
-
-  return {
-    name: e.name,
-    message: e.message,
-    status,
-    oauthError: asString(e.error),
-    oauthErrorDescription: asString(e.error_description),
-    upstreamUrl,
-    cause: causeStr,
-  };
-}
+// `extractUpstreamErrorDetails` was lifted to `lib/oauth/upstream-error.ts`
+// so the /callback path can share the same normalisation logic.
 
 // When a holder bails out before the upstream call (RT/AT not found in KV,
 // client mismatch, etc.), populate the failure cache too — otherwise concurrent
