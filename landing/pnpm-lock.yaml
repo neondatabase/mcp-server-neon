@@ -15,8 +15,8 @@ importers:
         specifier: 1.25.3
         version: 1.25.3(hono@4.12.11)(zod@4.3.6)
       '@neondatabase/api-client':
-        specifier: 2.5.0
-        version: 2.5.0
+        specifier: file:/home/andras.kauer/neon-cloud/web/api-client
+        version: file:../../../../neon-cloud/web/api-client
       '@neondatabase/serverless':
         specifier: 1.0.0
         version: 1.0.0
@@ -797,8 +797,8 @@ packages:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
 
-  '@neondatabase/api-client@2.5.0':
-    resolution: {integrity: sha512-Tg5/Aq8zg1kxT8OuaRULpl0NcxTLpOBpcbdeC8RO3U6Ubftu+YSjKUqB5NRZWITMwDy8GSJtPQYF/xHHlsqauQ==}
+  '@neondatabase/api-client@file:../../../../neon-cloud/web/api-client':
+    resolution: {directory: ../../../../neon-cloud/web/api-client, type: directory}
 
   '@neondatabase/serverless@1.0.0':
     resolution: {integrity: sha512-XWmEeWpBXIoksZSDN74kftfTnXFEGZ3iX8jbANWBc+ag6dsiQuvuR4LgB0WdCOKMb5AQgjqgufc0TgAsZubUYw==}
@@ -4337,7 +4337,7 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@neondatabase/api-client@2.5.0':
+  '@neondatabase/api-client@file:../../../../neon-cloud/web/api-client':
     dependencies:
       axios: 1.13.6
     transitivePeerDependencies:

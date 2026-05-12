@@ -80,6 +80,16 @@ describe('handleGetNeonAuthConfig', () => {
           disable_sign_up: false,
         },
       }),
+      getNeonAuthPluginConfigs: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {},
+      }),
+      getNeonAuthWebhookConfig: vi
+        .fn()
+        .mockResolvedValue({ status: 404, statusText: 'Not Found' }),
+      getNeonAuthEmailServer: vi
+        .fn()
+        .mockResolvedValue({ status: 404, statusText: 'Not Found' }),
     };
 
     const result = await handleGetNeonAuthConfig(

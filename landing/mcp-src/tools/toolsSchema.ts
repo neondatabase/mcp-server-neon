@@ -3,6 +3,7 @@ import {
   ListSharedProjectsParams,
   NeonAuthEmailVerificationMethod,
 } from '@neondatabase/api-client';
+import * as net from 'node:net';
 // IMPORTANT: Use zod/v3 types for MCP registration compatibility.
 // @modelcontextprotocol/sdk@1.25.x accepts schemas typed through its zod-compat layer
 // (zod/v3 or zod/v4/core). Using plain `zod` imports here can create type-identity
@@ -356,6 +357,221 @@ function isValidTrustedOrigin(v: string): boolean {
   return true;
 }
 
+/** Per-plugin update shapes. Friendly names that map to the Neon Auth API are
+ * resolved in the handler's `build*Patch()` functions; mirroring the
+ * email_password convention (e.g. `allow_sign_up` ↔ `!disable_sign_up`). All
+ * fields are optional → partial-update semantics. `.strict()` rejects unknown
+ * keys so callers don't silently misspell field names. */
+const magicLinkPluginPatchSchema = z
+  .object({
+    enabled: z
+      .boolean()
+      .optional()
+      .describe('Whether the magic-link plugin is enabled.'),
+    allow_sign_up: z
+      .boolean()
+      .optional()
+      .describe(
+        'Whether new users may sign up via magic link. Maps to the inverse of Neon Auth `disable_sign_up`.',
+      ),
+    expires_in_minutes: z
+      .number()
+      .int()
+      .min(5)
+      .max(1440)
+      .optional()
+      .describe(
+        'Minutes before the magic link expires. Maps to Neon Auth `expires_in`. Range: 5..1440.',
+      ),
+  })
+  .strict();
+
+const phoneNumberPluginPatchSchema = z
+  .object({
+    enabled: z
+      .boolean()
+      .optional()
+      .describe('Whether the phone-number/OTP plugin is enabled.'),
+    otp_expires_in_seconds: z
+      .number()
+      .int()
+      .min(60)
+      .max(600)
+      .optional()
+      .describe(
+        'Seconds before the SMS OTP expires. Maps to Neon Auth `otp_expires_in`. Range: 60..600.',
+      ),
+  })
+  .strict();
+
+const organizationPluginPatchSchema = z
+  .object({
+    enabled: z
+      .boolean()
+      .optional()
+      .describe('Whether the multi-tenant organization plugin is enabled.'),
+    organization_limit: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe('Maximum number of organizations a user can create.'),
+    membership_limit: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe('Maximum number of members per organization.'),
+    creator_role: z
+      .enum(['admin', 'owner'])
+      .optional()
+      .describe('Role assigned to the user who creates an organization.'),
+    send_invitation_email: z
+      .boolean()
+      .optional()
+      .describe('Whether to send invitation emails for new members.'),
+  })
+  .strict();
+
+/**
+ * Webhook outbound URL guard.
+ *
+ * Neon Auth fires HTTP requests to `webhook_url` on auth events (user.created,
+ * send.otp, send.magic_link, etc.). If we let a caller point the URL at a
+ * private/internal address, the auth server effectively becomes a SSRF gadget
+ * against the Neon control-plane network. This list of zod-level checks is the
+ * static layer; the handler additionally resolves the host via DNS and rejects
+ * any answer that lands in a private/link-local range (defence in depth — DNS
+ * rebinding can move a public hostname into private space at request time).
+ */
+const WEBHOOK_BLOCKED_HOSTS = new Set([
+  'localhost',
+  '127.0.0.1',
+  '0.0.0.0',
+  '::1',
+  '[::1]',
+  '169.254.169.254', // AWS / GCP / Azure cloud-metadata
+  'metadata.google.internal',
+  'metadata.goog',
+]);
+
+function isPrivateIPv4(ip: string): boolean {
+  const parts = ip.split('.').map(Number);
+  if (
+    parts.length !== 4 ||
+    parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)
+  ) {
+    return false;
+  }
+  const [a, b] = parts;
+  if (a === 10) return true;
+  if (a === 127) return true;
+  if (a === 0) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  return false;
+}
+
+function isPrivateIPv6(ip: string): boolean {
+  const lower = ip.toLowerCase();
+  if (lower === '::1' || lower === '::') return true;
+  // fc00::/7 (unique local), fe80::/10 (link-local)
+  if (/^fc[0-9a-f]{2}:/.test(lower) || /^fd[0-9a-f]{2}:/.test(lower))
+    return true;
+  if (/^fe[89ab][0-9a-f]:/.test(lower)) return true;
+  return false;
+}
+
+export function isPrivateHostname(host: string): boolean {
+  const stripped =
+    host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+  const lower = stripped.toLowerCase();
+  if (WEBHOOK_BLOCKED_HOSTS.has(lower)) return true;
+  const ipKind = net.isIP(stripped);
+  if (ipKind === 4) return isPrivateIPv4(stripped);
+  if (ipKind === 6) return isPrivateIPv6(stripped);
+  return false;
+}
+
+function validateWebhookUrl(
+  v: string,
+): { ok: true } | { ok: false; reason: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(v);
+  } catch {
+    return { ok: false, reason: 'webhook_url must be a valid URL' };
+  }
+  if (parsed.protocol !== 'https:') {
+    return { ok: false, reason: 'webhook_url must use https://' };
+  }
+  if (parsed.username || parsed.password) {
+    return {
+      ok: false,
+      reason: 'webhook_url must not contain embedded credentials',
+    };
+  }
+  if (!parsed.hostname) {
+    return { ok: false, reason: 'webhook_url must have a hostname' };
+  }
+  if (isPrivateHostname(parsed.hostname)) {
+    return {
+      ok: false,
+      reason: `webhook_url host "${parsed.hostname}" is on the localhost/private/link-local/cloud-metadata blocklist`,
+    };
+  }
+  return { ok: true };
+}
+
+const NEON_AUTH_WEBHOOK_EVENTS = [
+  'user.before_create',
+  'user.created',
+  'send.otp',
+  'send.magic_link',
+  'organization.invitation.created',
+  'organization.invitation.accepted',
+  'phone_number.verified',
+] as const;
+
+const webhookConfigPatchSchema = z
+  .object({
+    enabled: z.boolean().optional().describe('Whether the webhook is active.'),
+    webhook_url: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'HTTPS URL to deliver webhook events to. Must be public; localhost / private / link-local / cloud-metadata IPs are rejected.',
+      ),
+    enabled_events: z
+      .array(z.enum(NEON_AUTH_WEBHOOK_EVENTS))
+      .optional()
+      .describe(
+        'List of Neon Auth events that should trigger the webhook. Allowed values: user.before_create, user.created, send.otp, send.magic_link, organization.invitation.created, organization.invitation.accepted, phone_number.verified.',
+      ),
+    timeout_seconds: z
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .optional()
+      .describe('Webhook delivery timeout (1..10 seconds).'),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    if (val.webhook_url !== undefined) {
+      const r = validateWebhookUrl(val.webhook_url);
+      if (!r.ok) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: r.reason,
+          path: ['webhook_url'],
+        });
+      }
+    }
+  });
+
 export const configureNeonAuthInputSchema = z
   .object({
     operation: z
@@ -364,6 +580,8 @@ export const configureNeonAuthInputSchema = z
         'remove_trusted_origin',
         'set_allow_localhost',
         'update_auth_methods',
+        'update_plugin',
+        'update_webhook_config',
       ])
       .describe('Which Neon Auth configuration change to apply'),
     projectId: z.string().describe('Neon project ID'),
@@ -414,6 +632,33 @@ export const configureNeonAuthInputSchema = z
       .describe(
         'Authentication methods to update. Required for update_auth_methods. At least one method block with at least one field must be provided.',
       ),
+    plugin: z
+      .enum(['magic_link', 'phone_number', 'organization'])
+      .optional()
+      .describe(
+        'Which Neon Auth plugin to update. Required for update_plugin. Note: email/password is NOT a plugin — use update_auth_methods for it.',
+      ),
+    plugin_patch: z
+      .union([
+        magicLinkPluginPatchSchema,
+        phoneNumberPluginPatchSchema,
+        organizationPluginPatchSchema,
+      ])
+      .optional()
+      .describe(
+        'Partial-update payload for the selected plugin. Shape must match `plugin`: magic_link → {enabled?, allow_sign_up?, expires_in_minutes?}, phone_number → {enabled?, otp_expires_in_seconds?}, organization → {enabled?, organization_limit?, membership_limit?, creator_role?, send_invitation_email?}.',
+      ),
+    webhook: webhookConfigPatchSchema
+      .optional()
+      .describe(
+        'Webhook configuration patch. Required for update_webhook_config. webhook_url must be https:// to a public host; localhost/private/link-local/cloud-metadata IPs are rejected at the schema layer and re-checked via DNS in the handler.',
+      ),
+    confirm_dangerous_change: z
+      .boolean()
+      .optional()
+      .describe(
+        'Set to true to acknowledge a high-impact change. Required to (a) change `webhook.webhook_url` and (b) disable the last enabled sign-in method (email_password / magic_link / phone_number).',
+      ),
   })
   .superRefine((val, ctx) => {
     if (
@@ -460,6 +705,95 @@ export const configureNeonAuthInputSchema = z
             path: ['methods', methodName],
           });
         }
+      }
+    }
+    if (val.operation === 'update_plugin') {
+      if (!val.plugin) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'plugin is required for update_plugin (magic_link | phone_number | organization)',
+          path: ['plugin'],
+        });
+      }
+      if (!val.plugin_patch) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'plugin_patch is required for update_plugin',
+          path: ['plugin_patch'],
+        });
+        return;
+      }
+      const patch = val.plugin_patch as Record<string, unknown>;
+      const fields = Object.values(patch);
+      if (fields.length === 0 || fields.every((v) => v === undefined)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'plugin_patch must include at least one field to update',
+          path: ['plugin_patch'],
+        });
+        return;
+      }
+      // Cross-shape validation: each plugin has a distinct field set; reject
+      // patches that match the wrong plugin so we never silently send keys
+      // the API will reject (or worse, silently ignore).
+      const ML_FIELDS = new Set([
+        'enabled',
+        'allow_sign_up',
+        'expires_in_minutes',
+      ]);
+      const PN_FIELDS = new Set(['enabled', 'otp_expires_in_seconds']);
+      const ORG_FIELDS = new Set([
+        'enabled',
+        'organization_limit',
+        'membership_limit',
+        'creator_role',
+        'send_invitation_email',
+      ]);
+      const provided = Object.keys(patch).filter((k) => patch[k] !== undefined);
+      const expected =
+        val.plugin === 'magic_link'
+          ? ML_FIELDS
+          : val.plugin === 'phone_number'
+            ? PN_FIELDS
+            : ORG_FIELDS;
+      const stranger = provided.find((k) => !expected.has(k));
+      if (stranger !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `plugin_patch field "${stranger}" is not valid for plugin "${val.plugin}". Expected fields: ${Array.from(expected).join(', ')}.`,
+          path: ['plugin_patch', stranger],
+        });
+      }
+    }
+    if (val.operation === 'update_webhook_config') {
+      if (!val.webhook) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'webhook is required for update_webhook_config',
+          path: ['webhook'],
+        });
+        return;
+      }
+      const fields = Object.values(val.webhook as Record<string, unknown>);
+      if (fields.every((v) => v === undefined)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'webhook must include at least one field to update',
+          path: ['webhook'],
+        });
+        return;
+      }
+      if (
+        val.webhook.webhook_url !== undefined &&
+        val.confirm_dangerous_change !== true
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'changing webhook_url is destructive (re-routes outbound auth events). Set confirm_dangerous_change: true to proceed.',
+          path: ['confirm_dangerous_change'],
+        });
       }
     }
   });
