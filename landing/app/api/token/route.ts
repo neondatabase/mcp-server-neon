@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { Client } from 'oauth2-server';
 import { model } from '../../../mcp-src/oauth/model';
-import { exchangeRefreshToken } from '../../../lib/oauth/client';
+import {
+  exchangeRefreshToken,
+  type UpstreamRequestSummary,
+} from '../../../lib/oauth/client';
 import { extractUpstreamErrorDetails } from '../../../lib/oauth/upstream-error';
 import { verifyPKCE } from '../../../mcp-src/oauth/utils';
 import { identify, flushAnalytics } from '../../../mcp-src/analytics/analytics';
@@ -42,6 +45,7 @@ class UpstreamTimeoutError extends Error {
 
 async function callUpstreamRefreshWithTimeout(
   refreshToken: string,
+  onRequest?: (summary: UpstreamRequestSummary) => void,
 ): Promise<Awaited<ReturnType<typeof exchangeRefreshToken>>> {
   // AbortController cancels the underlying fetch when the timer fires, so
   // we don't leak sockets to Hydra after our 4.5s budget. Without this,
@@ -62,7 +66,11 @@ async function callUpstreamRefreshWithTimeout(
   // and rejects later (e.g. with AbortError as a consequence of our abort).
   // The Promise.race result is what we surface; this side effect is just
   // best-effort socket cleanup.
-  const exchangePromise = exchangeRefreshToken(refreshToken, controller.signal);
+  const exchangePromise = exchangeRefreshToken(
+    refreshToken,
+    controller.signal,
+    onRequest,
+  );
   exchangePromise.catch(() => {});
   try {
     return await Promise.race([exchangePromise, timeoutPromise]);
@@ -288,6 +296,17 @@ async function executeRefresh(
   }
 
   let upstreamToken: Awaited<ReturnType<typeof exchangeRefreshToken>>;
+  // Capture the outbound HTTP request body summary so we can include a
+  // sanitized fingerprint of what we sent to Hydra in the cliff_upstream
+  // log. Without this we only see Hydra's "invalid_request" error and
+  // can't tell whether the failure is in our request shape, the token
+  // format, or Hydra-side validation. The capture function appends —
+  // openid-client only fires it once per request, but retries each get
+  // their own invocation so the LAST one written is what surfaced.
+  let lastUpstreamRequest: UpstreamRequestSummary | undefined;
+  const captureUpstreamRequest = (summary: UpstreamRequestSummary) => {
+    lastUpstreamRequest = summary;
+  };
   try {
     logger.info('Exchanging refresh token with upstream');
     // Retry on network-layer errors (ECONNRESET, ETIMEDOUT, DNS, etc.) but
@@ -295,7 +314,11 @@ async function executeRefresh(
     // may have rotated the RT. Two attempts with a short backoff catches
     // most TCP/connection blips without piling latency.
     upstreamToken = await retryAsync(
-      () => callUpstreamRefreshWithTimeout(providedRefreshToken.refreshToken),
+      () =>
+        callUpstreamRefreshWithTimeout(
+          providedRefreshToken.refreshToken,
+          captureUpstreamRequest,
+        ),
       {
         attempts: 2,
         delaysMs: [200],
@@ -317,6 +340,14 @@ async function executeRefresh(
       clientId: client.id,
       isClientError,
       networkErrorCode,
+      // Sanitized fingerprint of the HTTP request body we sent upstream.
+      // Critical for diagnosing the `invalid_request` cliff_upstream
+      // sub-bucket (~50% of all cliffs as of 2026-05-12) where Hydra
+      // rejects the call without us being able to tell why from the
+      // response alone. See dev-notes/cliff-upstream-investigation.md.
+      // Never contains the refresh_token or client_secret values — only
+      // a length + 6-char prefix fingerprint for the RT.
+      upstreamRequest: lastUpstreamRequest,
     });
 
     if (isClientError) {

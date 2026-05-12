@@ -74,11 +74,12 @@ vi.mock('../oauth/refresh-lock', () => ({
 
 // Spy on logger so SLO assertions can read what was emitted.
 const loggerInfoSpy = vi.fn();
+const loggerErrorSpy = vi.fn();
 vi.mock('../utils/logger', () => ({
   logger: {
     info: (...args: unknown[]) => loggerInfoSpy(...args),
     warn: vi.fn(),
-    error: vi.fn(),
+    error: (...args: unknown[]) => loggerErrorSpy(...args),
     debug: vi.fn(),
   },
 }));
@@ -296,6 +297,53 @@ describe('Token refresh flow', () => {
 
       expect(response.status).toBe(400);
       expect(body.error).toBe('invalid_grant');
+    });
+
+    it('logs a sanitized upstream-request fingerprint on cliff_upstream', async () => {
+      // Regression for the cliff_upstream investigation:
+      // dev-notes/cliff-upstream-investigation.md identified that we had
+      // no visibility into what request we sent to Hydra when it returned
+      // invalid_request. This test pins the contract that, when the upstream
+      // call fails, the captured request summary is included in the error
+      // log so dashboards can split the bucket by request shape.
+      const upstreamError = new Error('invalid_request') as Error & {
+        status: number;
+        error?: string;
+      };
+      upstreamError.status = 400;
+      upstreamError.error = 'invalid_request';
+
+      // Simulate openid-client invoking the inspector callback with a
+      // realistic refresh-token request body summary before throwing.
+      mockExchange.mockImplementation(async (_token, _signal, onRequest) => {
+        if (onRequest) {
+          onRequest({
+            paramNames: ['client_id', 'grant_type', 'refresh_token'],
+            bodyByteLength: 192,
+            refreshTokenFingerprint: 'len=87,prefix=vrx1_C',
+            hasClientSecret: false,
+            hasDuplicateParams: false,
+          });
+        }
+        throw upstreamError;
+      });
+      loggerErrorSpy.mockClear();
+
+      await POST(makeTokenRequest('old-refresh-token'));
+
+      // Find the cliff log call.
+      const cliffCall = loggerErrorSpy.mock.calls.find(
+        ([msg]) => msg === 'Upstream refresh token exchange failed',
+      );
+      expect(cliffCall).toBeDefined();
+      const ctx = cliffCall![1] as Record<string, unknown>;
+      expect(ctx.upstreamRequest).toEqual({
+        paramNames: ['client_id', 'grant_type', 'refresh_token'],
+        bodyByteLength: 192,
+        refreshTokenFingerprint: 'len=87,prefix=vrx1_C',
+        hasClientSecret: false,
+        hasDuplicateParams: false,
+      });
     });
   });
 
