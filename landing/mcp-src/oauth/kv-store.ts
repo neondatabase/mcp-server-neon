@@ -1,5 +1,6 @@
 import { KeyvPostgres } from '@keyv/postgres';
 import { logger } from '../utils/logger';
+import { retryAsync } from '../utils/retry';
 import type { AuthorizationCode, Client, Token } from 'oauth2-server';
 import Keyv from 'keyv';
 import { AuthContext } from '../types/auth';
@@ -28,6 +29,38 @@ export const shouldReinitKeyv = (err: unknown): boolean => {
   const msg = err instanceof Error ? err.message : String(err);
   return REINIT_ERROR_PATTERNS.some((re) => re.test(msg));
 };
+
+// Postgres `XX000` is Neon's "Couldn't connect to compute node" — emitted
+// when a suspended compute fails to scale-from-zero within the connect
+// budget. Surfaces on the auth-callback critical path because the
+// OAUTH_DATABASE_URL backing project auto-suspends, then the first request
+// after the idle window pays an 8–10s wake-up that exceeds the lambda's
+// own timeouts. A single retry with a brief delay catches the next request
+// against the freshly-woken compute and masks the user-visible failure.
+// The lazy Keyv pool re-inits in its error listener concurrently, so the
+// retried call grabs a clean pool.
+export const isPgConnectFailure = (err: unknown): boolean => {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (code === 'XX000') return true;
+  return shouldReinitKeyv(err);
+};
+
+/**
+ * Retry a single Postgres-bound call once on connect failures. Idempotent
+ * operations only (get/set/delete by primary key). Logs at warn on retry
+ * so the SLO dashboards can still see the underlying blip even when the
+ * user-visible outcome is success.
+ */
+export const withPgConnectRetry = <T>(
+  op: string,
+  fn: () => Promise<T>,
+): Promise<T> =>
+  retryAsync(fn, {
+    attempts: 2,
+    delaysMs: [1500],
+    op,
+    shouldRetry: isPgConnectFailure,
+  });
 
 const createLazyKeyv = <T>(table: string, errorLabel: string) => {
   let instance: Keyv<T> | null = null;
