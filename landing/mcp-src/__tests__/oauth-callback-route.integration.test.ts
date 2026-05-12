@@ -4,6 +4,7 @@ import { GET } from '../../app/callback/route';
 import { model } from '../oauth/model';
 import { exchangeCode } from '../../lib/oauth/client';
 import { resolveAccountFromAuth } from '../server/account';
+import { logger } from '../utils/logger';
 
 vi.mock('../oauth/model', () => ({
   model: {
@@ -256,6 +257,79 @@ describe('/callback route integration', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'invalid_request',
       error_description: 'Missing code or state',
+    });
+  });
+
+  // === internal_error SLO + Postgres XX000 retry ===
+  // Regression for the 2026-05-12 OAUTH_DATABASE_URL compute scale-from-zero
+  // hiccup: when the Keyv pool fails to connect (8s wake-up timeout), we
+  // (a) used to emit the internal_error SLO line with `clientId=undefined`,
+  // wiping out forensic correlation, and (b) didn't retry, so the user got
+  // a 500 even when the second attempt would have succeeded against the
+  // freshly-woken compute. Both pinned here.
+  describe('internal_error + pg-connect retry', () => {
+    type PgConnectError = Error & { code: string };
+    const makePgXX000Error = (): PgConnectError => {
+      const err = new Error(
+        "Couldn't connect to compute node",
+      ) as PgConnectError;
+      err.code = 'XX000';
+      return err;
+    };
+
+    it('emits internal_error SLO line with clientId when KV first call fails', async () => {
+      const sloSpy = vi.spyOn(logger, 'info');
+      vi.mocked(model.getClient).mockRejectedValue(
+        new Error('unexpected non-pg failure'),
+      );
+
+      const response = await GET(buildRequest(buildState()));
+
+      expect(response.status).toBeGreaterThanOrEqual(500);
+      const sloLine = sloSpy.mock.calls
+        .map(([msg]) => String(msg))
+        .find((m) =>
+          m.startsWith('[SLO] auth-callback outcome=internal_error'),
+        );
+      expect(sloLine).toBeDefined();
+      expect(sloLine).toContain('clientId=client-123');
+      // Reason carries the error.name fingerprint when not a PG connect failure.
+      expect(sloLine).toContain('reason=Error');
+    });
+
+    it('retries once and succeeds when the first KV call hits Postgres XX000', async () => {
+      vi.mocked(model.getClient)
+        .mockRejectedValueOnce(makePgXX000Error())
+        .mockResolvedValue({
+          id: 'client-123',
+          client_name: 'Callback Test Client',
+          redirect_uris: ['http://127.0.0.1:55667/callback'],
+        } as never);
+
+      const response = await GET(buildRequest(buildState()));
+
+      // Second attempt succeeded → user redirected back with code, no leak.
+      expect(response.status).toBe(307);
+      expect(model.getClient).toHaveBeenCalledTimes(2);
+    });
+
+    it('exhausts retries on persistent XX000 and emits internal_error with pg_connect_failure reason', async () => {
+      const sloSpy = vi.spyOn(logger, 'info');
+      vi.mocked(model.getClient).mockRejectedValue(makePgXX000Error());
+
+      const response = await GET(buildRequest(buildState()));
+
+      expect(response.status).toBeGreaterThanOrEqual(500);
+      // Two attempts (initial + one retry) per withPgConnectRetry config.
+      expect(model.getClient).toHaveBeenCalledTimes(2);
+      const sloLine = sloSpy.mock.calls
+        .map(([msg]) => String(msg))
+        .find((m) =>
+          m.startsWith('[SLO] auth-callback outcome=internal_error'),
+        );
+      expect(sloLine).toBeDefined();
+      expect(sloLine).toContain('clientId=client-123');
+      expect(sloLine).toContain('reason=pg_connect_failure');
     });
   });
 });
