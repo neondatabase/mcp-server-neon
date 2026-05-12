@@ -55,17 +55,29 @@ function fingerprintRefreshToken(rt: string): string {
   return `len=${rt.length},prefix=${rt.slice(0, 6)}`;
 }
 
-function summarizeRequestBody(
+export function summarizeRequestBody(
   body: BodyInit | null | undefined,
 ): UpstreamRequestSummary | null {
-  // openid-client uses URL-encoded form bodies for the token endpoint.
-  // Other body types (JSON, multipart) aren't expected here — bail out
-  // safely if they appear.
-  if (typeof body !== 'string') return null;
+  // openid-client (oauth4webapi) passes the token-endpoint body as a
+  // URLSearchParams instance, not a serialized string — see
+  // node_modules/oauth4webapi/build/index.js authenticatedRequest.
+  // Accept both shapes so the summary works both in tests (string bodies
+  // are easy to construct) and in production (URLSearchParams).
   let params: URLSearchParams;
-  try {
-    params = new URLSearchParams(body);
-  } catch {
+  let serialized: string;
+  if (body instanceof URLSearchParams) {
+    params = body;
+    serialized = body.toString();
+  } else if (typeof body === 'string') {
+    try {
+      params = new URLSearchParams(body);
+    } catch {
+      return null;
+    }
+    serialized = body;
+  } else {
+    // Other body types (JSON, multipart, ReadableStream) aren't expected
+    // on the token endpoint — bail out safely.
     return null;
   }
   const names: string[] = [];
@@ -77,7 +89,7 @@ function summarizeRequestBody(
   const rt = params.get('refresh_token');
   return {
     paramNames: Array.from(new Set(names)).sort(),
-    bodyByteLength: Buffer.byteLength(body, 'utf8'),
+    bodyByteLength: Buffer.byteLength(serialized, 'utf8'),
     refreshTokenFingerprint: rt ? fingerprintRefreshToken(rt) : undefined,
     hasClientSecret: params.has('client_secret'),
     hasDuplicateParams,
