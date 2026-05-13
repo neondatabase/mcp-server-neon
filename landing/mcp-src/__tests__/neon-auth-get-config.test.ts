@@ -403,7 +403,7 @@ describe('handleGetNeonAuthConfig', () => {
     }
   });
 
-  it('returns error when Neon Auth is not provisioned', async () => {
+  it('returns error with approval-gate wording when Neon Auth is not provisioned', async () => {
     const neonClient = {
       listProjectBranches: vi.fn().mockResolvedValue({
         data: { branches: [{ id: 'br-1', default: true }] },
@@ -419,7 +419,17 @@ describe('handleGetNeonAuthConfig', () => {
 
     expect(result.isError).toBe(true);
     if (result.content[0].type === 'text') {
-      expect(result.content[0].text).toContain('not provisioned');
+      const text = result.content[0].text;
+      // Core diagnostic — the branch has no Neon Auth integration.
+      expect(text).toContain('Neon Auth is not provisioned');
+      expect(text).toContain('HTTP 404');
+      // Approval gate — the LLM must NOT chain into provisioning silently.
+      // Provisioning has side effects (schema, service deploy, cost), so the
+      // user has to approve it explicitly. The message has to make that clear.
+      expect(text).toContain('ask the user');
+      expect(text).toContain('explicit approval');
+      expect(text).toContain('side effects');
+      expect(text).toContain('provision_neon_auth');
     }
   });
 });
