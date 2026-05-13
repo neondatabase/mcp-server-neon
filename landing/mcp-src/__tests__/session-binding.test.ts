@@ -423,12 +423,15 @@ describe('evaluateMessageOwnership retries once on transient Redis failures', ()
 
     expect(r).toEqual({ kind: 'pass' });
     expect(getSpy).toHaveBeenCalledTimes(2);
-    // Retry path emits a warn log; success path emits the bound_ok SLO line.
+    // Retry path emits a warn log via the shared retryAsync helper;
+    // success path emits the bound_ok SLO line.
     expect(
       loggerWarnSpy.mock.calls.some(
         ([msg]) =>
           typeof msg === 'string' &&
-          msg.includes('retrying after transient failure'),
+          msg.startsWith(
+            'retryAsync session-binding verify attempt 1/2 failed',
+          ),
       ),
     ).toBe(true);
     expect(

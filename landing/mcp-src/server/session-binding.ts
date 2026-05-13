@@ -3,6 +3,7 @@ import { createClient, type RedisClientType } from 'redis';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { AuthContext } from '../types/auth';
 import { logger } from '../utils/logger';
+import { retryAsync } from '../utils/retry';
 
 const SESSION_KEY_PREFIX = 'mcp:session:';
 const REDIS_OP_TIMEOUT_MS = 500;
@@ -99,26 +100,32 @@ function dropCachedRedis(): void {
 
 /**
  * Run a Redis-bound operation with a single retry on transient failures.
- * Between attempts, the cached client is dropped so the retry uses a fresh
- * socket — critical because the most common transient is a stuck Upstash
- * connection where the original op is still in-flight on the same socket.
+ * Mirrors `withPgConnectRetry` in `mcp-src/oauth/kv-store.ts` and delegates
+ * to the shared `retryAsync` helper so dashboards see a single warn-log
+ * shape (`retryAsync ... attempt N/M failed`) across all retry paths.
  *
- * Same shape as `withPgConnectRetry` in `mcp-src/oauth/kv-store.ts`. Single
- * retry only; SSE is the hot path and we'd rather fail-closed than burn
- * budget on a deeper retry tree. Operations must be idempotent — get/set
- * with a fixed key/value satisfy this.
+ * The cached client is dropped from inside the `shouldRetry` predicate —
+ * this is the natural decision point ("are we retrying? then we need a
+ * fresh socket"). Critical because `withTimeout` only races a timer — it
+ * does not cancel the underlying op — so the original socket may remain
+ * blocked on the very call that timed out. Building a new client sidesteps
+ * that.
+ *
+ * Single retry only; SSE is the hot path and we'd rather fail-closed than
+ * burn budget on a deeper retry tree. Operations must be idempotent —
+ * get/set with a fixed key/value satisfy this.
  */
 async function withRedisRetry<T>(op: string, fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (err) {
-    if (!isRedisTransientFailure(err)) throw err;
-    dropCachedRedis();
-    logger.warn(`session-binding ${op}: retrying after transient failure`, {
-      err: err instanceof Error ? err.message : String(err),
-    });
-    return await fn();
-  }
+  return retryAsync(fn, {
+    attempts: 2,
+    delaysMs: [0],
+    op: `session-binding ${op}`,
+    shouldRetry: (err) => {
+      if (!isRedisTransientFailure(err)) return false;
+      dropCachedRedis();
+      return true;
+    },
+  });
 }
 
 function getRedis(): Promise<RedisClientType> {
