@@ -216,6 +216,86 @@ describe('/callback route integration', () => {
     expect(exchangeCode).not.toHaveBeenCalled();
   });
 
+  // === "correct_*" buckets: Hydra rejecting flows for expected reasons ===
+  // Each of these emits an SLO line that counts as GOOD because the system
+  // worked as designed — the user can retry without our intervention. See
+  // dev-notes/hydra-incident-2026-05-12T13-44Z.md §Update for the source
+  // citations against Hydra v1.11.10.
+
+  it('classifies `request_unauthorized` (login/consent expired) as correct_consent_expired', async () => {
+    const sloSpy = vi.spyOn(logger, 'info');
+    const response = await GET(
+      buildErrorRequest(
+        buildState(),
+        'request_unauthorized',
+        'The login request has expired. Please try again.',
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    const sloLine = sloSpy.mock.calls
+      .map(([msg]) => String(msg))
+      .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+    expect(sloLine).toContain('outcome=correct_consent_expired');
+    expect(sloLine).toContain('clientId=client-123');
+  });
+
+  it('classifies `request_forbidden` (CSRF mismatch) as correct_csrf_mismatch', async () => {
+    const sloSpy = vi.spyOn(logger, 'info');
+    const response = await GET(
+      buildErrorRequest(
+        buildState(),
+        'request_forbidden',
+        'The CSRF value from the token does not match the CSRF value from the data store.',
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    const sloLine = sloSpy.mock.calls
+      .map(([msg]) => String(msg))
+      .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+    expect(sloLine).toContain('outcome=correct_csrf_mismatch');
+    expect(sloLine).toContain('clientId=client-123');
+  });
+
+  it('classifies code-exchange `invalid_grant` (code reused/expired) as correct_invalid_grant', async () => {
+    const sloSpy = vi.spyOn(logger, 'info');
+    const upstreamErr = Object.assign(
+      new Error('authorization code already used'),
+      {
+        status: 400,
+        error: 'invalid_grant',
+        error_description: 'The authorization code has already been used.',
+      },
+    );
+    vi.mocked(exchangeCode).mockRejectedValue(upstreamErr);
+
+    const response = await GET(buildRequest(buildState()));
+
+    // handleOAuthError surfaces this to the client; the important assertion
+    // is the SLO bucket.
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    const sloLine = sloSpy.mock.calls
+      .map(([msg]) => String(msg))
+      .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+    expect(sloLine).toContain('outcome=correct_invalid_grant');
+    expect(sloLine).toContain('clientId=client-123');
+    expect(sloLine).toContain('upstreamError=invalid_grant');
+  });
+
+  it('still buckets unknown upstream errors as upstream_other_error', async () => {
+    const sloSpy = vi.spyOn(logger, 'info');
+    const response = await GET(
+      buildErrorRequest(buildState(), 'unmappable_new_code', 'Something new'),
+    );
+
+    expect(response.status).toBe(307);
+    const sloLine = sloSpy.mock.calls
+      .map(([msg]) => String(msg))
+      .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+    expect(sloLine).toContain('outcome=upstream_other_error');
+  });
+
   it('falls back to JSON 400 when upstream error arrives without state', async () => {
     const response = await GET(
       new NextRequest('http://localhost/callback?error=server_error', {
