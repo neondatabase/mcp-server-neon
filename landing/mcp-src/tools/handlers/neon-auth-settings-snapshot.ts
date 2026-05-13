@@ -222,11 +222,48 @@ function buildNeonAuthConfigurableSettingsFromSlices(
   };
 }
 
+// Maximum length of an upstream error-body snippet we attach to a failed
+// slice fetch. Long enough to carry a typical `message` field, short enough
+// not to dominate the rendered tool output if the server returns HTML or a
+// very chatty error body.
+const UPSTREAM_ERROR_SNIPPET_MAX_LEN = 200;
+
+// Pulls a short, safe-to-render hint out of an axios response body so a
+// non-404 fetch failure surfaces some actionable detail instead of a bare
+// `${status} ${statusText}`. Strips control characters and truncates so we
+// never spill multi-KB HTML error pages or arbitrary upstream content into
+// the rendered tool response.
+function summarizeAxiosErrorBody(data: unknown): string | undefined {
+  let raw: string | undefined;
+  if (typeof data === 'string') {
+    raw = data;
+  } else if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+    const candidate =
+      typeof obj.message === 'string'
+        ? obj.message
+        : typeof obj.error === 'string'
+          ? obj.error
+          : typeof obj.detail === 'string'
+            ? obj.detail
+            : undefined;
+    raw = candidate;
+  }
+  if (!raw) return undefined;
+  const cleaned = raw.replace(/[\u0000-\u001F\u007F]+/g, ' ').trim();
+  if (cleaned.length === 0) return undefined;
+  return cleaned.length > UPSTREAM_ERROR_SNIPPET_MAX_LEN
+    ? `${cleaned.slice(0, UPSTREAM_ERROR_SNIPPET_MAX_LEN)}…`
+    : cleaned;
+}
+
 // Email provider may not be configured on a fresh branch; the upstream API
 // returns 404 in that case, which axios surfaces as a thrown AxiosError.
 // We translate that into the same Slice<T> shape the other endpoints use so
 // the caller sees a uniform "missing data" signal instead of a thrown
-// rejection.
+// rejection. For non-404 failures we fold a short, sanitized snippet of the
+// upstream body into `statusText` so callers get an actionable hint instead
+// of a bare `${status} ${statusText}`.
 async function safeFetchEmailProvider(
   neonClient: Api<unknown>,
   projectId: string,
@@ -236,9 +273,16 @@ async function safeFetchEmailProvider(
     return await neonClient.getNeonAuthEmailProvider(projectId, branchId);
   } catch (err) {
     if (isAxiosError(err) && err.response) {
+      const { status, statusText, data } = err.response;
+      // Only enrich non-404 responses; 404 means "not configured" and is
+      // handled by the caller as a benign null slice.
+      if (status === 404) {
+        return { status, statusText };
+      }
+      const snippet = summarizeAxiosErrorBody(data);
       return {
-        status: err.response.status,
-        statusText: err.response.statusText,
+        status,
+        statusText: snippet ? `${statusText}: ${snippet}` : statusText,
       };
     }
     throw err;

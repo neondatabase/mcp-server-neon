@@ -66,6 +66,49 @@ async function snapshotMessage(
   };
 }
 
+/**
+ * Post-mutation reconciliation expectation.
+ *
+ * The handlers issue a write, then re-fetch a focused slice to render a
+ * concise summary. If a concurrent change races between the write and the
+ * read, the slice can disagree with what we just acknowledged (e.g. PATCH
+ * 200 followed by a 404 on the GET). We treat that as a soft inconsistency
+ * — the upstream write was acknowledged, so we don't flip `isError`, but
+ * we DO surface a warning line so the caller doesn't read the empty slice
+ * as "the change silently undid itself".
+ */
+type PostMutationExpectation =
+  // Slice should contain a row keyed by this provider id (add / update).
+  | { kind: 'oauth-must-include'; providerId: string }
+  // Slice should NOT contain a row keyed by this provider id (remove).
+  | { kind: 'oauth-must-exclude'; providerId: string }
+  // Slice should be non-null (update_email_provider).
+  | { kind: 'email-must-be-present' }
+  // No reconciliation check (read-only / unrelated reload).
+  | { kind: 'none' };
+
+const RECONCILIATION_WARNING_PREFIX =
+  'WARNING: post-mutation snapshot reload disagrees with the upstream write';
+
+function reconcileOauthSlice(
+  providers: ReadonlyArray<{ id: string }>,
+  expectation: PostMutationExpectation,
+): string | null {
+  if (expectation.kind === 'oauth-must-include') {
+    const present = providers.some((p) => p.id === expectation.providerId);
+    if (!present) {
+      return `${RECONCILIATION_WARNING_PREFIX}: provider "${expectation.providerId}" is absent from the post-write provider list. The mutation was acknowledged by upstream; a concurrent change may have raced. Re-run get_neon_auth_config to reconcile.`;
+    }
+  }
+  if (expectation.kind === 'oauth-must-exclude') {
+    const present = providers.some((p) => p.id === expectation.providerId);
+    if (present) {
+      return `${RECONCILIATION_WARNING_PREFIX}: provider "${expectation.providerId}" is still present in the post-write provider list. The delete was acknowledged by upstream; a concurrent change may have raced. Re-run get_neon_auth_config to reconcile.`;
+    }
+  }
+  return null;
+}
+
 // Focused success message for OAuth-provider operations. Shows only the
 // configured-providers slice (with secrets redacted) instead of the full
 // settings snapshot — keeps responses concise per product preference.
@@ -74,27 +117,28 @@ async function oauthProvidersSummaryMessage(
   projectId: string,
   branchId: string,
   header: string,
+  expectation: PostMutationExpectation = { kind: 'none' },
 ): Promise<CallToolResult> {
   const { providers, error } = await fetchOAuthProvidersSlice(
     neonClient,
     projectId,
     branchId,
   );
+  const reconciliationWarning = reconcileOauthSlice(providers, expectation);
+  const lines: string[] = [header];
+  if (reconciliationWarning) {
+    lines.push('', reconciliationWarning);
+  }
+  lines.push(
+    '',
+    stringifyOAuthProvidersSlice(
+      'Configured OAuth providers (client_secret redacted; see get_neon_auth_config for the same view alongside other settings):',
+      providers,
+      error,
+    ),
+  );
   return {
-    content: [
-      {
-        type: 'text',
-        text: [
-          header,
-          '',
-          stringifyOAuthProvidersSlice(
-            'Configured OAuth providers (client_secret redacted; see get_neon_auth_config for the same view alongside other settings):',
-            providers,
-            error,
-          ),
-        ].join('\n'),
-      },
-    ],
+    content: [{ type: 'text', text: lines.join('\n') }],
   };
 }
 
@@ -105,27 +149,31 @@ async function emailProviderSummaryMessage(
   projectId: string,
   branchId: string,
   header: string,
+  expectation: PostMutationExpectation = { kind: 'none' },
 ): Promise<CallToolResult> {
   const { provider, error } = await fetchEmailProviderSlice(
     neonClient,
     projectId,
     branchId,
   );
+  let reconciliationWarning: string | null = null;
+  if (expectation.kind === 'email-must-be-present' && provider === null) {
+    reconciliationWarning = `${RECONCILIATION_WARNING_PREFIX}: email provider is absent from the post-write snapshot (upstream returned 404). The PATCH was acknowledged by upstream; a concurrent delete or propagation lag may have raced. Re-run get_neon_auth_config to reconcile.`;
+  }
+  const lines: string[] = [header];
+  if (reconciliationWarning) {
+    lines.push('', reconciliationWarning);
+  }
+  lines.push(
+    '',
+    stringifyEmailProviderSlice(
+      'Current email provider configuration (SMTP password redacted; see get_neon_auth_config for the same view alongside other settings):',
+      provider,
+      error,
+    ),
+  );
   return {
-    content: [
-      {
-        type: 'text',
-        text: [
-          header,
-          '',
-          stringifyEmailProviderSlice(
-            'Current email provider configuration (SMTP password redacted; see get_neon_auth_config for the same view alongside other settings):',
-            provider,
-            error,
-          ),
-        ].join('\n'),
-      },
-    ],
+    content: [{ type: 'text', text: lines.join('\n') }],
   };
 }
 
@@ -333,15 +381,17 @@ export async function handleConfigureNeonAuth(
           ],
         };
       }
-      const mode =
-        cfg?.client_id !== undefined && cfg?.client_secret !== undefined
-          ? 'standard (BYO credentials)'
-          : 'shared (Neon-managed credentials)';
+      // Header is intentionally mode-agnostic: the upstream response (mirrored
+      // in the snapshot below as `type: 'standard' | 'shared'`) is the source
+      // of truth for which mode the provider was registered in. We can't infer
+      // mode from the request payload alone — e.g. a Microsoft caller passing
+      // only `microsoft_tenant_id` would otherwise be mislabeled as "shared".
       return oauthProvidersSummaryMessage(
         neonClient,
         props.projectId,
         branchId,
-        `Requested add of OAuth provider ${props.oauth_provider} in ${mode} mode.`,
+        `Requested add of OAuth provider ${props.oauth_provider}.`,
+        { kind: 'oauth-must-include', providerId: props.oauth_provider! },
       );
     }
     case 'update_oauth_provider': {
@@ -359,7 +409,11 @@ export async function handleConfigureNeonAuth(
         props.oauth_provider!,
         body,
       );
-      if (res.status !== 200) {
+      // Accept both 200 (PATCH returning the updated resource) and 204 (PATCH
+      // accepted, no body) — upstream is documented to return 200 today, but
+      // matching the permissiveness used by `remove_oauth_provider` shields
+      // us from a future spec narrowing/widening.
+      if (res.status !== 200 && res.status !== 204) {
         return {
           isError: true,
           content: [
@@ -375,6 +429,7 @@ export async function handleConfigureNeonAuth(
         props.projectId,
         branchId,
         `Requested update of OAuth provider ${props.oauth_provider}.`,
+        { kind: 'oauth-must-include', providerId: props.oauth_provider! },
       );
     }
     case 'remove_oauth_provider': {
@@ -401,19 +456,24 @@ export async function handleConfigureNeonAuth(
         props.projectId,
         branchId,
         `Requested remove of OAuth provider ${props.oauth_provider}.`,
+        { kind: 'oauth-must-exclude', providerId: props.oauth_provider! },
       );
     }
     case 'update_email_provider': {
       // The upstream PATCH endpoint expects the full discriminated union
-      // (the API does not support partial within-type updates), which is
-      // exactly what our schema produces.
-      const body = props.email_provider! as NeonAuthEmailServerConfig;
+      // (the API does not support partial within-type updates). Using a type
+      // annotation rather than `as` so any divergence between our Zod-derived
+      // shape and the SDK's NeonAuthEmailServerConfig union surfaces at the
+      // type-checker, not at runtime.
+      const body: NeonAuthEmailServerConfig = props.email_provider!;
       const res = await neonClient.updateNeonAuthEmailProvider(
         props.projectId,
         branchId,
         body,
       );
-      if (res.status !== 200) {
+      // Accept both 200 (PATCH returning the updated resource) and 204 (PATCH
+      // accepted, no body). See note on update_oauth_provider above.
+      if (res.status !== 200 && res.status !== 204) {
         return {
           isError: true,
           content: [
@@ -429,6 +489,7 @@ export async function handleConfigureNeonAuth(
         props.projectId,
         branchId,
         `Requested update of email provider (type=${body.type}).`,
+        { kind: 'email-must-be-present' },
       );
     }
     case 'send_test_email': {
@@ -447,12 +508,27 @@ export async function handleConfigureNeonAuth(
         },
       );
       if (res.status !== 200) {
+        // In practice axios's default validateStatus rejects 4xx/5xx as
+        // thrown errors handled by the outer wrapper, but if a future SDK
+        // config relaxes that, the resolved-non-200 path also needs to
+        // surface any `error_message` in the upstream body so callers see
+        // *why* the dispatch failed, not just the HTTP code.
+        const upstreamMessage =
+          typeof res.data === 'object' &&
+          res.data !== null &&
+          'error_message' in res.data &&
+          typeof (res.data as { error_message?: unknown }).error_message ===
+            'string'
+            ? (res.data as { error_message: string }).error_message
+            : undefined;
         return {
           isError: true,
           content: [
             {
               type: 'text',
-              text: `Failed to dispatch test email request (${res.status} ${res.statusText}).`,
+              text: upstreamMessage
+                ? `Failed to dispatch test email request (${res.status} ${res.statusText}).\nUpstream error: ${upstreamMessage}`
+                : `Failed to dispatch test email request (${res.status} ${res.statusText}).`,
             },
           ],
         };

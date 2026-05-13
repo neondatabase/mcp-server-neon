@@ -252,6 +252,94 @@ describe('handleGetNeonAuthConfig', () => {
     }
   });
 
+  it('attaches a sanitized upstream error snippet when the email_provider fetch fails with non-404', async () => {
+    // Long body (>200 chars) with a `message` field plus a control character
+    // to confirm we (a) prefer `message` over the rest, (b) strip control
+    // characters, and (c) truncate the snippet so a chatty upstream cannot
+    // dominate the rendered tool output.
+    const longMessage = 'upstream rejected: ' + 'x'.repeat(500);
+    const axiosError500 = Object.assign(
+      new Error('Request failed with status code 500'),
+      {
+        isAxiosError: true,
+        response: {
+          status: 500,
+          statusText: 'Internal Server Error',
+          data: {
+            message: `${longMessage}\u0001\u0007  `,
+            unrelated_field: 'should be ignored',
+          },
+        },
+      },
+    );
+    const neonClient = {
+      ...defaultSnapshotMocks(),
+      listProjectBranches: vi.fn().mockResolvedValue({
+        data: { branches: [{ id: 'br-1', default: true }] },
+      }),
+      getNeonAuth: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          auth_provider: NeonAuthSupportedAuthProvider.BetterAuth,
+          auth_provider_project_id: 'ap1',
+          branch_id: 'br-1',
+          db_name: 'neondb',
+          created_at: '2025-01-01T00:00:00.000Z',
+          owned_by: NeonAuthProviderProjectOwnedBy.Neon,
+          jwks_url: 'https://jwks.example/',
+          base_url: 'https://auth.example/',
+        },
+      }),
+      getProjectBranch: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          branch: {
+            id: 'br-1',
+            name: 'main',
+            project_id: 'p1',
+            parent_id: 'br-root',
+            default: true,
+            protected: false,
+            created_at: '',
+            updated_at: '',
+            compute_time_seconds: 0,
+            written_data_bytes: 0,
+            data_transfer_bytes: 0,
+          },
+        },
+      }),
+      getNeonAuthEmailProvider: vi.fn().mockRejectedValue(axiosError500),
+    };
+
+    const result = await handleGetNeonAuthConfig(
+      { projectId: 'p1' },
+      neonClient as never,
+      extra,
+    );
+
+    expect(result.isError).toBeFalsy();
+    if (result.content[0].type === 'text') {
+      const body = parseSettingsJson(result.content[0].text);
+      expect(body.email_provider).toBeNull();
+      // _errors must be present (this is a real fetch failure, unlike 404)
+      // and must include a sanitized snippet of the upstream message.
+      const errors = body._errors as Record<string, string> | undefined;
+      expect(errors).toBeDefined();
+      expect(errors!.email_provider).toContain('500');
+      expect(errors!.email_provider).toContain('upstream rejected');
+      // Truncated to <= ~200 chars + ellipsis — the full 500-char tail
+      // must not appear verbatim.
+      expect(errors!.email_provider).toContain('…');
+      expect(errors!.email_provider.length).toBeLessThan(280);
+      // Control characters must be stripped.
+      expect(errors!.email_provider).not.toMatch(/[\u0000-\u001F\u007F]/);
+      // Untouched upstream fields other than message/error/detail are not
+      // surfaced.
+      expect(errors!.email_provider).not.toContain('unrelated_field');
+      expect(errors!.email_provider).not.toContain('should be ignored');
+    }
+  });
+
   it('reports email_provider as null when upstream returns 404 (no provider configured)', async () => {
     const axiosError404 = Object.assign(
       new Error('Request failed with status code 404'),
