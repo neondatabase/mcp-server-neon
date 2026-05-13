@@ -1,15 +1,22 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   Api,
+  NeonAuthAddOAuthProviderRequest,
   NeonAuthEmailAndPasswordConfigUpdate,
+  NeonAuthEmailServerConfig,
   NeonAuthSupportedAuthProvider,
+  NeonAuthUpdateOAuthProviderRequest,
 } from '@neondatabase/api-client';
 import { configureNeonAuthInputSchema } from '../toolsSchema';
 import { z } from 'zod/v3';
 import { getDefaultBranch } from './utils';
 import {
+  fetchEmailProviderSlice,
   fetchNeonAuthConfigurableSettings,
+  fetchOAuthProvidersSlice,
+  stringifyEmailProviderSlice,
   stringifyNeonAuthConfigurableSettings,
+  stringifyOAuthProvidersSlice,
 } from './neon-auth-settings-snapshot';
 import { ToolHandlerExtraParams } from '../types';
 
@@ -56,6 +63,117 @@ async function snapshotMessage(
         ].join('\n'),
       },
     ],
+  };
+}
+
+/**
+ * Post-mutation reconciliation expectation.
+ *
+ * The handlers issue a write, then re-fetch a focused slice to render a
+ * concise summary. If a concurrent change races between the write and the
+ * read, the slice can disagree with what we just acknowledged (e.g. PATCH
+ * 200 followed by a 404 on the GET). We treat that as a soft inconsistency
+ * — the upstream write was acknowledged, so we don't flip `isError`, but
+ * we DO surface a warning line so the caller doesn't read the empty slice
+ * as "the change silently undid itself".
+ */
+type PostMutationExpectation =
+  // Slice should contain a row keyed by this provider id (add / update).
+  | { kind: 'oauth-must-include'; providerId: string }
+  // Slice should NOT contain a row keyed by this provider id (remove).
+  | { kind: 'oauth-must-exclude'; providerId: string }
+  // Slice should be non-null (update_email_provider).
+  | { kind: 'email-must-be-present' }
+  // No reconciliation check (read-only / unrelated reload).
+  | { kind: 'none' };
+
+const RECONCILIATION_WARNING_PREFIX =
+  'WARNING: post-mutation snapshot reload disagrees with the upstream write';
+
+function reconcileOauthSlice(
+  providers: ReadonlyArray<{ id: string }>,
+  expectation: PostMutationExpectation,
+): string | null {
+  if (expectation.kind === 'oauth-must-include') {
+    const present = providers.some((p) => p.id === expectation.providerId);
+    if (!present) {
+      return `${RECONCILIATION_WARNING_PREFIX}: provider "${expectation.providerId}" is absent from the post-write provider list. The mutation was acknowledged by upstream; a concurrent change may have raced. Re-run get_neon_auth_config to reconcile.`;
+    }
+  }
+  if (expectation.kind === 'oauth-must-exclude') {
+    const present = providers.some((p) => p.id === expectation.providerId);
+    if (present) {
+      return `${RECONCILIATION_WARNING_PREFIX}: provider "${expectation.providerId}" is still present in the post-write provider list. The delete was acknowledged by upstream; a concurrent change may have raced. Re-run get_neon_auth_config to reconcile.`;
+    }
+  }
+  return null;
+}
+
+// Focused success message for OAuth-provider operations. Shows only the
+// configured-providers slice (with secrets redacted) instead of the full
+// settings snapshot — keeps responses concise per product preference.
+async function oauthProvidersSummaryMessage(
+  neonClient: Api<unknown>,
+  projectId: string,
+  branchId: string,
+  header: string,
+  expectation: PostMutationExpectation = { kind: 'none' },
+): Promise<CallToolResult> {
+  const { providers, error } = await fetchOAuthProvidersSlice(
+    neonClient,
+    projectId,
+    branchId,
+  );
+  const reconciliationWarning = reconcileOauthSlice(providers, expectation);
+  const lines: string[] = [header];
+  if (reconciliationWarning) {
+    lines.push('', reconciliationWarning);
+  }
+  lines.push(
+    '',
+    stringifyOAuthProvidersSlice(
+      'Configured OAuth providers (client_secret redacted; see get_neon_auth_config for the same view alongside other settings):',
+      providers,
+      error,
+    ),
+  );
+  return {
+    content: [{ type: 'text', text: lines.join('\n') }],
+  };
+}
+
+// Focused success message for the email-provider operation. Same rationale
+// as `oauthProvidersSummaryMessage`.
+async function emailProviderSummaryMessage(
+  neonClient: Api<unknown>,
+  projectId: string,
+  branchId: string,
+  header: string,
+  expectation: PostMutationExpectation = { kind: 'none' },
+): Promise<CallToolResult> {
+  const { provider, error } = await fetchEmailProviderSlice(
+    neonClient,
+    projectId,
+    branchId,
+  );
+  let reconciliationWarning: string | null = null;
+  if (expectation.kind === 'email-must-be-present' && provider === null) {
+    reconciliationWarning = `${RECONCILIATION_WARNING_PREFIX}: email provider is absent from the post-write snapshot (upstream returned 404). The PATCH was acknowledged by upstream; a concurrent delete or propagation lag may have raced. Re-run get_neon_auth_config to reconcile.`;
+  }
+  const lines: string[] = [header];
+  if (reconciliationWarning) {
+    lines.push('', reconciliationWarning);
+  }
+  lines.push(
+    '',
+    stringifyEmailProviderSlice(
+      'Current email provider configuration (SMTP password redacted; see get_neon_auth_config for the same view alongside other settings):',
+      provider,
+      error,
+    ),
+  );
+  return {
+    content: [{ type: 'text', text: lines.join('\n') }],
   };
 }
 
@@ -232,6 +350,206 @@ export async function handleConfigureNeonAuth(
         branchId,
         'Updated auth methods for this branch.',
       );
+    }
+    case 'add_oauth_provider': {
+      const cfg = props.oauth_provider_config;
+      const body: NeonAuthAddOAuthProviderRequest = {
+        id: props.oauth_provider!,
+      };
+      if (cfg?.client_id !== undefined) body.client_id = cfg.client_id;
+      if (cfg?.client_secret !== undefined)
+        body.client_secret = cfg.client_secret;
+      if (cfg?.microsoft_tenant_id !== undefined) {
+        body.microsoft_tenant_id = cfg.microsoft_tenant_id;
+      }
+      const res = await neonClient.addBranchNeonAuthOauthProvider(
+        props.projectId,
+        branchId,
+        body,
+      );
+      // Upstream returns 201 on first add, 200 on idempotent re-add. Accept
+      // both so callers don't see a confusing "failed" message on a benign
+      // re-issue.
+      if (res.status !== 201 && res.status !== 200) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Failed to add OAuth provider ${props.oauth_provider} (${res.status} ${res.statusText}). Ensure Neon Auth is provisioned for this branch and credentials are valid.`,
+            },
+          ],
+        };
+      }
+      // Header is intentionally mode-agnostic: the upstream response (mirrored
+      // in the snapshot below as `type: 'standard' | 'shared'`) is the source
+      // of truth for which mode the provider was registered in. We can't infer
+      // mode from the request payload alone — e.g. a Microsoft caller passing
+      // only `microsoft_tenant_id` would otherwise be mislabeled as "shared".
+      return oauthProvidersSummaryMessage(
+        neonClient,
+        props.projectId,
+        branchId,
+        `Requested add of OAuth provider ${props.oauth_provider}.`,
+        { kind: 'oauth-must-include', providerId: props.oauth_provider! },
+      );
+    }
+    case 'update_oauth_provider': {
+      const cfg = props.oauth_provider_config!;
+      const body: NeonAuthUpdateOAuthProviderRequest = {};
+      if (cfg.client_id !== undefined) body.client_id = cfg.client_id;
+      if (cfg.client_secret !== undefined)
+        body.client_secret = cfg.client_secret;
+      if (cfg.microsoft_tenant_id !== undefined) {
+        body.microsoft_tenant_id = cfg.microsoft_tenant_id;
+      }
+      const res = await neonClient.updateBranchNeonAuthOauthProvider(
+        props.projectId,
+        branchId,
+        props.oauth_provider!,
+        body,
+      );
+      // Accept both 200 (PATCH returning the updated resource) and 204 (PATCH
+      // accepted, no body) — upstream is documented to return 200 today, but
+      // matching the permissiveness used by `remove_oauth_provider` shields
+      // us from a future spec narrowing/widening.
+      if (res.status !== 200 && res.status !== 204) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Failed to update OAuth provider ${props.oauth_provider} (${res.status} ${res.statusText}). Ensure the provider is currently configured on this branch.`,
+            },
+          ],
+        };
+      }
+      return oauthProvidersSummaryMessage(
+        neonClient,
+        props.projectId,
+        branchId,
+        `Requested update of OAuth provider ${props.oauth_provider}.`,
+        { kind: 'oauth-must-include', providerId: props.oauth_provider! },
+      );
+    }
+    case 'remove_oauth_provider': {
+      const res = await neonClient.deleteBranchNeonAuthOauthProvider(
+        props.projectId,
+        branchId,
+        props.oauth_provider!,
+      );
+      // Upstream may return 200 or 204 for a successful delete; the request
+      // is idempotent so a 200 on a missing entry is also acceptable.
+      if (res.status !== 200 && res.status !== 204) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Failed to remove OAuth provider ${props.oauth_provider} (${res.status} ${res.statusText}).`,
+            },
+          ],
+        };
+      }
+      return oauthProvidersSummaryMessage(
+        neonClient,
+        props.projectId,
+        branchId,
+        `Requested remove of OAuth provider ${props.oauth_provider}.`,
+        { kind: 'oauth-must-exclude', providerId: props.oauth_provider! },
+      );
+    }
+    case 'update_email_provider': {
+      // The upstream PATCH endpoint expects the full discriminated union
+      // (the API does not support partial within-type updates). Using a type
+      // annotation rather than `as` so any divergence between our Zod-derived
+      // shape and the SDK's NeonAuthEmailServerConfig union surfaces at the
+      // type-checker, not at runtime.
+      const body: NeonAuthEmailServerConfig = props.email_provider!;
+      const res = await neonClient.updateNeonAuthEmailProvider(
+        props.projectId,
+        branchId,
+        body,
+      );
+      // Accept both 200 (PATCH returning the updated resource) and 204 (PATCH
+      // accepted, no body). See note on update_oauth_provider above.
+      if (res.status !== 200 && res.status !== 204) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Failed to update email provider (${res.status} ${res.statusText}).`,
+            },
+          ],
+        };
+      }
+      return emailProviderSummaryMessage(
+        neonClient,
+        props.projectId,
+        branchId,
+        `Requested update of email provider (type=${body.type}).`,
+        { kind: 'email-must-be-present' },
+      );
+    }
+    case 'send_test_email': {
+      const t = props.test_email!;
+      const res = await neonClient.sendNeonAuthTestEmail(
+        props.projectId,
+        branchId,
+        {
+          recipient_email: t.recipient_email,
+          host: t.host,
+          port: t.port,
+          username: t.username,
+          password: t.password,
+          sender_email: t.sender_email,
+          sender_name: t.sender_name,
+        },
+      );
+      if (res.status !== 200) {
+        // In practice axios's default validateStatus rejects 4xx/5xx as
+        // thrown errors handled by the outer wrapper, but if a future SDK
+        // config relaxes that, the resolved-non-200 path also needs to
+        // surface any `error_message` in the upstream body so callers see
+        // *why* the dispatch failed, not just the HTTP code.
+        const upstreamMessage =
+          typeof res.data === 'object' &&
+          res.data !== null &&
+          'error_message' in res.data &&
+          typeof (res.data as { error_message?: unknown }).error_message ===
+            'string'
+            ? (res.data as { error_message: string }).error_message
+            : undefined;
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: upstreamMessage
+                ? `Failed to dispatch test email request (${res.status} ${res.statusText}).\nUpstream error: ${upstreamMessage}`
+                : `Failed to dispatch test email request (${res.status} ${res.statusText}).`,
+            },
+          ],
+        };
+      }
+      // Pass the upstream result through verbatim. We deliberately don't
+      // refresh the snapshot here — sending a test email is a side-effect
+      // that doesn't mutate Neon Auth state.
+      const { success, error_message } = res.data;
+      const header = success
+        ? `Test email dispatched to ${t.recipient_email} via ${t.host}:${t.port}.`
+        : `Test email could NOT be sent to ${t.recipient_email} via ${t.host}:${t.port}.`;
+      const detail = error_message ? `\nUpstream error: ${error_message}` : '';
+      return {
+        isError: !success,
+        content: [
+          {
+            type: 'text',
+            text: `${header}${detail}`,
+          },
+        ],
+      };
     }
   }
 }
