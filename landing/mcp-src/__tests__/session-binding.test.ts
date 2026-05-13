@@ -16,6 +16,7 @@ vi.mock('redis', () => ({
   createClient: vi.fn(() => ({
     on: vi.fn(),
     connect: connectSpy,
+    disconnect: vi.fn(async () => undefined),
     set: setSpy,
     get: getSpy,
     del: delSpy,
@@ -386,6 +387,188 @@ describe('evaluateMessageOwnership (POST /message 403 gate)', () => {
     );
     expect(r.kind).toBe('reject');
     if (r.kind === 'reject') expect(r.status).toBe(503);
+  });
+});
+
+// Regression for the 2026-05-12/13 production observation: SSE binding
+// `redis_error` events all clustered at the 500ms timeout ceiling, suggesting
+// Upstash tail latency rather than hard infra failure. Single retry against
+// a fresh socket masks the blip without compromising fail-closed posture.
+describe('evaluateMessageOwnership retries once on transient Redis failures', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    setSpy.mockReset();
+    getSpy.mockReset();
+    delSpy.mockReset();
+    connectSpy.mockReset();
+    connectSpy.mockResolvedValue(undefined);
+    loggerInfoSpy.mockReset();
+    loggerWarnSpy.mockReset();
+    loggerErrorSpy.mockReset();
+    process.env.KV_URL = 'redis://localhost:6379';
+  });
+
+  it('retries once on a withTimeout rejection and surfaces success on the second attempt', async () => {
+    const { evaluateMessageOwnership } = await loadModule();
+    getSpy
+      .mockRejectedValueOnce(new Error('session-binding get timed out'))
+      .mockResolvedValue('identity-A');
+
+    const r = await evaluateMessageOwnership(
+      'POST',
+      '/api/message',
+      'sess',
+      'identity-A',
+    );
+
+    expect(r).toEqual({ kind: 'pass' });
+    expect(getSpy).toHaveBeenCalledTimes(2);
+    // Retry path emits a warn log via the shared retryAsync helper;
+    // success path emits the bound_ok SLO line.
+    expect(
+      loggerWarnSpy.mock.calls.some(
+        ([msg]) =>
+          typeof msg === 'string' &&
+          msg.startsWith(
+            'retryAsync session-binding verify attempt 1/2 failed',
+          ),
+      ),
+    ).toBe(true);
+    expect(
+      loggerInfoSpy.mock.calls.some(
+        ([msg]) =>
+          typeof msg === 'string' &&
+          msg.startsWith('[SEC] sse-bind outcome=bound_ok'),
+      ),
+    ).toBe(true);
+    // Crucially, NO redis_error should be emitted — the retry masked it.
+    expect(
+      loggerInfoSpy.mock.calls.some(
+        ([msg]) =>
+          typeof msg === 'string' &&
+          msg.startsWith('[SEC] sse-bind outcome=redis_error'),
+      ),
+    ).toBe(false);
+  });
+
+  it('emits redis_error after exhausting the single retry on persistent timeouts', async () => {
+    const { evaluateMessageOwnership } = await loadModule();
+    getSpy.mockRejectedValue(new Error('session-binding get timed out'));
+
+    const r = await evaluateMessageOwnership(
+      'POST',
+      '/api/message',
+      'sess',
+      'identity-A',
+    );
+
+    expect(r.kind).toBe('reject');
+    if (r.kind === 'reject') expect(r.status).toBe(503);
+    expect(getSpy).toHaveBeenCalledTimes(2);
+    expect(
+      loggerInfoSpy.mock.calls.some(
+        ([msg]) =>
+          typeof msg === 'string' &&
+          msg.startsWith('[SEC] sse-bind outcome=redis_error'),
+      ),
+    ).toBe(true);
+  });
+
+  it('does NOT retry on non-transient errors (logic bugs, unexpected shapes)', async () => {
+    const { evaluateMessageOwnership } = await loadModule();
+    getSpy.mockRejectedValue(new Error('WRONGTYPE Operation against a key…'));
+
+    const r = await evaluateMessageOwnership(
+      'POST',
+      '/api/message',
+      'sess',
+      'identity-A',
+    );
+
+    expect(r.kind).toBe('reject');
+    if (r.kind === 'reject') expect(r.status).toBe(503);
+    // Single attempt — no retry on logic errors.
+    expect(getSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries on Node socket failures (ECONNRESET / ETIMEDOUT)', async () => {
+    const { evaluateMessageOwnership } = await loadModule();
+    const econn = Object.assign(new Error('socket closed'), {
+      code: 'ECONNRESET',
+    });
+    getSpy.mockRejectedValueOnce(econn).mockResolvedValue('identity-A');
+
+    const r = await evaluateMessageOwnership(
+      'POST',
+      '/api/message',
+      'sess',
+      'identity-A',
+    );
+
+    expect(r).toEqual({ kind: 'pass' });
+    expect(getSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries on redis@4 lifecycle errors (SocketClosedUnexpectedlyError)', async () => {
+    const { evaluateMessageOwnership } = await loadModule();
+    const closed = Object.assign(new Error('socket closed unexpectedly'), {
+      name: 'SocketClosedUnexpectedlyError',
+    });
+    getSpy.mockRejectedValueOnce(closed).mockResolvedValue('identity-A');
+
+    const r = await evaluateMessageOwnership(
+      'POST',
+      '/api/message',
+      'sess',
+      'identity-A',
+    );
+
+    expect(r).toEqual({ kind: 'pass' });
+    expect(getSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('isRedisTransientFailure predicate', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('matches our own withTimeout rejection', async () => {
+    const { isRedisTransientFailure } = await loadModule();
+    expect(
+      isRedisTransientFailure(new Error('session-binding get timed out')),
+    ).toBe(true);
+  });
+
+  it('matches Node socket error codes', async () => {
+    const { isRedisTransientFailure } = await loadModule();
+    for (const code of ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EPIPE']) {
+      const err = Object.assign(new Error('socket'), { code });
+      expect(isRedisTransientFailure(err)).toBe(true);
+    }
+  });
+
+  it('matches redis@4 lifecycle error names', async () => {
+    const { isRedisTransientFailure } = await loadModule();
+    for (const name of [
+      'AbortError',
+      'ClientClosedError',
+      'SocketClosedUnexpectedlyError',
+    ]) {
+      const err = Object.assign(new Error('x'), { name });
+      expect(isRedisTransientFailure(err)).toBe(true);
+    }
+  });
+
+  it('does NOT match unrelated logic errors', async () => {
+    const { isRedisTransientFailure } = await loadModule();
+    expect(
+      isRedisTransientFailure(new Error('WRONGTYPE Operation against a key')),
+    ).toBe(false);
+    expect(isRedisTransientFailure(new Error('arbitrary message'))).toBe(false);
+    expect(isRedisTransientFailure('string error')).toBe(false);
+    expect(isRedisTransientFailure(null)).toBe(false);
+    expect(isRedisTransientFailure(undefined)).toBe(false);
   });
 });
 

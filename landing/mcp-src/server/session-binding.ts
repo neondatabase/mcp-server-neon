@@ -3,6 +3,7 @@ import { createClient, type RedisClientType } from 'redis';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { AuthContext } from '../types/auth';
 import { logger } from '../utils/logger';
+import { retryAsync } from '../utils/retry';
 
 const SESSION_KEY_PREFIX = 'mcp:session:';
 const REDIS_OP_TIMEOUT_MS = 500;
@@ -26,6 +27,104 @@ function withTimeout<T>(promise: Promise<T>, op: string): Promise<T> {
         reject(err);
       },
     );
+  });
+}
+
+/**
+ * Predicate for transient Redis failures that are worth retrying once. Matches:
+ *
+ *  - our own `withTimeout` rejection (`session-binding <op> timed out`),
+ *    which is what surfaces when Upstash's tail latency exceeds our budget,
+ *  - Node socket errors (`ECONNRESET`, `ETIMEDOUT`, `ECONNREFUSED`, `EPIPE`)
+ *    emitted by the `redis` client when the underlying connection breaks,
+ *  - `redis@4` lifecycle errors (`AbortError`, `ClientClosedError`,
+ *    `SocketClosedUnexpectedlyError`) when a queued op is invalidated by a
+ *    reconnect.
+ *
+ * Logic-layer errors (key not found, type mismatch) are NOT retried — those
+ * are caller bugs, not transient infra.
+ */
+export function isRedisTransientFailure(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  if (err.message.includes('timed out')) return true;
+  const code = (err as { code?: unknown }).code;
+  if (
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNREFUSED' ||
+    code === 'EPIPE'
+  ) {
+    return true;
+  }
+  if (
+    err.name === 'AbortError' ||
+    err.name === 'ClientClosedError' ||
+    err.name === 'SocketClosedUnexpectedlyError'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Drop the cached redis client so the next `getRedis()` rebuilds a fresh
+ * connection. Used between retry attempts because `withTimeout` only races
+ * a timer — it does not cancel the underlying op — so the previous socket
+ * may still be blocked on the very call that timed out. Disconnect is
+ * fire-and-forget; if the cached promise hasn't resolved yet, we just drop
+ * the reference.
+ */
+function dropCachedRedis(): void {
+  const cached = clientPromise;
+  clientPromise = null;
+  if (!cached) return;
+  cached.then(
+    (client) => {
+      // Defensive: older redis client shapes may not expose disconnect.
+      try {
+        const result = client.disconnect?.();
+        if (result && typeof result.catch === 'function') {
+          result.catch(() => {
+            /* ignore — point is just to release the stuck socket */
+          });
+        }
+      } catch {
+        /* ignore — best-effort cleanup */
+      }
+    },
+    () => {
+      /* cached promise already rejected; nothing to disconnect */
+    },
+  );
+}
+
+/**
+ * Run a Redis-bound operation with a single retry on transient failures.
+ * Mirrors `withPgConnectRetry` in `mcp-src/oauth/kv-store.ts` and delegates
+ * to the shared `retryAsync` helper so dashboards see a single warn-log
+ * shape (`retryAsync ... attempt N/M failed`) across all retry paths.
+ *
+ * The cached client is dropped from inside the `shouldRetry` predicate —
+ * this is the natural decision point ("are we retrying? then we need a
+ * fresh socket"). Critical because `withTimeout` only races a timer — it
+ * does not cancel the underlying op — so the original socket may remain
+ * blocked on the very call that timed out. Building a new client sidesteps
+ * that.
+ *
+ * Single retry only; SSE is the hot path and we'd rather fail-closed than
+ * burn budget on a deeper retry tree. Operations must be idempotent —
+ * get/set with a fixed key/value satisfy this.
+ */
+async function withRedisRetry<T>(op: string, fn: () => Promise<T>): Promise<T> {
+  return retryAsync(fn, {
+    attempts: 2,
+    delaysMs: [0],
+    op: `session-binding ${op}`,
+    shouldRetry: (err) => {
+      if (!isRedisTransientFailure(err)) return false;
+      dropCachedRedis();
+      return true;
+    },
   });
 }
 
@@ -107,19 +206,23 @@ export async function bindSession(
   identity: string,
   ttlSec: number,
 ): Promise<void> {
-  const redis = await getRedis();
-  await withTimeout(
-    redis.set(sessionKey(sessionId), identity, { EX: ttlSec }),
-    'set',
-  );
+  await withRedisRetry('bind', async () => {
+    const redis = await getRedis();
+    return withTimeout(
+      redis.set(sessionKey(sessionId), identity, { EX: ttlSec }),
+      'set',
+    );
+  });
 }
 
 export async function verifySession(
   sessionId: string,
   identity: string,
 ): Promise<boolean> {
-  const redis = await getRedis();
-  const stored = await withTimeout(redis.get(sessionKey(sessionId)), 'get');
+  const stored = await withRedisRetry('verify', async () => {
+    const redis = await getRedis();
+    return withTimeout(redis.get(sessionKey(sessionId)), 'get');
+  });
   if (!stored) return false;
   const a = Buffer.from(stored);
   const b = Buffer.from(identity);
@@ -128,8 +231,10 @@ export async function verifySession(
 }
 
 export async function releaseSession(sessionId: string): Promise<void> {
-  const redis = await getRedis();
-  await withTimeout(redis.del(sessionKey(sessionId)), 'del');
+  await withRedisRetry('release', async () => {
+    const redis = await getRedis();
+    return withTimeout(redis.del(sessionKey(sessionId)), 'del');
+  });
 }
 
 export type MessageOwnershipResult =
@@ -203,8 +308,10 @@ export async function evaluateMessageOwnership(
     };
   }
   try {
-    const redis = await getRedis();
-    const stored = await withTimeout(redis.get(sessionKey(sessionId)), 'get');
+    const stored = await withRedisRetry('verify', async () => {
+      const redis = await getRedis();
+      return withTimeout(redis.get(sessionKey(sessionId)), 'get');
+    });
     if (stored === null) {
       emitSseBindOutcome('binding_missing', {
         ...baseCtx,
