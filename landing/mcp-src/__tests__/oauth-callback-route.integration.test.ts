@@ -296,6 +296,85 @@ describe('/callback route integration', () => {
     expect(sloLine).toContain('outcome=upstream_other_error');
   });
 
+  // === Downstream-request fingerprint on /callback ?error=... ===
+  // Regression for the 2026-05-13 production observation: Hydra returns a
+  // generic `invalid_request` whose description doesn't tell us which
+  // parameter it found malformed. The fingerprint captures sanitized shape
+  // of what we forwarded so the next event can be diagnosed.
+  describe('downstream-request fingerprint on upstream errors', () => {
+    it('emits stateLen, stateFp, scopeCount and redirectUri host/path on the ?error=invalid_request path', async () => {
+      const sloSpy = vi.spyOn(logger, 'info');
+      const state = buildState({
+        resource: 'https://mcp.neon.tech/mcp?projectId=p-1',
+        codeChallenge: 'pkce-abc',
+        codeChallengeMethod: 'S256',
+      });
+
+      await GET(
+        buildErrorRequest(
+          state,
+          'invalid_request',
+          'The request is missing a required parameter, ...',
+        ),
+      );
+
+      const sloLine = sloSpy.mock.calls
+        .map(([msg]) => String(msg))
+        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      expect(sloLine).toBeDefined();
+      expect(sloLine).toContain(`stateLen=${state.length}`);
+      expect(sloLine).toContain(
+        `stateFp=len=${state.length},prefix=${state.slice(0, 6)}`,
+      );
+      expect(sloLine).toContain('scopeCount=2'); // ['read', 'write']
+      expect(sloLine).toContain('rURIHost=127.0.0.1');
+      expect(sloLine).toContain('rURIPath=/callback');
+      expect(sloLine).toContain('hasResource=1');
+      expect(sloLine).toContain('hasPKCE=1');
+    });
+
+    it('never includes the raw state value in the SLO line', async () => {
+      const sloSpy = vi.spyOn(logger, 'info');
+      // Build a state with a recognisable secret-like fragment so we can
+      // assert it does NOT leak into the log line.
+      const state = buildState({
+        state: 'secret-downstream-state-do-not-leak',
+      });
+
+      await GET(buildErrorRequest(state, 'invalid_request', 'malformed'));
+
+      const sloLine = sloSpy.mock.calls
+        .map(([msg]) => String(msg))
+        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      expect(sloLine).toBeDefined();
+      expect(sloLine).not.toContain('secret-downstream-state-do-not-leak');
+      // The fingerprint exposes at most 6 chars of the base64-encoded state,
+      // which is the JSON's opening `{"resp...`. That's deterministic by
+      // construction and not the downstream `state` value (which is JSON-
+      // embedded), so it can't echo the secret.
+    });
+
+    it('includes the fingerprint on the code-exchange catch path too', async () => {
+      const sloSpy = vi.spyOn(logger, 'info');
+      const upstreamErr = Object.assign(new Error('bad request'), {
+        status: 400,
+        error: 'invalid_grant',
+        error_description: 'The authorization code has already been used.',
+      });
+      vi.mocked(exchangeCode).mockRejectedValue(upstreamErr);
+
+      const state = buildState();
+      await GET(buildRequest(state));
+
+      const sloLine = sloSpy.mock.calls
+        .map(([msg]) => String(msg))
+        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      expect(sloLine).toContain('outcome=correct_invalid_grant');
+      expect(sloLine).toContain(`stateLen=${state.length}`);
+      expect(sloLine).toContain('scopeCount=2');
+    });
+  });
+
   it('falls back to JSON 400 when upstream error arrives without state', async () => {
     const response = await GET(
       new NextRequest('http://localhost/callback?error=server_error', {

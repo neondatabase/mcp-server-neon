@@ -55,10 +55,12 @@ window: rolling 28 days
 Emitted at every exit point of `app/callback/route.ts`:
 
 ```
-[SLO] auth-callback outcome=<bucket> elapsedMs=<n> [clientId=<id>] [upstreamError=<code>] [upstreamStatus=<n>] [reason=<short>]
+[SLO] auth-callback outcome=<bucket> elapsedMs=<n> [clientId=<id>] [upstreamError=<code>] [upstreamStatus=<n>] [reason=<short>] [stateLen=<n> stateFp=len=<n>,prefix=<6chars> scopeCount=<n> rURIHost=<host> rURIPath=<path> hasResource=1 hasPKCE=1]
 ```
 
 Same shape as `[SLO] refresh ...` so the same `vercel logs --query "[SLO] auth-callback"` style queries work.
+
+The `stateLen` / `stateFp` / `scopeCount` / `rURIHost` / `rURIPath` / `hasResource` / `hasPKCE` block is the downstream-request fingerprint. It's emitted only on the `?error=...` redirect path and the code-exchange catch path (where Hydra rejected our request and the description is often a generic "missing/invalid/malformed parameter" catch-all). The fields are sanitized — **NEVER includes the raw `state` value**, only its length + 6-char prefix. See `summarizeDownstreamRequest` in `app/callback/route.ts`.
 
 ### 2. How to compute it from logs
 
