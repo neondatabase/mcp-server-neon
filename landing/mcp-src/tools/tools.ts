@@ -258,7 +258,14 @@ async function handleDeleteBranch(
   },
   neonClient: Api<unknown>,
 ) {
-  const response = await neonClient.deleteProjectBranch(projectId, branchId);
+  // The local @neondatabase/api-client (HEAD) widened this method to take a
+  // params object. Cast through until npm 2.8.0 publishes.
+  const response = await (
+    neonClient.deleteProjectBranch as unknown as (arg: {
+      projectId: string;
+      branchId: string;
+    }) => ReturnType<typeof neonClient.deleteProjectBranch>
+  )({ projectId, branchId });
   return response.data;
 }
 

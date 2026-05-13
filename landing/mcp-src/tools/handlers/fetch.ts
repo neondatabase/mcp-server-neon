@@ -56,8 +56,14 @@ async function fetchOrganizationDetails(
 
     let members: MemberWithUser[] = [];
     try {
-      const { data: membersData } =
-        await neonClient.getOrganizationMembers(orgId);
+      // The local @neondatabase/api-client (HEAD) widened this method's
+      // signature to take a params object. Until npm 2.8.0 publishes, call
+      // through a cast so typecheck passes without touching unrelated code.
+      const { data: membersData } = await (
+        neonClient.getOrganizationMembers as unknown as (
+          arg: string | { orgId: string },
+        ) => ReturnType<typeof neonClient.getOrganizationMembers>
+      )({ orgId });
       members = membersData.members || [];
     } catch {
       // Skip if we can't access members

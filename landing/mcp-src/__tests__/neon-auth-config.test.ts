@@ -189,6 +189,16 @@ describe('handleConfigureNeonAuth', () => {
         status: 200,
         data: EMAIL_PASSWORD_DEFAULTS,
       }),
+      getNeonAuthPluginConfigs: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {},
+      }),
+      getNeonAuthWebhookConfig: vi
+        .fn()
+        .mockResolvedValue({ status: 404, statusText: 'Not Found' }),
+      getNeonAuthEmailServer: vi
+        .fn()
+        .mockResolvedValue({ status: 404, statusText: 'Not Found' }),
     };
 
     const result = await handleConfigureNeonAuth(
@@ -243,6 +253,16 @@ describe('handleConfigureNeonAuth', () => {
         status: 200,
         data: EMAIL_PASSWORD_DEFAULTS,
       }),
+      getNeonAuthPluginConfigs: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {},
+      }),
+      getNeonAuthWebhookConfig: vi
+        .fn()
+        .mockResolvedValue({ status: 404, statusText: 'Not Found' }),
+      getNeonAuthEmailServer: vi
+        .fn()
+        .mockResolvedValue({ status: 404, statusText: 'Not Found' }),
     };
 
     const result = await handleConfigureNeonAuth(
@@ -308,6 +328,16 @@ describe('handleConfigureNeonAuth', () => {
           email_verification_method: NeonAuthEmailVerificationMethod.Otp,
         },
       }),
+      getNeonAuthPluginConfigs: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {},
+      }),
+      getNeonAuthWebhookConfig: vi
+        .fn()
+        .mockResolvedValue({ status: 404, statusText: 'Not Found' }),
+      getNeonAuthEmailServer: vi
+        .fn()
+        .mockResolvedValue({ status: 404, statusText: 'Not Found' }),
     };
 
     await handleConfigureNeonAuth(
@@ -365,6 +395,16 @@ describe('handleConfigureNeonAuth', () => {
         status: 200,
         data: EMAIL_PASSWORD_DEFAULTS,
       }),
+      getNeonAuthPluginConfigs: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {},
+      }),
+      getNeonAuthWebhookConfig: vi
+        .fn()
+        .mockResolvedValue({ status: 404, statusText: 'Not Found' }),
+      getNeonAuthEmailServer: vi
+        .fn()
+        .mockResolvedValue({ status: 404, statusText: 'Not Found' }),
     };
 
     await handleConfigureNeonAuth(
