@@ -30,8 +30,11 @@ window: rolling 28 days
 |---|---|---|---|
 | `success` | yes | no | Code exchanged, redirected to client |
 | `correct_user_denied` | yes | no | User clicked Cancel at Hydra — `error=access_denied`. System worked correctly. |
-| `upstream_unmapped_error` | yes | **yes** | Hydra returned `?error=error&error_description=The error is unrecognizable` (Fosite fallback for unmapped internal state) or any `?error=...` we couldn't classify. **This is the bucket that captures today's bug.** |
-| `upstream_other_error` | yes | **yes** | Hydra-mapped OAuth error during code-exchange that isn't 5xx (usually `invalid_grant` on a code we sent back; rare). |
+| `correct_consent_expired` | yes | no | Hydra `request_unauthorized` — the login/consent challenge DB row expired (`ttl.login_consent_request`, 30m default in Hydra v1.11.x). User took too long between starting auth and clicking Accept; system worked as designed. |
+| `correct_csrf_mismatch` | yes | no | Hydra `request_forbidden` — CSRF cookie value differs from the DB row, typically because a concurrent OAuth flow on `oauth2.neon.tech` overwrote the cookie. CSRF guard correctly rejected a corrupted flow; user retries in a single tab and succeeds. See `dev-notes/hydra-incident-2026-05-12T13-44Z.md` §Update for the v1.11.10 source citation (`consent/helper.go:89`). |
+| `correct_invalid_grant` | yes | no | Hydra `invalid_grant` on code-exchange — the authorization code was already used or expired (`ttl.auth_code`, 10m default). Mirrors the refresh SLO's same-named bucket. |
+| `upstream_unmapped_error` | yes | **yes** | Hydra returned `?error=error&error_description=The error is unrecognizable` (Fosite fallback for unmapped internal state) or any `?error=...` we couldn't classify. **Captures the "user stranded" pattern.** |
+| `upstream_other_error` | yes | **yes** | Hydra-mapped OAuth error during code-exchange that isn't 5xx and didn't match one of the `correct_*` classifiers above. New fingerprints land here first; promote to a `correct_*` or keep as bad once characterized. |
 | `upstream_5xx` | **no** | n/a | Hydra returned 5xx during the code-exchange (`OAUTH_RESPONSE_IS_NOT_CONFORM`). Excluded — provider-side outage, out of our control. |
 | `state_decode_failed` | yes | **yes** | Our own base64/JSON state could not be parsed (we built bad state OR the param got truncated in transit). |
 | `bad_request` | **no** | n/a | Callback hit without code/state/error at all — direct navigation, prefetch, browser history. Excluded — not driven by the OAuth flow. |
@@ -39,9 +42,10 @@ window: rolling 28 days
 
 ### Why this shape
 
-- **`correct_user_denied` is good, not bad.** A user clicking Cancel at the consent screen is the system working as designed. Counting it as a failure would set an unachievable ceiling.
+- **`correct_*` buckets are good, not bad.** When Hydra correctly rejects a flow for a well-understood reason (user clicked Cancel, the 30-minute consent TTL elapsed, a concurrent flow stomped the CSRF cookie, the auth code was already used), the user can retry and succeed without any change on our side. Counting these as failures sets an unachievable ceiling and conflates client-pattern friction with service-quality regressions. The classifier lives in `app/callback/route.ts:classifyUpstreamError`.
 - **`upstream_5xx` is excluded, mirroring `transient_upstream_5xx` in the refresh SLO.** Provider outages aren't on our budget.
-- **`upstream_unmapped_error` is bad.** Even though the root cause is server-side at Hydra, *users see this break*. The fact that Hydra can't even classify its own error is itself a regression we should be tracking the rate of. Today's "The error is unrecognizable" feedback report would land here.
+- **`upstream_unmapped_error` is bad.** Even though the root cause is server-side at Hydra, *users see this break*. The fact that Hydra can't even classify its own error is itself a regression we should be tracking the rate of.
+- **`upstream_other_error` is bad until characterized.** This is the "we don't recognize this yet" bucket. When it shows up at non-trivial rate, examine the `upstreamError`/`upstreamErrorDescription` fields, decide if it's a Hydra-side reject for a normal user behavior (→ promote to `correct_*`) or a real failure mode (→ keep bad, possibly split into its own bucket).
 - **`bad_request` is excluded.** Bare GETs to `/callback` aren't part of the OAuth flow; counting them inflates traffic without diagnostic value.
 
 ## Implementation
@@ -63,6 +67,8 @@ Same pattern as `dev-notes/refresh-slo.md` — pull per-bucket JSONL via the Ver
 ```bash
 # Run from landing/ so the Vercel project is detected.
 for q in "outcome=success" "outcome=correct_user_denied" \
+         "outcome=correct_consent_expired" "outcome=correct_csrf_mismatch" \
+         "outcome=correct_invalid_grant" \
          "outcome=upstream_unmapped_error" "outcome=upstream_5xx" \
          "outcome=upstream_other_error" "outcome=state_decode_failed" \
          "outcome=bad_request" "outcome=internal_error"; do
