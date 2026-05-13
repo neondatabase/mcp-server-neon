@@ -152,6 +152,7 @@ function emitAuthCallbackSlo(
     upstreamError?: string;
     upstreamStatus?: number;
     reason?: string;
+    downstreamRequest?: DownstreamRequestSummary;
   } = {},
 ): void {
   const elapsedMs = Date.now() - startMs;
@@ -162,7 +163,80 @@ function emitAuthCallbackSlo(
   if (typeof context.upstreamStatus === 'number')
     fields.push(`upstreamStatus=${context.upstreamStatus}`);
   if (context.reason) fields.push(`reason=${context.reason}`);
+  if (context.downstreamRequest) {
+    // Inline-serialise rather than as a JSON blob so log dashboards can
+    // grep fields like `stateLen=` directly.
+    const d = context.downstreamRequest;
+    fields.push(`stateLen=${d.stateLength}`);
+    fields.push(`stateFp=${d.stateFingerprint}`);
+    fields.push(`scopeCount=${d.scopeCount}`);
+    if (d.redirectUriHost) fields.push(`rURIHost=${d.redirectUriHost}`);
+    if (d.redirectUriPath) fields.push(`rURIPath=${d.redirectUriPath}`);
+    if (d.hasResource) fields.push(`hasResource=1`);
+    if (d.hasCodeChallenge) fields.push(`hasPKCE=1`);
+  }
   logger.info(`[SLO] auth-callback ${fields.join(' ')}`);
+}
+
+/**
+ * Privacy-safe summary of the downstream client's auth request, captured at
+ * `/callback` when Hydra returns an `?error=...` redirect. Mirrors the
+ * `UpstreamRequestSummary` pattern from PR #252 (refresh-grant) — the goal is
+ * the same: when Hydra returns a generic `invalid_request` ("missing/invalid
+ * parameter, includes a parameter more than once, or is otherwise malformed"),
+ * we want enough fingerprint of what we forwarded to disambiguate the cause
+ * without leaking the downstream state.
+ *
+ * NEVER logs the raw `state` value — only its length + a short prefix. State
+ * is base64-encoded JSON containing the downstream client's params; leaking
+ * even partial values could be replay-leverage if any of them are sensitive.
+ */
+type DownstreamRequestSummary = {
+  /** Length of the `state` query param we forwarded to Hydra. Hydra may
+   *  reject very long states; this is the most likely `invalid_request`
+   *  trigger we don't currently see. */
+  stateLength: number;
+  /** Length + first-6-char prefix of the state, for correlating this
+   *  failure to an earlier `/api/authorize` log line without leaking the
+   *  full value. */
+  stateFingerprint: string;
+  /** Number of scopes the downstream client requested. */
+  scopeCount: number;
+  /** Downstream `redirect_uri` host (e.g. `localhost`) — not the port,
+   *  because per-process random ports are PII-adjacent on a small user
+   *  base and don't help diagnosis. */
+  redirectUriHost?: string;
+  /** Downstream `redirect_uri` path (e.g. `/oauth/callback`). */
+  redirectUriPath?: string;
+  /** Whether the downstream client passed a `resource` URI (grant scoping). */
+  hasResource: boolean;
+  /** Whether the downstream client passed PKCE challenge params. */
+  hasCodeChallenge: boolean;
+};
+
+function summarizeDownstreamRequest(
+  state: string,
+  requestParams: DownstreamAuthRequest,
+): DownstreamRequestSummary {
+  let redirectUriHost: string | undefined;
+  let redirectUriPath: string | undefined;
+  try {
+    const u = new URL(requestParams.redirectUri);
+    redirectUriHost = u.hostname;
+    redirectUriPath = u.pathname;
+  } catch {
+    // Malformed redirect_uri — leave host/path undefined; the upstream
+    // error description usually tells us this happened.
+  }
+  return {
+    stateLength: state.length,
+    stateFingerprint: `len=${state.length},prefix=${state.slice(0, 6)}`,
+    scopeCount: requestParams.scope?.length ?? 0,
+    redirectUriHost,
+    redirectUriPath,
+    hasResource: Boolean(requestParams.resource),
+    hasCodeChallenge: Boolean(requestParams.codeChallenge),
+  };
 }
 
 /**
@@ -252,6 +326,13 @@ export async function GET(request: NextRequest) {
           emitAuthCallbackSlo(outcome, sloStartMs, {
             clientId: requestParams.clientId,
             upstreamError,
+            // Sanitized fingerprint of what we forwarded to Hydra's
+            // /oauth2/auth. Closes the diagnostic gap when Hydra returns
+            // its generic `invalid_request` (the catch-all that flags
+            // missing/duplicate/malformed params OR a redirect_uri
+            // whitelist failure — Hydra returns the same description for
+            // all of them). See dev-notes/auth-callback-slo.md.
+            downstreamRequest: summarizeDownstreamRequest(state, requestParams),
           });
           return NextResponse.redirect(redirectUrl.href);
         } catch (decodeErr) {
@@ -360,6 +441,10 @@ export async function GET(request: NextRequest) {
         clientId: requestParams.clientId,
         upstreamError: details.oauthError,
         upstreamStatus,
+        // Same diagnostic as the `?error=...` redirect path above —
+        // fingerprint what we forwarded so a generic `invalid_request`
+        // / `invalid_grant` event isn't a black box.
+        downstreamRequest: summarizeDownstreamRequest(state, requestParams),
       });
       return handleOAuthError(exchangeErr, 'OAuth callback error');
     }
