@@ -33,7 +33,7 @@ export const NEON_PROMPTS = [
     name: 'setup-neon-auth',
     scope: 'neon_auth' as const,
     description:
-      'Interactive guide for setting up Neon Auth in a Vite+React project. Walks through provisioning, package installation, client setup, and UI components.',
+      'Guide the user through setting up Neon Auth in a Vite+React project, covering provisioning, package installation, client setup, and UI components.',
     argsSchema: setupNeonAuthViteReactArgsSchema,
   },
 ] as const satisfies ReadonlyArray<{
