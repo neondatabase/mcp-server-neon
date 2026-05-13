@@ -40,40 +40,109 @@ const toMilliseconds = (seconds: number): number => seconds * 1000;
  * Auth-flow SLO outcome buckets emitted by /callback. Mirrors the refresh
  * SLO at /api/token (see dev-notes/refresh-slo.md). Bucket map:
  *
- *  - `success`              200/302 successful exchange + redirect
- *  - `correct_user_denied`  User clicked Cancel at upstream (Hydra returned
- *                           `error=access_denied`). System worked correctly.
- *  - `upstream_unmapped_error` Hydra returned an `?error=...` redirect that
- *                           we couldn't map to a known OAuth code (notably
- *                           Hydra's "The error is unrecognizable" fallback).
- *                           Counts BAD — this is the failure mode that
- *                           strands users on a generic error page.
- *  - `upstream_5xx`         Hydra returned 5xx during the code-exchange
- *                           (OAUTH_RESPONSE_IS_NOT_CONFORM). Excluded from
- *                           the denominator — provider-side outage.
- *  - `upstream_other_error` Hydra-mapped OAuth error during code-exchange
- *                           that isn't 5xx (rare; usually invalid_grant on
- *                           a code we sent back). Counts BAD.
- *  - `state_decode_failed`  Our own base64/JSON state could not be parsed.
- *                           Counts BAD — our state encoding broke or the
- *                           caller tampered.
- *  - `bad_request`          Callback hit without any of code/state/error
- *                           query params. Excluded — usually direct
- *                           navigation by a browser to the bare URL.
- *  - `internal_error`       Everything else (KV failures, neon API errors,
- *                           etc.). Counts BAD.
+ *  GOOD (numerator):
+ *  - `success`                   200/302 successful exchange + redirect
+ *  - `correct_user_denied`       User clicked Cancel (Hydra `access_denied`)
+ *  - `correct_consent_expired`   Hydra `request_unauthorized` — the
+ *                                login/consent challenge DB row expired
+ *                                (ttl.login_consent_request, 30m default
+ *                                in Hydra v1.11.x). Counts GOOD because
+ *                                the user took too long; system worked
+ *                                as designed.
+ *  - `correct_csrf_mismatch`     Hydra `request_forbidden` — CSRF cookie
+ *                                value differs from the DB row, typically
+ *                                because a concurrent OAuth flow on the
+ *                                same host overwrote the cookie. Counts
+ *                                GOOD because the CSRF guard correctly
+ *                                rejected a corrupted flow; user retries
+ *                                in a single tab and succeeds.
+ *  - `correct_invalid_grant`     Hydra `invalid_grant` on code-exchange —
+ *                                the authorization code was already used
+ *                                or expired (ttl.auth_code, 10m default).
+ *                                Mirrors the refresh SLO's same-named
+ *                                bucket; system worked as designed.
  *
- * See dev-notes/auth-callback-slo.md for the definition + targets.
+ *  BAD (numerator):
+ *  - `upstream_unmapped_error`   Hydra returned `?error=error` with
+ *                                description "The error is unrecognizable"
+ *                                (Fosite-unmapped fallback). The canonical
+ *                                fingerprint of a Hydra-side state issue
+ *                                we can't classify; user is stranded.
+ *  - `upstream_other_error`      Any other upstream OAuth error we haven't
+ *                                explicitly classified. Counts BAD until
+ *                                characterized — when a new fingerprint
+ *                                shows up here often enough, promote it to
+ *                                its own bucket (good or bad as appropriate).
+ *  - `state_decode_failed`       Our own base64/JSON state could not be
+ *                                parsed — our encoding broke or caller tampered.
+ *  - `internal_error`            Everything else (KV failures, neon API
+ *                                errors, unexpected throws).
+ *
+ *  EXCLUDED (not in denominator):
+ *  - `upstream_5xx`              Hydra returned 5xx during code-exchange
+ *                                (OAUTH_RESPONSE_IS_NOT_CONFORM) — provider
+ *                                outage, not our quality.
+ *  - `bad_request`               Bare GET to /callback without any of
+ *                                code/state/error — direct navigation,
+ *                                prefetch, browser history.
+ *
+ * Source-grounded justifications for the "correct_*" buckets live in
+ * dev-notes/hydra-incident-2026-05-12T13-44Z.md §Update. See also
+ * dev-notes/auth-callback-slo.md for the SLO definition + targets.
  */
 type AuthCallbackOutcome =
   | 'success'
   | 'correct_user_denied'
+  | 'correct_consent_expired'
+  | 'correct_csrf_mismatch'
+  | 'correct_invalid_grant'
   | 'upstream_unmapped_error'
   | 'upstream_5xx'
   | 'upstream_other_error'
   | 'state_decode_failed'
   | 'bad_request'
   | 'internal_error';
+
+/**
+ * Map an upstream OAuth error (as either an `?error=...` redirect or an
+ * exception thrown by the code-exchange call) to its SLO bucket. Centralised
+ * so both code paths in GET() reach the same classification.
+ */
+function classifyUpstreamError(
+  upstreamError: string,
+  upstreamErrorDescription: string | null,
+  upstreamStatus: number | undefined,
+): AuthCallbackOutcome {
+  // Provider 5xx wins — excluded from the SLO denominator regardless of
+  // the OAuth error code Hydra may have attached.
+  if (upstreamStatus !== undefined && upstreamStatus >= 500) {
+    return 'upstream_5xx';
+  }
+  // Hydra's catch-all unmapped error — the canonical fingerprint of a
+  // Hydra-side state issue we can't classify. Counts BAD because the user
+  // is left without a clear remediation path.
+  if (
+    upstreamError === 'error' ||
+    upstreamErrorDescription === HYDRA_UNRECOGNIZABLE_ERROR_DESCRIPTION
+  ) {
+    return 'upstream_unmapped_error';
+  }
+  // Buckets that count as "system worked as designed" — Hydra rejected the
+  // request for a well-understood reason, the user can retry and succeed
+  // without our intervention. See file-level JSDoc for the rationale.
+  switch (upstreamError) {
+    case 'access_denied':
+      return 'correct_user_denied';
+    case 'request_unauthorized':
+      return 'correct_consent_expired';
+    case 'request_forbidden':
+      return 'correct_csrf_mismatch';
+    case 'invalid_grant':
+      return 'correct_invalid_grant';
+  }
+  // Unclassified — counts BAD until a fingerprint emerges and we promote.
+  return 'upstream_other_error';
+}
 
 function emitAuthCallbackSlo(
   outcome: AuthCallbackOutcome,
@@ -154,18 +223,14 @@ export async function GET(request: NextRequest) {
     // real failure on its own side. Falls back to a JSON 400 if we don't
     // have enough state to do the relay.
     if (upstreamError) {
-      // Hydra's "The error is unrecognizable" fingerprint indicates an
-      // unmapped internal state on the upstream side. Bucket separately so
-      // we can alert on it without conflating with legitimate user-denied.
-      const isUnmapped =
-        upstreamErrorDescription === HYDRA_UNRECOGNIZABLE_ERROR_DESCRIPTION ||
-        upstreamError === 'error';
-      const outcome: AuthCallbackOutcome =
-        upstreamError === 'access_denied'
-          ? 'correct_user_denied'
-          : isUnmapped
-            ? 'upstream_unmapped_error'
-            : 'upstream_other_error';
+      // Centralised classification — see classifyUpstreamError + file-level
+      // JSDoc for the bucket map. No HTTP status in the redirect-error
+      // path, so 5xx classification doesn't apply here.
+      const outcome = classifyUpstreamError(
+        upstreamError,
+        upstreamErrorDescription,
+        undefined,
+      );
 
       logger.warn('Upstream returned error to /callback', {
         upstreamError,
@@ -281,10 +346,11 @@ export async function GET(request: NextRequest) {
     } catch (exchangeErr) {
       const details = extractUpstreamErrorDetails(exchangeErr);
       const upstreamStatus = details.status;
-      const outcome: AuthCallbackOutcome =
-        upstreamStatus !== undefined && upstreamStatus >= 500
-          ? 'upstream_5xx'
-          : 'upstream_other_error';
+      const outcome = classifyUpstreamError(
+        details.oauthError ?? '',
+        details.oauthErrorDescription ?? null,
+        upstreamStatus,
+      );
       logger.error('Upstream code exchange failed at /callback', {
         ...details,
         clientId: requestParams.clientId,
