@@ -1,4 +1,8 @@
-import { NEON_DOCS_BASE_URL, NEON_DOCS_INDEX_URL } from '../../resources';
+import {
+  NEON_DOCS_BASE_URL,
+  NEON_DOCS_INDEX_URL,
+  NEON_DOCS_SEARCH_URL,
+} from '../../resources';
 import { InvalidArgumentError, NotFoundError } from '../../server/errors';
 
 // Hard cap on upstream docs fetches so a stalled neon.com response
@@ -57,6 +61,40 @@ export async function getDocResource({
     }
     throw new Error(
       `Failed to fetch doc page "${mdSlug}": ${response.status} ${response.statusText}`,
+    );
+  }
+  return response.text();
+}
+
+export async function searchDocs({
+  query,
+  mode,
+  limit,
+}: {
+  query: string;
+  mode?: 'hybrid' | 'fts' | 'semantic';
+  limit?: number;
+}): Promise<string> {
+  const searchUrl = process.env.NEON_DOCS_SEARCH_URL;
+  if (!searchUrl) {
+    throw new Error(
+      'search_docs is not configured: set the NEON_DOCS_SEARCH_URL environment variable to the deployed docs search API URL.',
+    );
+  }
+
+  const params = new URLSearchParams();
+  params.set('q', query);
+  params.set('compact', 'true');
+  if (mode && mode !== 'hybrid') params.set('mode', mode);
+  if (limit) params.set('limit', String(limit));
+
+  const url = `${searchUrl}/api/docs-search?${params}`;
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(DOCS_FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Failed to search docs: ${response.status} ${response.statusText}`,
     );
   }
   return response.text();
