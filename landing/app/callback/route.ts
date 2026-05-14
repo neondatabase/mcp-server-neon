@@ -10,6 +10,7 @@ import { generateRandomString } from '../../mcp-src/oauth/utils';
 import { createNeonClient } from '../../mcp-src/server/api';
 import { resolveAccountFromAuth } from '../../mcp-src/server/account';
 import { handleOAuthError } from '../../lib/errors';
+import { matchesRedirectUri } from '../../lib/oauth/redirect-uri';
 import { logger } from '../../mcp-src/utils/logger';
 import type { AuthorizationCode } from 'oauth2-server';
 import {
@@ -277,6 +278,37 @@ function buildClientErrorRedirect(
   return url;
 }
 
+
+/**
+ * CWE-601 guard: confirm that a redirect_uri decoded from the OAuth state
+ * is on the client's registered allowlist. Used by the upstream-error
+ * relay path, which doesn't have a loaded `Client` in scope (the
+ * success path does its own check inline once the client is loaded).
+ *
+ * Errors from the KV lookup intentionally fail closed — when in doubt,
+ * we don't redirect.
+ */
+async function isAllowedRedirectUri(
+  clientId: string,
+  redirectUri: string,
+): Promise<boolean> {
+  if (!clientId || !redirectUri) return false;
+  try {
+    const client = await withPgConnectRetry('callback.validateRedirect', () =>
+      model.getClient(clientId, ''),
+    );
+    const registered =
+      (client as { redirect_uris?: string[] } | undefined)?.redirect_uris ?? [];
+    return matchesRedirectUri(redirectUri, registered);
+  } catch (err) {
+    logger.warn('Failed to load client for redirect_uri validation', {
+      clientId,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const sloStartMs = Date.now();
   // Captured for the outer catch so an internal_error event carries a
@@ -317,6 +349,37 @@ export async function GET(request: NextRequest) {
       if (state) {
         try {
           const requestParams = decodeAuthParams(state);
+          // CWE-601 defence-in-depth: re-validate the decoded redirectUri
+          // against the client's registered redirect_uris before relaying
+          // an upstream error. The state value is opaque to us once it
+          // round-trips through the upstream IdP, so we cannot trust the
+          // embedded redirectUri without checking it again here.
+          if (
+            !(await isAllowedRedirectUri(
+              requestParams.clientId,
+              requestParams.redirectUri,
+            ))
+          ) {
+            logger.warn(
+              'Refusing to relay upstream error to non-allowlisted redirect_uri',
+              {
+                clientId: requestParams.clientId,
+                providedRedirectUri: requestParams.redirectUri,
+              },
+            );
+            emitAuthCallbackSlo('bad_request', sloStartMs, {
+              clientId: requestParams.clientId,
+              upstreamError,
+              reason: 'redirect_uri_not_allowlisted',
+            });
+            return NextResponse.json(
+              {
+                error: 'invalid_request',
+                error_description: 'Invalid redirect URI',
+              },
+              { status: 400 },
+            );
+          }
           const redirectUrl = buildClientErrorRedirect(
             requestParams,
             upstreamError,
@@ -463,6 +526,39 @@ export async function GET(request: NextRequest) {
         {
           error: 'invalid_client',
           error_description: 'Invalid client ID',
+        },
+        { status: 400 },
+      );
+    }
+
+    // CWE-601: refuse to mint an authorization code for a redirect_uri
+    // that isn't on this client's registered allowlist. /api/authorize
+    // already enforces this on the way in, but the state value reaches
+    // /callback after a round-trip through the upstream IdP, so we
+    // re-validate here to defend against a tampered state (e.g. from
+    // POST /api/authorize, which re-encodes the supplied state without
+    // re-checking redirectUri/clientId).
+    if (
+      !requestParams.redirectUri ||
+      !matchesRedirectUri(
+        requestParams.redirectUri,
+        (client as { redirect_uris?: string[] }).redirect_uris ?? [],
+      )
+    ) {
+      logger.warn('Invalid redirect URI at /callback', {
+        clientId,
+        providedRedirectUri: requestParams.redirectUri,
+        registeredRedirectUris: (client as { redirect_uris?: string[] })
+          .redirect_uris,
+      });
+      emitAuthCallbackSlo('bad_request', sloStartMs, {
+        clientId,
+        reason: 'redirect_uri_not_allowlisted',
+      });
+      return NextResponse.json(
+        {
+          error: 'invalid_request',
+          error_description: 'Invalid redirect URI',
         },
         { status: 400 },
       );

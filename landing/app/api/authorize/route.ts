@@ -596,6 +596,44 @@ export async function POST(request: NextRequest) {
 
     const requestParams = JSON.parse(atob(state)) as DownstreamAuthRequest;
 
+    // CWE-601: re-validate the decoded state before re-encoding it for
+    // the upstream IdP. The GET handler validates clientId/redirectUri
+    // when it first builds the state, but a malicious caller can POST
+    // here directly with a state of their own choosing — without this
+    // check that state is forwarded to the upstream IdP and round-trips
+    // back into /callback, which then redirects the auth code to the
+    // attacker-controlled redirectUri.
+    const postClient = await model.getClient(requestParams.clientId, '');
+    if (!postClient) {
+      logger.warn('Client not found at POST /api/authorize', {
+        clientId: requestParams.clientId,
+      });
+      return NextResponse.json(
+        {
+          error: 'invalid_client',
+          error_description: 'Invalid client ID',
+        },
+        { status: 400 },
+      );
+    }
+    if (
+      !requestParams.redirectUri ||
+      !matchesRedirectUri(requestParams.redirectUri, postClient.redirect_uris)
+    ) {
+      logger.warn('Invalid redirect URI at POST /api/authorize', {
+        clientId: requestParams.clientId,
+        providedRedirectUri: requestParams.redirectUri,
+        registeredRedirectUris: postClient.redirect_uris,
+      });
+      return NextResponse.json(
+        {
+          error: 'invalid_request',
+          error_description: 'Invalid redirect URI',
+        },
+        { status: 400 },
+      );
+    }
+
     // Update scopes with user selection
     requestParams.scope = validScopes;
     const grant = requestParams.resource
