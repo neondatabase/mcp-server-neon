@@ -49,7 +49,7 @@ export const NEON_TOOLS = [
   {
     name: 'list_projects' as const,
     scope: 'projects',
-    description: `Lists the first 10 Neon projects in your account. If you can't find the project, increase the limit by passing a higher value to the \`limit\` parameter. Optionally filter by project name or ID using the \`search\` parameter.`,
+    description: `List Neon projects in your account. Do not use for projects shared with you (use \`list_shared_projects\` instead). Supports optional \`search\` (filter by name or ID) and \`limit\` (default 10) parameters.`,
     inputSchema: listProjectsInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -63,7 +63,7 @@ export const NEON_TOOLS = [
   {
     name: 'list_organizations' as const,
     scope: 'projects',
-    description: `Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the \`search\` parameter.`,
+    description: `List all organizations the current user belongs to. Supports optional \`search\` parameter to filter by name or ID.`,
     inputSchema: listOrganizationsInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -77,7 +77,7 @@ export const NEON_TOOLS = [
   {
     name: 'list_shared_projects' as const,
     scope: 'projects',
-    description: `Lists projects that have been shared with the current user. These are projects that the user has been granted access to collaborate on. Optionally filter by project name or ID using the \`search\` parameter.`,
+    description: `List projects shared with the current user for collaboration. Do not use for projects you own (use \`list_projects\` instead). Supports optional \`search\` (filter by name or ID) and \`limit\` (default 10) parameters.`,
     inputSchema: listSharedProjectsInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -92,7 +92,7 @@ export const NEON_TOOLS = [
     name: 'create_project' as const,
     scope: 'projects',
     description:
-      'Create a new Neon project. If someone is trying to create a database, use this tool.',
+      'Create a new Neon project with a default database and branch. If someone is trying to create a database, use this tool. Returns a connection string for the new project automatically. Supports optional `org_id` (assign to a specific organization) and `name` parameters.',
     inputSchema: createProjectInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -106,7 +106,8 @@ export const NEON_TOOLS = [
   {
     name: 'delete_project' as const,
     scope: 'projects',
-    description: 'Delete a Neon project',
+    description:
+      'Delete a Neon project and all its data permanently. Do not use when you only need to remove a branch (use `delete_branch` instead).',
     inputSchema: deleteProjectInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -120,7 +121,8 @@ export const NEON_TOOLS = [
   {
     name: 'describe_project' as const,
     scope: 'projects',
-    description: 'Describes a Neon project',
+    description:
+      'Get details and configuration of a specific Neon project. Do not use when you need to list all projects (use `list_projects` instead).',
     inputSchema: describeProjectInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -180,7 +182,8 @@ export const NEON_TOOLS = [
   {
     name: 'describe_table_schema' as const,
     scope: 'schema',
-    description: 'Describe the schema of a table in a Neon database',
+    description:
+      'Get column definitions, data types, and constraints for a specific table. Do not use when you need all tables in a database (use `get_database_tables` instead).',
     inputSchema: describeTableSchemaInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -194,7 +197,8 @@ export const NEON_TOOLS = [
   {
     name: 'get_database_tables' as const,
     scope: 'schema',
-    description: 'Get all tables in a Neon database',
+    description:
+      'List all tables in a Neon database. Do not use when you need column-level detail for a specific table (use `describe_table_schema` instead).',
     inputSchema: getDatabaseTablesInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -208,7 +212,8 @@ export const NEON_TOOLS = [
   {
     name: 'create_branch' as const,
     scope: 'branches',
-    description: 'Create a branch in a Neon project',
+    description:
+      'Create a branch from the default branch of a Neon project for isolated development or testing.',
     inputSchema: createBranchInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -393,7 +398,7 @@ export const NEON_TOOLS = [
     name: 'describe_branch' as const,
     scope: 'branches',
     description:
-      'Get a tree view of all objects in a branch, including databases, schemas, tables, views, and functions',
+      'Get a tree view of all objects in a branch, including databases, schemas, tables, views, and functions. Do not use when you only need table names (use `get_database_tables` instead) or column detail (use `describe_table_schema` instead).',
     inputSchema: describeBranchInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -407,7 +412,8 @@ export const NEON_TOOLS = [
   {
     name: 'delete_branch' as const,
     scope: 'branches',
-    description: 'Delete a branch from a Neon project',
+    description:
+      'Delete a branch from a Neon project. Do not use when you need to delete the entire project (use `delete_project` instead).',
     inputSchema: deleteBranchInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -421,7 +427,7 @@ export const NEON_TOOLS = [
   {
     name: 'reset_from_parent' as const,
     scope: 'branches',
-    description: `Resets a branch to match its parent's current state, effectively discarding all changes made on the branch. To avoid data loss, provide a name to preserve the changes in a new branch using \`preserveUnderName\` parameter. This tool is commonly used to create fresh development branches from updated parent branch, undo experimental changes, or restore a branch to a known good state. Warning: This operation will discard all changes if \`preserveUnderName\` is not provided.`,
+    description: `Reset a branch to its parent's current state, discarding all changes made on the branch. Use \`preserveUnderName\` to preserve the current state under a new branch name before resetting. Warning: without \`preserveUnderName\`, all changes on the branch are permanently lost.`,
     inputSchema: resetFromParentInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -436,7 +442,7 @@ export const NEON_TOOLS = [
     name: 'get_connection_string' as const,
     scope: 'branches',
     description:
-      'Get a PostgreSQL connection string for a Neon database with all parameters optional. In read-only mode, this tool can only return connection strings for read-replica endpoints. If no read replica exists and the user needs a setup DATABASE_URL, explain that limitation and guide them to https://console.neon.tech to copy the DATABASE_URL manually.',
+      'Get a PostgreSQL connection string for a Neon database. All parameters are optional; the tool resolves the project, branch, and database automatically if not specified. In read-only mode, this tool can only return connection strings for read-replica endpoints. If no read replica exists and the user needs a DATABASE_URL, explain that limitation and guide them to https://console.neon.tech to copy the DATABASE_URL manually.',
     inputSchema: getConnectionStringInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -485,7 +491,7 @@ export const NEON_TOOLS = [
     inputSchema: configureNeonAuthInputSchema,
     readOnlySafe: false,
     description: `
-    Updates Neon Auth (Better Auth) settings for a branch after it is provisioned.
+    Configure Neon Auth for a branch by specifying an \`operation\`. Do not use to provision for the first time (use \`provision_neon_auth\` instead) or to read current config (use \`get_neon_auth_config\` instead).
 
     Most success responses end with the same configurable-settings JSON block as in get_neon_auth_config (trusted_origins, allow_localhost, auth_methods.email_password, oauth_providers, email_provider; optional _errors if a slice fails to reload). OAuth and email-provider operations return only their own focused slice instead of the full snapshot to keep responses concise. Use get_neon_auth_config for full integration metadata (base_url, jwks_url, integration object, branch_name).
 
@@ -524,11 +530,9 @@ export const NEON_TOOLS = [
     inputSchema: getNeonAuthConfigInputSchema,
     readOnlySafe: true,
     description: `
-    Returns Neon Auth (Better Auth) for a branch as one JSON object: integration metadata (base_url, jwks_url, db_name, auth_provider, branch_id, created_at, owned_by, transfer_status, auth_provider_project_id), branch_name from the Neon branch API, project_id and resolved branch_id, plus the same configurable fields as configure_neon_auth (trusted_origins, allow_localhost, auth_methods.email_password with enabled, allow_sign_up, verify_email_on_sign_up, verify_email_on_sign_in, email_verification_method, require_email_verification, auto_sign_in_after_verification, oauth_providers (id, type, client_id, client_secret), email_provider (discriminated by type)). Top-level base_url, jwks_url, and db_name duplicate integration for quick copy. Optional _errors records partial fetch failures for configurable slices.
+    Read full Neon Auth configuration for a branch. Do not use when you need to update config (use \`configure_neon_auth\` instead). Requires Neon Auth to be provisioned first (use \`provision_neon_auth\`). Returns Neon Auth (Better Auth) for a branch as one JSON object: integration metadata (base_url, jwks_url, db_name, auth_provider, branch_id, created_at, owned_by, transfer_status, auth_provider_project_id), branch_name from the Neon branch API, project_id and resolved branch_id, plus the same configurable fields as configure_neon_auth (trusted_origins, allow_localhost, auth_methods.email_password with enabled, allow_sign_up, verify_email_on_sign_up, verify_email_on_sign_in, email_verification_method, require_email_verification, auto_sign_in_after_verification, oauth_providers (id, type, client_id, client_secret), email_provider (discriminated by type)). Top-level base_url, jwks_url, and db_name duplicate integration for quick copy. Optional _errors records partial fetch failures for configurable slices.
 
     Secrets — OAuth client_secret and the SMTP password — are NEVER returned. When the upstream config indicates a secret is set, this endpoint surfaces it as the literal sentinel "***redacted***"; when no secret is set the field is null. Use the matching configure_neon_auth operations to write or rotate these values.
-
-    Omit branchId to use the project default branch. Requires Neon Auth to be provisioned (use provision_neon_auth first).
     `,
     annotations: {
       title: 'Get Neon Auth configuration',
@@ -595,7 +599,7 @@ export const NEON_TOOLS = [
     name: 'explain_sql_statement' as const,
     scope: 'querying',
     description:
-      'Describe the PostgreSQL query execution plan for a query of SQL statement by running EXPLAIN (ANAYLZE...) in the database',
+      'Analyze the query execution plan for a SQL statement using EXPLAIN ANALYZE. Do not use when you need to execute the query for results (use `run_sql` instead).',
     inputSchema: explainSqlStatementInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -827,7 +831,8 @@ export const NEON_TOOLS = [
   {
     name: 'list_branch_computes' as const,
     scope: 'branches',
-    description: 'Lists compute endpoints for a project or specific branch',
+    description:
+      'List compute endpoints for a project or branch. Do not use when you need a connection string (use `get_connection_string` instead).',
     inputSchema: listBranchComputesInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -1119,7 +1124,7 @@ export const NEON_TOOLS = [
   {
     name: 'search' as const,
     scope: null,
-    description: `Searches across all user organizations, projects, and branches that match the query. Returns a list of objects with id, title, and url. This tool searches through all accessible resources and provides direct links to the Neon Console.`,
+    description: `Search across all organizations, projects, and branches by keyword. Returns matching items with id, title, and URL. Query must be at least 3 characters. Do not use when you need all projects (use \`list_projects\` instead).`,
     inputSchema: searchInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -1133,7 +1138,7 @@ export const NEON_TOOLS = [
   {
     name: 'fetch' as const,
     scope: null,
-    description: `Fetches detailed information about a specific organization, project, or branch using the ID returned by the search tool. This tool provides comprehensive information about Neon resources for detailed analysis and management.`,
+    description: `Fetch detailed information about a specific organization, project, or branch using the ID returned by the \`search\` tool.`,
     inputSchema: fetchInputSchema,
     readOnlySafe: true,
     annotations: {
