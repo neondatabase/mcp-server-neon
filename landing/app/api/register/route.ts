@@ -11,9 +11,23 @@ const SUPPORTED_RESPONSE_TYPES = ['code'];
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
+    // Allowlist of headers persisted with the client registration. Storing
+    // arbitrary request headers (e.g. Authorization, Cookie, infrastructure
+    // X-Forwarded-* headers) would leak sensitive data into the KV store and
+    // back into the authorize flow. Only persist the headers that the
+    // authorize handler actually consumes.
+    const ALLOWED_REGISTER_HEADERS = [
+      'x-read-only',
+      'x-neon-read-only',
+      'x-neon-project-id',
+      'x-neon-scopes',
+    ];
     const requestHeaders: Record<string, string> = {};
     request.headers.forEach((value, key) => {
-      requestHeaders[key.toLowerCase()] = value;
+      const lower = key.toLowerCase();
+      if (ALLOWED_REGISTER_HEADERS.includes(lower)) {
+        requestHeaders[lower] = value;
+      }
     });
 
     logger.info('request to register client', {
