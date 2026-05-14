@@ -106,7 +106,8 @@ export const NEON_TOOLS = [
   {
     name: 'delete_project' as const,
     scope: 'projects',
-    description: 'Delete a Neon project and all its data permanently. Do not use when you only need to remove a branch (use `delete_branch` instead).',
+    description:
+      'Delete a Neon project and all its data permanently. Do not use when you only need to remove a branch (use `delete_branch` instead).',
     inputSchema: deleteProjectInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -120,7 +121,8 @@ export const NEON_TOOLS = [
   {
     name: 'describe_project' as const,
     scope: 'projects',
-    description: 'Get details and configuration of a specific Neon project. Do not use when you need to list all projects (use `list_projects` instead).',
+    description:
+      'Get details and configuration of a specific Neon project. Do not use when you need to list all projects (use `list_projects` instead).',
     inputSchema: describeProjectInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -180,7 +182,8 @@ export const NEON_TOOLS = [
   {
     name: 'describe_table_schema' as const,
     scope: 'schema',
-    description: 'Get column definitions, data types, and constraints for a specific table. Do not use when you need all tables in a database (use `get_database_tables` instead).',
+    description:
+      'Get column definitions, data types, and constraints for a specific table. Do not use when you need all tables in a database (use `get_database_tables` instead).',
     inputSchema: describeTableSchemaInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -194,7 +197,8 @@ export const NEON_TOOLS = [
   {
     name: 'get_database_tables' as const,
     scope: 'schema',
-    description: 'List all tables in a Neon database. Do not use when you need column-level detail for a specific table (use `describe_table_schema` instead).',
+    description:
+      'List all tables in a Neon database. Do not use when you need column-level detail for a specific table (use `describe_table_schema` instead).',
     inputSchema: getDatabaseTablesInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -208,7 +212,8 @@ export const NEON_TOOLS = [
   {
     name: 'create_branch' as const,
     scope: 'branches',
-    description: 'Create a branch from the default branch of a Neon project for isolated development or testing.',
+    description:
+      'Create a branch from the default branch of a Neon project for isolated development or testing.',
     inputSchema: createBranchInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -407,7 +412,8 @@ export const NEON_TOOLS = [
   {
     name: 'delete_branch' as const,
     scope: 'branches',
-    description: 'Delete a branch from a Neon project. Do not use when you need to delete the entire project (use `delete_project` instead).',
+    description:
+      'Delete a branch from a Neon project. Do not use when you need to delete the entire project (use `delete_project` instead).',
     inputSchema: deleteBranchInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -825,7 +831,8 @@ export const NEON_TOOLS = [
   {
     name: 'list_branch_computes' as const,
     scope: 'branches',
-    description: 'List compute endpoints for a project or branch. Do not use when you need a connection string (use `get_connection_string` instead).',
+    description:
+      'List compute endpoints for a project or branch. Do not use when you need a connection string (use `get_connection_string` instead).',
     inputSchema: listBranchComputesInputSchema,
     readOnlySafe: true,
     annotations: {
