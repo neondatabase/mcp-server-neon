@@ -28,6 +28,9 @@ export const SENTRY_DSN =
   process.env.SENTRY_DSN ??
   'https://b3564134667aa2dfeaa3992a12d9c12f@o1373725.ingest.us.sentry.io/4509328350380033';
 
+// Docs search API
+export const NEON_DOCS_SEARCH_URL = process.env.NEON_DOCS_SEARCH_URL ?? '';
+
 // Environment
 export type Environment = 'development' | 'production' | 'preview';
 

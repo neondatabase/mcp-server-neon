@@ -1,6 +1,8 @@
 export const NEON_DOCS_INDEX_URL = 'https://neon.com/docs/llms.txt';
 export const NEON_DOCS_BASE_URL = 'https://neon.com';
 
+export { NEON_DOCS_SEARCH_URL } from './constants';
+
 export async function fetchRawGithubContent(rawPath: string) {
   const path = rawPath.replace('/blob', '');
 

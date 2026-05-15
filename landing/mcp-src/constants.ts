@@ -9,6 +9,7 @@ export {
   ANALYTICS_WRITE_KEY,
   SENTRY_DSN,
   NEON_CONSOLE_HOST,
+  NEON_DOCS_SEARCH_URL,
   type Environment,
 } from '../lib/config';
 

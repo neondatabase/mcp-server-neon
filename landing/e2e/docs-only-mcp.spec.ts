@@ -108,7 +108,11 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     expect(listResult?.result?.tools).toBeDefined();
 
     const toolNames = listResult!.result!.tools!.map((t) => t.name).sort();
-    expect(toolNames).toEqual(['get_doc_resource', 'list_docs_resources']);
+    expect(toolNames).toEqual([
+      'get_doc_resource',
+      'list_docs_resources',
+      'search_docs',
+    ]);
   });
 
   // Skipped from merge-gating CI per CLAUDE.md ("Merge-gating tests must be
