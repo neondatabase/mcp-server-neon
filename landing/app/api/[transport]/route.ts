@@ -859,7 +859,11 @@ function createDocsOnlyMcpHandler() {
           limit?: number;
         }) =>
           runDocsTool(searchDocsTool.name, () =>
-            searchDocs({ query: args.query, mode: args.mode, limit: args.limit }),
+            searchDocs({
+              query: args.query,
+              mode: args.mode,
+              limit: args.limit,
+            }),
           ),
       );
 

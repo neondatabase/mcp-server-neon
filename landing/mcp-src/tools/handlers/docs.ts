@@ -1,7 +1,6 @@
 import {
   NEON_DOCS_BASE_URL,
   NEON_DOCS_INDEX_URL,
-  NEON_DOCS_SEARCH_URL,
 } from '../../resources';
 import { InvalidArgumentError, NotFoundError } from '../../server/errors';
 
