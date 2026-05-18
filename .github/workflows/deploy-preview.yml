@@ -26,7 +26,7 @@ jobs:
       # Only remove labels from other PRs when a new label is added (not on every commit)
       - name: Remove deploy-preview label from other PRs
         if: github.event.action == 'labeled'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const currentPR = context.payload.pull_request.number;
@@ -69,7 +69,7 @@ jobs:
       # detects the push to the preview branch above. This step just creates a visible
       # record in GitHub's "Environments" tab and adds the deployment link to the PR.
       - name: Create GitHub Deployment
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const deployment = await github.rest.repos.createDeployment({
@@ -94,7 +94,7 @@ jobs:
       # Only comment on initial label, not on every commit push
       - name: Comment on PR
         if: github.event.action == 'labeled'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             github.rest.issues.createComment({
@@ -114,7 +114,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Remove deploy-preview label
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
