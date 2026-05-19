@@ -1,13 +1,13 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Api, NeonAuthSupportedAuthProvider } from '@neondatabase/api-client';
 import { isAxiosError } from 'axios';
-import { provisionNeonAuthInputSchema } from '../toolsSchema';
 import { z } from 'zod/v3';
+import { neonAuthProvisionInputSchema } from '../toolsSchema';
+import { ToolHandlerExtraParams } from '../types';
 import { getDefaultDatabase } from '../utils';
 import { getDefaultBranch } from './utils';
-import { ToolHandlerExtraParams } from '../types';
 
-type Props = z.infer<typeof provisionNeonAuthInputSchema>;
+type Props = z.infer<typeof neonAuthProvisionInputSchema>;
 
 async function respondWithExistingNeonAuth(
   projectId: string,
@@ -57,13 +57,12 @@ ${jwks_url}
   }
 }
 
-export async function handleProvisionNeonAuth(
+export async function handleNeonAuthProvision(
   { projectId, branchId, databaseName }: Props,
   neonClient: Api<unknown>,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _extra: ToolHandlerExtraParams,
 ): Promise<CallToolResult> {
-  // If branchId is not provided, use the default branch
   let resolvedBranchId = branchId;
   if (!resolvedBranchId) {
     const defaultBranch = await getDefaultBranch(projectId, neonClient);
@@ -100,7 +99,6 @@ export async function handleProvisionNeonAuth(
       database_name: defaultDatabase.name,
     });
   } catch (error: unknown) {
-    // Axios rejects 4xx by default; Neon returns 409 when auth is already enabled.
     if (isAxiosError(error) && error.response?.status === 409) {
       return respondWithExistingNeonAuth(
         projectId,
@@ -131,7 +129,6 @@ export async function handleProvisionNeonAuth(
     };
   }
 
-  // 409 without throw (if axios is configured to resolve errors)
   if (response.status === 409) {
     return respondWithExistingNeonAuth(projectId, resolvedBranchId, neonClient);
   }
