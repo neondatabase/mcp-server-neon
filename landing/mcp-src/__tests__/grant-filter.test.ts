@@ -48,7 +48,7 @@ describe('filterToolsForGrant', () => {
       grant({ projectId: 'proj-123', scopes: null }),
     );
     const names = tools.map((t) => t.name);
-    expect(tools).toHaveLength(24);
+    expect(tools).toHaveLength(29);
     expect(names).not.toContain('list_projects');
     expect(names).not.toContain('create_project');
     expect(names).not.toContain('search');
