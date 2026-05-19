@@ -140,27 +140,25 @@ function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
 }
 
 /**
- * Get the final list of available tools after applying grant context and read-only filtering.
+ * Build the access-control notices that apply for the given grant + read-only
+ * combination. Returns one entry per applicable notice; empty array when
+ * neither read-only nor project-scoped mode is active.
  *
- * This is the single source of truth for tool availability, used by:
- * - The MCP server (server/index.ts) at registration time
- * - The /api/list-tools REST endpoint for previewing tool visibility
- *
- * Combines two filtering stages:
- * 1. Grant-based filtering (scope categories + project scoping)
- * 2. Read-only filtering (strips non-readOnlySafe tools when read-only is active)
+ * Exposed separately from `getAvailableTools` so the `/api/list-tools` REST
+ * endpoint can surface notices as a top-level field instead of duplicating
+ * the same ~400-char block inside every tool's `description` (see
+ * github.com/neondatabase/mcp-server-neon/issues/257). The MCP-protocol tool
+ * registration path keeps the notice inline by going through
+ * `getAvailableTools`, which still concatenates these into descriptions for
+ * LLM consumption.
  */
-export function getAvailableTools(
+export function getAccessControlNotices(
   grant: GrantContext,
   readOnly: boolean,
-): NeonTool[] {
-  let tools = filterToolsForGrant(NEON_TOOLS, grant);
+): string[] {
+  const notices: string[] = [];
   if (readOnly) {
-    tools = tools.filter((tool) => tool.readOnlySafe);
-  }
-  const descriptionNotices: string[] = [];
-  if (readOnly) {
-    descriptionNotices.push(
+    notices.push(
       'Notice: The MCP server is currently configured with read-only permissions. ' +
         'All write-access tools have been removed. All remaining tools are limited to read-only operations ' +
         '(for example, read-only SQL queries). Do not try to work around this restriction; it is intentional. ' +
@@ -170,7 +168,7 @@ export function getAvailableTools(
     );
   }
   if (grant.projectId) {
-    descriptionNotices.push(
+    notices.push(
       `Notice: The MCP server is currently configured and scoped to one project only (${grant.projectId}). ` +
         'Project management tools have been removed. All remaining tools are scoped to this project and can only interact with it. ' +
         'This is intentional. If the user requests changes to another project, inform them about the project-scoping configuration. ' +
@@ -178,10 +176,50 @@ export function getAvailableTools(
         'and by logging out and back in after removing the param when using OAuth.',
     );
   }
+  return notices;
+}
 
-  if (descriptionNotices.length === 0) return tools;
+/**
+ * Return the filtered tool set for a given grant + read-only combination,
+ * WITHOUT the access-control notice suffix in tool descriptions. This is the
+ * shape `/api/list-tools` consumes — notices are surfaced as a top-level
+ * field instead.
+ *
+ * Combines two filtering stages:
+ * 1. Grant-based filtering (scope categories + project scoping)
+ * 2. Read-only filtering (strips non-readOnlySafe tools when read-only is active)
+ */
+export function getFilteredTools(
+  grant: GrantContext,
+  readOnly: boolean,
+): NeonTool[] {
+  let tools = filterToolsForGrant(NEON_TOOLS, grant);
+  if (readOnly) {
+    tools = tools.filter((tool) => tool.readOnlySafe);
+  }
+  return tools;
+}
 
-  const noticesSuffix = `\n\n<notice>\n${descriptionNotices.join('\n\n')}\n</notice>`;
+/**
+ * Get the final list of available tools after applying grant context and
+ * read-only filtering, with access-control notices appended to each tool's
+ * `description`. This is what the MCP server (server/index.ts) and the MCP
+ * transport route ([transport]/route.ts) register so LLM clients see the
+ * notice inline alongside the tool descriptions.
+ *
+ * For the REST `/api/list-tools` endpoint, prefer `getFilteredTools` +
+ * `getAccessControlNotices` separately to avoid duplicating the notice block
+ * across every tool description.
+ */
+export function getAvailableTools(
+  grant: GrantContext,
+  readOnly: boolean,
+): NeonTool[] {
+  const tools = getFilteredTools(grant, readOnly);
+  const notices = getAccessControlNotices(grant, readOnly);
+  if (notices.length === 0) return tools;
+
+  const noticesSuffix = `\n\n<notice>\n${notices.join('\n\n')}\n</notice>`;
   return tools.map(
     (tool) =>
       ({
