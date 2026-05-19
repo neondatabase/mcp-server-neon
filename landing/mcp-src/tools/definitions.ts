@@ -213,7 +213,7 @@ export const NEON_TOOLS = [
     name: 'create_branch' as const,
     scope: 'branches',
     description:
-      'Create a branch from the default branch of a Neon project for isolated development or testing.',
+      "Create a branch in a Neon project for isolated development or testing. By default the branch is created from the project's default branch; pass `parentId` to fork an existing non-default branch instead (e.g. to make a disposable copy of a dev/staging branch).",
     inputSchema: createBranchInputSchema,
     readOnlySafe: false,
     annotations: {

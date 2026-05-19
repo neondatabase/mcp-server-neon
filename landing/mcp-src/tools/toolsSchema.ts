@@ -134,6 +134,12 @@ export const createBranchInputSchema = z.object({
     .string()
     .describe('The ID of the project to create the branch in'),
   branchName: z.string().optional().describe('An optional name for the branch'),
+  parentId: z
+    .string()
+    .optional()
+    .describe(
+      "An optional branch ID (e.g. 'br-...') to branch from. If omitted, the branch is created from the project's default branch. Use this to fork an existing non-default branch — for example, to make an isolated copy of a dev/staging branch for experimentation.",
+    ),
 });
 
 export const prepareDatabaseMigrationInputSchema = z.object({
