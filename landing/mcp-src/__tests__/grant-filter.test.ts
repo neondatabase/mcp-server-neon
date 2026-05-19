@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   filterToolsForGrant,
   getAvailableTools,
+  getFilteredTools,
+  getAccessControlNotices,
   getAccessControlWarnings,
   injectProjectId,
 } from '../tools/grant-filter';
@@ -99,6 +101,73 @@ describe('getAvailableTools', () => {
       expect(tool.description).toContain(
         'configured and scoped to one project only (proj-123)',
       );
+    }
+  });
+});
+
+describe('getFilteredTools (no notice suffix)', () => {
+  // Issue #257: the REST endpoint surfaces notices as a top-level field,
+  // so the filtered tool list must NOT carry the <notice> block in
+  // descriptions. The MCP-protocol path (getAvailableTools) keeps the
+  // notice inline as today.
+
+  it('returns the same set of tools as getAvailableTools', () => {
+    const filtered = getFilteredTools(grant({ scopes: ['querying'] }), false);
+    const available = getAvailableTools(grant({ scopes: ['querying'] }), false);
+    expect(filtered.map((t) => t.name).sort()).toEqual(
+      available.map((t) => t.name).sort(),
+    );
+  });
+
+  it('does NOT append the read-only notice to tool descriptions', () => {
+    const tools = getFilteredTools(grant(), true);
+    for (const tool of tools) {
+      expect(tool.description).not.toContain('<notice>');
+      expect(tool.description).not.toContain('read-only permissions');
+    }
+  });
+
+  it('does NOT append the project-scope notice to tool descriptions', () => {
+    const tools = getFilteredTools(grant({ projectId: 'p-1' }), false);
+    for (const tool of tools) {
+      expect(tool.description).not.toContain('<notice>');
+      expect(tool.description).not.toContain('scoped to one project only');
+    }
+  });
+});
+
+describe('getAccessControlNotices', () => {
+  it('returns empty array when neither read-only nor project-scoped', () => {
+    expect(getAccessControlNotices(grant(), false)).toEqual([]);
+  });
+
+  it('returns the read-only notice when readOnly=true', () => {
+    const notices = getAccessControlNotices(grant(), true);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toContain('read-only permissions');
+  });
+
+  it('returns the project-scope notice when projectId is set', () => {
+    const notices = getAccessControlNotices(grant({ projectId: 'p-1' }), false);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toContain('scoped to one project only (p-1)');
+  });
+
+  it('returns both notices when both modes are active', () => {
+    const notices = getAccessControlNotices(grant({ projectId: 'p-1' }), true);
+    expect(notices).toHaveLength(2);
+  });
+
+  it('produces the same notices that getAvailableTools concatenates', () => {
+    // Round-trip guard: the MCP-protocol path concatenates the same notices
+    // we surface separately. If the strings ever drift, the regression
+    // shows up here.
+    const tools = getAvailableTools(grant({ projectId: 'p-1' }), true);
+    const notices = getAccessControlNotices(grant({ projectId: 'p-1' }), true);
+    for (const tool of tools) {
+      for (const notice of notices) {
+        expect(tool.description).toContain(notice);
+      }
     }
   });
 });
