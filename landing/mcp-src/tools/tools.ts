@@ -222,15 +222,18 @@ async function handleCreateBranch(
   {
     projectId,
     branchName,
+    parentId,
   }: {
     projectId: string;
     branchName?: string;
+    parentId?: string;
   },
   neonClient: Api<unknown>,
 ) {
   const response = await neonClient.createProjectBranch(projectId, {
     branch: {
       name: branchName,
+      parent_id: parentId,
     },
     endpoints: [
       {
@@ -1286,6 +1289,7 @@ export const NEON_HANDLERS = {
       {
         projectId: params.projectId,
         branchName: params.branchName,
+        parentId: params.parentId,
       },
       neonClient,
     );
