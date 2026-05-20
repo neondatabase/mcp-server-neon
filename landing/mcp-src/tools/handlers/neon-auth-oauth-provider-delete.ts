@@ -1,5 +1,5 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { Api } from '@neondatabase/api-client';
+import { Api, NeonAuthOauthProviderId } from '@neondatabase/api-client';
 import { z } from 'zod/v3';
 import { neonAuthOauthProviderDeleteInputSchema } from '../toolsSchema';
 import { ToolHandlerExtraParams } from '../types';
@@ -22,7 +22,7 @@ export async function handleNeonAuthOauthProviderDelete(
   const res = await neonClient.deleteBranchNeonAuthOauthProvider(
     props.projectId,
     branchId,
-    props.provider_id,
+    props.provider_id as NeonAuthOauthProviderId,
   );
   if (res.status !== 200 && res.status !== 204) {
     return {

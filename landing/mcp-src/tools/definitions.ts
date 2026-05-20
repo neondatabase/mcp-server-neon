@@ -523,7 +523,7 @@ export const NEON_TOOLS = [
     inputSchema: neonAuthOauthProviderAddInputSchema,
     readOnlySafe: false,
     description: `
-    Add an OAuth provider (Google, GitHub, Microsoft, Vercel, ...) to Neon Auth on a branch. Omit \`oauth_provider_config\` for Neon-managed shared credentials, or pass \`client_id\` + \`client_secret\` together for BYO ("standard") mode. For Microsoft, optionally also pass \`microsoft_tenant_id\`. The upstream call is idempotent — re-adding the same provider returns 200 with the existing config.
+    Add an OAuth provider (Google, GitHub, Vercel) to Neon Auth on a branch. Omit \`oauth_provider_config\` for Neon-managed shared credentials, or pass \`client_id\` + \`client_secret\` together for BYO ("standard") mode. The upstream call is idempotent — re-adding the same provider returns 200 with the existing config.
 
     To rotate credentials on an existing provider, use \`neon_auth_oauth_provider_update\` instead. To remove a provider, use \`neon_auth_oauth_provider_delete\`. For sign-in method toggles (email_password, magic_link, phone), use \`neon_auth_methods_update\`.
 
@@ -543,7 +543,7 @@ export const NEON_TOOLS = [
     inputSchema: neonAuthOauthProviderUpdateInputSchema,
     readOnlySafe: false,
     description: `
-    Rotate credentials on an existing OAuth provider. Pass \`provider_id\` and at least one of \`client_id\`, \`client_secret\`, \`microsoft_tenant_id\` inside \`oauth_provider_config\`; omitted fields are left unchanged.
+    Rotate credentials on an existing OAuth provider. Pass \`provider_id\` and at least one of \`client_id\`, \`client_secret\` inside \`oauth_provider_config\`; omitted fields are left unchanged.
 
     To add a new provider, use \`neon_auth_oauth_provider_add\` instead. To remove a provider, use \`neon_auth_oauth_provider_delete\`.
 

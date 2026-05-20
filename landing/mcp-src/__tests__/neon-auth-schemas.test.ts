@@ -246,14 +246,13 @@ describe('neonAuthOauthProviderUpdateInputSchema', () => {
     ).toBe(false);
   });
 
-  it('accepts microsoft tenant rotation alone', () => {
-    expect(
-      neonAuthOauthProviderUpdateInputSchema.safeParse({
-        projectId: 'p1',
-        provider_id: 'microsoft',
-        oauth_provider_config: { microsoft_tenant_id: 't1' },
-      }).success,
-    ).toBe(true);
+  it('rejects microsoft (BetterAuth-only surface)', () => {
+    const r = neonAuthOauthProviderUpdateInputSchema.safeParse({
+      projectId: 'p1',
+      provider_id: 'microsoft',
+      oauth_provider_config: { client_id: 'x' },
+    });
+    expect(r.success).toBe(false);
   });
 });
 

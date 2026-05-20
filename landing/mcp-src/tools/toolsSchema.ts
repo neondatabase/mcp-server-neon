@@ -531,7 +531,21 @@ export const neonAuthMethodsUpdateInputSchema = z
 
 // ---------------------------------------------------------------------------
 // OAuth provider — add / update / delete.
+//
+// Provider list is intentionally narrower than the SDK's `NeonAuthOauthProviderId`
+// enum. The SDK enum (`google`, `github`, `microsoft`, `vercel`) reflects the
+// public API contract from the StackAuth era. Today the MCP only provisions
+// BetterAuth-backed projects (see `neon_auth_provision`), and BetterAuth's
+// neon-auth Zod allowlist accepts only `google` / `github` / `vercel` — calling
+// add with `microsoft` would 400 at runtime. The Lakebase console UI applies
+// the same gating (Microsoft is hidden when `auth_provider === 'better_auth'`).
 // ---------------------------------------------------------------------------
+
+const NEON_AUTH_BETTERAUTH_OAUTH_PROVIDERS = [
+  'google',
+  'github',
+  'vercel',
+] as const satisfies readonly `${NeonAuthOauthProviderId}`[];
 
 const oauthProviderConfigSchema = z
   .object({
@@ -549,13 +563,6 @@ const oauthProviderConfigSchema = z
       .describe(
         'OAuth client secret issued by the upstream provider. Pair with `client_id` for BYO ("standard") mode; omit both for Neon-managed ("shared") mode.',
       ),
-    microsoft_tenant_id: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        'Microsoft Entra ID tenant ID. Only meaningful when `provider_id="microsoft"`; the upstream API will reject it for other providers.',
-      ),
   })
   .strict();
 
@@ -567,9 +574,9 @@ export const neonAuthOauthProviderAddInputSchema = z
       .optional()
       .describe('Branch ID. If omitted, the project default branch is used.'),
     provider_id: z
-      .nativeEnum(NeonAuthOauthProviderId)
+      .enum(NEON_AUTH_BETTERAUTH_OAUTH_PROVIDERS)
       .describe(
-        'Identifier of the OAuth provider to add. Sourced from the SDK enum `NeonAuthOauthProviderId` so it widens automatically as upstream adds providers.',
+        'Identifier of the OAuth provider to add. Limited to providers BetterAuth supports (`google`, `github`, `vercel`).',
       ),
     oauth_provider_config: oauthProviderConfigSchema
       .optional()
@@ -600,10 +607,10 @@ export const neonAuthOauthProviderUpdateInputSchema = z
       .optional()
       .describe('Branch ID. If omitted, the project default branch is used.'),
     provider_id: z
-      .nativeEnum(NeonAuthOauthProviderId)
+      .enum(NEON_AUTH_BETTERAUTH_OAUTH_PROVIDERS)
       .describe('Identifier of the OAuth provider to update.'),
     oauth_provider_config: oauthProviderConfigSchema.describe(
-      'Credential updates. Pass at least one of client_id, client_secret, microsoft_tenant_id; omitted fields are left unchanged.',
+      'Credential updates. Pass at least one of client_id, client_secret; omitted fields are left unchanged.',
     ),
   })
   .strict()
@@ -613,7 +620,7 @@ export const neonAuthOauthProviderUpdateInputSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message:
-          'oauth_provider_config requires at least one field (client_id, client_secret, or microsoft_tenant_id).',
+          'oauth_provider_config requires at least one field (client_id or client_secret).',
         path: ['oauth_provider_config'],
       });
     }
@@ -627,7 +634,7 @@ export const neonAuthOauthProviderDeleteInputSchema = z
       .optional()
       .describe('Branch ID. If omitted, the project default branch is used.'),
     provider_id: z
-      .nativeEnum(NeonAuthOauthProviderId)
+      .enum(NEON_AUTH_BETTERAUTH_OAUTH_PROVIDERS)
       .describe('Identifier of the OAuth provider to delete.'),
   })
   .strict();
