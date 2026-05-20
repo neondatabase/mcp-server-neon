@@ -222,7 +222,7 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 
 - `create_project`, `delete_project`
 - `create_branch`, `delete_branch`, `reset_from_parent`
-- `provision_neon_auth`, `provision_neon_data_api`
+- `neon_auth_provision`, `neon_auth_methods_update`, `neon_auth_oauth_provider_add`, `neon_auth_oauth_provider_update`, `neon_auth_oauth_provider_delete`, `neon_auth_domain_update`, `neon_auth_webhook_update`, `neon_auth_send_test_email`, `provision_neon_data_api`
 - `prepare_database_migration`, `complete_database_migration`
 - `prepare_query_tuning`, `complete_query_tuning`
 
@@ -330,7 +330,12 @@ Notes:
 
 **Neon Auth:**
 
-- **`provision_neon_auth`**: Provisions Neon Auth for a Neon project. It allows developers to easily set up authentication infrastructure by creating an integration with an Auth provider.
+- **`neon_auth_provision`**: Provisions Neon Auth on a branch — managed authentication built on Better Auth. Idempotent.
+- **`neon_auth_methods_update`**: Deep-merge update for sign-in methods (`email_password`, `magic_link`, `phone`), `email_delivery`, `organizations.enabled`, and `app_name`. Pass any combination of slices.
+- **`neon_auth_oauth_provider_add`** / **`neon_auth_oauth_provider_update`** / **`neon_auth_oauth_provider_delete`**: Manage OAuth providers (Google, GitHub, Microsoft, Vercel) — shared or BYO credentials.
+- **`neon_auth_domain_update`**: Atomic batch edit of trusted domains. Pass `add[]`, `remove[]`, and/or `allow_localhost` toggle in a single call.
+- **`neon_auth_webhook_update`**: Update webhook config (URL, events, enabled, timeout).
+- **`neon_auth_send_test_email`**: Verify SMTP credentials end-to-end before saving them via `neon_auth_methods_update.email_delivery`.
 
 **Neon Data API:**
 
