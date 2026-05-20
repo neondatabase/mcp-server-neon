@@ -223,13 +223,6 @@ export const getConnectionStringInputSchema = z.object({
     ),
 });
 
-// ===========================================================================
-// Neon Auth — schemas for the 8-tool restructured surface (no fat-with-ops
-// `configure_neon_auth`). Each tool below has its own schema. Helper sub-
-// schemas (oauth_provider_config, email_delivery, etc.) are reused across
-// tools where shape is genuinely the same.
-// ===========================================================================
-
 export const neonAuthProvisionInputSchema = z.object({
   projectId: z
     .string()
@@ -244,13 +237,9 @@ export const neonAuthProvisionInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'The database name to provision Neon Auth for. If not provided, the default database is used. Note: resolved server-side via `tmp_identity_integrations` for now; will become required when the v2 API ships (the route gains `/databases/{db_name}`).',
+      'The database name to provision Neon Auth for. If not provided, the default database is used.',
     ),
 });
-
-// ---------------------------------------------------------------------------
-// Methods update — deep-merge PATCH for the unified blob.
-// ---------------------------------------------------------------------------
 
 const emailPasswordSliceSchema = z
   .object({

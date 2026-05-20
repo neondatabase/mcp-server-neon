@@ -137,7 +137,7 @@ async function patchMagicLink(
   }
 }
 
-async function putPhone(
+async function patchPhone(
   neonClient: Api<unknown>,
   projectId: string,
   branchId: string,
@@ -148,7 +148,7 @@ async function putPhone(
       path: `/projects/${encodeURIComponent(projectId)}/branches/${encodeURIComponent(
         branchId,
       )}/auth/plugins/phone_number`,
-      method: 'PUT',
+      method: 'PATCH',
       body: payload,
       secure: true,
       type: ContentType.Json,
@@ -291,7 +291,7 @@ export async function handleNeonAuthMethodsUpdate(
   }
   if (props.sign_in_methods?.phone) {
     tasks.push(
-      putPhone(
+      patchPhone(
         neonClient,
         props.projectId,
         branchId,
