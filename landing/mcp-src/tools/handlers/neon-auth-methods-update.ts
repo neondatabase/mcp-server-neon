@@ -73,6 +73,11 @@ function isOk(status: number): boolean {
   return status >= 200 && status < 300;
 }
 
+// TODO(api-client-bump): swap raw `neonClient.request({...})` for typed
+// `neonClient.updateNeonAuthConfig(projectId, branchId, { app_name })` once
+// `@neondatabase/api-client` ships a version that exposes the method
+// (`/auth/config` PATCH is `x-internal: true` today, so the SDK omits it —
+// promotion to public + bump unlocks the typed call).
 async function patchAppName(
   neonClient: Api<unknown>,
   projectId: string,
@@ -103,6 +108,10 @@ async function patchAppName(
   }
 }
 
+// TODO(api-client-bump): swap raw `neonClient.request({...})` for typed
+// `neonClient.updateNeonAuthMagicLinkPlugin(projectId, branchId, payload)`
+// once `@neondatabase/api-client` ships a version >= the bump that picks up
+// the magic-link endpoint added in goapp PR #5585.
 async function patchMagicLink(
   neonClient: Api<unknown>,
   projectId: string,
@@ -137,6 +146,10 @@ async function patchMagicLink(
   }
 }
 
+// TODO(api-client-bump): swap raw `neonClient.request({...})` for typed
+// `neonClient.updateNeonAuthPhoneNumberPlugin(projectId, branchId, payload)`
+// once `@neondatabase/api-client` ships a version >= the bump that picks up
+// the phone-number endpoint added in goapp PR #5599.
 async function patchPhone(
   neonClient: Api<unknown>,
   projectId: string,
