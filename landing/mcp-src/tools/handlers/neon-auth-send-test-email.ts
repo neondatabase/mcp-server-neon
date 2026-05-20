@@ -3,7 +3,10 @@ import { Api } from '@neondatabase/api-client';
 import { z } from 'zod/v3';
 import { neonAuthSendTestEmailInputSchema } from '../toolsSchema';
 import { ToolHandlerExtraParams } from '../types';
-import { resolveNeonAuthBranchId } from './neon-auth-utils';
+import {
+  ensureNeonAuthProvisioned,
+  resolveNeonAuthBranchId,
+} from './neon-auth-utils';
 
 type Props = z.infer<typeof neonAuthSendTestEmailInputSchema>;
 
@@ -18,6 +21,12 @@ export async function handleNeonAuthSendTestEmail(
     props.branchId,
     neonClient,
   );
+  const preflight = await ensureNeonAuthProvisioned(
+    neonClient,
+    props.projectId,
+    branchId,
+  );
+  if (preflight) return preflight;
 
   const res = await neonClient.sendNeonAuthTestEmail(
     props.projectId,

@@ -10,7 +10,10 @@ import { z } from 'zod/v3';
 import { isAxiosError } from 'axios';
 import { neonAuthMethodsUpdateInputSchema } from '../toolsSchema';
 import { ToolHandlerExtraParams } from '../types';
-import { resolveNeonAuthBranchId } from './neon-auth-utils';
+import {
+  ensureNeonAuthProvisioned,
+  resolveNeonAuthBranchId,
+} from './neon-auth-utils';
 
 type Props = z.infer<typeof neonAuthMethodsUpdateInputSchema>;
 
@@ -274,6 +277,12 @@ export async function handleNeonAuthMethodsUpdate(
     props.branchId,
     neonClient,
   );
+  const preflight = await ensureNeonAuthProvisioned(
+    neonClient,
+    props.projectId,
+    branchId,
+  );
+  if (preflight) return preflight;
 
   const tasks: Promise<SliceResult>[] = [];
 

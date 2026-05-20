@@ -3,7 +3,10 @@ import { Api, NeonAuthWebhookConfig } from '@neondatabase/api-client';
 import { z } from 'zod/v3';
 import { neonAuthWebhookUpdateInputSchema } from '../toolsSchema';
 import { ToolHandlerExtraParams } from '../types';
-import { resolveNeonAuthBranchId } from './neon-auth-utils';
+import {
+  ensureNeonAuthProvisioned,
+  resolveNeonAuthBranchId,
+} from './neon-auth-utils';
 
 type Props = z.infer<typeof neonAuthWebhookUpdateInputSchema>;
 
@@ -18,6 +21,12 @@ export async function handleNeonAuthWebhookUpdate(
     props.branchId,
     neonClient,
   );
+  const preflight = await ensureNeonAuthProvisioned(
+    neonClient,
+    props.projectId,
+    branchId,
+  );
+  if (preflight) return preflight;
 
   const body: NeonAuthWebhookConfig = { enabled: props.enabled };
   if (props.url !== undefined) body.webhook_url = props.url;

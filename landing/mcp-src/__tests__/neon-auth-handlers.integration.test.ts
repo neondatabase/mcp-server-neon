@@ -22,6 +22,9 @@ function defaultBranchMock() {
     listProjectBranches: vi.fn().mockResolvedValue({
       data: { branches: [{ id: 'br-default', default: true }] },
     }),
+    // Pre-flight probe used by ensureNeonAuthProvisioned in every non-provision
+    // handler. 200 = "provisioned, proceed". Override per-test for 404 / 5xx.
+    getNeonAuth: vi.fn().mockResolvedValue({ status: 200, data: {} }),
   };
 }
 
@@ -506,6 +509,113 @@ describe('handleNeonAuthSendTestEmail', () => {
     expect(result.isError).toBe(true);
     if (result.content[0].type === 'text') {
       expect(result.content[0].text).toContain('auth failed');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ensureNeonAuthProvisioned preflight — every non-provision handler short-
+// circuits when getNeonAuth returns 404 (or surfaces a generic verify-failed
+// error on a 5xx outage), without invoking the per-op SDK mutation.
+// ---------------------------------------------------------------------------
+describe('Neon Auth preflight (not-provisioned + verify-failed)', () => {
+  it('neon_auth_methods_update — 404 returns canonical not-provisioned message and does NOT call any per-slice SDK', async () => {
+    const updateNeonAuthEmailAndPasswordConfig = vi.fn();
+    const neonClient = {
+      ...defaultBranchMock(),
+      getNeonAuth: vi.fn().mockResolvedValue({ status: 404 }),
+      updateNeonAuthEmailAndPasswordConfig,
+    };
+    const result = await handleNeonAuthMethodsUpdate(
+      {
+        projectId: 'p1',
+        branchId: 'b1',
+        sign_in_methods: { email_password: { enabled: true } },
+      },
+      neonClient as never,
+      extra,
+    );
+    expect(result.isError).toBe(true);
+    expect(updateNeonAuthEmailAndPasswordConfig).not.toHaveBeenCalled();
+    if (result.content[0].type === 'text') {
+      expect(result.content[0].text).toContain('not provisioned');
+      expect(result.content[0].text).toContain('explicit approval');
+      expect(result.content[0].text).toContain('side effects');
+      expect(result.content[0].text).toContain('neon_auth_provision');
+    }
+  });
+
+  it('neon_auth_oauth_provider_add — 404 returns canonical message and does NOT call addBranchNeonAuthOauthProvider', async () => {
+    const addBranchNeonAuthOauthProvider = vi.fn();
+    const neonClient = {
+      ...defaultBranchMock(),
+      getNeonAuth: vi.fn().mockResolvedValue({ status: 404 }),
+      addBranchNeonAuthOauthProvider,
+    };
+    const result = await handleNeonAuthOauthProviderAdd(
+      { projectId: 'p1', branchId: 'b1', provider_id: 'google' },
+      neonClient as never,
+      extra,
+    );
+    expect(result.isError).toBe(true);
+    expect(addBranchNeonAuthOauthProvider).not.toHaveBeenCalled();
+    if (result.content[0].type === 'text') {
+      expect(result.content[0].text).toContain('not provisioned');
+    }
+  });
+
+  it('neon_auth_domain_update — 404 returns canonical message and does NOT call addBranchNeonAuthTrustedDomain', async () => {
+    const addBranchNeonAuthTrustedDomain = vi.fn();
+    const neonClient = {
+      ...defaultBranchMock(),
+      getNeonAuth: vi.fn().mockResolvedValue({ status: 404 }),
+      addBranchNeonAuthTrustedDomain,
+    };
+    const result = await handleNeonAuthDomainUpdate(
+      {
+        projectId: 'p1',
+        branchId: 'b1',
+        add: ['https://app.example.com'],
+      },
+      neonClient as never,
+      extra,
+    );
+    expect(result.isError).toBe(true);
+    expect(addBranchNeonAuthTrustedDomain).not.toHaveBeenCalled();
+    if (result.content[0].type === 'text') {
+      expect(result.content[0].text).toContain('not provisioned');
+    }
+  });
+
+  it('neon_auth_webhook_update — 5xx returns generic verify-failed (NOT the not-provisioned message)', async () => {
+    const updateNeonAuthWebhookConfig = vi.fn();
+    const neonClient = {
+      ...defaultBranchMock(),
+      getNeonAuth: vi.fn().mockResolvedValue({
+        status: 502,
+        statusText: 'Bad Gateway',
+      }),
+      updateNeonAuthWebhookConfig,
+    };
+    const result = await handleNeonAuthWebhookUpdate(
+      {
+        projectId: 'p1',
+        branchId: 'b1',
+        enabled: true,
+        url: 'https://hooks.example.com/neon',
+        events: ['user.created'],
+      },
+      neonClient as never,
+      extra,
+    );
+    expect(result.isError).toBe(true);
+    expect(updateNeonAuthWebhookConfig).not.toHaveBeenCalled();
+    if (result.content[0].type === 'text') {
+      // 5xx must NOT be misrepresented as "not provisioned"
+      expect(result.content[0].text).not.toContain('not provisioned');
+      expect(result.content[0].text).not.toContain('explicit approval');
+      expect(result.content[0].text).toContain('Failed to verify');
+      expect(result.content[0].text).toContain('502');
     }
   });
 });

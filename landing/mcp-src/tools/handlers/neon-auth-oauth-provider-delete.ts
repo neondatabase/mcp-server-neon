@@ -3,7 +3,10 @@ import { Api, NeonAuthOauthProviderId } from '@neondatabase/api-client';
 import { z } from 'zod/v3';
 import { neonAuthOauthProviderDeleteInputSchema } from '../toolsSchema';
 import { ToolHandlerExtraParams } from '../types';
-import { resolveNeonAuthBranchId } from './neon-auth-utils';
+import {
+  ensureNeonAuthProvisioned,
+  resolveNeonAuthBranchId,
+} from './neon-auth-utils';
 
 type Props = z.infer<typeof neonAuthOauthProviderDeleteInputSchema>;
 
@@ -18,6 +21,12 @@ export async function handleNeonAuthOauthProviderDelete(
     props.branchId,
     neonClient,
   );
+  const preflight = await ensureNeonAuthProvisioned(
+    neonClient,
+    props.projectId,
+    branchId,
+  );
+  if (preflight) return preflight;
 
   const res = await neonClient.deleteBranchNeonAuthOauthProvider(
     props.projectId,

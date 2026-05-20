@@ -7,7 +7,10 @@ import {
 import { z } from 'zod/v3';
 import { neonAuthOauthProviderAddInputSchema } from '../toolsSchema';
 import { ToolHandlerExtraParams } from '../types';
-import { resolveNeonAuthBranchId } from './neon-auth-utils';
+import {
+  ensureNeonAuthProvisioned,
+  resolveNeonAuthBranchId,
+} from './neon-auth-utils';
 
 type Props = z.infer<typeof neonAuthOauthProviderAddInputSchema>;
 
@@ -22,6 +25,12 @@ export async function handleNeonAuthOauthProviderAdd(
     props.branchId,
     neonClient,
   );
+  const preflight = await ensureNeonAuthProvisioned(
+    neonClient,
+    props.projectId,
+    branchId,
+  );
+  if (preflight) return preflight;
 
   const cfg = props.oauth_provider_config;
   const body: NeonAuthAddOAuthProviderRequest = {

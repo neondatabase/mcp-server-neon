@@ -4,7 +4,10 @@ import { z } from 'zod/v3';
 import { isAxiosError } from 'axios';
 import { neonAuthDomainUpdateInputSchema } from '../toolsSchema';
 import { ToolHandlerExtraParams } from '../types';
-import { resolveNeonAuthBranchId } from './neon-auth-utils';
+import {
+  ensureNeonAuthProvisioned,
+  resolveNeonAuthBranchId,
+} from './neon-auth-utils';
 
 type Props = z.infer<typeof neonAuthDomainUpdateInputSchema>;
 
@@ -109,6 +112,12 @@ export async function handleNeonAuthDomainUpdate(
     props.branchId,
     neonClient,
   );
+  const preflight = await ensureNeonAuthProvisioned(
+    neonClient,
+    props.projectId,
+    branchId,
+  );
+  if (preflight) return preflight;
 
   const addResults: UrlOutcome[] = [];
   const removeResults: UrlOutcome[] = [];

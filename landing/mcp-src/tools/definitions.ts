@@ -508,6 +508,9 @@ export const NEON_TOOLS = [
     Atomic per slice, not across slices, until the upstream API ships a unified PATCH with If-Match. On mid-fan-out failure, returns a partial-success report listing succeeded vs. failed slices; the agent should re-call with only the failed slices once the underlying issue is resolved.
 
     SECURITY: SMTP \`password\` inside \`email_delivery\` is treated as write-only — never echoed back in responses.
+
+    PREREQUISITES:
+    Neon Auth must already be provisioned for the target branch. If the response indicates "Neon Auth is not provisioned" (HTTP 404), DO NOT automatically call \`neon_auth_provision\` — provisioning has side effects (creates the neon_auth schema, deploys an auth service in your compute region, may incur cost). Surface the prerequisite to the user, explain what \`neon_auth_provision\` does, and ask for explicit approval before calling it.
     `,
     annotations: {
       title: 'Update Neon Auth Methods',
@@ -528,6 +531,9 @@ export const NEON_TOOLS = [
     To rotate credentials on an existing provider, use \`neon_auth_oauth_provider_update\` instead. To remove a provider, use \`neon_auth_oauth_provider_delete\`. For sign-in method toggles (email_password, magic_link, phone), use \`neon_auth_methods_update\`.
 
     SECURITY: \`client_secret\` is treated as write-only — never echoed back in responses.
+
+    PREREQUISITES:
+    Neon Auth must already be provisioned for the target branch. If the response indicates "Neon Auth is not provisioned" (HTTP 404), DO NOT automatically call \`neon_auth_provision\` — provisioning has side effects (creates the neon_auth schema, deploys an auth service in your compute region, may incur cost). Surface the prerequisite to the user, explain what \`neon_auth_provision\` does, and ask for explicit approval before calling it.
     `,
     annotations: {
       title: 'Add Neon Auth OAuth Provider',
@@ -548,6 +554,9 @@ export const NEON_TOOLS = [
     To add a new provider, use \`neon_auth_oauth_provider_add\` instead. To remove a provider, use \`neon_auth_oauth_provider_delete\`.
 
     SECURITY: \`client_secret\` is treated as write-only — never echoed back in responses.
+
+    PREREQUISITES:
+    Neon Auth must already be provisioned for the target branch. If the response indicates "Neon Auth is not provisioned" (HTTP 404), DO NOT automatically call \`neon_auth_provision\` — provisioning has side effects (creates the neon_auth schema, deploys an auth service in your compute region, may incur cost). Surface the prerequisite to the user, explain what \`neon_auth_provision\` does, and ask for explicit approval before calling it.
     `,
     annotations: {
       title: 'Update Neon Auth OAuth Provider',
@@ -564,6 +573,9 @@ export const NEON_TOOLS = [
     readOnlySafe: false,
     description: `
     Delete an OAuth provider from Neon Auth on a branch. To rotate credentials only, use \`neon_auth_oauth_provider_update\` instead. To add a new provider, use \`neon_auth_oauth_provider_add\`.
+
+    PREREQUISITES:
+    Neon Auth must already be provisioned for the target branch. If the response indicates "Neon Auth is not provisioned" (HTTP 404), DO NOT automatically call \`neon_auth_provision\` — provisioning has side effects (creates the neon_auth schema, deploys an auth service in your compute region, may incur cost). Surface the prerequisite to the user, explain what \`neon_auth_provision\` does, and ask for explicit approval before calling it.
     `,
     annotations: {
       title: 'Delete Neon Auth OAuth Provider',
@@ -584,6 +596,9 @@ export const NEON_TOOLS = [
     Trusted domains are a security boundary: Neon Auth uses them for (a) CSRF on the request Origin/Referer header and (b) the allowlist of URLs the auth server may redirect users to (callbackURL, redirectTo, errorCallbackURL, newUserCallbackURL across sign-in/sign-up, OAuth provider flows, email verification, password reset, and magic-link flows). Broadening the list weakens these defences.
 
     Does NOT manage OAuth providers (use \`neon_auth_oauth_provider_*\`) or webhooks (use \`neon_auth_webhook_update\`). Per-call atomicity, not cross-slice atomicity: on mid-batch failure, succeeded entries are NOT rolled back; the response surfaces per-URL outcomes so the agent can re-call with only the failed entries.
+
+    PREREQUISITES:
+    Neon Auth must already be provisioned for the target branch. If the response indicates "Neon Auth is not provisioned" (HTTP 404), DO NOT automatically call \`neon_auth_provision\` — provisioning has side effects (creates the neon_auth schema, deploys an auth service in your compute region, may incur cost). Surface the prerequisite to the user, explain what \`neon_auth_provision\` does, and ask for explicit approval before calling it.
     `,
     annotations: {
       title: 'Update Neon Auth Trusted Domains',
@@ -604,6 +619,9 @@ export const NEON_TOOLS = [
     Allowed events: user.before_create, user.created, send.otp, send.magic_link.
 
     SEMANTICS: the upstream endpoint REPLACES the saved configuration. Always send the full intended state (url, events, timeout_seconds) on every call — fields you omit are reset, not preserved. Only \`enabled\` is independent: passing \`{ enabled: false }\` alone disables delivery without altering the saved url/events. Passing \`{ enabled: true }\` alone WILL clear url/events.
+
+    PREREQUISITES:
+    Neon Auth must already be provisioned for the target branch. If the response indicates "Neon Auth is not provisioned" (HTTP 404), DO NOT automatically call \`neon_auth_provision\` — provisioning has side effects (creates the neon_auth schema, deploys an auth service in your compute region, may incur cost). Surface the prerequisite to the user, explain what \`neon_auth_provision\` does, and ask for explicit approval before calling it.
     `,
     annotations: {
       title: 'Update Neon Auth Webhook',
@@ -624,6 +642,9 @@ export const NEON_TOOLS = [
     Use \`neon_auth_methods_update\` with the \`email_delivery\` slice to actually save SMTP credentials. Marked NOT idempotent — every call sends a real email.
 
     SECURITY: \`password\` is treated as write-only — never echoed back in responses.
+
+    PREREQUISITES:
+    Neon Auth must already be provisioned for the target branch. If the response indicates "Neon Auth is not provisioned" (HTTP 404), DO NOT automatically call \`neon_auth_provision\` — provisioning has side effects (creates the neon_auth schema, deploys an auth service in your compute region, may incur cost). Surface the prerequisite to the user, explain what \`neon_auth_provision\` does, and ask for explicit approval before calling it.
     `,
     annotations: {
       title: 'Send Neon Auth Test Email',
