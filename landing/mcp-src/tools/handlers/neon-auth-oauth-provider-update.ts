@@ -1,6 +1,7 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   Api,
+  NeonAuthOauthProviderId,
   NeonAuthUpdateOAuthProviderRequest,
 } from '@neondatabase/api-client';
 import { z } from 'zod/v3';
@@ -26,14 +27,11 @@ export async function handleNeonAuthOauthProviderUpdate(
   const body: NeonAuthUpdateOAuthProviderRequest = {};
   if (cfg.client_id !== undefined) body.client_id = cfg.client_id;
   if (cfg.client_secret !== undefined) body.client_secret = cfg.client_secret;
-  if (cfg.microsoft_tenant_id !== undefined) {
-    body.microsoft_tenant_id = cfg.microsoft_tenant_id;
-  }
 
   const res = await neonClient.updateBranchNeonAuthOauthProvider(
     props.projectId,
     branchId,
-    props.provider_id,
+    props.provider_id as NeonAuthOauthProviderId,
     body,
   );
   if (res.status !== 200 && res.status !== 204) {

@@ -1,5 +1,9 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { Api, NeonAuthAddOAuthProviderRequest } from '@neondatabase/api-client';
+import {
+  Api,
+  NeonAuthAddOAuthProviderRequest,
+  NeonAuthOauthProviderId,
+} from '@neondatabase/api-client';
 import { z } from 'zod/v3';
 import { neonAuthOauthProviderAddInputSchema } from '../toolsSchema';
 import { ToolHandlerExtraParams } from '../types';
@@ -20,12 +24,11 @@ export async function handleNeonAuthOauthProviderAdd(
   );
 
   const cfg = props.oauth_provider_config;
-  const body: NeonAuthAddOAuthProviderRequest = { id: props.provider_id };
+  const body: NeonAuthAddOAuthProviderRequest = {
+    id: props.provider_id as NeonAuthOauthProviderId,
+  };
   if (cfg?.client_id !== undefined) body.client_id = cfg.client_id;
   if (cfg?.client_secret !== undefined) body.client_secret = cfg.client_secret;
-  if (cfg?.microsoft_tenant_id !== undefined) {
-    body.microsoft_tenant_id = cfg.microsoft_tenant_id;
-  }
 
   const res = await neonClient.addBranchNeonAuthOauthProvider(
     props.projectId,

@@ -283,8 +283,8 @@ describe('handleNeonAuthOauthProviderUpdate', () => {
       {
         projectId: 'p1',
         branchId: 'b1',
-        provider_id: NeonAuthOauthProviderId.Microsoft,
-        oauth_provider_config: { microsoft_tenant_id: 't1' },
+        provider_id: 'github',
+        oauth_provider_config: { client_secret: 'rotated' },
       },
       neonClient as never,
       extra,
@@ -292,8 +292,8 @@ describe('handleNeonAuthOauthProviderUpdate', () => {
     expect(updateBranchNeonAuthOauthProvider).toHaveBeenCalledWith(
       'p1',
       'b1',
-      NeonAuthOauthProviderId.Microsoft,
-      { microsoft_tenant_id: 't1' },
+      'github',
+      { client_secret: 'rotated' },
     );
   });
 });
