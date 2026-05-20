@@ -637,11 +637,24 @@ export const neonAuthOauthProviderDeleteInputSchema = z
 // Webhook update.
 // ---------------------------------------------------------------------------
 
+// TODO(api-client-bump): replace this hardcoded array with
+//   `as const satisfies readonly NeonAuthWebhookEvent[]`
+// where `NeonAuthWebhookEvent = NonNullable<NeonAuthWebhookConfig['enabled_events']>[number]`,
+// once `@neondatabase/api-client` ships a regenerated `NeonAuthWebhookConfig.enabled_events`
+// inline union that covers the full 7-event set. SDK 2.7.1 only exposes the
+// first 4 (organization.invitation.* + phone_number.verified landed later in
+// goapp's `public-v2.yaml`), so the `satisfies` clause would currently fail.
+// Until the SDK catches up, this list mirrors the YAML by hand —
+// `public-v2.yaml` `NeonAuthWebhookConfig.enabled_events` is the source of
+// truth.
 const NEON_AUTH_WEBHOOK_EVENTS = [
   'user.before_create',
   'user.created',
   'send.otp',
   'send.magic_link',
+  'organization.invitation.created',
+  'organization.invitation.accepted',
+  'phone_number.verified',
 ] as const;
 
 export const neonAuthWebhookUpdateInputSchema = z
