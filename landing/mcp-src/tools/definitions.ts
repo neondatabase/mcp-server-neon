@@ -466,7 +466,7 @@ export const NEON_TOOLS = [
     description: `
     Provisions Neon Auth for a Neon branch. Neon Auth is a managed authentication service built on Better Auth, fully integrated into the Neon platform. Idempotent — re-enabling on a branch that already has Neon Auth returns the existing details (the upstream 409 is treated as success).
 
-    Use this BEFORE any other \`neon_auth_*\` tool. Once provisioned, configure auth methods with \`neon_auth_methods_update\`, manage OAuth providers with \`neon_auth_oauth_provider_add\` / \`neon_auth_oauth_provider_update\` / \`neon_auth_oauth_provider_delete\`, manage trusted domains with \`neon_auth_domain_update\`, configure webhooks with \`neon_auth_webhook_update\`, and verify SMTP credentials with \`neon_auth_send_test_email\`.
+    Use this BEFORE any other \`neon_auth_*\` tool.
 
     <workflow>
       The tool will:
@@ -482,8 +482,6 @@ export const NEON_TOOLS = [
       - Works with RLS: JWTs are validated by the Data API for authenticated queries
       - Better Auth compatible: Exposes the same APIs and schema as Better Auth
     </key_features>
-
-    \`databaseName\` is resolved server-side via \`tmp_identity_integrations\` for now; it will become required when the v2 API ships (the route gains \`/databases/{db_name}\`).
     `,
     annotations: {
       title: 'Provision Neon Auth',
