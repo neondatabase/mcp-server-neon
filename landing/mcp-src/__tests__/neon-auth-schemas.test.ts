@@ -351,13 +351,21 @@ describe('neonAuthWebhookUpdateInputSchema', () => {
     ).toBe(false);
   });
 
-  it('accepts enabled alone', () => {
+  it('accepts enabled=false alone (disable without clobbering url/events)', () => {
     expect(
       neonAuthWebhookUpdateInputSchema.safeParse({
         projectId: 'p1',
-        enabled: true,
+        enabled: false,
       }).success,
     ).toBe(true);
+  });
+
+  it('rejects enabled=true without url/events (PUT semantics would clobber)', () => {
+    const r = neonAuthWebhookUpdateInputSchema.safeParse({
+      projectId: 'p1',
+      enabled: true,
+    });
+    expect(r.success).toBe(false);
   });
 
   it('rejects unknown event in events list', () => {
@@ -365,6 +373,7 @@ describe('neonAuthWebhookUpdateInputSchema', () => {
       neonAuthWebhookUpdateInputSchema.safeParse({
         projectId: 'p1',
         enabled: true,
+        url: 'https://hooks.example.com/neon',
         events: ['user.deleted'],
       }).success,
     ).toBe(false);
@@ -375,7 +384,42 @@ describe('neonAuthWebhookUpdateInputSchema', () => {
       neonAuthWebhookUpdateInputSchema.safeParse({
         projectId: 'p1',
         enabled: true,
+        url: 'https://hooks.example.com/neon',
+        events: ['user.created'],
         timeout_seconds: 30,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects http:// webhook url (SSRF guard)', () => {
+    expect(
+      neonAuthWebhookUpdateInputSchema.safeParse({
+        projectId: 'p1',
+        enabled: true,
+        url: 'http://hooks.example.com/neon',
+        events: ['user.created'],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects loopback https webhook url (SSRF guard)', () => {
+    expect(
+      neonAuthWebhookUpdateInputSchema.safeParse({
+        projectId: 'p1',
+        enabled: true,
+        url: 'https://127.0.0.1/neon',
+        events: ['user.created'],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects link-local metadata webhook url (SSRF guard)', () => {
+    expect(
+      neonAuthWebhookUpdateInputSchema.safeParse({
+        projectId: 'p1',
+        enabled: true,
+        url: 'https://169.254.169.254/latest/meta-data/',
+        events: ['user.created'],
       }).success,
     ).toBe(false);
   });

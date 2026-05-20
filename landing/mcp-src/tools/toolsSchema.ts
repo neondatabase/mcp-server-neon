@@ -223,6 +223,41 @@ export const getConnectionStringInputSchema = z.object({
     ),
 });
 
+// Server-side SSRF guards. Applied to user-supplied hostnames/URLs that the
+// Neon Auth control plane will dial out to (webhook deliveries, SMTP probes,
+// test emails). Block loopback / private / link-local / cloud-metadata.
+const PRIVATE_HOST_LITERAL_RE =
+  /^(localhost|0\.0\.0\.0|127\.|10\.|192\.168\.|169\.254\.|100\.64\.|172\.(1[6-9]|2\d|3[0-1])\.|::1?$|\[::1?\]|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:|\[fc[0-9a-f]{2}:|\[fd[0-9a-f]{2}:|\[fe80:)/i;
+
+function isBlockedDialOutHost(host: string): boolean {
+  const h = host.trim().toLowerCase();
+  if (!h) return true;
+  if (PRIVATE_HOST_LITERAL_RE.test(h)) return true;
+  // metadata services
+  if (h === '169.254.169.254' || h === 'metadata.google.internal') return true;
+  // .local mDNS, .internal cloud metadata, .localhost reserved TLD
+  if (/\.(local|internal|localhost)$/.test(h)) return true;
+  return false;
+}
+
+function isHttpsDialOutUrl(v: string): boolean {
+  try {
+    const u = new URL(v);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+    // Disallow plain http for non-localhost since this URL is dialed by the
+    // server. Localhost dial-outs from the upstream make no sense either, so
+    // we reject them outright.
+    if (u.protocol === 'http:') return false;
+    if (isBlockedDialOutHost(u.hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const WEBHOOK_BLOCKED_URL_MSG =
+  'Webhook URL must be an https:// URL pointing at a publicly reachable host. http:// is rejected; loopback, private (RFC1918), link-local, carrier-grade NAT, and cloud-metadata addresses are blocked to prevent SSRF.';
+
 export const neonAuthProvisionInputSchema = z.object({
   projectId: z
     .string()
@@ -619,8 +654,11 @@ export const neonAuthWebhookUpdateInputSchema = z
     url: z
       .string()
       .url()
+      .refine(isHttpsDialOutUrl, { message: WEBHOOK_BLOCKED_URL_MSG })
       .optional()
-      .describe('Destination URL receiving webhook deliveries.'),
+      .describe(
+        'Destination URL receiving webhook deliveries. Must be an https:// URL on a publicly reachable host. http://, loopback, private (RFC1918), link-local, and cloud-metadata addresses are rejected to prevent SSRF.',
+      ),
     events: z
       .array(z.enum(NEON_AUTH_WEBHOOK_EVENTS))
       .optional()
@@ -633,9 +671,33 @@ export const neonAuthWebhookUpdateInputSchema = z
       .min(1)
       .max(10)
       .optional()
-      .describe('Per-delivery HTTP timeout in seconds (1-10).'),
+      .describe('Per-delivery timeout in seconds (1-10).'),
   })
-  .strict();
+  .strict()
+  .superRefine((val, ctx) => {
+    // Upstream PUT replaces the saved webhook config. If the caller is
+    // turning the webhook ON without supplying url/events, we'd silently
+    // clear those — block at validation time so the agent has to send the
+    // full intended state.
+    if (val.enabled === true) {
+      if (val.url === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            '`url` is required when `enabled` is true. The upstream PUT replaces the saved config, so omitting `url` would clear the existing value.',
+          path: ['url'],
+        });
+      }
+      if (val.events === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            '`events` is required when `enabled` is true. The upstream PUT replaces the saved config, so omitting `events` would clear the existing list.',
+          path: ['events'],
+        });
+      }
+    }
+  });
 
 // ---------------------------------------------------------------------------
 // Domain update — atomic batch (add / remove / allow_localhost).
