@@ -49,34 +49,29 @@ async function addOne(
   }
 }
 
-async function removeBatch(
+async function removeOne(
   neonClient: Api<unknown>,
   projectId: string,
   branchId: string,
-  urls: string[],
-): Promise<UrlOutcome[]> {
-  // Batch endpoint accepts the list of URLs directly. v1 does not require
-  // URL → id resolution because the delete endpoint takes the domain string.
+  url: string,
+): Promise<UrlOutcome> {
+  // One delete request per URL — gives per-URL outcomes on partial failure
+  // instead of collapsing the batch into a single status.
   try {
     const res = await neonClient.deleteBranchNeonAuthTrustedDomain(
       projectId,
       branchId,
       {
         auth_provider: NeonAuthSupportedAuthProvider.BetterAuth,
-        domains: urls.map((domain) => ({ domain })),
+        domains: [{ domain: url }],
       },
     );
     if (res.status !== 200) {
-      return urls.map((url) => ({
-        url,
-        ok: false,
-        error: `${res.status} ${res.statusText}`,
-      }));
+      return { url, ok: false, error: `${res.status} ${res.statusText}` };
     }
-    return urls.map((url) => ({ url, ok: true }));
+    return { url, ok: true };
   } catch (err) {
-    const error = describeError(err);
-    return urls.map((url) => ({ url, ok: false, error }));
+    return { url, ok: false, error: describeError(err) };
   }
 }
 
@@ -132,14 +127,12 @@ export async function handleNeonAuthDomainUpdate(
   }
 
   if (props.remove && props.remove.length > 0) {
-    removeResults.push(
-      ...(await removeBatch(
-        neonClient,
-        props.projectId,
-        branchId,
-        props.remove,
-      )),
+    const results = await Promise.all(
+      props.remove.map((url) =>
+        removeOne(neonClient, props.projectId, branchId, url),
+      ),
     );
+    removeResults.push(...results);
   }
 
   if (props.allow_localhost !== undefined) {

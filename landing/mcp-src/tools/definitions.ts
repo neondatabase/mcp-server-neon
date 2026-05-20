@@ -598,13 +598,15 @@ export const NEON_TOOLS = [
     Update the Neon Auth webhook configuration for a branch (URL, enabled flag, allowed events, per-delivery timeout). Webhooks are infrastructure-shaped — kept separate from \`neon_auth_methods_update\` because they're not an auth method.
 
     Allowed events: user.before_create, user.created, send.otp, send.magic_link.
+
+    SEMANTICS: the upstream endpoint REPLACES the saved configuration. Always send the full intended state (url, events, timeout_seconds) on every call — fields you omit are reset, not preserved. Only \`enabled\` is independent: passing \`{ enabled: false }\` alone disables delivery without altering the saved url/events. Passing \`{ enabled: true }\` alone WILL clear url/events.
     `,
     annotations: {
       title: 'Update Neon Auth Webhook',
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: true,
-      openWorldHint: false,
+      openWorldHint: true,
     } satisfies ToolAnnotations,
   },
   {
@@ -624,7 +626,7 @@ export const NEON_TOOLS = [
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
-      openWorldHint: false,
+      openWorldHint: true,
     } satisfies ToolAnnotations,
   },
   {
