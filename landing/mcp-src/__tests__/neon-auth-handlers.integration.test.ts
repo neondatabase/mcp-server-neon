@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { AxiosError } from 'axios';
+import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   NeonAuthOauthProviderId,
   NeonAuthProviderProjectOwnedBy,
@@ -16,6 +17,17 @@ import { handleNeonAuthSendTestEmail } from '../tools/handlers/neon-auth-send-te
 import type { ToolHandlerExtraParams } from '../tools/types';
 
 const extra = {} as ToolHandlerExtraParams;
+
+/**
+ * Extract the first text content block from a tool result. Asserts that the
+ * block exists and is text-typed; throws on mismatch so callers can use the
+ * returned string in `.toContain(...)` chains without `if`-narrowing.
+ */
+function getText(result: CallToolResult): string {
+  const block = result.content[0];
+  expect(block.type).toBe('text');
+  return (block as { type: 'text'; text: string }).text;
+}
 
 function defaultBranchMock() {
   return {
@@ -80,10 +92,9 @@ describe('handleNeonAuthProvision', () => {
     );
     expect(result.isError).toBeFalsy();
     expect(getNeonAuth).toHaveBeenCalledWith('p1', 'br-1');
-    if (result.content[0].type === 'text') {
-      expect(result.content[0].text).toContain('Neon Auth already provisioned');
-      expect(result.content[0].text).toContain('https://auth.example/');
-    }
+    const text = getText(result);
+    expect(text).toContain('Neon Auth already provisioned');
+    expect(text).toContain('https://auth.example/');
   });
 
   it('returns success on 201 from createNeonAuth', async () => {
@@ -108,10 +119,9 @@ describe('handleNeonAuthProvision', () => {
       extra,
     );
     expect(result.isError).toBeFalsy();
-    if (result.content[0].type === 'text') {
-      expect(result.content[0].text).toContain('successfully provisioned');
-      expect(result.content[0].text).toContain('https://auth.new/');
-    }
+    const text = getText(result);
+    expect(text).toContain('successfully provisioned');
+    expect(text).toContain('https://auth.new/');
   });
 });
 
@@ -154,15 +164,10 @@ describe('handleNeonAuthMethodsUpdate', () => {
       'br-default',
       { enabled: true },
     );
-    if (result.content[0].type === 'text') {
-      expect(result.content[0].text).toContain(
-        'Neon Auth methods updated successfully',
-      );
-      expect(result.content[0].text).toContain(
-        'sign_in_methods.email_password',
-      );
-      expect(result.content[0].text).toContain('organizations');
-    }
+    const text = getText(result);
+    expect(text).toContain('Neon Auth methods updated successfully');
+    expect(text).toContain('sign_in_methods.email_password');
+    expect(text).toContain('organizations');
   });
 
   it('reports partial failure when one slice fails (mid-fan-out)', async () => {
@@ -188,13 +193,11 @@ describe('handleNeonAuthMethodsUpdate', () => {
       extra,
     );
     expect(result.isError).toBe(true);
-    if (result.content[0].type === 'text') {
-      const text = result.content[0].text;
-      expect(text).toContain('partially failed');
-      expect(text).toContain('"sign_in_methods.email_password"');
-      expect(text).toContain('"organizations"');
-      expect(text).toContain('500');
-    }
+    const text = getText(result);
+    expect(text).toContain('partially failed');
+    expect(text).toContain('"sign_in_methods.email_password"');
+    expect(text).toContain('"organizations"');
+    expect(text).toContain('500');
   });
 
   it('email_password mapping inverts allow_sign_up to disable_sign_up', async () => {
@@ -401,14 +404,12 @@ describe('handleNeonAuthDomainUpdate', () => {
       extra,
     );
     expect(result.isError).toBe(true);
-    if (result.content[0].type === 'text') {
-      const text = result.content[0].text;
-      expect(text).toContain('partially failed');
-      expect(text).toContain('https://a.com');
-      expect(text).toContain('https://b.com');
-      expect(text).toContain('"ok": true');
-      expect(text).toContain('"ok": false');
-    }
+    const text = getText(result);
+    expect(text).toContain('partially failed');
+    expect(text).toContain('https://a.com');
+    expect(text).toContain('https://b.com');
+    expect(text).toContain('"ok": true');
+    expect(text).toContain('"ok": false');
   });
 });
 
@@ -507,9 +508,8 @@ describe('handleNeonAuthSendTestEmail', () => {
       extra,
     );
     expect(result.isError).toBe(true);
-    if (result.content[0].type === 'text') {
-      expect(result.content[0].text).toContain('auth failed');
-    }
+    const text = getText(result);
+    expect(text).toContain('auth failed');
   });
 });
 
@@ -537,12 +537,11 @@ describe('Neon Auth preflight (not-provisioned + verify-failed)', () => {
     );
     expect(result.isError).toBe(true);
     expect(updateNeonAuthEmailAndPasswordConfig).not.toHaveBeenCalled();
-    if (result.content[0].type === 'text') {
-      expect(result.content[0].text).toContain('not provisioned');
-      expect(result.content[0].text).toContain('explicit approval');
-      expect(result.content[0].text).toContain('side effects');
-      expect(result.content[0].text).toContain('neon_auth_provision');
-    }
+    const text = getText(result);
+    expect(text).toContain('not provisioned');
+    expect(text).toContain('explicit approval');
+    expect(text).toContain('side effects');
+    expect(text).toContain('neon_auth_provision');
   });
 
   it('neon_auth_oauth_provider_add — 404 returns canonical message and does NOT call addBranchNeonAuthOauthProvider', async () => {
@@ -559,9 +558,8 @@ describe('Neon Auth preflight (not-provisioned + verify-failed)', () => {
     );
     expect(result.isError).toBe(true);
     expect(addBranchNeonAuthOauthProvider).not.toHaveBeenCalled();
-    if (result.content[0].type === 'text') {
-      expect(result.content[0].text).toContain('not provisioned');
-    }
+    const text = getText(result);
+    expect(text).toContain('not provisioned');
   });
 
   it('neon_auth_domain_update — 404 returns canonical message and does NOT call addBranchNeonAuthTrustedDomain', async () => {
@@ -582,9 +580,8 @@ describe('Neon Auth preflight (not-provisioned + verify-failed)', () => {
     );
     expect(result.isError).toBe(true);
     expect(addBranchNeonAuthTrustedDomain).not.toHaveBeenCalled();
-    if (result.content[0].type === 'text') {
-      expect(result.content[0].text).toContain('not provisioned');
-    }
+    const text = getText(result);
+    expect(text).toContain('not provisioned');
   });
 
   it('neon_auth_webhook_update — 5xx returns generic verify-failed (NOT the not-provisioned message)', async () => {
@@ -610,12 +607,11 @@ describe('Neon Auth preflight (not-provisioned + verify-failed)', () => {
     );
     expect(result.isError).toBe(true);
     expect(updateNeonAuthWebhookConfig).not.toHaveBeenCalled();
-    if (result.content[0].type === 'text') {
-      // 5xx must NOT be misrepresented as "not provisioned"
-      expect(result.content[0].text).not.toContain('not provisioned');
-      expect(result.content[0].text).not.toContain('explicit approval');
-      expect(result.content[0].text).toContain('Failed to verify');
-      expect(result.content[0].text).toContain('502');
-    }
+    const text = getText(result);
+    // 5xx must NOT be misrepresented as "not provisioned"
+    expect(text).not.toContain('not provisioned');
+    expect(text).not.toContain('explicit approval');
+    expect(text).toContain('Failed to verify');
+    expect(text).toContain('502');
   });
 });
