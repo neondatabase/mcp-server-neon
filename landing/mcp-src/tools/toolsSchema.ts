@@ -300,19 +300,19 @@ const emailPasswordSliceSchema = z
       .nativeEnum(NeonAuthEmailVerificationMethod)
       .optional()
       .describe(
-        'How verification emails are delivered: `link` sends a verification link, `otp` sends a one-time password.',
+        'How verification emails are delivered: `link` sends a verification link, `otp` sends a one-time password. Sourced from the Neon Auth API enum `NeonAuthEmailVerificationMethod` so it stays in lockstep with the upstream SDK as new methods are added.',
       ),
     require_email_verification: z
       .boolean()
       .optional()
       .describe(
-        'Whether email verification is required before users can sign in.',
+        'Whether email verification is required before users can sign in (Neon Auth `require_email_verification`).',
       ),
     auto_sign_in_after_verification: z
       .boolean()
       .optional()
       .describe(
-        'Whether users are automatically signed in after verifying their email.',
+        'Whether users are automatically signed in after verifying their email (Neon Auth `auto_sign_in_after_verification`).',
       ),
   })
   .strict();
