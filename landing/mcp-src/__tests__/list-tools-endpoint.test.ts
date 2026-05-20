@@ -7,13 +7,15 @@ type ListToolsResponse = {
     scopes: string[] | null;
   };
   readOnly: boolean;
+  notices?: string[];
   warnings?: string[];
   tools: Array<{
     name: string;
     title: string;
-    scope: string | null;
+    scope: string;
     readOnlySafe: boolean;
     description: string;
+    inputSchema: Record<string, unknown>;
   }>;
 };
 
@@ -106,6 +108,80 @@ describe('/api/list-tools endpoint', () => {
     const res = OPTIONS();
     const allowed = res.headers.get('Access-Control-Allow-Headers') ?? '';
     expect(allowed).toBe('x-read-only');
+  });
+
+  // === Issue #257 — response shape additions ===
+  // (1) inputSchema per tool, (2) top-level notices field (no per-tool dup),
+  // (3) scope=null mapped to "global" for unambiguity.
+  describe('issue #257 — inputSchema / notices / scope-global', () => {
+    it('emits inputSchema on every tool as a JSON Schema object', async () => {
+      const body = await callListTools();
+      for (const tool of body.tools) {
+        expect(typeof tool.inputSchema).toBe('object');
+        expect(tool.inputSchema).not.toBeNull();
+        // JSON Schema draft 7 marker.
+        expect(tool.inputSchema['$schema']).toMatch(/json-schema\.org/);
+      }
+    });
+
+    it('inputSchema captures Zod constraints (e.g. search.query min 3)', async () => {
+      const body = await callListTools();
+      const search = body.tools.find((t) => t.name === 'search');
+      expect(search).toBeDefined();
+      const props = (search!.inputSchema as { properties?: unknown })
+        .properties as Record<string, { minLength?: number }>;
+      // search has a query field constrained to min 3 characters per the
+      // prose description — assert the constraint surfaces in the schema.
+      expect(props.query?.minLength).toBe(3);
+    });
+
+    it('maps internal scope=null to "global" in the response', async () => {
+      const body = await callListTools();
+      const search = body.tools.find((t) => t.name === 'search');
+      const fetch_ = body.tools.find((t) => t.name === 'fetch');
+      expect(search?.scope).toBe('global');
+      expect(fetch_?.scope).toBe('global');
+      // Sanity-check that other tools keep their named scope.
+      const listProjects = body.tools.find((t) => t.name === 'list_projects');
+      expect(listProjects?.scope).toBe('projects');
+    });
+
+    it('omits the `notices` field when neither read-only nor project-scoped', async () => {
+      const body = await callListTools();
+      expect(body.notices).toBeUndefined();
+    });
+
+    it('surfaces the read-only notice at top level (not in each description) when readonly=true', async () => {
+      const body = await callListTools({ readonly: 'true' });
+      expect(body.notices).toBeDefined();
+      expect(body.notices).toHaveLength(1);
+      expect(body.notices?.[0]).toContain('read-only permissions');
+      // Per-tool descriptions must NOT carry the <notice> suffix anymore —
+      // that was the duplication the issue called out.
+      for (const tool of body.tools) {
+        expect(tool.description).not.toContain('<notice>');
+        expect(tool.description).not.toContain('read-only permissions');
+      }
+    });
+
+    it('surfaces the project-scope notice at top level (not in each description)', async () => {
+      const body = await callListTools({ projectId: 'proj-123' });
+      expect(body.notices).toHaveLength(1);
+      expect(body.notices?.[0]).toContain('proj-123');
+      for (const tool of body.tools) {
+        expect(tool.description).not.toContain('<notice>');
+      }
+    });
+
+    it('surfaces both notices when both modes are active', async () => {
+      const body = await callListTools({
+        readonly: 'true',
+        projectId: 'proj-123',
+      });
+      expect(body.notices).toHaveLength(2);
+      expect(body.notices?.[0]).toContain('read-only');
+      expect(body.notices?.[1]).toContain('proj-123');
+    });
   });
 
   it('returns valid responses across repeated mixed-param requests', async () => {
