@@ -292,7 +292,7 @@ Notes:
 
 **Project Management:**
 
-- **`list_projects`**: Lists the first 10 Neon projects in your account, providing a summary of each project. If you can't find a specific project, increase the limit by passing a higher value to the `limit` parameter.
+- **`list_projects`**: Lists the first 25 Neon projects in your account, providing a summary of each project. If you can't find a specific project, increase the limit by passing a higher value to the `limit` parameter.
 - **`list_shared_projects`**: Lists Neon projects shared with the current user. Supports a search parameter and limiting the number of projects returned (default: 10).
 - **`describe_project`**: Fetches detailed information about a specific Neon project, including its ID, name, and associated branches and databases.
 - **`create_project`**: Creates a new Neon project in your Neon account. A project acts as a container for branches, databases, roles, and computes.

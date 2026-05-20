@@ -49,7 +49,7 @@ export const NEON_TOOLS = [
   {
     name: 'list_projects' as const,
     scope: 'projects',
-    description: `List Neon projects in your account. Do not use for projects shared with you (use \`list_shared_projects\` instead). Supports optional \`search\` (filter by name or ID) and \`limit\` (default 10) parameters.`,
+    description: `List Neon projects in your account. Do not use for projects shared with you (use \`list_shared_projects\` instead). Supports optional \`search\` (filter by name or ID) and \`limit\` (default 25) parameters.`,
     inputSchema: listProjectsInputSchema,
     readOnlySafe: true,
     annotations: {
