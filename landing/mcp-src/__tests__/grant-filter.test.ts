@@ -137,20 +137,30 @@ describe('getFilteredTools (no notice suffix)', () => {
 });
 
 describe('getAccessControlNotices', () => {
-  it('returns empty array when neither read-only nor project-scoped', () => {
-    expect(getAccessControlNotices(grant(), false)).toEqual([]);
+  it('emits the write-mode destructive-tools notice by default', () => {
+    const notices = getAccessControlNotices(grant(), false);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toContain('Write mode active');
+    expect(notices[0]).toContain('destructiveHint');
   });
 
-  it('returns the read-only notice when readOnly=true', () => {
+  it('omits the write-mode notice when no destructive tools are in scope', () => {
+    const notices = getAccessControlNotices(grant({ scopes: ['docs'] }), false);
+    expect(notices).toEqual([]);
+  });
+
+  it('suppresses the write-mode notice in read-only mode', () => {
     const notices = getAccessControlNotices(grant(), true);
     expect(notices).toHaveLength(1);
     expect(notices[0]).toContain('read-only permissions');
+    expect(notices[0]).not.toContain('Write mode active');
   });
 
   it('returns the project-scope notice when projectId is set', () => {
     const notices = getAccessControlNotices(grant({ projectId: 'p-1' }), false);
-    expect(notices).toHaveLength(1);
-    expect(notices[0]).toContain('scoped to one project only (p-1)');
+    expect(
+      notices.some((n) => n.includes('scoped to one project only (p-1)')),
+    ).toBe(true);
   });
 
   it('returns both notices when both modes are active', () => {
