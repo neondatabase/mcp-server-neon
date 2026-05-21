@@ -107,7 +107,7 @@ export const NEON_TOOLS = [
     name: 'delete_project' as const,
     scope: 'projects',
     description:
-      'Delete a Neon project and all its data permanently. Do not use when you only need to remove a branch (use `delete_branch` instead).',
+      'Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For removing single branches, use `delete_branch` instead.',
     inputSchema: deleteProjectInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -145,6 +145,8 @@ export const NEON_TOOLS = [
       If you have a temporary branch from a prior step, you MUST:
       1. Pass the branch ID to this tool unless explicitly told otherwise
       2. Tell the user that you are using the temporary branch with ID [branch_id]
+
+      NEVER run destructive SQL (DROP, DELETE, TRUNCATE, UPDATE without WHERE) autonomously; always ask the user first. Prefer testing on a temporary branch first.
     </important_notes>`,
     inputSchema: runSqlInputSchema,
     readOnlySafe: true,
@@ -168,6 +170,8 @@ export const NEON_TOOLS = [
       If you have a temporary branch from a prior step, you MUST:
       1. Pass the branch ID to this tool unless explicitly told otherwise
       2. Tell the user that you are using the temporary branch with ID [branch_id]
+
+      NEVER run destructive SQL (DROP, DELETE, TRUNCATE, UPDATE without WHERE) autonomously; always ask the user first. Prefer testing on a temporary branch first.
     </important_notes>`,
     inputSchema: runSqlTransactionInputSchema,
     readOnlySafe: true,
@@ -366,7 +370,7 @@ export const NEON_TOOLS = [
   {
     name: 'complete_database_migration' as const,
     scope: 'querying',
-    description: `Complete a database migration by applying changes to the main branch and cleaning up the temporary branch.
+    description: `Complete a database migration by applying changes to the main branch and cleaning up the temporary branch. NEVER run autonomously; always ask the user first and verify in the temporary branch.
 
     <important_notes>
       You MUST pass ALL values from the \`prepare_database_migration\` response:
@@ -413,7 +417,7 @@ export const NEON_TOOLS = [
     name: 'delete_branch' as const,
     scope: 'branches',
     description:
-      'Delete a branch from a Neon project. Do not use when you need to delete the entire project (use `delete_project` instead).',
+      'Delete a branch and all its data. NEVER run autonomously; always ask the user first. For deleting an entire project, use `delete_project` instead.',
     inputSchema: deleteBranchInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -427,7 +431,7 @@ export const NEON_TOOLS = [
   {
     name: 'reset_from_parent' as const,
     scope: 'branches',
-    description: `Reset a branch to its parent's current state, discarding all changes made on the branch. Use \`preserveUnderName\` to preserve the current state under a new branch name before resetting. Warning: without \`preserveUnderName\`, all changes on the branch are permanently lost.`,
+    description: `Reset a branch to its parent's current state, discarding all changes made on the branch. NEVER run autonomously; always ask the user first. Use \`preserveUnderName\` to preserve the current state under a new branch name before resetting.`,
     inputSchema: resetFromParentInputSchema,
     readOnlySafe: false,
     annotations: {
@@ -491,7 +495,7 @@ export const NEON_TOOLS = [
     inputSchema: configureNeonAuthInputSchema,
     readOnlySafe: false,
     description: `
-    Configure Neon Auth for a branch by specifying an \`operation\`. Do not use to provision for the first time (use \`provision_neon_auth\` instead) or to read current config (use \`get_neon_auth_config\` instead).
+    Configure Neon Auth for a branch by specifying an \`operation\`. NEVER run autonomously; always ask the user first. Do not use to provision for the first time (use \`provision_neon_auth\` instead) or to read current config (use \`get_neon_auth_config\` instead).
 
     Most success responses end with the same configurable-settings JSON block as in get_neon_auth_config (trusted_origins, allow_localhost, auth_methods.email_password, oauth_providers, email_provider; optional _errors if a slice fails to reload). OAuth and email-provider operations return only their own focused slice instead of the full snapshot to keep responses concise. Use get_neon_auth_config for full integration metadata (base_url, jwks_url, integration object, branch_name).
 
@@ -772,7 +776,7 @@ export const NEON_TOOLS = [
     name: 'complete_query_tuning' as const,
     scope: 'querying',
     readOnlySafe: false,
-    description: `Complete a query tuning session by either applying the changes to the main branch or discarding them. 
+    description: `Complete a query tuning session by either applying the changes to the main branch or discarding them. NEVER run autonomously; always ask the user first and verify on the temporary branch. 
     <important_notes>
         BEFORE RUNNING THIS TOOL: test out the changes in the temporary branch first by running 
         - \`run_sql\` with the suggested DDL statements.

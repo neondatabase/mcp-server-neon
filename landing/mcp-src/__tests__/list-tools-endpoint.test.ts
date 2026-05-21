@@ -146,9 +146,16 @@ describe('/api/list-tools endpoint', () => {
       expect(listProjects?.scope).toBe('projects');
     });
 
-    it('omits the `notices` field when neither read-only nor project-scoped', async () => {
+    it('surfaces the write-mode notice in the default response', async () => {
       const body = await callListTools();
-      expect(body.notices).toBeUndefined();
+      expect(body.notices).toBeDefined();
+      expect(body.notices).toHaveLength(1);
+      expect(body.notices?.[0]).toContain('Write mode active');
+      // Per-tool descriptions must NOT carry the notice suffix on this
+      // endpoint (issue #257).
+      for (const tool of body.tools) {
+        expect(tool.description).not.toContain('<notice>');
+      }
     });
 
     it('surfaces the read-only notice at top level (not in each description) when readonly=true', async () => {
@@ -166,8 +173,7 @@ describe('/api/list-tools endpoint', () => {
 
     it('surfaces the project-scope notice at top level (not in each description)', async () => {
       const body = await callListTools({ projectId: 'proj-123' });
-      expect(body.notices).toHaveLength(1);
-      expect(body.notices?.[0]).toContain('proj-123');
+      expect(body.notices?.some((n) => n.includes('proj-123'))).toBe(true);
       for (const tool of body.tools) {
         expect(tool.description).not.toContain('<notice>');
       }

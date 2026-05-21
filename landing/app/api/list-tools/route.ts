@@ -38,12 +38,16 @@ export function OPTIONS() {
  *   {
  *     grant: GrantContext,                  // applied grant context
  *     readOnly: boolean,                    // applied read-only mode
- *     notices?: string[],                   // present iff read-only or
- *                                           // project-scoped is active.
+ *     notices?: string[],                   // One informational message per
+ *                                           // active condition:
+ *                                           //   - read-only mode (restriction)
+ *                                           //   - write mode with destructive
+ *                                           //     tools exposed (safety)
+ *                                           //   - project-scoped (scope)
  *                                           // Render once per agent turn
  *                                           // rather than per-tool to avoid
  *                                           // duplicated tokens.
- *     warnings?: string[],                  // present iff access-control
+ *     warnings?: string[],                  // Present if access-control
  *                                           // edge cases apply.
  *     tools: Array<{
  *       name: string,
