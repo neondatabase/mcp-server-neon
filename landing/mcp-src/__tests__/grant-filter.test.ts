@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod/v3';
 import {
   filterToolsForGrant,
   getAvailableTools,
@@ -9,6 +10,25 @@ import {
 } from '../tools/grant-filter';
 import type { GrantContext, ScopeCategory } from '../utils/grant-context';
 import { NEON_TOOLS } from '../tools/definitions';
+
+type NeonTool = (typeof NEON_TOOLS)[number];
+
+function syntheticTool(name: string, inputSchema: z.ZodTypeAny): NeonTool {
+  return {
+    name,
+    scope: null,
+    description: 'synthetic test tool',
+    inputSchema,
+    readOnlySafe: false,
+    annotations: {
+      title: name,
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  } as unknown as NeonTool;
+}
 
 function grant(overrides: Partial<GrantContext> = {}): GrantContext {
   return {
@@ -258,6 +278,130 @@ describe('injectProjectId', () => {
   it('returns args unchanged when not project-scoped', () => {
     const args = { projectId: 'proj-keep', branchId: 'br-1' };
     expect(injectProjectId(args, grant())).toEqual(args);
+  });
+});
+
+describe('removeProjectIdFromSchema (project-scoped behavior)', () => {
+  // These tests exercise the schema-rewrite path via synthetic tools so we
+  // can pin down each Zod shape variant without relying on real tool schemas.
+  const scopedGrant = grant({ projectId: 'proj-1', scopes: null });
+
+  it('ZodObject without projectId is left untouched (no-op)', () => {
+    const original = z.object({ foo: z.string() });
+    const tool = syntheticTool('no_project_id', original);
+    const [filtered] = filterToolsForGrant([tool], scopedGrant);
+    expect(filtered.inputSchema).toBe(original);
+  });
+
+  it('ZodObject with projectId returns a new schema with projectId omitted', () => {
+    const tool = syntheticTool(
+      'has_project_id',
+      z.object({ projectId: z.string(), foo: z.string() }),
+    );
+    const [filtered] = filterToolsForGrant([tool], scopedGrant);
+    expect(filtered.inputSchema).not.toBe(tool.inputSchema);
+    expect(filtered.inputSchema.safeParse({ foo: 'bar' }).success).toBe(true);
+    expect(
+      filtered.inputSchema.safeParse({ projectId: 'x', foo: 'bar' }).success,
+    ).toBe(true);
+    // projectId is not part of the output shape any more.
+    const parsed = filtered.inputSchema.parse({ foo: 'bar' });
+    expect(parsed).toEqual({ foo: 'bar' });
+  });
+
+  it('preserves .strict() on the bare ZodObject so unknown keys still reject', () => {
+    const tool = syntheticTool(
+      'strict_object',
+      z.object({ projectId: z.string(), foo: z.string() }).strict(),
+    );
+    const [filtered] = filterToolsForGrant([tool], scopedGrant);
+    expect(filtered.inputSchema.safeParse({ foo: 'bar' }).success).toBe(true);
+    expect(
+      filtered.inputSchema.safeParse({ foo: 'bar', unknown: true }).success,
+    ).toBe(false);
+  });
+
+  it('preserves .superRefine() across the omit (ZodEffects branch)', () => {
+    // Mirrors the "at least one slice present" rule from
+    // neon_auth_sign_in_methods_update — the regression we are fixing.
+    const tool = syntheticTool(
+      'refined_object',
+      z
+        .object({
+          projectId: z.string(),
+          a: z.boolean().optional(),
+          b: z.boolean().optional(),
+        })
+        .strict()
+        .superRefine((val, ctx) => {
+          if (val.a === undefined && val.b === undefined) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: 'at least one of a or b is required',
+            });
+          }
+        }),
+    );
+    const [filtered] = filterToolsForGrant([tool], scopedGrant);
+
+    // Refinement still rejects payloads with neither slice.
+    const empty = filtered.inputSchema.safeParse({});
+    expect(empty.success).toBe(false);
+    if (!empty.success) {
+      expect(empty.error.issues[0].message).toContain('at least one of a or b');
+    }
+
+    // Refinement accepts payloads with one slice.
+    expect(filtered.inputSchema.safeParse({ a: true }).success).toBe(true);
+    expect(filtered.inputSchema.safeParse({ b: false }).success).toBe(true);
+
+    // Inner .strict() still rejects unknown keys.
+    expect(
+      filtered.inputSchema.safeParse({ a: true, unknown: 1 }).success,
+    ).toBe(false);
+  });
+
+  it('preserves .refine() across the omit (ZodEffects branch)', () => {
+    const tool = syntheticTool(
+      'refine_object',
+      z
+        .object({ projectId: z.string(), n: z.number() })
+        .refine((val) => val.n > 0, { message: 'n must be positive' }),
+    );
+    const [filtered] = filterToolsForGrant([tool], scopedGrant);
+
+    expect(filtered.inputSchema.safeParse({ n: 1 }).success).toBe(true);
+    const bad = filtered.inputSchema.safeParse({ n: -1 });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues[0].message).toBe('n must be positive');
+    }
+  });
+
+  it('non-object schemas (e.g. z.string()) are left untouched', () => {
+    const tool = syntheticTool('plain_string', z.string());
+    const [filtered] = filterToolsForGrant([tool], scopedGrant);
+    expect(filtered.inputSchema).toBe(tool.inputSchema);
+  });
+
+  it('ZodEffects wrapping a non-object schema is left untouched', () => {
+    const tool = syntheticTool(
+      'effect_on_string',
+      z.string().refine((s) => s.length > 0, { message: 'no empty' }),
+    );
+    const [filtered] = filterToolsForGrant([tool], scopedGrant);
+    expect(filtered.inputSchema).toBe(tool.inputSchema);
+  });
+
+  it('ZodEffects whose inner object lacks projectId is left untouched', () => {
+    const tool = syntheticTool(
+      'effect_no_project_id',
+      z
+        .object({ foo: z.string() })
+        .refine((val) => val.foo.length > 0, { message: 'non-empty' }),
+    );
+    const [filtered] = filterToolsForGrant([tool], scopedGrant);
+    expect(filtered.inputSchema).toBe(tool.inputSchema);
   });
 });
 
