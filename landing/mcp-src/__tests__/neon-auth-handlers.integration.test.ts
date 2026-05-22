@@ -7,7 +7,13 @@ import {
   NeonAuthSupportedAuthProvider,
 } from '@neondatabase/api-client';
 import { handleNeonAuthProvision } from '../tools/handlers/neon-auth-provision';
-import { handleNeonAuthMethodsUpdate } from '../tools/handlers/neon-auth-methods-update';
+import { handleNeonAuthConfigGet } from '../tools/handlers/neon-auth-config-get';
+import {
+  handleNeonAuthAppUpdate,
+  handleNeonAuthEmailDeliveryUpdate,
+  handleNeonAuthOrganizationsUpdate,
+  handleNeonAuthSignInMethodsUpdate,
+} from '../tools/handlers/neon-auth-methods-update';
 import { handleNeonAuthOauthProviderAdd } from '../tools/handlers/neon-auth-oauth-provider-add';
 import { handleNeonAuthOauthProviderUpdate } from '../tools/handlers/neon-auth-oauth-provider-update';
 import { handleNeonAuthOauthProviderDelete } from '../tools/handlers/neon-auth-oauth-provider-delete';
@@ -126,29 +132,161 @@ describe('handleNeonAuthProvision', () => {
 });
 
 // ---------------------------------------------------------------------------
-// neon_auth_methods_update — happy path + partial failure
+// neon_auth_config_get
 // ---------------------------------------------------------------------------
-describe('handleNeonAuthMethodsUpdate', () => {
-  it('fans out email_password and organizations slices on success', async () => {
+describe('handleNeonAuthConfigGet', () => {
+  it('returns a mega snapshot with secrets redacted', async () => {
+    const neonClient = {
+      ...defaultBranchMock(),
+      getNeonAuth: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          auth_provider: NeonAuthSupportedAuthProvider.BetterAuth,
+          auth_provider_project_id: 'ap1',
+          branch_id: 'br-default',
+          db_name: 'neondb',
+          created_at: '2025-01-01T00:00:00.000Z',
+          owned_by: NeonAuthProviderProjectOwnedBy.Neon,
+          jwks_url: 'https://jwks.example/',
+          base_url: 'https://auth.example/',
+        },
+      }),
+      getProjectBranch: vi.fn().mockResolvedValue({
+        status: 200,
+        data: { branch: { name: 'main' } },
+      }),
+      listBranchNeonAuthTrustedDomains: vi.fn().mockResolvedValue({
+        status: 200,
+        data: { domains: [{ domain: 'https://app.example.com' }] },
+      }),
+      getNeonAuthPluginConfigs: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          allow_localhost: false,
+          organization: { enabled: true },
+          email_and_password: {
+            enabled: true,
+            disable_sign_up: false,
+            send_verification_email_on_sign_up: true,
+            send_verification_email_on_sign_in: false,
+            email_verification_method: 'link',
+            require_email_verification: true,
+            auto_sign_in_after_verification: true,
+          },
+          oauth_providers: [
+            {
+              id: NeonAuthOauthProviderId.Google,
+              type: 'standard',
+              client_id: 'client',
+              client_secret: 'secret',
+            },
+          ],
+          email_provider: {
+            type: 'standard',
+            host: 'smtp.example.com',
+            port: 587,
+            username: 'apikey',
+            password: 'smtp-secret',
+            sender_email: 'auth@example.com',
+            sender_name: 'Auth',
+          },
+        },
+      }),
+      getNeonAuthWebhookConfig: vi.fn().mockResolvedValue({
+        status: 200,
+        data: { enabled: true, webhook_url: 'https://hooks.example.com/neon' },
+      }),
+      request: vi.fn().mockResolvedValue({
+        status: 200,
+        data: { app_name: 'My App' },
+      }),
+    };
+
+    const result = await handleNeonAuthConfigGet(
+      { projectId: 'p1' },
+      neonClient as never,
+      extra,
+    );
+
+    expect(result.isError).toBeFalsy();
+    const text = getText(result);
+    expect(text).toContain('Neon Auth configuration');
+    expect(text).toContain('"oauth_providers"');
+    expect(text).toContain('"email_delivery"');
+    expect(text).toContain('"organizations"');
+    expect(text).toContain('"webhook"');
+    expect(text).toContain('"app_name": "My App"');
+    expect(text).toContain('***redacted***');
+    expect(text).not.toContain('smtp-secret');
+  });
+
+  it('returns partial snapshot errors instead of throwing when one slice fetch fails', async () => {
+    const neonClient = {
+      ...defaultBranchMock(),
+      getNeonAuth: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          branch_id: 'br-default',
+          db_name: 'neondb',
+          jwks_url: 'https://jwks.example/',
+          base_url: 'https://auth.example/',
+        },
+      }),
+      getProjectBranch: vi.fn().mockResolvedValue({
+        status: 200,
+        data: { branch: { name: 'main' } },
+      }),
+      listBranchNeonAuthTrustedDomains: vi.fn().mockResolvedValue({
+        status: 200,
+        data: { domains: [] },
+      }),
+      getNeonAuthPluginConfigs: vi.fn().mockResolvedValue({
+        status: 502,
+        statusText: 'Bad Gateway',
+      }),
+      getNeonAuthWebhookConfig: vi.fn().mockResolvedValue({
+        status: 404,
+        statusText: 'Not Found',
+      }),
+      request: vi.fn().mockResolvedValue({
+        status: 404,
+        statusText: 'Not Found',
+      }),
+    };
+
+    const result = await handleNeonAuthConfigGet(
+      { projectId: 'p1' },
+      neonClient as never,
+      extra,
+    );
+
+    expect(result.isError).toBeFalsy();
+    const text = getText(result);
+    expect(text).toContain('_errors');
+    expect(text).toContain('Bad Gateway');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Split config update handlers — happy path + partial failure
+// ---------------------------------------------------------------------------
+describe('handleNeonAuthSignInMethodsUpdate', () => {
+  it('updates only sign-in method slices', async () => {
     const updateNeonAuthEmailAndPasswordConfig = vi
       .fn()
       .mockResolvedValue({ status: 200, data: {} });
-    const updateNeonAuthOrganizationPlugin = vi
-      .fn()
-      .mockResolvedValue({ status: 200, data: {} });
+    const request = vi.fn().mockResolvedValue({ status: 200, data: {} });
     const neonClient = {
       ...defaultBranchMock(),
       updateNeonAuthEmailAndPasswordConfig,
-      updateNeonAuthOrganizationPlugin,
+      request,
     };
 
-    const result = await handleNeonAuthMethodsUpdate(
+    const result = await handleNeonAuthSignInMethodsUpdate(
       {
         projectId: 'p1',
-        sign_in_methods: {
-          email_password: { enabled: true, allow_sign_up: false },
-        },
-        organizations: { enabled: true },
+        email_password: { enabled: true, allow_sign_up: false },
+        magic_link: { enabled: true },
       },
       neonClient as never,
       extra,
@@ -159,15 +297,16 @@ describe('handleNeonAuthMethodsUpdate', () => {
       'br-default',
       { enabled: true, disable_sign_up: true },
     );
-    expect(updateNeonAuthOrganizationPlugin).toHaveBeenCalledWith(
-      'p1',
-      'br-default',
-      { enabled: true },
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/projects/p1/branches/br-default/auth/plugins/magic-link',
+        body: { enabled: true },
+      }),
     );
     const text = getText(result);
-    expect(text).toContain('Neon Auth methods updated successfully');
-    expect(text).toContain('sign_in_methods.email_password');
-    expect(text).toContain('organizations');
+    expect(text).toContain('Neon Auth sign-in methods updated successfully');
+    expect(text).toContain('email_password');
+    expect(text).toContain('magic_link');
   });
 
   it('reports partial failure when one slice fails (mid-fan-out)', async () => {
@@ -177,17 +316,17 @@ describe('handleNeonAuthMethodsUpdate', () => {
         status: 200,
         data: {},
       }),
-      updateNeonAuthOrganizationPlugin: vi.fn().mockResolvedValue({
+      request: vi.fn().mockResolvedValue({
         status: 500,
         statusText: 'Server Error',
       }),
     };
 
-    const result = await handleNeonAuthMethodsUpdate(
+    const result = await handleNeonAuthSignInMethodsUpdate(
       {
         projectId: 'p1',
-        sign_in_methods: { email_password: { enabled: true } },
-        organizations: { enabled: true },
+        email_password: { enabled: true },
+        magic_link: { enabled: true },
       },
       neonClient as never,
       extra,
@@ -195,8 +334,8 @@ describe('handleNeonAuthMethodsUpdate', () => {
     expect(result.isError).toBe(true);
     const text = getText(result);
     expect(text).toContain('partially failed');
-    expect(text).toContain('"sign_in_methods.email_password"');
-    expect(text).toContain('"organizations"');
+    expect(text).toContain('"email_password"');
+    expect(text).toContain('"magic_link"');
     expect(text).toContain('500');
   });
 
@@ -208,11 +347,11 @@ describe('handleNeonAuthMethodsUpdate', () => {
       ...defaultBranchMock(),
       updateNeonAuthEmailAndPasswordConfig,
     };
-    await handleNeonAuthMethodsUpdate(
+    await handleNeonAuthSignInMethodsUpdate(
       {
         projectId: 'p1',
         branchId: 'b1',
-        sign_in_methods: { email_password: { allow_sign_up: false } },
+        email_password: { allow_sign_up: false },
       },
       neonClient as never,
       extra,
@@ -225,6 +364,71 @@ describe('handleNeonAuthMethodsUpdate', () => {
   });
 });
 
+describe('handleNeonAuthEmailDeliveryUpdate', () => {
+  it('updates only email delivery config', async () => {
+    const updateNeonAuthEmailProvider = vi
+      .fn()
+      .mockResolvedValue({ status: 200, data: {} });
+    const neonClient = { ...defaultBranchMock(), updateNeonAuthEmailProvider };
+    const result = await handleNeonAuthEmailDeliveryUpdate(
+      {
+        projectId: 'p1',
+        email_delivery: { type: 'shared', sender_name: 'Acme' },
+      },
+      neonClient as never,
+      extra,
+    );
+    expect(result.isError).toBeFalsy();
+    expect(updateNeonAuthEmailProvider).toHaveBeenCalledWith(
+      'p1',
+      'br-default',
+      { type: 'shared', sender_name: 'Acme' },
+    );
+  });
+});
+
+describe('handleNeonAuthOrganizationsUpdate', () => {
+  it('updates only organization config', async () => {
+    const updateNeonAuthOrganizationPlugin = vi
+      .fn()
+      .mockResolvedValue({ status: 200, data: {} });
+    const neonClient = {
+      ...defaultBranchMock(),
+      updateNeonAuthOrganizationPlugin,
+    };
+    const result = await handleNeonAuthOrganizationsUpdate(
+      { projectId: 'p1', organizations: { enabled: true } },
+      neonClient as never,
+      extra,
+    );
+    expect(result.isError).toBeFalsy();
+    expect(updateNeonAuthOrganizationPlugin).toHaveBeenCalledWith(
+      'p1',
+      'br-default',
+      { enabled: true },
+    );
+  });
+});
+
+describe('handleNeonAuthAppUpdate', () => {
+  it('updates only app display config', async () => {
+    const request = vi.fn().mockResolvedValue({ status: 200, data: {} });
+    const neonClient = { ...defaultBranchMock(), request };
+    const result = await handleNeonAuthAppUpdate(
+      { projectId: 'p1', app_name: 'My App' },
+      neonClient as never,
+      extra,
+    );
+    expect(result.isError).toBeFalsy();
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/projects/p1/branches/br-default/auth/config',
+        body: { app_name: 'My App' },
+      }),
+    );
+  });
+});
+
 // ---------------------------------------------------------------------------
 // OAuth provider handlers
 // ---------------------------------------------------------------------------
@@ -233,9 +437,23 @@ describe('handleNeonAuthOauthProviderAdd', () => {
     const addBranchNeonAuthOauthProvider = vi
       .fn()
       .mockResolvedValue({ status: 201 });
+    const listBranchNeonAuthOauthProviders = vi.fn().mockResolvedValue({
+      status: 200,
+      data: {
+        providers: [
+          {
+            id: NeonAuthOauthProviderId.Google,
+            type: 'standard',
+            client_id: 'client',
+            client_secret: 'secret',
+          },
+        ],
+      },
+    });
     const neonClient = {
       ...defaultBranchMock(),
       addBranchNeonAuthOauthProvider,
+      listBranchNeonAuthOauthProviders,
     };
     const result = await handleNeonAuthOauthProviderAdd(
       { projectId: 'p1', provider_id: NeonAuthOauthProviderId.Google },
@@ -248,6 +466,10 @@ describe('handleNeonAuthOauthProviderAdd', () => {
       'br-default',
       { id: NeonAuthOauthProviderId.Google },
     );
+    const text = getText(result);
+    expect(text).toContain('OAuth providers after add');
+    expect(text).toContain('***redacted***');
+    expect(text).not.toContain('"secret"');
   });
 
   it('passes BYO credentials when provided', async () => {
@@ -257,6 +479,9 @@ describe('handleNeonAuthOauthProviderAdd', () => {
     const neonClient = {
       ...defaultBranchMock(),
       addBranchNeonAuthOauthProvider,
+      listBranchNeonAuthOauthProviders: vi
+        .fn()
+        .mockResolvedValue({ status: 200, data: { providers: [] } }),
     };
     await handleNeonAuthOauthProviderAdd(
       {
@@ -274,6 +499,29 @@ describe('handleNeonAuthOauthProviderAdd', () => {
       client_secret: 'b',
     });
   });
+
+  it('keeps add success when the follow-up provider list fetch fails', async () => {
+    const neonClient = {
+      ...defaultBranchMock(),
+      addBranchNeonAuthOauthProvider: vi.fn().mockResolvedValue({
+        status: 201,
+      }),
+      listBranchNeonAuthOauthProviders: vi.fn().mockResolvedValue({
+        status: 503,
+        statusText: 'Service Unavailable',
+      }),
+    };
+    const result = await handleNeonAuthOauthProviderAdd(
+      { projectId: 'p1', provider_id: NeonAuthOauthProviderId.Google },
+      neonClient as never,
+      extra,
+    );
+
+    expect(result.isError).toBeFalsy();
+    const text = getText(result);
+    expect(text).toContain('_errors');
+    expect(text).toContain('Service Unavailable');
+  });
 });
 
 describe('handleNeonAuthOauthProviderUpdate', () => {
@@ -284,8 +532,11 @@ describe('handleNeonAuthOauthProviderUpdate', () => {
     const neonClient = {
       ...defaultBranchMock(),
       updateBranchNeonAuthOauthProvider,
+      listBranchNeonAuthOauthProviders: vi
+        .fn()
+        .mockResolvedValue({ status: 200, data: { providers: [] } }),
     };
-    await handleNeonAuthOauthProviderUpdate(
+    const result = await handleNeonAuthOauthProviderUpdate(
       {
         projectId: 'p1',
         branchId: 'b1',
@@ -301,6 +552,7 @@ describe('handleNeonAuthOauthProviderUpdate', () => {
       'github',
       { client_secret: 'rotated' },
     );
+    expect(getText(result)).toContain('OAuth providers after update');
   });
 });
 
@@ -312,6 +564,9 @@ describe('handleNeonAuthOauthProviderDelete', () => {
     const neonClient = {
       ...defaultBranchMock(),
       deleteBranchNeonAuthOauthProvider,
+      listBranchNeonAuthOauthProviders: vi
+        .fn()
+        .mockResolvedValue({ status: 200, data: { providers: [] } }),
     };
     const result = await handleNeonAuthOauthProviderDelete(
       { projectId: 'p1', provider_id: NeonAuthOauthProviderId.Vercel },
@@ -324,6 +579,7 @@ describe('handleNeonAuthOauthProviderDelete', () => {
       'br-default',
       NeonAuthOauthProviderId.Vercel,
     );
+    expect(getText(result)).toContain('OAuth providers after delete');
   });
 });
 
@@ -519,18 +775,18 @@ describe('handleNeonAuthSendTestEmail', () => {
 // error on a 5xx outage), without invoking the per-op SDK mutation.
 // ---------------------------------------------------------------------------
 describe('Neon Auth preflight (not-provisioned + verify-failed)', () => {
-  it('neon_auth_methods_update — 404 returns canonical not-provisioned message and does NOT call any per-slice SDK', async () => {
+  it('neon_auth_sign_in_methods_update — 404 returns canonical not-provisioned message and does NOT call any per-slice SDK', async () => {
     const updateNeonAuthEmailAndPasswordConfig = vi.fn();
     const neonClient = {
       ...defaultBranchMock(),
       getNeonAuth: vi.fn().mockResolvedValue({ status: 404 }),
       updateNeonAuthEmailAndPasswordConfig,
     };
-    const result = await handleNeonAuthMethodsUpdate(
+    const result = await handleNeonAuthSignInMethodsUpdate(
       {
         projectId: 'p1',
         branchId: 'b1',
-        sign_in_methods: { email_password: { enabled: true } },
+        email_password: { enabled: true },
       },
       neonClient as never,
       extra,

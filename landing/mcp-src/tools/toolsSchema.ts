@@ -341,20 +341,6 @@ const phoneSliceSchema = z
   })
   .strict();
 
-const signInMethodsSchema = z
-  .object({
-    email_password: emailPasswordSliceSchema
-      .optional()
-      .describe(
-        'Email-and-password sign-in. Provide only the fields you want to change; omitted fields are left unchanged.',
-      ),
-    magic_link: magicLinkSliceSchema
-      .optional()
-      .describe('Magic-link plugin toggle.'),
-    phone: phoneSliceSchema.optional().describe('Phone-number plugin toggle.'),
-  })
-  .strict();
-
 const organizationsSliceSchema = z
   .object({
     enabled: z
@@ -433,90 +419,94 @@ const emailDeliverySchema = z
     'Email delivery configuration discriminated by `type`. "standard" = BYO SMTP (full credentials required); "shared" = Neon-managed shared SMTP. The upstream PATCH replaces the saved configuration; partial within-type updates are not supported.',
   );
 
-export const neonAuthMethodsUpdateInputSchema = z
+const neonAuthBranchTargetSchema = {
+  projectId: z.string().describe('Neon project ID.'),
+  branchId: z
+    .string()
+    .optional()
+    .describe(
+      'Branch ID. If omitted, the project default branch is used (same as `neon_auth_provision`).',
+    ),
+};
+
+export const neonAuthConfigGetInputSchema = z
+  .object(neonAuthBranchTargetSchema)
+  .strict();
+
+export const neonAuthSignInMethodsUpdateInputSchema = z
   .object({
-    projectId: z.string().describe('Neon project ID.'),
-    branchId: z
-      .string()
+    ...neonAuthBranchTargetSchema,
+    email_password: emailPasswordSliceSchema
       .optional()
       .describe(
-        'Branch ID. If omitted, the project default branch is used (same as `neon_auth_provision`).',
+        'Email-and-password sign-in. Provide only the fields you want to change; omitted fields are left unchanged.',
       ),
-    sign_in_methods: signInMethodsSchema
+    magic_link: magicLinkSliceSchema
       .optional()
-      .describe(
-        'Sign-in method slices. Provide only the slices you want to change.',
-      ),
-    email_delivery: emailDeliverySchema
-      .optional()
-      .describe(
-        'Email delivery (transactional) configuration. Discriminated union by `type`.',
-      ),
-    organizations: organizationsSliceSchema
-      .optional()
-      .describe('Organizations plugin slice.'),
-    app_name: z
-      .string()
-      .min(1)
-      .optional()
-      .describe('Display name of the application (Better Auth `app_name`).'),
+      .describe('Magic-link plugin toggle.'),
+    phone: phoneSliceSchema.optional().describe('Phone-number plugin toggle.'),
   })
   .strict()
   .superRefine((val, ctx) => {
     const sliceCount =
-      (val.sign_in_methods ? 1 : 0) +
-      (val.email_delivery ? 1 : 0) +
-      (val.organizations ? 1 : 0) +
-      (val.app_name !== undefined ? 1 : 0);
+      (val.email_password ? 1 : 0) +
+      (val.magic_link ? 1 : 0) +
+      (val.phone ? 1 : 0);
     if (sliceCount === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message:
-          'At least one slice must be provided: sign_in_methods, email_delivery, organizations, or app_name.',
+          'At least one sign-in method slice must be provided: email_password, magic_link, or phone.',
       });
       return;
     }
-    if (val.sign_in_methods) {
-      const subSliceCount =
-        (val.sign_in_methods.email_password ? 1 : 0) +
-        (val.sign_in_methods.magic_link ? 1 : 0) +
-        (val.sign_in_methods.phone ? 1 : 0);
-      if (subSliceCount === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            'sign_in_methods must include at least one slice (email_password, magic_link, or phone).',
-          path: ['sign_in_methods'],
-        });
-      }
-      const ep = val.sign_in_methods.email_password;
-      if (ep && Object.values(ep).every((v) => v === undefined)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            'sign_in_methods.email_password must include at least one field to update.',
-          path: ['sign_in_methods', 'email_password'],
-        });
-      }
-      const ml = val.sign_in_methods.magic_link;
-      if (ml && Object.values(ml).every((v) => v === undefined)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            'sign_in_methods.magic_link must include at least one field to update.',
-          path: ['sign_in_methods', 'magic_link'],
-        });
-      }
-      const ph = val.sign_in_methods.phone;
-      if (ph && Object.values(ph).every((v) => v === undefined)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            'sign_in_methods.phone must include at least one field to update.',
-          path: ['sign_in_methods', 'phone'],
-        });
-      }
+    if (
+      val.email_password &&
+      Object.values(val.email_password).every((v) => v === undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'email_password must include at least one field to update.',
+        path: ['email_password'],
+      });
     }
+    if (
+      val.magic_link &&
+      Object.values(val.magic_link).every((v) => v === undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'magic_link must include at least one field to update.',
+        path: ['magic_link'],
+      });
+    }
+    if (val.phone && Object.values(val.phone).every((v) => v === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'phone must include at least one field to update.',
+        path: ['phone'],
+      });
+    }
+  });
+
+export const neonAuthEmailDeliveryUpdateInputSchema = z
+  .object({
+    ...neonAuthBranchTargetSchema,
+    email_delivery: emailDeliverySchema.describe(
+      'Email delivery (transactional) configuration. Discriminated union by `type`.',
+    ),
+  })
+  .strict();
+
+export const neonAuthOrganizationsUpdateInputSchema = z
+  .object({
+    ...neonAuthBranchTargetSchema,
+    organizations: organizationsSliceSchema.describe(
+      'Organizations plugin slice.',
+    ),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
     if (
       val.organizations &&
       Object.values(val.organizations).every((v) => v === undefined)
@@ -528,6 +518,16 @@ export const neonAuthMethodsUpdateInputSchema = z
       });
     }
   });
+
+export const neonAuthAppUpdateInputSchema = z
+  .object({
+    ...neonAuthBranchTargetSchema,
+    app_name: z
+      .string()
+      .min(1)
+      .describe('Display name of the application (Better Auth `app_name`).'),
+  })
+  .strict();
 
 // ---------------------------------------------------------------------------
 // OAuth provider — add / update / delete.

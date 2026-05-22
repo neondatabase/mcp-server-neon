@@ -48,12 +48,50 @@ describe('filterToolsForGrant', () => {
       grant({ projectId: 'proj-123', scopes: null }),
     );
     const names = tools.map((t) => t.name);
-    expect(tools).toHaveLength(29);
+    expect(tools).toHaveLength(33);
     expect(names).not.toContain('list_projects');
     expect(names).not.toContain('create_project');
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
     expect(names).toContain('describe_project');
+  });
+
+  it('removes projectId from refined schemas without dropping refinements', () => {
+    const tools = filterToolsForGrant(
+      NEON_TOOLS,
+      grant({ projectId: 'proj-123', scopes: null }),
+    );
+    const tool = tools.find(
+      (t) => t.name === 'neon_auth_sign_in_methods_update',
+    );
+    expect(tool).toBeDefined();
+    expect(
+      tool!.inputSchema.safeParse({ email_password: { enabled: true } })
+        .success,
+    ).toBe(true);
+    expect(tool!.inputSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('removes projectId from strict object schemas without allowing unknown keys', () => {
+    const tools = filterToolsForGrant(
+      NEON_TOOLS,
+      grant({ projectId: 'proj-123', scopes: null }),
+    );
+    const tool = tools.find(
+      (t) => t.name === 'neon_auth_email_delivery_update',
+    );
+    expect(tool).toBeDefined();
+    expect(
+      tool!.inputSchema.safeParse({
+        email_delivery: { type: 'shared' },
+      }).success,
+    ).toBe(true);
+    expect(
+      tool!.inputSchema.safeParse({
+        email_delivery: { type: 'shared' },
+        unknown: true,
+      }).success,
+    ).toBe(false);
   });
 
   it('combines scope and project filtering', () => {

@@ -216,13 +216,14 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 - `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`
 - `list_slow_queries`, `explain_sql_statement`
 - `get_connection_string`
+- `neon_auth_config_get`
 - `search`, `fetch`, `list_docs_resources`, `get_doc_resource`
 
 **Tools requiring write access:**
 
 - `create_project`, `delete_project`
 - `create_branch`, `delete_branch`, `reset_from_parent`
-- `neon_auth_provision`, `neon_auth_methods_update`, `neon_auth_oauth_provider_add`, `neon_auth_oauth_provider_update`, `neon_auth_oauth_provider_delete`, `neon_auth_domain_update`, `neon_auth_webhook_update`, `neon_auth_send_test_email`, `provision_neon_data_api`
+- `neon_auth_provision`, `neon_auth_sign_in_methods_update`, `neon_auth_email_delivery_update`, `neon_auth_organizations_update`, `neon_auth_app_update`, `neon_auth_oauth_provider_add`, `neon_auth_oauth_provider_update`, `neon_auth_oauth_provider_delete`, `neon_auth_domain_update`, `neon_auth_webhook_update`, `neon_auth_send_test_email`, `provision_neon_data_api`
 - `prepare_database_migration`, `complete_database_migration`
 - `prepare_query_tuning`, `complete_query_tuning`
 
@@ -331,11 +332,15 @@ Notes:
 **Neon Auth:**
 
 - **`neon_auth_provision`**: Provisions Neon Auth on a branch — managed authentication built on Better Auth. Idempotent.
-- **`neon_auth_methods_update`**: Deep-merge update for sign-in methods (`email_password`, `magic_link`, `phone`), `email_delivery`, `organizations.enabled`, and `app_name`. Pass any combination of slices.
-- **`neon_auth_oauth_provider_add`** / **`neon_auth_oauth_provider_update`** / **`neon_auth_oauth_provider_delete`**: Manage OAuth providers (Google, GitHub, Microsoft, Vercel) — shared or BYO credentials.
+- **`neon_auth_config_get`**: Retrieves the current Neon Auth integration and configurable settings. Secrets are redacted.
+- **`neon_auth_sign_in_methods_update`**: Deep-merge update for sign-in methods (`email_password`, `magic_link`, `phone`). Pass any combination of method slices.
+- **`neon_auth_email_delivery_update`**: Update shared or BYO SMTP email delivery configuration.
+- **`neon_auth_organizations_update`**: Update the organizations plugin configuration.
+- **`neon_auth_app_update`**: Update app-level display configuration, currently `app_name`.
+- **`neon_auth_oauth_provider_add`** / **`neon_auth_oauth_provider_update`** / **`neon_auth_oauth_provider_delete`**: Manage OAuth providers (Google, GitHub, Vercel) — shared or BYO credentials.
 - **`neon_auth_domain_update`**: Atomic batch edit of trusted domains. Pass `add[]`, `remove[]`, and/or `allow_localhost` toggle in a single call.
 - **`neon_auth_webhook_update`**: Update webhook config (URL, events, enabled, timeout).
-- **`neon_auth_send_test_email`**: Verify SMTP credentials end-to-end before saving them via `neon_auth_methods_update.email_delivery`.
+- **`neon_auth_send_test_email`**: Verify SMTP credentials end-to-end before saving them via `neon_auth_email_delivery_update`.
 
 **Neon Data API:**
 

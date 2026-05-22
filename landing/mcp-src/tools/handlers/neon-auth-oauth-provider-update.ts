@@ -11,6 +11,10 @@ import {
   ensureNeonAuthProvisioned,
   resolveNeonAuthBranchId,
 } from './neon-auth-utils';
+import {
+  fetchOAuthProvidersSlice,
+  stringifyOAuthProvidersSlice,
+} from './neon-auth-settings-snapshot';
 
 type Props = z.infer<typeof neonAuthOauthProviderUpdateInputSchema>;
 
@@ -54,11 +58,20 @@ export async function handleNeonAuthOauthProviderUpdate(
       ],
     };
   }
+  const { providers, error } = await fetchOAuthProvidersSlice(
+    neonClient,
+    props.projectId,
+    branchId,
+  );
   return {
     content: [
       {
         type: 'text',
-        text: `OAuth provider ${props.provider_id} credentials updated on branch ${branchId}.`,
+        text: stringifyOAuthProvidersSlice(
+          `OAuth providers after update on branch ${branchId}:`,
+          providers,
+          error,
+        ),
       },
     ],
   };

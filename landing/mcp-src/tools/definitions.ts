@@ -19,8 +19,12 @@ import {
   listProjectsInputSchema,
   prepareDatabaseMigrationInputSchema,
   prepareQueryTuningInputSchema,
+  neonAuthConfigGetInputSchema,
   neonAuthProvisionInputSchema,
-  neonAuthMethodsUpdateInputSchema,
+  neonAuthSignInMethodsUpdateInputSchema,
+  neonAuthEmailDeliveryUpdateInputSchema,
+  neonAuthOrganizationsUpdateInputSchema,
+  neonAuthAppUpdateInputSchema,
   neonAuthOauthProviderAddInputSchema,
   neonAuthOauthProviderUpdateInputSchema,
   neonAuthOauthProviderDeleteInputSchema,
@@ -496,24 +500,99 @@ export const NEON_TOOLS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'neon_auth_methods_update' as const,
+    name: 'neon_auth_config_get' as const,
     scope: 'neon_auth',
-    inputSchema: neonAuthMethodsUpdateInputSchema,
+    inputSchema: neonAuthConfigGetInputSchema,
+    readOnlySafe: true,
+    description: `
+    Retrieve the full Neon Auth configuration for a branch. This is the read-only mega-get tool for agents that need current state before deciding what to change.
+
+    Returns integration metadata, base_url, jwks_url, trusted domains, localhost toggle, sign-in method state, OAuth providers, and email delivery config. Secrets such as OAuth client_secret and SMTP password are never returned; a redacted sentinel means a secret is set.
+    `,
+    annotations: {
+      title: 'Get Neon Auth Config',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'neon_auth_sign_in_methods_update' as const,
+    scope: 'neon_auth',
+    inputSchema: neonAuthSignInMethodsUpdateInputSchema,
     readOnlySafe: false,
     description: `
-    Deep-merge PATCH for the unified Neon Auth methods/config blob on a branch. Pass any combination of slices: \`sign_in_methods.email_password\`, \`sign_in_methods.magic_link\`, \`sign_in_methods.phone\`, \`organizations.enabled\`, \`email_delivery\`, \`app_name\`. Slices are independent — within a slice, omitted fields are left unchanged.
+    Deep-merge PATCH for Neon Auth sign-in/sign-up methods on a branch. Pass any combination of \`email_password\`, \`magic_link\`, and \`phone\`. Slices are independent — within a slice, omitted fields are left unchanged.
 
-    Does NOT manage OAuth providers (use \`neon_auth_oauth_provider_add\` / \`neon_auth_oauth_provider_update\` / \`neon_auth_oauth_provider_delete\`), trusted domains (use \`neon_auth_domain_update\`), webhooks (use \`neon_auth_webhook_update\`), or send test emails (use \`neon_auth_send_test_email\`). Requires Neon Auth to be provisioned first via \`neon_auth_provision\`.
+    Does NOT manage email delivery (use \`neon_auth_email_delivery_update\`), app display config (use \`neon_auth_app_update\`), organizations (use \`neon_auth_organizations_update\`), OAuth providers (use \`neon_auth_oauth_provider_add\` / \`neon_auth_oauth_provider_update\` / \`neon_auth_oauth_provider_delete\`), trusted domains (use \`neon_auth_domain_update\`), webhooks (use \`neon_auth_webhook_update\`), or send test emails (use \`neon_auth_send_test_email\`). Requires Neon Auth to be provisioned first via \`neon_auth_provision\`.
 
     Atomic per slice, not across slices, until the upstream API ships a unified PATCH with If-Match. On mid-fan-out failure, returns a partial-success report listing succeeded vs. failed slices; the agent should re-call with only the failed slices once the underlying issue is resolved.
-
-    SECURITY: SMTP \`password\` inside \`email_delivery\` is treated as write-only — never echoed back in responses.
 
     PREREQUISITES:
     Neon Auth must already be provisioned for the target branch. If the response indicates "Neon Auth is not provisioned" (HTTP 404), DO NOT automatically call \`neon_auth_provision\` — provisioning has side effects (creates the neon_auth schema, deploys an auth service in your compute region, may incur cost). Surface the prerequisite to the user, explain what \`neon_auth_provision\` does, and ask for explicit approval before calling it.
     `,
     annotations: {
-      title: 'Update Neon Auth Methods',
+      title: 'Update Neon Auth Sign-In Methods',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'neon_auth_email_delivery_update' as const,
+    scope: 'neon_auth',
+    inputSchema: neonAuthEmailDeliveryUpdateInputSchema,
+    readOnlySafe: false,
+    description: `
+    Update Neon Auth email delivery configuration for a branch. Use \`type: "shared"\` for Neon-managed shared SMTP or \`type: "standard"\` with full SMTP credentials for BYO email delivery.
+
+    SECURITY: SMTP \`password\` is treated as write-only — never echoed back in responses. Use \`neon_auth_send_test_email\` to test credentials before saving them.
+
+    PREREQUISITES:
+    Neon Auth must already be provisioned for the target branch. If the response indicates "Neon Auth is not provisioned" (HTTP 404), DO NOT automatically call \`neon_auth_provision\` — provisioning has side effects (creates the neon_auth schema, deploys an auth service in your compute region, may incur cost). Surface the prerequisite to the user, explain what \`neon_auth_provision\` does, and ask for explicit approval before calling it.
+    `,
+    annotations: {
+      title: 'Update Neon Auth Email Delivery',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'neon_auth_organizations_update' as const,
+    scope: 'neon_auth',
+    inputSchema: neonAuthOrganizationsUpdateInputSchema,
+    readOnlySafe: false,
+    description: `
+    Update the Neon Auth organizations plugin configuration for a branch. This is separate from sign-in methods because organizations are tenancy/project behavior, not a way for users to sign in or sign up.
+
+    PREREQUISITES:
+    Neon Auth must already be provisioned for the target branch. If the response indicates "Neon Auth is not provisioned" (HTTP 404), DO NOT automatically call \`neon_auth_provision\` — provisioning has side effects (creates the neon_auth schema, deploys an auth service in your compute region, may incur cost). Surface the prerequisite to the user, explain what \`neon_auth_provision\` does, and ask for explicit approval before calling it.
+    `,
+    annotations: {
+      title: 'Update Neon Auth Organizations',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'neon_auth_app_update' as const,
+    scope: 'neon_auth',
+    inputSchema: neonAuthAppUpdateInputSchema,
+    readOnlySafe: false,
+    description: `
+    Update app-level Neon Auth display configuration for a branch, currently \`app_name\`. This is separate from sign-in methods because it is product/display config, not an authentication method.
+
+    PREREQUISITES:
+    Neon Auth must already be provisioned for the target branch. If the response indicates "Neon Auth is not provisioned" (HTTP 404), DO NOT automatically call \`neon_auth_provision\` — provisioning has side effects (creates the neon_auth schema, deploys an auth service in your compute region, may incur cost). Surface the prerequisite to the user, explain what \`neon_auth_provision\` does, and ask for explicit approval before calling it.
+    `,
+    annotations: {
+      title: 'Update Neon Auth App Config',
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: true,
@@ -528,7 +607,7 @@ export const NEON_TOOLS = [
     description: `
     Add an OAuth provider (Google, GitHub, Vercel) to Neon Auth on a branch. Omit \`oauth_provider_config\` for Neon-managed shared credentials, or pass \`client_id\` + \`client_secret\` together for BYO ("standard") mode. The upstream call is idempotent — re-adding the same provider returns 200 with the existing config.
 
-    To rotate credentials on an existing provider, use \`neon_auth_oauth_provider_update\` instead. To remove a provider, use \`neon_auth_oauth_provider_delete\`. For sign-in method toggles (email_password, magic_link, phone), use \`neon_auth_methods_update\`.
+    To rotate credentials on an existing provider, use \`neon_auth_oauth_provider_update\` instead. To remove a provider, use \`neon_auth_oauth_provider_delete\`. For sign-in method toggles (email_password, magic_link, phone), use \`neon_auth_sign_in_methods_update\`.
 
     SECURITY: \`client_secret\` is treated as write-only — never echoed back in responses.
 
@@ -614,7 +693,7 @@ export const NEON_TOOLS = [
     inputSchema: neonAuthWebhookUpdateInputSchema,
     readOnlySafe: false,
     description: `
-    Update the Neon Auth webhook configuration for a branch (URL, enabled flag, allowed events, per-delivery timeout). Webhooks are infrastructure-shaped — kept separate from \`neon_auth_methods_update\` because they're not an auth method.
+    Update the Neon Auth webhook configuration for a branch (URL, enabled flag, allowed events, per-delivery timeout). Webhooks are infrastructure-shaped — kept separate from \`neon_auth_sign_in_methods_update\` because they're not an auth method.
 
     Allowed events: user.before_create, user.created, send.otp, send.magic_link.
 
@@ -639,7 +718,7 @@ export const NEON_TOOLS = [
     description: `
     Dispatch a one-off SMTP test message to verify credentials end-to-end before saving them. Pass \`recipient_email\` + the full StandardEmailServer fields (host, port, username, password, sender_email, sender_name). Does NOT read from or mutate the saved email_delivery config — the caller supplies the credentials to test.
 
-    Use \`neon_auth_methods_update\` with the \`email_delivery\` slice to actually save SMTP credentials. Marked NOT idempotent — every call sends a real email.
+    Use \`neon_auth_email_delivery_update\` to actually save SMTP credentials. Marked NOT idempotent — every call sends a real email.
 
     SECURITY: \`password\` is treated as write-only — never echoed back in responses.
 

@@ -7,6 +7,10 @@ import {
   ensureNeonAuthProvisioned,
   resolveNeonAuthBranchId,
 } from './neon-auth-utils';
+import {
+  fetchOAuthProvidersSlice,
+  stringifyOAuthProvidersSlice,
+} from './neon-auth-settings-snapshot';
 
 type Props = z.infer<typeof neonAuthOauthProviderDeleteInputSchema>;
 
@@ -44,11 +48,20 @@ export async function handleNeonAuthOauthProviderDelete(
       ],
     };
   }
+  const { providers, error } = await fetchOAuthProvidersSlice(
+    neonClient,
+    props.projectId,
+    branchId,
+  );
   return {
     content: [
       {
         type: 'text',
-        text: `OAuth provider ${props.provider_id} deleted from branch ${branchId}.`,
+        text: stringifyOAuthProvidersSlice(
+          `OAuth providers after delete on branch ${branchId}:`,
+          providers,
+          error,
+        ),
       },
     ],
   };

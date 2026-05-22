@@ -117,21 +117,42 @@ function applyProjectScopeFilter(
 function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
   const schema = tool.inputSchema;
 
-  // Only Zod objects can have keys removed
+  if (schema instanceof z.ZodEffects) {
+    const innerSchema = schema.innerType();
+    if (!(innerSchema instanceof z.ZodObject)) return null;
+
+    const shape = innerSchema.shape as Record<string, z.ZodTypeAny>;
+    if (!('projectId' in shape)) return null;
+
+    const objectSchema = innerSchema as z.ZodObject<
+      Record<string, z.ZodTypeAny>
+    >;
+    const strippedInnerSchema = objectSchema.omit({ projectId: true });
+    const newSchema = strippedInnerSchema.superRefine((val: unknown, ctx) => {
+      const result = schema.safeParse({
+        projectId: '__project_scoped__',
+        ...(val as Record<string, unknown>),
+      });
+      if (result.success) return;
+      for (const issue of result.error.issues) {
+        ctx.addIssue(issue);
+      }
+    });
+
+    return {
+      ...tool,
+      inputSchema: newSchema,
+    } as NeonTool;
+  }
+
+  // Only Zod objects can have keys removed.
   if (!(schema instanceof z.ZodObject)) return null;
 
   const shape = schema.shape as Record<string, z.ZodTypeAny>;
   if (!('projectId' in shape)) return null;
 
-  // Build a new shape without projectId
-  const newShape: Record<string, z.ZodTypeAny> = {};
-  for (const [key, value] of Object.entries(shape)) {
-    if (key !== 'projectId') {
-      newShape[key] = value;
-    }
-  }
-
-  const newSchema = z.object(newShape);
+  const objectSchema = schema as z.ZodObject<Record<string, z.ZodTypeAny>>;
+  const newSchema = objectSchema.omit({ projectId: true });
 
   return {
     ...tool,

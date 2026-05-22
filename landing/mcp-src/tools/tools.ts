@@ -12,7 +12,13 @@ import { InvalidArgumentError, NotFoundError } from '../server/errors';
 
 import { describeTable, formatTableDescription } from '../describeUtils';
 import { handleNeonAuthProvision } from './handlers/neon-auth-provision';
-import { handleNeonAuthMethodsUpdate } from './handlers/neon-auth-methods-update';
+import { handleNeonAuthConfigGet } from './handlers/neon-auth-config-get';
+import {
+  handleNeonAuthAppUpdate,
+  handleNeonAuthEmailDeliveryUpdate,
+  handleNeonAuthOrganizationsUpdate,
+  handleNeonAuthSignInMethodsUpdate,
+} from './handlers/neon-auth-methods-update';
 import { handleNeonAuthOauthProviderAdd } from './handlers/neon-auth-oauth-provider-add';
 import { handleNeonAuthOauthProviderUpdate } from './handlers/neon-auth-oauth-provider-update';
 import { handleNeonAuthOauthProviderDelete } from './handlers/neon-auth-oauth-provider-delete';
@@ -1512,8 +1518,24 @@ You MUST follow these steps:
     return handleNeonAuthProvision(params, neonClient, extra);
   },
 
-  neon_auth_methods_update: async ({ params }, neonClient, extra) => {
-    return handleNeonAuthMethodsUpdate(params, neonClient, extra);
+  neon_auth_config_get: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthConfigGet(params, neonClient, extra);
+  },
+
+  neon_auth_sign_in_methods_update: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthSignInMethodsUpdate(params, neonClient, extra);
+  },
+
+  neon_auth_email_delivery_update: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthEmailDeliveryUpdate(params, neonClient, extra);
+  },
+
+  neon_auth_organizations_update: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthOrganizationsUpdate(params, neonClient, extra);
+  },
+
+  neon_auth_app_update: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthAppUpdate(params, neonClient, extra);
   },
 
   neon_auth_oauth_provider_add: async ({ params }, neonClient, extra) => {

@@ -21,7 +21,7 @@ export async function resolveNeonAuthBranchId(
  * Auto-chaining into provisioning is the wrong UX — provisioning creates the
  * `neon_auth` schema, deploys an auth service, and may incur cost.
  */
-export const NEON_AUTH_NOT_PROVISIONED_MESSAGE =
+const NEON_AUTH_NOT_PROVISIONED_MESSAGE =
   'Neon Auth is not provisioned for this branch (HTTP 404). Before calling neon_auth_provision, ask the user for explicit approval — provisioning has side effects (creates the neon_auth schema, deploys an auth service in your compute region, may incur cost).';
 
 /**

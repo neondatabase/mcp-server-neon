@@ -8,20 +8,32 @@ import {
 } from '@neondatabase/api-client';
 import { z } from 'zod/v3';
 import { isAxiosError } from 'axios';
-import { neonAuthMethodsUpdateInputSchema } from '../toolsSchema';
+import {
+  neonAuthAppUpdateInputSchema,
+  neonAuthEmailDeliveryUpdateInputSchema,
+  neonAuthOrganizationsUpdateInputSchema,
+  neonAuthSignInMethodsUpdateInputSchema,
+} from '../toolsSchema';
 import { ToolHandlerExtraParams } from '../types';
 import {
   ensureNeonAuthProvisioned,
   resolveNeonAuthBranchId,
 } from './neon-auth-utils';
 
-type Props = z.infer<typeof neonAuthMethodsUpdateInputSchema>;
+type SignInProps = z.infer<typeof neonAuthSignInMethodsUpdateInputSchema>;
+type EmailDeliveryProps = z.infer<
+  typeof neonAuthEmailDeliveryUpdateInputSchema
+>;
+type OrganizationsProps = z.infer<
+  typeof neonAuthOrganizationsUpdateInputSchema
+>;
+type AppProps = z.infer<typeof neonAuthAppUpdateInputSchema>;
 
 type SliceName =
   | 'app_name'
-  | 'sign_in_methods.email_password'
-  | 'sign_in_methods.magic_link'
-  | 'sign_in_methods.phone'
+  | 'email_password'
+  | 'magic_link'
+  | 'phone'
   | 'email_delivery'
   | 'organizations';
 
@@ -30,7 +42,7 @@ type SliceResult =
   | { slice: SliceName; ok: false; error: string };
 
 function buildEmailPasswordPatch(
-  email: NonNullable<NonNullable<Props['sign_in_methods']>['email_password']>,
+  email: NonNullable<SignInProps['email_password']>,
 ): NeonAuthEmailAndPasswordConfigUpdate {
   const patch: NeonAuthEmailAndPasswordConfigUpdate = {};
   if (email.enabled !== undefined) {
@@ -134,15 +146,15 @@ async function patchMagicLink(
     });
     if (!isOk(res.status)) {
       return {
-        slice: 'sign_in_methods.magic_link',
+        slice: 'magic_link',
         ok: false,
         error: `${res.status} ${res.statusText}`,
       };
     }
-    return { slice: 'sign_in_methods.magic_link', ok: true };
+    return { slice: 'magic_link', ok: true };
   } catch (err) {
     return {
-      slice: 'sign_in_methods.magic_link',
+      slice: 'magic_link',
       ok: false,
       error: describeError(err),
     };
@@ -172,15 +184,15 @@ async function patchPhone(
     });
     if (!isOk(res.status)) {
       return {
-        slice: 'sign_in_methods.phone',
+        slice: 'phone',
         ok: false,
         error: `${res.status} ${res.statusText}`,
       };
     }
-    return { slice: 'sign_in_methods.phone', ok: true };
+    return { slice: 'phone', ok: true };
   } catch (err) {
     return {
-      slice: 'sign_in_methods.phone',
+      slice: 'phone',
       ok: false,
       error: describeError(err),
     };
@@ -201,15 +213,15 @@ async function patchEmailPassword(
     );
     if (!isOk(res.status)) {
       return {
-        slice: 'sign_in_methods.email_password',
+        slice: 'email_password',
         ok: false,
         error: `${res.status} ${res.statusText}`,
       };
     }
-    return { slice: 'sign_in_methods.email_password', ok: true };
+    return { slice: 'email_password', ok: true };
   } catch (err) {
     return {
-      slice: 'sign_in_methods.email_password',
+      slice: 'email_password',
       ok: false,
       error: describeError(err),
     };
@@ -266,8 +278,54 @@ async function patchOrganizations(
   }
 }
 
-export async function handleNeonAuthMethodsUpdate(
-  props: Props,
+function formatMutationResult(
+  title: string,
+  branchId: string,
+  results: SliceResult[],
+): CallToolResult {
+  const succeeded = results.filter((r) => r.ok).map((r) => r.slice);
+  const failed = results
+    .filter((r): r is Extract<SliceResult, { ok: false }> => !r.ok)
+    .map((r) => ({ slice: r.slice, error: r.error }));
+
+  const summary = {
+    branch_id: branchId,
+    succeeded,
+    failed,
+  };
+
+  if (failed.length === 0) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `${title} updated successfully.\n\`\`\`json\n${JSON.stringify(
+            summary,
+            null,
+            2,
+          )}\n\`\`\``,
+        },
+      ],
+    };
+  }
+
+  return {
+    isError: true,
+    content: [
+      {
+        type: 'text',
+        text: `${title} update partially failed. Atomicity is per-slice; succeeded slices are NOT rolled back. Re-call with only the failed slices once the upstream issue is resolved.\n\`\`\`json\n${JSON.stringify(
+          summary,
+          null,
+          2,
+        )}\n\`\`\``,
+      },
+    ],
+  };
+}
+
+export async function handleNeonAuthSignInMethodsUpdate(
+  props: SignInProps,
   neonClient: Api<unknown>,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _extra: ToolHandlerExtraParams,
@@ -285,100 +343,107 @@ export async function handleNeonAuthMethodsUpdate(
   if (preflight) return preflight;
 
   const tasks: Promise<SliceResult>[] = [];
-
-  if (props.app_name !== undefined) {
-    tasks.push(
-      patchAppName(neonClient, props.projectId, branchId, props.app_name),
-    );
-  }
-  if (props.sign_in_methods?.email_password) {
+  if (props.email_password) {
     tasks.push(
       patchEmailPassword(
         neonClient,
         props.projectId,
         branchId,
-        buildEmailPasswordPatch(props.sign_in_methods.email_password),
+        buildEmailPasswordPatch(props.email_password),
       ),
     );
   }
-  if (props.sign_in_methods?.magic_link) {
+  if (props.magic_link) {
     tasks.push(
-      patchMagicLink(
-        neonClient,
-        props.projectId,
-        branchId,
-        props.sign_in_methods.magic_link,
-      ),
+      patchMagicLink(neonClient, props.projectId, branchId, props.magic_link),
     );
   }
-  if (props.sign_in_methods?.phone) {
-    tasks.push(
-      patchPhone(
-        neonClient,
-        props.projectId,
-        branchId,
-        props.sign_in_methods.phone,
-      ),
-    );
-  }
-  if (props.email_delivery) {
-    tasks.push(
-      patchEmailDelivery(
-        neonClient,
-        props.projectId,
-        branchId,
-        props.email_delivery as NeonAuthEmailServerConfig,
-      ),
-    );
-  }
-  if (props.organizations) {
-    const orgPayload: NeonAuthOrganizationConfigUpdate = {};
-    if (props.organizations.enabled !== undefined) {
-      orgPayload.enabled = props.organizations.enabled;
-    }
-    tasks.push(
-      patchOrganizations(neonClient, props.projectId, branchId, orgPayload),
-    );
+  if (props.phone) {
+    tasks.push(patchPhone(neonClient, props.projectId, branchId, props.phone));
   }
 
-  const results = await Promise.all(tasks);
-  const succeeded = results.filter((r) => r.ok).map((r) => r.slice);
-  const failed = results
-    .filter((r): r is Extract<SliceResult, { ok: false }> => !r.ok)
-    .map((r) => ({ slice: r.slice, error: r.error }));
+  return formatMutationResult(
+    'Neon Auth sign-in methods',
+    branchId,
+    await Promise.all(tasks),
+  );
+}
 
-  const summary = {
-    branch_id: branchId,
-    succeeded,
-    failed,
-  };
+export async function handleNeonAuthEmailDeliveryUpdate(
+  props: EmailDeliveryProps,
+  neonClient: Api<unknown>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _extra: ToolHandlerExtraParams,
+): Promise<CallToolResult> {
+  const branchId = await resolveNeonAuthBranchId(
+    props.projectId,
+    props.branchId,
+    neonClient,
+  );
+  const preflight = await ensureNeonAuthProvisioned(
+    neonClient,
+    props.projectId,
+    branchId,
+  );
+  if (preflight) return preflight;
 
-  if (failed.length === 0) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Neon Auth methods updated successfully.\n\`\`\`json\n${JSON.stringify(
-            summary,
-            null,
-            2,
-          )}\n\`\`\``,
-        },
-      ],
-    };
+  return formatMutationResult('Neon Auth email delivery', branchId, [
+    await patchEmailDelivery(
+      neonClient,
+      props.projectId,
+      branchId,
+      props.email_delivery as NeonAuthEmailServerConfig,
+    ),
+  ]);
+}
+
+export async function handleNeonAuthOrganizationsUpdate(
+  props: OrganizationsProps,
+  neonClient: Api<unknown>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _extra: ToolHandlerExtraParams,
+): Promise<CallToolResult> {
+  const branchId = await resolveNeonAuthBranchId(
+    props.projectId,
+    props.branchId,
+    neonClient,
+  );
+  const preflight = await ensureNeonAuthProvisioned(
+    neonClient,
+    props.projectId,
+    branchId,
+  );
+  if (preflight) return preflight;
+
+  const orgPayload: NeonAuthOrganizationConfigUpdate = {};
+  if (props.organizations.enabled !== undefined) {
+    orgPayload.enabled = props.organizations.enabled;
   }
 
-  return {
-    isError: true,
-    content: [
-      {
-        type: 'text',
-        text: `Neon Auth methods update partially failed. Atomicity is per-slice; succeeded slices are NOT rolled back. Re-call with only the failed slices once the upstream issue is resolved.\n\`\`\`json\n${JSON.stringify(
-          summary,
-          null,
-          2,
-        )}\n\`\`\``,
-      },
-    ],
-  };
+  return formatMutationResult('Neon Auth organizations', branchId, [
+    await patchOrganizations(neonClient, props.projectId, branchId, orgPayload),
+  ]);
+}
+
+export async function handleNeonAuthAppUpdate(
+  props: AppProps,
+  neonClient: Api<unknown>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _extra: ToolHandlerExtraParams,
+): Promise<CallToolResult> {
+  const branchId = await resolveNeonAuthBranchId(
+    props.projectId,
+    props.branchId,
+    neonClient,
+  );
+  const preflight = await ensureNeonAuthProvisioned(
+    neonClient,
+    props.projectId,
+    branchId,
+  );
+  if (preflight) return preflight;
+
+  return formatMutationResult('Neon Auth app config', branchId, [
+    await patchAppName(neonClient, props.projectId, branchId, props.app_name),
+  ]);
 }

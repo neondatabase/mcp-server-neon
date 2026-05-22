@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
+  neonAuthConfigGetInputSchema,
   neonAuthProvisionInputSchema,
-  neonAuthMethodsUpdateInputSchema,
+  neonAuthSignInMethodsUpdateInputSchema,
+  neonAuthEmailDeliveryUpdateInputSchema,
+  neonAuthOrganizationsUpdateInputSchema,
+  neonAuthAppUpdateInputSchema,
   neonAuthOauthProviderAddInputSchema,
   neonAuthOauthProviderUpdateInputSchema,
   neonAuthOauthProviderDeleteInputSchema,
@@ -36,90 +40,96 @@ describe('neonAuthProvisionInputSchema', () => {
 });
 
 // =============================================================================
-// neon_auth_methods_update
+// neon_auth_config_get
 // =============================================================================
-describe('neonAuthMethodsUpdateInputSchema', () => {
-  it('rejects empty (no slices)', () => {
+describe('neonAuthConfigGetInputSchema', () => {
+  it('requires projectId', () => {
+    expect(neonAuthConfigGetInputSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('accepts projectId with optional branchId', () => {
     expect(
-      neonAuthMethodsUpdateInputSchema.safeParse({ projectId: 'p1' }).success,
+      neonAuthConfigGetInputSchema.safeParse({
+        projectId: 'p1',
+        branchId: 'b1',
+      }).success,
+    ).toBe(true);
+  });
+});
+
+// =============================================================================
+// neon_auth_sign_in_methods_update
+// =============================================================================
+describe('neonAuthSignInMethodsUpdateInputSchema', () => {
+  it('rejects empty (no method slices)', () => {
+    expect(
+      neonAuthSignInMethodsUpdateInputSchema.safeParse({ projectId: 'p1' })
+        .success,
     ).toBe(false);
   });
 
-  it('accepts app_name alone', () => {
+  it('accepts email_password partial', () => {
     expect(
-      neonAuthMethodsUpdateInputSchema.safeParse({
+      neonAuthSignInMethodsUpdateInputSchema.safeParse({
         projectId: 'p1',
-        app_name: 'My App',
+        email_password: { enabled: true },
       }).success,
     ).toBe(true);
   });
 
-  it('accepts organizations.enabled alone', () => {
+  it('accepts magic_link toggle', () => {
     expect(
-      neonAuthMethodsUpdateInputSchema.safeParse({
+      neonAuthSignInMethodsUpdateInputSchema.safeParse({
         projectId: 'p1',
-        organizations: { enabled: true },
+        magic_link: { enabled: true },
       }).success,
     ).toBe(true);
   });
 
-  it('accepts sign_in_methods.email_password partial', () => {
+  it('accepts phone toggle', () => {
     expect(
-      neonAuthMethodsUpdateInputSchema.safeParse({
+      neonAuthSignInMethodsUpdateInputSchema.safeParse({
         projectId: 'p1',
-        sign_in_methods: { email_password: { enabled: true } },
+        phone: { enabled: false },
       }).success,
     ).toBe(true);
-  });
-
-  it('accepts sign_in_methods.magic_link toggle', () => {
-    expect(
-      neonAuthMethodsUpdateInputSchema.safeParse({
-        projectId: 'p1',
-        sign_in_methods: { magic_link: { enabled: true } },
-      }).success,
-    ).toBe(true);
-  });
-
-  it('accepts sign_in_methods.phone toggle', () => {
-    expect(
-      neonAuthMethodsUpdateInputSchema.safeParse({
-        projectId: 'p1',
-        sign_in_methods: { phone: { enabled: false } },
-      }).success,
-    ).toBe(true);
-  });
-
-  it('rejects empty sign_in_methods object', () => {
-    expect(
-      neonAuthMethodsUpdateInputSchema.safeParse({
-        projectId: 'p1',
-        sign_in_methods: {},
-      }).success,
-    ).toBe(false);
   });
 
   it('rejects email_password block with no fields', () => {
     expect(
-      neonAuthMethodsUpdateInputSchema.safeParse({
+      neonAuthSignInMethodsUpdateInputSchema.safeParse({
         projectId: 'p1',
-        sign_in_methods: { email_password: {} },
+        email_password: {},
       }).success,
     ).toBe(false);
   });
 
-  it('accepts email_delivery type=shared with no overrides', () => {
+  it('rejects non-method config slices', () => {
     expect(
-      neonAuthMethodsUpdateInputSchema.safeParse({
+      neonAuthSignInMethodsUpdateInputSchema.safeParse({
+        projectId: 'p1',
+        app_name: 'My App',
+      }).success,
+    ).toBe(false);
+  });
+});
+
+// =============================================================================
+// neon_auth_email_delivery_update
+// =============================================================================
+describe('neonAuthEmailDeliveryUpdateInputSchema', () => {
+  it('accepts type=shared with no overrides', () => {
+    expect(
+      neonAuthEmailDeliveryUpdateInputSchema.safeParse({
         projectId: 'p1',
         email_delivery: { type: 'shared' },
       }).success,
     ).toBe(true);
   });
 
-  it('accepts email_delivery type=standard with full SMTP', () => {
+  it('accepts type=standard with full SMTP', () => {
     expect(
-      neonAuthMethodsUpdateInputSchema.safeParse({
+      neonAuthEmailDeliveryUpdateInputSchema.safeParse({
         projectId: 'p1',
         email_delivery: {
           type: 'standard',
@@ -134,9 +144,9 @@ describe('neonAuthMethodsUpdateInputSchema', () => {
     ).toBe(true);
   });
 
-  it('rejects email_delivery type=standard with missing fields', () => {
+  it('rejects type=standard with missing fields', () => {
     expect(
-      neonAuthMethodsUpdateInputSchema.safeParse({
+      neonAuthEmailDeliveryUpdateInputSchema.safeParse({
         projectId: 'p1',
         email_delivery: { type: 'standard', host: 'h' },
       }).success,
@@ -145,19 +155,55 @@ describe('neonAuthMethodsUpdateInputSchema', () => {
 
   it('rejects unknown discriminator type', () => {
     expect(
-      neonAuthMethodsUpdateInputSchema.safeParse({
+      neonAuthEmailDeliveryUpdateInputSchema.safeParse({
         projectId: 'p1',
         email_delivery: { type: 'sendgrid' },
       }).success,
     ).toBe(false);
   });
+});
 
-  it('rejects unknown top-level keys (strict)', () => {
+// =============================================================================
+// neon_auth_organizations_update
+// =============================================================================
+describe('neonAuthOrganizationsUpdateInputSchema', () => {
+  it('accepts enabled', () => {
     expect(
-      neonAuthMethodsUpdateInputSchema.safeParse({
+      neonAuthOrganizationsUpdateInputSchema.safeParse({
         projectId: 'p1',
-        app_name: 'X',
-        unknown_field: true,
+        organizations: { enabled: true },
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects empty organizations object', () => {
+    expect(
+      neonAuthOrganizationsUpdateInputSchema.safeParse({
+        projectId: 'p1',
+        organizations: {},
+      }).success,
+    ).toBe(false);
+  });
+});
+
+// =============================================================================
+// neon_auth_app_update
+// =============================================================================
+describe('neonAuthAppUpdateInputSchema', () => {
+  it('accepts app_name', () => {
+    expect(
+      neonAuthAppUpdateInputSchema.safeParse({
+        projectId: 'p1',
+        app_name: 'My App',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects blank app_name', () => {
+    expect(
+      neonAuthAppUpdateInputSchema.safeParse({
+        projectId: 'p1',
+        app_name: '',
       }).success,
     ).toBe(false);
   });
