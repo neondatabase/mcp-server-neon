@@ -360,19 +360,6 @@ export function ConsentForm({
             </div>
           </div>
         </form>
-
-        <p className="mt-6 text-center text-xs text-neon-text-muted">
-          Built on the{' '}
-          <a
-            href="https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization"
-            className="underline decoration-dotted underline-offset-2 hover:text-neon-text"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Model Context Protocol authorization spec
-          </a>
-          .
-        </p>
       </div>
     </div>
   );
