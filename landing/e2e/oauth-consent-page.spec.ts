@@ -192,3 +192,76 @@ test.describe('OAuth consent page', () => {
     await expect(fullAccess).toBeDisabled();
   });
 });
+
+test.describe('OAuth consent error page', () => {
+  // Each `reason` value the Server Action and page route can redirect to.
+  // The test asserts the page renders, identifies itself as the
+  // authorization-error UI, and surfaces the human-readable reason copy.
+  const REASONS: Array<{ reason: string; expectedCopy: RegExp }> = [
+    {
+      reason: 'missing_state',
+      expectedCopy: /missing required state/i,
+    },
+    {
+      reason: 'invalid_state',
+      expectedCopy: /expired or was tampered with/i,
+    },
+    {
+      reason: 'invalid_client',
+      expectedCopy: /requesting client could not be found/i,
+    },
+    {
+      reason: 'invalid_redirect',
+      expectedCopy: /redirect URI is not registered/i,
+    },
+  ];
+
+  for (const { reason, expectedCopy } of REASONS) {
+    test(`renders for reason=${reason}`, async ({ page }) => {
+      await page.goto(`/oauth/consent/error?reason=${reason}`);
+      await expect(
+        page.getByRole('heading', {
+          name: /Could not complete this authorization/i,
+        }),
+      ).toBeVisible();
+      await expect(page.getByText(expectedCopy)).toBeVisible();
+      // Docs link points at neon.com (not neon.tech) per PR review.
+      await expect(
+        page.getByRole('link', { name: /Neon MCP server docs/i }),
+      ).toHaveAttribute('href', /^https:\/\/neon\.com\//);
+    });
+  }
+
+  test('falls back to a generic message for unknown reason values', async ({
+    page,
+  }) => {
+    await page.goto('/oauth/consent/error?reason=not_a_known_reason');
+    await expect(
+      page.getByText(/authorization request could not be processed/i),
+    ).toBeVisible();
+  });
+
+  test('falls back to a generic message when reason is missing entirely', async ({
+    page,
+  }) => {
+    await page.goto('/oauth/consent/error');
+    await expect(
+      page.getByText(/authorization request could not be processed/i),
+    ).toBeVisible();
+  });
+
+  test('clickjacking-prevention headers are set on the error page', async ({
+    request,
+  }) => {
+    const response = await request.get(
+      '/oauth/consent/error?reason=invalid_state',
+      { maxRedirects: 0 },
+    );
+    expect(response.status()).toBe(200);
+    const headers = response.headers();
+    expect(headers['x-frame-options']?.toLowerCase()).toBe('deny');
+    expect(headers['content-security-policy']).toContain(
+      "frame-ancestors 'none'",
+    );
+  });
+});
