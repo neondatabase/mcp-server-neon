@@ -16,6 +16,7 @@ import { logger } from '../../../mcp-src/utils/logger';
 import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
 import {
   DEFAULT_GRANT,
+  grantsAreEquivalent,
   resolveGrantFromResourceUri,
   type GrantContext,
 } from '../../../mcp-src/utils/grant-context';
@@ -71,34 +72,6 @@ const parseAuthRequest = (
     codeChallengeMethod,
   };
 };
-
-/**
- * Compare two grant contexts for re-consent purposes. Used by the
- * pre-approval short-circuit so that an MCP client that previously got
- * consented for one grant shape (e.g. unconstrained access) cannot use the
- * same approval cookie to silently expand into a different shape (e.g.
- * narrower categories or a different projectId). When the resource URI's
- * grant shape differs from what was stored at approval time, we re-show
- * the consent screen so the user explicitly approves the new shape.
- */
-function grantsAreEquivalent(
-  a: GrantContext | undefined,
-  b: GrantContext,
-): boolean {
-  if (!a) return false;
-  const aScopes = a.scopes;
-  const bScopes = b.scopes;
-  if (aScopes === null && bScopes !== null) return false;
-  if (aScopes !== null && bScopes === null) return false;
-  if (aScopes !== null && bScopes !== null) {
-    if (aScopes.length !== bScopes.length) return false;
-    const setA = new Set(aScopes);
-    for (const s of bScopes) {
-      if (!setA.has(s)) return false;
-    }
-  }
-  return (a.projectId ?? null) === (b.projectId ?? null);
-}
 
 export async function GET(request: NextRequest) {
   try {

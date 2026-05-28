@@ -255,6 +255,33 @@ describe('/api/authorize route integration', () => {
     expect(upstreamAuth).not.toHaveBeenCalled();
   });
 
+  it('re-shows the consent page when the incoming resource URI carries duplicate categories', async () => {
+    // Regression for the array-length-vs-set-size bug fixed by
+    // grantsAreEquivalent: stored `['querying', 'schema']` previously
+    // matched incoming `['querying', 'querying']` (both length 2),
+    // silently bypassing re-consent. Going through `Set.size` plus
+    // `Set.prototype.isSubsetOf` correctly distinguishes them.
+    vi.mocked(isClientAlreadyApproved).mockResolvedValue(true);
+    vi.mocked(model.getClientAuthContext).mockResolvedValue({
+      grant: { projectId: null, scopes: ['querying', 'schema'] },
+      scope: ['read', 'write'],
+      readOnly: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as never);
+
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', {
+        resource:
+          'https://mcp.neon.tech/mcp?category=querying&category=querying',
+      }),
+    );
+
+    const location = getRedirectLocation(response);
+    expect(location.pathname).toBe('/oauth/consent');
+    expect(upstreamAuth).not.toHaveBeenCalled();
+  });
+
   it('rejects with invalid_client when the registered client is missing', async () => {
     vi.mocked(model.getClient).mockResolvedValue(undefined);
     const response = await GET(buildAuthorizeRequest());
