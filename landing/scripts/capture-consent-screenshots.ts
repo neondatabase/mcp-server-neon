@@ -70,9 +70,7 @@ const SCENARIOS: Array<{
   name: string;
   description: string;
   authorizeParams?: Record<string, string>;
-  beforeShot?: (
-    page: import('@playwright/test').Page,
-  ) => Promise<void>;
+  beforeShot?: (page: import('@playwright/test').Page) => Promise<void>;
 }> = [
   {
     name: '01-default-full-access',
@@ -112,8 +110,7 @@ const SCENARIOS: Array<{
     description:
       'MCP client capped categories to Querying+Schema via resource URI — only those two render',
     authorizeParams: {
-      resource:
-        'https://mcp.neon.tech/mcp?category=querying&category=schema',
+      resource: 'https://mcp.neon.tech/mcp?category=querying&category=schema',
     },
   },
   {
