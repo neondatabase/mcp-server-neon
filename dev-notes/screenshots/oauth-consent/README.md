@@ -1,10 +1,24 @@
 # OAuth consent UI screenshots
 
 Reference screenshots of the `/oauth/consent` page introduced in the
-"rich Next.js consent UI" PR. Re-generate with
-`landing/scripts/capture-consent-screenshots.ts` after meaningful UI
-changes (run a Next.js dev server, then `pnpm exec tsx
-landing/scripts/capture-consent-screenshots.ts`).
+"rich Next.js consent UI" PR. Re-generate via the
+[`agent-browser`](https://www.npmjs.com/package/agent-browser) global
+CLI:
+
+```sh
+# in one terminal — start the dev server with .env.e2e exported
+cd landing && env $(cat .env.e2e | grep -v '^#' | xargs -L1) \
+  pnpm exec next dev --port 3100
+
+# in another terminal — capture the 6 scenarios
+cd landing && ./scripts/capture-consent-screenshots.sh
+```
+
+The script produces PNGs in `/tmp/consent-screenshots/` by default; copy
+them over the files in this directory once you're happy with the
+output. The `agent-browser` daemon persists across commands; the script
+calls `agent-browser close --all` at the end so a fresh run starts
+clean.
 
 | File                                | Scenario |
 | ----------------------------------- | -------- |

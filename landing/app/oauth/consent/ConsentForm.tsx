@@ -250,6 +250,7 @@ export function ConsentForm({
                 value={projectId}
                 disabled={locks.projectIdLocked}
                 onChange={(e) => setProjectId(e.target.value)}
+                aria-label="Project ID"
                 className="w-full rounded-lg border border-neon-border bg-black/40 px-3.5 py-2.5 font-mono text-sm text-neon-text placeholder:text-neutral-600 focus:border-neon-green/60 focus:outline-none focus:ring-2 focus:ring-neon-green/30 disabled:cursor-not-allowed disabled:opacity-60"
                 aria-describedby={`${projectIdInputId}-help`}
               />
@@ -593,6 +594,7 @@ function CategoryCheckbox({
         type="checkbox"
         checked={checked}
         onChange={onChange}
+        aria-label={label}
         className="mt-0.5 size-4 cursor-pointer accent-[#00E599]"
       />
       <div className="min-w-0">
