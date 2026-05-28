@@ -1,17 +1,5 @@
 export const SUPPORTED_SCOPES = ['read', 'write', '*'] as const;
 
-export const SCOPE_DEFINITIONS = {
-  read: {
-    label: 'Read-only',
-    description: 'View Neon resources and run read-only queries',
-  },
-  write: {
-    label: 'Full access',
-    description:
-      'Allow full management of your Neon resources and databases, including running any INSERT, UPDATE, or DELETE statements',
-  },
-} as const;
-
 export type ReadOnlyContext = {
   /** Value of the readonly= URL query param (highest priority). */
   queryParamValue?: string | null;
