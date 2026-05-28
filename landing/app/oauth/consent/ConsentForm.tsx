@@ -334,12 +334,7 @@ export function ConsentForm({
             />
           </Section>
 
-          <div className="mt-10 flex flex-col-reverse gap-3 border-t border-neon-border pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs leading-relaxed text-neon-text-muted">
-              Approving redirects you to{' '}
-              <span className="font-medium text-neon-text">neon.tech</span> to
-              sign in. The MCP client never sees your Neon credentials.
-            </p>
+          <div className="mt-10 flex flex-col-reverse gap-3 border-t border-neon-border pt-6 sm:flex-row sm:items-center sm:justify-end">
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
               <button
                 type="submit"
