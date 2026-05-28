@@ -34,13 +34,12 @@ export default async function ConsentErrorPage({
       </h1>
       <p className="text-sm leading-relaxed text-neutral-400">{reason}</p>
       <p className="text-xs text-neutral-500">
-        If the problem persists, contact the MCP client developer or open a
-        support ticket at{' '}
+        Retry from your MCP client. If the problem persists, see the{' '}
         <a
-          href="https://neon.tech/docs/ai/neon-mcp-server"
+          href="https://neon.com/docs/ai/neon-mcp-server"
           className="underline decoration-dotted"
         >
-          neon.tech/docs/ai/neon-mcp-server
+          Neon MCP server docs
         </a>
         .
       </p>
