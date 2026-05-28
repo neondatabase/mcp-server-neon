@@ -49,7 +49,7 @@ test.describe('OAuth consent page', () => {
     await page.goto(consentUrl);
 
     await expect(
-      page.getByRole('heading', { name: /Authorize E2E Consent Client/i }),
+      page.getByRole('heading', { name: /E2E Consent Client/i }),
     ).toBeVisible();
     await expect(page.getByRole('radio', { name: 'Read-only' })).toBeVisible();
     await expect(

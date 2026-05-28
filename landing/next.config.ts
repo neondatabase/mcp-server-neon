@@ -16,6 +16,11 @@ const nextConfig: NextConfig = {
   // Serverless deployment on Vercel - do not use 'export' mode
   // API routes require dynamic server-side rendering
 
+  // Hide the floating "Next.js" dev indicator. It clashes with the brand
+  // surface in screenshots and brings no value at mcp.neon.tech where
+  // the consent UI is the only user-facing page.
+  devIndicators: false,
+
   async redirects() {
     return [
       {

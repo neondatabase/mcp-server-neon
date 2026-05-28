@@ -7,6 +7,24 @@
   --color-ring: var(--ring);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+
+  /* Neon brand tokens. Mirrors the palette used on neon.com:
+     - `--color-neon-green` is Neon's signature primary green (#00E599).
+     - The dark surface tokens match the OAuth approval card the legacy
+       inline-HTML route used. Both are surfaced as utility classes so
+       the OAuth consent UI can use `bg-neon-surface`, `text-neon-green`,
+       etc. without sprinkling raw hex values throughout the JSX. */
+  --color-neon-green: var(--neon-green);
+  --color-neon-green-soft: var(--neon-green-soft);
+  --color-neon-surface: var(--neon-surface);
+  --color-neon-surface-elevated: var(--neon-surface-elevated);
+  --color-neon-border: var(--neon-border);
+  --color-neon-text: var(--neon-text);
+  --color-neon-text-muted: var(--neon-text-muted);
+
+  --font-sans:
+    var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, sans-serif;
 }
 
 :root {
@@ -16,6 +34,14 @@
   --primary-foreground: oklch(0.984 0.003 247.858);
   --border: oklch(0.929 0.013 255.508);
   --ring: oklch(0.704 0.04 256.788);
+
+  --neon-green: #00e599;
+  --neon-green-soft: rgba(0, 229, 153, 0.12);
+  --neon-surface: #0a0c09;
+  --neon-surface-elevated: #111312;
+  --neon-border: rgba(255, 255, 255, 0.08);
+  --neon-text: #ededed;
+  --neon-text-muted: #a3a3a3;
 }
 
 @variant dark {
@@ -36,6 +62,7 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
   }
 
   button:not(:disabled),

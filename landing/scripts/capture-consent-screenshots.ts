@@ -143,7 +143,7 @@ async function main() {
 
     const page = await context.newPage();
     await page.goto(consentUrl, { waitUntil: 'networkidle' });
-    await page.waitForSelector('text=Authorize Codex CLI');
+    await page.getByRole('heading', { name: /Codex CLI/i }).waitFor();
     // Let the live preview's debounced fetch settle.
     await page.waitForTimeout(800);
 

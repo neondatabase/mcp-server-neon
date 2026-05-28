@@ -150,26 +150,15 @@ export function ConsentForm({
   const previewCount = previewTools.length;
 
   return (
-    <div className="min-h-screen bg-[#0a0c09] text-neutral-100">
-      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
-        <div className="mb-8 flex items-center justify-center">
-          <a href="/" target="_blank" rel="noreferrer" aria-label="Neon">
-            {/* eslint-disable-next-line @next/next/no-img-element -- the brand
-                logo is a tiny remote SVG; routing it through next/image would
-                require configuring remotePatterns just for one icon. */}
-            <img
-              src="https://neon.com/brand/neon-logomark-dark-color.svg"
-              alt="Neon MCP"
-              className="h-12 w-12 rounded-lg"
-            />
-          </a>
-        </div>
+    <div className="min-h-screen bg-neon-surface text-neon-text">
+      <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-16">
+        <BrandHeader />
 
         <form
           id={formId}
           action={approveConsent}
           onSubmit={() => setSubmitting('approve')}
-          className="rounded-xl border border-white/10 bg-black/40 p-6 shadow-[0_0_28px_-12px_rgb(0_230_153_/_0.55)] sm:p-8"
+          className="rounded-2xl border border-neon-border bg-neon-surface-elevated p-6 shadow-[0_0_60px_-30px_rgba(0,229,153,0.55)] sm:p-9"
         >
           <input type="hidden" name="signedState" value={signedState} />
           <input type="hidden" name="readonly" value={String(readOnly)} />
@@ -182,33 +171,38 @@ export function ConsentForm({
             <input key={c} type="hidden" name="categories" value={c} />
           ))}
 
-          <header className="mb-6">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Authorize {client.name}
+          <header className="mb-8">
+            <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-neon-text-muted">
+              Authorization request
+            </p>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-[28px]">
+              Allow <span className="text-neon-green">{client.name}</span> to
+              access your Neon resources
             </h1>
-            <p className="mt-2 text-sm leading-relaxed text-neutral-400">
-              {client.name} is requesting access to your Neon resources via the
-              Neon MCP server. Review and adjust the access below, then approve
-              to continue.
+            <p className="mt-3 text-sm leading-relaxed text-neon-text-muted">
+              Review and adjust the access below, then approve to continue. You
+              can sign out any time from the Neon console to revoke this
+              authorization.
             </p>
           </header>
 
           <ClientInfoCard client={client} />
 
           <Section
+            label="01"
             title="Access mode"
-            description="Pick how much the agent is allowed to do on your behalf."
+            description="How much can the agent do on your behalf? Read-only is the safer default."
           >
             <div
               role="radiogroup"
               aria-label="Access mode"
-              className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+              className="grid grid-cols-1 gap-3 sm:grid-cols-2"
             >
               <AccessModeOption
                 checked={readOnly}
                 onSelect={() => setReadOnly(true)}
                 title="Read-only"
-                description="View resources and run read-only SQL. Safer default."
+                description="View resources and run read-only queries."
               />
               <AccessModeOption
                 checked={!readOnly}
@@ -226,44 +220,51 @@ export function ConsentForm({
           </Section>
 
           <Section
+            label="02"
             title="Project scope"
-            description="Optionally pin the agent to a single Neon project. Project-management tools (list/create/delete project) are hidden when set."
+            description="Pin the agent to a single Neon project. Project-management tools (list, create, delete project) are hidden when set."
           >
-            <label
-              htmlFor={projectIdInputId}
-              className="mb-2 block text-xs font-medium uppercase tracking-wide text-neutral-400"
-            >
-              Project ID
-              {locks.projectIdLocked && (
-                <Badge tone="warn" className="ml-2">
-                  Locked by client
-                </Badge>
-              )}
-            </label>
-            <input
-              id={projectIdInputId}
-              name="projectId"
-              type="text"
-              inputMode="text"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="prj_…"
-              value={projectId}
-              disabled={locks.projectIdLocked}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 font-mono text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-emerald-400/60 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60"
-              aria-describedby={`${projectIdInputId}-help`}
-            />
-            <p
-              id={`${projectIdInputId}-help`}
-              className="mt-2 text-xs text-neutral-500"
-            >
-              Leave blank to allow access to every project you have permission
-              for.
-            </p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor={projectIdInputId}
+                  className="text-xs font-medium uppercase tracking-[0.14em] text-neon-text-muted"
+                >
+                  Project ID{' '}
+                  <span className="text-neon-text-muted/60 normal-case tracking-normal">
+                    (optional)
+                  </span>
+                </label>
+                {locks.projectIdLocked && (
+                  <Badge tone="warn">Locked by client</Badge>
+                )}
+              </div>
+              <input
+                id={projectIdInputId}
+                name="projectId"
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="prj_…"
+                value={projectId}
+                disabled={locks.projectIdLocked}
+                onChange={(e) => setProjectId(e.target.value)}
+                className="w-full rounded-lg border border-neon-border bg-black/40 px-3.5 py-2.5 font-mono text-sm text-neon-text placeholder:text-neutral-600 focus:border-neon-green/60 focus:outline-none focus:ring-2 focus:ring-neon-green/30 disabled:cursor-not-allowed disabled:opacity-60"
+                aria-describedby={`${projectIdInputId}-help`}
+              />
+              <p
+                id={`${projectIdInputId}-help`}
+                className="text-xs text-neon-text-muted"
+              >
+                Leave blank to allow access to every project you have permission
+                for.
+              </p>
+            </div>
           </Section>
 
           <Section
+            label="03"
             title="Tool categories"
             description={
               locks.categoriesLockedToSubsetOf !== null
@@ -271,26 +272,28 @@ export function ConsentForm({
                 : 'Pick which categories of tools the agent can use. Unchecked categories are hidden from the model entirely.'
             }
           >
-            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-              <button
-                type="button"
-                onClick={handleSelectAll}
-                className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-neutral-300 transition hover:border-emerald-400/40 hover:bg-emerald-400/10"
-              >
-                Select all
-              </button>
-              <button
-                type="button"
-                onClick={handleClearAll}
-                className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-neutral-300 transition hover:border-red-400/40 hover:bg-red-400/10"
-              >
-                Clear all
-              </button>
-              {selectedAll && (
-                <span className="text-neutral-500">
-                  All categories selected
-                </span>
-              )}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSelectAll}
+                  className="rounded-md border border-neon-border bg-white/5 px-3 py-1.5 text-xs font-medium text-neon-text transition hover:border-neon-green/50 hover:bg-neon-green-soft hover:text-neon-green"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="rounded-md border border-neon-border bg-white/5 px-3 py-1.5 text-xs font-medium text-neon-text transition hover:border-red-400/40 hover:bg-red-400/10 hover:text-red-200"
+                >
+                  Clear all
+                </button>
+              </div>
+              <span className="text-xs text-neon-text-muted">
+                {selectedAll
+                  ? 'All categories enabled'
+                  : `${categories.size} of ${allowedCategories.length} selected`}
+              </span>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {allowedCategories.map((cat) => {
@@ -316,8 +319,9 @@ export function ConsentForm({
           </Section>
 
           <Section
+            label="04"
             title="Tools preview"
-            description={`Live preview of the tools your client will see based on the choices above.`}
+            description="Live preview of the tools your client will see based on the choices above."
           >
             <ToolsPreview
               loading={preview.loading}
@@ -329,36 +333,42 @@ export function ConsentForm({
             />
           </Section>
 
-          <div className="mt-8 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <button
-              type="submit"
-              formAction={cancelConsent}
-              onClick={() => setSubmitting('cancel')}
-              disabled={submitting !== null}
-              className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-neutral-300 transition hover:bg-white/5 disabled:cursor-wait disabled:opacity-60"
-            >
-              {submitting === 'cancel' ? 'Cancelling…' : 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              disabled={submitting !== null}
-              className="rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-neutral-950 transition hover:bg-emerald-300 disabled:cursor-wait disabled:opacity-60"
-            >
-              {submitting === 'approve' ? 'Approving…' : 'Approve'}
-            </button>
+          <div className="mt-10 flex flex-col-reverse gap-3 border-t border-neon-border pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-relaxed text-neon-text-muted">
+              Approving redirects you to{' '}
+              <span className="font-medium text-neon-text">neon.tech</span> to
+              sign in. The MCP client never sees your Neon credentials.
+            </p>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+              <button
+                type="submit"
+                formAction={cancelConsent}
+                onClick={() => setSubmitting('cancel')}
+                disabled={submitting !== null}
+                className="rounded-md border border-neon-border bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-neon-text transition hover:border-white/30 hover:bg-white/[0.08] disabled:cursor-wait disabled:opacity-60"
+              >
+                {submitting === 'cancel' ? 'Cancelling…' : 'Cancel'}
+              </button>
+              <button
+                type="submit"
+                disabled={submitting !== null}
+                className="rounded-md bg-neon-green px-5 py-2.5 text-sm font-semibold text-neutral-950 shadow-[0_0_20px_-6px_rgba(0,229,153,0.6)] transition hover:bg-[#1aebab] disabled:cursor-wait disabled:opacity-60"
+              >
+                {submitting === 'approve' ? 'Approving…' : 'Approve & continue'}
+              </button>
+            </div>
           </div>
         </form>
 
-        <p className="mt-6 text-center text-xs text-neutral-500">
-          Approving redirects you to Neon to sign in. The MCP client never sees
-          your Neon credentials. Read more about the{' '}
+        <p className="mt-6 text-center text-xs text-neon-text-muted">
+          Built on the{' '}
           <a
             href="https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization"
-            className="underline decoration-dotted"
+            className="underline decoration-dotted underline-offset-2 hover:text-neon-text"
             target="_blank"
             rel="noreferrer"
           >
-            MCP authorization spec
+            Model Context Protocol authorization spec
           </a>
           .
         </p>
@@ -367,10 +377,40 @@ export function ConsentForm({
   );
 }
 
+function BrandHeader() {
+  return (
+    <div className="mb-10 flex items-center justify-center gap-3">
+      <a
+        href="/"
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center gap-3"
+        aria-label="Neon"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- the brand
+            logo is a tiny remote SVG; routing it through next/image would
+            require configuring remotePatterns just for one icon. */}
+        <img
+          src="https://neon.com/brand/neon-logomark-dark-color.svg"
+          alt=""
+          className="h-9 w-9"
+        />
+        <span className="text-lg font-semibold tracking-tight">
+          Neon <span className="text-neon-text-muted">/</span>{' '}
+          <span className="text-neon-text-muted">MCP server</span>
+        </span>
+      </a>
+    </div>
+  );
+}
+
 function ClientInfoCard({ client }: { client: ConsentFormProps['client'] }) {
   return (
-    <div className="mb-6 rounded-lg border border-white/10 bg-white/[0.02] p-4 text-sm">
-      <Detail label="Name" value={client.name} />
+    <div className="mb-8 rounded-xl border border-neon-border bg-black/30 p-5 text-sm">
+      <Detail
+        label="Client"
+        value={<span className="font-medium">{client.name}</span>}
+      />
       {client.website && (
         <Detail
           label="Website"
@@ -379,7 +419,7 @@ function ClientInfoCard({ client }: { client: ConsentFormProps['client'] }) {
               href={client.website}
               target="_blank"
               rel="noreferrer"
-              className="underline decoration-dotted"
+              className="underline decoration-dotted underline-offset-2 hover:text-neon-green"
             >
               {client.website}
             </a>
@@ -388,11 +428,24 @@ function ClientInfoCard({ client }: { client: ConsentFormProps['client'] }) {
       )}
       {client.redirectUris.length > 0 && (
         <Detail
-          label="Redirect URIs"
+          label={
+            <span className="flex items-center gap-1.5">
+              Redirect URI
+              {client.redirectUris.length > 1 ? 's' : ''}
+              <span
+                title="OAuth tokens will be returned to this exact URI. The Neon MCP server validates against the registered list."
+                className="cursor-help text-neon-text-muted"
+              >
+                ⓘ
+              </span>
+            </span>
+          }
           value={
-            <div className="flex flex-col gap-0.5 font-mono text-xs">
+            <div className="flex flex-col gap-1 font-mono text-xs">
               {client.redirectUris.map((uri) => (
-                <span key={uri}>{uri}</span>
+                <span key={uri} className="break-all">
+                  {uri}
+                </span>
               ))}
             </div>
           }
@@ -402,32 +455,47 @@ function ClientInfoCard({ client }: { client: ConsentFormProps['client'] }) {
   );
 }
 
-function Detail({ label, value }: { label: string; value: React.ReactNode }) {
+function Detail({
+  label,
+  value,
+}: {
+  label: React.ReactNode;
+  value: React.ReactNode;
+}) {
   return (
-    <div className="flex flex-col gap-0.5 py-1.5 sm:flex-row sm:gap-3">
-      <div className="min-w-32 text-neutral-400">{label}</div>
-      <div className="flex-1 break-all text-neutral-200">{value}</div>
+    <div className="flex flex-col gap-0.5 py-1.5 sm:flex-row sm:gap-4">
+      <div className="min-w-32 text-neon-text-muted">{label}</div>
+      <div className="flex-1 break-all text-neon-text">{value}</div>
     </div>
   );
 }
 
 function Section({
+  label,
   title,
   description,
   children,
 }: {
+  label: string;
   title: string;
   description: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="mb-6 border-t border-white/5 pt-6 first-of-type:border-t-0 first-of-type:pt-0">
-      <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-neutral-300">
-        {title}
-      </h2>
-      <p className="mb-4 text-xs leading-relaxed text-neutral-500">
-        {description}
-      </p>
+    <section className="mb-8 last:mb-0">
+      <div className="mb-4 flex items-baseline gap-3">
+        <span className="font-mono text-xs font-medium text-neon-green">
+          {label}
+        </span>
+        <div>
+          <h2 className="text-base font-semibold tracking-tight text-neon-text">
+            {title}
+          </h2>
+          <p className="mt-0.5 text-sm leading-relaxed text-neon-text-muted">
+            {description}
+          </p>
+        </div>
+      </div>
       {children}
     </section>
   );
@@ -460,20 +528,38 @@ function AccessModeOption({
       aria-label={title}
       disabled={disabled}
       className={[
-        'flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition',
+        'group flex flex-col items-start gap-1.5 rounded-xl border p-4 text-left transition',
         checked
-          ? 'border-emerald-400/60 bg-emerald-400/10'
-          : 'border-white/10 bg-white/[0.02] hover:border-emerald-400/30 hover:bg-emerald-400/5',
+          ? 'border-neon-green/60 bg-neon-green-soft shadow-[inset_0_0_0_1px_rgba(0,229,153,0.4)]'
+          : 'border-neon-border bg-white/[0.02] hover:border-neon-green/30 hover:bg-white/[0.04]',
         disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
       ].join(' ')}
     >
       <div className="flex w-full items-center justify-between">
-        <span className="text-sm font-medium text-neutral-100" aria-hidden>
+        <span className="text-sm font-medium text-neon-text" aria-hidden>
           {title}
         </span>
-        {badge && <Badge tone={badge.tone}>{badge.label}</Badge>}
+        <div className="flex items-center gap-2">
+          {badge && <Badge tone={badge.tone}>{badge.label}</Badge>}
+          <span
+            aria-hidden
+            className={[
+              'flex size-4 items-center justify-center rounded-full border transition',
+              checked
+                ? 'border-neon-green bg-neon-green'
+                : 'border-white/20 group-hover:border-white/40',
+            ].join(' ')}
+          >
+            {checked && (
+              <span className="size-1.5 rounded-full bg-neutral-950" />
+            )}
+          </span>
+        </div>
       </div>
-      <span className="text-xs leading-relaxed text-neutral-400" aria-hidden>
+      <span
+        className="text-xs leading-relaxed text-neon-text-muted"
+        aria-hidden
+      >
         {description}
       </span>
     </button>
@@ -498,8 +584,8 @@ function CategoryCheckbox({
       className={[
         'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition',
         checked
-          ? 'border-emerald-400/40 bg-emerald-400/[0.06]'
-          : 'border-white/10 bg-white/[0.02] hover:border-emerald-400/20 hover:bg-emerald-400/[0.03]',
+          ? 'border-neon-green/40 bg-neon-green-soft/60'
+          : 'border-neon-border bg-white/[0.02] hover:border-neon-green/20 hover:bg-white/[0.04]',
       ].join(' ')}
     >
       <input
@@ -507,11 +593,11 @@ function CategoryCheckbox({
         type="checkbox"
         checked={checked}
         onChange={onChange}
-        className="mt-0.5 size-4 cursor-pointer accent-emerald-400"
+        className="mt-0.5 size-4 cursor-pointer accent-[#00E599]"
       />
       <div className="min-w-0">
-        <div className="text-sm font-medium text-neutral-100">{label}</div>
-        <div className="text-xs text-neutral-400">{description}</div>
+        <div className="text-sm font-medium text-neon-text">{label}</div>
+        <div className="text-xs text-neon-text-muted">{description}</div>
       </div>
     </label>
   );
@@ -523,11 +609,12 @@ function Badge({
   className = '',
 }: {
   children: React.ReactNode;
-  tone: 'warn';
+  tone: 'warn' | 'info';
   className?: string;
 }) {
   const tones = {
     warn: 'border-yellow-400/40 bg-yellow-400/10 text-yellow-200',
+    info: 'border-neon-green/40 bg-neon-green-soft text-neon-green',
   } as const;
   return (
     <span
@@ -553,6 +640,13 @@ function ToolsPreview({
   notices?: string[];
   warnings?: string[];
 }) {
+  // Group tools by category so the preview reads as "Querying: Run SQL,
+  // Explain SQL Statement, …" rather than as a flat 30-chip blob. Also
+  // sort categories in the canonical order so the layout stays stable
+  // across renders. Hook must run before any early return per the
+  // rules of hooks.
+  const grouped = useMemoGroupedTools(tools);
+
   if (error) {
     return (
       <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-200">
@@ -562,27 +656,27 @@ function ToolsPreview({
   }
 
   return (
-    <div>
-      <div className="mb-3 flex items-center gap-2 text-xs text-neutral-400">
+    <div className="rounded-xl border border-neon-border bg-black/20 p-4">
+      <div className="mb-3 flex items-center justify-between text-xs">
         {loading ? (
-          <span className="inline-flex items-center gap-1">
-            <span className="size-2 animate-pulse rounded-full bg-emerald-400/60" />
+          <span className="inline-flex items-center gap-2 text-neon-text-muted">
+            <span className="size-2 animate-pulse rounded-full bg-neon-green" />
             Updating preview…
           </span>
         ) : (
-          <span>
-            <span className="font-semibold text-neutral-200">{count}</span>{' '}
-            tools available
+          <span className="text-neon-text-muted">
+            <span className="font-semibold text-neon-text">{count}</span>{' '}
+            {count === 1 ? 'tool' : 'tools'} available
           </span>
         )}
       </div>
 
       {warnings && warnings.length > 0 && (
-        <ul className="mb-2 space-y-1 text-xs text-yellow-200">
+        <ul className="mb-3 space-y-1.5 text-xs">
           {warnings.map((w) => (
             <li
               key={w}
-              className="rounded-md border border-yellow-500/30 bg-yellow-500/5 px-2 py-1.5"
+              className="rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 leading-relaxed text-yellow-200"
             >
               {w}
             </li>
@@ -590,11 +684,11 @@ function ToolsPreview({
         </ul>
       )}
       {notices && notices.length > 0 && (
-        <ul className="mb-2 space-y-1 text-xs text-neutral-400">
+        <ul className="mb-3 space-y-1.5 text-xs">
           {notices.map((n) => (
             <li
               key={n}
-              className="rounded-md border border-white/10 bg-white/[0.02] px-2 py-1.5"
+              className="rounded-md border border-neon-border bg-white/[0.03] px-3 py-2 leading-relaxed text-neon-text-muted"
             >
               {n}
             </li>
@@ -602,25 +696,109 @@ function ToolsPreview({
         </ul>
       )}
 
-      {tools.length > 0 ? (
-        <ul className="flex flex-wrap gap-1.5">
-          {tools.map((tool) => (
-            <li
-              key={tool.name}
-              className="rounded-md border border-emerald-400/20 bg-emerald-400/[0.04] px-2 py-1 text-xs text-emerald-200/90"
-              title={`${tool.title}${tool.readOnlySafe ? ' · read-only safe' : ''}`}
-            >
-              {tool.title}
+      {loading && tools.length === 0 ? (
+        <ToolsPreviewSkeleton />
+      ) : tools.length > 0 ? (
+        <ul className="space-y-3">
+          {grouped.map(({ scope, items }) => (
+            <li key={scope}>
+              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-neon-text-muted">
+                {scope === 'global' ? 'Always available' : labelForScope(scope)}
+              </div>
+              <ul className="flex flex-wrap gap-1.5">
+                {items.map((tool) => (
+                  <li
+                    key={tool.name}
+                    className={[
+                      'rounded-md border px-2 py-1 text-xs',
+                      tool.readOnlySafe
+                        ? 'border-neon-green/30 bg-neon-green-soft text-neon-green'
+                        : 'border-amber-400/30 bg-amber-400/[0.06] text-amber-200',
+                    ].join(' ')}
+                    title={`${tool.title}${tool.readOnlySafe ? ' · read-only safe' : ' · can mutate'}`}
+                  >
+                    {tool.title}
+                  </li>
+                ))}
+              </ul>
             </li>
           ))}
         </ul>
       ) : (
-        !loading && (
-          <p className="text-xs text-neutral-500">
-            No tools would be available with these settings.
-          </p>
-        )
+        <p className="rounded-md border border-neon-border bg-white/[0.02] px-3 py-3 text-xs text-neon-text-muted">
+          No tools would be available with these settings. The agent will not be
+          able to interact with Neon resources.
+        </p>
       )}
     </div>
   );
+}
+
+function ToolsPreviewSkeleton() {
+  return (
+    <div className="space-y-3">
+      {[16, 24, 12].map((widths, gIdx) => (
+        <div key={gIdx}>
+          <div className="mb-1.5 h-2 w-24 animate-pulse rounded bg-white/[0.06]" />
+          <div className="flex flex-wrap gap-1.5">
+            {Array.from({ length: 4 + gIdx }).map((_, i) => (
+              <div
+                key={i}
+                className="h-6 animate-pulse rounded-md bg-white/[0.06]"
+                style={{ width: `${widths + i * 6}%` }}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const SCOPE_LABEL: Record<string, string> = {
+  projects: 'Projects',
+  branches: 'Branches',
+  schema: 'Schema',
+  querying: 'Querying',
+  neon_auth: 'Neon Auth',
+  data_api: 'Data API',
+  docs: 'Docs',
+};
+
+function labelForScope(scope: string): string {
+  return SCOPE_LABEL[scope] ?? scope;
+}
+
+const CATEGORY_ORDER: ReadonlyArray<ScopeCategory | 'global'> = [
+  'projects',
+  'branches',
+  'schema',
+  'querying',
+  'neon_auth',
+  'data_api',
+  'docs',
+  'global',
+];
+
+function useMemoGroupedTools(
+  tools: ToolPreviewItem[],
+): Array<{ scope: ScopeCategory | 'global'; items: ToolPreviewItem[] }> {
+  return useMemo(() => {
+    const buckets = new Map<ScopeCategory | 'global', ToolPreviewItem[]>();
+    for (const tool of tools) {
+      const arr = buckets.get(tool.scope) ?? [];
+      arr.push(tool);
+      buckets.set(tool.scope, arr);
+    }
+    return CATEGORY_ORDER.flatMap((scope) => {
+      const items = buckets.get(scope);
+      if (!items || items.length === 0) return [];
+      return [
+        {
+          scope,
+          items: items.sort((a, b) => a.title.localeCompare(b.title)),
+        },
+      ];
+    });
+  }, [tools]);
 }
