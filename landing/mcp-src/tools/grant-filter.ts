@@ -140,13 +140,14 @@ function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
 }
 
 /**
- * Build the access-control notices that apply for the given grant + read-only
- * combination. Returns one entry per applicable notice; empty array when
- * neither read-only nor project-scoped mode is active.
+ * Build the access-control notices for the given grant + read-only combination.
+ * Each notice covers one active condition: read-only (restriction), write mode
+ * with destructive tools exposed (safety), project-scoped (scope). Empty array
+ * when none apply.
  *
  * Exposed separately from `getAvailableTools` so the `/api/list-tools` REST
  * endpoint can surface notices as a top-level field instead of duplicating
- * the same ~400-char block inside every tool's `description` (see
+ * the same block inside every tool's `description` (see
  * github.com/neondatabase/mcp-server-neon/issues/257). The MCP-protocol tool
  * registration path keeps the notice inline by going through
  * `getAvailableTools`, which still concatenates these into descriptions for
@@ -166,6 +167,18 @@ export function getAccessControlNotices(
         'The user can remove read-only mode by removing the readonly query param from the MCP server URL, ' +
         'or by logging out and back in with OAuth and selecting full access.',
     );
+  } else {
+    // Safety notice: only fires when destructive tools survive the grant filter
+    // (e.g., the `docs` scope exposes no destructive tools, so no notice).
+    const hasExposedDestructive = getFilteredTools(grant, false).some(
+      (tool) => tool.annotations?.destructiveHint === true,
+    );
+    if (hasExposedDestructive) {
+      notices.push(
+        'Notice: Write mode active. Destructive tools are exposed. ' +
+          'For tools with `destructiveHint: true`, NEVER invoke autonomously; always ask the user first.',
+      );
+    }
   }
   if (grant.projectId) {
     notices.push(

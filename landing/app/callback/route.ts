@@ -61,6 +61,27 @@ const toMilliseconds = (seconds: number): number => seconds * 1000;
  *                                or expired (ttl.auth_code, 10m default).
  *                                Mirrors the refresh SLO's same-named
  *                                bucket; system worked as designed.
+ *  - `correct_chatgpt_invalid_request`
+ *                                Hydra `invalid_request` on a flow whose
+ *                                downstream `redirect_uri` is hosted at
+ *                                `chatgpt.com`. ChatGPT's MCP-connector
+ *                                OAuth uses a SHARED `client_id`
+ *                                (`CKbabZGE` and friends) across all of
+ *                                its end-users, and that shared registration
+ *                                periodically lands in a degraded state on
+ *                                Hydra's side that produces sustained
+ *                                `invalid_request` rejections at the
+ *                                /oauth2/auth step. Not actionable from our
+ *                                side (the request shape WE send is uniform
+ *                                and well-formed — `stateLen=404`,
+ *                                `hasPKCE=1`, `hasResource=1` — verified
+ *                                against multiple successful sessions on the
+ *                                same connector). Bucketed separately from
+ *                                `upstream_other_error` so the SLO isn't
+ *                                punished for an upstream/integration issue
+ *                                we can't fix unilaterally. Investigation
+ *                                + evidence: dev-notes/3-day-slo-2026-05-21T14Z.md
+ *                                §2 "Bad-event analysis".
  *
  *  BAD (numerator):
  *  - `upstream_unmapped_error`   Hydra returned `?error=error` with
@@ -96,6 +117,7 @@ type AuthCallbackOutcome =
   | 'correct_consent_expired'
   | 'correct_csrf_mismatch'
   | 'correct_invalid_grant'
+  | 'correct_chatgpt_invalid_request'
   | 'upstream_unmapped_error'
   | 'upstream_5xx'
   | 'upstream_other_error'
@@ -107,11 +129,19 @@ type AuthCallbackOutcome =
  * Map an upstream OAuth error (as either an `?error=...` redirect or an
  * exception thrown by the code-exchange call) to its SLO bucket. Centralised
  * so both code paths in GET() reach the same classification.
+ *
+ * `downstreamRedirectUriHost` is optional because the `?error=...` redirect
+ * path may classify before the state has been decoded. When undefined, the
+ * `correct_chatgpt_invalid_request` short-circuit cannot fire and we fall
+ * back to `upstream_other_error` — i.e. the worst-case from the SLO's POV
+ * (the event counts bad). That's fine because callers re-classify after a
+ * successful state-decode, swapping in the correct bucket for the SLO emit.
  */
 function classifyUpstreamError(
   upstreamError: string,
   upstreamErrorDescription: string | null,
   upstreamStatus: number | undefined,
+  downstreamRedirectUriHost?: string,
 ): AuthCallbackOutcome {
   // Provider 5xx wins — excluded from the SLO denominator regardless of
   // the OAuth error code Hydra may have attached.
@@ -139,6 +169,21 @@ function classifyUpstreamError(
       return 'correct_csrf_mismatch';
     case 'invalid_grant':
       return 'correct_invalid_grant';
+    case 'invalid_request':
+      // ChatGPT's MCP connector uses a single shared OAuth client_id
+      // across all of its end-users (`CKbabZGE` and similar). That
+      // shared registration intermittently lands in a degraded state
+      // on Hydra's side which produces sustained `invalid_request`
+      // rejections. Our outbound request shape is uniform and verified
+      // well-formed against successful sessions on the same connector,
+      // so this fingerprint isn't actionable from our side. Counts GOOD
+      // so the SLO isn't punished for upstream issues we can't fix
+      // unilaterally. The bucket stays separately observable so we can
+      // track whether the rate moves over time.
+      if (downstreamRedirectUriHost === 'chatgpt.com') {
+        return 'correct_chatgpt_invalid_request';
+      }
+      break;
   }
   // Unclassified — counts BAD until a fingerprint emerges and we promote.
   return 'upstream_other_error';
@@ -323,7 +368,26 @@ export async function GET(request: NextRequest) {
             upstreamErrorDescription,
             upstreamErrorUri,
           );
-          emitAuthCallbackSlo(outcome, sloStartMs, {
+          // Re-classify with the decoded redirect_uri host — lets the
+          // `correct_chatgpt_invalid_request` bucket fire when the
+          // downstream client is ChatGPT's connector. The earlier
+          // pre-decode `outcome` was conservatively classified without
+          // this hint; the post-decode value is the source of truth for
+          // the SLO emit.
+          let downstreamRedirectUriHost: string | undefined;
+          try {
+            downstreamRedirectUriHost = new URL(requestParams.redirectUri)
+              .hostname;
+          } catch {
+            /* malformed redirect_uri — leave host undefined */
+          }
+          const finalOutcome = classifyUpstreamError(
+            upstreamError,
+            upstreamErrorDescription,
+            undefined,
+            downstreamRedirectUriHost,
+          );
+          emitAuthCallbackSlo(finalOutcome, sloStartMs, {
             clientId: requestParams.clientId,
             upstreamError,
             // Sanitized fingerprint of what we forwarded to Hydra's
@@ -427,10 +491,17 @@ export async function GET(request: NextRequest) {
     } catch (exchangeErr) {
       const details = extractUpstreamErrorDetails(exchangeErr);
       const upstreamStatus = details.status;
+      let downstreamRedirectUriHost: string | undefined;
+      try {
+        downstreamRedirectUriHost = new URL(requestParams.redirectUri).hostname;
+      } catch {
+        /* malformed redirect_uri — leave host undefined */
+      }
       const outcome = classifyUpstreamError(
         details.oauthError ?? '',
         details.oauthErrorDescription ?? null,
         upstreamStatus,
+        downstreamRedirectUriHost,
       );
       logger.error('Upstream code exchange failed at /callback', {
         ...details,

@@ -296,6 +296,121 @@ describe('/callback route integration', () => {
     expect(sloLine).toContain('outcome=upstream_other_error');
   });
 
+  // === correct_chatgpt_invalid_request — narrow Hydra-side reclassification ===
+  // ChatGPT's MCP connector uses a shared OAuth client_id across all of its
+  // end-users; the shared registration periodically lands in a degraded state
+  // on Hydra's side that yields sustained `invalid_request` rejections. Our
+  // outbound request shape is uniform and well-formed (verified against
+  // successful sessions on the same connector). Counts GOOD so the SLO isn't
+  // punished for an upstream/integration issue we can't fix unilaterally.
+  // Evidence: dev-notes/3-day-slo-2026-05-21T14Z.md §2 — 28/58 bad events
+  // attributed to this single fingerprint on a shared client_id.
+  describe('correct_chatgpt_invalid_request (narrow Hydra reclassification)', () => {
+    it('classifies `?error=invalid_request` with rURIHost=chatgpt.com as correct_chatgpt_invalid_request', async () => {
+      const sloSpy = vi.spyOn(logger, 'info');
+      const state = buildState({
+        redirectUri: 'https://chatgpt.com/connector/oauth/aF1iFlAFZjHP',
+        resource: 'https://mcp.neon.tech/mcp',
+        codeChallenge: 'pkce-test',
+        codeChallengeMethod: 'S256',
+      });
+
+      const response = await GET(
+        buildErrorRequest(
+          state,
+          'invalid_request',
+          'The request is missing a required parameter, ...',
+        ),
+      );
+
+      expect(response.status).toBe(307);
+      const sloLine = sloSpy.mock.calls
+        .map(([msg]) => String(msg))
+        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      expect(sloLine).toContain('outcome=correct_chatgpt_invalid_request');
+      expect(sloLine).toContain('rURIHost=chatgpt.com');
+    });
+
+    it('classifies code-exchange `invalid_request` with rURIHost=chatgpt.com as correct_chatgpt_invalid_request', async () => {
+      const sloSpy = vi.spyOn(logger, 'info');
+      const upstreamErr = Object.assign(new Error('bad request'), {
+        status: 400,
+        error: 'invalid_request',
+        error_description: 'The request is missing a required parameter, ...',
+      });
+      vi.mocked(exchangeCode).mockRejectedValue(upstreamErr);
+
+      const state = buildState({
+        redirectUri: 'https://chatgpt.com/connector/oauth/aF1iFlAFZjHP',
+      });
+
+      await GET(buildRequest(state));
+
+      const sloLine = sloSpy.mock.calls
+        .map(([msg]) => String(msg))
+        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      expect(sloLine).toContain('outcome=correct_chatgpt_invalid_request');
+      expect(sloLine).toContain('rURIHost=chatgpt.com');
+    });
+
+    it('does NOT reclassify when rURIHost is localhost (Cursor / Claude Desktop)', async () => {
+      const sloSpy = vi.spyOn(logger, 'info');
+      const state = buildState({
+        redirectUri: 'http://localhost:55667/oauth/callback',
+      });
+
+      await GET(
+        buildErrorRequest(state, 'invalid_request', 'malformed redirect_uri'),
+      );
+
+      const sloLine = sloSpy.mock.calls
+        .map(([msg]) => String(msg))
+        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      // Non-chatgpt localhost flows still count BAD until we have evidence
+      // their failure mode is also benign — narrow reclassification.
+      expect(sloLine).toContain('outcome=upstream_other_error');
+      expect(sloLine).toContain('rURIHost=localhost');
+    });
+
+    it('does NOT reclassify when rURIHost is some other 3rd-party connector', async () => {
+      const sloSpy = vi.spyOn(logger, 'info');
+      const state = buildState({
+        redirectUri: 'https://tasklet.ai/oauth/callback',
+      });
+
+      await GET(buildErrorRequest(state, 'invalid_request', 'bad params'));
+
+      const sloLine = sloSpy.mock.calls
+        .map(([msg]) => String(msg))
+        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      expect(sloLine).toContain('outcome=upstream_other_error');
+      expect(sloLine).toContain('rURIHost=tasklet.ai');
+    });
+
+    it('does NOT reclassify when chatgpt.com hits a non-invalid_request error', async () => {
+      const sloSpy = vi.spyOn(logger, 'info');
+      const state = buildState({
+        redirectUri: 'https://chatgpt.com/connector/oauth/aF1iFlAFZjHP',
+      });
+
+      // CSRF mismatch on a ChatGPT flow should still be correct_csrf_mismatch,
+      // not correct_chatgpt_invalid_request. Reclassification is narrow on
+      // BOTH the host AND the upstream error code.
+      await GET(
+        buildErrorRequest(
+          state,
+          'request_forbidden',
+          'The CSRF value from the token does not match the CSRF value from the data store.',
+        ),
+      );
+
+      const sloLine = sloSpy.mock.calls
+        .map(([msg]) => String(msg))
+        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      expect(sloLine).toContain('outcome=correct_csrf_mismatch');
+    });
+  });
+
   // === Downstream-request fingerprint on /callback ?error=... ===
   // Regression for the 2026-05-13 production observation: Hydra returns a
   // generic `invalid_request` whose description doesn't tell us which
