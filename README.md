@@ -51,6 +51,7 @@ There are a few options for setting up the Neon MCP Server:
 - An MCP Client application.
 - A [Neon account](https://console.neon.tech/signup).
 - **Node.js (>= v18.0.0):** Download from [nodejs.org](https://nodejs.org).
+- If [IP Allow](https://neon.com/docs/introduction/ip-allow) is enabled, add `34.192.103.46` and `23.22.233.166` to your allowlist (`mcp.neon.tech` static IPs).
 
 For development, you'll need Node.js 22+ (pnpm is provided via Corepack — run `corepack enable` to activate it).
 
