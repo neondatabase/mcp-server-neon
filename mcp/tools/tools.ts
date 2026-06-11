@@ -223,10 +223,12 @@ async function handleCreateBranch(
     projectId,
     branchName,
     parentId,
+    expiresAt,
   }: {
     projectId: string;
     branchName?: string;
     parentId?: string;
+    expiresAt?: string;
   },
   neonClient: Api<unknown>,
 ) {
@@ -234,6 +236,7 @@ async function handleCreateBranch(
     branch: {
       name: branchName,
       parent_id: parentId,
+      expires_at: expiresAt,
     },
     endpoints: [
       {
@@ -1290,6 +1293,7 @@ export const NEON_HANDLERS = {
         projectId: params.projectId,
         branchName: params.branchName,
         parentId: params.parentId,
+        expiresAt: params.expiresAt,
       },
       neonClient,
     );
