@@ -70,6 +70,30 @@ describe('/api/register route integration', () => {
     );
   });
 
+  it('does not persist sensitive or unknown headers', async () => {
+    const response = await POST(
+      buildRequest(VALID_PAYLOAD, {
+        'x-read-only': 'true',
+        authorization: 'Bearer super-secret-token',
+        cookie: 'session=secret',
+        'x-forwarded-for': '10.0.0.1',
+        'x-internal-trace': 'should-not-leak',
+      }),
+    );
+    const body = (await response.json()) as { client_id: string };
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(model.saveClientRegisterHeaders)).toHaveBeenCalledOnce();
+    const persisted = vi.mocked(model.saveClientRegisterHeaders).mock
+      .calls[0][1];
+    expect(persisted).toEqual({ 'x-read-only': 'true' });
+    expect(persisted).not.toHaveProperty('authorization');
+    expect(persisted).not.toHaveProperty('cookie');
+    expect(persisted).not.toHaveProperty('x-forwarded-for');
+    expect(persisted).not.toHaveProperty('x-internal-trace');
+    expect(body.client_id).toBeTypeOf('string');
+  });
+
   it('returns 400 when client_name is missing', async () => {
     const { client_name, ...payloadWithoutClientName } = VALID_PAYLOAD;
     void client_name;
