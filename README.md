@@ -24,7 +24,7 @@ Some of the key features of the Neon MCP server include:
 - **Accessibility for non-developers:** Empower users with varying technical backgrounds to interact with Neon databases.
 - **Database migration support:** Leverage Neon's branching capabilities for database schema changes initiated via natural language.
 
-For example, in Claude Code, or any MCP Client, you can use natural language to accomplish things with Neon, such as:
+For example, in Claude Code, or any MCP client, you can use natural language to accomplish things with Neon, such as:
 
 - `Let's create a new Postgres database, and call it "my-database". Let's then create a table called users with the following columns: id, name, email, and password.`
 - `I want to run a migration on my project called "my-project" that alters the users table to add a new column called "created_at".`
@@ -48,7 +48,7 @@ There are a few options for setting up the Neon MCP Server:
 
 ### Prerequisites
 
-- An MCP Client application.
+- An MCP client application.
 - A [Neon account](https://console.neon.tech/signup).
 - **Node.js (>= v18.0.0):** Download from [nodejs.org](https://nodejs.org).
 - If [IP Allow](https://neon.com/docs/introduction/ip-allow) is enabled, add `34.192.103.46` and `23.22.233.166` to your allowlist (`mcp.neon.tech` static IPs).
@@ -258,7 +258,7 @@ Core implementation areas:
 ## Guides
 
 - [Neon MCP Server Guide](https://neon.tech/docs/ai/neon-mcp-server)
-- [Connect MCP Clients to Neon](https://neon.tech/docs/ai/connect-mcp-clients-to-neon)
+- [Connect MCP clients to Neon](https://neon.tech/docs/ai/connect-mcp-clients-to-neon)
 - [Cursor with Neon MCP Server](https://neon.tech/guides/cursor-mcp-neon)
 - [Claude Desktop with Neon MCP Server](https://neon.tech/guides/neon-mcp-server)
 - [Cline with Neon MCP Server](https://neon.tech/guides/cline-mcp-neon)
@@ -269,7 +269,7 @@ Core implementation areas:
 
 ## Supported Tools
 
-The Neon MCP Server provides the following actions, which are exposed as "tools" to MCP Clients. You can use these tools to interact with your Neon projects and databases using natural language commands.
+The Neon MCP Server provides the following actions, which are exposed as "tools" to MCP clients. You can use these tools to interact with your Neon projects and databases using natural language commands.
 
 ### Tool Scope Metadata
 
@@ -293,7 +293,7 @@ Notes:
 
 **Project Management:**
 
-- **`list_projects`**: Lists the first 10 Neon projects in your account, providing a summary of each project. If you can't find a specific project, increase the limit by passing a higher value to the `limit` parameter.
+- **`list_projects`**: Lists the first 25 Neon projects in your account, providing a summary of each project. If you can't find a specific project, increase the limit by passing a higher value to the `limit` parameter.
 - **`list_shared_projects`**: Lists Neon projects shared with the current user. Supports a search parameter and limiting the number of projects returned (default: 10).
 - **`describe_project`**: Fetches detailed information about a specific Neon project, including its ID, name, and associated branches and databases.
 - **`create_project`**: Creates a new Neon project in your Neon account. A project acts as a container for branches, databases, roles, and computes.

@@ -27,7 +27,7 @@ export const listProjectsInputSchema = z.object({
     ),
   limit: z
     .number()
-    .default(10)
+    .default(25)
     .describe(
       'Specify a value from 1 to 400 to limit number of projects in the response.',
     ),
