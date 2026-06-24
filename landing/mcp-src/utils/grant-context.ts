@@ -141,3 +141,50 @@ export function resolveGrantFromToken(token: {
   }
   return { ...DEFAULT_GRANT };
 }
+
+/**
+ * Compare two grant contexts for re-consent purposes. Used by the OAuth
+ * authorize handler's pre-approval short-circuit so that an MCP client
+ * that previously got consented for one grant shape (e.g. unconstrained
+ * access) cannot use the same approval cookie to silently expand into a
+ * different shape (e.g. narrower categories or a different projectId).
+ * When the resource URI's grant shape differs from what was stored at
+ * approval time, the authorize handler re-shows the consent screen so
+ * the user explicitly approves the new shape.
+ *
+ * Equivalence is computed against the underlying SETS of scope categories
+ * (not array length). An earlier version compared `aScopes.length`
+ * directly which produced false positives when one side carried duplicate
+ * `?category=querying&category=querying` values: e.g. stored
+ * `['querying', 'schema']` vs incoming `['querying', 'querying']` both
+ * have length 2, but they describe different category sets. Going
+ * through `Set.size` collapses duplicates, and
+ * `Set.prototype.isSubsetOf` (paired with the size check) gives proper
+ * set equality.
+ *
+ * Treats `scopes === null` (unconstrained, every category — including
+ * future ones) as distinct from `scopes === [...all current categories]`
+ * (an explicit list, even if it currently spans every category) on
+ * purpose: a future category addition would silently widen a
+ * `null`-grant approval but not an explicit-list one. The user must
+ * re-consent across that boundary.
+ */
+export function grantsAreEquivalent(
+  a: GrantContext | undefined,
+  b: GrantContext,
+): boolean {
+  if (!a) return false;
+
+  const aScopes = a.scopes;
+  const bScopes = b.scopes;
+
+  if ((aScopes === null) !== (bScopes === null)) return false;
+
+  if (aScopes !== null && bScopes !== null) {
+    const setA = new Set(aScopes);
+    const setB = new Set(bScopes);
+    if (setA.size !== setB.size || !setA.isSubsetOf(setB)) return false;
+  }
+
+  return (a.projectId ?? null) === (b.projectId ?? null);
+}

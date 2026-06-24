@@ -1,7 +1,17 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 
 import './globals.css';
+
+// Neon-brand-leaning sans-serif. Inter is the closest free + bundled font
+// to the type used on neon.com; loaded via next/font so it ships as a
+// CSS variable and self-hosts the woff2.
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Neon MCP Server',
@@ -57,7 +67,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <body className="antialiased">{children}</body>
     </html>
   );

@@ -34,16 +34,8 @@ async function registerClient(
   return (await registerResponse.json()) as RegisterResponse;
 }
 
-function extractWriteCheckbox(html: string): string {
-  const match = html.match(
-    /<input[\s\S]*?name="scopes"[\s\S]*?value="write"[\s\S]*?class="scope-checkbox"[\s\S]*?\/>/,
-  );
-  expect(match).toBeTruthy();
-  return match![0];
-}
-
 test.describe('OAuth register and authorize contract', () => {
-  test('registered client is accepted by authorize route', async ({
+  test('registered client is accepted by authorize route and redirected to consent page', async ({
     request,
   }) => {
     const registerBody = await registerClient(request);
@@ -61,55 +53,34 @@ test.describe('OAuth register and authorize contract', () => {
       maxRedirects: 0,
     });
 
-    // For unapproved clients, authorize renders consent HTML (200).
-    // If a cookie somehow exists in local runs, it may redirect upstream (302).
-    expect([200, 302]).toContain(authorizeResponse.status());
+    // Unapproved clients are redirected to the consent page; approved
+    // clients with the same grant shape get a direct upstream redirect.
+    expect([302, 307].includes(authorizeResponse.status())).toBeTruthy();
+    const location = authorizeResponse.headers()['location'];
+    expect(location).toBeTruthy();
+    expect(location).toMatch(/\/oauth\/consent\?state=|oauth\.[\w.-]+/);
   });
 
-  test('register with no read-only headers keeps Full access checked by default', async ({
+  test('signed state is required to render the consent page', async ({
     request,
   }) => {
-    const registerBody = await registerClient(request);
-
-    const authorizeResponse = await request.get('/api/authorize', {
-      params: {
-        response_type: 'code',
-        client_id: registerBody.client_id,
-        redirect_uri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
-        scope: 'read write',
-        state: 'e2e-state',
-      },
+    const consentResponse = await request.get('/oauth/consent', {
       maxRedirects: 0,
     });
-
-    expect(authorizeResponse.status()).toBe(200);
-    const body = await authorizeResponse.text();
-    const writeCheckbox = extractWriteCheckbox(body);
-    expect(writeCheckbox).toContain('checked');
+    // notFound() in App Router renders the 404 page.
+    expect(consentResponse.status()).toBe(404);
   });
 
-  test('register x-read-only=true defaults Full access to unchecked on authorize', async ({
+  test('tampered signed state is rejected at the consent page', async ({
     request,
   }) => {
-    const registerBody = await registerClient(request, {
-      'x-read-only': 'true',
-    });
-
-    const authorizeResponse = await request.get('/api/authorize', {
-      params: {
-        response_type: 'code',
-        client_id: registerBody.client_id,
-        redirect_uri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
-        scope: 'read write',
-        state: 'e2e-state',
-      },
+    const tamperedState =
+      '00'.repeat(32) + '.' + Buffer.from('{}').toString('base64url');
+    const consentResponse = await request.get('/oauth/consent', {
+      params: { state: tamperedState },
       maxRedirects: 0,
     });
-
-    expect(authorizeResponse.status()).toBe(200);
-    const body = await authorizeResponse.text();
-    const writeCheckbox = extractWriteCheckbox(body);
-    expect(writeCheckbox).not.toContain('checked');
+    expect(consentResponse.status()).toBe(404);
   });
 
   test('unknown client is rejected by authorize route', async ({ request }) => {
@@ -130,5 +101,28 @@ test.describe('OAuth register and authorize contract', () => {
     };
     expect(body.error).toBe('invalid_client');
     expect(body.error_description).toContain('Invalid client ID');
+  });
+
+  test('attacker-controlled redirect URI is rejected before consent', async ({
+    request,
+  }) => {
+    const registerBody = await registerClient(request);
+    const authorizeResponse = await request.get('/api/authorize', {
+      params: {
+        response_type: 'code',
+        client_id: registerBody.client_id,
+        redirect_uri: 'https://attacker.example/callback',
+        scope: 'read write',
+        state: 'e2e-state',
+      },
+    });
+
+    expect(authorizeResponse.status()).toBe(400);
+    const body = (await authorizeResponse.json()) as {
+      error: string;
+      error_description: string;
+    };
+    expect(body.error).toBe('invalid_request');
+    expect(body.error_description).toContain('Invalid redirect URI');
   });
 });
