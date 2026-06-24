@@ -573,6 +573,9 @@ describe('handleConfigureNeonAuth', () => {
       listProjectBranches: vi.fn().mockResolvedValue({
         data: { branches: [{ id: 'br-default', default: true }] },
       }),
+      // Satisfy the `ensureNeonAuthProvisioned` prereq probe so the handler
+      // reaches the schema/handler-skew check we are actually testing here.
+      getNeonAuth: vi.fn().mockResolvedValue({ status: 200, data: {} }),
     };
 
     await expect(
@@ -842,6 +845,11 @@ describe('handleConfigureNeonAuth', () => {
       listProjectBranches: vi.fn().mockResolvedValue({
         data: { branches: [{ id: 'br-default', default: true }] },
       }),
+      // The integration probe is intentionally NOT a snapshot fetcher; it
+      // gates whether the operation runs at all. Returning 200 here lets the
+      // dispatch happen so we can still assert the no-snapshot-reload
+      // contract on the snapshot fetchers below.
+      getNeonAuth: vi.fn().mockResolvedValue({ status: 200, data: {} }),
     };
 
     const result = await handleConfigureNeonAuth(
@@ -892,6 +900,8 @@ describe('handleConfigureNeonAuth', () => {
       listProjectBranches: vi.fn().mockResolvedValue({
         data: { branches: [{ id: 'br-default', default: true }] },
       }),
+      // Satisfy the `ensureNeonAuthProvisioned` prereq probe.
+      getNeonAuth: vi.fn().mockResolvedValue({ status: 200, data: {} }),
     };
 
     const result = await handleConfigureNeonAuth(
@@ -1368,5 +1378,124 @@ describe('handleConfigureNeonAuth', () => {
       // branch.
       expect(text).not.toContain('sensitive-password');
     }
+  });
+});
+
+describe('handleConfigureNeonAuth prerequisite probe', () => {
+  // The configure handler runs `ensureNeonAuthProvisioned` BEFORE dispatching
+  // any operation. A 404 on the integration probe definitively means the
+  // branch has no Neon Auth integration, so we return a prescriptive
+  // "ask the user before calling provision_neon_auth" message and short-
+  // circuit before invoking the per-operation SDK method. This avoids two
+  // failure modes:
+  //   1. Letting the LLM see a generic per-op 404 string and chain into
+  //      provision_neon_auth automatically (provisioning has side effects).
+  //   2. Conflating "Neon Auth not provisioned" with op-meaningful 404s
+  //      (e.g. unknown OAuth provider id on update_oauth_provider).
+
+  it('short-circuits add_trusted_origin (PR1 op) with approval-gate message and does NOT call the mutation SDK', async () => {
+    const addBranchNeonAuthTrustedDomain = vi.fn();
+    const neonClient = {
+      ...defaultSnapshotMocks(),
+      // Override: branch has no Neon Auth integration.
+      getNeonAuth: vi.fn().mockResolvedValue({ status: 404 }),
+      addBranchNeonAuthTrustedDomain,
+    };
+
+    const result = await handleConfigureNeonAuth(
+      configureNeonAuthInputSchema.parse({
+        operation: 'add_trusted_origin',
+        projectId: 'proj-1',
+        branchId: 'br-1',
+        trusted_origin: 'https://app.example.com/auth/callback',
+      }),
+      neonClient as never,
+      extra,
+    );
+
+    expect(result.isError).toBe(true);
+    if (result.content[0].type === 'text') {
+      const text = result.content[0].text;
+      expect(text).toContain('Neon Auth is not provisioned');
+      expect(text).toContain('HTTP 404');
+      // Approval-gate wording — the LLM must surface the prereq to the user
+      // and obtain explicit consent before calling provision_neon_auth.
+      expect(text).toContain('ask the user');
+      expect(text).toContain('explicit approval');
+      expect(text).toContain('side effects');
+      expect(text).toContain('provision_neon_auth');
+    }
+    // Defence-in-depth: the per-op SDK mutation must NOT be called.
+    // A future regression that calls the mutation first would still flow
+    // through the 404 path, but we insist on the short-circuit so callers
+    // never observe partial / ambiguous mutation attempts on an
+    // unprovisioned branch.
+    expect(addBranchNeonAuthTrustedDomain).not.toHaveBeenCalled();
+  });
+
+  it('short-circuits add_oauth_provider (PR2 op) with approval-gate message and does NOT call the mutation SDK', async () => {
+    const addBranchNeonAuthOauthProvider = vi.fn();
+    const neonClient = {
+      ...defaultSnapshotMocks(),
+      getNeonAuth: vi.fn().mockResolvedValue({ status: 404 }),
+      addBranchNeonAuthOauthProvider,
+    };
+
+    const result = await handleConfigureNeonAuth(
+      configureNeonAuthInputSchema.parse({
+        operation: 'add_oauth_provider',
+        projectId: 'proj-1',
+        branchId: 'br-1',
+        oauth_provider: 'google',
+      }),
+      neonClient as never,
+      extra,
+    );
+
+    expect(result.isError).toBe(true);
+    if (result.content[0].type === 'text') {
+      const text = result.content[0].text;
+      expect(text).toContain('Neon Auth is not provisioned');
+      expect(text).toContain('ask the user');
+      expect(text).toContain('explicit approval');
+    }
+    expect(addBranchNeonAuthOauthProvider).not.toHaveBeenCalled();
+  });
+
+  it('returns a generic verify-failed message (not the approval-gate one) when getNeonAuth fails with non-404', async () => {
+    const addBranchNeonAuthTrustedDomain = vi.fn();
+    const neonClient = {
+      ...defaultSnapshotMocks(),
+      getNeonAuth: vi.fn().mockResolvedValue({
+        status: 500,
+        statusText: 'Internal Server Error',
+      }),
+      addBranchNeonAuthTrustedDomain,
+    };
+
+    const result = await handleConfigureNeonAuth(
+      configureNeonAuthInputSchema.parse({
+        operation: 'add_trusted_origin',
+        projectId: 'proj-1',
+        branchId: 'br-1',
+        trusted_origin: 'https://app.example.com/auth/callback',
+      }),
+      neonClient as never,
+      extra,
+    );
+
+    expect(result.isError).toBe(true);
+    if (result.content[0].type === 'text') {
+      const text = result.content[0].text;
+      expect(text).toContain('Failed to verify Neon Auth provisioning (500');
+      expect(text).toContain('Internal Server Error');
+      // Critical: a generic upstream failure must NOT be misrepresented as
+      // "not provisioned". That would steer the LLM toward suggesting
+      // provisioning when the actual problem is something else (e.g. an
+      // outage). Keep the two paths distinct.
+      expect(text).not.toContain('ask the user');
+      expect(text).not.toContain('side effects');
+    }
+    expect(addBranchNeonAuthTrustedDomain).not.toHaveBeenCalled();
   });
 });

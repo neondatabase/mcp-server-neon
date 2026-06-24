@@ -25,6 +25,19 @@ type Props = z.infer<typeof configureNeonAuthInputSchema>;
 const SNAPSHOT_TITLE =
   'Current Neon Auth settings (same fields as get_neon_auth_config):';
 
+/**
+ * Single canonical "Neon Auth is not provisioned" message shared between
+ * get_neon_auth_config (which detects the 404 directly while fetching the
+ * integration) and configure_neon_auth (which pre-checks via getNeonAuth so a
+ * 404 is unambiguously "not provisioned" rather than "OAuth provider/email
+ * provider not found"). The wording is deliberately prescriptive about the
+ * approval gate: provisioning has side effects, so the LLM must surface the
+ * prerequisite to the user and obtain explicit consent before calling
+ * provision_neon_auth.
+ */
+export const NEON_AUTH_NOT_PROVISIONED_MESSAGE =
+  'Neon Auth is not provisioned for this branch (HTTP 404). Before calling provision_neon_auth, ask the user for explicit approval — provisioning has side effects (creates the neon_auth schema, deploys an auth service in your compute region, may incur cost).';
+
 export async function resolveNeonAuthBranchId(
   projectId: string,
   branchId: string | undefined,
@@ -35,6 +48,43 @@ export async function resolveNeonAuthBranchId(
   }
   const defaultBranch = await getDefaultBranch(projectId, neonClient);
   return defaultBranch.id;
+}
+
+/**
+ * Pre-flight check: returns null when Neon Auth IS provisioned for this
+ * branch (callers should then proceed); returns a CallToolResult to short-
+ * circuit with when it is not, or when the integration probe itself failed.
+ *
+ * Why a dedicated probe rather than mapping the per-operation 404? Several
+ * operations have their own 404-meaningful semantics (e.g. update_oauth_provider
+ * on an unknown provider id, delete on a missing entry). Disambiguating by
+ * status code alone is unsafe, so we ask the integration endpoint directly:
+ * a 404 there definitively means the branch has no Neon Auth integration.
+ */
+async function ensureNeonAuthProvisioned(
+  neonClient: Api<unknown>,
+  projectId: string,
+  branchId: string,
+): Promise<CallToolResult | null> {
+  const res = await neonClient.getNeonAuth(projectId, branchId);
+  if (res.status === 200) {
+    return null;
+  }
+  if (res.status === 404) {
+    return {
+      isError: true,
+      content: [{ type: 'text', text: NEON_AUTH_NOT_PROVISIONED_MESSAGE }],
+    };
+  }
+  return {
+    isError: true,
+    content: [
+      {
+        type: 'text',
+        text: `Failed to verify Neon Auth provisioning (${res.status} ${res.statusText}).`,
+      },
+    ],
+  };
 }
 
 async function snapshotMessage(
@@ -217,6 +267,20 @@ export async function handleConfigureNeonAuth(
     props.branchId,
     neonClient,
   );
+
+  // Prerequisite probe before any mutation: see ensureNeonAuthProvisioned.
+  // Costs one extra GET per configure call but lets us return an actionable
+  // "ask the user before provisioning" message instead of a per-op generic
+  // 404 string, and avoids conflating "Neon Auth not provisioned" with
+  // op-level 404s (e.g. unknown OAuth provider id).
+  const prereq = await ensureNeonAuthProvisioned(
+    neonClient,
+    props.projectId,
+    branchId,
+  );
+  if (prereq) {
+    return prereq;
+  }
 
   switch (props.operation) {
     case 'add_trusted_origin': {
