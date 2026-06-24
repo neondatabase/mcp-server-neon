@@ -2,6 +2,13 @@
 
 # [NEXT]
 
+Neon Auth MCP surface:
+
+- Add `neon_auth_config_get` as the single read-only mega-get for Neon Auth configuration, with OAuth and SMTP secrets redacted.
+- Replace `neon_auth_methods_update` with focused write tools: `neon_auth_sign_in_methods_update`, `neon_auth_email_delivery_update`, `neon_auth_organizations_update`, and `neon_auth_app_update`.
+- Keep OAuth provider management as separate `add` / `update` / `delete` tools, and return the redacted OAuth provider list after successful mutations.
+- Remove legacy Neon Auth tools from the MCP surface: `provision_neon_auth`, `configure_neon_auth`, and `get_neon_auth_config`.
+
 OAuth refresh-token chain stability — drove the reconstructed refresh-grant SLO from ~93% to 100% in production by closing the cross-instance reuse race and the surrounding cliff/retry-storm paths.
 
 Refresh-token reliability:

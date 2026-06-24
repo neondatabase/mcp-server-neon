@@ -223,10 +223,45 @@ export const getConnectionStringInputSchema = z.object({
     ),
 });
 
-export const provisionNeonAuthInputSchema = z.object({
+// Server-side SSRF guards. Applied to user-supplied hostnames/URLs that the
+// Neon Auth control plane will dial out to (webhook deliveries, SMTP probes,
+// test emails). Block loopback / private / link-local / cloud-metadata.
+const PRIVATE_HOST_LITERAL_RE =
+  /^(localhost|0\.0\.0\.0|127\.|10\.|192\.168\.|169\.254\.|100\.64\.|172\.(1[6-9]|2\d|3[0-1])\.|::1?$|\[::1?\]|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:|\[fc[0-9a-f]{2}:|\[fd[0-9a-f]{2}:|\[fe80:)/i;
+
+function isBlockedDialOutHost(host: string): boolean {
+  const h = host.trim().toLowerCase();
+  if (!h) return true;
+  if (PRIVATE_HOST_LITERAL_RE.test(h)) return true;
+  // metadata services
+  if (h === '169.254.169.254' || h === 'metadata.google.internal') return true;
+  // .local mDNS, .internal cloud metadata, .localhost reserved TLD
+  if (/\.(local|internal|localhost)$/.test(h)) return true;
+  return false;
+}
+
+function isHttpsDialOutUrl(v: string): boolean {
+  try {
+    const u = new URL(v);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+    // Disallow plain http for non-localhost since this URL is dialed by the
+    // server. Localhost dial-outs from the upstream make no sense either, so
+    // we reject them outright.
+    if (u.protocol === 'http:') return false;
+    if (isBlockedDialOutHost(u.hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const WEBHOOK_BLOCKED_URL_MSG =
+  'Webhook URL must be an https:// URL pointing at a publicly reachable host. http:// is rejected; loopback, private (RFC1918), link-local, carrier-grade NAT, and cloud-metadata addresses are blocked to prevent SSRF.';
+
+export const neonAuthProvisionInputSchema = z.object({
   projectId: z
     .string()
-    .describe('The ID of the project to provision Neon Auth for'),
+    .describe('The ID of the project to provision Neon Auth for.'),
   branchId: z
     .string()
     .optional()
@@ -241,7 +276,7 @@ export const provisionNeonAuthInputSchema = z.object({
     ),
 });
 
-const emailPasswordAuthMethodSchema = z
+const emailPasswordSliceSchema = z
   .object({
     enabled: z
       .boolean()
@@ -288,33 +323,34 @@ const emailPasswordAuthMethodSchema = z
   })
   .strict();
 
-const oauthProviderConfigSchema = z
+const magicLinkSliceSchema = z
   .object({
-    client_id: z
-      .string()
-      .min(1)
+    enabled: z
+      .boolean()
       .optional()
-      .describe(
-        'OAuth client ID issued by the upstream provider. Omit for shared mode (Neon-managed credentials).',
-      ),
-    client_secret: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        'OAuth client secret issued by the upstream provider. Omit for shared mode (Neon-managed credentials). Never returned by get_neon_auth_config — that endpoint redacts secrets.',
-      ),
-    microsoft_tenant_id: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        'Microsoft Entra ID tenant ID. Only meaningful when oauth_provider="microsoft"; the upstream API will reject it for other providers.',
-      ),
+      .describe('Whether magic-link sign-in is enabled.'),
   })
   .strict();
 
-// `update_email_provider` and `send_test_email` reuse the same SMTP fields.
+const phoneSliceSchema = z
+  .object({
+    enabled: z
+      .boolean()
+      .optional()
+      .describe('Whether phone-number sign-in is enabled.'),
+  })
+  .strict();
+
+const organizationsSliceSchema = z
+  .object({
+    enabled: z
+      .boolean()
+      .optional()
+      .describe('Whether the organizations plugin is enabled.'),
+  })
+  .strict();
+
+// `email_delivery` reuses the same discriminated union as v1's email_provider.
 const standardEmailServerFields = {
   host: z
     .string()
@@ -331,7 +367,7 @@ const standardEmailServerFields = {
     .string()
     .min(1)
     .describe(
-      'SMTP authentication password. Never returned by get_neon_auth_config — that endpoint redacts secrets.',
+      'SMTP authentication password. Never echoed back by any read tool.',
     ),
   sender_email: z
     .string()
@@ -345,7 +381,7 @@ const standardEmailServerFields = {
     .describe('Default From: display name (e.g. "Acme Auth").'),
 };
 
-const emailProviderSchema = z
+const emailDeliverySchema = z
   .discriminatedUnion('type', [
     z
       .object({
@@ -364,7 +400,7 @@ const emailProviderSchema = z
           .email()
           .optional()
           .describe(
-            'Optional override for the From: address on the Neon-managed shared SMTP. If omitted, Neon picks a sensible default.',
+            'Optional override for the From: address on the Neon-managed shared SMTP.',
           ),
         sender_name: z
           .string()
@@ -380,47 +416,320 @@ const emailProviderSchema = z
       ),
   ])
   .describe(
-    'Email server configuration discriminated by `type`. "standard" = bring-your-own SMTP (full credentials required); "shared" = Neon-managed shared SMTP (credentials managed by Neon).',
+    'Email delivery configuration discriminated by `type`. "standard" = BYO SMTP (full credentials required); "shared" = Neon-managed shared SMTP. The upstream PATCH replaces the saved configuration; partial within-type updates are not supported.',
   );
 
-const sendTestEmailSchema = z
+const neonAuthBranchTargetSchema = {
+  projectId: z.string().describe('Neon project ID.'),
+  branchId: z
+    .string()
+    .optional()
+    .describe(
+      'Branch ID. If omitted, the project default branch is used (same as `neon_auth_provision`).',
+    ),
+};
+
+export const neonAuthConfigGetInputSchema = z
+  .object(neonAuthBranchTargetSchema)
+  .strict();
+
+export const neonAuthSignInMethodsUpdateInputSchema = z
   .object({
-    recipient_email: z
-      .string()
-      .email()
-      .min(1)
-      .max(256)
-      .describe('Email address to deliver the test message to.'),
-    ...standardEmailServerFields,
+    ...neonAuthBranchTargetSchema,
+    email_password: emailPasswordSliceSchema
+      .optional()
+      .describe(
+        'Email-and-password sign-in. Provide only the fields you want to change; omitted fields are left unchanged.',
+      ),
+    magic_link: magicLinkSliceSchema
+      .optional()
+      .describe('Magic-link plugin toggle.'),
+    phone: phoneSliceSchema.optional().describe('Phone-number plugin toggle.'),
   })
   .strict()
-  .describe(
-    'Test SMTP credentials end-to-end before saving them. Sends a single message from sender_email to recipient_email through the supplied host/port/username/password. Does NOT read from or write to the saved email_provider config — pass the credentials you want to verify.',
-  );
+  .superRefine((val, ctx) => {
+    const sliceCount =
+      (val.email_password ? 1 : 0) +
+      (val.magic_link ? 1 : 0) +
+      (val.phone ? 1 : 0);
+    if (sliceCount === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'At least one sign-in method slice must be provided: email_password, magic_link, or phone.',
+      });
+      return;
+    }
+    if (
+      val.email_password &&
+      Object.values(val.email_password).every((v) => v === undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'email_password must include at least one field to update.',
+        path: ['email_password'],
+      });
+    }
+    if (
+      val.magic_link &&
+      Object.values(val.magic_link).every((v) => v === undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'magic_link must include at least one field to update.',
+        path: ['magic_link'],
+      });
+    }
+    if (val.phone && Object.values(val.phone).every((v) => v === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'phone must include at least one field to update.',
+        path: ['phone'],
+      });
+    }
+  });
+
+export const neonAuthEmailDeliveryUpdateInputSchema = z
+  .object({
+    ...neonAuthBranchTargetSchema,
+    email_delivery: emailDeliverySchema.describe(
+      'Email delivery (transactional) configuration. Discriminated union by `type`.',
+    ),
+  })
+  .strict();
+
+export const neonAuthOrganizationsUpdateInputSchema = z
+  .object({
+    ...neonAuthBranchTargetSchema,
+    organizations: organizationsSliceSchema.describe(
+      'Organizations plugin slice.',
+    ),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    if (
+      val.organizations &&
+      Object.values(val.organizations).every((v) => v === undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'organizations must include at least one field to update.',
+        path: ['organizations'],
+      });
+    }
+  });
+
+export const neonAuthAppUpdateInputSchema = z
+  .object({
+    ...neonAuthBranchTargetSchema,
+    app_name: z
+      .string()
+      .min(1)
+      .describe('Display name of the application (Better Auth `app_name`).'),
+  })
+  .strict();
+
+// ---------------------------------------------------------------------------
+// OAuth provider — add / update / delete.
+//
+// Provider list is intentionally narrower than the SDK's `NeonAuthOauthProviderId`
+// enum. The SDK enum (`google`, `github`, `microsoft`, `vercel`) reflects the
+// public API contract from the StackAuth era. Today the MCP only provisions
+// BetterAuth-backed projects (see `neon_auth_provision`), and BetterAuth's
+// neon-auth Zod allowlist accepts only `google` / `github` / `vercel` — calling
+// add with `microsoft` would 400 at runtime. The Lakebase console UI applies
+// the same gating (Microsoft is hidden when `auth_provider === 'better_auth'`).
+// ---------------------------------------------------------------------------
+
+const NEON_AUTH_BETTERAUTH_OAUTH_PROVIDERS = [
+  'google',
+  'github',
+  'vercel',
+] as const satisfies readonly `${NeonAuthOauthProviderId}`[];
+
+const oauthProviderConfigSchema = z
+  .object({
+    client_id: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'OAuth client ID issued by the upstream provider. Pair with `client_secret` for BYO ("standard") mode; omit both for Neon-managed ("shared") mode.',
+      ),
+    client_secret: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'OAuth client secret issued by the upstream provider. Pair with `client_id` for BYO ("standard") mode; omit both for Neon-managed ("shared") mode.',
+      ),
+  })
+  .strict();
+
+export const neonAuthOauthProviderAddInputSchema = z
+  .object({
+    projectId: z.string().describe('Neon project ID.'),
+    branchId: z
+      .string()
+      .optional()
+      .describe('Branch ID. If omitted, the project default branch is used.'),
+    provider_id: z
+      .enum(NEON_AUTH_BETTERAUTH_OAUTH_PROVIDERS)
+      .describe(
+        'Identifier of the OAuth provider to add. Limited to providers BetterAuth supports (`google`, `github`, `vercel`).',
+      ),
+    oauth_provider_config: oauthProviderConfigSchema
+      .optional()
+      .describe(
+        'OAuth credentials. Omit (or pass an empty object) for Neon-managed shared mode; pass `client_id` + `client_secret` together for BYO mode.',
+      ),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    const cfg = val.oauth_provider_config;
+    const hasId = cfg?.client_id !== undefined;
+    const hasSecret = cfg?.client_secret !== undefined;
+    if (hasId !== hasSecret) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'oauth_provider_config requires client_id and client_secret to be provided together for BYO ("standard") mode, or both omitted for Neon-managed ("shared") mode.',
+        path: ['oauth_provider_config'],
+      });
+    }
+  });
+
+export const neonAuthOauthProviderUpdateInputSchema = z
+  .object({
+    projectId: z.string().describe('Neon project ID.'),
+    branchId: z
+      .string()
+      .optional()
+      .describe('Branch ID. If omitted, the project default branch is used.'),
+    provider_id: z
+      .enum(NEON_AUTH_BETTERAUTH_OAUTH_PROVIDERS)
+      .describe('Identifier of the OAuth provider to update.'),
+    oauth_provider_config: oauthProviderConfigSchema.describe(
+      'Credential updates. Pass at least one of client_id, client_secret; omitted fields are left unchanged.',
+    ),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    const cfg = val.oauth_provider_config;
+    if (!cfg || Object.values(cfg).every((v) => v === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'oauth_provider_config requires at least one field (client_id or client_secret).',
+        path: ['oauth_provider_config'],
+      });
+    }
+  });
+
+export const neonAuthOauthProviderDeleteInputSchema = z
+  .object({
+    projectId: z.string().describe('Neon project ID.'),
+    branchId: z
+      .string()
+      .optional()
+      .describe('Branch ID. If omitted, the project default branch is used.'),
+    provider_id: z
+      .enum(NEON_AUTH_BETTERAUTH_OAUTH_PROVIDERS)
+      .describe('Identifier of the OAuth provider to delete.'),
+  })
+  .strict();
+
+// ---------------------------------------------------------------------------
+// Webhook update.
+// ---------------------------------------------------------------------------
+
+// TODO(api-client-bump): replace this hardcoded array with
+//   `as const satisfies readonly NeonAuthWebhookEvent[]`
+// where `NeonAuthWebhookEvent = NonNullable<NeonAuthWebhookConfig['enabled_events']>[number]`,
+// once `@neondatabase/api-client` ships a regenerated `NeonAuthWebhookConfig.enabled_events`
+// inline union that covers the full 7-event set. SDK 2.7.1 only exposes the
+// first 4 (organization.invitation.* + phone_number.verified landed later in
+// goapp's `public-v2.yaml`), so the `satisfies` clause would currently fail.
+// Until the SDK catches up, this list mirrors the YAML by hand —
+// `public-v2.yaml` `NeonAuthWebhookConfig.enabled_events` is the source of
+// truth.
+const NEON_AUTH_WEBHOOK_EVENTS = [
+  'user.before_create',
+  'user.created',
+  'send.otp',
+  'send.magic_link',
+  'organization.invitation.created',
+  'organization.invitation.accepted',
+  'phone_number.verified',
+] as const;
+
+export const neonAuthWebhookUpdateInputSchema = z
+  .object({
+    projectId: z.string().describe('Neon project ID.'),
+    branchId: z
+      .string()
+      .optional()
+      .describe('Branch ID. If omitted, the project default branch is used.'),
+    enabled: z.boolean().describe('Whether the webhook is enabled.'),
+    url: z
+      .string()
+      .url()
+      .refine(isHttpsDialOutUrl, { message: WEBHOOK_BLOCKED_URL_MSG })
+      .optional()
+      .describe(
+        'Destination URL receiving webhook deliveries. Must be an https:// URL on a publicly reachable host. http://, loopback, private (RFC1918), link-local, and cloud-metadata addresses are rejected to prevent SSRF.',
+      ),
+    events: z
+      .array(z.enum(NEON_AUTH_WEBHOOK_EVENTS))
+      .optional()
+      .describe(
+        'Events that should trigger a webhook delivery. Allowed values: user.before_create, user.created, send.otp, send.magic_link.',
+      ),
+    timeout_seconds: z
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .optional()
+      .describe('Per-delivery timeout in seconds (1-10).'),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    // Upstream PUT replaces the saved webhook config. If the caller is
+    // turning the webhook ON without supplying url/events, we'd silently
+    // clear those — block at validation time so the agent has to send the
+    // full intended state.
+    if (val.enabled === true) {
+      if (val.url === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            '`url` is required when `enabled` is true. The upstream PUT replaces the saved config, so omitting `url` would clear the existing value.',
+          path: ['url'],
+        });
+      }
+      if (val.events === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            '`events` is required when `enabled` is true. The upstream PUT replaces the saved config, so omitting `events` would clear the existing list.',
+          path: ['events'],
+        });
+      }
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// Domain update — atomic batch (add / remove / allow_localhost).
+// ---------------------------------------------------------------------------
 
 /**
- * Validates a `trusted_origin` value before it ever reaches the Neon API.
+ * Validates a `trusted_origin` URL before it ever reaches the Neon API.
  *
- * Better Auth's `trustedOrigins` list is a security boundary (CSRF on the
+ * Neon Auth's trusted-domains list is a security boundary (CSRF on the
  * Origin/Referer header + allowlist for callback/redirect URLs in sign-in,
  * OAuth, email verification, password reset, and magic-link flows). Bad
- * entries here can broaden CSRF or open redirect surface, so we reject
- * patterns that are almost never what a caller wants:
- *
- *   - Schemes that don't make sense for browser-driven auth callbacks
- *     (`file:`, `data:`, `javascript:`, `vbscript:`, `about:`).
- *   - Plain `http://` for anything other than `localhost`/`127.0.0.1`/`[::1]`.
- *     Production callbacks should always be `https://`.
- *   - Host-only or TLD-only wildcards: `https://*`, `https://**`,
- *     `https://*.com`, `https://*.io`. These match-all patterns nullify
- *     CSRF protection.
- *   - Empty host (`https://`, `https://:8080`).
- *   - Embedded ASCII control characters (NUL through US, plus DEL).
- *
- * Wildcards in subdomain position (`https://*.example.com`,
- * `https://**.example.com`) and custom-scheme deeplinks (`myapp://`,
- * `exp://...` patterns with embedded wildcards) are still accepted, matching
- * what the upstream Neon API and Better Auth's `trustedOrigins` support.
+ * entries here can broaden CSRF or open redirect surface.
  */
 const TRUSTED_ORIGIN_BLOCKED_SCHEMES = new Set([
   'file',
@@ -431,17 +740,10 @@ const TRUSTED_ORIGIN_BLOCKED_SCHEMES = new Set([
 ]);
 
 const TRUSTED_ORIGIN_LOCAL_HOST_RE = /^(localhost|127\.0\.0\.1|\[::1\])$/i;
-
-// Matches `*`, `**`, `*.com`, `*.io`, etc. (host-only or TLD-only wildcards).
-// Must NOT match `*.example.com` or `**.example.com`.
 const TRUSTED_ORIGIN_HOST_WILDCARD_RE = /^\*+(\.[a-z]{2,})?$/i;
-
 const TRUSTED_ORIGIN_SCHEME_PREFIX_RE = /^([a-zA-Z][a-zA-Z0-9+.\-]*):\/\/(.*)$/;
 
 function extractHttpHost(rest: string): string | null {
-  // Strip path/query/fragment first, then peel the port off, taking care of
-  // IPv6 bracketed-host syntax like `[::1]:3000` where splitting on `:` would
-  // otherwise truncate the address.
   const hostWithPort = rest.split(/[/?#]/)[0];
   if (hostWithPort.length === 0) return null;
   if (hostWithPort.startsWith('[')) {
@@ -473,209 +775,75 @@ function isValidTrustedOrigin(v: string): boolean {
   return true;
 }
 
-export const configureNeonAuthInputSchema = z
+const TRUSTED_ORIGIN_REJECT_MESSAGE =
+  'Each entry must be an https:// URL or origin (wildcard subdomains allowed, e.g. https://*.example.com), an http://localhost (or 127.0.0.1/[::1]) origin, or a custom-scheme deeplink (e.g. myapp://). Rejected: file:/data:/javascript:/vbscript:/about: schemes, non-localhost http://, host-only or TLD-only wildcards (https://*, https://**, https://*.com), empty host, surrounding whitespace, and ASCII control characters.';
+
+const trustedOriginUrlSchema = z
+  .string()
+  .min(1)
+  .refine(isValidTrustedOrigin, { message: TRUSTED_ORIGIN_REJECT_MESSAGE });
+
+export const neonAuthDomainUpdateInputSchema = z
   .object({
-    operation: z
-      .enum([
-        'add_trusted_origin',
-        'remove_trusted_origin',
-        'set_allow_localhost',
-        'update_auth_methods',
-        'add_oauth_provider',
-        'update_oauth_provider',
-        'remove_oauth_provider',
-        'update_email_provider',
-        'send_test_email',
-      ])
-      .describe('Which Neon Auth configuration change to apply'),
-    projectId: z.string().describe('Neon project ID'),
+    projectId: z.string().describe('Neon project ID.'),
     branchId: z
       .string()
       .optional()
-      .describe(
-        'Branch ID. If omitted, the project default branch is used (same as provision_neon_auth).',
-      ),
-    trusted_origin: z
-      .string()
-      .min(1)
-      .refine(isValidTrustedOrigin, {
-        message:
-          'trusted_origin must be a https:// URL or origin (wildcard subdomains allowed, e.g. https://*.example.com), an http://localhost (or 127.0.0.1/[::1]) origin, or a custom-scheme deeplink (e.g. myapp://, exp://...). Rejected: file:/data:/javascript:/vbscript:/about: schemes, non-localhost http://, host-only or TLD-only wildcards (https://*, https://**, https://*.com), empty host, surrounding whitespace, and ASCII control characters.',
-      })
+      .describe('Branch ID. If omitted, the project default branch is used.'),
+    add: z
+      .array(trustedOriginUrlSchema)
       .optional()
       .describe(
-        [
-          'Origin to add to (or remove from) the Better Auth trusted origins list. Required for add_trusted_origin and remove_trusted_origin.',
-          'Better Auth uses trusted origins for two purposes:',
-          '1. CSRF protection - validates the incoming request Origin/Referer header on state-changing endpoints (POST/PUT/PATCH/DELETE).',
-          '2. URL allowlist - authorizes URLs your client passes via callbackURL, redirectTo, errorCallbackURL, and newUserCallbackURL across sign-in/sign-up, OAuth provider flows, email verification, password reset, and magic-link flows. Not just OAuth redirect_uri.',
-          'Accepted formats (must include "<scheme>://"):',
-          '- https:// origin or full URL: https://app.example.com, https://app.example.com/auth/callback',
-          '- Subdomain wildcards: https://*.example.com (single-segment), https://**.example.com (cross-segment)',
-          '- Local development over plain http: http://localhost, http://localhost:3000, http://127.0.0.1[:port], http://[::1][:port]',
-          '- Custom-scheme deeplinks: myapp://, exp://192.168.*.*:*/**',
-          'Rejected: file:/data:/javascript:/vbscript:/about: schemes, non-localhost http://, host-only or TLD-only wildcards (https://*, https://**, https://*.com), and empty host. See https://www.better-auth.com/docs/reference/options for canonical pattern syntax.',
-        ].join(' '),
+        'URLs to add to the trusted-origin allowlist. Each is validated against the same security rules used by the v1 add-trusted-origin operation.',
+      ),
+    remove: z
+      .array(trustedOriginUrlSchema)
+      .optional()
+      .describe(
+        'URLs to remove from the trusted-origin allowlist. Resolved to ids server-side via a list-then-delete fan-out.',
       ),
     allow_localhost: z
       .boolean()
       .optional()
       .describe(
-        'Whether Neon Auth should allow localhost origins. Required for set_allow_localhost.',
-      ),
-    methods: z
-      .object({
-        email_password: emailPasswordAuthMethodSchema
-          .optional()
-          .describe(
-            'Email and password authentication settings. Provide only the fields you want to change; omitted fields are left unchanged.',
-          ),
-      })
-      .strict()
-      .optional()
-      .describe(
-        'Authentication methods to update. Required for update_auth_methods. At least one method block with at least one field must be provided.',
-      ),
-    oauth_provider: z
-      .nativeEnum(NeonAuthOauthProviderId)
-      .optional()
-      .describe(
-        'Identifier of the OAuth provider to add, update, or remove. Required for add_oauth_provider, update_oauth_provider, and remove_oauth_provider. Sourced from the SDK enum NeonAuthOauthProviderId so it stays in lockstep with the upstream provider list (currently includes google, github, microsoft, vercel).',
-      ),
-    oauth_provider_config: oauthProviderConfigSchema
-      .optional()
-      .describe(
-        'OAuth provider credentials. For add_oauth_provider, omit entirely (or pass an empty object) to use Neon-managed shared credentials; pass client_id+client_secret to use BYO credentials. For update_oauth_provider, pass at least one field — omitted fields are left unchanged.',
-      ),
-    email_provider: emailProviderSchema
-      .optional()
-      .describe(
-        'Email server configuration. Required for update_email_provider. The upstream PATCH endpoint replaces the saved configuration with the supplied discriminated union; partial within-type updates are not supported by the API.',
-      ),
-    test_email: sendTestEmailSchema
-      .optional()
-      .describe(
-        'SMTP credentials + recipient for a one-off test email. Required for send_test_email.',
+        'Whether to allow localhost origins for development. Optional; if omitted, the current value is left unchanged.',
       ),
   })
+  .strict()
   .superRefine((val, ctx) => {
-    if (
-      val.operation === 'add_trusted_origin' ||
-      val.operation === 'remove_trusted_origin'
-    ) {
-      if (!val.trusted_origin) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'trusted_origin is required for this operation',
-          path: ['trusted_origin'],
-        });
-      }
-    }
-    if (val.operation === 'set_allow_localhost') {
-      if (val.allow_localhost === undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'allow_localhost is required for this operation',
-          path: ['allow_localhost'],
-        });
-      }
-    }
-    if (val.operation === 'update_auth_methods') {
-      const methodBlocks = val.methods
-        ? Object.entries(val.methods).filter(([, v]) => v !== undefined)
-        : [];
-      if (methodBlocks.length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            'methods must include at least one method block (e.g. methods.email_password)',
-          path: ['methods'],
-        });
-        return;
-      }
-      for (const [methodName, methodValue] of methodBlocks) {
-        const fields = Object.values(methodValue as Record<string, unknown>);
-        const hasAtLeastOneField = fields.some((v) => v !== undefined);
-        if (!hasAtLeastOneField) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `methods.${methodName} must include at least one field to update`,
-            path: ['methods', methodName],
-          });
-        }
-      }
-    }
-    if (
-      val.operation === 'add_oauth_provider' ||
-      val.operation === 'update_oauth_provider' ||
-      val.operation === 'remove_oauth_provider'
-    ) {
-      if (val.oauth_provider === undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'oauth_provider is required for this operation',
-          path: ['oauth_provider'],
-        });
-      }
-    }
-    if (val.operation === 'update_oauth_provider') {
-      const cfg = val.oauth_provider_config;
-      const hasAtLeastOneField =
-        cfg !== undefined && Object.values(cfg).some((v) => v !== undefined);
-      if (!hasAtLeastOneField) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            'update_oauth_provider requires at least one field in oauth_provider_config (client_id, client_secret, or microsoft_tenant_id)',
-          path: ['oauth_provider_config'],
-        });
-      }
-    }
-    if (val.operation === 'add_oauth_provider') {
-      // Standard mode requires both id and secret to be set together; shared
-      // mode requires neither. Reject the half-set configurations early so
-      // upstream doesn't return an opaque 4xx.
-      const cfg = val.oauth_provider_config;
-      const hasId = cfg?.client_id !== undefined;
-      const hasSecret = cfg?.client_secret !== undefined;
-      if (hasId !== hasSecret) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            'oauth_provider_config requires client_id and client_secret to be provided together for BYO ("standard") mode, or both omitted for Neon-managed ("shared") mode',
-          path: ['oauth_provider_config'],
-        });
-      }
-    }
-    if (val.operation === 'update_email_provider') {
-      if (val.email_provider === undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'email_provider is required for this operation',
-          path: ['email_provider'],
-        });
-      }
-    }
-    if (val.operation === 'send_test_email') {
-      if (val.test_email === undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'test_email is required for this operation',
-          path: ['test_email'],
-        });
-      }
+    const present =
+      (val.add && val.add.length > 0) ||
+      (val.remove && val.remove.length > 0) ||
+      val.allow_localhost !== undefined;
+    if (!present) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'At least one of add, remove, or allow_localhost must be provided.',
+      });
     }
   });
 
-export const getNeonAuthConfigInputSchema = z.object({
-  projectId: z.string().describe('Neon project ID'),
-  branchId: z
-    .string()
-    .optional()
-    .describe(
-      'Branch ID. If omitted, the project default branch is used (same as provision_neon_auth).',
-    ),
-});
+// ---------------------------------------------------------------------------
+// Send test email.
+// ---------------------------------------------------------------------------
+
+export const neonAuthSendTestEmailInputSchema = z
+  .object({
+    projectId: z.string().describe('Neon project ID.'),
+    branchId: z
+      .string()
+      .optional()
+      .describe('Branch ID. If omitted, the project default branch is used.'),
+    recipient_email: z
+      .string()
+      .email()
+      .min(1)
+      .max(256)
+      .describe('Email address to deliver the test message to.'),
+    ...standardEmailServerFields,
+  })
+  .strict();
 
 export const provisionNeonDataApiInputSchema = z
   .object({

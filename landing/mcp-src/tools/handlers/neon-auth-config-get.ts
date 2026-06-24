@@ -1,31 +1,34 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Api, NeonAuthIntegration } from '@neondatabase/api-client';
-import { getNeonAuthConfigInputSchema } from '../toolsSchema';
 import { z } from 'zod/v3';
-import { resolveNeonAuthBranchId } from './neon-auth-config';
-import { fetchNeonAuthConfigurableSettings } from './neon-auth-settings-snapshot';
+import { neonAuthConfigGetInputSchema } from '../toolsSchema';
 import { ToolHandlerExtraParams } from '../types';
+import { resolveNeonAuthBranchId } from './neon-auth-utils';
+import {
+  fetchNeonAuthConfigurableSettings,
+  stringifyNeonAuthConfigurableSettings,
+} from './neon-auth-settings-snapshot';
 
-type Props = z.infer<typeof getNeonAuthConfigInputSchema>;
+type Props = z.infer<typeof neonAuthConfigGetInputSchema>;
 
-function integrationPayload(int: NeonAuthIntegration) {
+function integrationPayload(integration: NeonAuthIntegration) {
   const payload: Record<string, unknown> = {
-    auth_provider: int.auth_provider,
-    auth_provider_project_id: int.auth_provider_project_id,
-    branch_id: int.branch_id,
-    db_name: int.db_name,
-    created_at: int.created_at,
-    owned_by: int.owned_by,
-    jwks_url: int.jwks_url,
-    base_url: int.base_url,
+    auth_provider: integration.auth_provider,
+    auth_provider_project_id: integration.auth_provider_project_id,
+    branch_id: integration.branch_id,
+    db_name: integration.db_name,
+    created_at: integration.created_at,
+    owned_by: integration.owned_by,
+    jwks_url: integration.jwks_url,
+    base_url: integration.base_url,
   };
-  if (int.transfer_status !== undefined) {
-    payload.transfer_status = int.transfer_status;
+  if (integration.transfer_status !== undefined) {
+    payload.transfer_status = integration.transfer_status;
   }
   return payload;
 }
 
-export async function handleGetNeonAuthConfig(
+export async function handleNeonAuthConfigGet(
   { projectId, branchId }: Props,
   neonClient: Api<unknown>,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -49,7 +52,7 @@ export async function handleGetNeonAuthConfig(
           type: 'text',
           text:
             integrationRes.status === 404
-              ? 'Neon Auth is not provisioned for this branch (HTTP 404). Use provision_neon_auth first.'
+              ? 'Neon Auth is not provisioned for this branch (HTTP 404). Before calling neon_auth_provision, ask the user for explicit approval.'
               : `Failed to load Neon Auth integration (${integrationRes.status} ${integrationRes.statusText}).`,
         },
       ],
@@ -61,11 +64,10 @@ export async function handleGetNeonAuthConfig(
     neonClient.getProjectBranch(projectId, resolvedBranchId),
   ]);
 
-  const integration = integrationRes.data;
   const branch_name =
     branchRes.status === 200 ? branchRes.data.branch.name : null;
-
-  const body: Record<string, unknown> = {
+  const integration = integrationRes.data;
+  const body = {
     project_id: projectId,
     branch_id: resolvedBranchId,
     branch_name,
@@ -75,15 +77,16 @@ export async function handleGetNeonAuthConfig(
     integration: integrationPayload(integration),
     ...settings,
   };
-  if (Object.keys(errors).length > 0) {
-    body._errors = errors;
-  }
 
   return {
     content: [
       {
         type: 'text',
-        text: `Neon Auth configuration:\n\`\`\`json\n${JSON.stringify(body, null, 2)}\n\`\`\``,
+        text: stringifyNeonAuthConfigurableSettings(
+          'Neon Auth configuration:',
+          body,
+          errors,
+        ),
       },
     ],
   };

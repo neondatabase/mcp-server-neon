@@ -114,7 +114,7 @@ export const getPromptTemplate = async (
     void args?.databaseName;
 
     const content = await fetchRawGithubContent(
-      '/neondatabase-labs/ai-rules/main/mcp-prompts/neon-auth-setup.md',
+      '/neondatabase/ai-rules/main/neon-auth.mdc',
     );
 
     return `

@@ -11,9 +11,20 @@ import crypto from 'crypto';
 import { InvalidArgumentError, NotFoundError } from '../server/errors';
 
 import { describeTable, formatTableDescription } from '../describeUtils';
-import { handleProvisionNeonAuth } from './handlers/neon-auth';
-import { handleConfigureNeonAuth } from './handlers/neon-auth-config';
-import { handleGetNeonAuthConfig } from './handlers/neon-auth-get-config';
+import { handleNeonAuthProvision } from './handlers/neon-auth-provision';
+import { handleNeonAuthConfigGet } from './handlers/neon-auth-config-get';
+import {
+  handleNeonAuthAppUpdate,
+  handleNeonAuthEmailDeliveryUpdate,
+  handleNeonAuthOrganizationsUpdate,
+  handleNeonAuthSignInMethodsUpdate,
+} from './handlers/neon-auth-methods-update';
+import { handleNeonAuthOauthProviderAdd } from './handlers/neon-auth-oauth-provider-add';
+import { handleNeonAuthOauthProviderUpdate } from './handlers/neon-auth-oauth-provider-update';
+import { handleNeonAuthOauthProviderDelete } from './handlers/neon-auth-oauth-provider-delete';
+import { handleNeonAuthDomainUpdate } from './handlers/neon-auth-domain-update';
+import { handleNeonAuthWebhookUpdate } from './handlers/neon-auth-webhook-update';
+import { handleNeonAuthSendTestEmail } from './handlers/neon-auth-send-test-email';
 import { handleProvisionNeonDataApi } from './handlers/data-api';
 import { handleSearch } from './handlers/search';
 import { handleFetch } from './handlers/fetch';
@@ -1503,25 +1514,52 @@ You MUST follow these steps:
     };
   },
 
-  provision_neon_auth: async ({ params }, neonClient, extra) => {
-    const result = await handleProvisionNeonAuth(
-      {
-        projectId: params.projectId,
-        branchId: params.branchId,
-        databaseName: params.databaseName,
-      },
-      neonClient,
-      extra,
-    );
-    return result;
+  neon_auth_provision: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthProvision(params, neonClient, extra);
   },
 
-  configure_neon_auth: async ({ params }, neonClient, extra) => {
-    return handleConfigureNeonAuth(params, neonClient, extra);
+  neon_auth_config_get: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthConfigGet(params, neonClient, extra);
   },
 
-  get_neon_auth_config: async ({ params }, neonClient, extra) => {
-    return handleGetNeonAuthConfig(params, neonClient, extra);
+  neon_auth_sign_in_methods_update: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthSignInMethodsUpdate(params, neonClient, extra);
+  },
+
+  neon_auth_email_delivery_update: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthEmailDeliveryUpdate(params, neonClient, extra);
+  },
+
+  neon_auth_organizations_update: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthOrganizationsUpdate(params, neonClient, extra);
+  },
+
+  neon_auth_app_update: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthAppUpdate(params, neonClient, extra);
+  },
+
+  neon_auth_oauth_provider_add: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthOauthProviderAdd(params, neonClient, extra);
+  },
+
+  neon_auth_oauth_provider_update: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthOauthProviderUpdate(params, neonClient, extra);
+  },
+
+  neon_auth_oauth_provider_delete: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthOauthProviderDelete(params, neonClient, extra);
+  },
+
+  neon_auth_domain_update: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthDomainUpdate(params, neonClient, extra);
+  },
+
+  neon_auth_webhook_update: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthWebhookUpdate(params, neonClient, extra);
+  },
+
+  neon_auth_send_test_email: async ({ params }, neonClient, extra) => {
+    return handleNeonAuthSendTestEmail(params, neonClient, extra);
   },
 
   provision_neon_data_api: async ({ params }, neonClient, extra) => {

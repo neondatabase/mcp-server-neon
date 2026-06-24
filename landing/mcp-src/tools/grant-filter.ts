@@ -112,30 +112,60 @@ function applyProjectScopeFilter(
  * Remove projectId from a tool's input schema if present.
  * Returns a new tool object with the modified schema, or null if no modification needed.
  *
- * Uses Zod's shape manipulation to create a new schema without the projectId field.
+ * Uses Zod's first-class `.omit()` to preserve the underlying ZodObject's
+ * configuration (`.strict()`, catchall, etc.). For schemas wrapped in
+ * `.superRefine` / `.refine` / `.transform` (i.e. `ZodEffects`), unwraps the
+ * inner object, omits projectId, and re-wraps with the original effect via
+ * `new z.ZodEffects({...def, schema: omitted})` so the refinement still runs.
+ *
+ * The refinement closures in our schemas only inspect slice fields (never
+ * projectId), so rewrapping the same effect on the omitted schema is safe.
  */
 function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
   const schema = tool.inputSchema;
 
-  // Only Zod objects can have keys removed
+  // ZodEffects wrapper (e.g. z.object({...}).strict().superRefine(...)) —
+  // unwrap inner object, omit projectId, re-wrap with the same effect.
+  if (schema instanceof z.ZodEffects) {
+    const inner = schema.innerType();
+    if (!(inner instanceof z.ZodObject)) return null;
+
+    const shape = inner.shape as Record<string, z.ZodTypeAny>;
+    if (!('projectId' in shape)) return null;
+
+    const omitted = (inner as z.ZodObject<Record<string, z.ZodTypeAny>>).omit({
+      projectId: true,
+    });
+
+    // Reconstruct ZodEffects directly via constructor to reuse the original
+    // effect definition (`.superRefine` / `.refine` / `.transform`). Using
+    // the public `ZodEffects.create(omitted, def.effect, ...)` would also
+    // work, but constructing from `_def` keeps any params (description,
+    // errorMap) intact.
+    const rewrapped = new z.ZodEffects({
+      ...schema._def,
+      schema: omitted,
+    });
+
+    return {
+      ...tool,
+      inputSchema: rewrapped,
+    } as NeonTool;
+  }
+
+  // Bare ZodObject — `.omit()` preserves `.strict()` / catchall.
   if (!(schema instanceof z.ZodObject)) return null;
 
   const shape = schema.shape as Record<string, z.ZodTypeAny>;
   if (!('projectId' in shape)) return null;
 
-  // Build a new shape without projectId
-  const newShape: Record<string, z.ZodTypeAny> = {};
-  for (const [key, value] of Object.entries(shape)) {
-    if (key !== 'projectId') {
-      newShape[key] = value;
-    }
-  }
-
-  const newSchema = z.object(newShape);
+  const omitted = (schema as z.ZodObject<Record<string, z.ZodTypeAny>>).omit({
+    projectId: true,
+  });
 
   return {
     ...tool,
-    inputSchema: newSchema,
+    inputSchema: omitted,
   } as NeonTool;
 }
 

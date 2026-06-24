@@ -40,7 +40,7 @@ async function callListTools(
 describe('/api/list-tools endpoint', () => {
   it('returns all tools by default', async () => {
     const body = await callListTools();
-    expect(body.tools).toHaveLength(31);
+    expect(body.tools).toHaveLength(40);
     expect(body.readOnly).toBe(false);
     expect(body.grant).toEqual({
       projectId: null,
@@ -64,7 +64,7 @@ describe('/api/list-tools endpoint', () => {
   it('filters project-agnostic tools in project-scoped mode', async () => {
     const body = await callListTools({ projectId: 'proj-123' });
     expect(body.grant.projectId).toBe('proj-123');
-    expect(body.tools).toHaveLength(24);
+    expect(body.tools).toHaveLength(33);
     const names = body.tools.map((t) => t.name);
     expect(names).not.toContain('list_projects');
     expect(names).not.toContain('create_project');
@@ -101,7 +101,7 @@ describe('/api/list-tools endpoint', () => {
     const res = await GET(req);
     const body = (await res.json()) as ListToolsResponse;
     expect(body.readOnly).toBe(false);
-    expect(body.tools).toHaveLength(31);
+    expect(body.tools).toHaveLength(40);
   });
 
   it('OPTIONS returns expected CORS allow-headers', () => {
