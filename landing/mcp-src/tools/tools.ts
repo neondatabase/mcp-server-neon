@@ -17,7 +17,7 @@ import { handleGetNeonAuthConfig } from './handlers/neon-auth-get-config';
 import { handleProvisionNeonDataApi } from './handlers/data-api';
 import { handleSearch } from './handlers/search';
 import { handleFetch } from './handlers/fetch';
-import { getDocResource, listDocsResources } from './handlers/docs';
+import { getDocResource, listDocsResources, searchDocs } from './handlers/docs';
 
 import {
   getDefaultDatabase,
@@ -1720,6 +1720,22 @@ You MUST follow these steps:
 
   get_doc_resource: async ({ params }) => {
     const content = await getDocResource({ slug: params.slug });
+    return {
+      content: [
+        {
+          type: 'text',
+          text: content,
+        },
+      ],
+    };
+  },
+
+  search_docs: async ({ params }) => {
+    const content = await searchDocs({
+      query: params.query,
+      mode: params.mode,
+      limit: params.limit,
+    });
     return {
       content: [
         {

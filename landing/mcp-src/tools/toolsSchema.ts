@@ -912,3 +912,25 @@ export const getDocResourceInputSchema = z.object({
       "The docs page slug (path) to fetch, e.g. 'docs/guides/prisma.md'. Slugs use .md file endings matching the URLs in the documentation index. Use the list_docs_resources tool first to discover available slugs.",
     ),
 });
+
+export const searchDocsInputSchema = z.object({
+  query: z
+    .string()
+    .min(1)
+    .describe(
+      'Natural-language search query for finding relevant Neon documentation pages.',
+    ),
+  mode: z
+    .enum(['hybrid', 'fts', 'semantic'])
+    .optional()
+    .describe(
+      'Search strategy. "hybrid" (default) merges keyword and semantic results. "fts" is keyword-only PostgreSQL full-text search. "semantic" uses vector similarity for conceptual matches.',
+    ),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .optional()
+    .describe('Maximum number of results to return (1-50, default 10).'),
+});

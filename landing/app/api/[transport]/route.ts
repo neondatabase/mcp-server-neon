@@ -18,6 +18,7 @@ import { NEON_HANDLERS } from '../../../mcp-src/tools/index';
 import {
   getDocResource,
   listDocsResources,
+  searchDocs,
 } from '../../../mcp-src/tools/handlers/docs';
 import { createNeonClient } from '../../../mcp-src/server/api';
 import pkg from '../../../package.json';
@@ -738,7 +739,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 // not surfaced anonymously.
 const DOCS_ONLY_TOOLS = NEON_TOOLS.filter((tool) => tool.scope === 'docs');
 function getDocsOnlyToolDefinition(
-  name: 'list_docs_resources' | 'get_doc_resource',
+  name: 'list_docs_resources' | 'get_doc_resource' | 'search_docs',
 ) {
   const tool = DOCS_ONLY_TOOLS.find((tool) => tool.name === name);
   assert(tool, `${name} tool definition not found`);
@@ -747,6 +748,7 @@ function getDocsOnlyToolDefinition(
 
 const listDocsResourcesTool = getDocsOnlyToolDefinition('list_docs_resources');
 const getDocResourceTool = getDocsOnlyToolDefinition('get_doc_resource');
+const searchDocsTool = getDocsOnlyToolDefinition('search_docs');
 
 const ANONYMOUS_DOCS_USER_ID = 'anonymous-docs';
 
@@ -762,7 +764,7 @@ function createDocsOnlyMcpHandler() {
   return createMcpHandler(
     (server: McpServer) => {
       async function runDocsTool(
-        toolName: 'list_docs_resources' | 'get_doc_resource',
+        toolName: 'list_docs_resources' | 'get_doc_resource' | 'search_docs',
         call: () => Promise<string>,
       ) {
         const traceId = generateTraceId();
@@ -841,6 +843,27 @@ function createDocsOnlyMcpHandler() {
         async (args: { slug: string }) =>
           runDocsTool(getDocResourceTool.name, () =>
             getDocResource({ slug: args.slug }),
+          ),
+      );
+
+      server.registerTool(
+        searchDocsTool.name,
+        {
+          description: searchDocsTool.description,
+          inputSchema: searchDocsTool.inputSchema,
+          annotations: searchDocsTool.annotations,
+        },
+        async (args: {
+          query: string;
+          mode?: 'hybrid' | 'fts' | 'semantic';
+          limit?: number;
+        }) =>
+          runDocsTool(searchDocsTool.name, () =>
+            searchDocs({
+              query: args.query,
+              mode: args.mode,
+              limit: args.limit,
+            }),
           ),
       );
 
