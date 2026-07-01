@@ -36,7 +36,7 @@ For example, in Claude Code, or any MCP Client, you can use natural language to 
 >
 > The Neon MCP Server is intended for local development and IDE integrations only. **We do not recommend using the Neon MCP Server in production environments.** It can execute powerful operations that may lead to accidental or unauthorized changes.
 >
-> For more information, see [MCP security guidance →](https://neon.tech/docs/ai/neon-mcp-server#mcp-security-guidance).
+> For more information, see [MCP security guidance →](https://neon.com/docs/ai/neon-mcp-server#mcp-security-guidance).
 
 ## Setting up Neon MCP Server
 
@@ -244,7 +244,7 @@ npx add-mcp https://mcp.neon.tech/sse --type sse
 The remote server runs as a Next.js App Router application on Vercel at `mcp.neon.tech`.
 
 > [!NOTE]
-> The root `/` path redirects to [Neon MCP Server docs](https://neon.tech/docs/ai/neon-mcp-server). There is no landing page.
+> The root `/` path redirects to [Neon MCP Server docs](https://neon.com/docs/ai/neon-mcp-server). There is no landing page.
 
 Core implementation areas:
 
@@ -257,13 +257,13 @@ Core implementation areas:
 
 ## Guides
 
-- [Neon MCP Server Guide](https://neon.tech/docs/ai/neon-mcp-server)
-- [Connect MCP Clients to Neon](https://neon.tech/docs/ai/connect-mcp-clients-to-neon)
-- [Cursor with Neon MCP Server](https://neon.tech/guides/cursor-mcp-neon)
-- [Claude Desktop with Neon MCP Server](https://neon.tech/guides/neon-mcp-server)
-- [Cline with Neon MCP Server](https://neon.tech/guides/cline-mcp-neon)
-- [Windsurf with Neon MCP Server](https://neon.tech/guides/windsurf-mcp-neon)
-- [Zed with Neon MCP Server](https://neon.tech/guides/zed-mcp-neon)
+- [Neon MCP Server Guide](https://neon.com/docs/ai/neon-mcp-server)
+- [Connect MCP Clients to Neon](https://neon.com/docs/ai/connect-mcp-clients-to-neon)
+- [Cursor with Neon MCP Server](https://neon.com/guides/cursor-mcp-neon)
+- [Claude Desktop with Neon MCP Server](https://neon.com/guides/neon-mcp-server)
+- [Cline with Neon MCP Server](https://neon.com/guides/cline-mcp-neon)
+- [Windsurf with Neon MCP Server](https://neon.com/guides/windsurf-mcp-neon)
+- [Zed with Neon MCP Server](https://neon.com/guides/zed-mcp-neon)
 
 # Features
 

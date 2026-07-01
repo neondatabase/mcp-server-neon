@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/',
-        destination: 'https://neon.tech/docs/ai/neon-mcp-server',
+        destination: 'https://neon.com/docs/ai/neon-mcp-server',
         permanent: true,
       },
     ];
