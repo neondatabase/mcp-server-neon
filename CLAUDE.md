@@ -258,7 +258,7 @@ landing/                  # Next.js app (main project)
 │   │   └── health/     # Health check endpoint
 │   ├── callback/       # OAuth callback handler
 │   └── .well-known/    # OAuth discovery endpoints
-│   # Note: Root `/` redirects to https://neon.tech/docs/ai/neon-mcp-server
+│   # Note: Root `/` redirects to https://neon.com/docs/ai/neon-mcp-server
 │   # (configured in next.config.ts). There is no landing page.
 ├── e2e/                # Playwright E2E tests
 │   ├── global-setup.ts             # Instagres DB provisioning + secret generation
