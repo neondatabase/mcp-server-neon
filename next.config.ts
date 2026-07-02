@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   // Serverless deployment on Vercel - do not use 'export' mode
   // API routes require dynamic server-side rendering
 
-  // Redirect landing page to Neon docs (single source of truth)
+  // Redirect root path to Neon docs (single source of truth; there is no landing page)
   async redirects() {
     return [
       {

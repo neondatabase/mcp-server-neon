@@ -68,7 +68,7 @@ The `stateLen` / `stateFp` / `scopeCount` / `rURIHost` / `rURIPath` / `hasResour
 Same pattern as `dev-notes/refresh-slo.md` — pull per-bucket JSONL via the Vercel CLI, then aggregate.
 
 ```bash
-# Run from landing/ so the Vercel project is detected.
+# Run from the repo root so the Vercel project is detected.
 for q in "outcome=success" "outcome=correct_user_denied" \
          "outcome=correct_consent_expired" "outcome=correct_csrf_mismatch" \
          "outcome=correct_invalid_grant" "outcome=correct_chatgpt_invalid_request" \

@@ -5,8 +5,7 @@
   "description": "Official Neon MCP server for managing Neon projects and Postgres databases.",
   "repository": {
     "url": "https://github.com/neondatabase/mcp-server-neon",
-    "source": "github",
-    "subfolder": "landing"
+    "source": "github"
   },
   "version": "1.0.0",
   "websiteUrl": "https://neon.com/docs/ai/neon-mcp-server",
@@ -14,17 +13,13 @@
     {
       "src": "https://neon.com/brand/neon-logo-light-color.svg",
       "mimeType": "image/svg+xml",
-      "sizes": [
-        "any"
-      ],
+      "sizes": ["any"],
       "theme": "light"
     },
     {
       "src": "https://neon.com/brand/neon-logo-dark-color.svg",
       "mimeType": "image/svg+xml",
-      "sizes": [
-        "any"
-      ],
+      "sizes": ["any"],
       "theme": "dark"
     }
   ],

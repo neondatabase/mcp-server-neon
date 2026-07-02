@@ -1,22 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { model } from '../../mcp-src/oauth/model';
+import { model } from '../../mcp/oauth/model';
 import {
   isPgConnectFailure,
   withPgConnectRetry,
-} from '../../mcp-src/oauth/kv-store';
+} from '../../mcp/oauth/kv-store';
 import { exchangeCode } from '../../lib/oauth/client';
 import { extractUpstreamErrorDetails } from '../../lib/oauth/upstream-error';
-import { generateRandomString } from '../../mcp-src/oauth/utils';
-import { createNeonClient } from '../../mcp-src/server/api';
-import { resolveAccountFromAuth } from '../../mcp-src/server/account';
+import { generateRandomString } from '../../mcp/oauth/utils';
+import { createNeonClient } from '../../mcp/server/api';
+import { resolveAccountFromAuth } from '../../mcp/server/account';
 import { handleOAuthError } from '../../lib/errors';
-import { logger } from '../../mcp-src/utils/logger';
+import { logger } from '../../mcp/utils/logger';
 import type { AuthorizationCode } from 'oauth2-server';
 import {
   DEFAULT_GRANT,
   resolveGrantFromResourceUri,
   type GrantContext,
-} from '../../mcp-src/utils/grant-context';
+} from '../../mcp/utils/grant-context';
 
 type DownstreamAuthRequest = {
   responseType: string;

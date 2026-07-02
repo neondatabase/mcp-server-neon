@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import he from 'he';
-import { model } from '../../../mcp-src/oauth/model';
+import { model } from '../../../mcp/oauth/model';
 import { upstreamAuth } from '../../../lib/oauth/client';
 import {
   isClientAlreadyApproved,
@@ -13,14 +13,14 @@ import {
   hasWriteScope,
   SCOPE_DEFINITIONS,
   SUPPORTED_SCOPES,
-} from '../../../mcp-src/utils/read-only';
-import { logger } from '../../../mcp-src/utils/logger';
+} from '../../../mcp/utils/read-only';
+import { logger } from '../../../mcp/utils/logger';
 import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
 import {
   DEFAULT_GRANT,
   resolveGrantFromResourceUri,
   type GrantContext,
-} from '../../../mcp-src/utils/grant-context';
+} from '../../../mcp/utils/grant-context';
 
 export type DownstreamAuthRequest = {
   responseType: string;

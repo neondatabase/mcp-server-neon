@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { resolveGrantFromSearchParams } from '../../../mcp-src/utils/grant-context';
-import { isReadOnly } from '../../../mcp-src/utils/read-only';
+import { resolveGrantFromSearchParams } from '../../../mcp/utils/grant-context';
+import { isReadOnly } from '../../../mcp/utils/read-only';
 import {
   getFilteredTools,
   getAccessControlNotices,
   getAccessControlWarnings,
-} from '../../../mcp-src/tools/grant-filter';
-import { logger } from '../../../mcp-src/utils/logger';
+} from '../../../mcp/tools/grant-filter';
+import { logger } from '../../../mcp/utils/logger';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',

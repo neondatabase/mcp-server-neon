@@ -1,23 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { Client } from 'oauth2-server';
-import { model } from '../../../mcp-src/oauth/model';
+import { model } from '../../../mcp/oauth/model';
 import {
   exchangeRefreshToken,
   type UpstreamRequestSummary,
 } from '../../../lib/oauth/client';
 import { extractUpstreamErrorDetails } from '../../../lib/oauth/upstream-error';
-import { verifyPKCE } from '../../../mcp-src/oauth/utils';
-import { identify, flushAnalytics } from '../../../mcp-src/analytics/analytics';
+import { verifyPKCE } from '../../../mcp/oauth/utils';
+import { identify, flushAnalytics } from '../../../mcp/analytics/analytics';
 import { handleOAuthError } from '../../../lib/errors';
-import { logger } from '../../../mcp-src/utils/logger';
-import { singleflight } from '../../../mcp-src/utils/singleflight';
-import { retryAsync } from '../../../mcp-src/utils/retry';
+import { logger } from '../../../mcp/utils/logger';
+import { singleflight } from '../../../mcp/utils/singleflight';
+import { retryAsync } from '../../../mcp/utils/retry';
 import {
   withRefreshLock,
   type ReleaseHint,
   peekTransientFailure,
-} from '../../../mcp-src/oauth/refresh-lock';
+} from '../../../mcp/oauth/refresh-lock';
 
 const toSeconds = (ms: number): number => Math.floor(ms / 1000);
 const toMilliseconds = (seconds: number): number => seconds * 1000;

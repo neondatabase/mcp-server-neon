@@ -248,12 +248,12 @@ The remote server runs as a Next.js App Router application on Vercel at `mcp.neo
 
 Core implementation areas:
 
-- `landing/app/api/[transport]/route.ts`: MCP transport endpoint for Streamable HTTP (`/mcp`) and SSE (`/sse`)
-- `landing/app/api/authorize/`, `landing/app/callback/`, `landing/app/api/token/`, `landing/app/api/revoke/`: OAuth flow endpoints
-- `landing/app/.well-known/`: OAuth discovery metadata endpoints
-- `landing/mcp-src/`: MCP server, tools, handlers, analytics, and Sentry integration
-- `landing/lib/`: Next.js-compatible helpers (OAuth, configuration, error handling)
-- `landing/mcp-src/utils/read-only.ts`: read-only mode and scope handling
+- `app/api/[transport]/route.ts`: MCP transport endpoint for Streamable HTTP (`/mcp`) and SSE (`/sse`)
+- `app/api/authorize/`, `app/callback/`, `app/api/token/`, `app/api/revoke/`: OAuth flow endpoints
+- `app/.well-known/`: OAuth discovery metadata endpoints
+- `mcp/`: MCP server, tools, handlers, analytics, and Sentry integration
+- `lib/`: Next.js-compatible helpers (OAuth, configuration, error handling)
+- `mcp/utils/read-only.ts`: read-only mode and scope handling
 
 ## Guides
 
@@ -359,10 +359,9 @@ This project uses [pnpm](https://pnpm.io) as the package manager, pinned via Cor
 
 ## Project Structure
 
-The MCP server code lives in the `landing/` directory, which is a Next.js application deployed to Vercel at `mcp.neon.tech`.
+The MCP server code lives at the repository root, a Next.js application deployed to Vercel at `mcp.neon.tech`.
 
 ```bash
-cd landing
 corepack enable
 pnpm install
 ```
@@ -403,11 +402,9 @@ Optional:
 
 ## Testing Pyramid
 
-All tests run from `landing/`.
+All tests run from the repository root.
 
 ```bash
-cd landing
-
 # Unit tests
 pnpm run test:unit
 

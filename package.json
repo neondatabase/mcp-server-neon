@@ -21,8 +21,8 @@
     "knip:fix": "knip --fix",
     "test": "pnpm run test:unit && pnpm run test:integration && pnpm run test:e2e",
     "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.e2e.test.ts\"",
-    "test:integration": "vitest run mcp-src/__tests__/*.integration.test.ts",
-    "test:e2e:mcp": "vitest run mcp-src/__tests__/*.e2e.test.ts",
+    "test:integration": "vitest run mcp/__tests__/*.integration.test.ts",
+    "test:e2e:mcp": "vitest run mcp/__tests__/*.e2e.test.ts",
     "test:e2e:web": "tsx scripts/e2e-setup.ts && playwright test",
     "test:e2e": "pnpm run test:e2e:mcp && pnpm run test:e2e:web"
   },

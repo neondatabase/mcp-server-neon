@@ -16,9 +16,6 @@ jobs:
     runs-on:
       group: neondatabase-protected-runner-group
       labels: linux-ubuntu-latest
-    defaults:
-      run:
-        working-directory: landing
     steps:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -42,7 +39,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
-          package_json_file: landing/package.json
+          package_json_file: package.json
       - name: Get pnpm store path
         id: pnpm-store
         run: echo "path=$(pnpm store path)" >> "$GITHUB_OUTPUT"
@@ -50,14 +47,14 @@ jobs:
         uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
-          key: pnpm-${{ runner.os }}-${{ hashFiles('landing/pnpm-lock.yaml') }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             pnpm-${{ runner.os }}-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Validate server.json version sync
         run: |
-          node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const server=JSON.parse(fs.readFileSync('../server.json','utf8')); if (pkg.version !== server.version) { console.error('Version mismatch: landing/package.json=' + pkg.version + ' server.json=' + server.version); process.exit(1); }"
+          node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const server=JSON.parse(fs.readFileSync('server.json','utf8')); if (pkg.version !== server.version) { console.error('Version mismatch: package.json=' + pkg.version + ' server.json=' + server.version); process.exit(1); }"
       - name: Format check
         run: pnpm run fmt:check
       - name: Lint

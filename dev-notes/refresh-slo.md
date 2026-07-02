@@ -70,7 +70,7 @@ Buckets emitted: `success_fresh | success_cache_replay | correct_invalid_grant |
 The `[SLO] refresh outcome=…` lines are emitted at INFO level and stay in Vercel's log retention (~3 days). Pull them with the CLI and aggregate with the snippet below. The dominant `success` bucket eats the `--limit 5000` cap quickly; for windows longer than a few minutes, **issue one targeted query per outcome bucket** — rare buckets fit comfortably under the cap and expose the full window.
 
 ```bash
-# Run from landing/ so the Vercel project is detected.
+# Run from the repo root so the Vercel project is detected.
 for q in "outcome=success" "outcome=correct_invalid_grant" \
          "outcome=cliff_upstream" "outcome=transient_lock_timeout" \
          "outcome=transient_persist_failure" "outcome=transient_upstream_5xx" \

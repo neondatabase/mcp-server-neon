@@ -1,5 +1,5 @@
 // Initialize Sentry (must be first import)
-import '../../../mcp-src/sentry/instrument';
+import '../../../mcp/sentry/instrument';
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
@@ -10,44 +10,41 @@ import { normalizeObjectSchema } from '@modelcontextprotocol/sdk/server/zod-comp
 import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-schema-compat.js';
 import { captureException, startSpan } from '@sentry/node';
 
-import {
-  getAvailablePrompts,
-  getPromptTemplate,
-} from '../../../mcp-src/prompts';
-import { NEON_HANDLERS } from '../../../mcp-src/tools/index';
+import { getAvailablePrompts, getPromptTemplate } from '../../../mcp/prompts';
+import { NEON_HANDLERS } from '../../../mcp/tools/index';
 import {
   getDocResource,
   listDocsResources,
-} from '../../../mcp-src/tools/handlers/docs';
-import { createNeonClient } from '../../../mcp-src/server/api';
+} from '../../../mcp/tools/handlers/docs';
+import { createNeonClient } from '../../../mcp/server/api';
 import pkg from '../../../package.json';
-import { handleToolError } from '../../../mcp-src/server/errors';
-import type { ToolHandlerExtraParams } from '../../../mcp-src/tools/types';
-import { detectClientApplication } from '../../../mcp-src/utils/client-application';
-import { isReadOnly } from '../../../mcp-src/utils/read-only';
-import type { AuthContext } from '../../../mcp-src/types/auth';
-import { logger } from '../../../mcp-src/utils/logger';
-import { generateTraceId } from '../../../mcp-src/utils/trace';
+import { handleToolError } from '../../../mcp/server/errors';
+import type { ToolHandlerExtraParams } from '../../../mcp/tools/types';
+import { detectClientApplication } from '../../../mcp/utils/client-application';
+import { isReadOnly } from '../../../mcp/utils/read-only';
+import type { AuthContext } from '../../../mcp/types/auth';
+import { logger } from '../../../mcp/utils/logger';
+import { generateTraceId } from '../../../mcp/utils/trace';
 import { waitUntil } from '@vercel/functions';
-import { track, flushAnalytics } from '../../../mcp-src/analytics/analytics';
-import { resolveAccountFromAuth } from '../../../mcp-src/server/account';
-import { model } from '../../../mcp-src/oauth/model';
-import { getApiKeys, type ApiKeyRecord } from '../../../mcp-src/oauth/kv-store';
-import { setSentryTags } from '../../../mcp-src/sentry/utils';
-import type { ServerContext, AppContext } from '../../../mcp-src/types/context';
+import { track, flushAnalytics } from '../../../mcp/analytics/analytics';
+import { resolveAccountFromAuth } from '../../../mcp/server/account';
+import { model } from '../../../mcp/oauth/model';
+import { getApiKeys, type ApiKeyRecord } from '../../../mcp/oauth/kv-store';
+import { setSentryTags } from '../../../mcp/sentry/utils';
+import type { ServerContext, AppContext } from '../../../mcp/types/context';
 import {
   isDocsOnlyRequest,
   resolveGrantFromSearchParams,
   resolveGrantFromToken,
   DEFAULT_GRANT,
   type GrantContext,
-} from '../../../mcp-src/utils/grant-context';
+} from '../../../mcp/utils/grant-context';
 import {
   getAvailableTools,
   getAccessControlWarnings,
   injectProjectId,
-} from '../../../mcp-src/tools/grant-filter';
-import { NEON_TOOLS } from '../../../mcp-src/tools/definitions';
+} from '../../../mcp/tools/grant-filter';
+import { NEON_TOOLS } from '../../../mcp/tools/definitions';
 import { assert } from '../../../lib/assert';
 import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
 import {
@@ -57,7 +54,7 @@ import {
   evaluateMessageOwnership,
   releaseSession,
   shouldRejectEnvelope,
-} from '../../../mcp-src/server/session-binding';
+} from '../../../mcp/server/session-binding';
 
 class SessionIdentityMismatchError extends Error {
   constructor() {

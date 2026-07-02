@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { SERVER_HOST } from '@/lib/config';
-import { SUPPORTED_SCOPES } from '@/mcp-src/utils/read-only';
-import { SCOPE_CATEGORIES } from '@/mcp-src/utils/grant-context';
+import { SUPPORTED_SCOPES } from '@/mcp/utils/read-only';
+import { SCOPE_CATEGORIES } from '@/mcp/utils/grant-context';
 
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];

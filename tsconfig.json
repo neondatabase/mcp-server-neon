@@ -28,7 +28,7 @@
     "app/.well-known/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    "../public/types/**/*.ts",
+    "public/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules"]

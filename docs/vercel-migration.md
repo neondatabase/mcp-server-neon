@@ -116,7 +116,7 @@ Vercel serverless functions terminate immediately after returning a response. Th
 
 ```typescript
 import { waitUntil } from '@vercel/functions';
-import { flushAnalytics } from '../../../mcp-src/analytics/analytics';
+import { flushAnalytics } from '../../../mcp/analytics/analytics';
 
 // Inside request handlers
 waitUntil(flushAnalytics());
@@ -201,10 +201,10 @@ Updated `tsconfig.json`:
 
 - Module resolution: `bundler` (instead of `node16`)
 - Excluded transport files not used in Vercel deployment:
-  - `mcp-src/index.ts`
-  - `mcp-src/transports/sse-express.ts`
-  - `mcp-src/transports/stdio.ts`
-  - `mcp-src/transports/stream.ts`
+  - `mcp/index.ts`
+  - `mcp/transports/sse-express.ts`
+  - `mcp/transports/stdio.ts`
+  - `mcp/transports/stream.ts`
 
 ### 12. Redis/Session Storage
 
@@ -422,7 +422,7 @@ persistMigrationToMemory(migrationId, { ... });
 
 **Changes Made:**
 
-- **Deleted `mcp-src/tools/state.ts`** - Removed in-memory state storage
+- **Deleted `mcp/tools/state.ts`** - Removed in-memory state storage
 - **Updated `completeDatabaseMigrationInputSchema`** - Added required params: `migrationSql`, `databaseName`, `projectId`, `temporaryBranchId`, `parentBranchId`, `applyChanges`
 - **Added branch naming convention** - Temp branches named `mcp-migration-YYYY-MM-DDTHH-mm-ss` for easy orphan identification
 - **Added `applyChanges` flag** - Allows canceling migrations by deleting temp branch without applying

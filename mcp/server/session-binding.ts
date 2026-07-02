@@ -100,7 +100,7 @@ function dropCachedRedis(): void {
 
 /**
  * Run a Redis-bound operation with a single retry on transient failures.
- * Mirrors `withPgConnectRetry` in `mcp-src/oauth/kv-store.ts` and delegates
+ * Mirrors `withPgConnectRetry` in `mcp/oauth/kv-store.ts` and delegates
  * to the shared `retryAsync` helper so dashboards see a single warn-log
  * shape (`retryAsync ... attempt N/M failed`) across all retry paths.
  *

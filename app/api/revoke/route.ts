@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { model } from '../../../mcp-src/oauth/model';
+import { model } from '../../../mcp/oauth/model';
 import { handleOAuthError } from '../../../lib/errors';
-import { logger } from '../../../mcp-src/utils/logger';
+import { logger } from '../../../mcp/utils/logger';
 
 const extractClientCredentials = (
   request: NextRequest,

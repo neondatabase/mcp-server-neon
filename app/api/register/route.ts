@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { model } from '../../../mcp-src/oauth/model';
-import { generateRandomString } from '../../../mcp-src/oauth/utils';
+import { model } from '../../../mcp/oauth/model';
+import { generateRandomString } from '../../../mcp/oauth/utils';
 import { handleOAuthError } from '../../../lib/errors';
-import { logger } from '../../../mcp-src/utils/logger';
+import { logger } from '../../../mcp/utils/logger';
 import type { Client } from 'oauth2-server';
 
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];

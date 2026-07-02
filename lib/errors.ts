@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { logger } from '../mcp-src/utils/logger';
+import { logger } from '../mcp/utils/logger';
 import { extractUpstreamErrorDetails } from './oauth/upstream-error';
 
 type OAuthErrorResponse = {
