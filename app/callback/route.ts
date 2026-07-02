@@ -38,7 +38,7 @@ const toMilliseconds = (seconds: number): number => seconds * 1000;
 
 /**
  * Auth-flow SLO outcome buckets emitted by /callback. Mirrors the refresh
- * SLO at /api/token (see dev-notes/refresh-slo.md). Bucket map:
+ * SLO at /api/token (see ai-notes/refresh-slo.md). Bucket map:
  *
  *  GOOD (numerator):
  *  - `success`                   200/302 successful exchange + redirect
@@ -80,7 +80,7 @@ const toMilliseconds = (seconds: number): number => seconds * 1000;
  *                                `upstream_other_error` so the SLO isn't
  *                                punished for an upstream/integration issue
  *                                we can't fix unilaterally. Investigation
- *                                + evidence: dev-notes/3-day-slo-2026-05-21T14Z.md
+ *                                + evidence: ai-notes/3-day-slo-2026-05-21T14Z.md
  *                                §2 "Bad-event analysis".
  *
  *  BAD (numerator):
@@ -108,8 +108,8 @@ const toMilliseconds = (seconds: number): number => seconds * 1000;
  *                                prefetch, browser history.
  *
  * Source-grounded justifications for the "correct_*" buckets live in
- * dev-notes/hydra-incident-2026-05-12T13-44Z.md §Update. See also
- * dev-notes/auth-callback-slo.md for the SLO definition + targets.
+ * ai-notes/hydra-incident-2026-05-12T13-44Z.md §Update. See also
+ * ai-notes/auth-callback-slo.md for the SLO definition + targets.
  */
 type AuthCallbackOutcome =
   | 'success'
@@ -395,7 +395,7 @@ export async function GET(request: NextRequest) {
             // its generic `invalid_request` (the catch-all that flags
             // missing/duplicate/malformed params OR a redirect_uri
             // whitelist failure — Hydra returns the same description for
-            // all of them). See dev-notes/auth-callback-slo.md.
+            // all of them). See ai-notes/auth-callback-slo.md.
             downstreamRequest: summarizeDownstreamRequest(state, requestParams),
           });
           return NextResponse.redirect(redirectUrl.href);

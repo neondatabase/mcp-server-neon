@@ -1,6 +1,6 @@
 # /callback (OAuth code-grant) SLO
 
-Companion to `dev-notes/refresh-slo.md`. Tracks the **initial authorization** flow: every time an MCP client (Cursor, Claude, ChatGPT, etc.) sends a user through `/api/authorize` → upstream Hydra → back to our `/callback` → handed off to the client's redirect URI.
+Companion to `ai-notes/refresh-slo.md`. Tracks the **initial authorization** flow: every time an MCP client (Cursor, Claude, ChatGPT, etc.) sends a user through `/api/authorize` → upstream Hydra → back to our `/callback` → handed off to the client's redirect URI.
 
 ## Why
 
@@ -31,9 +31,9 @@ window: rolling 28 days
 | `success` | yes | no | Code exchanged, redirected to client |
 | `correct_user_denied` | yes | no | User clicked Cancel at Hydra — `error=access_denied`. System worked correctly. |
 | `correct_consent_expired` | yes | no | Hydra `request_unauthorized` — the login/consent challenge DB row expired (`ttl.login_consent_request`, 30m default in Hydra v1.11.x). User took too long between starting auth and clicking Accept; system worked as designed. |
-| `correct_csrf_mismatch` | yes | no | Hydra `request_forbidden` — CSRF cookie value differs from the DB row, typically because a concurrent OAuth flow on `oauth2.neon.tech` overwrote the cookie. CSRF guard correctly rejected a corrupted flow; user retries in a single tab and succeeds. See `dev-notes/hydra-incident-2026-05-12T13-44Z.md` §Update for the v1.11.10 source citation (`consent/helper.go:89`). |
+| `correct_csrf_mismatch` | yes | no | Hydra `request_forbidden` — CSRF cookie value differs from the DB row, typically because a concurrent OAuth flow on `oauth2.neon.tech` overwrote the cookie. CSRF guard correctly rejected a corrupted flow; user retries in a single tab and succeeds. See `ai-notes/hydra-incident-2026-05-12T13-44Z.md` §Update for the v1.11.10 source citation (`consent/helper.go:89`). |
 | `correct_invalid_grant` | yes | no | Hydra `invalid_grant` on code-exchange — the authorization code was already used or expired (`ttl.auth_code`, 10m default). Mirrors the refresh SLO's same-named bucket. |
-| `correct_chatgpt_invalid_request` | yes | no | Hydra `invalid_request` on a flow whose downstream `redirect_uri` host is `chatgpt.com`. ChatGPT's MCP-connector uses a SHARED OAuth `client_id` across all of its end-users; that shared registration periodically lands in a degraded state on Hydra's side that produces sustained `invalid_request` rejections. Not actionable from our side — the request shape WE send is uniform and well-formed (`stateLen=404`, `hasPKCE=1`, `hasResource=1`), verified against successful sessions on the same connector. Investigation: `dev-notes/3-day-slo-2026-05-21T14Z.md` §2. |
+| `correct_chatgpt_invalid_request` | yes | no | Hydra `invalid_request` on a flow whose downstream `redirect_uri` host is `chatgpt.com`. ChatGPT's MCP-connector uses a SHARED OAuth `client_id` across all of its end-users; that shared registration periodically lands in a degraded state on Hydra's side that produces sustained `invalid_request` rejections. Not actionable from our side — the request shape WE send is uniform and well-formed (`stateLen=404`, `hasPKCE=1`, `hasResource=1`), verified against successful sessions on the same connector. Investigation: `ai-notes/3-day-slo-2026-05-21T14Z.md` §2. |
 | `upstream_unmapped_error` | yes | **yes** | Hydra returned `?error=error&error_description=The error is unrecognizable` (Fosite fallback for unmapped internal state) or any `?error=...` we couldn't classify. **Captures the "user stranded" pattern.** |
 | `upstream_other_error` | yes | **yes** | Hydra-mapped OAuth error during code-exchange that isn't 5xx and didn't match one of the `correct_*` classifiers above. New fingerprints land here first; promote to a `correct_*` or keep as bad once characterized. |
 | `upstream_5xx` | **no** | n/a | Hydra returned 5xx during the code-exchange (`OAUTH_RESPONSE_IS_NOT_CONFORM`). Excluded — provider-side outage, out of our control. |
@@ -65,7 +65,7 @@ The `stateLen` / `stateFp` / `scopeCount` / `rURIHost` / `rURIPath` / `hasResour
 
 ### 2. How to compute it from logs
 
-Same pattern as `dev-notes/refresh-slo.md` — pull per-bucket JSONL via the Vercel CLI, then aggregate.
+Same pattern as `ai-notes/refresh-slo.md` — pull per-bucket JSONL via the Vercel CLI, then aggregate.
 
 ```bash
 # Run from the repo root so the Vercel project is detected.

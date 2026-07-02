@@ -301,7 +301,7 @@ describe('Token refresh flow', () => {
 
     it('logs a sanitized upstream-request fingerprint on cliff_upstream', async () => {
       // Regression for the cliff_upstream investigation:
-      // dev-notes/cliff-upstream-investigation.md identified that we had
+      // ai-notes/cliff-upstream-investigation.md identified that we had
       // no visibility into what request we sent to Hydra when it returned
       // invalid_request. This test pins the contract that, when the upstream
       // call fails, the captured request summary is included in the error

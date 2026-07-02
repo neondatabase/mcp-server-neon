@@ -14,8 +14,7 @@ test-results/
 .claude/
 .cursor/
 .github/
-dev-notes/
-docs/
+ai-notes/
 CHANGELOG.md
 LICENSE
 skills-lock.json

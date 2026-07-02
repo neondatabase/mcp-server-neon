@@ -308,10 +308,18 @@ See `.env.local.example` for all configuration options. Key variables:
 ├── tsconfig.json       # TypeScript config (bundler resolution)
 └── vercel.json         # Vercel deployment config
 
-docs/                   # Project docs (SMOKE_TESTS.md, vercel-migration.md)
-dev-notes/              # Developer notes and solution documentation
-└── *.md               # Problem solutions, fixes, and technical decisions
+ai-notes/               # Docs, developer notes, and solution write-ups (see below)
+├── SMOKE_TESTS.md      # Manual smoke-test checklist
+├── vercel-migration.md # Vercel/pnpm migration write-up
+└── *.md                # SLO definitions, incident notes, and technical decisions
 ```
+
+## Repository Notes (`ai-notes/`)
+
+Deeper context for agents and humans lives in [`ai-notes/`](ai-notes/): the manual
+smoke-test checklist, the Vercel/pnpm migration write-up, and detailed SLO
+definitions + incident investigations (e.g. the auth-callback and refresh SLOs).
+Code comments reference these files by path (e.g. `ai-notes/refresh-slo.md`).
 
 ## Important Notes
 
@@ -377,7 +385,7 @@ In addition to the top-level scopes, the server exposes **scope categories** via
 ### Development Notes
 
 - Import paths in `mcp/` are extensionless (no `.js` suffix)
-- See `docs/vercel-migration.md` for detailed migration documentation
+- See `ai-notes/vercel-migration.md` for detailed migration documentation
 
 ## GitHub Workflows
 

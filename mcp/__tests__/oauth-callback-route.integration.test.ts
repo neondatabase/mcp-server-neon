@@ -219,7 +219,7 @@ describe('/callback route integration', () => {
   // === "correct_*" buckets: Hydra rejecting flows for expected reasons ===
   // Each of these emits an SLO line that counts as GOOD because the system
   // worked as designed — the user can retry without our intervention. See
-  // dev-notes/hydra-incident-2026-05-12T13-44Z.md §Update for the source
+  // ai-notes/hydra-incident-2026-05-12T13-44Z.md §Update for the source
   // citations against Hydra v1.11.10.
 
   it('classifies `request_unauthorized` (login/consent expired) as correct_consent_expired', async () => {
@@ -303,7 +303,7 @@ describe('/callback route integration', () => {
   // outbound request shape is uniform and well-formed (verified against
   // successful sessions on the same connector). Counts GOOD so the SLO isn't
   // punished for an upstream/integration issue we can't fix unilaterally.
-  // Evidence: dev-notes/3-day-slo-2026-05-21T14Z.md §2 — 28/58 bad events
+  // Evidence: ai-notes/3-day-slo-2026-05-21T14Z.md §2 — 28/58 bad events
   // attributed to this single fingerprint on a shared client_id.
   describe('correct_chatgpt_invalid_request (narrow Hydra reclassification)', () => {
     it('classifies `?error=invalid_request` with rURIHost=chatgpt.com as correct_chatgpt_invalid_request', async () => {

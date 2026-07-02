@@ -88,7 +88,7 @@ type RefreshTokenResult = {
 };
 
 /**
- * Outcome bucket for the refresh-token SLO. See dev-notes/refresh-slo.md.
+ * Outcome bucket for the refresh-token SLO. See ai-notes/refresh-slo.md.
  *
  * - `success`                    — 200 returned (fresh upstream rotation OR
  *                                  cached cross-instance hit). Counts good.
@@ -344,7 +344,7 @@ async function executeRefresh(
       // Critical for diagnosing the `invalid_request` cliff_upstream
       // sub-bucket (~50% of all cliffs as of 2026-05-12) where Hydra
       // rejects the call without us being able to tell why from the
-      // response alone. See dev-notes/cliff-upstream-investigation.md.
+      // response alone. See ai-notes/cliff-upstream-investigation.md.
       // Never contains the refresh_token or client_secret values — only
       // a length + 6-char prefix fingerprint for the RT.
       upstreamRequest: lastUpstreamRequest,
