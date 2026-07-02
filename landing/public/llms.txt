@@ -19,7 +19,7 @@ The Neon MCP Server enables Large Language Models to manage Neon Postgres databa
 
 ## Documentation
 
-- Neon MCP Docs: https://neon.tech/docs/ai/neon-mcp-server
+- Neon MCP Docs: https://neon.com/docs/ai/neon-mcp-server
 - MCP Protocol: https://modelcontextprotocol.io
 
 ## Contact
