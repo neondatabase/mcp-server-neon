@@ -1,0 +1,20 @@
+.next/
+node_modules/
+dist/
+build/
+out/
+pnpm-lock.yaml
+coverage/
+.vercel/
+patches/
+test-results/
+
+# Not part of the app source (docs, notes, vendored agent skills, CI config)
+.agents/
+.claude/
+.cursor/
+.github/
+ai-notes/
+CHANGELOG.md
+LICENSE
+skills-lock.json

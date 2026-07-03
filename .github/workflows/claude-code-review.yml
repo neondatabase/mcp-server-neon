@@ -54,9 +54,9 @@ jobs:
             ## Context
 
             This is the **Neon MCP Server** - a Model Context Protocol server bridging LLMs to Neon Postgres API.
-            The main codebase is in the `landing/` directory using Next.js App Router with Vercel serverless deployment.
+            The main codebase is at the repository root using Next.js App Router with Vercel serverless deployment.
             Review this PR with understanding of:
-            - MCP tool/handler architecture in `landing/mcp-src/` (see CLAUDE.md)
+            - MCP tool/handler architecture in `mcp/` (see AGENTS.md)
             - Next.js App Router API routes for OAuth and MCP transport
             - TypeScript with bundler module resolution
             - Tool registration pattern: definitions.ts → toolsSchema.ts → handlers/ → tools.ts
@@ -131,11 +131,11 @@ jobs:
             - Start with **[Category]** (Security/Logic/Performance/Architecture/Testing)
             - Explain the issue clearly
             - Provide actionable fix or suggestion
-            - Reference CLAUDE.md patterns when applicable
+            - Reference AGENTS.md patterns when applicable
 
             **Example:**
             ```bash
-            gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number || github.event.inputs.pr_number }}/comments -f body=$'🔴 **[Security]**: Potential SQL injection vulnerability.\n\n**Fix:** Use parameterized queries:\n```typescript\nconst result = await query(\'SELECT * FROM users WHERE name = $1\', [userName]);\n```' -f path="landing/mcp-src/tools/handlers/run-sql.ts" -F line=42 -f side="RIGHT" -f commit_id="${{ github.event.pull_request.head.sha || github.sha }}"
+            gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number || github.event.inputs.pr_number }}/comments -f body=$'🔴 **[Security]**: Potential SQL injection vulnerability.\n\n**Fix:** Use parameterized queries:\n```typescript\nconst result = await query(\'SELECT * FROM users WHERE name = $1\', [userName]);\n```' -f path="mcp/tools/handlers/run-sql.ts" -F line=42 -f side="RIGHT" -f commit_id="${{ github.event.pull_request.head.sha || github.sha }}"
             ```
 
             Note: The $'...' syntax is bash ANSI-C quoting which interprets \n as actual newlines. Use \' to escape single quotes within the body.
@@ -155,7 +155,7 @@ jobs:
             - **Be selective**: Only comment on significant issues worth a human's attention
             - **Be specific**: Reference exact lines, provide clear fixes
             - **Be constructive**: Explain the "why" behind suggestions
-            - **Be project-aware**: Use CLAUDE.md patterns and terminology
+            - **Be project-aware**: Use AGENTS.md patterns and terminology
             - **Don't duplicate**: Skip issues automated tools will catch
 
           claude_args: '--allowed-tools "Bash(gh:*)"'
