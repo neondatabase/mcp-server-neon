@@ -140,6 +140,12 @@ export const createBranchInputSchema = z.object({
     .describe(
       "An optional branch ID (e.g. 'br-...') to branch from. If omitted, the branch is created from the project's default branch. Use this to fork an existing non-default branch — for example, to make an isolated copy of a dev/staging branch for experimentation.",
     ),
+  expiresAt: z
+    .string()
+    .optional()
+    .describe(
+      'An optional ISO 8601 timestamp after which Neon automatically deletes the branch.',
+    ),
 });
 
 export const prepareDatabaseMigrationInputSchema = z.object({
