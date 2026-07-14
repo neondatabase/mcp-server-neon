@@ -42,7 +42,7 @@ For example, in Claude Code, or any MCP Client, you can use natural language to 
 
 There are a few options for setting up the Neon MCP Server:
 
-1. **Quick Setup with API Key (Cursor, VS Code, and Claude Code):** Run [`neonctl@latest init`](https://neon.com/docs/reference/cli-init) to automatically configure Neon's MCP Server, [agent skills](https://github.com/neondatabase/agent-skills), and VS Code extension with one command.
+1. **Quick Setup with API Key (Cursor, VS Code, and Claude Code):** Run [`neon@latest init`](https://neon.com/docs/reference/cli-init) to automatically configure Neon's MCP Server, [agent skills](https://github.com/neondatabase/agent-skills), and VS Code extension with one command.
 2. **Remote MCP Server (OAuth Based Authentication):** Connect to Neon's managed MCP server using OAuth for authentication. This method is more convenient as it eliminates the need to manage API keys. Additionally, you will automatically receive the latest features and improvements as soon as they are released.
 3. **Remote MCP Server (API Key Based Authentication):** Connect to Neon's managed MCP server using API key for authentication. This method is useful if you want to connect a remote agent to Neon where OAuth is not available. Additionally, you will automatically receive the latest features and improvements as soon as they are released.
 
@@ -59,10 +59,10 @@ For development, you'll need Node.js 22+ (pnpm is provided via Corepack — run 
 
 **Don't want to manually create an API key?**
 
-Run [`neonctl@latest init`](https://neon.com/docs/reference/cli-init) to automatically configure Neon's MCP Server with one command:
+Run [`neon@latest init`](https://neon.com/docs/reference/cli-init) to automatically configure Neon's MCP Server with one command:
 
 ```bash
-npx neonctl@latest init
+npx neon@latest init
 ```
 
 This works with Cursor, VS Code (GitHub Copilot), and Claude Code. It will authenticate via OAuth, create a Neon API key for you, and configure your editor automatically.
