@@ -13,6 +13,7 @@ import {
 // requires cross-version compatibility shims.
 import { z } from 'zod/v3';
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
+import { SEVERITY_LEVELS } from '../otel/severity';
 
 type ZodObjectParams<T> = z.ZodObject<{ [key in keyof T]: z.ZodType<T[key]> }>;
 
@@ -909,15 +910,6 @@ export const fetchInputSchema = z.object({
     ),
 });
 
-const SEVERITY_LEVELS = [
-  'trace',
-  'debug',
-  'info',
-  'warn',
-  'error',
-  'fatal',
-] as const;
-
 export const queryLogsInputSchema = z.object({
   projectId: z
     .string()
@@ -1033,7 +1025,7 @@ export const listLogFieldValuesInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Relative lookback window as a duration (e.g. "6h", "24h"). Defaults to the last 6 hours.',
+      'Relative lookback window as a duration (e.g. "6h", "24h"). If omitted, the server default lookback (6 hours) applies.',
     ),
 });
 

@@ -15,6 +15,7 @@
 
 import type { Api } from '@neondatabase/api-client';
 import { NEON_TELEMETRY_API_HOST } from '../constants';
+import { InvalidArgumentError } from '../server/errors';
 import type {
   LokiQueryResponse,
   LokiScalarResponse,
@@ -32,14 +33,18 @@ function tenantBaseUrl(scope: TelemetryScope): string {
 }
 
 /**
- * Loki errors come back as `{ status: "error", error: "..." }` with a non-2xx code.
- * Axios (validateStatus default) throws on those, so a thrown AxiosError is the
- * error path; we surface the Loki `error` message when present.
+ * The Neon API client's axios instance uses the default `validateStatus`, which
+ * REJECTS on a non-2xx status — so a Loki error (`{ status: "error", error: "..." }`
+ * with a 4xx/5xx code) would throw an AxiosError before we could read its body, and
+ * the generic tool-error handler renders `error.response.data.message`, which a Loki
+ * body does not have (it uses `error`). We pass `validateStatus: () => true` on these
+ * requests so any status resolves, then map it here — surfacing the Loki `error`
+ * string as an InvalidArgumentError (a client error, so it isn't captured to Sentry).
  */
 function assertOk(response: { status: number; data: unknown }): void {
   if (response.status < 200 || response.status >= 300) {
     const data = response.data as { error?: string } | undefined;
-    throw new Error(
+    throw new InvalidArgumentError(
       data?.error ?? `Telemetry API returned status ${response.status}`,
     );
   }
@@ -77,6 +82,7 @@ export async function queryRange(
     method: 'GET',
     query,
     secure: true,
+    validateStatus: () => true,
   });
   assertOk(response);
   return response.data;
@@ -91,6 +97,7 @@ export async function listLabels(
     path: `${tenantBaseUrl(scope)}/labels`,
     method: 'GET',
     secure: true,
+    validateStatus: () => true,
   });
   assertOk(response);
   return response.data.data;
@@ -99,8 +106,6 @@ export async function listLabels(
 type LabelValuesParams = {
   scope: TelemetryScope;
   label: string;
-  /** Optional LogQL stream selector to scope the values (e.g. `{entity_type="function"}`). */
-  selector?: string;
   since?: string;
 };
 
@@ -110,7 +115,6 @@ export async function listLabelValues(
   params: LabelValuesParams,
 ): Promise<string[]> {
   const query: Record<string, string> = {};
-  if (params.selector) query.query = params.selector;
   if (params.since) query.since = params.since;
 
   const response = await neonClient.request<LokiScalarResponse>({
@@ -118,6 +122,7 @@ export async function listLabelValues(
     method: 'GET',
     query,
     secure: true,
+    validateStatus: () => true,
   });
   assertOk(response);
   return response.data.data;

@@ -119,10 +119,17 @@ describe('flattenLokiResponse', () => {
     expect(first.timestamp).toBe('2023-11-14T22:13:20.000Z');
   });
 
-  it('respects the limit after merging streams', () => {
-    const { records } = flattenLokiResponse(response, 2);
+  it('respects the limit after merging streams and reports truncation', () => {
+    const { records, truncated } = flattenLokiResponse(response, 2);
     expect(records).toHaveLength(2);
     expect(records.map((r) => r.body)).toEqual(['third', 'second']);
+    // 3 records merged, sliced to 2 → truncated even without a backend warning.
+    expect(truncated).toBe(true);
+  });
+
+  it('is not truncated when records fit within the limit', () => {
+    const { truncated } = flattenLokiResponse(response, 100);
+    expect(truncated).toBe(false);
   });
 
   it('marks truncated when the backend returns warnings', () => {

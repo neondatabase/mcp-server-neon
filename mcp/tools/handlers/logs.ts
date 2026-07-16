@@ -48,13 +48,14 @@ export async function handleQueryLogs(
   const scope = await resolveScope(params, neonClient, extra);
 
   // A raw LogQL expression takes over from the structured filters entirely.
+  // buildLogQL owns severityText-over-minSeverity precedence.
   const logql =
     params.query ??
     buildLogQL({
       entityType: params.source,
       serviceName: params.serviceName,
       severityText: params.severityText,
-      minSeverity: params.severityText ? undefined : params.minSeverity,
+      minSeverity: params.minSeverity,
       bodyContains: params.bodyContains,
       traceId: params.traceId,
     });

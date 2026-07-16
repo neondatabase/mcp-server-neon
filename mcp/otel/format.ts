@@ -17,7 +17,10 @@ function nanoStrToIso(ns: string): string {
 
 type FlattenedLogs = {
   records: LogRecord[];
-  /** True when the backend capped the result at the row limit (partial window). */
+  /**
+   * True when the returned window is partial: either the backend flagged a row-cap
+   * (its `warnings`), or the merged streams exceeded `limit` and we sliced them.
+   */
   truncated: boolean;
   /** The backend's truncation warnings, if any. */
   warnings: string[];
@@ -53,9 +56,10 @@ export function flattenLokiResponse(
   records.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
   const warnings = response.warnings ?? [];
+  const slicedByLimit = records.length > limit;
   return {
     records: records.slice(0, limit),
-    truncated: warnings.length > 0,
+    truncated: warnings.length > 0 || slicedByLimit,
     warnings,
   };
 }

@@ -21,6 +21,16 @@ function mockClient(requestImpl: ReturnType<typeof vi.fn>) {
       status: 200,
       data: { branches: [{ id: 'br-default', default: true }] },
     }),
+    listProjects: vi.fn().mockResolvedValue({
+      status: 200,
+      data: { projects: [{ id: 'proj-only' }] },
+    }),
+    // getOnlyProject → handleListProjects → getOrgByOrgIdOrDefault. A personal
+    // (billing_account) user short-circuits org resolution to a plain listProjects.
+    getCurrentUserInfo: vi.fn().mockResolvedValue({
+      status: 200,
+      data: { billing_account: { id: 'ba-1' } },
+    }),
   } as unknown as Api<unknown>;
 }
 
@@ -80,7 +90,7 @@ describe('query_logs handler', () => {
     expect(payload.scope).toEqual({ projectId: 'proj-1', branchId: 'br-1' });
   });
 
-  it('resolves the default branch when branchId is omitted', async () => {
+  it('resolves the default branch and defaults to a 1h window when omitted', async () => {
     const request = vi.fn().mockResolvedValue({
       status: 200,
       data: {
@@ -98,6 +108,29 @@ describe('query_logs handler', () => {
 
     const call = request.mock.calls[0][0];
     expect(call.path).toContain('/branches/br-default/');
+    // No since/startTime given → default 1h relative window.
+    expect(call.query.since).toBe('1h');
+    expect(call.query.start).toBeUndefined();
+  });
+
+  it('resolves the only project when projectId is omitted', async () => {
+    const request = vi.fn().mockResolvedValue({
+      status: 200,
+      data: {
+        status: 'success',
+        data: { resultType: 'streams', result: [] },
+      },
+    });
+    const client = mockClient(request);
+
+    await NEON_HANDLERS.query_logs(
+      { params: { source: 'function', limit: 100 } },
+      client,
+      extra,
+    );
+
+    const call = request.mock.calls[0][0];
+    expect(call.path).toContain('/projects/proj-only/');
   });
 
   it('passes a raw LogQL query through unchanged and uses absolute time', async () => {
@@ -133,7 +166,9 @@ describe('query_logs handler', () => {
     expect(call.query.since).toBeUndefined();
   });
 
-  it('surfaces the Loki error message on a non-2xx response', async () => {
+  it('surfaces the Loki error message as a client error on a non-2xx response', async () => {
+    // The real client uses validateStatus: () => true, so a 4xx RESOLVES with the
+    // Loki error body; assertOk throws an InvalidArgumentError carrying the message.
     const request = vi.fn().mockResolvedValue({
       status: 400,
       data: { status: 'error', error: 'missing query' },
@@ -154,6 +189,8 @@ describe('query_logs handler', () => {
         extra,
       ),
     ).rejects.toThrow(/missing query/);
+    // validateStatus is set so axios does not itself reject on 4xx.
+    expect(request.mock.calls[0][0].validateStatus).toBeTypeOf('function');
   });
 });
 

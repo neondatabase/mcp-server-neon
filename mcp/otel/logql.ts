@@ -17,26 +17,21 @@ type MatchOp = '=' | '!=' | '=~' | '!~';
 
 /**
  * Structured inputs for a logs query. Each field maps to a stream-selector matcher
- * (or a line filter, for body*). Only `entityType` has a default; everything else is
- * optional. Label columns are restricted to those the backend allows as matchers.
+ * (or a line filter, for `bodyContains`). Only `entityType` has a default; everything
+ * else is optional. This is the set of filters the query_logs tool exposes; more
+ * exotic filtering is available via the tool's raw-LogQL escape hatch.
  */
 type LogQLFilters = {
   /** Producer of the telemetry, e.g. "function" or "storage". */
   entityType?: string;
-  /** Specific producer instance id (function nid, bucket, ...). */
-  entityId?: string;
   serviceName?: string;
-  scopeName?: string;
-  /** Exact severity_text match (e.g. "ERROR"). */
+  /** Exact severity_text match (e.g. "ERROR"). Takes precedence over minSeverity. */
   severityText?: string;
   /** Minimum OTel severity level; expands to a severity_text regex. */
   minSeverity?: SeverityLevel;
   traceId?: string;
-  spanId?: string;
   /** Case-sensitive substring the log body must contain (LogQL `|=`). */
   bodyContains?: string;
-  /** RE2 regex the log body must match (LogQL `|~`). */
-  bodyMatches?: string;
 };
 
 /** Escape a value for a LogQL double-quoted string literal (Go-unquote compatible). */
@@ -67,12 +62,11 @@ export function buildLogQL(filters: LogQLFilters): string {
   if (entityType) {
     addMatcher('entity_type', '=', entityType);
   }
-  if (filters.entityId) addMatcher('entity_id', '=', filters.entityId);
   if (filters.serviceName) addMatcher('service_name', '=', filters.serviceName);
-  if (filters.scopeName) addMatcher('scope_name', '=', filters.scopeName);
   if (filters.traceId) addMatcher('trace_id', '=', filters.traceId);
-  if (filters.spanId) addMatcher('span_id', '=', filters.spanId);
 
+  // Severity precedence lives here (not in the caller): an exact severityText wins
+  // over the minSeverity threshold regex.
   if (filters.severityText) {
     addMatcher('severity_text', '=', filters.severityText);
   } else if (filters.minSeverity) {
@@ -92,7 +86,6 @@ export function buildLogQL(filters: LogQLFilters): string {
   let expr = `{${matchers.join(', ')}}`;
 
   if (filters.bodyContains) expr += ` |= ${quote(filters.bodyContains)}`;
-  if (filters.bodyMatches) expr += ` |~ ${quote(filters.bodyMatches)}`;
 
   return expr;
 }
