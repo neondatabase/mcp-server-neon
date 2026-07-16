@@ -192,6 +192,37 @@ describe('query_logs handler', () => {
     // validateStatus is set so axios does not itself reject on 4xx.
     expect(request.mock.calls[0][0].validateStatus).toBeTypeOf('function');
   });
+
+  it('raises a backend error (not a client error) on a 5xx response', async () => {
+    // 5xx is a telemetry-backend fault: a plain Error so handleToolError captures
+    // it to Sentry, rather than an InvalidArgumentError swallowed as a client error.
+    const { InvalidArgumentError } = await import('../server/errors');
+    const request = vi.fn().mockResolvedValue({
+      status: 502,
+      data: { status: 'error', error: 'telemetry backend unavailable' },
+    });
+    const client = mockClient(request);
+
+    await expect(
+      NEON_HANDLERS.query_logs(
+        {
+          params: {
+            projectId: 'proj-1',
+            branchId: 'br-1',
+            source: 'function',
+            limit: 100,
+          },
+        },
+        client,
+        extra,
+      ),
+    ).rejects.toSatisfy(
+      (e: unknown) =>
+        e instanceof Error &&
+        !(e instanceof InvalidArgumentError) &&
+        /telemetry backend unavailable/.test(e.message),
+    );
+  });
 });
 
 describe('list_log_fields / list_log_field_values handlers', () => {

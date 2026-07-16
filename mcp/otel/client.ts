@@ -38,16 +38,22 @@ function tenantBaseUrl(scope: TelemetryScope): string {
  * with a 4xx/5xx code) would throw an AxiosError before we could read its body, and
  * the generic tool-error handler renders `error.response.data.message`, which a Loki
  * body does not have (it uses `error`). We pass `validateStatus: () => true` on these
- * requests so any status resolves, then map it here — surfacing the Loki `error`
- * string as an InvalidArgumentError (a client error, so it isn't captured to Sentry).
+ * requests so any status resolves, then map it here, surfacing the Loki `error` string.
+ *
+ * A 4xx is the caller's fault (bad LogQL, bad time range) → InvalidArgumentError, a
+ * client error kept out of Sentry. A 5xx is a telemetry-backend fault → a plain Error,
+ * which handleToolError routes to `captureException` so a backend outage stays visible
+ * to on-call (matching how the default axios-reject path treated 5xx before).
  */
 function assertOk(response: { status: number; data: unknown }): void {
-  if (response.status < 200 || response.status >= 300) {
-    const data = response.data as { error?: string } | undefined;
-    throw new InvalidArgumentError(
-      data?.error ?? `Telemetry API returned status ${response.status}`,
-    );
+  if (response.status >= 200 && response.status < 300) return;
+  const data = response.data as { error?: string } | undefined;
+  const message =
+    data?.error ?? `Telemetry API returned status ${response.status}`;
+  if (response.status >= 500) {
+    throw new Error(`Telemetry backend error: ${message}`);
   }
+  throw new InvalidArgumentError(message);
 }
 
 type QueryRangeParams = {
