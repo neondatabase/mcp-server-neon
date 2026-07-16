@@ -32,6 +32,9 @@ import {
   compareDatabaseSchemaInputSchema,
   searchInputSchema,
   fetchInputSchema,
+  queryLogsInputSchema,
+  listLogFieldsInputSchema,
+  listLogFieldValuesInputSchema,
   listDocsResourcesInputSchema,
   getDocResourceInputSchema,
 } from './toolsSchema';
@@ -1188,6 +1191,73 @@ export const NEON_TOOLS = [
       destructiveHint: false,
       idempotentHint: true,
       openWorldHint: true,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'query_logs' as const,
+    scope: 'observability',
+    description: `
+  <use_case>
+    Query logs emitted by your Neon serverless functions (and other services like storage).
+    Logs are OpenTelemetry-based; this tool exposes them through structured filters so you
+    don't have to write a query language.
+
+    Use this tool when the user wants to:
+    - See recent logs / errors for a function or service
+    - Investigate a failure ("why did my function error in the last hour?")
+    - Correlate logs to a distributed trace via trace_id
+  </use_case>
+
+  <workflow>
+    1. Pick the source (defaults to "function"). Optionally narrow by serviceName, minSeverity, or bodyContains.
+    2. Set a time window: \`since\` (relative, e.g. "1h" — default) OR startTime/endTime (absolute RFC3339).
+    3. Use list_log_fields / list_log_field_values first if you need to discover valid service names or severities.
+  </workflow>
+
+  <important_notes>
+    - Defaults to the project's default branch and the last 1 hour if unspecified.
+    - Results are newest-first and capped by \`limit\` (default 100); \`truncated: true\` means the window was larger than the cap — narrow the filters or time range.
+    - \`minSeverity\` follows OTel ordering (trace < debug < info < warn < error < fatal), so "error" also returns FATAL.
+    - Advanced: pass a raw LogQL \`query\` to bypass structured filters. Only stream selectors \`{label="v"}\` and line filters (|= |~ != !~) are supported — no aggregations or parsers.
+  </important_notes>`,
+    inputSchema: queryLogsInputSchema,
+    readOnlySafe: true,
+    annotations: {
+      title: 'Query Logs',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'list_log_fields' as const,
+    scope: 'observability',
+    description:
+      'List the log fields (labels) you can filter on for a branch, such as service_name, severity_text, scope_name, and entity_type. Use this before query_logs or list_log_field_values to discover valid field names.',
+    inputSchema: listLogFieldsInputSchema,
+    readOnlySafe: true,
+    annotations: {
+      title: 'List Log Fields',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'list_log_field_values' as const,
+    scope: 'observability',
+    description:
+      'List the distinct values of a log field (e.g. all service_name or severity_text values seen) within a branch and time window. Use this to discover concrete values to pass to query_logs. Only advertised fields (from list_log_fields) resolve; others return an empty list.',
+    inputSchema: listLogFieldValuesInputSchema,
+    readOnlySafe: true,
+    annotations: {
+      title: 'List Log Field Values',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     } satisfies ToolAnnotations,
   },
   {

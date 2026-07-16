@@ -909,6 +909,134 @@ export const fetchInputSchema = z.object({
     ),
 });
 
+const SEVERITY_LEVELS = [
+  'trace',
+  'debug',
+  'info',
+  'warn',
+  'error',
+  'fatal',
+] as const;
+
+export const queryLogsInputSchema = z.object({
+  projectId: z
+    .string()
+    .describe(
+      'The ID of the project whose logs to query. If omitted and you have exactly one project, that project is used.',
+    )
+    .optional(),
+  branchId: z
+    .string()
+    .describe(
+      "The ID of the branch whose logs to query. Defaults to the project's default branch.",
+    )
+    .optional(),
+  source: z
+    .enum(['function', 'storage', 'pg_endpoint'])
+    .default('function')
+    .describe(
+      'Which service produced the logs. "function" (serverless functions) is the default; "storage" and "pg_endpoint" are also available.',
+    ),
+  serviceName: z
+    .string()
+    .optional()
+    .describe('Filter to a specific OTel service name (service.name).'),
+  minSeverity: z
+    .enum(SEVERITY_LEVELS)
+    .optional()
+    .describe(
+      'Return only logs at this OTel severity level or above (trace < debug < info < warn < error < fatal). E.g. "error" returns ERROR and FATAL.',
+    ),
+  severityText: z
+    .string()
+    .optional()
+    .describe(
+      'Filter to an exact severity text (e.g. "ERROR"). Takes precedence over minSeverity.',
+    ),
+  bodyContains: z
+    .string()
+    .optional()
+    .describe(
+      'Return only logs whose body contains this case-sensitive substring.',
+    ),
+  traceId: z
+    .string()
+    .optional()
+    .describe(
+      'Correlate to a distributed trace: return only logs with this trace_id.',
+    ),
+  since: z
+    .string()
+    .optional()
+    .describe(
+      'Relative lookback window ending now, as a duration (e.g. "30m", "1h", "24h"). Defaults to the last hour. Ignored when startTime is set.',
+    ),
+  startTime: z
+    .string()
+    .optional()
+    .describe(
+      'Absolute start of the window, RFC3339 (e.g. "2026-07-16T09:00:00Z"). Overrides `since`.',
+    ),
+  endTime: z
+    .string()
+    .optional()
+    .describe(
+      'Absolute end of the window, RFC3339. Defaults to now. Only used with startTime.',
+    ),
+  limit: z
+    .number()
+    .int()
+    .positive()
+    .max(1000)
+    .default(100)
+    .describe(
+      'Maximum number of log lines to return (1-1000, default 100). Large results are truncated server-side.',
+    ),
+  query: z
+    .string()
+    .optional()
+    .describe(
+      'Advanced: a raw LogQL expression to run instead of the structured filters above (e.g. `{entity_type="function"} |~ "(?i)timeout"`). Only stream selectors and line filters are supported — no aggregations or parser stages. When set, the structured filter fields are ignored.',
+    ),
+});
+
+export const listLogFieldsInputSchema = z.object({
+  projectId: z
+    .string()
+    .describe(
+      'The ID of the project. Defaults to your only project if unambiguous.',
+    )
+    .optional(),
+  branchId: z
+    .string()
+    .describe("The ID of the branch. Defaults to the project's default branch.")
+    .optional(),
+});
+
+export const listLogFieldValuesInputSchema = z.object({
+  projectId: z
+    .string()
+    .describe(
+      'The ID of the project. Defaults to your only project if unambiguous.',
+    )
+    .optional(),
+  branchId: z
+    .string()
+    .describe("The ID of the branch. Defaults to the project's default branch.")
+    .optional(),
+  field: z
+    .string()
+    .describe(
+      'The log field (label) whose distinct values to list, e.g. "service_name" or "severity_text". Use list_log_fields to discover valid field names.',
+    ),
+  since: z
+    .string()
+    .optional()
+    .describe(
+      'Relative lookback window as a duration (e.g. "6h", "24h"). Defaults to the last 6 hours.',
+    ),
+});
+
 export const listDocsResourcesInputSchema = z.object({});
 
 export const getDocResourceInputSchema = z.object({

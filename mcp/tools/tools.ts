@@ -18,6 +18,11 @@ import { handleProvisionNeonDataApi } from './handlers/data-api';
 import { handleSearch } from './handlers/search';
 import { handleFetch } from './handlers/fetch';
 import { getDocResource, listDocsResources } from './handlers/docs';
+import {
+  handleQueryLogs,
+  handleListLogFields,
+  handleListLogFieldValues,
+} from './handlers/logs';
 
 import {
   getDefaultDatabase,
@@ -1731,6 +1736,27 @@ You MUST follow these steps:
           text: content,
         },
       ],
+    };
+  },
+
+  query_logs: async ({ params }, neonClient, extra) => {
+    const result = await handleQueryLogs(params, neonClient, extra);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+
+  list_log_fields: async ({ params }, neonClient, extra) => {
+    const result = await handleListLogFields(params, neonClient, extra);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+
+  list_log_field_values: async ({ params }, neonClient, extra) => {
+    const result = await handleListLogFieldValues(params, neonClient, extra);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
   },
 } satisfies ToolHandlers;
