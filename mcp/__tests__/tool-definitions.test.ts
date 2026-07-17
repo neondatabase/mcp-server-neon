@@ -12,8 +12,8 @@ import { NEON_HANDLERS } from '../tools/tools';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
 
 describe('NEON_TOOLS definitions', () => {
-  it('has 31 tools', () => {
-    expect(NEON_TOOLS).toHaveLength(31);
+  it('has 34 tools', () => {
+    expect(NEON_TOOLS).toHaveLength(34);
   });
 
   it('every tool has a name, scope (or null), and readOnlySafe flag', () => {
@@ -131,6 +131,6 @@ describe('read-only safety consistency', () => {
     const readOnlyTools = NEON_TOOLS.filter((t) => t.readOnlySafe);
     // run_sql and run_sql_transaction are readOnlySafe but not readOnlyHint
     // (they can both read and write)
-    expect(readOnlyTools.length).toBeGreaterThanOrEqual(18);
+    expect(readOnlyTools.length).toBeGreaterThanOrEqual(21);
   });
 });

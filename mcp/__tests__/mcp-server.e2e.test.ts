@@ -80,6 +80,17 @@ describe('MCP server e2e tool calls', () => {
     });
   });
 
+  it('lists observability (logs) tools through MCP listTools', async () => {
+    await withConnectedClient(createTestContext(), async (client) => {
+      const result = await client.listTools();
+      const toolNames = result.tools.map((tool) => tool.name);
+
+      expect(toolNames).toContain('query_logs');
+      expect(toolNames).toContain('list_log_fields');
+      expect(toolNames).toContain('list_log_field_values');
+    });
+  });
+
   it('calls list_docs_resources through MCP protocol', async () => {
     const mockIndex =
       '# Neon Docs\n- [AI Concepts](https://neon.com/docs/ai/ai-concepts.md)';

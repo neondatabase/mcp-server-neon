@@ -18,6 +18,7 @@ export const SCOPE_CATEGORIES = [
   'querying',
   'neon_auth',
   'data_api',
+  'observability',
   'docs',
 ] as const;
 
