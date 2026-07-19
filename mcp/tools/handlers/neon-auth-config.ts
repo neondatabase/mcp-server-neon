@@ -6,7 +6,7 @@ import {
   NeonAuthEmailServerConfig,
   NeonAuthSupportedAuthProvider,
   NeonAuthUpdateOAuthProviderRequest,
-} from '@neondatabase/api-client';
+} from '../../neon-client';
 import { configureNeonAuthInputSchema } from '../toolsSchema';
 import { z } from 'zod/v3';
 import { getDefaultBranch } from './utils';

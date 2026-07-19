@@ -4,7 +4,7 @@ import { retryAsync } from '../utils/retry';
 import type { AuthorizationCode, Client, Token } from 'oauth2-server';
 import Keyv from 'keyv';
 import { AuthContext } from '../types/auth';
-import { AuthDetailsResponse } from '@neondatabase/api-client';
+import { AuthDetailsResponse } from '../neon-client';
 import type { GrantContext } from '../utils/grant-context';
 
 const SCHEMA = 'mcpauth';

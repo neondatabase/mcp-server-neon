@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EndpointType } from '@neondatabase/api-client';
+import { EndpointType } from '../neon-client';
 import { InvalidArgumentError } from '../server/errors';
 import { handleGetConnectionString } from '../tools/handlers/connection-string';
 import type { ToolHandlerExtraParams } from '../tools/types';

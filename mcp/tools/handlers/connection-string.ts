@@ -1,4 +1,4 @@
-import { Api, EndpointType } from '@neondatabase/api-client';
+import { Api, EndpointType } from '../../neon-client';
 import { ToolHandlerExtraParams } from '../types';
 import { startSpan } from '@sentry/node';
 import { getDefaultDatabase } from '../utils';

@@ -1,6 +1,6 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { Api, NeonAuthSupportedAuthProvider } from '@neondatabase/api-client';
-import { isAxiosError } from 'axios';
+import { Api, NeonAuthSupportedAuthProvider } from '../../neon-client';
+import { NeonApiError } from '@neon/sdk';
 import { provisionNeonAuthInputSchema } from '../toolsSchema';
 import { z } from 'zod/v3';
 import { getDefaultDatabase } from '../utils';
@@ -100,26 +100,15 @@ export async function handleProvisionNeonAuth(
       database_name: defaultDatabase.name,
     });
   } catch (error: unknown) {
-    // Axios rejects 4xx by default; Neon returns 409 when auth is already enabled.
-    if (isAxiosError(error) && error.response?.status === 409) {
+    // The SDK throws a typed API error; Neon returns 409 when auth is enabled.
+    if (error instanceof NeonApiError && error.status === 409) {
       return respondWithExistingNeonAuth(
         projectId,
         resolvedBranchId,
         neonClient,
       );
     }
-    const detail =
-      isAxiosError(error) &&
-      error.response?.data &&
-      typeof error.response.data === 'object' &&
-      'message' in error.response.data
-        ? String(
-            (error.response.data as { message?: string }).message ??
-              error.message,
-          )
-        : error instanceof Error
-          ? error.message
-          : 'Unknown error';
+    const detail = error instanceof Error ? error.message : 'Unknown error';
     return {
       isError: true,
       content: [

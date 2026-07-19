@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { NeonAuthEmailVerificationMethod } from '@neondatabase/api-client';
+import { NeonAuthEmailVerificationMethod } from '../../neon-client';
 
 /**
  * Shared default mocks for the API endpoints that

@@ -3,7 +3,7 @@
  * list_log_field_values. These call the Neon telemetry read API (see mcp/otel).
  */
 
-import type { Api } from '@neondatabase/api-client';
+import type { Api } from '../../neon-client';
 import { z } from 'zod/v3';
 import type { ToolHandlerExtraParams } from '../types';
 import { getDefaultBranch, getOnlyProject } from './utils';

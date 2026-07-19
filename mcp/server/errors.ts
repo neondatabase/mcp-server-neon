@@ -1,4 +1,4 @@
-import { isAxiosError } from 'axios';
+import { NeonApiError } from '@neon/sdk';
 import { NeonDbError } from '@neondatabase/serverless';
 import { logger } from '../utils/logger';
 import { captureException } from '@sentry/node';
@@ -47,21 +47,17 @@ export function handleToolError(
 ) {
   if (error instanceof NeonDbError || isClientError(error)) {
     return errorResponse(error);
-  } else if (
-    isAxiosError(error) &&
-    error.response?.status &&
-    error.response?.status < 500
-  ) {
+  } else if (error instanceof NeonApiError && error.status < 500) {
     return {
       isError: true,
       content: [
         {
           type: 'text' as const,
-          text: error.response.data.message,
+          text: error.message,
         },
         {
           type: 'text' as const,
-          text: `[${error.response.statusText}] ${error.message}`,
+          text: `[HTTP ${error.status}] ${error.message}`,
         },
       ],
     };

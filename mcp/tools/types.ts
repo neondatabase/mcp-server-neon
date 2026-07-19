@@ -1,5 +1,5 @@
 import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { Api } from '@neondatabase/api-client';
+import { Api } from '../neon-client';
 
 import { NEON_TOOLS } from './definitions';
 import { AuthContext } from '../types/auth';

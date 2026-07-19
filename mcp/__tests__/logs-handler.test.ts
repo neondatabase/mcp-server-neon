@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import type { Api } from '@neondatabase/api-client';
+import type { Api } from '../neon-client';
 import { NEON_HANDLERS } from '../tools/tools';
 
 type ToolResult = { content: Array<{ type: string; text: string }> };

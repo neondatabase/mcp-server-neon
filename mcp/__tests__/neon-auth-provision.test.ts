@@ -1,32 +1,23 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AxiosError } from 'axios';
+import { NeonApiError } from '@neon/sdk';
 import {
   NeonAuthProviderProjectOwnedBy,
   NeonAuthSupportedAuthProvider,
-} from '@neondatabase/api-client';
+} from '../neon-client';
 import { handleProvisionNeonAuth } from '../tools/handlers/neon-auth';
 import type { ToolHandlerExtraParams } from '../tools/types';
 
 const extra = {} as ToolHandlerExtraParams;
 
-function axios409(): AxiosError {
-  return new AxiosError(
-    'Request failed with status code 409',
-    'ERR_BAD_REQUEST',
-    {} as never,
-    {},
-    {
-      status: 409,
-      statusText: 'Conflict',
-      data: { message: 'already exists' },
-      headers: {},
-      config: {} as never,
-    },
-  );
+function neonApiError409(): NeonApiError {
+  return new NeonApiError('already exists', {
+    status: 409,
+    body: { message: 'already exists' },
+  });
 }
 
 describe('handleProvisionNeonAuth', () => {
-  it('treats HTTP 409 from createNeonAuth as idempotent success (axios throw)', async () => {
+  it('treats an SDK HTTP 409 as idempotent success', async () => {
     const getNeonAuth = vi.fn().mockResolvedValue({
       status: 200,
       data: {
@@ -47,7 +38,7 @@ describe('handleProvisionNeonAuth', () => {
       listProjectBranchDatabases: vi.fn().mockResolvedValue({
         data: { databases: [{ name: 'neondb', owner_name: 'u' }] },
       }),
-      createNeonAuth: vi.fn().mockRejectedValue(axios409()),
+      createNeonAuth: vi.fn().mockRejectedValue(neonApiError409()),
       getNeonAuth,
     };
 

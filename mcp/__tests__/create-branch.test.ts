@@ -7,8 +7,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import type { Api } from '@neondatabase/api-client';
-import { EndpointType } from '@neondatabase/api-client';
+import { type Api, EndpointType } from '../neon-client';
 import { NEON_HANDLERS } from '../tools/tools';
 
 type ToolResult = {

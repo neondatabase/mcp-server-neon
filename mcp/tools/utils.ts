@@ -1,5 +1,5 @@
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
-import { Api, Organization, Branch } from '@neondatabase/api-client';
+import { Api, Organization, Branch } from '../neon-client';
 import { ToolHandlerExtraParams } from './types';
 import { NotFoundError } from '../server/errors';
 

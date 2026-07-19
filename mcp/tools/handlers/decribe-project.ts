@@ -1,4 +1,4 @@
-import { Api } from '@neondatabase/api-client';
+import { Api } from '../../neon-client';
 
 async function handleDescribeProject(
   projectId: string,

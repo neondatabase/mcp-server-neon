@@ -13,7 +13,7 @@
  * signal-agnostic so traces (TraceQL) and metrics (PromQL) can be added later.
  */
 
-import type { Api } from '@neondatabase/api-client';
+import type { Api } from '../neon-client';
 import { NEON_TELEMETRY_API_HOST } from '../constants';
 import { InvalidArgumentError } from '../server/errors';
 import type {

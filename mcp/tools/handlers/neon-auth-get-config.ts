@@ -1,5 +1,5 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { Api, NeonAuthIntegration } from '@neondatabase/api-client';
+import { Api, NeonAuthIntegration } from '../../neon-client';
 import { getNeonAuthConfigInputSchema } from '../toolsSchema';
 import { z } from 'zod/v3';
 import { resolveNeonAuthBranchId } from './neon-auth-config';
