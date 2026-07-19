@@ -55,7 +55,7 @@ export type GetProjectBranchSchemaComparisonParams = {
   db_name: string;
 };
 
-export type ApiResponse<T> = {
+type ApiResponse<T> = {
   data: T;
   status: number;
   statusText: string;
