@@ -22,54 +22,54 @@ All commands should be run from the repository root. The project uses [pnpm](htt
 pnpm install
 
 # Start the Next.js dev server (for the remote MCP server)
-pnpm run dev
+pnpm dev
 ```
 
 ### Formatting, Linting, and Type Checking
 
 ```bash
 # Check formatting (runs in CI)
-pnpm run fmt:check
+pnpm fmt:check
 
 # Auto-fix formatting
-pnpm run fmt
+pnpm fmt
 
 # Lint
-pnpm run lint
+pnpm lint
 
 # Auto-fix lint + formatting together
-pnpm run lint:fix
+pnpm lint:fix
 
 # Type check
-pnpm run typecheck
+pnpm typecheck
 
 # Check for unused code and dependencies
-pnpm run knip
+pnpm knip
 
 # Auto-fix unused exports/dependencies
-pnpm run knip:fix
+pnpm knip:fix
 ```
 
 ### Testing
 
 ```bash
 # Run full test suite (unit + integration + e2e; used in CI)
-pnpm run test
+pnpm test
 
 # Run unit tests
-pnpm run test:unit
+pnpm test:unit
 
 # Run integration tests
-pnpm run test:integration
+pnpm test:integration
 
 # Run MCP protocol e2e tests (real tool calls over MCP protocol)
-pnpm run test:e2e:mcp
+pnpm test:e2e:mcp
 
 # Run website e2e tests (Playwright; provisions/validates ephemeral DB first)
-pnpm run test:e2e:web
+pnpm test:e2e:web
 
 # Run all e2e tests
-pnpm run test:e2e
+pnpm test:e2e
 ```
 
 ### Testing Pyramid Rules
@@ -99,7 +99,7 @@ Merge-gating tests must be deterministic. Do not make third-party uptime (for ex
 - **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com) and generates a random `COOKIE_SECRET`. Both are written to `.env.e2e` (gitignored) and passed to the Next.js dev server.
 - **No secrets needed**: The e2e infrastructure is fully self-contained. Instagres databases expire after 72 hours; no explicit teardown is required.
 - **Reuse across runs**: If `.env.e2e` already exists, global-setup reuses it instead of re-provisioning. Delete the file to force a fresh database.
-- **CI**: The PR workflow runs format, lint, knip, `pnpm run test`, and build before merge.
+- **CI**: The PR workflow runs format, lint, knip, `pnpm test`, and build before merge.
 
 ## Architecture
 
@@ -432,10 +432,10 @@ This repository uses an enhanced Claude Code Review workflow that provides inlin
 
 ### What's Automated (Not Reviewed by Claude)
 
-- Formatting: `pnpm run fmt:check` (checked by pr.yml)
-- Linting: `pnpm run lint` (checked by pr.yml)
-- Tests: `pnpm run test` (unit + integration + MCP e2e + website e2e, checked by `pr.yml`)
-- Building: `pnpm run build` (checked by pr.yml)
+- Formatting: `pnpm fmt:check` (checked by pr.yml)
+- Linting: `pnpm lint` (checked by pr.yml)
+- Tests: `pnpm test` (unit + integration + MCP e2e + website e2e, checked by `pr.yml`)
+- Building: `pnpm build` (checked by pr.yml)
 
 ### Review Process
 
