@@ -56,16 +56,16 @@ jobs:
         run: |
           node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const server=JSON.parse(fs.readFileSync('server.json','utf8')); if (pkg.version !== server.version) { console.error('Version mismatch: package.json=' + pkg.version + ' server.json=' + server.version); process.exit(1); }"
       - name: Format check
-        run: pnpm run fmt:check
+        run: pnpm fmt:check
       - name: Lint
-        run: pnpm run lint
+        run: pnpm lint
       - name: Check unused code and dependencies
-        run: pnpm run knip
+        run: pnpm knip
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
       - name: Run tests
-        run: pnpm run test
+        run: pnpm test
       - name: Build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-        run: pnpm run build
+        run: pnpm build
