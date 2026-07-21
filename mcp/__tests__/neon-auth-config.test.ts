@@ -1204,10 +1204,9 @@ describe('handleConfigureNeonAuth', () => {
   });
 
   // Item #7: HTTP non-success branches for the five new ops ---------------
-  // These exercise the resolved-non-200 path, which is defensive against
-  // future SDK config changes — axios's default validateStatus throws on
-  // 4xx/5xx today, so most non-200 responses propagate through the outer
-  // error wrapper. We still lock the in-handler shape so the contract is
+  // These exercise the resolved-non-200 path, which is defensive: the SDK
+  // throws on 4xx/5xx today, so most non-200 responses propagate through the
+  // outer error wrapper. We still lock the in-handler shape so the contract is
   // explicit and stable.
 
   it('add_oauth_provider returns isError=true on resolved 5xx', async () => {

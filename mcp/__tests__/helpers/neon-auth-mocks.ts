@@ -40,8 +40,8 @@ export function defaultSnapshotMocks() {
     }),
     // Default: shared (Neon-managed) email provider with no sender
     // overrides. Tests that need the "no provider configured" path
-    // (axios 404) should override this mock with `mockRejectedValue` of a
-    // synthetic AxiosError.
+    // (404) should override this mock with `mockRejectedValue` of a
+    // synthetic API error.
     getNeonAuthEmailProvider: vi.fn().mockResolvedValue({
       status: 200,
       data: { type: 'shared' },

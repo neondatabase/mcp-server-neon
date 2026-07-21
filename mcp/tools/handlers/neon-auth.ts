@@ -120,7 +120,8 @@ export async function handleProvisionNeonAuth(
     };
   }
 
-  // 409 without throw (if axios is configured to resolve errors)
+  // Defensive fallback: the SDK throws on 409 (handled above), but if a client
+  // ever resolves the non-2xx response instead of throwing, treat it as idempotent.
   if (response.status === 409) {
     return respondWithExistingNeonAuth(projectId, resolvedBranchId, neonClient);
   }

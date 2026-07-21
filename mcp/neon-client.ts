@@ -125,7 +125,6 @@ type RawRequest = {
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   query?: Record<string, string | number>;
   secure?: boolean;
-  validateStatus?: () => boolean;
 };
 
 function success<T>(data: T, status = 200): ApiResponse<T> {

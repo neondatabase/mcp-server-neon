@@ -4,10 +4,9 @@
  * The read API is Loki-compatible and lives at
  *   {NEON_TELEMETRY_API_HOST}/projects/{projectId}/branches/{branchId}/loki/api/v1/...
  * It is a sibling of /api/v2 and is NOT on the public OpenAPI spec, so it is not a
- * generated method on the Neon API client. We reuse the client's underlying axios
- * transport (`neonClient.request`) with an absolute URL: axios ignores `baseURL`
- * when the path is absolute, and the client's default `Authorization: Bearer` header
- * carries the caller's Neon credentials unchanged.
+ * generated method on the Neon SDK. We reuse the client's low-level `request`
+ * escape hatch with an absolute URL, which carries the caller's
+ * `Authorization: Bearer` credentials unchanged.
  *
  * Only the logs (LogQL) endpoints are wired today; the tenant path and client are
  * signal-agnostic so traces (TraceQL) and metrics (PromQL) can be added later.
@@ -33,17 +32,16 @@ function tenantBaseUrl(scope: TelemetryScope): string {
 }
 
 /**
- * The Neon API client's axios instance uses the default `validateStatus`, which
- * REJECTS on a non-2xx status — so a Loki error (`{ status: "error", error: "..." }`
- * with a 4xx/5xx code) would throw an AxiosError before we could read its body, and
- * the generic tool-error handler renders `error.response.data.message`, which a Loki
- * body does not have (it uses `error`). We pass `validateStatus: () => true` on these
- * requests so any status resolves, then map it here, surfacing the Loki `error` string.
+ * The client's `request` escape hatch resolves on any status (it does not reject
+ * on non-2xx), so a Loki error (`{ status: "error", error: "..." }` with a 4xx/5xx
+ * code) resolves with its body intact and we map it here, surfacing the Loki `error`
+ * string. This matters because the generic tool-error handler renders
+ * `error.response.data.message`, which a Loki body does not have (it uses `error`).
  *
  * A 4xx is the caller's fault (bad LogQL, bad time range) → InvalidArgumentError, a
  * client error kept out of Sentry. A 5xx is a telemetry-backend fault → a plain Error,
  * which handleToolError routes to `captureException` so a backend outage stays visible
- * to on-call (matching how the default axios-reject path treated 5xx before).
+ * to on-call.
  */
 function assertOk(response: { status: number; data: unknown }): void {
   if (response.status >= 200 && response.status < 300) return;
@@ -88,7 +86,6 @@ export async function queryRange(
     method: 'GET',
     query,
     secure: true,
-    validateStatus: () => true,
   });
   assertOk(response);
   return response.data;
@@ -103,7 +100,6 @@ export async function listLabels(
     path: `${tenantBaseUrl(scope)}/labels`,
     method: 'GET',
     secure: true,
-    validateStatus: () => true,
   });
   assertOk(response);
   return response.data.data;
@@ -128,7 +124,6 @@ export async function listLabelValues(
     method: 'GET',
     query,
     secure: true,
-    validateStatus: () => true,
   });
   assertOk(response);
   return response.data.data;
