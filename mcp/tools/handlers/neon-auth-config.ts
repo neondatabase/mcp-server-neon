@@ -6,7 +6,7 @@ import {
   NeonAuthEmailServerConfig,
   NeonAuthSupportedAuthProvider,
   NeonAuthUpdateOAuthProviderRequest,
-} from '@neondatabase/api-client';
+} from '../../neon-client';
 import { configureNeonAuthInputSchema } from '../toolsSchema';
 import { z } from 'zod/v3';
 import { getDefaultBranch } from './utils';
@@ -508,11 +508,11 @@ export async function handleConfigureNeonAuth(
         },
       );
       if (res.status !== 200) {
-        // In practice axios's default validateStatus rejects 4xx/5xx as
-        // thrown errors handled by the outer wrapper, but if a future SDK
-        // config relaxes that, the resolved-non-200 path also needs to
-        // surface any `error_message` in the upstream body so callers see
-        // *why* the dispatch failed, not just the HTTP code.
+        // In practice the SDK throws on 4xx/5xx and the outer wrapper handles
+        // those errors, but if a client ever resolves a non-200 instead of
+        // throwing, this path also needs to surface any `error_message` in the
+        // upstream body so callers see *why* the dispatch failed, not just the
+        // HTTP code.
         const upstreamMessage =
           typeof res.data === 'object' &&
           res.data !== null &&

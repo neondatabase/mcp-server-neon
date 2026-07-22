@@ -1,4 +1,4 @@
-import { Api } from '@neondatabase/api-client';
+import { Api } from '../../neon-client';
 import { handleListProjects } from './list-projects';
 import { ToolHandlerExtraParams } from '../types';
 import { NotFoundError } from '../../server/errors';

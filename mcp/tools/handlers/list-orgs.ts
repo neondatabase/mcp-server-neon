@@ -1,4 +1,4 @@
-import { Api, Organization } from '@neondatabase/api-client';
+import { Api, Organization } from '../../neon-client';
 import { ToolHandlerExtraParams } from '../types';
 import { filterOrganizations } from '../utils';
 

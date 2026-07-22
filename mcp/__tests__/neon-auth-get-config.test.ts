@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
+import { NeonApiError } from '@neon/sdk';
 import {
   NeonAuthEmailVerificationMethod,
   NeonAuthProviderProjectOwnedBy,
   NeonAuthSupportedAuthProvider,
-} from '@neondatabase/api-client';
+} from '../neon-client';
 import { handleGetNeonAuthConfig } from '../tools/handlers/neon-auth-get-config';
 import { REDACTED_SECRET } from '../tools/handlers/neon-auth-settings-snapshot';
 import type { ToolHandlerExtraParams } from '../tools/types';
@@ -258,20 +259,13 @@ describe('handleGetNeonAuthConfig', () => {
     // characters, and (c) truncate the snippet so a chatty upstream cannot
     // dominate the rendered tool output.
     const longMessage = 'upstream rejected: ' + 'x'.repeat(500);
-    const axiosError500 = Object.assign(
-      new Error('Request failed with status code 500'),
-      {
-        isAxiosError: true,
-        response: {
-          status: 500,
-          statusText: 'Internal Server Error',
-          data: {
-            message: `${longMessage}\u0001\u0007  `,
-            unrelated_field: 'should be ignored',
-          },
-        },
+    const apiError500 = new NeonApiError('Internal Server Error', {
+      status: 500,
+      body: {
+        message: `${longMessage}\u0001\u0007  `,
+        unrelated_field: 'should be ignored',
       },
-    );
+    });
     const neonClient = {
       ...defaultSnapshotMocks(),
       listProjectBranches: vi.fn().mockResolvedValue({
@@ -308,7 +302,7 @@ describe('handleGetNeonAuthConfig', () => {
           },
         },
       }),
-      getNeonAuthEmailProvider: vi.fn().mockRejectedValue(axiosError500),
+      getNeonAuthEmailProvider: vi.fn().mockRejectedValue(apiError500),
     };
 
     const result = await handleGetNeonAuthConfig(
@@ -341,13 +335,7 @@ describe('handleGetNeonAuthConfig', () => {
   });
 
   it('reports email_provider as null when upstream returns 404 (no provider configured)', async () => {
-    const axiosError404 = Object.assign(
-      new Error('Request failed with status code 404'),
-      {
-        isAxiosError: true,
-        response: { status: 404, statusText: 'Not Found' },
-      },
-    );
+    const apiError404 = new NeonApiError('Not Found', { status: 404 });
     const neonClient = {
       ...defaultSnapshotMocks(),
       listProjectBranches: vi.fn().mockResolvedValue({
@@ -384,7 +372,7 @@ describe('handleGetNeonAuthConfig', () => {
           },
         },
       }),
-      getNeonAuthEmailProvider: vi.fn().mockRejectedValue(axiosError404),
+      getNeonAuthEmailProvider: vi.fn().mockRejectedValue(apiError404),
     };
 
     const result = await handleGetNeonAuthConfig(

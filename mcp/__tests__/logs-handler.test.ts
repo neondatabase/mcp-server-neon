@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import type { Api } from '@neondatabase/api-client';
+import type { Api } from '../neon-client';
 import { NEON_HANDLERS } from '../tools/tools';
 
 type ToolResult = { content: Array<{ type: string; text: string }> };
@@ -167,7 +167,7 @@ describe('query_logs handler', () => {
   });
 
   it('surfaces the Loki error message as a client error on a non-2xx response', async () => {
-    // The real client uses validateStatus: () => true, so a 4xx RESOLVES with the
+    // The client's request resolves on any status, so a 4xx RESOLVES with the
     // Loki error body; assertOk throws an InvalidArgumentError carrying the message.
     const request = vi.fn().mockResolvedValue({
       status: 400,
@@ -189,8 +189,6 @@ describe('query_logs handler', () => {
         extra,
       ),
     ).rejects.toThrow(/missing query/);
-    // validateStatus is set so axios does not itself reject on 4xx.
-    expect(request.mock.calls[0][0].validateStatus).toBeTypeOf('function');
   });
 
   it('raises a backend error (not a client error) on a 5xx response', async () => {

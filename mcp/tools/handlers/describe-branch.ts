@@ -1,4 +1,4 @@
-import { Api, Branch } from '@neondatabase/api-client';
+import { Api, Branch } from '../../neon-client';
 import { ToolHandlerExtraParams } from '../types';
 import { handleGetConnectionString } from './connection-string';
 import { neon } from '@neondatabase/serverless';

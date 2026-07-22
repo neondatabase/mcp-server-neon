@@ -72,6 +72,10 @@ pnpm test:e2e:web
 pnpm test:e2e
 ```
 
+### Live API-key smoke testing with mcporter
+
+To verify a local MCP server against the real Neon API, start it with `NEON_API_KEY` in its environment (for example, `pnpm exec next dev --port 3031`), then use `npx mcporter` from an untracked temporary directory to register `http://127.0.0.1:3031/mcp` with the header `Authorization: Bearer $NEON_API_KEY`. Create a clearly prefixed project in the approved smoke-test organization, exercise the changed tools (including project and branch lifecycle), then delete the project and the temporary mcporter config directory. Never print or commit the API key, connection strings, or the generated config.
+
 ### Testing Pyramid Rules
 
 The repository follows this hierarchy:

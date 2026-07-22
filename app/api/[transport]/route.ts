@@ -9,6 +9,7 @@ import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { normalizeObjectSchema } from '@modelcontextprotocol/sdk/server/zod-compat.js';
 import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-schema-compat.js';
 import { captureException, startSpan } from '@sentry/node';
+import { NeonApiError } from '@neon/sdk';
 
 import { getAvailablePrompts, getPromptTemplate } from '../../../mcp/prompts';
 import { NEON_HANDLERS } from '../../../mcp/tools/index';
@@ -972,14 +973,10 @@ const fetchAccountDetails = async (
     });
     return record;
   } catch (error) {
-    const axiosError = error as {
-      response?: { status?: number; data?: unknown };
-      message?: string;
-    };
     logger.error('API key verification failed', {
-      message: axiosError.message,
-      status: axiosError.response?.status,
-      data: axiosError.response?.data,
+      message: error instanceof Error ? error.message : String(error),
+      status: error instanceof NeonApiError ? error.status : undefined,
+      data: error instanceof NeonApiError ? error.body : undefined,
     });
     return null;
   }

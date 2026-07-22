@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
+import { NeonApiError } from '@neon/sdk';
 import {
   NeonAuthEmailVerificationMethod,
   NeonAuthSupportedAuthProvider,
-} from '@neondatabase/api-client';
+} from '../neon-client';
 import { configureNeonAuthInputSchema } from '../tools/toolsSchema';
 import { handleConfigureNeonAuth } from '../tools/handlers/neon-auth-config';
 import { REDACTED_SECRET } from '../tools/handlers/neon-auth-settings-snapshot';
@@ -1173,19 +1174,13 @@ describe('handleConfigureNeonAuth', () => {
     const updateNeonAuthEmailProvider = vi
       .fn()
       .mockResolvedValue({ status: 200 });
-    const axiosError404 = Object.assign(
-      new Error('Request failed with status code 404'),
-      {
-        isAxiosError: true,
-        response: { status: 404, statusText: 'Not Found' },
-      },
-    );
+    const apiError404 = new NeonApiError('Not Found', { status: 404 });
     const neonClient = {
       ...defaultSnapshotMocks(),
       updateNeonAuthEmailProvider,
       // Concurrent delete (or extreme propagation lag) between PATCH and
       // GET surfaces the email provider as 404 right after we PATCHed it.
-      getNeonAuthEmailProvider: vi.fn().mockRejectedValue(axiosError404),
+      getNeonAuthEmailProvider: vi.fn().mockRejectedValue(apiError404),
     };
 
     const result = await handleConfigureNeonAuth(
@@ -1209,10 +1204,9 @@ describe('handleConfigureNeonAuth', () => {
   });
 
   // Item #7: HTTP non-success branches for the five new ops ---------------
-  // These exercise the resolved-non-200 path, which is defensive against
-  // future SDK config changes — axios's default validateStatus throws on
-  // 4xx/5xx today, so most non-200 responses propagate through the outer
-  // error wrapper. We still lock the in-handler shape so the contract is
+  // These exercise the resolved-non-200 path, which is defensive: the SDK
+  // throws on 4xx/5xx today, so most non-200 responses propagate through the
+  // outer error wrapper. We still lock the in-handler shape so the contract is
   // explicit and stable.
 
   it('add_oauth_provider returns isError=true on resolved 5xx', async () => {

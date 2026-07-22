@@ -1,5 +1,5 @@
-import type { Api, AuthDetailsResponse } from '@neondatabase/api-client';
-import { isAxiosError } from 'axios';
+import type { Api, AuthDetailsResponse } from '../neon-client';
+import { NeonApiError } from '@neon/sdk';
 import { addBreadcrumb } from '@sentry/node';
 import { identify } from '../analytics/analytics';
 import { logger } from '../utils/logger';
@@ -41,12 +41,19 @@ export async function resolveAccountFromAuth(
     }
   } catch (error) {
     // Project-scoped API keys cannot access account-level endpoints
+    const message =
+      error instanceof NeonApiError &&
+      typeof error.body === 'object' &&
+      error.body !== null &&
+      'message' in error.body &&
+      typeof error.body.message === 'string'
+        ? error.body.message
+        : undefined;
     const isProjectScopedKeyError =
-      isAxiosError(error) &&
-      (error.response?.status === 404 || error.response?.status === 403) &&
-      typeof error.response?.data?.message === 'string' &&
-      (error.response.data.message.includes('outside the project') ||
-        error.response.data.message.includes('project-scoped'));
+      error instanceof NeonApiError &&
+      (error.status === 404 || error.status === 403) &&
+      (message?.includes('outside the project') ||
+        message?.includes('project-scoped'));
 
     if (isProjectScopedKeyError) {
       logger.debug('Using project-scoped API key fallback', {

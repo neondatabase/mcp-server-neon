@@ -3,7 +3,7 @@ import {
   ListSharedProjectsParams,
   NeonAuthEmailVerificationMethod,
   NeonAuthOauthProviderId,
-} from '@neondatabase/api-client';
+} from '../neon-client';
 // IMPORTANT: Use zod/v3 types for MCP registration compatibility.
 // @modelcontextprotocol/sdk@1.25.x accepts schemas typed through its zod-compat layer
 // (zod/v3 or zod/v4/core). Using plain `zod` imports here can create type-identity

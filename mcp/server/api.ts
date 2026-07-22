@@ -1,12 +1,3 @@
-import { createApiClient } from '@neondatabase/api-client';
-import { NEON_API_HOST } from '../constants';
-import pkg from '../../package.json';
+import { createNeonClient as createSdkClient } from '../neon-client';
 
-export const createNeonClient = (apiKey: string) =>
-  createApiClient({
-    apiKey,
-    baseURL: NEON_API_HOST,
-    headers: {
-      'User-Agent': `mcp-server-neon/${pkg.version}`,
-    },
-  });
+export const createNeonClient = (apiKey: string) => createSdkClient(apiKey);

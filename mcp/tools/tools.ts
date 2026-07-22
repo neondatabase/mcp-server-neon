@@ -5,7 +5,7 @@ import {
   ListSharedProjectsParams,
   GetProjectBranchSchemaComparisonParams,
   ProjectCreateRequest,
-} from '@neondatabase/api-client';
+} from '../neon-client';
 import { neon } from '@neondatabase/serverless';
 import crypto from 'crypto';
 import { InvalidArgumentError, NotFoundError } from '../server/errors';
@@ -359,17 +359,18 @@ async function handleSchemaMigration(
     try {
       // Create branch with identifiable name for easy orphan cleanup
       const branchName = generateMigrationBranchName();
-      newBranch = await handleCreateBranch(
+      const createdBranch = await handleCreateBranch(
         { projectId, branchName },
         neonClient,
       );
+      newBranch = createdBranch;
 
       let resolvedDatabaseName = databaseName;
       if (!resolvedDatabaseName) {
         const dbObject = await getDefaultDatabase(
           {
             projectId,
-            branchId: newBranch.branch.id,
+            branchId: createdBranch.branch.id,
             databaseName,
           },
           neonClient,
@@ -382,7 +383,7 @@ async function handleSchemaMigration(
           sqlStatements: splitSqlStatements(migrationSql),
           databaseName: resolvedDatabaseName,
           projectId,
-          branchId: newBranch.branch.id,
+          branchId: createdBranch.branch.id,
         },
         neonClient,
         extra,
@@ -401,8 +402,8 @@ async function handleSchemaMigration(
         migrationSql,
         databaseName: resolvedDatabaseName,
         projectId,
-        branch: newBranch.branch,
-        parentBranchId: newBranch.branch.parent_id,
+        branch: createdBranch.branch,
+        parentBranchId: createdBranch.branch.parent_id,
         migrationResult: result,
       };
     } catch (error) {

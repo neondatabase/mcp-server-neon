@@ -1,4 +1,4 @@
-import { Api, ListProjectsParams } from '@neondatabase/api-client';
+import { Api, ListProjectsParams } from '../../neon-client';
 import { ToolHandlerExtraParams } from '../types';
 import { getOrgByOrgIdOrDefault } from '../utils';
 import { handleListOrganizations } from './list-orgs';
