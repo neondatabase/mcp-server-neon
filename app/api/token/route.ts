@@ -759,6 +759,7 @@ export async function POST(request: NextRequest) {
         },
         {
           context: {
+            authMethod: 'oauth',
             client: {
               id: client.id,
               name: client.client_name,

@@ -19,7 +19,7 @@ const analytics: Analytics | undefined = ANALYTICS_WRITE_KEY
  * Call this before returning from short-lived serverless functions.
  */
 export const flushAnalytics = async (): Promise<void> => {
-  await analytics?.closeAndFlush();
+  await analytics?.flush();
 };
 
 export const identify = (

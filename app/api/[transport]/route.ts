@@ -153,6 +153,7 @@ type AuthenticatedExtra = {
   authInfo?: AuthInfo & {
     extra?: {
       apiKey?: string;
+      authMethod?: AuthContext['extra']['authMethod'];
       account?: AuthContext['extra']['account'];
       readOnly?: boolean;
       grant?: GrantContext;
@@ -224,6 +225,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
         const grant = context.grant ?? DEFAULT_GRANT;
         const properties = {
+          authMethod: context.authMethod,
           clientName,
           clientApplication,
           readOnly: String(context.readOnly ?? false),
@@ -240,7 +242,6 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
             app: context.app,
           },
         });
-        waitUntil(flushAnalytics());
         logger.info('Server initialized:', {
           clientName,
           clientApplication,
@@ -252,11 +253,16 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
       // Helper function to get Neon client and context from auth info
       async function getAuthContext(extra: AuthenticatedExtra) {
         const authInfo = extra.authInfo;
-        if (!authInfo?.extra?.apiKey || !authInfo?.extra?.account) {
+        if (
+          !authInfo?.extra?.apiKey ||
+          !authInfo?.extra?.authMethod ||
+          !authInfo?.extra?.account
+        ) {
           throw new Error('Authentication required');
         }
 
         const apiKey = authInfo.extra.apiKey;
+        const authMethod = authInfo.extra.authMethod;
         const account = authInfo.extra.account;
         const readOnly = authInfo.extra.readOnly ?? false;
         const grant = { ...(authInfo.extra.grant ?? DEFAULT_GRANT) };
@@ -282,6 +288,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         // Build and store context for potential use in onerror
         const context: ServerContext = {
           apiKey,
+          authMethod,
           account,
           app: dynamicAppContext,
           readOnly,
@@ -292,6 +299,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
         return {
           apiKey,
+          authMethod,
           account,
           readOnly,
           grant,
@@ -347,7 +355,12 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         track({
           userId,
           event: 'server_error',
-          properties: { message, error, eventId },
+          properties: {
+            authMethod: lastKnownContext?.authMethod ?? 'unknown',
+            message,
+            error,
+            eventId,
+          },
           context: contexts,
         });
         waitUntil(flushAnalytics());
@@ -394,6 +407,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
               async (span) => {
                 const {
                   account,
+                  authMethod,
                   readOnly,
                   grant,
                   neonClient,
@@ -407,6 +421,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                 trackServerInit(context);
 
                 const properties = {
+                  authMethod,
                   tool_name: tool.name,
                   readOnly: String(readOnly),
                   projectScoped: String(!!grant.projectId),
@@ -513,6 +528,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
             const {
               account,
+              authMethod,
               readOnly,
               clientApplication: clientApp,
               clientName: cName,
@@ -525,6 +541,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
             const traceId = generateTraceId();
             const properties = {
+              authMethod,
               prompt_name: prompt.name,
               clientName: cName,
               traceId,
@@ -775,6 +792,7 @@ function createDocsOnlyMcpHandler() {
           },
           async (span) => {
             const properties = {
+              authMethod: 'anonymous',
               tool_name: toolName,
               readOnly: 'true',
               projectScoped: 'false',
@@ -1043,6 +1061,7 @@ const verifyToken = async (
           ? Math.floor(token.expires_at / 1000)
           : undefined,
         extra: {
+          authMethod: 'oauth',
           account: {
             id: token.user.id,
             name: token.user.name,
@@ -1089,6 +1108,7 @@ const verifyToken = async (
     scopes: ['*'], // API keys get all scopes
     clientId: 'api-key', // Literal string
     extra: {
+      authMethod: apiKeyRecord.authMethod,
       account: apiKeyRecord.account,
       apiKey: bearerToken,
       readOnly,

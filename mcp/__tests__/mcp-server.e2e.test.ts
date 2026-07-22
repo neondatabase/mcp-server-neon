@@ -17,6 +17,7 @@ const originalFetch = globalThis.fetch;
 function createTestContext(overrides?: Partial<ServerContext>): ServerContext {
   return {
     apiKey: 'test-api-key',
+    authMethod: 'api_key_user',
     account: {
       id: 'user_test_123',
       name: 'Test User',
