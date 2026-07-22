@@ -13,9 +13,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-The Model Context Protocol (MCP) is a [standardized protocol](https://modelcontextprotocol.io/introduction) designed to manage context between large language models (LLMs) and external systems. This repository provides a remote MCP Server for [Neon](https://neon.tech).
+The Model Context Protocol (MCP) is a [standardized protocol](https://modelcontextprotocol.io) designed to manage context between large language models (LLMs) and external systems. This repository provides a remote MCP Server for [Neon](https://neon.com).
 
-Neon's MCP server acts as a bridge between natural language requests and the [Neon API](https://api-docs.neon.tech/reference/getting-started-with-neon-api). Built upon MCP, it translates your requests into the necessary API calls, enabling you to manage tasks such as creating projects and branches, running queries, and performing database migrations seamlessly.
+Neon's MCP server acts as a bridge between natural language requests and the [Neon API](https://neon.com/docs/reference/api). Built upon MCP, it translates your requests into the necessary API calls, enabling you to manage tasks such as creating projects and branches, running queries, and performing database migrations seamlessly.
 
 Some of the key features of the Neon MCP server include:
 
@@ -42,7 +42,7 @@ For example, in Claude Code, or any MCP Client, you can use natural language to 
 
 There are a few options for setting up the Neon MCP Server:
 
-1. **Quick Setup with API Key (Cursor, VS Code, and Claude Code):** Run [`neon@latest init`](https://neon.com/docs/reference/cli-init) to automatically configure Neon's MCP Server, [agent skills](https://github.com/neondatabase/agent-skills), and VS Code extension with one command.
+1. **Quick Setup with API Key (Cursor, VS Code, and Claude Code):** Run [`neon@latest init`](https://neon.com/docs/cli/init) to automatically configure Neon's MCP Server, [agent skills](https://github.com/neondatabase/agent-skills), and VS Code extension with one command.
 2. **Remote MCP Server (OAuth Based Authentication):** Connect to Neon's managed MCP server using OAuth for authentication. This method is more convenient as it eliminates the need to manage API keys. Additionally, you will automatically receive the latest features and improvements as soon as they are released.
 3. **Remote MCP Server (API Key Based Authentication):** Connect to Neon's managed MCP server using API key for authentication. This method is useful if you want to connect a remote agent to Neon where OAuth is not available. Additionally, you will automatically receive the latest features and improvements as soon as they are released.
 
@@ -59,7 +59,7 @@ For development, you'll need Node.js 22+ (pnpm is provided via Corepack — run 
 
 **Don't want to manually create an API key?**
 
-Run [`neon@latest init`](https://neon.com/docs/reference/cli-init) to automatically configure Neon's MCP Server with one command:
+Run [`neon@latest init`](https://neon.com/docs/cli/init) to automatically configure Neon's MCP Server with one command:
 
 ```bash
 npx neon@latest init
@@ -217,13 +217,15 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 - `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`
 - `list_slow_queries`, `explain_sql_statement`
 - `get_connection_string`
+- `get_neon_auth_config`
+- `query_logs`, `list_log_fields`, `list_log_field_values`
 - `search`, `fetch`, `list_docs_resources`, `get_doc_resource`
 
 **Tools requiring write access:**
 
 - `create_project`, `delete_project`
 - `create_branch`, `delete_branch`, `reset_from_parent`
-- `provision_neon_auth`, `provision_neon_data_api`
+- `provision_neon_auth`, `configure_neon_auth`, `provision_neon_data_api`
 - `prepare_database_migration`, `complete_database_migration`
 - `prepare_query_tuning`, `complete_query_tuning`
 
@@ -260,18 +262,19 @@ Core implementation areas:
 - [Neon MCP Server Guide](https://neon.com/docs/ai/neon-mcp-server)
 - [Connect MCP Clients to Neon](https://neon.com/docs/ai/connect-mcp-clients-to-neon)
 - [Cursor with Neon MCP Server](https://neon.com/guides/cursor-mcp-neon)
+- [Claude Code with Neon MCP Server](https://neon.com/guides/claude-code-mcp-neon)
 - [Claude Desktop with Neon MCP Server](https://neon.com/guides/neon-mcp-server)
 - [Cline with Neon MCP Server](https://neon.com/guides/cline-mcp-neon)
 - [Windsurf with Neon MCP Server](https://neon.com/guides/windsurf-mcp-neon)
 - [Zed with Neon MCP Server](https://neon.com/guides/zed-mcp-neon)
 
-# Features
+## Features
 
-## Supported Tools
+### Supported Tools
 
 The Neon MCP Server provides the following actions, which are exposed as "tools" to MCP Clients. You can use these tools to interact with your Neon projects and databases using natural language commands.
 
-### Tool Scope Metadata
+#### Tool Scope Metadata
 
 Each tool definition includes a `scope` category used for grant-based tool filtering and consent UX. Current categories are:
 
@@ -281,6 +284,7 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 - `querying`
 - `neon_auth`
 - `data_api`
+- `observability`
 - `docs`
 - `null` (tools without a scope category)
 
@@ -302,11 +306,11 @@ Notes:
 
 **Branch Management:**
 
-- **`create_branch`**: Creates a new branch within a specified Neon project. Leverages [Neon's branching](/docs/introduction/branching) feature for development, testing, or migrations.
+- **`create_branch`**: Creates a new branch within a specified Neon project. Leverages [Neon's branching](https://neon.com/docs/introduction/branching) feature for development, testing, or migrations.
 - **`delete_branch`**: Deletes an existing branch from a Neon project.
 - **`describe_branch`**: Retrieves details about a specific branch, such as its name, ID, and parent branch.
 - **`list_branch_computes`**: Lists compute endpoints for a project or specific branch, including compute ID, type, size, last active time, and autoscaling information.
-- **`compare_database_schema`**: Shows the schema diff between the child branch and its parent
+- **`compare_database_schema`**: Shows the schema diff between the child branch and its parent.
 - **`reset_from_parent`**: Resets the current branch to its parent's state, discarding local changes. Automatically preserves to backup if branch has children, or optionally preserve on request with a custom name.
 
 **SQL Query Execution:**
@@ -332,6 +336,8 @@ Notes:
 **Neon Auth:**
 
 - **`provision_neon_auth`**: Provisions Neon Auth for a Neon project. It allows developers to easily set up authentication infrastructure by creating an integration with an Auth provider.
+- **`configure_neon_auth`**: Configures an existing Neon Auth integration for a branch — managing trusted origins, localhost access, authentication methods, OAuth providers, and the transactional email provider.
+- **`get_neon_auth_config`**: Reads the full Neon Auth configuration for a branch, including integration metadata and configurable settings (secrets are redacted).
 
 **Neon Data API:**
 
@@ -342,22 +348,28 @@ Notes:
 - **`search`**: Searches across organizations, projects, and branches matching a query. Returns IDs, titles, and direct links to the Neon Console.
 - **`fetch`**: Fetches detailed information about a specific organization, project, or branch using an ID (typically from the search tool).
 
+**Observability:**
+
+- **`query_logs`**: Queries logs emitted by your Neon serverless functions and other services using structured filters (source, service name, severity, time window). Logs are OpenTelemetry-based.
+- **`list_log_fields`**: Lists the log fields (labels) you can filter on for a branch, such as `service_name`, `severity_text`, and `scope_name`. Use before `query_logs`.
+- **`list_log_field_values`**: Lists the distinct values of a log field within a branch and time window, to discover concrete values to pass to `query_logs`.
+
 **Documentation and Resources:**
 
 - **`list_docs_resources`**: Lists all available Neon documentation pages by fetching the index from `https://neon.com/docs/llms.txt`. Returns page URLs and titles that can be fetched individually using the `get_doc_resource` tool.
 - **`get_doc_resource`**: Fetches a specific Neon documentation page as markdown content. Use the `list_docs_resources` tool first to discover available page slugs, then pass the slug to this tool.
 
-## Migrations
+### Migrations
 
 Migrations are a way to manage changes to your database schema over time. With the Neon MCP server, LLMs are empowered to do migrations safely with separate "Start" (`prepare_database_migration`) and "Commit" (`complete_database_migration`) commands.
 
 The "Start" command accepts a migration and runs it in a new temporary branch. Upon returning, this command hints to the LLM that it should test the migration on this branch. The LLM can then run the "Commit" command to apply the migration to the original branch.
 
-# Development
+## Development
 
 This project uses [pnpm](https://pnpm.io) as the package manager, pinned via Corepack.
 
-## Project Structure
+### Project Structure
 
 The MCP server code lives at the repository root, a Next.js application deployed to Vercel at `mcp.neon.tech`.
 
@@ -366,21 +378,21 @@ corepack enable
 pnpm install
 ```
 
-## Local Development
+### Local Development
 
 ```bash
 # Start the Next.js dev server (for the remote MCP server)
-pnpm run dev
+pnpm dev
 ```
 
-## Linting and Type Checking
+### Linting and Type Checking
 
 ```bash
-pnpm run lint
-pnpm run typecheck
+pnpm lint
+pnpm typecheck
 ```
 
-## Environment Variables
+### Environment Variables
 
 Required for remote server runtime:
 
@@ -400,28 +412,28 @@ Optional:
 | ----------- | --------------------------------------------------------------------------------- |
 | `LOG_LEVEL` | Winston log level: `error`, `warn`, `info` (default), `debug`, `verbose`, `silly` |
 
-## Testing Pyramid
+### Testing Pyramid
 
 All tests run from the repository root.
 
 ```bash
 # Unit tests
-pnpm run test:unit
+pnpm test:unit
 
 # Integration tests
-pnpm run test:integration
+pnpm test:integration
 
 # MCP protocol end-to-end tests (real MCP client/server tool calls)
-pnpm run test:e2e:mcp
+pnpm test:e2e:mcp
 
 # Website end-to-end tests (Playwright; provisions/validates ephemeral DB first)
-pnpm run test:e2e:web
+pnpm test:e2e:web
 
 # Full end-to-end suite
-pnpm run test:e2e
+pnpm test:e2e
 
 # Full test pyramid (unit + integration + e2e; used in CI)
-pnpm run test
+pnpm test
 ```
 
 Testing strategy:
@@ -431,6 +443,6 @@ Testing strategy:
 - Use **unit** tests for pure logic and edge cases.
 - Avoid relying on third-party uptime in merge-gating tests; mock external dependencies in integration/unit tiers.
 
-## Deployment
+### Deployment
 
 Vercel deploys the remote server automatically from the repository branch configuration. Preview environments are available for pull requests.
