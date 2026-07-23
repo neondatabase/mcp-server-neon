@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GrantContext } from '../utils/grant-context';
 
-const { runSqlSpy } = vi.hoisted(() => ({
+const { flushAnalyticsSpy, runSqlSpy, trackSpy } = vi.hoisted(() => ({
+  flushAnalyticsSpy: vi.fn().mockResolvedValue(undefined),
   runSqlSpy: vi.fn(async ({ params }: { params: Record<string, unknown> }) => ({
     content: [{ type: 'text', text: JSON.stringify(params) }],
   })),
+  trackSpy: vi.fn(),
 }));
 
 vi.mock('../oauth/model', () => ({
@@ -28,8 +30,8 @@ vi.mock('../tools/index', async () => {
 });
 
 vi.mock('../analytics/analytics', () => ({
-  track: vi.fn(),
-  flushAnalytics: vi.fn().mockResolvedValue(undefined),
+  track: trackSpy,
+  flushAnalytics: flushAnalyticsSpy,
 }));
 
 vi.mock('../utils/logger', () => ({
@@ -140,6 +142,38 @@ describe('transport dynamic tool composition', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     runSqlSpy.mockClear();
+  });
+
+  it('tracks server initialization and tool calls with the auth method', async () => {
+    const oauthToken = 'oauth-analytics';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write', {
+        projectId: 'proj_analytics',
+        scopes: null,
+      }),
+    );
+
+    await listToolsForToken(oauthToken);
+    await mcpCall(oauthToken, 'tools/call', 3, {
+      name: 'run_sql',
+      arguments: { sql: 'select 1' },
+    });
+
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event: 'server_init',
+        properties: expect.objectContaining({ authMethod: 'oauth' }),
+      }),
+    );
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        event: 'tool_call',
+        properties: expect.objectContaining({ authMethod: 'oauth' }),
+      }),
+    );
+    expect(flushAnalyticsSpy).toHaveBeenCalledTimes(1);
   });
 
   it('keeps same tool names and enforces projectId by selected variant', async () => {

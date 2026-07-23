@@ -51,6 +51,7 @@ export const createMcpServer = async (context: ServerContext) => {
       userId: context.account.id,
       event: 'server_init',
       properties: {
+        authMethod: context.authMethod,
         clientName,
         clientApplication,
         readOnly: String(context.readOnly ?? false),
@@ -117,6 +118,7 @@ export const createMcpServer = async (context: ServerContext) => {
           },
           async (span) => {
             const properties = {
+              authMethod: context.authMethod,
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
               projectScoped: String(!!grant.projectId),
@@ -187,7 +189,12 @@ export const createMcpServer = async (context: ServerContext) => {
       prompt.argsSchema,
       async (args, extra) => {
         const traceId = generateTraceId();
-        const properties = { prompt_name: prompt.name, clientName, traceId };
+        const properties = {
+          authMethod: context.authMethod,
+          prompt_name: prompt.name,
+          clientName,
+          traceId,
+        };
         logger.info('prompt call:', properties);
         setSentryTags(context);
         track({
@@ -243,7 +250,7 @@ export const createMcpServer = async (context: ServerContext) => {
     track({
       userId: context.account.id,
       event: 'server_error',
-      properties: { message, error, eventId },
+      properties: { authMethod: context.authMethod, message, error, eventId },
       context: contexts,
     });
   };

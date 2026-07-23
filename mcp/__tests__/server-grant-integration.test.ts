@@ -37,6 +37,7 @@ const { createMcpServer } = await import('../server/index');
 function buildContext(overrides: Partial<ServerContext> = {}): ServerContext {
   return {
     apiKey: 'test-api-key',
+    authMethod: 'api_key_user',
     account: {
       id: 'acc-1',
       name: 'Test',
