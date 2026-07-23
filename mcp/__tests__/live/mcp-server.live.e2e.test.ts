@@ -160,6 +160,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
 
     server = await createMcpServer({
       apiKey,
+      authMethod: authDetails.auth_method,
       account: {
         id: testOrgId,
         name: 'MCP live E2E test organization',
