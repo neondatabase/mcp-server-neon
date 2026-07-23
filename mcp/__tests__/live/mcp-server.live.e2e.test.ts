@@ -9,7 +9,9 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { NeonApiClient } from '../../neon-client';
 
-loadEnv({ path: '.env', quiet: true });
+// Prefer a repo-local .env for portable clones. In Andre's workspace layout,
+// fall back to the shared root environment at ../../.env.
+loadEnv({ path: ['.env', '../../.env'], quiet: true });
 
 // Live tests should not emit product analytics or Sentry events.
 process.env.ANALYTICS_WRITE_KEY = '';
@@ -52,11 +54,12 @@ const tableDescriptionSchema = z.object({
   formatted: z.string(),
 });
 
-function requireEnvironment(name: 'NEON_API_KEY' | 'NEON_TEST_ORG_ID'): string {
+function requireApiKey(): string {
+  const name = 'NEON_API_KEY';
   const value = process.env[name]?.trim();
   if (!value) {
     throw new Error(
-      `${name} is required. Copy .env.example to .env and configure the live-test organization.`,
+      `${name} is required. Copy .env.example to .env or configure the shared workspace-root .env.`,
     );
   }
   return value;
@@ -128,8 +131,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   }
 
   beforeAll(async () => {
-    const apiKey = requireEnvironment('NEON_API_KEY');
-    testOrgId = requireEnvironment('NEON_TEST_ORG_ID');
+    const apiKey = requireApiKey();
+    const configuredTestOrgId = process.env.NEON_TEST_ORG_ID?.trim();
 
     const [{ createMcpServer }, { createNeonClient }] = await Promise.all([
       import('../../server/index'),
@@ -137,6 +140,26 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     ]);
 
     neonClient = createNeonClient(apiKey);
+    const authDetails = (await neonClient.getAuthDetails()).data;
+    if (configuredTestOrgId) {
+      if (
+        authDetails.auth_method === 'api_key_org' &&
+        authDetails.account_id !== configuredTestOrgId
+      ) {
+        throw new Error(
+          'NEON_TEST_ORG_ID does not match the organization-scoped API key account.',
+        );
+      }
+      testOrgId = configuredTestOrgId;
+    } else if (authDetails.auth_method === 'api_key_org') {
+      testOrgId = authDetails.account_id;
+    } else {
+      throw new Error(
+        'NEON_TEST_ORG_ID is required unless NEON_API_KEY is organization-scoped.',
+      );
+    }
+    await neonClient.getOrganization(testOrgId);
+
     server = await createMcpServer({
       apiKey,
       account: {

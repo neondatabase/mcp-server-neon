@@ -88,9 +88,15 @@ Set up the dedicated disposable test organization:
 ```bash
 cp .env.example .env
 # Fill in NEON_API_KEY with an org-scoped key for the disposable test org.
-# Fill in NEON_TEST_ORG_ID with that org's ID.
+# NEON_TEST_ORG_ID is inferred for org-scoped keys; set it for user keys.
 pnpm test:e2e:live
 ```
+
+The test loads the repo-local `.env` first. In the standard
+`~/Workspaces/personal/<owner>/<repo>` layout it also falls back to
+`../../.env`, so the shared workspace-root smoke-test key can be reused without
+copying secrets into this repository. The suite asks `@neon/sdk` for the
+organization attached to an org-scoped key.
 
 The suite always creates a uniquely named `smoke-mcp-live-*` project first and
 deletes it at the end. Cleanup runs from `afterAll` even when an assertion fails,
@@ -262,7 +268,7 @@ See `.env.example` for live-test configuration. Runtime configuration is
 normally provided through `.env.local`. Key variables:
 
 - `NEON_API_KEY`: Required only for opt-in live Neon E2E tests and local API-key smoke tests
-- `NEON_TEST_ORG_ID`: Dedicated disposable organization used by live Neon E2E tests
+- `NEON_TEST_ORG_ID`: Dedicated disposable organization for live E2E tests; optional with an org-scoped key
 - `OAUTH_DATABASE_URL`: Required for remote MCP server with OAuth
 - `COOKIE_SECRET`: Required for remote MCP server OAuth flow
 - `CLIENT_ID` / `CLIENT_SECRET`: OAuth client credentials
