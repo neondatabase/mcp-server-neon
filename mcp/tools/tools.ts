@@ -210,6 +210,9 @@ async function handleDescribeTableSchema(
   );
 
   const description = await describeTable(connectionString.uri, tableName);
+  if (!description) {
+    throw new NotFoundError(`Table not found: ${tableName}`);
+  }
   return {
     raw: description,
     formatted: formatTableDescription(description),

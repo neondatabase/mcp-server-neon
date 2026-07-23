@@ -321,6 +321,26 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    'returns a clean not-found error for a missing qualified table',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const result = await callTool('describe_table_schema', {
+        projectId,
+        tableName: 'crm.missing_property_options',
+      });
+      const parsedResult = toolResultSchema.parse(result);
+      const text = textContent(result);
+
+      expect(parsedResult.isError).toBe(true);
+      expect(text).toContain(
+        'NotFoundError: Table not found: crm.missing_property_options',
+      );
+      expect(text).not.toContain('relation');
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'deletes the project through MCP and verifies deletion with @neon/sdk',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');

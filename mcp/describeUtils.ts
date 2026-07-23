@@ -44,7 +44,7 @@ const DESCRIBE_TABLE_STATEMENTS = [
       cls.relname AS table_name
     FROM pg_catalog.pg_class cls
     JOIN pg_catalog.pg_namespace ns ON ns.oid = cls.relnamespace
-    WHERE cls.oid = $1::regclass
+    WHERE cls.oid = to_regclass($1)
   )
   SELECT 
     c.column_name as name,
@@ -65,13 +65,13 @@ const DESCRIBE_TABLE_STATEMENTS = [
   // Get index information
   `
   WITH target AS (
-    SELECT $1::regclass AS oid
+    SELECT to_regclass($1) AS oid
   )
   SELECT
     i.relname as name,
     pg_get_indexdef(i.oid) as definition,
     pg_size_pretty(pg_relation_size(i.oid)) as size
-  FROM target target
+  FROM target
   JOIN pg_catalog.pg_class t ON t.oid = target.oid
   JOIN pg_catalog.pg_index ix ON t.oid = ix.indrelid
   JOIN pg_catalog.pg_class i ON i.oid = ix.indexrelid
@@ -87,7 +87,7 @@ const DESCRIBE_TABLE_STATEMENTS = [
       cls.relname AS table_name
     FROM pg_catalog.pg_class cls
     JOIN pg_catalog.pg_namespace ns ON ns.oid = cls.relnamespace
-    WHERE cls.oid = $1::regclass
+    WHERE cls.oid = to_regclass($1)
   )
   SELECT
     tc.constraint_name as name,
@@ -105,10 +105,10 @@ const DESCRIBE_TABLE_STATEMENTS = [
   // Get table size information
   `
   SELECT
-    pg_size_pretty(pg_total_relation_size($1::regclass)) as total_size,
-    pg_size_pretty(pg_relation_size($1::regclass)) as table_size,
+    pg_size_pretty(pg_total_relation_size(to_regclass($1))) as total_size,
+    pg_size_pretty(pg_relation_size(to_regclass($1))) as table_size,
     pg_size_pretty(
-      pg_total_relation_size($1::regclass) - pg_relation_size($1::regclass)
+      pg_total_relation_size(to_regclass($1)) - pg_relation_size(to_regclass($1))
     ) as index_size;
   `,
 ];
@@ -116,8 +116,14 @@ const DESCRIBE_TABLE_STATEMENTS = [
 export async function describeTable(
   connectionString: string,
   tableName: string,
-): Promise<TableDescription> {
+): Promise<TableDescription | null> {
   const sql = neon(connectionString);
+
+  const relations = await sql.query(
+    'SELECT to_regclass($1)::text AS relation_name',
+    [tableName],
+  );
+  if (typeof relations[0]?.relation_name !== 'string') return null;
 
   // Execute all queries in parallel
   const [columns, indexes, constraints, sizes] = await Promise.all([
