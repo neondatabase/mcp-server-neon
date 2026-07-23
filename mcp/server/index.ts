@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getAvailablePrompts, getPromptTemplate } from '../prompts';
 import { NEON_HANDLERS, ToolHandlerExtended } from '../tools/index';
 import { logger } from '../utils/logger';
 import { generateTraceId } from '../utils/trace';
@@ -30,9 +29,6 @@ export const createMcpServer = async (context: ServerContext) => {
     {
       capabilities: {
         tools: {},
-        prompts: {
-          listChanged: true,
-        },
       },
     },
   );
@@ -176,62 +172,6 @@ export const createMcpServer = async (context: ServerContext) => {
             }
           },
         );
-      },
-    );
-  });
-
-  // Register prompts
-  const availablePrompts = getAvailablePrompts(grant);
-  availablePrompts.forEach((prompt) => {
-    server.prompt(
-      prompt.name,
-      prompt.description,
-      prompt.argsSchema,
-      async (args, extra) => {
-        const traceId = generateTraceId();
-        const properties = {
-          authMethod: context.authMethod,
-          prompt_name: prompt.name,
-          clientName,
-          traceId,
-        };
-        logger.info('prompt call:', properties);
-        setSentryTags(context);
-        track({
-          userId: context.account.id,
-          event: 'prompt_call',
-          properties,
-          context: { client: context.client, app: context.app },
-        });
-        try {
-          const extraArgs: ToolHandlerExtraParams = {
-            ...extra,
-            account: context.account,
-            readOnly: context.readOnly,
-            clientApplication,
-          };
-          const template = await getPromptTemplate(
-            prompt.name,
-            extraArgs,
-            args as Record<string, string>,
-          );
-          return {
-            messages: [
-              {
-                role: 'user',
-                content: {
-                  type: 'text',
-                  text: template,
-                },
-              },
-            ],
-          };
-        } catch (error) {
-          captureException(error, {
-            extra: properties,
-          });
-          throw error;
-        }
       },
     );
   });

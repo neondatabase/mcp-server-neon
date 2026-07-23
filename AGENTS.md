@@ -301,7 +301,6 @@ See `.env.local.example` for all configuration options. Key variables:
 │   │   └── logger.ts             # Logging utilities
 │   ├── describeUtils.ts # Postgres \d-style describe helpers (derived from @neondatabase/psql-describe)
 │   ├── resources.ts    # MCP resources
-│   ├── prompts.ts      # LLM prompts
 │   └── constants.ts    # Shared constants
 ├── public/             # Static assets (favicons, OG image, llms.txt)
 ├── .prettierrc         # Prettier config (singleQuote: true)
