@@ -37,48 +37,79 @@ type ConstraintDescription = {
 const DESCRIBE_TABLE_STATEMENTS = [
   // Get column information
   `
+  WITH target AS (
+    SELECT
+      cls.oid,
+      ns.nspname AS table_schema,
+      cls.relname AS table_name
+    FROM pg_catalog.pg_class cls
+    JOIN pg_catalog.pg_namespace ns ON ns.oid = cls.relnamespace
+    WHERE cls.oid = $1::regclass
+  )
   SELECT 
     c.column_name as name,
     c.data_type as type,
     c.is_nullable = 'YES' as nullable,
     c.column_default as default,
     pd.description
-  FROM information_schema.columns c
-  LEFT JOIN pg_catalog.pg_statio_all_tables st ON c.table_schema = st.schemaname AND c.table_name = st.relname
-  LEFT JOIN pg_catalog.pg_description pd ON pd.objoid = st.relid AND pd.objsubid = c.ordinal_position
-  WHERE c.table_schema = 'public' AND c.table_name = $1
+  FROM target t
+  JOIN information_schema.columns c
+    ON c.table_schema = t.table_schema
+    AND c.table_name = t.table_name
+  LEFT JOIN pg_catalog.pg_description pd
+    ON pd.objoid = t.oid
+    AND pd.objsubid = c.ordinal_position
   ORDER BY c.ordinal_position;
   `,
 
   // Get index information
   `
+  WITH target AS (
+    SELECT $1::regclass AS oid
+  )
   SELECT
     i.relname as name,
     pg_get_indexdef(i.oid) as definition,
     pg_size_pretty(pg_relation_size(i.oid)) as size
-  FROM pg_class t
-  JOIN pg_index ix ON t.oid = ix.indrelid
-  JOIN pg_class i ON i.oid = ix.indexrelid
-  WHERE t.relname = $1 AND t.relkind = 'r';
+  FROM target target
+  JOIN pg_catalog.pg_class t ON t.oid = target.oid
+  JOIN pg_catalog.pg_index ix ON t.oid = ix.indrelid
+  JOIN pg_catalog.pg_class i ON i.oid = ix.indexrelid
+  WHERE t.relkind = 'r';
   `,
 
   // Get constraint information
   `
+  WITH target AS (
+    SELECT
+      cls.oid,
+      ns.nspname AS table_schema,
+      cls.relname AS table_name
+    FROM pg_catalog.pg_class cls
+    JOIN pg_catalog.pg_namespace ns ON ns.oid = cls.relnamespace
+    WHERE cls.oid = $1::regclass
+  )
   SELECT
     tc.constraint_name as name,
     tc.constraint_type as type,
     pg_get_constraintdef(cc.oid) as definition
-  FROM information_schema.table_constraints tc
-  JOIN pg_catalog.pg_constraint cc ON tc.constraint_name = cc.conname
-  WHERE tc.table_schema = 'public' AND tc.table_name = $1;
+  FROM target t
+  JOIN information_schema.table_constraints tc
+    ON tc.table_schema = t.table_schema
+    AND tc.table_name = t.table_name
+  JOIN pg_catalog.pg_constraint cc
+    ON cc.conrelid = t.oid
+    AND cc.conname = tc.constraint_name;
   `,
 
   // Get table size information
   `
   SELECT
-    pg_size_pretty(pg_total_relation_size($1)) as total_size,
-    pg_size_pretty(pg_relation_size($1)) as table_size,
-    pg_size_pretty(pg_total_relation_size($1) - pg_relation_size($1)) as index_size;
+    pg_size_pretty(pg_total_relation_size($1::regclass)) as total_size,
+    pg_size_pretty(pg_relation_size($1::regclass)) as table_size,
+    pg_size_pretty(
+      pg_total_relation_size($1::regclass) - pg_relation_size($1::regclass)
+    ) as index_size;
   `,
 ];
 

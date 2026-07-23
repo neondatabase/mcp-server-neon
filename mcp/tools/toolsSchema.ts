@@ -106,7 +106,11 @@ export const explainSqlStatementInputSchema = z.object({
     .describe('Whether to include ANALYZE in the EXPLAIN command'),
 });
 export const describeTableSchemaInputSchema = z.object({
-  tableName: z.string().describe('The name of the table'),
+  tableName: z
+    .string()
+    .describe(
+      'The table name, optionally schema-qualified (for example, crm.contacts)',
+    ),
   projectId: z
     .string()
     .describe('The ID of the project to execute the query against'),

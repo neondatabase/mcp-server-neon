@@ -209,14 +209,7 @@ async function handleDescribeTableSchema(
     extra,
   );
 
-  // Extract table name without schema if schema-qualified
-  const tableNameParts = tableName.split('.');
-  const simpleTableName = tableNameParts[tableNameParts.length - 1];
-
-  const description = await describeTable(
-    connectionString.uri,
-    simpleTableName,
-  );
+  const description = await describeTable(connectionString.uri, tableName);
   return {
     raw: description,
     formatted: formatTableDescription(description),
