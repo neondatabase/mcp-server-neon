@@ -102,6 +102,11 @@ uses `@neon/sdk` to verify the project name before deletion, and refuses to
 delete projects without the smoke prefix. Never point these variables at a
 personal or production organization, and never commit `.env.test`.
 
+For same-repository pull requests, `.github/workflows/pr.yml` maps the
+repository secret `NEON_TEST_API_KEY` to `NEON_API_KEY` for this step. Fork and
+Dependabot PRs skip the live suite because GitHub does not safely expose
+repository secrets to untrusted PR code.
+
 ### Live API-key smoke testing with mcporter
 
 To verify a local MCP server against the real Neon API, start it with `NEON_API_KEY` in its environment (for example, `pnpm exec next dev --port 3031`), then use `npx mcporter` from an untracked temporary directory to register `http://127.0.0.1:3031/mcp` with the header `Authorization: Bearer $NEON_API_KEY`. Create a clearly prefixed project in the approved smoke-test organization, exercise the changed tools (including project and branch lifecycle), then delete the project and the temporary mcporter config directory. Never print or commit the API key, connection strings, or the generated config.
@@ -125,7 +130,9 @@ Use file naming to classify tiers:
 - `*.integration.test.ts` for integration tests
 - `*.test.ts` for unit tests
 
-Merge-gating tests must be deterministic. Do not make third-party uptime (for example, external docs websites) a required CI dependency.
+Keep the default unit/integration suites deterministic. The explicitly named
+live Neon E2E step is the only merge check that depends on external
+infrastructure.
 
 **Unit and integration tests** use [Vitest](https://vitest.dev/) and live in `mcp/__tests__/`. Configuration is in `vitest.config.ts`.
 
@@ -134,7 +141,7 @@ Merge-gating tests must be deterministic. Do not make third-party uptime (for ex
 - **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com) and generates a random `COOKIE_SECRET`. Both are written to `.env.e2e` (gitignored) and passed to the Next.js dev server.
 - **No secrets needed**: The e2e infrastructure is fully self-contained. Instagres databases expire after 72 hours; no explicit teardown is required.
 - **Reuse across runs**: If `.env.e2e` already exists, global-setup reuses it instead of re-provisioning. Delete the file to force a fresh database.
-- **CI**: The PR workflow runs format, lint, knip, `pnpm test`, and build before merge.
+- **CI**: The PR workflow runs format, lint, knip, `pnpm test`, live Neon E2E for trusted same-repo PRs, and build before merge.
 
 ## Architecture
 
