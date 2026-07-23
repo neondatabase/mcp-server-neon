@@ -9,9 +9,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { NeonApiClient } from '../../neon-client';
 
-// Prefer a repo-local .env for portable clones. In Andre's workspace layout,
-// fall back to the shared root environment at ../../.env.
-loadEnv({ path: ['.env', '../../.env'], quiet: true });
+loadEnv({ path: '.env', quiet: true });
 
 // Live tests should not emit product analytics or Sentry events.
 process.env.ANALYTICS_WRITE_KEY = '';
@@ -59,7 +57,7 @@ function requireApiKey(): string {
   const value = process.env[name]?.trim();
   if (!value) {
     throw new Error(
-      `${name} is required. Copy .env.example to .env or configure the shared workspace-root .env.`,
+      `${name} is required. Copy .env.example to the repository-local .env.`,
     );
   }
   return value;

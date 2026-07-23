@@ -92,10 +92,8 @@ cp .env.example .env
 pnpm test:e2e:live
 ```
 
-The test loads the repo-local `.env` first. In the standard
-`~/Workspaces/personal/<owner>/<repo>` layout it also falls back to
-`../../.env`, so the shared workspace-root smoke-test key can be reused without
-copying secrets into this repository. The suite asks `@neon/sdk` for the
+The test only loads this repository's `.env`; it must not inspect parent or
+workspace-global environment files. The suite asks `@neon/sdk` for the
 organization attached to an org-scoped key.
 
 The suite always creates a uniquely named `smoke-mcp-live-*` project first and
