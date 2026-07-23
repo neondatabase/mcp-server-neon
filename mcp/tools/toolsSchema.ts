@@ -7,7 +7,7 @@ import {
 // IMPORTANT: Use zod/v3 types for MCP registration compatibility.
 // @modelcontextprotocol/sdk@1.25.x accepts schemas typed through its zod-compat layer
 // (zod/v3 or zod/v4/core). Using plain `zod` imports here can create type-identity
-// mismatches at registerTool/registerPrompt boundaries in Next.js builds.
+// mismatches at registerTool boundaries in Next.js builds.
 //
 // Revisit this once the MCP SDK publishes a single-zod type surface that no longer
 // requires cross-version compatibility shims.

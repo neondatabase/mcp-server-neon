@@ -11,7 +11,6 @@ import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-sc
 import { captureException, startSpan } from '@sentry/node';
 import { NeonApiError } from '@neon/sdk';
 
-import { getAvailablePrompts, getPromptTemplate } from '../../../mcp/prompts';
 import { NEON_HANDLERS } from '../../../mcp/tools/index';
 import {
   getDocResource,
@@ -509,87 +508,6 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         );
       });
 
-      // Register prompts for this specific auth context.
-      const composedPrompts = getAvailablePrompts(staticToolContext.grant);
-      composedPrompts.forEach((prompt) => {
-        server.registerPrompt(
-          prompt.name,
-          {
-            description: prompt.description,
-            // Same compatibility guardrail as tool registration above.
-            argsSchema: prompt.argsSchema,
-          },
-          async (args: any, extra: any) => {
-            const typedExtra = extra as AuthenticatedExtra;
-            if (checkEnvelopeMatches(typedExtra, `prompt:${prompt.name}`)) {
-              // Silently drop the misrouted invocation; see tool handler note.
-              return { messages: [] } as const;
-            }
-
-            const {
-              account,
-              authMethod,
-              readOnly,
-              clientApplication: clientApp,
-              clientName: cName,
-              client,
-              context,
-            } = await getAuthContext(typedExtra);
-
-            // Track server_init on first authenticated request
-            trackServerInit(context);
-
-            const traceId = generateTraceId();
-            const properties = {
-              authMethod,
-              prompt_name: prompt.name,
-              clientName: cName,
-              traceId,
-            };
-            logger.info('prompt call:', properties);
-            setSentryTags(context);
-
-            track({
-              userId: account.id,
-              event: 'prompt_call',
-              properties,
-              context: { client, app: context.app },
-            });
-            waitUntil(flushAnalytics());
-
-            try {
-              const extraArgs: ToolHandlerExtraParams = {
-                ...extra,
-                account,
-                readOnly,
-                clientApplication: clientApp,
-              };
-              const template = await getPromptTemplate(
-                prompt.name,
-                extraArgs,
-                args,
-              );
-              return {
-                messages: [
-                  {
-                    role: 'user' as const,
-                    content: {
-                      type: 'text' as const,
-                      text: template,
-                    },
-                  },
-                ],
-              };
-            } catch (error) {
-              captureException(error, {
-                extra: properties,
-              });
-              throw error;
-            }
-          },
-        );
-      });
-
       // Override tools/list to return the same context-scoped surface that was
       // registered for this handler instance.
       server.server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -625,9 +543,6 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
       capabilities: {
         tools: {},
         resources: {},
-        prompts: {
-          listChanged: true,
-        },
       },
     },
     {
