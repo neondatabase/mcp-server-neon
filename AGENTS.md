@@ -65,7 +65,7 @@ pnpm test:integration
 # Run MCP protocol e2e tests (real tool calls over MCP protocol)
 pnpm test:e2e:mcp
 
-# Run live MCP → Neon E2E tests (requires .env)
+# Run live MCP → Neon E2E tests (requires .env.test)
 pnpm test:e2e:live
 
 # Run website e2e tests (Playwright; provisions/validates ephemeral DB first)
@@ -86,13 +86,13 @@ registration, handlers, `@neon/sdk`, connection-string resolution, and SQL.
 Set up the dedicated disposable test organization:
 
 ```bash
-cp .env.example .env
+cp .env.test.example .env.test
 # Fill in NEON_API_KEY with an org-scoped key for the disposable test org.
 # NEON_TEST_ORG_ID is inferred for org-scoped keys; set it for user keys.
 pnpm test:e2e:live
 ```
 
-The test only loads this repository's `.env`; it must not inspect parent or
+The test only loads this repository's `.env.test`; it must not inspect parent or
 workspace-global environment files. The suite asks `@neon/sdk` for the
 organization attached to an org-scoped key.
 
@@ -100,7 +100,7 @@ The suite always creates a uniquely named `smoke-mcp-live-*` project first and
 deletes it at the end. Cleanup runs from `afterAll` even when an assertion fails,
 uses `@neon/sdk` to verify the project name before deletion, and refuses to
 delete projects without the smoke prefix. Never point these variables at a
-personal or production organization, and never commit `.env`.
+personal or production organization, and never commit `.env.test`.
 
 ### Live API-key smoke testing with mcporter
 
@@ -262,7 +262,7 @@ export const NEON_HANDLERS = {
 
 ## Environment Configuration
 
-See `.env.example` for live-test configuration. Runtime configuration is
+See `.env.test.example` for live-test configuration. Runtime configuration is
 normally provided through `.env.local`. Key variables:
 
 - `NEON_API_KEY`: Required only for opt-in live Neon E2E tests and local API-key smoke tests

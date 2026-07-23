@@ -9,7 +9,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { NeonApiClient } from '../../neon-client';
 
-loadEnv({ path: '.env', quiet: true });
+loadEnv({ path: '.env.test', quiet: true });
 
 // Live tests should not emit product analytics or Sentry events.
 process.env.ANALYTICS_WRITE_KEY = '';
@@ -57,7 +57,7 @@ function requireApiKey(): string {
   const value = process.env[name]?.trim();
   if (!value) {
     throw new Error(
-      `${name} is required. Copy .env.example to the repository-local .env.`,
+      `${name} is required. Copy .env.test.example to the repository-local .env.test.`,
     );
   }
   return value;
