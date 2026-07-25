@@ -1,5 +1,6 @@
 import { KeyvPostgres } from '@keyv/postgres';
 import { logger } from '../utils/logger';
+import { pinSslVerificationMode } from '../utils/pg-connection';
 import { retryAsync } from '../utils/retry';
 import type { AuthorizationCode, Client, Token } from 'oauth2-server';
 import Keyv from 'keyv';
@@ -70,7 +71,12 @@ const createLazyKeyv = <T>(table: string, errorLabel: string) => {
     logger.info(`initializing keyv for ${table}`);
     const inst = new Keyv<T>({
       store: new KeyvPostgres({
-        connectionString: process.env.OAUTH_DATABASE_URL,
+        // Names the verification mode explicitly so pg v9 cannot quietly
+        // downgrade it, and so pg stops warning about the alias on every cold
+        // start. See pinSslVerificationMode.
+        connectionString: pinSslVerificationMode(
+          process.env.OAUTH_DATABASE_URL,
+        ),
         schema: SCHEMA,
         table,
       }),
