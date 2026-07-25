@@ -21,6 +21,8 @@ import {
   type ProjectListItem,
 } from '@neon/sdk';
 import { NEON_API_HOST } from './constants';
+import { NonJsonResponseError } from './server/errors';
+import { parseJsonBody, summarizeBody } from './utils/http-body';
 import pkg from '../package.json';
 
 export type {
@@ -120,7 +122,7 @@ type ConnectionUriParams = {
   role_name?: string;
 };
 
-type RawRequest = {
+export type RawRequest = {
   path: string;
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   query?: Record<string, string | number>;
@@ -550,6 +552,15 @@ export function createNeonClient(apiKey: string) {
       );
     },
 
+    /**
+     * Escape hatch for endpoints that are not on the public OpenAPI spec.
+     *
+     * Resolves on any status so callers can map an API-specific error envelope
+     * themselves. A body that is not JSON cannot be represented that way, so it
+     * rejects with NonJsonResponseError carrying the status for the caller to
+     * classify — rather than letting `response.json()` raise a SyntaxError that
+     * hides which side failed (Sentry issue MCP-SERVER-GT).
+     */
     async request<T>(request: RawRequest): Promise<ApiResponse<T>> {
       const url = new URL(request.path);
       for (const [key, value] of Object.entries(request.query ?? {})) {
@@ -562,9 +573,18 @@ export function createNeonClient(apiKey: string) {
           'User-Agent': `mcp-server-neon/${pkg.version}`,
         },
       });
-      const data: T = await response.json();
+      const text = await response.text();
+      const body = parseJsonBody<T>(text);
+      if (!body.ok) {
+        throw new NonJsonResponseError({
+          status: response.status,
+          statusText: response.statusText,
+          contentType: response.headers.get('content-type'),
+          bodySnippet: summarizeBody(text),
+        });
+      }
       return {
-        data,
+        data: body.value,
         status: response.status,
         statusText: response.statusText,
       };

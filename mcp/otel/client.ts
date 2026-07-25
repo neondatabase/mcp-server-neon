@@ -12,9 +12,9 @@
  * signal-agnostic so traces (TraceQL) and metrics (PromQL) can be added later.
  */
 
-import type { Api } from '../neon-client';
+import type { Api, RawRequest } from '../neon-client';
 import { NEON_TELEMETRY_API_HOST } from '../constants';
-import { InvalidArgumentError } from '../server/errors';
+import { InvalidArgumentError, NonJsonResponseError } from '../server/errors';
 import type {
   LokiQueryResponse,
   LokiScalarResponse,
@@ -32,10 +32,10 @@ function tenantBaseUrl(scope: TelemetryScope): string {
 }
 
 /**
- * The client's `request` escape hatch resolves on any status (it does not reject
- * on non-2xx), so a Loki error (`{ status: "error", error: "..." }` with a 4xx/5xx
- * code) resolves with its body intact and we map it here, surfacing the Loki `error`
- * string. This matters because the generic tool-error handler renders
+ * The client's `request` escape hatch resolves on any status when the body is JSON
+ * (it does not reject on non-2xx), so a Loki error (`{ status: "error", error: "..." }`
+ * with a 4xx/5xx code) resolves with its body intact and we map it here, surfacing
+ * the Loki `error` string. This matters because the generic tool-error handler renders
  * `error.response.data.message`, which a Loki body does not have (it uses `error`).
  *
  * A 4xx is the caller's fault (bad LogQL, bad time range) → InvalidArgumentError, a
@@ -52,6 +52,46 @@ function assertOk(response: { status: number; data: unknown }): void {
     throw new Error(`Telemetry backend error: ${message}`);
   }
   throw new InvalidArgumentError(message);
+}
+
+/**
+ * Put an undecodable body on the same fault line assertOk uses.
+ *
+ * The read API is reached through the console's edge, which answers with an HTML
+ * page when it never reaches the backend (gateway 502/504, WAF block, auth
+ * redirect). A 4xx page is the caller's problem — a revoked key or a project the
+ * key cannot see — so it stays a client error. Anything else is ours: a 5xx page
+ * means the backend is unhealthy, and JSON-shaped success that is not JSON at all
+ * means the edge is intercepting our traffic. Both need to reach on-call.
+ */
+function telemetryErrorFromNonJson(error: NonJsonResponseError): Error {
+  const detail = `non-JSON response (HTTP ${error.status}, content-type ${
+    error.contentType ?? 'unknown'
+  }): ${error.bodySnippet}`;
+  if (error.status >= 400 && error.status < 500) {
+    return new InvalidArgumentError(`Telemetry API returned a ${detail}`);
+  }
+  return new Error(`Telemetry backend error: ${detail}`);
+}
+
+/**
+ * Single entry point for telemetry reads, so the error contract (Loki envelopes and
+ * undecodable bodies alike) is defined once for every endpoint.
+ */
+async function telemetryRequest<T>(
+  neonClient: Api<unknown>,
+  request: RawRequest,
+): Promise<T> {
+  try {
+    const response = await neonClient.request<T>(request);
+    assertOk(response);
+    return response.data;
+  } catch (error) {
+    if (error instanceof NonJsonResponseError) {
+      throw telemetryErrorFromNonJson(error);
+    }
+    throw error;
+  }
 }
 
 type QueryRangeParams = {
@@ -81,14 +121,12 @@ export async function queryRange(
   if (params.limit !== undefined) query.limit = params.limit;
   if (params.direction) query.direction = params.direction;
 
-  const response = await neonClient.request<LokiQueryResponse>({
+  return telemetryRequest<LokiQueryResponse>(neonClient, {
     path: `${tenantBaseUrl(params.scope)}/query_range`,
     method: 'GET',
     query,
     secure: true,
   });
-  assertOk(response);
-  return response.data;
 }
 
 /** Fetch the advertised stream label names (the filterable low-cardinality fields). */
@@ -96,13 +134,12 @@ export async function listLabels(
   neonClient: Api<unknown>,
   scope: TelemetryScope,
 ): Promise<string[]> {
-  const response = await neonClient.request<LokiScalarResponse>({
+  const body = await telemetryRequest<LokiScalarResponse>(neonClient, {
     path: `${tenantBaseUrl(scope)}/labels`,
     method: 'GET',
     secure: true,
   });
-  assertOk(response);
-  return response.data.data;
+  return body.data;
 }
 
 type LabelValuesParams = {
@@ -119,12 +156,11 @@ export async function listLabelValues(
   const query: Record<string, string> = {};
   if (params.since) query.since = params.since;
 
-  const response = await neonClient.request<LokiScalarResponse>({
+  const body = await telemetryRequest<LokiScalarResponse>(neonClient, {
     path: `${tenantBaseUrl(params.scope)}/label/${encodeURIComponent(params.label)}/values`,
     method: 'GET',
     query,
     secure: true,
   });
-  assertOk(response);
-  return response.data.data;
+  return body.data;
 }

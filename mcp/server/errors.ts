@@ -17,6 +17,40 @@ export class NotFoundError extends Error {
   }
 }
 
+type NonJsonResponseDetails = {
+  status: number;
+  statusText: string;
+  contentType: string | null;
+  bodySnippet: string;
+};
+
+/**
+ * An upstream response whose body could not be parsed as JSON, typically an HTML
+ * error page served by the edge in front of the API.
+ *
+ * It carries the HTTP context that a bare `SyntaxError` from `JSON.parse` discards,
+ * so the layer that knows the API's semantics can decide whether the caller or the
+ * backend is at fault. It is intentionally not a client error: left unclassified it
+ * reaches Sentry, because an undecodable body is never something the LLM can fix.
+ */
+export class NonJsonResponseError extends Error {
+  readonly status: number;
+  readonly statusText: string;
+  readonly contentType: string | null;
+  readonly bodySnippet: string;
+
+  constructor(details: NonJsonResponseDetails) {
+    super(
+      `Expected JSON but received ${details.contentType ?? 'an unknown content type'} (HTTP ${details.status}): ${details.bodySnippet}`,
+    );
+    this.name = 'NonJsonResponseError';
+    this.status = details.status;
+    this.statusText = details.statusText;
+    this.contentType = details.contentType;
+    this.bodySnippet = details.bodySnippet;
+  }
+}
+
 function isClientError(
   error: unknown,
 ): error is InvalidArgumentError | NotFoundError {
