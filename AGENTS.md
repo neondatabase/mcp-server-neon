@@ -65,12 +65,47 @@ pnpm test:integration
 # Run MCP protocol e2e tests (real tool calls over MCP protocol)
 pnpm test:e2e:mcp
 
+# Run live MCP → Neon E2E tests (requires .env.test)
+pnpm test:e2e:live
+
 # Run website e2e tests (Playwright; provisions/validates ephemeral DB first)
 pnpm test:e2e:web
 
 # Run all e2e tests
 pnpm test:e2e
 ```
+
+### Live MCP → Neon E2E tests
+
+`pnpm test:e2e:live` runs a real MCP client and server over the SDK's in-memory
+transport, while every tool call reaches the real Neon Management API and a real
+temporary Neon database. This is more deterministic than starting an HTTP server
+and shelling through `mcporter`, while still covering MCP schemas, tool
+registration, handlers, `@neon/sdk`, connection-string resolution, and SQL.
+
+Set up the dedicated disposable test organization:
+
+```bash
+cp .env.test.example .env.test
+# Fill in NEON_API_KEY with an org-scoped key for the disposable test org.
+# NEON_TEST_ORG_ID is inferred for org-scoped keys; set it for user keys.
+pnpm test:e2e:live
+```
+
+The test only loads this repository's `.env.test`; it must not inspect parent or
+workspace-global environment files. The suite asks `@neon/sdk` for the
+organization attached to an org-scoped key.
+
+The suite always creates a uniquely named `smoke-mcp-live-*` project first and
+deletes it at the end. Cleanup runs from `afterAll` even when an assertion fails,
+uses `@neon/sdk` to verify the project name before deletion, and refuses to
+delete projects without the smoke prefix. Never point these variables at a
+personal or production organization, and never commit `.env.test`.
+
+For same-repository pull requests, `.github/workflows/pr.yml` maps the
+repository secret `NEON_TEST_API_KEY` to `NEON_API_KEY` for this step. Fork and
+Dependabot PRs skip the live suite because GitHub does not safely expose
+repository secrets to untrusted PR code.
 
 ### Live API-key smoke testing with mcporter
 
@@ -81,6 +116,7 @@ To verify a local MCP server against the real Neon API, start it with `NEON_API_
 The repository follows this hierarchy:
 
 1. **E2E first** (highest confidence):
+   - `test:e2e:live`: MCP client + server + real Neon API/project/database lifecycle. Opt-in because it requires a dedicated test-org API key.
    - `test:e2e:mcp`: MCP client + server protocol tests that perform real tool calls.
    - `test:e2e:web`: Playwright tests for website and HTTP endpoints.
 2. **Integration second**:
@@ -94,7 +130,9 @@ Use file naming to classify tiers:
 - `*.integration.test.ts` for integration tests
 - `*.test.ts` for unit tests
 
-Merge-gating tests must be deterministic. Do not make third-party uptime (for example, external docs websites) a required CI dependency.
+Keep the default unit/integration suites deterministic. The explicitly named
+live Neon E2E step is the only merge check that depends on external
+infrastructure.
 
 **Unit and integration tests** use [Vitest](https://vitest.dev/) and live in `mcp/__tests__/`. Configuration is in `vitest.config.ts`.
 
@@ -103,7 +141,7 @@ Merge-gating tests must be deterministic. Do not make third-party uptime (for ex
 - **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com) and generates a random `COOKIE_SECRET`. Both are written to `.env.e2e` (gitignored) and passed to the Next.js dev server.
 - **No secrets needed**: The e2e infrastructure is fully self-contained. Instagres databases expire after 72 hours; no explicit teardown is required.
 - **Reuse across runs**: If `.env.e2e` already exists, global-setup reuses it instead of re-provisioning. Delete the file to force a fresh database.
-- **CI**: The PR workflow runs format, lint, knip, `pnpm test`, and build before merge.
+- **CI**: The PR workflow runs format, lint, knip, `pnpm test`, live Neon E2E for trusted same-repo PRs, and build before merge.
 
 ## Architecture
 
@@ -231,9 +269,11 @@ export const NEON_HANDLERS = {
 
 ## Environment Configuration
 
-See `.env.local.example` for all configuration options. Key variables:
+See `.env.test.example` for live-test configuration. Runtime configuration is
+normally provided through `.env.local`. Key variables:
 
-- `NEON_API_KEY`: Required for running tests (unit, integration, e2e)
+- `NEON_API_KEY`: Required only for opt-in live Neon E2E tests and local API-key smoke tests
+- `NEON_TEST_ORG_ID`: Dedicated disposable organization for live E2E tests; optional with an org-scoped key
 - `OAUTH_DATABASE_URL`: Required for remote MCP server with OAuth
 - `COOKIE_SECRET`: Required for remote MCP server OAuth flow
 - `CLIENT_ID` / `CLIENT_SECRET`: OAuth client credentials
@@ -270,6 +310,7 @@ See `.env.local.example` for all configuration options. Key variables:
 │   └── oauth/          # OAuth utilities for Next.js
 ├── mcp/            # MCP server source code
 │   ├── __tests__/      # Vitest unit/integration/MCP e2e tests
+│   │   ├── live/                   # Opt-in MCP → real Neon lifecycle tests
 │   │   ├── *.test.ts              # Unit tests
 │   │   ├── *.integration.test.ts  # Integration tests
 │   │   └── *.e2e.test.ts          # MCP protocol e2e tests

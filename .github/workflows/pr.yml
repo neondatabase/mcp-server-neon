@@ -65,6 +65,13 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Run tests
         run: pnpm test
+      - name: Run live Neon E2E tests
+        if: >-
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.actor != 'dependabot[bot]'
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_TEST_API_KEY }}
+        run: pnpm test:e2e:live
       - name: Build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
