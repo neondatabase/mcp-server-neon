@@ -396,15 +396,15 @@ pnpm typecheck
 
 Required for remote server runtime:
 
-| Variable              | Description                                                                |
-| --------------------- | -------------------------------------------------------------------------- |
-| `SERVER_HOST`         | Server URL (defaults to `VERCEL_URL`)                                      |
-| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL                                                    |
-| `CLIENT_ID`           | OAuth client ID                                                            |
-| `CLIENT_SECRET`       | OAuth client secret                                                        |
-| `COOKIE_SECRET`       | Secret for signed cookies                                                  |
-| `KV_URL`              | Vercel KV (Upstash Redis) URL                                              |
-| `OAUTH_DATABASE_URL`  | Postgres URL for token storage — must end `sslmode=verify-full`, see below |
+| Variable              | Description                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------ |
+| `SERVER_HOST`         | Server URL (defaults to `VERCEL_URL`)                                                |
+| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL                                                              |
+| `CLIENT_ID`           | OAuth client ID                                                                      |
+| `CLIENT_SECRET`       | OAuth client secret                                                                  |
+| `COOKIE_SECRET`       | Secret for signed cookies                                                            |
+| `KV_URL`              | Vercel KV (Upstash Redis) URL                                                        |
+| `OAUTH_DATABASE_URL`  | Postgres URL for token storage — must use `sslmode=verify-full`, enforced at startup |
 
 Optional:
 
@@ -430,9 +430,16 @@ Two reasons:
   78 of the last 100 error-level entries on production, which buried real failures and made
   filtering logs by error level useless.
 
-Nothing enforces this at runtime — it is deliberately a config requirement rather than a
-connection-string rewrite in application code. If the SSL warning reappears in production
-logs, this is the first thing to check.
+**The OAuth store refuses to start if this is wrong.** `assertSslVerificationMode` checks the
+variable when the Keyv store is first built and throws naming the offending mode, so a
+copy-pasted `require` surfaces as a clear config error on the first OAuth request rather than
+as a silent loss of verification months later. It only ever validates — pinning the mode is
+the environment variable's job, not something application code does by rewriting a live
+connection string.
+
+The check is narrow on purpose. Only `prefer`, `require` and `verify-ca` are rejected, since
+those are the modes whose meaning changes. `disable` and `no-verify` are left alone as
+unambiguous deliberate choices, as is an explicit `uselibpqcompat` opt-in.
 
 ### Testing Pyramid
 

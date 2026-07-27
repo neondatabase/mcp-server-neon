@@ -1,5 +1,6 @@
 import { KeyvPostgres } from '@keyv/postgres';
 import { logger } from '../utils/logger';
+import { assertSslVerificationMode } from './pg-ssl-mode';
 import { retryAsync } from '../utils/retry';
 import type { AuthorizationCode, Client, Token } from 'oauth2-server';
 import Keyv from 'keyv';
@@ -67,6 +68,11 @@ const createLazyKeyv = <T>(table: string, errorLabel: string) => {
   let lastReinitAt = 0;
 
   const build = (): Keyv<T> => {
+    // Checked here rather than at module scope so a misconfigured OAuth store
+    // can't take down routes that never touch it — the docs endpoint bypasses
+    // OAuth entirely. Re-read on every build, so a reinit after a rotation sees
+    // the new value.
+    assertSslVerificationMode(process.env.OAUTH_DATABASE_URL);
     logger.info(`initializing keyv for ${table}`);
     const inst = new Keyv<T>({
       store: new KeyvPostgres({

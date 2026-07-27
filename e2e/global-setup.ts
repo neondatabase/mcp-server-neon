@@ -14,6 +14,21 @@ import { neon } from '@neondatabase/serverless';
 
 const ENV_FILE = path.resolve(import.meta.dirname, '..', '.env.e2e');
 
+/**
+ * The OAuth store refuses to start on an aliased `sslmode` (see
+ * `assertSslVerificationMode`), and Instagres hands back `?sslmode=require`. Pin it
+ * so the e2e environment mirrors production's verification mode rather than
+ * special-casing the guard for tests.
+ *
+ * Safe to build with `URL` here, unlike in application code: this is an ephemeral
+ * 72-hour test database, not a credential we have to avoid re-encoding.
+ */
+function pinSslVerificationMode(connectionString: string): string {
+  const url = new URL(connectionString);
+  url.searchParams.set('sslmode', 'verify-full');
+  return url.toString();
+}
+
 async function provisionInstagresDb(): Promise<string> {
   console.log('[e2e-setup] Provisioning Instagres database...');
 
@@ -40,7 +55,7 @@ async function provisionInstagresDb(): Promise<string> {
     `[e2e-setup] Database provisioned (ID: ${data.id}, expires: ${data.expires_at})`,
   );
 
-  return data.connection_string;
+  return pinSslVerificationMode(data.connection_string);
 }
 
 async function isDatabaseReachable(connectionString: string): Promise<boolean> {
@@ -66,7 +81,11 @@ export default async function globalSetup() {
     const dbMatch = content.match(/OAUTH_DATABASE_URL=(.+)/);
     const secretMatch = content.match(/COOKIE_SECRET=(.+)/);
     if (dbMatch?.[1]) {
-      const existingConnectionString = dbMatch[1].trim();
+      // Also pinned on read: a .env.e2e written before this guard existed still
+      // carries sslmode=require, and reusing it verbatim would fail the store.
+      const existingConnectionString = pinSslVerificationMode(
+        dbMatch[1].trim(),
+      );
       const canReuse = await isDatabaseReachable(existingConnectionString);
       if (canReuse) {
         console.log(

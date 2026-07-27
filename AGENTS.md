@@ -274,7 +274,7 @@ normally provided through `.env.local`. Key variables:
 
 - `NEON_API_KEY`: Required only for opt-in live Neon E2E tests and local API-key smoke tests
 - `NEON_TEST_ORG_ID`: Dedicated disposable organization for live E2E tests; optional with an org-scoped key
-- `OAUTH_DATABASE_URL`: Required for remote MCP server with OAuth. Must specify `sslmode=verify-full` — see "The `sslmode` requirement" below
+- `OAUTH_DATABASE_URL`: Required for remote MCP server with OAuth. Must specify `sslmode=verify-full`, enforced at startup — see "The `sslmode` requirement" below
 - `COOKIE_SECRET`: Required for remote MCP server OAuth flow
 - `CLIENT_ID` / `CLIENT_SECRET`: OAuth client credentials
 
@@ -415,16 +415,16 @@ In addition to the top-level scopes, the server exposes **scope categories** via
 
 ### Environment Variables (Vercel)
 
-| Variable                      | Description                                                     |
-| ----------------------------- | --------------------------------------------------------------- |
-| `SERVER_HOST`                 | Server URL (falls back to `VERCEL_URL`)                         |
-| `UPSTREAM_OAUTH_HOST`         | Neon OAuth provider URL                                         |
-| `CLIENT_ID` / `CLIENT_SECRET` | OAuth client credentials                                        |
-| `COOKIE_SECRET`               | Secret for signed cookies                                       |
-| `KV_URL`                      | Vercel KV (Upstash Redis) URL                                   |
-| `OAUTH_DATABASE_URL`          | Postgres URL for token storage — must use `sslmode=verify-full` |
-| `SENTRY_DSN`                  | Sentry error tracking DSN                                       |
-| `ANALYTICS_WRITE_KEY`         | Segment analytics write key                                     |
+| Variable                      | Description                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------------ |
+| `SERVER_HOST`                 | Server URL (falls back to `VERCEL_URL`)                                              |
+| `UPSTREAM_OAUTH_HOST`         | Neon OAuth provider URL                                                              |
+| `CLIENT_ID` / `CLIENT_SECRET` | OAuth client credentials                                                             |
+| `COOKIE_SECRET`               | Secret for signed cookies                                                            |
+| `KV_URL`                      | Vercel KV (Upstash Redis) URL                                                        |
+| `OAUTH_DATABASE_URL`          | Postgres URL for token storage — must use `sslmode=verify-full`, enforced at startup |
+| `SENTRY_DSN`                  | Sentry error tracking DSN                                                            |
+| `ANALYTICS_WRITE_KEY`         | Segment analytics write key                                                          |
 
 #### The `sslmode` requirement
 
@@ -442,15 +442,34 @@ warns about it on first parse. Two consequences, both of which this avoids:
 - Vercel records the warning at **error** level. It once made up 78 of the last 100
   error-level entries on production, burying real failures.
 
-This is deliberately configuration rather than code. A `pinSslVerificationMode` helper that
-rewrote the mode in `kv-store.ts` was proposed and rejected (#303): the value is set once
-per environment in Vercel, nothing overwrites it there, and rewriting connection strings in
-application code means owning string surgery around a live credential. The tradeoff is that
-drift is silent — if the SSL warning reappears in production logs, check this first.
+**Validated, not rewritten.** `mcp/oauth/pg-ssl-mode.ts` exports
+`assertSslVerificationMode`, called from `createLazyKeyv`'s `build()` in `kv-store.ts`. It
+throws on an aliased mode and never modifies the string.
 
-`e2e/global-setup.ts` is the one place that generates the variable itself, from Instagres
-for Playwright runs. It is unaffected by the Vercel values, so local e2e runs may still emit
-the warning; that is test-log noise, not a production concern.
+The split matters and was argued out in #303, which proposed a `pinSslVerificationMode`
+helper that rewrote the mode in application code. That was rejected: the value is set once
+per environment in Vercel, nothing overwrites it there, and rewriting means owning string
+surgery around a live credential. Validating instead keeps configuration as the single source
+of truth while still making drift loud.
+
+Two deliberate choices in the check:
+
+- **Narrow.** Only `prefer`, `require` and `verify-ca` are rejected — the modes whose meaning
+  changes. `disable`, `no-verify`, an explicit `uselibpqcompat`, a missing `sslmode`, a
+  keyword/value DSN, and an absent variable all pass, because turning those into an SSL error
+  would mislead. A false positive fails every OAuth request, so the predicate errs toward
+  accepting.
+- **In `build()`, not at module scope.** A misconfigured OAuth store must not take down routes
+  that never touch it — the `category=docs` endpoint bypasses OAuth entirely. The cost is that
+  it fails on first OAuth use rather than at import; the benefit is a contained blast radius.
+  Because `build()` re-reads the variable, a reinit after a rotation is checked too.
+
+`e2e/global-setup.ts` is the one place that generates the variable itself, from Instagres for
+Playwright runs, and Instagres hands back `?sslmode=require`. It pins the mode to
+`verify-full` before writing `.env.e2e` — both for freshly provisioned databases and when
+reusing an existing file — so the e2e environment mirrors production instead of the guard
+being special-cased for tests. `URL` is safe to use there: it's an ephemeral 72-hour test
+database, not a credential worth avoiding a re-encode on.
 
 ### Development Notes
 
