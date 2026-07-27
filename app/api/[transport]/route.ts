@@ -1103,6 +1103,43 @@ function isSseConnectionRequest(req: Request): boolean {
   return req.method === 'GET' && SSE_CONNECTION_PATHS.has(url.pathname);
 }
 
+/**
+ * What GET answers for this endpoint, minus the body.
+ *
+ * HEAD must not be forwarded to mcp-handler: its streamable-HTTP branch writes a
+ * response only for GET, DELETE, and POST, so a HEAD falls through every branch
+ * and the response promise never settles. The invocation then runs to the Fluid
+ * Compute ceiling and Vercel answers 504 — 800 seconds of compute per probe, and
+ * uptime checkers send them on a schedule.
+ *
+ * Mirroring GET keeps HEAD useful: probes learn the endpoint is alive, and the
+ * status matches what a GET would have returned.
+ */
+function headMirrorResponse(pathname: string): Response {
+  if (SSE_CONNECTION_PATHS.has(pathname)) {
+    // GET opens an SSE stream here. Advertise the stream without starting one,
+    // since a HEAD response cannot carry it.
+    return new Response(null, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    });
+  }
+  // The streamable-HTTP transport is POST-only; GET is 405 (mcp-handler).
+  return new Response(null, {
+    status: 405,
+    headers: { ...JSON_RESPONSE_HEADERS, Allow: 'POST' },
+  });
+}
+
+/** Drop the body while preserving status and headers, as HEAD requires. */
+function stripBody(response: Response): Response {
+  return new Response(null, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
 function jsonErrorResponse({
   status,
   error,
@@ -1219,6 +1256,19 @@ const authHandler = withMcpAuth(
   },
 );
 
+// HEAD goes through the same auth pipeline as GET, so an unauthenticated probe
+// still receives the 401 + WWW-Authenticate that MCP clients rely on for OAuth
+// discovery. Only the handler differs: it answers directly instead of handing the
+// request to mcp-handler, which would never respond to a HEAD.
+const headAuthHandler = withMcpAuth(
+  async (req) => headMirrorResponse(new URL(req.url).pathname),
+  verifyToken,
+  {
+    required: true,
+    resourceMetadataPath: PROTECTED_RESOURCE_METADATA_PATH,
+  },
+);
+
 function rewriteResourceMetadataHeader(
   response: Response,
   request: Request,
@@ -1290,6 +1340,19 @@ const handleRequest = (req: Request) => {
     duplex: 'half',
   });
 
+  // HEAD is answered here rather than by either MCP handler, both of which leave
+  // it unanswered until the function times out. Checked before the docs-only
+  // bypass because that path skips auth entirely, which would otherwise let an
+  // anonymous HEAD probe hang.
+  if (normalizedReq.method === 'HEAD') {
+    if (isDocsOnlyRequest(url.searchParams)) {
+      return headMirrorResponse(url.pathname);
+    }
+    return Promise.resolve(headAuthHandler(normalizedReq)).then((resolved) =>
+      stripBody(rewriteResourceMetadataHeader(resolved, req)),
+    );
+  }
+
   // Strict docs-only mode: bypass OAuth entirely so docs tools are usable
   // without an account. Only triggers when the request is exactly
   // ?category=docs (no other categories, no projectId).
@@ -1306,4 +1369,12 @@ const handleRequest = (req: Request) => {
   return rewriteResourceMetadataHeader(response, req);
 };
 
-export { handleRequest as GET, handleRequest as POST, handleRequest as DELETE };
+// HEAD is exported explicitly. Next.js would otherwise route it to the GET export,
+// which is the same function, but relying on that implicit mapping hides the fact
+// that HEAD needs its own branch to avoid the mcp-handler timeout.
+export {
+  handleRequest as GET,
+  handleRequest as POST,
+  handleRequest as DELETE,
+  handleRequest as HEAD,
+};
