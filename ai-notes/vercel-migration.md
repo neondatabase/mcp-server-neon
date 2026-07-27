@@ -293,7 +293,7 @@ Required for Vercel deployment:
 | `COOKIE_SECRET`       | Secret for signed cookies                           |
 | `KV_URL`              | Redis URL for session storage (Vercel KV / Upstash) |
 | `REDIS_URL`           | Redis URL fallback for local development            |
-| `OAUTH_DATABASE_URL`  | Postgres URL for token storage                      |
+| `OAUTH_DATABASE_URL`  | Postgres URL for token storage (`sslmode=verify-full`) |
 | `SENTRY_DSN`          | Sentry error tracking DSN                           |
 | `ANALYTICS_WRITE_KEY` | Segment analytics write key                         |
 

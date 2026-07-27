@@ -396,21 +396,43 @@ pnpm typecheck
 
 Required for remote server runtime:
 
-| Variable              | Description                           |
-| --------------------- | ------------------------------------- |
-| `SERVER_HOST`         | Server URL (defaults to `VERCEL_URL`) |
-| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL               |
-| `CLIENT_ID`           | OAuth client ID                       |
-| `CLIENT_SECRET`       | OAuth client secret                   |
-| `COOKIE_SECRET`       | Secret for signed cookies             |
-| `KV_URL`              | Vercel KV (Upstash Redis) URL         |
-| `OAUTH_DATABASE_URL`  | Postgres URL for token storage        |
+| Variable              | Description                                                                |
+| --------------------- | -------------------------------------------------------------------------- |
+| `SERVER_HOST`         | Server URL (defaults to `VERCEL_URL`)                                      |
+| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL                                                    |
+| `CLIENT_ID`           | OAuth client ID                                                            |
+| `CLIENT_SECRET`       | OAuth client secret                                                        |
+| `COOKIE_SECRET`       | Secret for signed cookies                                                  |
+| `KV_URL`              | Vercel KV (Upstash Redis) URL                                              |
+| `OAUTH_DATABASE_URL`  | Postgres URL for token storage — must end `sslmode=verify-full`, see below |
 
 Optional:
 
 | Variable    | Description                                                                       |
 | ----------- | --------------------------------------------------------------------------------- |
 | `LOG_LEVEL` | Winston log level: `error`, `warn`, `info` (default), `debug`, `verbose`, `silly` |
+
+#### The `sslmode` requirement
+
+`OAUTH_DATABASE_URL` must specify **`sslmode=verify-full`**. Neon's console hands out
+connection strings ending in `?sslmode=require`, so this needs changing by hand when the
+value is set or rotated — copy the string from Neon, then replace `require` with
+`verify-full` and leave every other parameter (including `channel_binding`) intact.
+
+Two reasons:
+
+- **`require` is about to mean something weaker.** Today `pg` treats `prefer`, `require`
+  and `verify-ca` as aliases for `verify-full`, i.e. full certificate _and_ hostname
+  verification. In `pg` v9 / `pg-connection-string` v3 they adopt libpq semantics, where
+  `require` encrypts without verifying. Naming the mode we want keeps today's guarantee
+  instead of silently inheriting a weaker one at the next major bump.
+- **`pg` warns about the alias, and Vercel logs it at error level.** It once accounted for
+  78 of the last 100 error-level entries on production, which buried real failures and made
+  filtering logs by error level useless.
+
+Nothing enforces this at runtime — it is deliberately a config requirement rather than a
+connection-string rewrite in application code. If the SSL warning reappears in production
+logs, this is the first thing to check.
 
 ### Testing Pyramid
 

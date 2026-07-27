@@ -274,7 +274,7 @@ normally provided through `.env.local`. Key variables:
 
 - `NEON_API_KEY`: Required only for opt-in live Neon E2E tests and local API-key smoke tests
 - `NEON_TEST_ORG_ID`: Dedicated disposable organization for live E2E tests; optional with an org-scoped key
-- `OAUTH_DATABASE_URL`: Required for remote MCP server with OAuth
+- `OAUTH_DATABASE_URL`: Required for remote MCP server with OAuth. Must specify `sslmode=verify-full` — see "The `sslmode` requirement" below
 - `COOKIE_SECRET`: Required for remote MCP server OAuth flow
 - `CLIENT_ID` / `CLIENT_SECRET`: OAuth client credentials
 
@@ -415,16 +415,42 @@ In addition to the top-level scopes, the server exposes **scope categories** via
 
 ### Environment Variables (Vercel)
 
-| Variable                      | Description                             |
-| ----------------------------- | --------------------------------------- |
-| `SERVER_HOST`                 | Server URL (falls back to `VERCEL_URL`) |
-| `UPSTREAM_OAUTH_HOST`         | Neon OAuth provider URL                 |
-| `CLIENT_ID` / `CLIENT_SECRET` | OAuth client credentials                |
-| `COOKIE_SECRET`               | Secret for signed cookies               |
-| `KV_URL`                      | Vercel KV (Upstash Redis) URL           |
-| `OAUTH_DATABASE_URL`          | Postgres URL for token storage          |
-| `SENTRY_DSN`                  | Sentry error tracking DSN               |
-| `ANALYTICS_WRITE_KEY`         | Segment analytics write key             |
+| Variable                      | Description                                                     |
+| ----------------------------- | --------------------------------------------------------------- |
+| `SERVER_HOST`                 | Server URL (falls back to `VERCEL_URL`)                         |
+| `UPSTREAM_OAUTH_HOST`         | Neon OAuth provider URL                                         |
+| `CLIENT_ID` / `CLIENT_SECRET` | OAuth client credentials                                        |
+| `COOKIE_SECRET`               | Secret for signed cookies                                       |
+| `KV_URL`                      | Vercel KV (Upstash Redis) URL                                   |
+| `OAUTH_DATABASE_URL`          | Postgres URL for token storage — must use `sslmode=verify-full` |
+| `SENTRY_DSN`                  | Sentry error tracking DSN                                       |
+| `ANALYTICS_WRITE_KEY`         | Segment analytics write key                                     |
+
+#### The `sslmode` requirement
+
+`OAUTH_DATABASE_URL` must specify **`sslmode=verify-full`**, in every environment. Neon's
+console hands out `?sslmode=require`, so this is a manual step whenever the value is set or
+rotated: replace `require` with `verify-full` and leave every other parameter (including
+`channel_binding`) byte-for-byte intact.
+
+`pg` currently treats `prefer`, `require` and `verify-ca` as aliases for `verify-full`, and
+warns about it on first parse. Two consequences, both of which this avoids:
+
+- In `pg` v9 / `pg-connection-string` v3 those modes adopt libpq semantics, where `require`
+  encrypts but does not verify. Naming the mode explicitly keeps today's certificate and
+  hostname verification rather than silently inheriting a weaker guarantee.
+- Vercel records the warning at **error** level. It once made up 78 of the last 100
+  error-level entries on production, burying real failures.
+
+This is deliberately configuration rather than code. A `pinSslVerificationMode` helper that
+rewrote the mode in `kv-store.ts` was proposed and rejected (#303): the value is set once
+per environment in Vercel, nothing overwrites it there, and rewriting connection strings in
+application code means owning string surgery around a live credential. The tradeoff is that
+drift is silent — if the SSL warning reappears in production logs, check this first.
+
+`e2e/global-setup.ts` is the one place that generates the variable itself, from Instagres
+for Playwright runs. It is unaffected by the Vercel values, so local e2e runs may still emit
+the warning; that is test-log noise, not a production concern.
 
 ### Development Notes
 
