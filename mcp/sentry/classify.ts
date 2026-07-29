@@ -64,9 +64,15 @@ const UNOWNED: ReadonlyArray<{
   rule: string;
   report: boolean;
 }> = [
-  // The peer hung up on us. There is no failure here to investigate.
-  { pattern: /EPIPE/, rule: 'client-disconnect:epipe', report: false },
+  // The only rule that discards, and the only one the previous `ignoreErrors` list
+  // also discarded. Node raises a bare `aborted` when the peer goes away mid-request.
   { pattern: /^aborted$/i, rule: 'client-disconnect:aborted', report: false },
+
+  // A write to a socket the peer already closed. Almost always a client hanging up
+  // mid-stream, but this was never filtered before and it arrives at `fatal` level,
+  // so it is grouped rather than dropped — a refactor of the noise policy is the
+  // wrong place to make several thousand `fatal` events disappear.
+  { pattern: /EPIPE/, rule: 'client-disconnect:epipe', report: true },
 
   // Transport faults that reach Sentry without an SDK wrapper. Kept visible: these
   // are usually transient, but "usually" is not "always" and the count is the signal.

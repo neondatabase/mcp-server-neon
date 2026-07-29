@@ -84,15 +84,16 @@ describe('Neon API errors', () => {
 });
 
 describe('errors raised outside our code', () => {
-  it.each([
-    ['EPIPE: broken pipe, write', 'client-disconnect:epipe'],
-    ['write EPIPE', 'client-disconnect:epipe'],
-    ['aborted', 'client-disconnect:aborted'],
-  ])('drops the client disconnect %j', (message, rule) => {
-    expect(classify(new Error(message))).toEqual({ report: false, rule });
+  it('drops a bare aborted, the one case ignoreErrors also dropped', () => {
+    expect(classify(new Error('aborted'))).toEqual({
+      report: false,
+      rule: 'client-disconnect:aborted',
+    });
   });
 
   it.each([
+    ['EPIPE: broken pipe, write', 'client-disconnect:epipe'],
+    ['write EPIPE', 'client-disconnect:epipe'],
     ['read ECONNRESET', 'transport:econnreset'],
     ['socket hang up', 'transport:socket-hang-up'],
     ['read ETIMEDOUT', 'transport:etimedout'],
@@ -109,6 +110,40 @@ describe('errors raised outside our code', () => {
     expect(d.report).toBe(true);
     expect(d.level).toBe('warning');
     expect(d.rule).toBe(rule);
+  });
+});
+
+describe('nothing that used to be reported becomes silent', () => {
+  // The previous `ignoreErrors` list, verbatim. Anything it did NOT drop was visible
+  // in Sentry, and this refactor must not delete it as a side effect.
+  const previouslyDropped = [
+    'write EPROTO ... ssl handshake',
+    'tlsv1 alert decrypt error',
+    'error:1408F10B:SSL routines:ssl3_read_bytes:x',
+    'SSL alert number 51',
+    'read ECONNRESET',
+    'socket hang up',
+    'Client network socket disconnected before secure TLS connection was established',
+    'aborted',
+    'Connection terminated unexpectedly',
+  ];
+
+  it.each(previouslyDropped)(
+    '%j stays droppable or grouped, never louder',
+    (m) => {
+      const d = classify(new Error(m));
+      expect(d.report === false || d.level === 'warning').toBe(true);
+    },
+  );
+
+  it.each([
+    'write EPIPE',
+    'EPIPE: broken pipe, write',
+    'Failed to fetch GitHub content: 404 Not Found',
+    'Disconnects client',
+    'Cannot find module xtend/mutable',
+  ])('%j is still reported', (m) => {
+    expect(classify(new Error(m)).report).toBe(true);
   });
 });
 
@@ -149,7 +184,7 @@ describe('beforeSend', () => {
   });
 
   it('returns null for a dropped error', () => {
-    expect(send(new Error('write EPIPE'))).toBeNull();
+    expect(send(new Error('aborted'))).toBeNull();
   });
 
   it('leaves an unmatched error untouched', () => {
