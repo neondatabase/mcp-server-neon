@@ -30,7 +30,7 @@
   "dependencies": {
     "@keyv/postgres": "2.1.2",
     "@modelcontextprotocol/sdk": "1.25.3",
-    "@neon/sdk": "1.2.0",
+    "@neon/sdk": "1.4.0",
     "@neondatabase/serverless": "1.0.0",
     "@segment/analytics-node": "2.2.1",
     "@sentry/node": "9.19.0",
