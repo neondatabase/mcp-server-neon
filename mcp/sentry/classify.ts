@@ -20,8 +20,8 @@
 
 import type { ErrorEvent, EventHint } from '@sentry/node';
 
-/** What Sentry should do with one error. */
-export type Disposition = {
+/** What Sentry should do with one error. Internal to this module's policy. */
+type Disposition = {
   /** Send the event at all. `false` discards it. */
   report: boolean;
   /** Lower the event level when reporting. */
