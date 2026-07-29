@@ -1,6 +1,7 @@
 import { init } from '@sentry/node';
 import { SENTRY_DSN } from '../constants';
 import pkg from '../../package.json';
+import { beforeSend } from './classify';
 
 init({
   dsn: SENTRY_DSN,
@@ -12,19 +13,10 @@ init({
   // For example, automatic IP address collection on events
   sendDefaultPii: true,
 
-  // Ignore transient network/SSL errors that aren't actionable
-  ignoreErrors: [
-    // SSL/TLS handshake failures (transient network issues)
-    /EPROTO.*ssl/i,
-    /tlsv1 alert decrypt error/i,
-    /SSL routines.*ssl3_read_bytes/i,
-    /SSL alert number 51/i,
-    // Connection reset/abort errors (client disconnects)
-    /ECONNRESET/,
-    /socket hang up/i,
-    /Client network socket disconnected before secure TLS connection/i,
-    /^aborted$/i,
-    // PostgreSQL connection terminated (stale serverless connections)
-    /Connection terminated unexpectedly/i,
-  ],
+  // Noise policy lives in `classify`, not here. `ignoreErrors` can only match error
+  // text, and it only ever sees the outermost exception of a `cause` chain — so it
+  // silently stopped filtering anything once the Neon SDK began wrapping transport
+  // faults. `beforeSend` gets the thrown object, so the decision can read `kind` and
+  // `reason` instead of guessing at wording.
+  beforeSend,
 });
