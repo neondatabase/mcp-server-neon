@@ -591,10 +591,6 @@ export function createNeonClient(apiKey: string) {
     get apiKey() {
       return apiKey;
     },
-
-    get userAgent() {
-      return USER_AGENT;
-    },
   };
 }
 
