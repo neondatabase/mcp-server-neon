@@ -23,7 +23,8 @@ export const splitSqlStatements = (sql: string) => {
 
   const matchDollarQuoteTag = (start: number) => {
     const remainder = sql.slice(start);
-    const match = remainder.match(/^\$[A-Za-z_][A-Za-z0-9_]*\$/) ??
+    const match =
+      remainder.match(/^\$[A-Za-z_][A-Za-z0-9_]*\$/) ??
       remainder.match(/^\$\$/);
     return match?.[0] ?? null;
   };
