@@ -19,13 +19,26 @@ import pkg from '../../package.json';
 let server: Server;
 let baseUrl: string;
 let receivedUserAgents: (string | undefined)[];
+let receivedAuthorization: (string | undefined)[];
+let receivedBodies: string[];
 
 beforeEach(async () => {
   receivedUserAgents = [];
+  receivedAuthorization = [];
+  receivedBodies = [];
   server = createServer((req, res) => {
     receivedUserAgents.push(req.headers['user-agent']);
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ project: { id: 'test-project' } }));
+    receivedAuthorization.push(req.headers.authorization);
+
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => {
+      if (chunks.length > 0) {
+        receivedBodies.push(Buffer.concat(chunks).toString());
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ project: { id: 'test-project' } }));
+    });
   });
 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -63,5 +76,27 @@ describe('Neon API client user agent', () => {
     });
 
     expect(receivedUserAgents).toEqual([`mcp-server-neon/${pkg.version}`]);
+  });
+
+  it('leaves the Authorization header the SDK sets intact', async () => {
+    const { createNeonClient } = await import('../neon-client');
+    const client = createNeonClient('test-api-key');
+
+    await client.getProject('test-project');
+
+    expect(receivedAuthorization).toEqual(['Bearer test-api-key']);
+  });
+
+  it('carries the body and headers of a POST through unchanged', async () => {
+    const { createNeonClient } = await import('../neon-client');
+    const client = createNeonClient('test-api-key');
+
+    await client.createProject({ project: { name: 'test-project' } });
+
+    expect(receivedUserAgents).toEqual([`mcp-server-neon/${pkg.version}`]);
+    expect(receivedAuthorization).toEqual(['Bearer test-api-key']);
+    expect(receivedBodies).toEqual([
+      JSON.stringify({ project: { name: 'test-project' } }),
+    ]);
   });
 });

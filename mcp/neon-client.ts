@@ -155,9 +155,12 @@ const USER_AGENT = `mcp-server-neon/${pkg.version}`;
  * so identifying ourselves means wrapping `fetch`.
  */
 const fetchAsMcpServer: typeof fetch = (input, init) => {
-  const headers = new Headers(init?.headers);
-  headers.set('User-Agent', USER_AGENT);
-  return fetch(input, { ...init, headers });
+  // The SDK calls this as `fetch(request)` with auth and content headers already
+  // on the Request, so the header has to be added to that request rather than
+  // supplied alongside it — passing an `init.headers` would replace them all.
+  const request = new Request(input, init);
+  request.headers.set('User-Agent', USER_AGENT);
+  return fetch(request);
 };
 
 /**
