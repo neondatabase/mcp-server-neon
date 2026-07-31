@@ -425,6 +425,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   readOnly: String(readOnly),
                   projectScoped: String(!!grant.projectId),
                   clientName: cName,
+                  clientApplication: clientApp,
                   traceId,
                 };
 
