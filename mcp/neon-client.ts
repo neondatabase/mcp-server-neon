@@ -146,6 +146,23 @@ async function readPage<T>(
   return result.data;
 }
 
+const USER_AGENT = `mcp-server-neon/${pkg.version}`;
+
+/**
+ * The Neon control plane attributes each request to a caller by its user agent,
+ * which is what makes MCP traffic separable from direct API traffic in Segment.
+ * `@neon/sdk` sends no user agent and its config exposes no way to set a header,
+ * so identifying ourselves means wrapping `fetch`.
+ */
+const fetchAsMcpServer: typeof fetch = (input, init) => {
+  // The SDK calls this as `fetch(request)` with auth and content headers already
+  // on the Request, so the header has to be added to that request rather than
+  // supplied alongside it — passing an `init.headers` would replace them all.
+  const request = new Request(input, init);
+  request.headers.set('User-Agent', USER_AGENT);
+  return fetch(request);
+};
+
 /**
  * Compatibility facade used while MCP handlers are migrated. It runs every
  * documented management-API request through `@neon/sdk`: ergonomic resources
@@ -157,6 +174,7 @@ export function createNeonClient(apiKey: string) {
     apiKey,
     baseUrl: NEON_API_HOST,
     throwOnError: true,
+    fetch: fetchAsMcpServer,
   });
 
   return {
@@ -559,7 +577,7 @@ export function createNeonClient(apiKey: string) {
         method: request.method,
         headers: {
           Authorization: `Bearer ${apiKey}`,
-          'User-Agent': `mcp-server-neon/${pkg.version}`,
+          'User-Agent': USER_AGENT,
         },
       });
       const data: T = await response.json();
@@ -572,10 +590,6 @@ export function createNeonClient(apiKey: string) {
 
     get apiKey() {
       return apiKey;
-    },
-
-    get userAgent() {
-      return `mcp-server-neon/${pkg.version}`;
     },
   };
 }
