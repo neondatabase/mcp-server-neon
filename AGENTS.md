@@ -6,7 +6,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 ## Project Overview
 
-This is the **Neon MCP Server** - a Model Context Protocol server that bridges natural language requests to the Neon API, enabling LLMs to manage Lakebase Postgres databases through conversational commands. The project implements remote (SSE/Streamable HTTP) MCP server transports with OAuth authentication support.
+This is the **Neon MCP Server** - a Model Context Protocol server that bridges natural language requests to the Neon API, enabling LLMs to manage Lakebase Postgres databases on Neon through conversational commands. The project implements remote (SSE/Streamable HTTP) MCP server transports with OAuth authentication support.
 
 **Architecture Note**: The project is a Next.js application at the repository root, deployed on Vercel serverless infrastructure and accessible at `mcp.neon.tech`.
 
