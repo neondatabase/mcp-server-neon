@@ -466,7 +466,7 @@ export const NEON_TOOLS = [
     inputSchema: provisionNeonAuthInputSchema,
     readOnlySafe: false,
     description: `
-    Provisions Neon Auth for a Neon branch. Neon Auth is a managed authentication service built on Better Auth, fully integrated into the Neon platform.
+    Provisions Neon Auth for a Neon branch. Neon Auth is a managed authentication service built on Better Auth, fully integrated with Lakebase Postgres and the rest of the Neon backend primitives.
 
     
     <workflow>
