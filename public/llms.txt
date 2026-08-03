@@ -1,8 +1,8 @@
 # Neon MCP Server
 
-> Connect AI tools to Neon Postgres databases using the Model Context Protocol (MCP).
+> Connect AI tools to Lakebase Postgres databases on Neon using the Model Context Protocol (MCP).
 
-The Neon MCP Server enables Large Language Models to manage Neon Postgres databases through natural language commands. It implements the Model Context Protocol specification for seamless AI integration.
+The Neon MCP Server enables Large Language Models to manage Lakebase Postgres databases on Neon through natural language commands. It implements the Model Context Protocol specification for seamless AI integration.
 
 ## Capabilities
 

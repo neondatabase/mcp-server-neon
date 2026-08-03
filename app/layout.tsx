@@ -6,7 +6,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Neon MCP Server',
   description:
-    'Connect your AI tools to Neon Postgres databases using the Model Context Protocol. Manage databases, run migrations, and optimize queries through natural language.',
+    'Connect your AI tools to Lakebase Postgres databases on Neon using the Model Context Protocol. Manage databases, run migrations, and optimize queries through natural language.',
   metadataBase: new URL('https://mcp.neon.tech'),
   icons: {
     icon: [
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Neon MCP Server',
     description:
-      'Connect your AI tools to Neon Postgres databases using the Model Context Protocol. Manage databases, run migrations, and optimize queries through natural language.',
+      'Connect your AI tools to Lakebase Postgres databases on Neon using the Model Context Protocol. Manage databases, run migrations, and optimize queries through natural language.',
     url: 'https://mcp.neon.tech',
     siteName: 'Neon MCP Server',
     images: [
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Neon MCP Server',
     description:
-      'Connect your AI tools to Neon Postgres databases using the Model Context Protocol.',
+      'Connect your AI tools to Lakebase Postgres databases on Neon using the Model Context Protocol.',
     images: ['/og-image.png'],
   },
   robots: {
