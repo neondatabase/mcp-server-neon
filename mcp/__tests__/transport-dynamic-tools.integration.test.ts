@@ -115,6 +115,26 @@ async function mcpCall(
   return { status: res.status, body };
 }
 
+async function anonymousDocsCall(
+  method: string,
+  id: number,
+  params: unknown,
+  userAgent?: string,
+) {
+  const req = new Request('http://localhost/api/mcp?category=docs', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+      ...(userAgent ? { 'User-Agent': userAgent } : {}),
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
+  });
+  const res = await POST(req);
+  await res.text();
+  return res.status;
+}
+
 async function listToolsForToken(token: string) {
   await mcpCall(token, 'initialize', 1, {
     protocolVersion: '2025-03-26',
@@ -214,6 +234,37 @@ describe('transport dynamic tool composition', () => {
       expect.objectContaining({
         event: 'tool_call',
         properties: expect.objectContaining(attribution),
+      }),
+    );
+  });
+
+  // ?category=docs bypasses OAuth, so it emits `tool_call` from its own handler
+  // rather than the authenticated one and has to carry the column too.
+  it('attributes anonymous docs-only tool calls to the client application', async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(new Response('# Neon Docs', { status: 200 }));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    try {
+      await anonymousDocsCall(
+        'tools/call',
+        1,
+        { name: 'list_docs_resources', arguments: { params: {} } },
+        'v0bot',
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(trackSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'tool_call',
+        properties: expect.objectContaining({
+          docsOnly: 'true',
+          clientName: 'anonymous-docs',
+          clientApplication: 'v0',
+        }),
       }),
     );
   });

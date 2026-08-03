@@ -5,7 +5,10 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  ListToolsRequestSchema,
+  type RequestInfo,
+} from '@modelcontextprotocol/sdk/types.js';
 import { normalizeObjectSchema } from '@modelcontextprotocol/sdk/server/zod-compat.js';
 import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-schema-compat.js';
 import { captureException, startSpan } from '@sentry/node';
@@ -681,6 +684,16 @@ const getDocResourceTool = getDocsOnlyToolDefinition('get_doc_resource');
 
 const ANONYMOUS_DOCS_USER_ID = 'anonymous-docs';
 
+// The docs-only path bypasses OAuth, so there is no `verifyToken` to hang the
+// User-Agent off the auth context the way the authenticated path does. The
+// header on the request that carries the tool call is the only client signal.
+function readUserAgent(extra: {
+  requestInfo?: RequestInfo;
+}): string | undefined {
+  const header = extra.requestInfo?.headers['user-agent'];
+  return Array.isArray(header) ? header[0] : header;
+}
+
 const docsOnlyAppContext: AppContext = {
   name: 'mcp-server-neon',
   transport: 'stream',
@@ -694,6 +707,7 @@ function createDocsOnlyMcpHandler() {
     (server: McpServer) => {
       async function runDocsTool(
         toolName: 'list_docs_resources' | 'get_doc_resource',
+        userAgent: string | undefined,
         call: () => Promise<string>,
       ) {
         const traceId = generateTraceId();
@@ -713,6 +727,7 @@ function createDocsOnlyMcpHandler() {
               readOnly: 'true',
               projectScoped: 'false',
               clientName: 'anonymous-docs',
+              clientApplication: detectClientApplication(userAgent),
               traceId,
               docsOnly: 'true',
             };
@@ -759,8 +774,10 @@ function createDocsOnlyMcpHandler() {
           inputSchema: listDocsResourcesTool.inputSchema,
           annotations: listDocsResourcesTool.annotations,
         },
-        async () =>
-          runDocsTool(listDocsResourcesTool.name, () => listDocsResources()),
+        async (_args: unknown, extra: { requestInfo?: RequestInfo }) =>
+          runDocsTool(listDocsResourcesTool.name, readUserAgent(extra), () =>
+            listDocsResources(),
+          ),
       );
 
       server.registerTool(
@@ -770,8 +787,8 @@ function createDocsOnlyMcpHandler() {
           inputSchema: getDocResourceTool.inputSchema,
           annotations: getDocResourceTool.annotations,
         },
-        async (args: { slug: string }) =>
-          runDocsTool(getDocResourceTool.name, () =>
+        async (args: { slug: string }, extra: { requestInfo?: RequestInfo }) =>
+          runDocsTool(getDocResourceTool.name, readUserAgent(extra), () =>
             getDocResource({ slug: args.slug }),
           ),
       );
