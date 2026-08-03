@@ -119,6 +119,7 @@ export const createMcpServer = async (context: ServerContext) => {
               readOnly: String(context.readOnly ?? false),
               projectScoped: String(!!grant.projectId),
               clientName,
+              clientApplication,
               traceId,
             };
             logger.info('tool call:', properties);

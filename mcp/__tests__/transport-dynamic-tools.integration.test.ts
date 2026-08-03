@@ -75,6 +75,7 @@ async function mcpCall(
   id: number,
   params?: unknown,
   queryString = '',
+  userAgent?: string,
 ) {
   const req = new Request(`http://localhost/api/mcp${queryString}`, {
     method: 'POST',
@@ -82,6 +83,7 @@ async function mcpCall(
       Authorization: `Bearer ${bearerToken}`,
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
+      ...(userAgent ? { 'User-Agent': userAgent } : {}),
     },
     body: JSON.stringify({
       jsonrpc: '2.0',
@@ -111,6 +113,26 @@ async function mcpCall(
     }
   }
   return { status: res.status, body };
+}
+
+async function anonymousDocsCall(
+  method: string,
+  id: number,
+  params: unknown,
+  userAgent?: string,
+) {
+  const req = new Request('http://localhost/api/mcp?category=docs', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+      ...(userAgent ? { 'User-Agent': userAgent } : {}),
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
+  });
+  const res = await POST(req);
+  await res.text();
+  return res.status;
 }
 
 async function listToolsForToken(token: string) {
@@ -174,6 +196,77 @@ describe('transport dynamic tool composition', () => {
       }),
     );
     expect(flushAnalyticsSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // Every streamable-HTTP request builds a fresh server instance, so the
+  // `initialize` handshake and the `tools/call` land on different ones and
+  // `clientInfo` is gone by the time anything is tracked. The User-Agent is
+  // what actually identifies the client on this transport, which is how v0
+  // ("v0bot") is attributed in production.
+  it('attributes tool calls to the client application, not just server_init', async () => {
+    const oauthToken = 'oauth-client-application';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write', {
+        projectId: 'proj_analytics',
+        scopes: null,
+      }),
+    );
+
+    await mcpCall(
+      oauthToken,
+      'tools/call',
+      1,
+      { name: 'run_sql', arguments: { sql: 'select 1' } },
+      '',
+      'v0bot',
+    );
+
+    const attribution = { clientName: 'v0bot', clientApplication: 'v0' };
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event: 'server_init',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        event: 'tool_call',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
+  });
+
+  // ?category=docs bypasses OAuth, so it emits `tool_call` from its own handler
+  // rather than the authenticated one and has to carry the column too.
+  it('attributes anonymous docs-only tool calls to the client application', async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(new Response('# Neon Docs', { status: 200 }));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    try {
+      await anonymousDocsCall(
+        'tools/call',
+        1,
+        { name: 'list_docs_resources', arguments: { params: {} } },
+        'v0bot',
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(trackSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'tool_call',
+        properties: expect.objectContaining({
+          docsOnly: 'true',
+          clientName: 'anonymous-docs',
+          clientApplication: 'v0',
+        }),
+      }),
+    );
   });
 
   it('keeps same tool names and enforces projectId by selected variant', async () => {

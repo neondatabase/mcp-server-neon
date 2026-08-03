@@ -9,7 +9,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
-import { createMcpServer } from '../server/index';
+const { trackSpy } = vi.hoisted(() => ({ trackSpy: vi.fn() }));
+
+vi.mock('../analytics/analytics', () => ({
+  track: trackSpy,
+  flushAnalytics: vi.fn().mockResolvedValue(undefined),
+}));
+
+const { createMcpServer } = await import('../server/index');
 import type { ServerContext } from '../types/context';
 
 const originalFetch = globalThis.fetch;
@@ -36,9 +43,10 @@ function createTestContext(overrides?: Partial<ServerContext>): ServerContext {
 async function withConnectedClient<T>(
   context: ServerContext,
   run: (client: Client) => Promise<T>,
+  clientName = 'test-client',
 ): Promise<T> {
   const server = await createMcpServer(context);
-  const client = new Client({ name: 'test-client', version: '1.0.0' });
+  const client = new Client({ name: clientName, version: '1.0.0' });
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
 
@@ -55,6 +63,7 @@ async function withConnectedClient<T>(
 
 describe('MCP server e2e tool calls', () => {
   beforeEach(() => {
+    trackSpy.mockClear();
     globalThis.fetch = vi.fn();
   });
 
@@ -153,6 +162,42 @@ describe('MCP server e2e tool calls', () => {
         );
       }
     });
+  });
+
+  // This server outlives the handshake, so `clientInfo` from `initialize` is
+  // still the client identity when a tool is called later. Both events must
+  // carry it, not just `server_init`.
+  it('attributes tool calls to the client application, not just server_init', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response('# Neon Docs', { status: 200 }),
+    );
+
+    await withConnectedClient(
+      createTestContext(),
+      async (client) => {
+        await client.callTool({
+          name: 'list_docs_resources',
+          arguments: { params: {} },
+        });
+      },
+      'v0bot',
+    );
+
+    const attribution = { clientName: 'v0bot', clientApplication: 'v0' };
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event: 'server_init',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        event: 'tool_call',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
   });
 
   it('enforces read-only filtering at MCP tool registry level', async () => {
