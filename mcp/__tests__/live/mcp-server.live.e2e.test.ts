@@ -8,6 +8,11 @@ import { z } from 'zod';
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { NeonApiClient } from '../../neon-client';
+import {
+  INSPECT_CHECKS,
+  INSPECT_QUERIES,
+  type InspectCheck,
+} from '../../inspect/queries';
 
 loadEnv({ path: '.env.test', quiet: true });
 
@@ -51,6 +56,32 @@ const tableDescriptionSchema = z.object({
   }),
   formatted: z.string(),
 });
+
+const inspectResultSchema = z.object({
+  check: z.enum(INSPECT_CHECKS),
+  describe: z.string(),
+  projectId: z.string(),
+  branchId: z.string(),
+  databaseName: z.string(),
+  fields: z.array(z.string()),
+  totalRowCount: z.number(),
+  rows: z.array(z.record(z.string(), z.unknown())),
+  truncated: z.boolean(),
+  note: z.string().optional(),
+});
+
+/**
+ * A check whose SQL carries its own `LIMIT` must say so once it reaches that
+ * ceiling, otherwise a capped result reads as the complete one.
+ */
+function expectSqlCapDisclosed(
+  check: InspectCheck,
+  report: z.infer<typeof inspectResultSchema>,
+) {
+  const { sqlLimit } = INSPECT_QUERIES[check];
+  if (sqlLimit === undefined || report.totalRowCount !== sqlLimit) return;
+  expect(report.note).toContain(`at most ${sqlLimit} rows`);
+}
 
 function requireApiKey(): string {
   const name = 'NEON_API_KEY';
@@ -335,6 +366,149 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         'NotFoundError: Table not found: crm.missing_property_options',
       );
       expect(text).not.toContain('relation');
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'reports the missing extension before it is installed',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const extensionChecks = INSPECT_CHECKS.filter(
+        (check) => INSPECT_QUERIES[check].requiresExtension,
+      );
+      expect(extensionChecks.length).toBeGreaterThan(0);
+
+      for (const check of extensionChecks) {
+        const result = await callTool('inspect_database', {
+          projectId,
+          check,
+        });
+        const parsedResult = toolResultSchema.parse(result);
+        const text = textContent(result);
+
+        expect(parsedResult.isError).toBe(true);
+        expect(text).toContain(
+          `CREATE EXTENSION IF NOT EXISTS ${INSPECT_QUERIES[check].requiresExtension};`,
+        );
+        // Installing an extension writes to the user's database, so the error
+        // must not read as something to do unattended.
+        expect(text).toContain('ask the user first');
+      }
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'runs every check that needs no extension against the real database',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      for (const check of INSPECT_CHECKS.filter(
+        (candidate) => !INSPECT_QUERIES[candidate].requiresExtension,
+      )) {
+        const result = await callTool('inspect_database', {
+          projectId,
+          check,
+        });
+        const report = inspectResultSchema.parse(
+          JSON.parse(assertToolSucceeded(`inspect_database/${check}`, result)),
+        );
+
+        expect(report.check).toBe(check);
+        expect(report.fields).toEqual(INSPECT_QUERIES[check].fields);
+        expect(report.totalRowCount).toBe(report.rows.length);
+        expect(report.truncated).toBe(false);
+        // Every returned row must use the declared columns, so the model can
+        // rely on `fields` for ordering.
+        for (const row of report.rows) {
+          expect(Object.keys(row).sort()).toEqual([...report.fields].sort());
+        }
+        if (report.totalRowCount === 0) {
+          expect(report.note).toBe(INSPECT_QUERIES[check].emptyMessage);
+        }
+        expectSqlCapDisclosed(check, report);
+      }
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'sees the tables it created and truncates to the requested limit',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const full = inspectResultSchema.parse(
+        JSON.parse(
+          assertToolSucceeded(
+            'inspect_database',
+            await callTool('inspect_database', {
+              projectId,
+              check: 'table-sizes',
+            }),
+          ),
+        ),
+      );
+      expect(full.totalRowCount).toBeGreaterThanOrEqual(2);
+      expect(full.rows.map((row) => row.name)).toContain('property_options');
+
+      const capped = inspectResultSchema.parse(
+        JSON.parse(
+          assertToolSucceeded(
+            'inspect_database',
+            await callTool('inspect_database', {
+              projectId,
+              check: 'table-sizes',
+              limit: 1,
+            }),
+          ),
+        ),
+      );
+      expect(capped.rows).toHaveLength(1);
+      expect(capped.totalRowCount).toBe(full.totalRowCount);
+      expect(capped.truncated).toBe(true);
+      expect(capped.note).toContain(`of ${full.totalRowCount} rows`);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'runs the extension-gated checks once their extensions exist',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const extensions = [
+        ...new Set(
+          INSPECT_CHECKS.map(
+            (check) => INSPECT_QUERIES[check].requiresExtension,
+          ).filter((name): name is string => Boolean(name)),
+        ),
+      ];
+      assertToolSucceeded(
+        'run_sql_transaction',
+        await callTool('run_sql_transaction', {
+          projectId,
+          sqlStatements: extensions.map(
+            (name) => `CREATE EXTENSION IF NOT EXISTS ${name}`,
+          ),
+        }),
+      );
+
+      for (const check of INSPECT_CHECKS.filter(
+        (candidate) => INSPECT_QUERIES[candidate].requiresExtension,
+      )) {
+        const report = inspectResultSchema.parse(
+          JSON.parse(
+            assertToolSucceeded(
+              `inspect_database/${check}`,
+              await callTool('inspect_database', { projectId, check }),
+            ),
+          ),
+        );
+        expect(report.check).toBe(check);
+        expect(report.fields).toEqual(INSPECT_QUERIES[check].fields);
+        for (const row of report.rows) {
+          expect(Object.keys(row).sort()).toEqual([...report.fields].sort());
+        }
+        expectSqlCapDisclosed(check, report);
+      }
     },
     LIVE_TEST_TIMEOUT_MS,
   );

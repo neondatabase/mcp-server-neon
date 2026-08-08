@@ -12,16 +12,16 @@ This document defines a repeatable smoke-test flow for the Neon MCP server. Use 
 The `/api/list-tools` endpoint accepts the same query params and returns the resolved grant, read-only state, and visible tools — no auth required:
 
 ```bash
-# Full access (29 tools)
+# Full access (35 tools)
 curl https://mcp.neon.tech/api/list-tools
 
-# Read-only (18 tools)
+# Read-only (23 tools)
 curl "https://mcp.neon.tech/api/list-tools?readonly=true"
 
-# Querying category only (10 tools)
+# Querying category only (11 tools)
 curl "https://mcp.neon.tech/api/list-tools?category=querying"
 
-# Project-scoped (22 tools, no project-agnostic tools)
+# Project-scoped (28 tools, no project-agnostic tools)
 curl "https://mcp.neon.tech/api/list-tools?projectId=proj-123"
 ```
 
@@ -144,6 +144,8 @@ Run through the applicable subset of these tests based on the current config. Sk
 
 **Performance Tool Check:**
 - `neon-preview.list_slow_queries`
+- `neon-preview.inspect_database` with `check: table-sizes` (no extension needed)
+- `neon-preview.inspect_database` with `check: outliers` (expect the `CREATE EXTENSION pg_stat_statements;` hint until it is installed)
 
 **Read-Only Connection String Guard** (only when `readonly=true`):
 - `neon-preview.get_connection_string` against a branch with a read replica endpoint

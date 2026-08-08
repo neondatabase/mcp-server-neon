@@ -40,7 +40,7 @@ async function callListTools(
 describe('/api/list-tools endpoint', () => {
   it('returns all tools by default', async () => {
     const body = await callListTools();
-    expect(body.tools).toHaveLength(34);
+    expect(body.tools).toHaveLength(35);
     expect(body.readOnly).toBe(false);
     expect(body.grant).toEqual({
       projectId: null,
@@ -51,7 +51,7 @@ describe('/api/list-tools endpoint', () => {
   it('filters by scopes when category param is present', async () => {
     const body = await callListTools({ category: 'querying' });
     expect(body.grant.scopes).toEqual(['querying']);
-    expect(body.tools).toHaveLength(10);
+    expect(body.tools).toHaveLength(11);
   });
 
   it('returns only always-available tools when scopes are all invalid', async () => {
@@ -64,7 +64,7 @@ describe('/api/list-tools endpoint', () => {
   it('filters project-agnostic tools in project-scoped mode', async () => {
     const body = await callListTools({ projectId: 'proj-123' });
     expect(body.grant.projectId).toBe('proj-123');
-    expect(body.tools).toHaveLength(27);
+    expect(body.tools).toHaveLength(28);
     const names = body.tools.map((t) => t.name);
     expect(names).not.toContain('list_projects');
     expect(names).not.toContain('create_project');
@@ -75,7 +75,7 @@ describe('/api/list-tools endpoint', () => {
   it('filters to readOnlySafe tools with readonly=true', async () => {
     const body = await callListTools({ readonly: 'true' });
     expect(body.readOnly).toBe(true);
-    expect(body.tools).toHaveLength(22);
+    expect(body.tools).toHaveLength(23);
     for (const tool of body.tools) {
       expect(tool.readOnlySafe).toBe(true);
     }
@@ -89,7 +89,7 @@ describe('/api/list-tools endpoint', () => {
     const res = await GET(req);
     const body = (await res.json()) as ListToolsResponse;
     expect(body.readOnly).toBe(true);
-    expect(body.tools).toHaveLength(22);
+    expect(body.tools).toHaveLength(23);
   });
 
   it('readonly query param takes precedence over x-read-only header', async () => {
@@ -101,7 +101,7 @@ describe('/api/list-tools endpoint', () => {
     const res = await GET(req);
     const body = (await res.json()) as ListToolsResponse;
     expect(body.readOnly).toBe(false);
-    expect(body.tools).toHaveLength(34);
+    expect(body.tools).toHaveLength(35);
   });
 
   it('OPTIONS returns expected CORS allow-headers', () => {

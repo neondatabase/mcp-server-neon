@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { z } from 'zod';
 
 const { trackSpy } = vi.hoisted(() => ({ trackSpy: vi.fn() }));
 
@@ -18,8 +19,18 @@ vi.mock('../analytics/analytics', () => ({
 
 const { createMcpServer } = await import('../server/index');
 import type { ServerContext } from '../types/context';
+import { INSPECT_CHECKS } from '../inspect/queries';
 
 const originalFetch = globalThis.fetch;
+
+const listedInspectSchema = z.object({
+  properties: z.object({
+    params: z.object({
+      properties: z.object({ check: z.object({ enum: z.array(z.string()) }) }),
+      required: z.array(z.string()),
+    }),
+  }),
+});
 
 function createTestContext(overrides?: Partial<ServerContext>): ServerContext {
   return {
@@ -98,6 +109,36 @@ describe('MCP server e2e tool calls', () => {
       expect(toolNames).toContain('query_logs');
       expect(toolNames).toContain('list_log_fields');
       expect(toolNames).toContain('list_log_field_values');
+    });
+  });
+
+  it('exposes every inspect_database check in the listed JSON Schema', async () => {
+    await withConnectedClient(createTestContext(), async (client) => {
+      const result = await client.listTools();
+      const inspectTool = result.tools.find(
+        (tool) => tool.name === 'inspect_database',
+      );
+
+      expect(inspectTool?.annotations?.readOnlyHint).toBe(true);
+      const schema = listedInspectSchema.parse(inspectTool?.inputSchema);
+      expect(schema.properties.params.properties.check.enum).toEqual([
+        ...INSPECT_CHECKS,
+      ]);
+      expect(schema.properties.params.required).toContain('check');
+    });
+  });
+
+  it('rejects an inspect_database check outside the catalog', async () => {
+    await withConnectedClient(createTestContext(), async (client) => {
+      const result = await client.callTool({
+        name: 'inspect_database',
+        arguments: { params: { projectId: 'project-1', check: 'cache-hit' } },
+      });
+
+      expect(result.isError).toBe(true);
+      // Naming the rejected value proves schema validation refused it, rather
+      // than the call reaching Postgres and failing there.
+      expect(JSON.stringify(result.content)).toContain('cache-hit');
     });
   });
 

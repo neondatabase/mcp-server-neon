@@ -15,6 +15,7 @@ import {
   explainSqlStatementInputSchema,
   getConnectionStringInputSchema,
   getDatabaseTablesInputSchema,
+  inspectDatabaseInputSchema,
   listBranchComputesInputSchema,
   listProjectsInputSchema,
   prepareDatabaseMigrationInputSchema,
@@ -832,6 +833,33 @@ export const NEON_TOOLS = [
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: false,
+      openWorldHint: false,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'inspect_database' as const,
+    scope: 'querying',
+    description: `
+    <use_case>
+      Reach for this first when asked why a database is slow, large, bloated, or behind. It runs one predefined, read-only Postgres diagnostic against a Neon branch — pick the one that answers the question from the \`check\` parameter's list, instead of writing catalog SQL by hand. These are the same checks as the \`neon inspect db\` CLI command.
+    </use_case>
+
+    <important_notes>
+      Not for: arbitrary SQL (\`run_sql\`), the slowest queries by average execution time with your own threshold and limit (\`list_slow_queries\`), the plan of one statement (\`explain_sql_statement\`), applying an optimization (\`prepare_query_tuning\`), compute and Neon Function logs (\`query_logs\`), or listing tables and columns (\`get_database_tables\`, \`describe_table_schema\`).
+
+      Three checks read alike and are not: \`long-running-queries\` is what is running right now and has been for over five minutes, \`outliers\` is cumulative execution time since statistics were last reset, and \`calls\` is call frequency over that same history.
+
+      \`lfc-hit-rate\`, \`working-set\`, and \`replication-slots\` describe the whole compute rather than the selected database, and cache counters reset when the compute restarts. \`bloat\` is a statistical estimate, not a measurement.
+
+      When a check needs an extension that is not installed, the tool says so and names the \`CREATE EXTENSION\` statement. Installing it writes to the user's database — ask before running it.
+    </important_notes>`,
+    inputSchema: inspectDatabaseInputSchema,
+    readOnlySafe: true,
+    annotations: {
+      title: 'Inspect Database',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },

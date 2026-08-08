@@ -15,33 +15,33 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('/api/list-tools endpoint', () => {
-  test('returns all 34 tools with no params', async ({ request }) => {
+  test('returns all 35 tools with no params', async ({ request }) => {
     const response = await request.get('/api/list-tools');
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(34);
+    expect(body.tools).toHaveLength(35);
     expect(body.readOnly).toBe(false);
     expect(body.grant.scopes).toBeNull();
     expect(body.grant.projectId).toBeNull();
     expect(body.warnings).toBeUndefined();
   });
 
-  test('returns 10 tools for category=querying', async ({ request }) => {
+  test('returns 11 tools for category=querying', async ({ request }) => {
     const response = await request.get('/api/list-tools?category=querying');
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(10);
+    expect(body.tools).toHaveLength(11);
     expect(body.grant.scopes).toEqual(['querying']);
   });
 
-  test('returns 27 tools for project-scoped mode', async ({ request }) => {
+  test('returns 28 tools for project-scoped mode', async ({ request }) => {
     const response = await request.get('/api/list-tools?projectId=proj-123');
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(27);
+    expect(body.tools).toHaveLength(28);
     expect(body.grant.projectId).toBe('proj-123');
 
     const names = body.tools.map((t: { name: string }) => t.name);
@@ -53,12 +53,12 @@ test.describe('/api/list-tools endpoint', () => {
     expect(names).not.toContain('fetch');
   });
 
-  test('returns 22 tools for readonly=true', async ({ request }) => {
+  test('returns 23 tools for readonly=true', async ({ request }) => {
     const response = await request.get('/api/list-tools?readonly=true');
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(22);
+    expect(body.tools).toHaveLength(23);
     expect(body.readOnly).toBe(true);
 
     for (const tool of body.tools) {

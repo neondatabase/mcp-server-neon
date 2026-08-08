@@ -215,7 +215,7 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 - `list_projects`, `list_shared_projects`, `describe_project`, `list_organizations`
 - `describe_branch`, `list_branch_computes`, `compare_database_schema`
 - `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`
-- `list_slow_queries`, `explain_sql_statement`
+- `list_slow_queries`, `explain_sql_statement`, `inspect_database`
 - `get_connection_string`
 - `get_neon_auth_config`
 - `query_logs`, `list_log_fields`, `list_log_field_values`
@@ -328,6 +328,7 @@ Notes:
 
 **SQL Querying and Optimization:**
 
+- **`inspect_database`**: Runs one of 14 predefined read-only Postgres diagnostics against a branch — relation and index sizes, index and sequential-scan usage, active queries and locks, the heaviest and most frequent queries, cache hit rate and working-set size, autovacuum and bloat estimates, and replication state. Same checks as the `neon inspect db` CLI command. Four of them need the `pg_stat_statements` or `neon` extension.
 - **`list_slow_queries`**: Identifies performance bottlenecks by finding the slowest queries in a database. Requires the pg_stat_statements extension.
 - **`explain_sql_statement`**: Provides detailed execution plans for SQL queries to help identify performance bottlenecks.
 - **`prepare_query_tuning`**: Analyzes query performance and suggests optimizations, like index creation. Creates a temporary branch for safely testing these optimizations.

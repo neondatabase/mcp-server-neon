@@ -36,6 +36,7 @@ import { handleListOrganizations } from './handlers/list-orgs';
 import { handleListProjects } from './handlers/list-projects';
 import { handleDescribeProject } from './handlers/decribe-project';
 import { handleGetConnectionString } from './handlers/connection-string';
+import { handleInspectDatabase } from './handlers/inspect-database';
 import { handleDescribeBranch } from './handlers/describe-branch';
 
 /**
@@ -1638,6 +1639,24 @@ You MUST follow these steps:
           text: JSON.stringify(result, null, 2),
         },
       ],
+    };
+  },
+
+  inspect_database: async ({ params }, neonClient, extra) => {
+    const result = await handleInspectDatabase(
+      {
+        check: params.check,
+        projectId: params.projectId,
+        branchId: params.branchId,
+        databaseName: params.databaseName,
+        computeId: params.computeId,
+        limit: params.limit,
+      },
+      neonClient,
+      extra,
+    );
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
   },
 
