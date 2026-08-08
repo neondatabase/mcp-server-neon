@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { NEON_HANDLERS, ToolHandlerExtended } from '../tools/index';
+import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
+import type {
+  ServerNotification,
+  ServerRequest,
+} from '@modelcontextprotocol/sdk/types.js';
+import { invokeTool, toolRegistration } from '../tools/registration';
 import { logger } from '../utils/logger';
 import { generateTraceId } from '../utils/trace';
 import { createNeonClient } from './api';
@@ -16,7 +21,6 @@ import { DEFAULT_GRANT } from '../utils/grant-context';
 import {
   getAvailableTools,
   getAccessControlWarnings,
-  injectProjectId,
 } from '../tools/grant-filter';
 import pkg from '../../package.json';
 
@@ -88,21 +92,16 @@ export const createMcpServer = async (context: ServerContext) => {
   // Compute access control warnings once (appended to every tool response)
   const accessControlWarnings = getAccessControlWarnings(grant, readOnly);
 
-  // Register tools
+  // Register tools. Registration and argument handling come from the shared
+  // module so this server is wire-identical to the deployed route.
   availableTools.forEach((tool) => {
-    const handler = NEON_HANDLERS[tool.name];
-    if (!handler) {
-      throw new Error(`Handler for tool ${tool.name} not found`);
-    }
-
-    const toolHandler = handler as ToolHandlerExtended<typeof tool.name>;
-
-    server.tool(
+    server.registerTool(
       tool.name,
-      tool.description,
-      { params: tool.inputSchema },
-      tool.annotations,
-      async (args, extra) => {
+      toolRegistration(tool),
+      async (
+        args: unknown,
+        extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
+      ) => {
         const traceId = generateTraceId();
         return await startSpan(
           {
@@ -142,14 +141,10 @@ export const createMcpServer = async (context: ServerContext) => {
               clientApplication,
             };
             try {
-              // Inject projectId if in project-scoped mode
-              const effectiveArgs = injectProjectId(
-                args as Record<string, unknown>,
+              const result = await invokeTool(
+                tool.name,
+                args,
                 grant,
-              );
-
-              const result = await toolHandler(
-                effectiveArgs as typeof args,
                 neonClient,
                 extraArgs,
               );

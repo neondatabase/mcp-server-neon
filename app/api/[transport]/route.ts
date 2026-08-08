@@ -45,8 +45,8 @@ import {
 import {
   getAvailableTools,
   getAccessControlWarnings,
-  injectProjectId,
 } from '../../../mcp/tools/grant-filter';
+import { invokeTool, toolRegistration } from '../../../mcp/tools/registration';
 import { NEON_TOOLS } from '../../../mcp/tools/definitions';
 import { assert } from '../../../lib/assert';
 import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
@@ -375,26 +375,21 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
       // Register tools for this specific auth context.
       composedTools.forEach((tool) => {
-        const toolHandler = NEON_HANDLERS[tool.name];
-        assert(toolHandler, `Handler for tool ${tool.name} not found`);
+        assert(
+          NEON_HANDLERS[tool.name],
+          `Handler for tool ${tool.name} not found`,
+        );
 
         server.registerTool(
           tool.name,
-          {
-            description: tool.description,
-            // NOTE: This intentionally stays strongly typed (no cast). If this starts failing
-            // after an SDK upgrade, treat it as a schema-type compatibility regression between
-            // MCP SDK zod-compat types and our tool schema definitions.
-            inputSchema: tool.inputSchema,
-            annotations: tool.annotations,
-          },
+          toolRegistration(tool),
           async (args: any, extra: any) => {
             const typedExtra = extra as AuthenticatedExtra;
             if (checkEnvelopeMatches(typedExtra, tool.name)) {
               // Silently drop the misrouted invocation. Returning a non-error
               // empty result avoids leaking a JSON-RPC error onto the SSE
               // owner's (victim's) channel.
-              return { content: [], isError: false } as const;
+              return { content: [], isError: false };
             }
 
             const traceId = generateTraceId();
@@ -455,15 +450,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                 };
 
                 try {
-                  // Inject projectId if in project-scoped mode
-                  const effectiveArgs = injectProjectId(
-                    (args ?? {}) as Record<string, unknown>,
+                  const result = await invokeTool(
+                    tool.name,
+                    args,
                     grant,
-                  );
-
-                  // Wrap args in { params } structure expected by handlers
-                  const result = await (toolHandler as any)(
-                    { params: effectiveArgs },
                     neonClient,
                     extraArgs,
                   );
