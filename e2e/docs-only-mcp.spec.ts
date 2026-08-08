@@ -112,8 +112,8 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     expect(toolNames).toEqual(['get_doc_resource', 'list_docs_resources']);
   });
 
-  // Reads the docs index from the fixture server that `e2e/global-setup.ts`
-  // points NEON_DOCS_BASE_URL at, so this stays deterministic and off the
+  // Reads the docs index from the fixture server that `playwright.config.ts`
+  // points NEON_DOCS_INDEX_URL at, so this stays deterministic and off the
   // network while still exercising the real handler and fetch.
   test('tools/call list_docs_resources returns the markdown index', async ({
     request,

@@ -114,9 +114,10 @@ export default async function globalSetup() {
     `[e2e-setup] Serving the docs index fixture on ${DOCS_FIXTURE_INDEX_URL}`,
   );
 
-  // Set env vars on process so the webServer subprocess inherits them.
-  // This is needed because Playwright evaluates config (including webServer.env)
-  // BEFORE globalSetup runs. But process.env changes propagate to spawned processes.
+  // For anything running in this process. The dev server does not read these from
+  // here: Playwright starts it as a plugin task, before global setup, so it is
+  // already running by now. It gets both from `.env.e2e`, which
+  // `playwright.config.ts` loads into `webServer.env` while building the config.
   process.env.OAUTH_DATABASE_URL = connectionString;
   process.env.COOKIE_SECRET = cookieSecret;
 
