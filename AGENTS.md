@@ -138,7 +138,8 @@ infrastructure.
 
 **E2E tests** use [Playwright](https://playwright.dev/) and live in `e2e/`. Configuration is in `playwright.config.ts`.
 
-- **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com) and generates a random `COOKIE_SECRET`. Both are written to `.env.e2e` (gitignored) and passed to the Next.js dev server.
+- **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com) and generates a random `COOKIE_SECRET`. Both are written to `.env.e2e` (gitignored) and passed to the Next.js dev server. It also starts the docs fixture server (see below).
+- **Docs fixture** (`e2e/docs-fixture.ts`): The docs tools fetch their index server-side, so `request.route()` cannot intercept it and a test calling `list_docs_resources` would otherwise depend on neon.com being up — which merge-gating tests must not. Global setup serves `e2e/fixtures/docs-index.txt` on port `3101` (`E2E_DOCS_PORT` to change it, and it fails loudly if the port is taken), and `playwright.config.ts` points the dev server's `NEON_DOCS_INDEX_URL` at it. That URL must be set in `webServer.env`, not in global setup: Playwright starts the web server as a plugin task, which runs **before** global setup, so anything global setup adds to `process.env` reaches the dev server too late. Only the index is redirected — individual doc pages still come from `NEON_DOCS_BASE_URL`, and the fixture serves no page paths.
 - **No secrets needed**: The e2e infrastructure is fully self-contained. Instagres databases expire after 72 hours; no explicit teardown is required.
 - **Reuse across runs**: If `.env.e2e` already exists, global-setup reuses it instead of re-provisioning. Delete the file to force a fresh database.
 - **CI**: The PR workflow runs format, lint, knip, `pnpm test`, live Neon E2E for trusted same-repo PRs, and build before merge.
