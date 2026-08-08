@@ -12,7 +12,7 @@ import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { neon } from '@neondatabase/serverless';
 import {
-  DOCS_FIXTURE_BASE_URL,
+  DOCS_FIXTURE_INDEX_URL,
   startDocsFixtureServer,
 } from './docs-fixture.js';
 
@@ -107,11 +107,11 @@ export default async function globalSetup() {
     cookieSecret = randomBytes(32).toString('hex');
   }
 
-  // `playwright.config.ts` points the dev server's NEON_DOCS_BASE_URL here; this
+  // `playwright.config.ts` points the dev server's NEON_DOCS_INDEX_URL here; this
   // is the process that answers on it.
   const docsServer = await startDocsFixtureServer();
   console.log(
-    `[e2e-setup] Serving the docs index fixture on ${DOCS_FIXTURE_BASE_URL}`,
+    `[e2e-setup] Serving the docs index fixture on ${DOCS_FIXTURE_INDEX_URL}`,
   );
 
   // Set env vars on process so the webServer subprocess inherits them.
