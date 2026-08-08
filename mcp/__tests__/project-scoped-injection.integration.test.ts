@@ -16,14 +16,18 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
-// Tool calls emit a Segment event, and the write key has a production default.
-vi.mock('../analytics/analytics', () => ({
-  track: vi.fn(),
-  flushAnalytics: vi.fn().mockResolvedValue(undefined),
-}));
+// A tool call emits a Segment event and the write key has a production default,
+// so blank it rather than mocking the analytics module out.
+process.env.ANALYTICS_WRITE_KEY = '';
+process.env.SENTRY_DSN = '';
 
 const SCOPED_PROJECT_ID = 'proj-scoped';
+
+const publishedSchemaSchema = z.object({
+  properties: z.record(z.string(), z.unknown()).optional(),
+});
 
 let server: Server;
 let requestedPaths: string[];
@@ -82,24 +86,23 @@ describe('project-scoped grants', () => {
     const client = new Client({ name: 'test-client', version: '1.0.0' });
     const [clientTransport, serverTransport] =
       InMemoryTransport.createLinkedPair();
-    await mcpServer.connect(serverTransport);
-    await client.connect(clientTransport);
 
     try {
+      await mcpServer.connect(serverTransport);
+      await client.connect(clientTransport);
+
       // A scoped client cannot send projectId — it is not in the schema it was
       // given — so this is exactly the call a real one makes.
       const listed = await client.listTools();
       const describeProject = listed.tools.find(
         (tool) => tool.name === 'describe_project',
       );
-      expect(
-        Object.keys(
-          (describeProject?.inputSchema.properties ?? {}) as Record<
-            string,
-            unknown
-          >,
-        ),
-      ).not.toContain('projectId');
+      const published = publishedSchemaSchema.parse(
+        describeProject?.inputSchema,
+      );
+      expect(Object.keys(published.properties ?? {})).not.toContain(
+        'projectId',
+      );
 
       const result = await client.callTool({
         name: 'describe_project',
@@ -110,8 +113,9 @@ describe('project-scoped grants', () => {
       // The granted project, not a fallback to "the only project on the account".
       expect(requestedPaths).toContain(`/api/v2/projects/${SCOPED_PROJECT_ID}`);
     } finally {
-      await client.close();
-      await mcpServer.close();
+      // Both, even if connecting or closing one of them threw, and without
+      // masking the assertion failure that got us here.
+      await Promise.allSettled([client.close(), mcpServer.close()]);
     }
   });
 });
