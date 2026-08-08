@@ -131,7 +131,7 @@ async function callTool(name: string, params: Record<string, unknown>) {
   await client.connect(clientTransport);
 
   try {
-    const result = await client.callTool({ name, arguments: { params } });
+    const result = await client.callTool({ name, arguments: params });
     const content = result.content as Array<{ type: string; text?: string }>;
     if (result.isError) {
       throw new Error(`${name} failed: ${content[0]?.text}`);

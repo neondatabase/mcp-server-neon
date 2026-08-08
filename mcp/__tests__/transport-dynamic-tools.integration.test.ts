@@ -15,15 +15,15 @@ vi.mock('../oauth/model', () => ({
   },
 }));
 
-vi.mock('../tools/index', async () => {
+// Mocks the module that defines the handlers, not the barrel that re-exports
+// them, so it applies no matter which one the code under test imports.
+vi.mock('../tools/tools', async () => {
   const actual =
-    await vi.importActual<typeof import('../tools/index')>('../tools/index');
-  const actualHandlers =
     await vi.importActual<typeof import('../tools/tools')>('../tools/tools');
   return {
     ...actual,
     NEON_HANDLERS: {
-      ...actualHandlers.NEON_HANDLERS,
+      ...actual.NEON_HANDLERS,
       run_sql: runSqlSpy,
     },
   };
@@ -250,7 +250,7 @@ describe('transport dynamic tool composition', () => {
       await anonymousDocsCall(
         'tools/call',
         1,
-        { name: 'list_docs_resources', arguments: { params: {} } },
+        { name: 'list_docs_resources', arguments: {} },
         'v0bot',
       );
     } finally {
