@@ -15,6 +15,7 @@ import {
   explainSqlStatementInputSchema,
   getConnectionStringInputSchema,
   getDatabaseTablesInputSchema,
+  inspectDatabaseInputSchema,
   listBranchComputesInputSchema,
   listProjectsInputSchema,
   prepareDatabaseMigrationInputSchema,
@@ -832,6 +833,35 @@ export const NEON_TOOLS = [
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: false,
+      openWorldHint: false,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'inspect_database' as const,
+    scope: 'querying',
+    description: `
+    <use_case>
+      Use this tool to run one predefined, read-only Postgres diagnostic against a Neon branch database: relation and index sizes, index and sequential-scan usage, currently active queries and locks, the heaviest and most frequent queries, cache hit rate and working-set size, autovacuum and bloat estimates, and replication state. These are the same checks as the \`neon inspect db\` CLI command.
+
+      Reach for this first when asked why a database is slow, large, or behind, before writing catalog SQL by hand.
+    </use_case>
+
+    <important_notes>
+      Do not use for arbitrary SQL (use \`run_sql\`), for the slowest queries by average execution time with your own threshold and limit (use \`list_slow_queries\`), for the plan of one statement (use \`explain_sql_statement\`), for applying an optimization (use \`prepare_query_tuning\`), or for compute and Neon Function logs (use \`query_logs\`).
+
+      Three checks look similar and are not: \`long-running-queries\` is what is running right now and has been for over five minutes, \`outliers\` is cumulative execution time since statistics were last reset, and \`calls\` is call frequency over that same history.
+
+      \`lfc-hit-rate\`, \`working-set\`, and \`replication-slots\` describe the whole compute rather than the selected database, and cache counters reset when the compute restarts. \`bloat\` is a statistical estimate, not a measurement.
+
+      \`outliers\` and \`calls\` need the \`pg_stat_statements\` extension, and \`lfc-hit-rate\` and \`working-set\` need the \`neon\` extension. The tool says which \`CREATE EXTENSION\` statement to run when one is missing.
+    </important_notes>`,
+    inputSchema: inspectDatabaseInputSchema,
+    readOnlySafe: true,
+    annotations: {
+      title: 'Inspect Database',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },

@@ -18,6 +18,7 @@ vi.mock('../analytics/analytics', () => ({
 
 const { createMcpServer } = await import('../server/index');
 import type { ServerContext } from '../types/context';
+import { INSPECT_CHECKS } from '../inspect/queries';
 
 const originalFetch = globalThis.fetch;
 
@@ -98,6 +99,34 @@ describe('MCP server e2e tool calls', () => {
       expect(toolNames).toContain('query_logs');
       expect(toolNames).toContain('list_log_fields');
       expect(toolNames).toContain('list_log_field_values');
+    });
+  });
+
+  it('exposes every inspect_database check in the listed JSON Schema', async () => {
+    await withConnectedClient(createTestContext(), async (client) => {
+      const result = await client.listTools();
+      const inspectTool = result.tools.find(
+        (tool) => tool.name === 'inspect_database',
+      );
+
+      expect(inspectTool?.annotations?.readOnlyHint).toBe(true);
+      const params = (
+        inspectTool?.inputSchema.properties as Record<string, unknown>
+      ).params as { properties: { check: { enum: string[] } } };
+      expect(params.properties.check.enum).toEqual([...INSPECT_CHECKS]);
+    });
+  });
+
+  it('rejects an inspect_database check outside the catalog', async () => {
+    await withConnectedClient(createTestContext(), async (client) => {
+      const result = await client.callTool({
+        name: 'inspect_database',
+        arguments: { params: { projectId: 'project-1', check: 'cache-hit' } },
+      });
+
+      expect(result.isError).toBe(true);
+      // Rejected by schema validation, so it must never reach the Neon API.
+      expect(globalThis.fetch).not.toHaveBeenCalled();
     });
   });
 
