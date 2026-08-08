@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
+import { DOCS_FIXTURE_BASE_URL } from './e2e/docs-fixture.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.E2E_PORT ?? '3100';
@@ -44,7 +45,14 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
-    // Load fresh values from .env.e2e for the webServer subprocess.
-    env: loadE2eEnv(),
+    env: {
+      // Load fresh values from .env.e2e for the webServer subprocess.
+      ...loadE2eEnv(),
+      // Read the docs index from the fixture server that global-setup starts,
+      // so no merge-gating test depends on neon.com being reachable. Set here
+      // rather than in global-setup because this object is built before
+      // global-setup runs, and it is not merged with later process.env changes.
+      NEON_DOCS_BASE_URL: DOCS_FIXTURE_BASE_URL,
+    },
   },
 });

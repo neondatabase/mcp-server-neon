@@ -11,6 +11,10 @@ import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { neon } from '@neondatabase/serverless';
+import {
+  DOCS_FIXTURE_BASE_URL,
+  startDocsFixtureServer,
+} from './docs-fixture.js';
 
 const ENV_FILE = path.resolve(import.meta.dirname, '..', '.env.e2e');
 
@@ -103,9 +107,20 @@ export default async function globalSetup() {
     cookieSecret = randomBytes(32).toString('hex');
   }
 
+  // `playwright.config.ts` points the dev server's NEON_DOCS_BASE_URL here; this
+  // is the process that answers on it.
+  const docsServer = await startDocsFixtureServer();
+  console.log(
+    `[e2e-setup] Serving the docs index fixture on ${DOCS_FIXTURE_BASE_URL}`,
+  );
+
   // Set env vars on process so the webServer subprocess inherits them.
   // This is needed because Playwright evaluates config (including webServer.env)
   // BEFORE globalSetup runs. But process.env changes propagate to spawned processes.
   process.env.OAUTH_DATABASE_URL = connectionString;
   process.env.COOKIE_SECRET = cookieSecret;
+
+  return async () => {
+    await new Promise<void>((resolve) => docsServer.close(() => resolve()));
+  };
 }

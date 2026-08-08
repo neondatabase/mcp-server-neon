@@ -1,0 +1,10 @@
+# Neon Docs (e2e fixture)
+
+This file stands in for https://neon.com/docs/llms.txt so the docs-only endpoint
+can be exercised without a network dependency. The e2e assertions match on the
+marker below, so keep it in place.
+
+E2E_DOCS_INDEX_FIXTURE_MARKER
+
+- [AI Concepts](https://neon.com/docs/ai/ai-concepts.md)
+- [Getting Started](https://neon.com/docs/get-started/signing-up.md)
