@@ -864,7 +864,7 @@ export const inspectDatabaseInputSchema = z.object({
     .optional()
     .default(INSPECT_DEFAULT_LIMIT)
     .describe(
-      'Maximum number of rows to return. The full row count is always reported, so raise this only when the response says it was truncated.',
+      'Maximum number of rows to return. The response reports how many rows the check produced and whether they were truncated, so raise this only when `truncated` is true. A few checks are capped in SQL and say so in their description.',
     ),
 });
 

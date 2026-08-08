@@ -27,7 +27,8 @@ type InspectDatabaseResult = {
   branchId: string;
   databaseName: string;
   fields: readonly string[];
-  rowCount: number;
+  /** Rows the check produced, which `rows` may be a truncated prefix of. */
+  totalRowCount: number;
   rows: Record<string, unknown>[];
   truncated: boolean;
   note?: string;
@@ -93,7 +94,7 @@ export async function handleInspectDatabase(
       );
       if (installed.length === 0) {
         throw new NotFoundError(
-          `The "${check}" check needs the "${query.requiresExtension}" extension, which is not installed on database "${connection.databaseName}". Enable it with: CREATE EXTENSION ${query.requiresExtension};`,
+          `The "${check}" check needs the "${query.requiresExtension}" extension, which is not installed on database "${connection.databaseName}". Installing it writes to the user's database, so ask the user first, then run \`CREATE EXTENSION IF NOT EXISTS ${query.requiresExtension};\` with run_sql.`,
         );
       }
     }
@@ -110,6 +111,11 @@ export async function handleInspectDatabase(
       note = `Showing the first ${limit} of ${rows.length} rows. Raise \`limit\` to see more.`;
     } else if (truncated) {
       note = `Showing the first ${limit} of ${rows.length} rows, which is the maximum this tool returns. Narrow the question with \`run_sql\` to see the rest.`;
+    } else if (query.sqlLimit !== undefined && rows.length === query.sqlLimit) {
+      // The query capped the result before `limit` could, so `totalRowCount` is
+      // the cap rather than the real total. Saying so stops a caller reporting a
+      // capped list as the complete one.
+      note = `The \`${check}\` check returns at most ${query.sqlLimit} rows, and hit that cap, so there may be more. Use \`run_sql\` for the full ranking.`;
     }
 
     return {
@@ -119,7 +125,7 @@ export async function handleInspectDatabase(
       branchId: connection.branchId,
       databaseName: connection.databaseName,
       fields: query.fields,
-      rowCount: rows.length,
+      totalRowCount: rows.length,
       rows: truncated ? rows.slice(0, limit) : rows,
       truncated,
       ...(note !== undefined && { note }),

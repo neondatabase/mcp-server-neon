@@ -8,7 +8,11 @@ import { z } from 'zod';
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { NeonApiClient } from '../../neon-client';
-import { INSPECT_CHECKS, INSPECT_QUERIES } from '../../inspect/queries';
+import {
+  INSPECT_CHECKS,
+  INSPECT_QUERIES,
+  type InspectCheck,
+} from '../../inspect/queries';
 
 loadEnv({ path: '.env.test', quiet: true });
 
@@ -60,11 +64,24 @@ const inspectResultSchema = z.object({
   branchId: z.string(),
   databaseName: z.string(),
   fields: z.array(z.string()),
-  rowCount: z.number(),
+  totalRowCount: z.number(),
   rows: z.array(z.record(z.string(), z.unknown())),
   truncated: z.boolean(),
   note: z.string().optional(),
 });
+
+/**
+ * A check whose SQL carries its own `LIMIT` must say so once it reaches that
+ * ceiling, otherwise a capped result reads as the complete one.
+ */
+function expectSqlCapDisclosed(
+  check: InspectCheck,
+  report: z.infer<typeof inspectResultSchema>,
+) {
+  const { sqlLimit } = INSPECT_QUERIES[check];
+  if (sqlLimit === undefined || report.totalRowCount !== sqlLimit) return;
+  expect(report.note).toContain(`at most ${sqlLimit} rows`);
+}
 
 function requireApiKey(): string {
   const name = 'NEON_API_KEY';
@@ -372,8 +389,11 @@ describe.sequential('MCP server live Neon lifecycle', () => {
 
         expect(parsedResult.isError).toBe(true);
         expect(text).toContain(
-          `CREATE EXTENSION ${INSPECT_QUERIES[check].requiresExtension};`,
+          `CREATE EXTENSION IF NOT EXISTS ${INSPECT_QUERIES[check].requiresExtension};`,
         );
+        // Installing an extension writes to the user's database, so the error
+        // must not read as something to do unattended.
+        expect(text).toContain('ask the user first');
       }
     },
     LIVE_TEST_TIMEOUT_MS,
@@ -396,16 +416,17 @@ describe.sequential('MCP server live Neon lifecycle', () => {
 
         expect(report.check).toBe(check);
         expect(report.fields).toEqual(INSPECT_QUERIES[check].fields);
-        expect(report.rowCount).toBe(report.rows.length);
+        expect(report.totalRowCount).toBe(report.rows.length);
         expect(report.truncated).toBe(false);
         // Every returned row must use the declared columns, so the model can
         // rely on `fields` for ordering.
         for (const row of report.rows) {
           expect(Object.keys(row).sort()).toEqual([...report.fields].sort());
         }
-        if (report.rowCount === 0) {
+        if (report.totalRowCount === 0) {
           expect(report.note).toBe(INSPECT_QUERIES[check].emptyMessage);
         }
+        expectSqlCapDisclosed(check, report);
       }
     },
     LIVE_TEST_TIMEOUT_MS,
@@ -426,7 +447,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
           ),
         ),
       );
-      expect(full.rowCount).toBeGreaterThanOrEqual(2);
+      expect(full.totalRowCount).toBeGreaterThanOrEqual(2);
       expect(full.rows.map((row) => row.name)).toContain('property_options');
 
       const capped = inspectResultSchema.parse(
@@ -442,9 +463,9 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         ),
       );
       expect(capped.rows).toHaveLength(1);
-      expect(capped.rowCount).toBe(full.rowCount);
+      expect(capped.totalRowCount).toBe(full.totalRowCount);
       expect(capped.truncated).toBe(true);
-      expect(capped.note).toContain(`of ${full.rowCount} rows`);
+      expect(capped.note).toContain(`of ${full.totalRowCount} rows`);
     },
     LIVE_TEST_TIMEOUT_MS,
   );
@@ -486,6 +507,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         for (const row of report.rows) {
           expect(Object.keys(row).sort()).toEqual([...report.fields].sort());
         }
+        expectSqlCapDisclosed(check, report);
       }
     },
     LIVE_TEST_TIMEOUT_MS,

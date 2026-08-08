@@ -7,8 +7,14 @@
  * powers `neon inspect db <check>`:
  * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ d9fa78f.
  * The CLI does not publish this module, so the SQL is duplicated rather than
- * imported. Keep it a verbatim copy — port fixes in both directions instead of
- * letting the two catalogs diverge.
+ * imported. Keep the SQL a verbatim copy — port fixes in both directions instead
+ * of letting the two catalogs diverge.
+ *
+ * The `describe` strings deliberately differ from the CLI's for `unused-indexes`,
+ * `outliers`, `calls`, and `bloat`. Here they are the enum documentation a model
+ * routes on, so they name the thresholds the SQL applies (`< 50` scans, `LIMIT
+ * 25`) rather than calling the result "few scans" or "the most expensive
+ * queries". `sqlLimit` carries the same fact in machine-readable form.
  *
  * Most checks need no extra extension. The ones that do declare it via
  * `requiresExtension`; the handler verifies the extension is installed first and
@@ -49,6 +55,12 @@ type InspectQuery = {
   fields: readonly string[];
   /** Explanation to return instead of an empty row set. */
   emptyMessage: string;
+  /**
+   * Row ceiling the SQL itself imposes, for the checks that carry a `LIMIT`.
+   * Without it a capped result is indistinguishable from a complete one, and the
+   * response would report `truncated: false` on a row set Postgres already cut.
+   */
+  sqlLimit?: number;
   /**
    * Postgres extension the query needs (e.g. `pg_stat_statements`). When set,
    * the handler verifies the extension is installed before running the query.
@@ -98,7 +110,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   },
   'unused-indexes': {
     describe:
-      'Non-unique indexes with few scans — candidates for removal (pg_stat_user_indexes)',
+      'Non-unique indexes with fewer than 50 scans — candidates for removal (pg_stat_user_indexes)',
     fields: ['table', 'index', 'index_size', 'index_scans'],
     emptyMessage: 'No unused indexes detected.',
     sql: /* sql */ `
@@ -170,9 +182,10 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   },
   outliers: {
     describe:
-      'Queries taking the most cumulative execution time (needs pg_stat_statements)',
+      'The 25 queries with the highest cumulative execution time since statistics were last reset (needs pg_stat_statements)',
     fields: ['total_exec_time', 'prop_exec_time', 'ncalls', 'query'],
     emptyMessage: 'No statements recorded yet.',
+    sqlLimit: 25,
     requiresExtension: 'pg_stat_statements',
     sql: /* sql */ `
       SELECT
@@ -191,9 +204,11 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
     `,
   },
   calls: {
-    describe: 'Most frequently called queries (needs pg_stat_statements)',
+    describe:
+      'The 25 most frequently executed queries since statistics were last reset (needs pg_stat_statements)',
     fields: ['ncalls', 'total_exec_time', 'prop_exec_time', 'query'],
     emptyMessage: 'No statements recorded yet.',
+    sqlLimit: 25,
     requiresExtension: 'pg_stat_statements',
     sql: /* sql */ `
       SELECT
@@ -299,9 +314,10 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   },
   bloat: {
     describe:
-      'Estimated table/index bloat (statistical estimate, no extension needed)',
+      'Estimated bloat for the 25 most bloated tables (statistical estimate, no extension needed)',
     fields: ['type', 'schema', 'object_name', 'bloat', 'waste'],
     emptyMessage: 'No bloat estimate available.',
+    sqlLimit: 25,
     sql: /* sql */ `
       WITH constants AS (
         SELECT current_setting('block_size')::numeric AS bs, 23 AS hdr, 8 AS ma

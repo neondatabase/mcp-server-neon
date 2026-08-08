@@ -32,6 +32,22 @@ describe('inspect query catalog', () => {
     expect(statements).toHaveLength(1);
   });
 
+  // A `LIMIT` in the SQL makes a capped result look complete, so the catalog has
+  // to declare it. This keeps the declaration honest in both directions.
+  it.each(INSPECT_CHECKS)('%s declares any SQL-level row cap', (check) => {
+    const query = INSPECT_QUERIES[check];
+    const limitInSql = query.sql.match(/LIMIT\s+(\d+)/i);
+    expect(query.sqlLimit).toBe(limitInSql ? Number(limitInSql[1]) : undefined);
+  });
+
+  it('names the cap in the description of every capped check', () => {
+    for (const check of INSPECT_CHECKS) {
+      const query = INSPECT_QUERIES[check];
+      if (query.sqlLimit === undefined) continue;
+      expect(query.describe).toContain(String(query.sqlLimit));
+    }
+  });
+
   it('documents every check for the model', () => {
     for (const check of INSPECT_CHECKS) {
       expect(INSPECT_CHECK_LIST).toContain(
