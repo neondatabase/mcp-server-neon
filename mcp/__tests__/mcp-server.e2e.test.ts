@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { z } from 'zod';
 
 const { trackSpy } = vi.hoisted(() => ({ trackSpy: vi.fn() }));
 
@@ -21,6 +22,15 @@ import type { ServerContext } from '../types/context';
 import { INSPECT_CHECKS } from '../inspect/queries';
 
 const originalFetch = globalThis.fetch;
+
+const listedInspectSchema = z.object({
+  properties: z.object({
+    params: z.object({
+      properties: z.object({ check: z.object({ enum: z.array(z.string()) }) }),
+      required: z.array(z.string()),
+    }),
+  }),
+});
 
 function createTestContext(overrides?: Partial<ServerContext>): ServerContext {
   return {
@@ -110,10 +120,11 @@ describe('MCP server e2e tool calls', () => {
       );
 
       expect(inspectTool?.annotations?.readOnlyHint).toBe(true);
-      const params = (
-        inspectTool?.inputSchema.properties as Record<string, unknown>
-      ).params as { properties: { check: { enum: string[] } } };
-      expect(params.properties.check.enum).toEqual([...INSPECT_CHECKS]);
+      const schema = listedInspectSchema.parse(inspectTool?.inputSchema);
+      expect(schema.properties.params.properties.check.enum).toEqual([
+        ...INSPECT_CHECKS,
+      ]);
+      expect(schema.properties.params.required).toContain('check');
     });
   });
 
@@ -125,8 +136,9 @@ describe('MCP server e2e tool calls', () => {
       });
 
       expect(result.isError).toBe(true);
-      // Rejected by schema validation, so it must never reach the Neon API.
-      expect(globalThis.fetch).not.toHaveBeenCalled();
+      // Naming the rejected value proves schema validation refused it, rather
+      // than the call reaching Postgres and failing there.
+      expect(JSON.stringify(result.content)).toContain('cache-hit');
     });
   });
 

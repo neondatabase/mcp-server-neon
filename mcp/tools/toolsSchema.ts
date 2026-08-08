@@ -17,6 +17,7 @@ import {
   INSPECT_CHECK_LIST,
   INSPECT_CHECKS,
   INSPECT_DEFAULT_LIMIT,
+  INSPECT_MAX_LIMIT,
 } from '../inspect/queries';
 import { SEVERITY_LEVELS } from '../otel/severity';
 
@@ -859,7 +860,7 @@ export const inspectDatabaseInputSchema = z.object({
     .number()
     .int()
     .min(1)
-    .max(1000)
+    .max(INSPECT_MAX_LIMIT)
     .optional()
     .default(INSPECT_DEFAULT_LIMIT)
     .describe(

@@ -3,6 +3,7 @@ import {
   INSPECT_CHECK_LIST,
   INSPECT_CHECKS,
   INSPECT_DEFAULT_LIMIT,
+  INSPECT_MAX_LIMIT,
   INSPECT_QUERIES,
 } from '../inspect/queries';
 import { inspectDatabaseInputSchema } from '../tools/toolsSchema';
@@ -77,7 +78,14 @@ describe('inspectDatabaseInputSchema', () => {
       inspectDatabaseInputSchema.safeParse({
         check: 'locks',
         projectId: 'project-1',
-        limit: 1001,
+        limit: INSPECT_MAX_LIMIT,
+      }).success,
+    ).toBe(true);
+    expect(
+      inspectDatabaseInputSchema.safeParse({
+        check: 'locks',
+        projectId: 'project-1',
+        limit: INSPECT_MAX_LIMIT + 1,
       }).success,
     ).toBe(false);
   });

@@ -3,12 +3,12 @@
  * query against Postgres' own statistics and catalog views, plus the output
  * columns in display order.
  *
- * Vendored verbatim from the `neon` CLI, where the same catalog powers
- * `neon inspect db <check>`:
+ * Every query is copied verbatim from the `neon` CLI, where the same catalog
+ * powers `neon inspect db <check>`:
  * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ d9fa78f.
- * The CLI does not publish this module, so the two copies are kept
- * byte-comparable on purpose — port fixes in both directions rather than
- * letting the SQL diverge here.
+ * The CLI does not publish this module, so the SQL is duplicated rather than
+ * imported. Keep it a verbatim copy — port fixes in both directions instead of
+ * letting the two catalogs diverge.
  *
  * Most checks need no extra extension. The ones that do declare it via
  * `requiresExtension`; the handler verifies the extension is installed first and
@@ -430,6 +430,9 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
  * model's context, so the handler caps the response and reports the full count.
  */
 export const INSPECT_DEFAULT_LIMIT = 50;
+
+/** Ceiling on `limit`, so a diagnostic can never return an unbounded response. */
+export const INSPECT_MAX_LIMIT = 1000;
 
 /** `check`-parameter documentation, generated so it cannot drift from the catalog. */
 export const INSPECT_CHECK_LIST = INSPECT_CHECKS.map(
