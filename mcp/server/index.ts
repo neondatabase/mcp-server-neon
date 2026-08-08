@@ -92,8 +92,10 @@ export const createMcpServer = async (context: ServerContext) => {
   // Compute access control warnings once (appended to every tool response)
   const accessControlWarnings = getAccessControlWarnings(grant, readOnly);
 
-  // Register tools. Registration and argument handling come from the shared
-  // module so this server is wire-identical to the deployed route.
+  // Register tools. Schema shape and argument handling come from the shared
+  // module, so a tool call here takes the same arguments as one against the
+  // deployed route. `tools/list` output is not yet identical — the route
+  // overrides it, this server uses the SDK's own rendering.
   availableTools.forEach((tool) => {
     server.registerTool(
       tool.name,

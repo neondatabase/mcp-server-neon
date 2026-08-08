@@ -53,9 +53,9 @@ export function toolRegistration(tool: NeonTool): {
  */
 export async function invokeTool(
   toolName: NeonTool['name'],
-  // The SDK hands back whatever the caller sent, already validated against the
-  // tool's zod schema. It is a plain object by then, but the callback signature
-  // is generic across every tool, so this is where it gets a shape.
+  // The SDK validates against the tool's zod schema before it calls us, so this
+  // is an object by the time it arrives. It is typed loosely only because the
+  // callback signature is shared across every tool.
   args: unknown,
   grant: GrantContext,
   neonClient: Api<unknown>,
@@ -67,12 +67,6 @@ export async function invokeTool(
   if (!handler) {
     throw new Error(`Handler for tool ${toolName} not found`);
   }
-  if (args !== undefined && (typeof args !== 'object' || args === null)) {
-    throw new Error(
-      `Tool ${toolName} received arguments that are not an object.`,
-    );
-  }
-
   const effectiveArgs = injectProjectId(
     (args ?? {}) as Record<string, unknown>,
     grant,
