@@ -148,6 +148,41 @@ describe('query_logs over the wire', () => {
     ]);
   });
 
+  it('posts ordinary filters through the SDK structured contract', async () => {
+    replies[QUERY_PATH] = {
+      status: 200,
+      body: { logs: [], is_truncated: false },
+    };
+
+    await NEON_HANDLERS.query_logs(
+      {
+        params: {
+          projectId: 'proj-1',
+          branchId: 'br-1',
+          source: 'storage',
+          serviceName: 'object-store',
+          severityText: 'WARN',
+          bodyContains: '"http_status":500',
+          traceId: '0123456789abcdef0123456789abcdef',
+          limit: 100,
+        },
+      },
+      neonClient,
+      extra,
+    );
+
+    expect(recorded[0].body).toEqual({
+      source: 'storage',
+      service_name: 'object-store',
+      severity_text: 'WARN',
+      body_contains: '"http_status":500',
+      trace_id: '0123456789abcdef0123456789abcdef',
+      since: '1h',
+      limit: 100,
+      sort_order: 'desc',
+    });
+  });
+
   it('posts a raw LogQL expression with no structured filters', async () => {
     replies[QUERY_PATH] = {
       status: 200,
@@ -159,7 +194,6 @@ describe('query_logs over the wire', () => {
         params: {
           projectId: 'proj-1',
           branchId: 'br-1',
-          source: 'function',
           logql: '{entity_type="function"} |~ "(?i)timeout"',
           startTime: '2026-07-16T09:00:00Z',
           limit: 100,

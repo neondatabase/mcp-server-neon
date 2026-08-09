@@ -103,6 +103,7 @@ describe('query_logs handler', () => {
     expect(payload.query).toBe(
       '{entity_type="function", service_name="api", trace_id="abc123", severity_text=~"(?i)(ERROR|FATAL)[0-9]*"} |= "boom"',
     );
+    expect(payload.logql).toBe(payload.query);
     expect(payload.count).toBe(1);
     expect(payload.truncated).toBe(false);
     // The SDK-only fields (severity_number, entity_id, trace_id, attributes) are
@@ -143,6 +144,39 @@ describe('query_logs handler', () => {
     });
   });
 
+  it('uses SDK structured filters when minimum severity is absent', async () => {
+    const queryLogs = page([]);
+    const client = mockClient({ queryLogs });
+
+    await NEON_HANDLERS.query_logs(
+      {
+        params: {
+          projectId: 'proj-1',
+          branchId: 'br-1',
+          source: 'storage',
+          serviceName: 'object-store',
+          severityText: 'WARN',
+          bodyContains: '"http_status":500',
+          traceId: '0123456789abcdef0123456789abcdef',
+          limit: 100,
+        },
+      },
+      client,
+      extra,
+    );
+
+    expect(queryLogs.mock.calls[0][2]).toEqual({
+      source: 'storage',
+      service_name: 'object-store',
+      severity_text: 'WARN',
+      body_contains: '"http_status":500',
+      trace_id: '0123456789abcdef0123456789abcdef',
+      since: '1h',
+      limit: 100,
+      sort_order: 'desc',
+    });
+  });
+
   it('resolves the default branch and defaults to a 1h window when omitted', async () => {
     const queryLogs = page([]);
     const client = mockClient({ queryLogs });
@@ -157,6 +191,7 @@ describe('query_logs handler', () => {
     expect(branchId).toBe('br-default');
     expect(input.since).toBe('1h');
     expect(input.start_time).toBeUndefined();
+    expect(input.source).toBe('function');
   });
 
   it('resolves the only project when projectId is omitted', async () => {
@@ -234,9 +269,6 @@ describe('query_logs handler', () => {
         params: {
           projectId: 'proj-1',
           branchId: 'br-1',
-          source: 'function',
-          serviceName: 'api',
-          minSeverity: 'error',
           logql: '{entity_type="function"} |~ "(?i)timeout"',
           limit: 100,
         },
@@ -255,6 +287,9 @@ describe('query_logs handler', () => {
     expect(payloadOf(result).query).toBe(
       '{entity_type="function"} |~ "(?i)timeout"',
     );
+    expect(payloadOf(result).logql).toBe(
+      '{entity_type="function"} |~ "(?i)timeout"',
+    );
   });
 
   it('keeps query as a compatibility alias for logql', async () => {
@@ -266,7 +301,6 @@ describe('query_logs handler', () => {
         params: {
           projectId: 'proj-1',
           branchId: 'br-1',
-          source: 'function',
           query: '{entity_type="storage"} |= "uploaded"',
           limit: 100,
         },
@@ -280,7 +314,7 @@ describe('query_logs handler', () => {
     });
   });
 
-  it('rejects logql and query together before resolving scope', async () => {
+  it('rejects raw logql with structured filters before resolving scope', async () => {
     const queryLogs = page([]);
     const client = mockClient({ queryLogs });
 
@@ -289,6 +323,28 @@ describe('query_logs handler', () => {
         {
           params: {
             source: 'function',
+            serviceName: 'api',
+            logql: '{entity_type="function"}',
+            limit: 100,
+          },
+        },
+        client,
+        extra,
+      ),
+    ).rejects.toThrow(InvalidArgumentError);
+
+    expect(queryLogs).not.toHaveBeenCalled();
+    expect(client.listProjects).not.toHaveBeenCalled();
+  });
+
+  it('rejects logql and query together before resolving scope', async () => {
+    const queryLogs = page([]);
+    const client = mockClient({ queryLogs });
+
+    await expect(
+      NEON_HANDLERS.query_logs(
+        {
+          params: {
             logql: '{entity_type="function"}',
             query: '{entity_type="storage"}',
             limit: 100,

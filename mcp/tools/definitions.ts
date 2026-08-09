@@ -40,7 +40,7 @@ import {
 } from './toolsSchema';
 
 const LOGS_AVAILABILITY =
-  'Logs require the Neon Platform Beta and are currently only available for projects in the aws-us-east-2 region.';
+  'Logs require the Neon Platform Beta and are currently only available for projects in the aws-us-east-2 region. A branch without logs access returns HTTP 404 with reason "telemetry_not_enabled".';
 
 type NeonToolDefinition = {
   name: string;
@@ -1222,9 +1222,9 @@ export const NEON_TOOLS = [
     - Defaults to the project's default branch and the last 1 hour if unspecified.
     - Results are newest-first and capped by \`limit\` (default 100); \`truncated: true\` means more records matched than were returned — narrow the filters or time range.
     - \`minSeverity\` follows OTel ordering (trace < debug < info < warn < error < fatal), so "error" also returns FATAL.
-    - The returned \`query\` is the LogQL these filters stand for; pass it back as \`logql\` to refine it by hand.
-    - Advanced: pass raw \`logql\` to replace the structured filters. Only stream selectors \`{label="v"}\` and line filters (|= |~ != !~) are supported — no aggregations or parsers. Structured filters are ignored when it is set.
-    - \`query\` remains available as a deprecated alias for \`logql\`; do not supply both.
+    - The returned \`logql\` and compatibility \`query\` fields contain the LogQL these filters stand for; pass \`logql\` back to refine it by hand.
+    - Advanced: pass raw \`logql\` instead of the structured filters. Only stream selectors \`{label="v"}\` and line filters (|= |~ != !~) are supported — no aggregations or parsers. Combining raw LogQL with structured filters is rejected.
+    - \`query\` remains available as a legacy input alias for \`logql\`; do not supply both.
   </important_notes>`,
     inputSchema: queryLogsInputSchema,
     readOnlySafe: true,
@@ -1239,7 +1239,7 @@ export const NEON_TOOLS = [
   {
     name: 'list_log_fields' as const,
     scope: 'observability',
-    description: `List the log fields whose values list_log_field_values can enumerate for a branch, such as service_name, severity_text, scope_name, and entity_type. The set is computed per branch and grows as fields are observed, so read it rather than assuming a fixed set. ${LOGS_AVAILABILITY}`,
+    description: `List the log fields whose values list_log_field_values can enumerate for a branch, such as service_name, severity_text, scope_name, and entity_type. The set is computed per branch and grows as fields are observed, so read it rather than assuming a fixed set. Fields without a structured query_logs input can be filtered through raw logql. ${LOGS_AVAILABILITY}`,
     inputSchema: listLogFieldsInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -1253,7 +1253,7 @@ export const NEON_TOOLS = [
   {
     name: 'list_log_field_values' as const,
     scope: 'observability',
-    description: `List the distinct values of a log field (e.g. all service_name or severity_text values seen) within a branch and time window. Use this to discover concrete values to pass to query_logs. The field must be one of the names list_log_fields reports for the branch; anything else is rejected as an unknown field rather than returning an empty list. \`truncated: true\` means more distinct values exist than were returned, so the list is an arbitrary subset — narrow the time window and ask again before filtering on it. ${LOGS_AVAILABILITY}`,
+    description: `List the distinct values of a log field (e.g. all service_name or severity_text values seen) within a branch and time window. Use values with the corresponding query_logs structured input when one exists, or with raw logql otherwise. The field must be one of the names list_log_fields reports for the branch; anything else is rejected as an unknown field rather than returning an empty list. \`truncated: true\` means more distinct values exist than were returned, so the list is an arbitrary subset — narrow the time window and ask again before filtering on it. ${LOGS_AVAILABILITY}`,
     inputSchema: listLogFieldValuesInputSchema,
     readOnlySafe: true,
     annotations: {

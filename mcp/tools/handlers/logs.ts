@@ -2,9 +2,9 @@
  * Handlers for the logs tools: query_logs, list_log_fields,
  * list_log_field_values. These call `neon.logs.*` through the client facade.
  *
- * Structured MCP filters are rendered into the same LogQL expression the
- * previous transport executed, then sent through the SDK's raw-LogQL input.
- * That keeps the tool's filtering semantics and returned `query` reproducible.
+ * Structured MCP filters use the SDK's structured inputs. They are also
+ * rendered as equivalent LogQL for the response and for minimum severity,
+ * whose structured API filter is not supported consistently across backends.
  */
 
 import type { Api, ProjectBranchLogRecord } from '../../neon-client';
@@ -76,16 +76,33 @@ export async function handleQueryLogs(
 ) {
   if (params.logql !== undefined && params.query !== undefined) {
     throw new InvalidArgumentError(
-      'Provide either `logql` or its deprecated `query` alias, not both.',
+      'Provide either `logql` or its legacy `query` alias, not both.',
+    );
+  }
+
+  const rawLogQL = params.logql ?? params.query;
+  if (rawLogQL !== undefined && hasStructuredFilters(params)) {
+    throw new InvalidArgumentError(
+      'Raw `logql` cannot be combined with structured log filters.',
     );
   }
 
   const scope = await resolveScope(params, neonClient, extra);
 
-  // Preserve the previous tool's LogQL semantics through the SDK transport.
-  // Besides making the returned query exactly reproducible, this keeps
-  // minSeverity working on branch backends that reject minimum_severity.
-  const query = params.logql ?? params.query ?? renderLogQL(params);
+  const query = rawLogQL ?? renderLogQL(params);
+  const filters = rawLogQL
+    ? { logql: rawLogQL }
+    : params.minSeverity
+      ? // Preserve minimum-severity behavior on branch backends that reject
+        // the API's structured minimum_severity filter.
+        { logql: query }
+      : {
+          source: params.source ?? 'function',
+          service_name: params.serviceName,
+          severity_text: params.severityText,
+          body_contains: params.bodyContains,
+          trace_id: params.traceId,
+        };
 
   // Absolute (startTime) and relative (since) windows are mutually exclusive;
   // with neither, look back one hour.
@@ -94,7 +111,7 @@ export async function handleQueryLogs(
     : { since: params.since ?? '1h', end_time: params.endTime };
 
   const page = await neonClient.queryLogs(scope.projectId, scope.branchId, {
-    logql: query,
+    ...filters,
     ...timeWindow,
     limit: params.limit,
     sort_order: 'desc',
@@ -102,6 +119,7 @@ export async function handleQueryLogs(
 
   return {
     query,
+    logql: query,
     scope,
     count: page.items.length,
     // A cursor is only issued when more records matched than were returned.
@@ -110,7 +128,18 @@ export async function handleQueryLogs(
   };
 }
 
-/** Render structured filters into the LogQL sent through the SDK. */
+function hasStructuredFilters(params: QueryLogsParams): boolean {
+  return (
+    params.source !== undefined ||
+    params.serviceName !== undefined ||
+    params.minSeverity !== undefined ||
+    params.severityText !== undefined ||
+    params.bodyContains !== undefined ||
+    params.traceId !== undefined
+  );
+}
+
+/** Render structured filters as equivalent LogQL for the response or fallback. */
 function renderLogQL(params: QueryLogsParams): string {
   return buildLogQL({
     entityType: params.source,

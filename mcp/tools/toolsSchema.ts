@@ -929,7 +929,7 @@ export const queryLogsInputSchema = z.object({
     .optional(),
   source: z
     .enum(['function', 'storage', 'pg_endpoint'])
-    .default('function')
+    .optional()
     .describe(
       'Which service produced the logs. "function" (serverless functions) is the default; "storage" and "pg_endpoint" are also available.',
     ),
@@ -953,10 +953,11 @@ export const queryLogsInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Return only logs whose body contains this case-sensitive substring.',
+      'Return only logs whose rendered message contains this case-sensitive substring. Structured messages use compact JSON, so match JSON syntax such as `"http_status":200`, not prose such as `http_status: 200`.',
     ),
   traceId: z
     .string()
+    .regex(/^[0-9a-f]{32}$/, 'traceId must be 32 lowercase hex digits')
     .optional()
     .describe(
       'Correlate to a distributed trace: return only logs with this trace_id.',
@@ -992,12 +993,14 @@ export const queryLogsInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Advanced: a raw LogQL expression to run instead of the structured filters above (e.g. `{entity_type="function"} |~ "(?i)timeout"`). Only stream selectors and line filters are supported — no aggregations or parser stages. When set, the structured filter fields are ignored.',
+      'Advanced: a raw LogQL expression to run instead of the structured filters above (e.g. `{entity_type="function"} |~ "(?i)timeout"`). Only stream selectors and line filters are supported — no aggregations or parser stages. Do not combine it with structured filters.',
     ),
   query: z
     .string()
     .optional()
-    .describe('Deprecated alias for `logql`. Do not supply both fields.'),
+    .describe(
+      'Legacy compatibility alias for `logql`. Do not supply both fields.',
+    ),
 });
 
 export const listLogFieldsInputSchema = z.object({

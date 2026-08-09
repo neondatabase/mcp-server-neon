@@ -1,9 +1,10 @@
 /**
  * Renders the LogQL expression a set of structured filters stands for.
  *
- * `query_logs` sends this expression through the SDK's raw-LogQL input and
- * reports the same string back as `query`, so the caller can widen or narrow it
- * and hand it straight back.
+ * `query_logs` reports this expression as `logql` and the compatibility
+ * `query` field, so the caller can widen or narrow it and hand it back. The
+ * expression is also the fallback for minimum severity, whose structured API
+ * filter is not supported consistently across branch backends.
  *
  * The API accepts only a subset of LogQL (Grafana Loki's query language): a
  * stream selector `{label op "value"}` (ops `=`, `!=`, `=~`, `!~`) optionally
