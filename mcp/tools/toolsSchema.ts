@@ -988,12 +988,16 @@ export const queryLogsInputSchema = z.object({
     .describe(
       'Maximum number of log lines to return (1-1000, default 100). Large results are truncated server-side.',
     ),
-  query: z
+  logql: z
     .string()
     .optional()
     .describe(
       'Advanced: a raw LogQL expression to run instead of the structured filters above (e.g. `{entity_type="function"} |~ "(?i)timeout"`). Only stream selectors and line filters are supported — no aggregations or parser stages. When set, the structured filter fields are ignored.',
     ),
+  query: z
+    .string()
+    .optional()
+    .describe('Deprecated alias for `logql`. Do not supply both fields.'),
 });
 
 export const listLogFieldsInputSchema = z.object({

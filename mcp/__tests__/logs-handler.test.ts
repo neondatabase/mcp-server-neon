@@ -10,6 +10,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import type { Api, ProjectBranchLogRecord } from '../neon-client';
+import { InvalidArgumentError } from '../server/errors';
 import { NEON_HANDLERS } from '../tools/tools';
 
 type ToolResult = { content: Array<{ type: string; text: string }> };
@@ -224,7 +225,7 @@ describe('query_logs handler', () => {
     });
   });
 
-  it('sends a raw LogQL query alone, without the defaulted source', async () => {
+  it('sends raw logql alone, without the defaulted source', async () => {
     const queryLogs = page([]);
     const client = mockClient({ queryLogs });
 
@@ -236,7 +237,7 @@ describe('query_logs handler', () => {
           source: 'function',
           serviceName: 'api',
           minSeverity: 'error',
-          query: '{entity_type="function"} |~ "(?i)timeout"',
+          logql: '{entity_type="function"} |~ "(?i)timeout"',
           limit: 100,
         },
       },
@@ -254,6 +255,52 @@ describe('query_logs handler', () => {
     expect(payloadOf(result).query).toBe(
       '{entity_type="function"} |~ "(?i)timeout"',
     );
+  });
+
+  it('keeps query as a compatibility alias for logql', async () => {
+    const queryLogs = page([]);
+    const client = mockClient({ queryLogs });
+
+    await NEON_HANDLERS.query_logs(
+      {
+        params: {
+          projectId: 'proj-1',
+          branchId: 'br-1',
+          source: 'function',
+          query: '{entity_type="storage"} |= "uploaded"',
+          limit: 100,
+        },
+      },
+      client,
+      extra,
+    );
+
+    expect(queryLogs.mock.calls[0][2]).toMatchObject({
+      logql: '{entity_type="storage"} |= "uploaded"',
+    });
+  });
+
+  it('rejects logql and query together before resolving scope', async () => {
+    const queryLogs = page([]);
+    const client = mockClient({ queryLogs });
+
+    await expect(
+      NEON_HANDLERS.query_logs(
+        {
+          params: {
+            source: 'function',
+            logql: '{entity_type="function"}',
+            query: '{entity_type="storage"}',
+            limit: 100,
+          },
+        },
+        client,
+        extra,
+      ),
+    ).rejects.toThrow(InvalidArgumentError);
+
+    expect(queryLogs).not.toHaveBeenCalled();
+    expect(client.listProjects).not.toHaveBeenCalled();
   });
 
   it('reports truncation when the page carries a cursor', async () => {

@@ -9,6 +9,7 @@
 
 import type { Api, ProjectBranchLogRecord } from '../../neon-client';
 import { z } from 'zod/v3';
+import { InvalidArgumentError } from '../../server/errors';
 import type { ToolHandlerExtraParams } from '../types';
 import { getDefaultBranch, getOnlyProject } from './utils';
 import { buildLogQL } from '../../otel/logql';
@@ -73,12 +74,18 @@ export async function handleQueryLogs(
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
 ) {
+  if (params.logql !== undefined && params.query !== undefined) {
+    throw new InvalidArgumentError(
+      'Provide either `logql` or its deprecated `query` alias, not both.',
+    );
+  }
+
   const scope = await resolveScope(params, neonClient, extra);
 
   // Preserve the previous tool's LogQL semantics through the SDK transport.
   // Besides making the returned query exactly reproducible, this keeps
   // minSeverity working on branch backends that reject minimum_severity.
-  const query = params.query ?? renderLogQL(params);
+  const query = params.logql ?? params.query ?? renderLogQL(params);
 
   // Absolute (startTime) and relative (since) windows are mutually exclusive;
   // with neither, look back one hour.

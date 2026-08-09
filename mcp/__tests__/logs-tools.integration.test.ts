@@ -160,7 +160,7 @@ describe('query_logs over the wire', () => {
           projectId: 'proj-1',
           branchId: 'br-1',
           source: 'function',
-          query: '{entity_type="function"} |~ "(?i)timeout"',
+          logql: '{entity_type="function"} |~ "(?i)timeout"',
           startTime: '2026-07-16T09:00:00Z',
           limit: 100,
         },
