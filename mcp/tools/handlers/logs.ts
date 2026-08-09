@@ -81,9 +81,11 @@ export async function handleQueryLogs(
   }
 
   const rawLogQL = params.logql ?? params.query;
-  if (rawLogQL !== undefined && hasStructuredFilters(params)) {
+  const conflictingFilters = structuredFilterNames(params);
+  if (rawLogQL !== undefined && conflictingFilters.length > 0) {
+    const rawField = params.logql !== undefined ? 'logql' : 'query';
     throw new InvalidArgumentError(
-      'Raw `logql` cannot be combined with structured log filters.',
+      `Raw \`${rawField}\` cannot be combined with structured log filters (${conflictingFilters.join(', ')}). Remove those filters, or omit \`${rawField}\` and use structured filters alone.`,
     );
   }
 
@@ -128,15 +130,15 @@ export async function handleQueryLogs(
   };
 }
 
-function hasStructuredFilters(params: QueryLogsParams): boolean {
-  return (
-    params.source !== undefined ||
-    params.serviceName !== undefined ||
-    params.minSeverity !== undefined ||
-    params.severityText !== undefined ||
-    params.bodyContains !== undefined ||
-    params.traceId !== undefined
-  );
+function structuredFilterNames(params: QueryLogsParams): string[] {
+  const filters: string[] = [];
+  if (params.source !== undefined) filters.push('source');
+  if (params.serviceName !== undefined) filters.push('serviceName');
+  if (params.minSeverity !== undefined) filters.push('minSeverity');
+  if (params.severityText !== undefined) filters.push('severityText');
+  if (params.bodyContains !== undefined) filters.push('bodyContains');
+  if (params.traceId !== undefined) filters.push('traceId');
+  return filters;
 }
 
 /** Render structured filters as equivalent LogQL for the response or fallback. */

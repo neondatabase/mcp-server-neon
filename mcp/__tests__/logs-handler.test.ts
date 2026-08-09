@@ -80,7 +80,7 @@ describe('query_logs handler', () => {
           serviceName: 'api',
           minSeverity: 'error',
           bodyContains: 'boom',
-          traceId: 'abc123',
+          traceId: '0123456789abcdef0123456789abcdef',
           since: '2h',
           limit: 50,
         },
@@ -92,7 +92,7 @@ describe('query_logs handler', () => {
     expect(queryLogs).toHaveBeenCalledTimes(1);
     expect(queryLogs).toHaveBeenCalledWith('proj-1', 'br-1', {
       logql:
-        '{entity_type="function", service_name="api", trace_id="abc123", severity_text=~"(?i)(ERROR|FATAL)[0-9]*"} |= "boom"',
+        '{entity_type="function", service_name="api", trace_id="0123456789abcdef0123456789abcdef", severity_text=~"(?i)(ERROR|FATAL)[0-9]*"} |= "boom"',
       since: '2h',
       limit: 50,
       sort_order: 'desc',
@@ -101,7 +101,7 @@ describe('query_logs handler', () => {
     const payload = payloadOf(result);
     expect(payload.scope).toEqual({ projectId: 'proj-1', branchId: 'br-1' });
     expect(payload.query).toBe(
-      '{entity_type="function", service_name="api", trace_id="abc123", severity_text=~"(?i)(ERROR|FATAL)[0-9]*"} |= "boom"',
+      '{entity_type="function", service_name="api", trace_id="0123456789abcdef0123456789abcdef", severity_text=~"(?i)(ERROR|FATAL)[0-9]*"} |= "boom"',
     );
     expect(payload.logql).toBe(payload.query);
     expect(payload.count).toBe(1);
@@ -331,7 +331,9 @@ describe('query_logs handler', () => {
         client,
         extra,
       ),
-    ).rejects.toThrow(InvalidArgumentError);
+    ).rejects.toThrow(
+      'Raw `logql` cannot be combined with structured log filters (source, serviceName).',
+    );
 
     expect(queryLogs).not.toHaveBeenCalled();
     expect(client.listProjects).not.toHaveBeenCalled();
