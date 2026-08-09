@@ -991,12 +991,14 @@ export const queryLogsInputSchema = z.object({
     ),
   logql: z
     .string()
+    .min(1, 'logql cannot be empty')
     .optional()
     .describe(
       'Advanced: a raw LogQL expression to run instead of the structured filters above (e.g. `{entity_type="function"} |~ "(?i)timeout"`). Only stream selectors and line filters are supported — no aggregations or parser stages. Do not combine it with structured filters.',
     ),
   query: z
     .string()
+    .min(1, 'query cannot be empty')
     .optional()
     .describe(
       'Legacy compatibility alias for `logql`. Do not supply both fields.',

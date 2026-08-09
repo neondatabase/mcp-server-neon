@@ -12,6 +12,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { Api, ProjectBranchLogRecord } from '../neon-client';
 import { InvalidArgumentError } from '../server/errors';
 import { NEON_HANDLERS } from '../tools/tools';
+import { queryLogsInputSchema } from '../tools/toolsSchema';
 
 type ToolResult = { content: Array<{ type: string; text: string }> };
 
@@ -54,6 +55,15 @@ function payloadOf(result: ToolResult) {
 }
 
 describe('query_logs handler', () => {
+  it.each(['logql', 'query'] as const)(
+    'rejects an empty %s input at the public schema boundary',
+    (field) => {
+      expect(queryLogsInputSchema.safeParse({ [field]: '' }).success).toBe(
+        false,
+      );
+    },
+  );
+
   it('renders structured filters as the executed LogQL query and shapes the response', async () => {
     const queryLogs = page([
       {

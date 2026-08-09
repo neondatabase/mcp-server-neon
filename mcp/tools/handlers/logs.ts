@@ -92,19 +92,20 @@ export async function handleQueryLogs(
   const scope = await resolveScope(params, neonClient, extra);
 
   const query = rawLogQL ?? renderLogQL(params);
-  const filters = rawLogQL
-    ? { logql: rawLogQL }
-    : params.minSeverity
-      ? // Preserve minimum-severity behavior on branch backends that reject
-        // the API's structured minimum_severity filter.
-        { logql: query }
-      : {
-          source: params.source ?? 'function',
-          service_name: params.serviceName,
-          severity_text: params.severityText,
-          body_contains: params.bodyContains,
-          trace_id: params.traceId,
-        };
+  const filters =
+    rawLogQL !== undefined
+      ? { logql: rawLogQL }
+      : params.minSeverity
+        ? // Preserve minimum-severity behavior on branch backends that reject
+          // the API's structured minimum_severity filter.
+          { logql: query }
+        : {
+            source: params.source ?? 'function',
+            service_name: params.serviceName,
+            severity_text: params.severityText,
+            body_contains: params.bodyContains,
+            trace_id: params.traceId,
+          };
 
   // Absolute (startTime) and relative (since) windows are mutually exclusive;
   // with neither, look back one hour.
