@@ -139,7 +139,7 @@ describe('query_logs over the wire', () => {
     });
     expect(payloadOf(result).records).toEqual([
       {
-        timestamp: '2026-07-16T09:30:00Z',
+        timestamp: '2026-07-16T09:30:00.000Z',
         body: 'boom',
         entityType: 'function',
         serviceName: 'api',

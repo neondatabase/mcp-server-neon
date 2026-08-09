@@ -56,7 +56,7 @@ describe('query_logs handler', () => {
   it('renders structured filters as the executed LogQL query and shapes the response', async () => {
     const queryLogs = page([
       {
-        timestamp: '2023-11-14T22:13:20.000Z',
+        timestamp: '2023-11-14T22:13:20Z',
         message: 'boom',
         source: 'function',
         service_name: 'api',
@@ -197,6 +197,31 @@ describe('query_logs handler', () => {
     });
     // Sending both bounds and a relative window is rejected by the API.
     expect(queryLogs.mock.calls[0][2].since).toBeUndefined();
+  });
+
+  it('uses endTime as the endpoint for a relative window', async () => {
+    const queryLogs = page([]);
+    const client = mockClient({ queryLogs });
+
+    await NEON_HANDLERS.query_logs(
+      {
+        params: {
+          projectId: 'proj-1',
+          branchId: 'br-1',
+          source: 'function',
+          since: '2h',
+          endTime: '2026-07-16T10:00:00Z',
+          limit: 100,
+        },
+      },
+      client,
+      extra,
+    );
+
+    expect(queryLogs.mock.calls[0][2]).toMatchObject({
+      since: '2h',
+      end_time: '2026-07-16T10:00:00Z',
+    });
   });
 
   it('sends a raw LogQL query alone, without the defaulted source', async () => {

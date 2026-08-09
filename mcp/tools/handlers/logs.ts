@@ -59,7 +59,7 @@ async function resolveScope(
 
 function toLogRecord(record: ProjectBranchLogRecord): LogRecord {
   return {
-    timestamp: record.timestamp,
+    timestamp: new Date(record.timestamp).toISOString(),
     severity: record.severity_text,
     serviceName: record.service_name,
     scopeName: record.scope_name,
@@ -84,7 +84,7 @@ export async function handleQueryLogs(
   // with neither, look back one hour.
   const timeWindow = params.startTime
     ? { start_time: params.startTime, end_time: params.endTime }
-    : { since: params.since ?? '1h' };
+    : { since: params.since ?? '1h', end_time: params.endTime };
 
   const page = await neonClient.queryLogs(scope.projectId, scope.branchId, {
     logql: query,

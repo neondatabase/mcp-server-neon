@@ -977,7 +977,7 @@ export const queryLogsInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Absolute end of the window, RFC3339. Defaults to now. Only used with startTime.',
+      'Absolute end of the window, RFC3339. Ends either a relative `since` window or an absolute `startTime` window; defaults to now.',
     ),
   limit: z
     .number()
