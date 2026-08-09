@@ -348,10 +348,10 @@ Notes:
 - **`search`**: Searches across organizations, projects, and branches matching a query. Returns IDs, titles, and direct links to the Neon Console.
 - **`fetch`**: Fetches detailed information about a specific organization, project, or branch using an ID (typically from the search tool).
 
-**Observability:**
+**Observability:** these tools require the Neon Platform Beta and are currently only available for projects in the `aws-us-east-2` region.
 
 - **`query_logs`**: Queries logs emitted by your Neon serverless functions and other services using structured filters (source, service name, severity, time window). Logs are OpenTelemetry-based.
-- **`list_log_fields`**: Lists the log fields (labels) you can filter on for a branch, such as `service_name`, `severity_text`, and `scope_name`. Use before `query_logs`.
+- **`list_log_fields`**: Lists the log fields you can enumerate values for on a branch, such as `service_name`, `severity_text`, and `scope_name`. Use before `list_log_field_values`.
 - **`list_log_field_values`**: Lists the distinct values of a log field within a branch and time window, to discover concrete values to pass to `query_logs`.
 
 **Documentation and Resources:**

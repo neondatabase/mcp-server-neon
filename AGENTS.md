@@ -372,7 +372,7 @@ Code comments reference these files by path (e.g. `ai-notes/refresh-slo.md`).
 
 - **Migration Pattern**: Tools like `prepare_database_migration` and `prepare_query_tuning` create temporary branches and return all context (branch IDs, SQL, database name, etc.) in the response. The LLM must pass this context back to subsequent `complete_*` tools. No state is stored server-side, enabling serverless deployment.
 
-- **Neon API Client**: Created using `@neondatabase/api-client` package. All tool handlers receive a pre-configured `neonClient` instance.
+- **Neon API Client**: Created in `mcp/neon-client.ts` on top of `@neon/sdk`. Every Neon request a tool makes goes through it — there is no raw-HTTP escape hatch — and all tool handlers receive a pre-configured `neonClient` instance.
 
 ## Remote MCP Server (Vercel)
 

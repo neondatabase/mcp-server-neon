@@ -6,10 +6,10 @@
  * heterogeneous producers. See
  * https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber
  *
- * The telemetry backend stores both `severity_number` and `severity_text`, but the
- * LogQL subset it accepts can only match strings (`=`, `!=`, `=~`, `!~`) — there is
- * no numeric `>=`. So a minimum-severity filter is expressed as a case-insensitive
- * regex over `severity_text` covering the requested level and everything above it.
+ * The API takes a minimum severity by name, but the LogQL subset it accepts can only
+ * match strings (`=`, `!=`, `=~`, `!~`) — there is no numeric `>=`. So the rendered
+ * LogQL equivalent of a minimum-severity filter is a case-insensitive regex over
+ * `severity_text` covering the requested level and everything above it.
  */
 
 /** The six OTel severity level names, ordered from least to most severe. */

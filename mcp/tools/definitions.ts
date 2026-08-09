@@ -1215,10 +1215,12 @@ export const NEON_TOOLS = [
   </workflow>
 
   <important_notes>
+    - Logs require the Neon Platform Beta and are currently only available for projects in the aws-us-east-2 region. Elsewhere this tool reports that logs are not available for the branch.
     - Defaults to the project's default branch and the last 1 hour if unspecified.
-    - Results are newest-first and capped by \`limit\` (default 100); \`truncated: true\` means the window was larger than the cap — narrow the filters or time range.
+    - Results are newest-first and capped by \`limit\` (default 100); \`truncated: true\` means more records matched than were returned — narrow the filters or time range.
     - \`minSeverity\` follows OTel ordering (trace < debug < info < warn < error < fatal), so "error" also returns FATAL.
-    - Advanced: pass a raw LogQL \`query\` to bypass structured filters. Only stream selectors \`{label="v"}\` and line filters (|= |~ != !~) are supported — no aggregations or parsers.
+    - The returned \`query\` is the LogQL these filters stand for; pass it back as \`query\` to refine it by hand.
+    - Advanced: pass a raw LogQL \`query\` to replace the structured filters. Only stream selectors \`{label="v"}\` and line filters (|= |~ != !~) are supported — no aggregations or parsers. It cannot be combined with the structured filters, which are ignored when it is set.
   </important_notes>`,
     inputSchema: queryLogsInputSchema,
     readOnlySafe: true,
@@ -1234,7 +1236,7 @@ export const NEON_TOOLS = [
     name: 'list_log_fields' as const,
     scope: 'observability',
     description:
-      'List the log fields (labels) you can filter on for a branch, such as service_name, severity_text, scope_name, and entity_type. Use this before query_logs or list_log_field_values to discover valid field names.',
+      'List the log fields whose values list_log_field_values can enumerate for a branch, such as service_name, severity_text, scope_name, and entity_type. The set is computed per branch and grows as fields are observed, so read it rather than assuming a fixed set. Logs require the Neon Platform Beta and are currently only available for projects in the aws-us-east-2 region.',
     inputSchema: listLogFieldsInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -1249,7 +1251,7 @@ export const NEON_TOOLS = [
     name: 'list_log_field_values' as const,
     scope: 'observability',
     description:
-      'List the distinct values of a log field (e.g. all service_name or severity_text values seen) within a branch and time window. Use this to discover concrete values to pass to query_logs. Only advertised fields (from list_log_fields) resolve; others return an empty list.',
+      'List the distinct values of a log field (e.g. all service_name or severity_text values seen) within a branch and time window. Use this to discover concrete values to pass to query_logs. The field must be one of the names list_log_fields reports for the branch; anything else is rejected as an unknown field rather than returning an empty list. `truncated: true` means more distinct values exist than were returned, so the list is an arbitrary subset — narrow the time window and ask again before filtering on it. Logs require the Neon Platform Beta and are currently only available for projects in the aws-us-east-2 region.',
     inputSchema: listLogFieldValuesInputSchema,
     readOnlySafe: true,
     annotations: {

@@ -1,13 +1,14 @@
 /**
- * Builds LogQL expressions for the telemetry read API from structured filters.
+ * Renders the LogQL expression a set of structured filters stands for.
  *
- * The backend accepts only a subset of LogQL (Grafana Loki's query language): a
+ * `query_logs` sends the structured filters themselves; this string is what it
+ * reports back as `query`, so the caller can widen or narrow it and hand it
+ * straight back through the raw-LogQL escape hatch. Nothing here is sent.
+ *
+ * The API accepts only a subset of LogQL (Grafana Loki's query language): a
  * stream selector `{label op "value"}` (ops `=`, `!=`, `=~`, `!~`) optionally
  * followed by line filters (`|=`, `!=`, `|~`, `!~`) on the log body. Aggregations,
- * parsers, and formatting stages are rejected. We construct expressions rather than
- * making the LLM author LogQL, but a raw expression can still be passed through.
- *
- * See the neon-cloud otel-gateway read API (platform/internal/otelgateway/read).
+ * parsers, and formatting stages are rejected.
  */
 
 import { severityAtOrAbovePattern, type SeverityLevel } from './severity';

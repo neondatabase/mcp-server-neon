@@ -1,11 +1,15 @@
 /**
  * Unit tests for the logs tool handlers, exercised through NEON_HANDLERS with a
- * mocked Neon API client. Asserts the telemetry request (URL, query params) and the
- * shaped response.
+ * stubbed Neon client facade. Asserts what the handlers ask `neon.logs.*` for —
+ * the camelCase-to-snake_case mapping, the defaults, the mutually exclusive
+ * windows — and the shape they return.
+ *
+ * What actually reaches the wire, and how a 4xx/5xx is classified, is covered by
+ * logs-tools.integration.test.ts against a real client.
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import type { Api } from '../neon-client';
+import type { Api, ProjectBranchLogRecord } from '../neon-client';
 import { NEON_HANDLERS } from '../tools/tools';
 
 type ToolResult = { content: Array<{ type: string; text: string }> };
@@ -14,9 +18,15 @@ const extra = {
   account: { id: 'acc-1' },
 } as unknown as Parameters<typeof NEON_HANDLERS.query_logs>[2];
 
-function mockClient(requestImpl: ReturnType<typeof vi.fn>) {
+type LogsStub = {
+  queryLogs?: ReturnType<typeof vi.fn>;
+  listLogFields?: ReturnType<typeof vi.fn>;
+  listLogFieldValues?: ReturnType<typeof vi.fn>;
+};
+
+function mockClient(logs: LogsStub) {
   return {
-    request: requestImpl,
+    ...logs,
     listProjectBranches: vi.fn().mockResolvedValue({
       status: 200,
       data: { branches: [{ id: 'br-default', default: true }] },
@@ -34,24 +44,31 @@ function mockClient(requestImpl: ReturnType<typeof vi.fn>) {
   } as unknown as Api<unknown>;
 }
 
+function page(items: ProjectBranchLogRecord[], cursor?: string) {
+  return vi.fn().mockResolvedValue({ items, cursor });
+}
+
+function payloadOf(result: ToolResult) {
+  return JSON.parse(result.content[0].text);
+}
+
 describe('query_logs handler', () => {
-  it('builds a query_range request from structured filters and shapes the response', async () => {
-    const request = vi.fn().mockResolvedValue({
-      status: 200,
-      data: {
-        status: 'success',
-        data: {
-          resultType: 'streams',
-          result: [
-            {
-              stream: { service_name: 'api', severity_text: 'ERROR' },
-              values: [['1700000000000000000', 'boom']],
-            },
-          ],
-        },
+  it('maps structured filters onto the logs query and shapes the response', async () => {
+    const queryLogs = page([
+      {
+        timestamp: '2023-11-14T22:13:20.000Z',
+        message: 'boom',
+        source: 'function',
+        service_name: 'api',
+        scope_name: 'handler',
+        severity_text: 'ERROR',
+        severity_number: 17,
+        entity_id: 'fn-1',
+        trace_id: 'abc123',
+        attributes: { region: 'aws-us-east-2' },
       },
-    });
-    const client = mockClient(request);
+    ]);
+    const client = mockClient({ queryLogs });
 
     const result = (await NEON_HANDLERS.query_logs(
       {
@@ -61,6 +78,8 @@ describe('query_logs handler', () => {
           source: 'function',
           serviceName: 'api',
           minSeverity: 'error',
+          bodyContains: 'boom',
+          traceId: 'abc123',
           since: '2h',
           limit: 50,
         },
@@ -69,79 +88,43 @@ describe('query_logs handler', () => {
       extra,
     )) as ToolResult;
 
-    expect(request).toHaveBeenCalledTimes(1);
-    const call = request.mock.calls[0][0];
-    expect(call.method).toBe('GET');
-    expect(call.secure).toBe(true);
-    expect(call.path).toBe(
-      'https://console.neon.tech/telemetry/v1/projects/proj-1/branches/br-1/loki/api/v1/query_range',
-    );
-    expect(call.query.query).toBe(
-      '{entity_type="function", service_name="api", severity_text=~"(?i)(ERROR|FATAL)[0-9]*"}',
-    );
-    expect(call.query.since).toBe('2h');
-    expect(call.query.limit).toBe(50);
-    expect(call.query.direction).toBe('backward');
+    expect(queryLogs).toHaveBeenCalledTimes(1);
+    expect(queryLogs).toHaveBeenCalledWith('proj-1', 'br-1', {
+      source: 'function',
+      service_name: 'api',
+      severity_text: undefined,
+      minimum_severity: 'error',
+      body_contains: 'boom',
+      trace_id: 'abc123',
+      since: '2h',
+      limit: 50,
+      sort_order: 'desc',
+    });
 
-    const payload = JSON.parse(result.content[0].text);
-    expect(payload.count).toBe(1);
-    expect(payload.records[0].body).toBe('boom');
-    expect(payload.records[0].serviceName).toBe('api');
+    const payload = payloadOf(result);
     expect(payload.scope).toEqual({ projectId: 'proj-1', branchId: 'br-1' });
-  });
-
-  it('resolves the default branch and defaults to a 1h window when omitted', async () => {
-    const request = vi.fn().mockResolvedValue({
-      status: 200,
-      data: {
-        status: 'success',
-        data: { resultType: 'streams', result: [] },
-      },
-    });
-    const client = mockClient(request);
-
-    await NEON_HANDLERS.query_logs(
-      { params: { projectId: 'proj-1', source: 'function', limit: 100 } },
-      client,
-      extra,
+    expect(payload.query).toBe(
+      '{entity_type="function", service_name="api", trace_id="abc123", severity_text=~"(?i)(ERROR|FATAL)[0-9]*"} |= "boom"',
     );
-
-    const call = request.mock.calls[0][0];
-    expect(call.path).toContain('/branches/br-default/');
-    // No since/startTime given → default 1h relative window.
-    expect(call.query.since).toBe('1h');
-    expect(call.query.start).toBeUndefined();
+    expect(payload.count).toBe(1);
+    expect(payload.truncated).toBe(false);
+    // The SDK-only fields (severity_number, entity_id, trace_id, attributes) are
+    // intentionally dropped; source becomes entityType.
+    expect(payload.records).toEqual([
+      {
+        timestamp: '2023-11-14T22:13:20.000Z',
+        severity: 'ERROR',
+        serviceName: 'api',
+        scopeName: 'handler',
+        entityType: 'function',
+        body: 'boom',
+      },
+    ]);
   });
 
-  it('resolves the only project when projectId is omitted', async () => {
-    const request = vi.fn().mockResolvedValue({
-      status: 200,
-      data: {
-        status: 'success',
-        data: { resultType: 'streams', result: [] },
-      },
-    });
-    const client = mockClient(request);
-
-    await NEON_HANDLERS.query_logs(
-      { params: { source: 'function', limit: 100 } },
-      client,
-      extra,
-    );
-
-    const call = request.mock.calls[0][0];
-    expect(call.path).toContain('/projects/proj-only/');
-  });
-
-  it('passes a raw LogQL query through unchanged and uses absolute time', async () => {
-    const request = vi.fn().mockResolvedValue({
-      status: 200,
-      data: {
-        status: 'success',
-        data: { resultType: 'streams', result: [] },
-      },
-    });
-    const client = mockClient(request);
+  it('prefers an exact severityText over minSeverity', async () => {
+    const queryLogs = page([]);
+    const client = mockClient({ queryLogs });
 
     await NEON_HANDLERS.query_logs(
       {
@@ -149,7 +132,61 @@ describe('query_logs handler', () => {
           projectId: 'proj-1',
           branchId: 'br-1',
           source: 'function',
-          query: '{entity_type="function"} |~ "(?i)timeout"',
+          severityText: 'WARN',
+          minSeverity: 'error',
+          limit: 100,
+        },
+      },
+      client,
+      extra,
+    );
+
+    expect(queryLogs.mock.calls[0][2]).toMatchObject({
+      severity_text: 'WARN',
+      minimum_severity: undefined,
+    });
+  });
+
+  it('resolves the default branch and defaults to a 1h window when omitted', async () => {
+    const queryLogs = page([]);
+    const client = mockClient({ queryLogs });
+
+    await NEON_HANDLERS.query_logs(
+      { params: { projectId: 'proj-1', source: 'function', limit: 100 } },
+      client,
+      extra,
+    );
+
+    const [, branchId, input] = queryLogs.mock.calls[0];
+    expect(branchId).toBe('br-default');
+    expect(input.since).toBe('1h');
+    expect(input.start_time).toBeUndefined();
+  });
+
+  it('resolves the only project when projectId is omitted', async () => {
+    const queryLogs = page([]);
+    const client = mockClient({ queryLogs });
+
+    await NEON_HANDLERS.query_logs(
+      { params: { source: 'function', limit: 100 } },
+      client,
+      extra,
+    );
+
+    expect(queryLogs.mock.calls[0][0]).toBe('proj-only');
+  });
+
+  it('uses an absolute window instead of since when startTime is given', async () => {
+    const queryLogs = page([]);
+    const client = mockClient({ queryLogs });
+
+    await NEON_HANDLERS.query_logs(
+      {
+        params: {
+          projectId: 'proj-1',
+          branchId: 'br-1',
+          source: 'function',
+          since: '2h',
           startTime: '2026-07-16T09:00:00Z',
           endTime: '2026-07-16T10:00:00Z',
           limit: 100,
@@ -159,80 +196,106 @@ describe('query_logs handler', () => {
       extra,
     );
 
-    const call = request.mock.calls[0][0];
-    expect(call.query.query).toBe('{entity_type="function"} |~ "(?i)timeout"');
-    expect(call.query.start).toBe('2026-07-16T09:00:00Z');
-    expect(call.query.end).toBe('2026-07-16T10:00:00Z');
-    expect(call.query.since).toBeUndefined();
+    expect(queryLogs.mock.calls[0][2]).toMatchObject({
+      start_time: '2026-07-16T09:00:00Z',
+      end_time: '2026-07-16T10:00:00Z',
+    });
+    // Sending both bounds and a relative window is rejected by the API.
+    expect(queryLogs.mock.calls[0][2].since).toBeUndefined();
   });
 
-  it('surfaces the Loki error message as a client error on a non-2xx response', async () => {
-    // The client's request resolves on any status, so a 4xx RESOLVES with the
-    // Loki error body; assertOk throws an InvalidArgumentError carrying the message.
-    const request = vi.fn().mockResolvedValue({
-      status: 400,
-      data: { status: 'error', error: 'missing query' },
-    });
-    const client = mockClient(request);
+  it('sends a raw LogQL query alone, without the defaulted source', async () => {
+    const queryLogs = page([]);
+    const client = mockClient({ queryLogs });
 
-    await expect(
-      NEON_HANDLERS.query_logs(
-        {
-          params: {
-            projectId: 'proj-1',
-            branchId: 'br-1',
-            source: 'function',
-            limit: 100,
-          },
+    const result = (await NEON_HANDLERS.query_logs(
+      {
+        params: {
+          projectId: 'proj-1',
+          branchId: 'br-1',
+          source: 'function',
+          serviceName: 'api',
+          minSeverity: 'error',
+          query: '{entity_type="function"} |~ "(?i)timeout"',
+          limit: 100,
         },
-        client,
-        extra,
-      ),
-    ).rejects.toThrow(/missing query/);
-  });
+      },
+      client,
+      extra,
+    )) as ToolResult;
 
-  it('raises a backend error (not a client error) on a 5xx response', async () => {
-    // 5xx is a telemetry-backend fault: a plain Error so handleToolError captures
-    // it to Sentry, rather than an InvalidArgumentError swallowed as a client error.
-    const { InvalidArgumentError } = await import('../server/errors');
-    const request = vi.fn().mockResolvedValue({
-      status: 502,
-      data: { status: 'error', error: 'telemetry backend unavailable' },
+    // Structured filters alongside logql are rejected as conflicting_filters.
+    expect(queryLogs).toHaveBeenCalledWith('proj-1', 'br-1', {
+      logql: '{entity_type="function"} |~ "(?i)timeout"',
+      since: '1h',
+      limit: 100,
+      sort_order: 'desc',
     });
-    const client = mockClient(request);
-
-    await expect(
-      NEON_HANDLERS.query_logs(
-        {
-          params: {
-            projectId: 'proj-1',
-            branchId: 'br-1',
-            source: 'function',
-            limit: 100,
-          },
-        },
-        client,
-        extra,
-      ),
-    ).rejects.toSatisfy(
-      (e: unknown) =>
-        e instanceof Error &&
-        !(e instanceof InvalidArgumentError) &&
-        /telemetry backend unavailable/.test(e.message),
+    expect(payloadOf(result).query).toBe(
+      '{entity_type="function"} |~ "(?i)timeout"',
     );
+  });
+
+  it('reports truncation when the page carries a cursor', async () => {
+    const queryLogs = page(
+      [
+        {
+          timestamp: '2023-11-14T22:13:20.000Z',
+          message: 'first',
+          attributes: {},
+        },
+      ],
+      'cursor-1',
+    );
+    const client = mockClient({ queryLogs });
+
+    const result = (await NEON_HANDLERS.query_logs(
+      {
+        params: {
+          projectId: 'proj-1',
+          branchId: 'br-1',
+          source: 'function',
+          limit: 1,
+        },
+      },
+      client,
+      extra,
+    )) as ToolResult;
+
+    const payload = payloadOf(result);
+    expect(payload.truncated).toBe(true);
+    expect(payload.count).toBe(1);
+  });
+
+  it('propagates a failure from the logs query unchanged', async () => {
+    const queryLogs = vi
+      .fn()
+      .mockRejectedValue(new Error('logs are not available for this branch'));
+    const client = mockClient({ queryLogs });
+
+    await expect(
+      NEON_HANDLERS.query_logs(
+        {
+          params: {
+            projectId: 'proj-1',
+            branchId: 'br-1',
+            source: 'function',
+            limit: 100,
+          },
+        },
+        client,
+        extra,
+      ),
+    ).rejects.toThrow(/logs are not available for this branch/);
   });
 });
 
 describe('list_log_fields / list_log_field_values handlers', () => {
-  it('lists advertised fields', async () => {
-    const request = vi.fn().mockResolvedValue({
-      status: 200,
-      data: {
-        status: 'success',
-        data: ['service_name', 'severity_text', 'scope_name', 'entity_type'],
-      },
-    });
-    const client = mockClient(request);
+  it('lists the fields reported for the branch', async () => {
+    const listLogFields = vi
+      .fn()
+      .mockResolvedValue(['service_name', 'severity_text', 'entity_type']);
+    const client = mockClient({ listLogFields });
 
     const result = (await NEON_HANDLERS.list_log_fields(
       { params: { projectId: 'proj-1', branchId: 'br-1' } },
@@ -240,18 +303,17 @@ describe('list_log_fields / list_log_field_values handlers', () => {
       extra,
     )) as ToolResult;
 
-    const call = request.mock.calls[0][0];
-    expect(call.path).toContain('/loki/api/v1/labels');
-    const payload = JSON.parse(result.content[0].text);
+    expect(listLogFields).toHaveBeenCalledWith('proj-1', 'br-1');
+    const payload = payloadOf(result);
+    expect(payload.scope).toEqual({ projectId: 'proj-1', branchId: 'br-1' });
     expect(payload.fields).toContain('severity_text');
   });
 
   it('lists values for a field with a since window', async () => {
-    const request = vi.fn().mockResolvedValue({
-      status: 200,
-      data: { status: 'success', data: ['api', 'worker'] },
-    });
-    const client = mockClient(request);
+    const listLogFieldValues = vi
+      .fn()
+      .mockResolvedValue({ values: ['api', 'worker'], is_truncated: false });
+    const client = mockClient({ listLogFieldValues });
 
     const result = (await NEON_HANDLERS.list_log_field_values(
       {
@@ -266,11 +328,58 @@ describe('list_log_fields / list_log_field_values handlers', () => {
       extra,
     )) as ToolResult;
 
-    const call = request.mock.calls[0][0];
-    expect(call.path).toContain('/loki/api/v1/label/service_name/values');
-    expect(call.query.since).toBe('24h');
-    const payload = JSON.parse(result.content[0].text);
-    expect(payload.field).toBe('service_name');
-    expect(payload.values).toEqual(['api', 'worker']);
+    expect(listLogFieldValues).toHaveBeenCalledWith(
+      'proj-1',
+      'br-1',
+      'service_name',
+      { since: '24h' },
+    );
+    expect(payloadOf(result)).toEqual({
+      scope: { projectId: 'proj-1', branchId: 'br-1' },
+      field: 'service_name',
+      values: ['api', 'worker'],
+      truncated: false,
+    });
+  });
+
+  it('leaves the window to the server when since is omitted', async () => {
+    const listLogFieldValues = vi
+      .fn()
+      .mockResolvedValue({ values: [], is_truncated: false });
+    const client = mockClient({ listLogFieldValues });
+
+    await NEON_HANDLERS.list_log_field_values(
+      { params: { projectId: 'proj-1', branchId: 'br-1', field: 'entity_id' } },
+      client,
+      extra,
+    );
+
+    expect(listLogFieldValues).toHaveBeenCalledWith(
+      'proj-1',
+      'br-1',
+      'entity_id',
+      undefined,
+    );
+  });
+
+  it('surfaces a truncated value list', async () => {
+    const listLogFieldValues = vi
+      .fn()
+      .mockResolvedValue({ values: ['api'], is_truncated: true });
+    const client = mockClient({ listLogFieldValues });
+
+    const result = (await NEON_HANDLERS.list_log_field_values(
+      {
+        params: {
+          projectId: 'proj-1',
+          branchId: 'br-1',
+          field: 'service_name',
+        },
+      },
+      client,
+      extra,
+    )) as ToolResult;
+
+    expect(payloadOf(result).truncated).toBe(true);
   });
 });

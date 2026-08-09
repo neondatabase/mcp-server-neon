@@ -5,6 +5,8 @@ import {
   type Branch,
   type ListProjectsData,
   type ListSharedProjectsData,
+  type LogFieldValuesQuery,
+  type LogQueryInput,
   type MemberWithUser,
   type NeonAuthAddOAuthProviderRequest,
   type NeonAuthEmailAndPasswordConfig,
@@ -17,6 +19,7 @@ import {
   type NeonAuthOauthProviderType,
   type NeonAuthUpdateOAuthProviderRequest,
   type Organization,
+  type ProjectBranchLogRecord,
   type ProjectCreateRequest,
   type ProjectListItem,
 } from '@neon/sdk';
@@ -36,6 +39,7 @@ export type {
   NeonAuthOauthProviderType,
   NeonAuthUpdateOAuthProviderRequest,
   Organization,
+  ProjectBranchLogRecord,
   ProjectCreateRequest,
   ProjectListItem,
 };
@@ -120,13 +124,6 @@ type ConnectionUriParams = {
   role_name?: string;
 };
 
-type RawRequest = {
-  path: string;
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
-  query?: Record<string, string | number>;
-  secure?: boolean;
-};
-
 function success<T>(data: T, status = 200): ApiResponse<T> {
   return {
     data,
@@ -164,10 +161,10 @@ const fetchAsMcpServer: typeof fetch = (input, init) => {
 };
 
 /**
- * Compatibility facade used while MCP handlers are migrated. It runs every
- * documented management-API request through `@neon/sdk`: ergonomic resources
- * are preferred, while `raw` is limited to endpoints without an ergonomic
- * equivalent or where the MCP response needs the endpoint's full payload.
+ * Compatibility facade used while MCP handlers are migrated. Every Neon request
+ * the server makes runs through `@neon/sdk`: ergonomic resources are preferred,
+ * while `raw` is limited to endpoints without an ergonomic equivalent or where
+ * the MCP response needs the endpoint's full payload.
  */
 export function createNeonClient(apiKey: string) {
   const neon = createSdkClient({
@@ -568,24 +565,26 @@ export function createNeonClient(apiKey: string) {
       );
     },
 
-    async request<T>(request: RawRequest): Promise<ApiResponse<T>> {
-      const url = new URL(request.path);
-      for (const [key, value] of Object.entries(request.query ?? {})) {
-        url.searchParams.set(key, String(value));
-      }
-      const response = await fetch(url, {
-        method: request.method,
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'User-Agent': USER_AGENT,
-        },
-      });
-      const data: T = await response.json();
-      return {
-        data,
-        status: response.status,
-        statusText: response.statusText,
-      };
+    /**
+     * One page of branch logs. An MCP tool call answers with a bounded result and
+     * reports whether more matched, so it consumes a single page and surfaces the
+     * cursor's presence rather than walking the whole window.
+     */
+    async queryLogs(projectId: string, branchId: string, input: LogQueryInput) {
+      return readPage(neon.logs.query(projectId, branchId, input).page());
+    },
+
+    async listLogFields(projectId: string, branchId: string) {
+      return neon.logs.fields(projectId, branchId);
+    },
+
+    async listLogFieldValues(
+      projectId: string,
+      branchId: string,
+      fieldName: string,
+      query?: LogFieldValuesQuery,
+    ) {
+      return neon.logs.fieldValues(projectId, branchId, fieldName, query);
     },
 
     get apiKey() {

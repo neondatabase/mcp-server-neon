@@ -8,9 +8,7 @@
  * What regressed is a property of the server, not of any one client factory: the
  * requests a tool call puts on the wire. So these drive real MCP tool calls over
  * the in-memory transport with `NEON_API_HOST` pointed at a loopback server that
- * records what arrived, and cover both code paths that reach Neon — the SDK
- * client, and the raw escape hatch the telemetry tools use for the Loki-compatible
- * endpoints that are not on the OpenAPI spec.
+ * records what arrived.
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client';
@@ -60,9 +58,9 @@ const fixtures: Record<string, { status: number; body: unknown }> = {
       operations: [],
     },
   },
-  'GET /telemetry/v1/projects/proj-1/branches/br-1/loki/api/v1/query_range': {
+  'POST /api/v2/projects/proj-1/branches/br-1/logs/query': {
     status: 200,
-    body: { status: 'success', data: { resultType: 'streams', result: [] } },
+    body: { logs: [], is_truncated: false },
   },
 };
 
@@ -100,7 +98,6 @@ beforeEach(async () => {
   const { port } = server.address() as AddressInfo;
 
   vi.resetModules();
-  // NEON_TELEMETRY_API_HOST derives from this, so one server serves both paths.
   process.env.NEON_API_HOST = `http://127.0.0.1:${port}/api/v2`;
 });
 
@@ -166,13 +163,13 @@ describe('user agent on Neon API requests made by tool calls', () => {
     });
   });
 
-  it('identifies the MCP server on raw telemetry requests', async () => {
+  it('identifies the MCP server on logs requests', async () => {
     await callTool('query_logs', { projectId: 'proj-1', branchId: 'br-1' });
 
     expect(recorded).toEqual([
       expect.objectContaining({
-        method: 'GET',
-        path: '/telemetry/v1/projects/proj-1/branches/br-1/loki/api/v1/query_range',
+        method: 'POST',
+        path: '/api/v2/projects/proj-1/branches/br-1/logs/query',
         userAgent: USER_AGENT,
         authorization: `Bearer ${API_KEY}`,
       }),
