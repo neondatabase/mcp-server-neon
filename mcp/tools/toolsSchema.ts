@@ -965,7 +965,7 @@ export const queryLogsInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Relative lookback window ending now, as a duration (e.g. "30m", "1h", "24h"). Defaults to the last hour. Ignored when startTime is set.',
+      'Relative lookback window ending at `endTime`, or now when omitted, as a duration (e.g. "30m", "1h", "24h"). Defaults to the last hour. Ignored when startTime is set.',
     ),
   startTime: z
     .string()
