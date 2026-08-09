@@ -53,7 +53,7 @@ function payloadOf(result: ToolResult) {
 }
 
 describe('query_logs handler', () => {
-  it('maps structured filters onto the logs query and shapes the response', async () => {
+  it('renders structured filters as the executed LogQL query and shapes the response', async () => {
     const queryLogs = page([
       {
         timestamp: '2023-11-14T22:13:20.000Z',
@@ -90,12 +90,8 @@ describe('query_logs handler', () => {
 
     expect(queryLogs).toHaveBeenCalledTimes(1);
     expect(queryLogs).toHaveBeenCalledWith('proj-1', 'br-1', {
-      source: 'function',
-      service_name: 'api',
-      severity_text: undefined,
-      minimum_severity: 'error',
-      body_contains: 'boom',
-      trace_id: 'abc123',
+      logql:
+        '{entity_type="function", service_name="api", trace_id="abc123", severity_text=~"(?i)(ERROR|FATAL)[0-9]*"} |= "boom"',
       since: '2h',
       limit: 50,
       sort_order: 'desc',
@@ -142,8 +138,7 @@ describe('query_logs handler', () => {
     );
 
     expect(queryLogs.mock.calls[0][2]).toMatchObject({
-      severity_text: 'WARN',
-      minimum_severity: undefined,
+      logql: '{entity_type="function", severity_text="WARN"}',
     });
   });
 

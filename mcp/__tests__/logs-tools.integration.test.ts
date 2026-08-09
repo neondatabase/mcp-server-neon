@@ -96,7 +96,7 @@ function payloadOf(result: unknown) {
 }
 
 describe('query_logs over the wire', () => {
-  it('posts the structured filters and the default window', async () => {
+  it('posts the compatibility LogQL query and the default window', async () => {
     replies[QUERY_PATH] = {
       status: 200,
       body: {
@@ -131,9 +131,8 @@ describe('query_logs over the wire', () => {
 
     expect(recorded).toHaveLength(1);
     expect(recorded[0].body).toEqual({
-      source: 'function',
-      service_name: 'api',
-      minimum_severity: 'error',
+      logql:
+        '{entity_type="function", service_name="api", severity_text=~"(?i)(ERROR|FATAL)[0-9]*"}',
       since: '1h',
       limit: 100,
       sort_order: 'desc',

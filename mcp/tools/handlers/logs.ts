@@ -2,9 +2,9 @@
  * Handlers for the logs tools: query_logs, list_log_fields,
  * list_log_field_values. These call `neon.logs.*` through the client facade.
  *
- * The MCP surface is camelCase and the API is snake_case, so the mapping lives
- * here. `mcp/otel/logql` renders the equivalent LogQL expression reported back
- * as `query`; it is not what gets sent.
+ * Structured MCP filters are rendered into the same LogQL expression the
+ * previous transport executed, then sent through the SDK's raw-LogQL input.
+ * That keeps the tool's filtering semantics and returned `query` reproducible.
  */
 
 import type { Api, ProjectBranchLogRecord } from '../../neon-client';
@@ -75,19 +75,10 @@ export async function handleQueryLogs(
 ) {
   const scope = await resolveScope(params, neonClient, extra);
 
-  // A raw LogQL expression replaces the structured filters rather than adding to
-  // them — the API rejects the two together, so not even the defaulted source
-  // may ride along. An exact severityText wins over the minSeverity threshold.
-  const filters = params.query
-    ? { logql: params.query }
-    : {
-        source: params.source,
-        service_name: params.serviceName,
-        severity_text: params.severityText,
-        minimum_severity: params.severityText ? undefined : params.minSeverity,
-        body_contains: params.bodyContains,
-        trace_id: params.traceId,
-      };
+  // Preserve the previous tool's LogQL semantics through the SDK transport.
+  // Besides making the returned query exactly reproducible, this keeps
+  // minSeverity working on branch backends that reject minimum_severity.
+  const query = params.query ?? renderLogQL(params);
 
   // Absolute (startTime) and relative (since) windows are mutually exclusive;
   // with neither, look back one hour.
@@ -96,14 +87,14 @@ export async function handleQueryLogs(
     : { since: params.since ?? '1h' };
 
   const page = await neonClient.queryLogs(scope.projectId, scope.branchId, {
-    ...filters,
+    logql: query,
     ...timeWindow,
     limit: params.limit,
     sort_order: 'desc',
   });
 
   return {
-    query: params.query ?? renderLogQL(params),
+    query,
     scope,
     count: page.items.length,
     // A cursor is only issued when more records matched than were returned.
@@ -112,7 +103,7 @@ export async function handleQueryLogs(
   };
 }
 
-/** The LogQL the structured filters stand for, reported back for reuse as `query`. */
+/** Render structured filters into the LogQL sent through the SDK. */
 function renderLogQL(params: QueryLogsParams): string {
   return buildLogQL({
     entityType: params.source,

@@ -1,9 +1,9 @@
 /**
  * Renders the LogQL expression a set of structured filters stands for.
  *
- * `query_logs` sends the structured filters themselves; this string is what it
- * reports back as `query`, so the caller can widen or narrow it and hand it
- * straight back through the raw-LogQL escape hatch. Nothing here is sent.
+ * `query_logs` sends this expression through the SDK's raw-LogQL input and
+ * reports the same string back as `query`, so the caller can widen or narrow it
+ * and hand it straight back.
  *
  * The API accepts only a subset of LogQL (Grafana Loki's query language): a
  * stream selector `{label op "value"}` (ops `=`, `!=`, `=~`, `!~`) optionally
