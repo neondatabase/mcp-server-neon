@@ -6,7 +6,6 @@
 // Re-export all config values from centralized config
 export {
   NEON_API_HOST,
-  NEON_TELEMETRY_API_HOST,
   ANALYTICS_WRITE_KEY,
   SENTRY_DSN,
   NEON_CONSOLE_HOST,

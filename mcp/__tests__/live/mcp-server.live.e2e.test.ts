@@ -127,7 +127,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     if (!client) throw new Error('MCP client is not connected.');
     return client.callTool({
       name,
-      arguments: { params },
+      arguments: params,
     });
   }
 

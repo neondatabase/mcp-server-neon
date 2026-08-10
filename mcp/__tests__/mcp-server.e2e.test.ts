@@ -105,10 +105,68 @@ describe('MCP server e2e tool calls', () => {
     await withConnectedClient(createTestContext(), async (client) => {
       const result = await client.listTools();
       const toolNames = result.tools.map((tool) => tool.name);
+      const queryLogsTool = result.tools.find(
+        (tool) => tool.name === 'query_logs',
+      );
+      const listLogFieldsTool = result.tools.find(
+        (tool) => tool.name === 'list_log_fields',
+      );
+      const listLogFieldValuesTool = result.tools.find(
+        (tool) => tool.name === 'list_log_field_values',
+      );
 
       expect(toolNames).toContain('query_logs');
       expect(toolNames).toContain('list_log_fields');
       expect(toolNames).toContain('list_log_field_values');
+      expect(queryLogsTool?.description).toContain(
+        'For structured queries, pick the source',
+      );
+      expect(queryLogsTool?.description).toContain(
+        'The returned preferred `logql` field',
+      );
+      expect(listLogFieldsTool?.description).toContain(
+        'currently returns `service_name`, `severity_text`, `scope_name`, and `entity_type`',
+      );
+      expect(listLogFieldsTool?.description).toContain(
+        'Call this tool instead of hardcoding that set',
+      );
+      expect(queryLogsTool?.inputSchema).toMatchObject({
+        type: 'object',
+        properties: {
+          logql: { type: 'string' },
+          query: {
+            type: 'string',
+            description: expect.stringContaining(
+              'overriding any structured filters',
+            ),
+          },
+          since: {
+            type: 'string',
+            description: expect.stringContaining(
+              'maximum supported window is `7d`',
+            ),
+          },
+          startTime: {
+            type: 'string',
+            description: expect.stringContaining(
+              'must not span more than seven days',
+            ),
+          },
+        },
+      });
+      expect(listLogFieldValuesTool?.description).toContain('server scan cap');
+      expect(listLogFieldValuesTool?.inputSchema).toMatchObject({
+        type: 'object',
+        properties: {
+          field: { type: 'string', minLength: 1 },
+          since: {
+            type: 'string',
+            description: expect.stringContaining(
+              'maximum supported window is `7d`',
+            ),
+          },
+        },
+      });
     });
   });
 
@@ -152,7 +210,7 @@ describe('MCP server e2e tool calls', () => {
     await withConnectedClient(createTestContext(), async (client) => {
       const result = await client.callTool({
         name: 'list_docs_resources',
-        arguments: { params: {} },
+        arguments: {},
       });
       const content = result.content as Array<{ type: string; text?: string }>;
 
@@ -174,7 +232,7 @@ describe('MCP server e2e tool calls', () => {
     await withConnectedClient(createTestContext(), async (client) => {
       const result = await client.callTool({
         name: 'get_doc_resource',
-        arguments: { params: { slug: 'docs/guides/prisma' } },
+        arguments: { slug: 'docs/guides/prisma' },
       });
       const content = result.content as Array<{ type: string; text?: string }>;
 
@@ -191,7 +249,7 @@ describe('MCP server e2e tool calls', () => {
     await withConnectedClient(createTestContext(), async (client) => {
       const result = await client.callTool({
         name: 'get_doc_resource',
-        arguments: { params: { slug: 'https://evil.example/bad' } },
+        arguments: { slug: 'https://evil.example/bad' },
       });
       const content = result.content as Array<{ type: string; text?: string }>;
 
@@ -218,7 +276,7 @@ describe('MCP server e2e tool calls', () => {
       async (client) => {
         await client.callTool({
           name: 'list_docs_resources',
-          arguments: { params: {} },
+          arguments: {},
         });
       },
       'v0bot',

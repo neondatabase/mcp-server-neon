@@ -21,6 +21,13 @@ export const COOKIE_SECRET = process.env.COOKIE_SECRET ?? '';
 export const NEON_API_HOST =
   process.env.NEON_API_HOST ?? 'https://console.neon.tech/api/v2';
 
+// Where the docs tools read the documentation index from. Overridable so a run
+// can be pointed at another origin; the e2e suite points it at a local fixture,
+// which is what keeps a merge-gating test off the network. Individual doc pages
+// still come from NEON_DOCS_BASE_URL in mcp/resources.ts.
+export const NEON_DOCS_INDEX_URL =
+  process.env.NEON_DOCS_INDEX_URL ?? 'https://neon.com/docs/llms.txt';
+
 // Analytics and monitoring
 export const ANALYTICS_WRITE_KEY =
   process.env.ANALYTICS_WRITE_KEY ?? 'gFVzt8ozOp6AZRXoD0g0Lv6UQ6aaoS7O';
@@ -33,10 +40,3 @@ export type Environment = 'development' | 'production' | 'preview';
 
 // Derived values
 export const NEON_CONSOLE_HOST = NEON_API_HOST.replace(/\/api\/v2$/, '');
-
-// Telemetry (OpenTelemetry) read API. Lives at /telemetry/v1 on the console host —
-// a sibling of /api/v2, and NOT part of the public OpenAPI spec / generated client.
-// Defaults to the console host derived from NEON_API_HOST; overridable for
-// preview/staging where it may be served from a different origin.
-export const NEON_TELEMETRY_API_HOST =
-  process.env.NEON_TELEMETRY_API_HOST ?? `${NEON_CONSOLE_HOST}/telemetry/v1`;

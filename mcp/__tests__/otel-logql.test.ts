@@ -1,13 +1,11 @@
 /**
- * Unit tests for the OTel logs helper layer: LogQL builder, severity mapping,
- * and Loki-envelope flattening.
+ * Unit tests for the LogQL renderer and severity mapping behind the `query`
+ * field query_logs reports back.
  */
 
 import { describe, it, expect } from 'vitest';
 import { buildLogQL } from '../otel/logql';
 import { severityAtOrAbovePattern } from '../otel/severity';
-import { flattenLokiResponse } from '../otel/format';
-import type { LokiQueryResponse } from '../otel/types';
 
 describe('buildLogQL', () => {
   it('defaults to the function entity type', () => {
@@ -76,68 +74,5 @@ describe('severityAtOrAbovePattern', () => {
 
   it('is just fatal at the top', () => {
     expect(severityAtOrAbovePattern('fatal')).toBe('(?i)(FATAL)[0-9]*');
-  });
-});
-
-describe('flattenLokiResponse', () => {
-  const response: LokiQueryResponse = {
-    status: 'success',
-    data: {
-      resultType: 'streams',
-      result: [
-        {
-          stream: {
-            service_name: 'api',
-            severity_text: 'ERROR',
-            entity_type: 'function',
-          },
-          values: [
-            ['1700000000000000000', 'first'],
-            ['1700000002000000000', 'third'],
-          ],
-        },
-        {
-          stream: { service_name: 'worker', severity_text: 'INFO' },
-          values: [['1700000001000000000', 'second']],
-        },
-      ],
-    },
-  };
-
-  it('flattens streams and sorts newest-first across streams', () => {
-    const { records, truncated } = flattenLokiResponse(response, 100);
-    expect(records.map((r) => r.body)).toEqual(['third', 'second', 'first']);
-    expect(truncated).toBe(false);
-  });
-
-  it('lifts stream labels onto each record and converts ns → ISO UTC', () => {
-    const { records } = flattenLokiResponse(response, 100);
-    const first = records.find((r) => r.body === 'first')!;
-    expect(first.serviceName).toBe('api');
-    expect(first.severity).toBe('ERROR');
-    expect(first.entityType).toBe('function');
-    expect(first.timestamp).toBe('2023-11-14T22:13:20.000Z');
-  });
-
-  it('respects the limit after merging streams and reports truncation', () => {
-    const { records, truncated } = flattenLokiResponse(response, 2);
-    expect(records).toHaveLength(2);
-    expect(records.map((r) => r.body)).toEqual(['third', 'second']);
-    // 3 records merged, sliced to 2 → truncated even without a backend warning.
-    expect(truncated).toBe(true);
-  });
-
-  it('is not truncated when records fit within the limit', () => {
-    const { truncated } = flattenLokiResponse(response, 100);
-    expect(truncated).toBe(false);
-  });
-
-  it('marks truncated when the backend returns warnings', () => {
-    const { truncated, warnings } = flattenLokiResponse(
-      { ...response, warnings: ['results truncated: hit the maximum'] },
-      100,
-    );
-    expect(truncated).toBe(true);
-    expect(warnings).toHaveLength(1);
   });
 });
