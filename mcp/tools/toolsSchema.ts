@@ -1004,7 +1004,7 @@ export const queryLogsInputSchema = z.object({
     .min(1, 'query cannot be empty')
     .optional()
     .describe(
-      'Legacy compatibility alias for `logql`. Do not supply both fields.',
+      'Legacy compatibility alias for `logql`. Preserves the previous behavior of overriding any structured filters. Do not supply both raw fields.',
     ),
 });
 

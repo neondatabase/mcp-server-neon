@@ -1223,8 +1223,8 @@ export const NEON_TOOLS = [
     - Results are newest-first and capped by \`limit\` (default 100); \`truncated: true\` means more records matched than were returned — narrow the filters or time range.
     - \`minSeverity\` follows OTel ordering (trace < debug < info < warn < error < fatal), so "error" also returns FATAL.
     - The returned \`logql\` and compatibility \`query\` fields contain the LogQL these filters stand for; pass \`logql\` back to refine it by hand.
-    - Advanced: pass raw \`logql\` instead of the structured filters. Only stream selectors \`{label="v"}\` and line filters (|= |~ != !~) are supported — no aggregations or parsers. Combining raw LogQL with structured filters is rejected.
-    - \`query\` remains available as a legacy input alias for \`logql\`; do not supply both.
+    - Advanced: pass raw \`logql\` instead of the structured filters. Only stream selectors \`{label="v"}\` and line filters (|= |~ != !~) are supported — no aggregations or parsers. Combining \`logql\` with structured filters is rejected.
+    - \`query\` remains available as a legacy input alias for \`logql\` and preserves its previous override behavior: when supplied, structured filters are ignored. Do not supply both raw fields.
   </important_notes>`,
     inputSchema: queryLogsInputSchema,
     readOnlySafe: true,

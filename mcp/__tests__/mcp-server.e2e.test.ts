@@ -117,7 +117,12 @@ describe('MCP server e2e tool calls', () => {
             type: 'object',
             properties: {
               logql: { type: 'string' },
-              query: { type: 'string' },
+              query: {
+                type: 'string',
+                description: expect.stringContaining(
+                  'overriding any structured filters',
+                ),
+              },
             },
           },
         },

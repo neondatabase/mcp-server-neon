@@ -82,10 +82,9 @@ export async function handleQueryLogs(
 
   const rawLogQL = params.logql ?? params.query;
   const conflictingFilters = structuredFilterNames(params);
-  if (rawLogQL !== undefined && conflictingFilters.length > 0) {
-    const rawField = params.logql !== undefined ? 'logql' : 'query';
+  if (params.logql !== undefined && conflictingFilters.length > 0) {
     throw new InvalidArgumentError(
-      `Raw \`${rawField}\` cannot be combined with structured log filters (${conflictingFilters.join(', ')}). Remove those filters, or omit \`${rawField}\` and use structured filters alone.`,
+      `Raw \`logql\` cannot be combined with structured log filters (${conflictingFilters.join(', ')}). Remove those filters, or omit \`logql\` and use structured filters alone.`,
     );
   }
 

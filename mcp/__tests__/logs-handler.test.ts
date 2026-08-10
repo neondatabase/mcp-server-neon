@@ -315,7 +315,7 @@ describe('query_logs handler', () => {
     );
   });
 
-  it('keeps query as a compatibility alias for logql', async () => {
+  it('keeps the legacy query alias override semantics', async () => {
     const queryLogs = page([]);
     const client = mockClient({ queryLogs });
 
@@ -325,6 +325,8 @@ describe('query_logs handler', () => {
           projectId: 'proj-1',
           branchId: 'br-1',
           query: '{entity_type="storage"} |= "uploaded"',
+          source: 'function',
+          serviceName: 'ignored',
           limit: 100,
         },
       },
@@ -332,8 +334,11 @@ describe('query_logs handler', () => {
       extra,
     );
 
-    expect(queryLogs.mock.calls[0][2]).toMatchObject({
+    expect(queryLogs).toHaveBeenCalledWith('proj-1', 'br-1', {
       logql: '{entity_type="storage"} |= "uploaded"',
+      since: '1h',
+      limit: 100,
+      sort_order: 'desc',
     });
   });
 
