@@ -43,7 +43,8 @@ export default defineConfig({
   webServer: {
     command: `pnpm exec next dev --port ${PORT}`,
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
+    // The suite owns this server so webServer.env always reaches it.
+    reuseExistingServer: false,
     timeout: 60_000,
     env: {
       // Load fresh values from .env.e2e for the webServer subprocess.
