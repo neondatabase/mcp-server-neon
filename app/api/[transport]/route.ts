@@ -759,11 +759,7 @@ function createDocsOnlyMcpHandler() {
 
       server.registerTool(
         listDocsResourcesTool.name,
-        {
-          description: listDocsResourcesTool.description,
-          inputSchema: listDocsResourcesTool.inputSchema,
-          annotations: listDocsResourcesTool.annotations,
-        },
+        toolRegistration(listDocsResourcesTool),
         async (_args: unknown, extra: { requestInfo?: RequestInfo }) =>
           runDocsTool(listDocsResourcesTool.name, readUserAgent(extra), () =>
             listDocsResources(),
@@ -772,11 +768,7 @@ function createDocsOnlyMcpHandler() {
 
       server.registerTool(
         getDocResourceTool.name,
-        {
-          description: getDocResourceTool.description,
-          inputSchema: getDocResourceTool.inputSchema,
-          annotations: getDocResourceTool.annotations,
-        },
+        toolRegistration(getDocResourceTool),
         async (args: { slug: string }, extra: { requestInfo?: RequestInfo }) =>
           runDocsTool(getDocResourceTool.name, readUserAgent(extra), () =>
             getDocResource({ slug: args.slug }),

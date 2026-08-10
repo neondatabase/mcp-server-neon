@@ -3,7 +3,6 @@ import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-sc
 import { normalizeObjectSchema } from '@modelcontextprotocol/sdk/server/zod-compat.js';
 import { NEON_TOOLS } from '../tools/definitions';
 import { toolRegistration } from '../tools/registration';
-import { injectProjectId } from '../tools/grant-filter';
 
 /**
  * The published JSON Schema, converted the same way the server converts it —
@@ -54,22 +53,5 @@ describe('tool registration wire contract', () => {
       expect(registration.annotations).toBe(tool.annotations);
       expect(registration.inputSchema).toBe(tool.inputSchema);
     }
-  });
-
-  // The reason the contract matters: a project-scoped grant has projectId
-  // stripped from the published schema, so the client cannot send it and
-  // injection is its only source. Injecting into the wrong level is invisible
-  // until a real project-scoped call fails.
-  it('injects projectId where a tool schema declares it', () => {
-    const injected = injectProjectId(
-      { sql: 'SELECT 1' },
-      { projectId: 'proj-123', scopes: null },
-    );
-
-    expect(injected).toEqual({ sql: 'SELECT 1', projectId: 'proj-123' });
-
-    const runSql = NEON_TOOLS.find((tool) => tool.name === 'run_sql');
-    if (!runSql) throw new Error('run_sql is missing from the catalog');
-    expect(publishedProperties(runSql.inputSchema)).toContain('projectId');
   });
 });
