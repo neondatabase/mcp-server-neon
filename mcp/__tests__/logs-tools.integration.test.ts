@@ -241,6 +241,86 @@ describe('query_logs over the wire', () => {
     expect(payloadOf(result).truncated).toBe(true);
   });
 
+  it('keeps the MCP response within limit when the API returns a whole timestamp group', async () => {
+    replies[QUERY_PATH] = {
+      status: 200,
+      body: {
+        logs: [
+          {
+            timestamp: '2026-07-16T09:30:00Z',
+            message: 'one',
+            attributes: {},
+          },
+          {
+            timestamp: '2026-07-16T09:30:00Z',
+            message: 'two',
+            attributes: {},
+          },
+        ],
+        is_truncated: false,
+      },
+    };
+
+    const result = await NEON_HANDLERS.query_logs(
+      {
+        params: {
+          projectId: 'proj-1',
+          branchId: 'br-1',
+          source: 'function',
+          limit: 1,
+        },
+      },
+      neonClient,
+      extra,
+    );
+
+    expect(payloadOf(result)).toMatchObject({
+      count: 1,
+      truncated: true,
+      records: [{ body: 'one' }],
+    });
+  });
+
+  it('returns a bounded terminal partial page when truncation has no cursor', async () => {
+    replies[QUERY_PATH] = {
+      status: 200,
+      body: {
+        logs: [
+          {
+            timestamp: '2026-07-16T09:30:00Z',
+            message: 'one',
+            attributes: {},
+          },
+          {
+            timestamp: '2026-07-16T09:30:00Z',
+            message: 'two',
+            attributes: {},
+          },
+        ],
+        is_truncated: true,
+      },
+    };
+
+    const result = await NEON_HANDLERS.query_logs(
+      {
+        params: {
+          projectId: 'proj-1',
+          branchId: 'br-1',
+          source: 'function',
+          limit: 1,
+        },
+      },
+      neonClient,
+      extra,
+    );
+
+    expect(payloadOf(result)).toMatchObject({
+      count: 1,
+      truncated: true,
+      records: [{ body: 'one' }],
+    });
+  });
+
   it('raises a rejected query as a client error the caller can act on', async () => {
     replies[QUERY_PATH] = {
       status: 400,
@@ -271,7 +351,37 @@ describe('query_logs over the wire', () => {
     const handled = handleToolError(error, {});
     expect(handled.isError).toBe(true);
     expect(handled.content.map((part) => part.text)).toContain(
-      '[HTTP 400] both since and start_time were supplied',
+      '[HTTP 400] both since and start_time were supplied (reason: conflicting_time_range)',
+    );
+  });
+
+  it('surfaces the reason that distinguishes unavailable telemetry', async () => {
+    replies[QUERY_PATH] = {
+      status: 404,
+      body: {
+        code: 'LOGS_NOT_AVAILABLE',
+        message: 'logs are not available for this branch',
+        reason: 'telemetry_not_enabled',
+      },
+    };
+
+    const error = await NEON_HANDLERS.query_logs(
+      {
+        params: {
+          projectId: 'proj-1',
+          branchId: 'br-1',
+          source: 'function',
+          limit: 100,
+        },
+      },
+      neonClient,
+      extra,
+    ).catch((e: unknown) => e);
+
+    if (!(error instanceof NeonApiError)) throw error;
+    const handled = handleToolError(error, {});
+    expect(handled.content.map((part) => part.text)).toContain(
+      '[HTTP 404] logs are not available for this branch (reason: telemetry_not_enabled)',
     );
   });
 

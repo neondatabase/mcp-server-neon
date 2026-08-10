@@ -935,6 +935,7 @@ export const queryLogsInputSchema = z.object({
     ),
   serviceName: z
     .string()
+    .min(1, 'serviceName cannot be empty')
     .optional()
     .describe('Filter to a specific OTel service name (service.name).'),
   minSeverity: z
@@ -945,12 +946,14 @@ export const queryLogsInputSchema = z.object({
     ),
   severityText: z
     .string()
+    .min(1, 'severityText cannot be empty')
     .optional()
     .describe(
       'Filter to an exact severity text (e.g. "ERROR"). Takes precedence over minSeverity.',
     ),
   bodyContains: z
     .string()
+    .min(1, 'bodyContains cannot be empty')
     .optional()
     .describe(
       'Return only logs whose rendered message contains this case-sensitive substring. Structured messages use compact JSON, so match JSON syntax such as `"http_status":200`, not prose such as `http_status: 200`.',

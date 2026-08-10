@@ -20,6 +20,7 @@ import {
   type NeonAuthUpdateOAuthProviderRequest,
   type Organization,
   type ProjectBranchLogRecord,
+  type ProjectBranchLogsQueryResponse,
   type ProjectCreateRequest,
   type ProjectListItem,
 } from '@neon/sdk';
@@ -567,11 +568,20 @@ export function createNeonClient(apiKey: string) {
 
     /**
      * One page of branch logs. An MCP tool call answers with a bounded result and
-     * reports whether more matched, so it consumes a single page and surfaces the
-     * cursor's presence rather than walking the whole window.
+     * reports whether more matched, including the API's terminal partial-page
+     * state where truncation has no resumable cursor.
      */
-    async queryLogs(projectId: string, branchId: string, input: LogQueryInput) {
-      return readPage(neon.logs.query(projectId, branchId, input).page());
+    async queryLogs(
+      projectId: string,
+      branchId: string,
+      input: LogQueryInput,
+    ): Promise<ProjectBranchLogsQueryResponse> {
+      return raw.queryProjectBranchLogs({
+        client: neon.client,
+        path: { project_id: projectId, branch_id: branchId },
+        body: input,
+        throwOnError: true,
+      });
     },
 
     async listLogFields(projectId: string, branchId: string) {

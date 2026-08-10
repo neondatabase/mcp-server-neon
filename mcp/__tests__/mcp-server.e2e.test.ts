@@ -97,10 +97,19 @@ describe('MCP server e2e tool calls', () => {
       const queryLogsTool = result.tools.find(
         (tool) => tool.name === 'query_logs',
       );
+      const listLogFieldsTool = result.tools.find(
+        (tool) => tool.name === 'list_log_fields',
+      );
 
       expect(toolNames).toContain('query_logs');
       expect(toolNames).toContain('list_log_fields');
       expect(toolNames).toContain('list_log_field_values');
+      expect(listLogFieldsTool?.description).toContain(
+        'currently returns `service_name`, `severity_text`, `scope_name`, and `entity_type`',
+      );
+      expect(listLogFieldsTool?.description).toContain(
+        'Call this tool instead of hardcoding that set',
+      );
       expect(queryLogsTool?.inputSchema).toMatchObject({
         type: 'object',
         properties: {

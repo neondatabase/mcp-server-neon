@@ -119,15 +119,15 @@ export async function handleQueryLogs(
     limit: params.limit,
     sort_order: 'desc',
   });
+  const records = page.logs.slice(0, params.limit);
 
   return {
     query,
     logql: query,
     scope,
-    count: page.items.length,
-    // A cursor is only issued when more records matched than were returned.
-    truncated: Boolean(page.cursor),
-    records: page.items.map(toLogRecord),
+    count: records.length,
+    truncated: page.is_truncated || records.length < page.logs.length,
+    records: records.map(toLogRecord),
   };
 }
 

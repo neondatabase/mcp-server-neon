@@ -47,7 +47,11 @@ function mockClient(logs: LogsStub) {
 }
 
 function page(items: ProjectBranchLogRecord[], cursor?: string) {
-  return vi.fn().mockResolvedValue({ items, cursor });
+  return vi.fn().mockResolvedValue({
+    logs: items,
+    next_cursor: cursor,
+    is_truncated: cursor !== undefined,
+  });
 }
 
 function payloadOf(result: ToolResult) {
@@ -57,6 +61,15 @@ function payloadOf(result: ToolResult) {
 describe('query_logs handler', () => {
   it.each(['logql', 'query'] as const)(
     'rejects an empty %s input at the public schema boundary',
+    (field) => {
+      expect(queryLogsInputSchema.safeParse({ [field]: '' }).success).toBe(
+        false,
+      );
+    },
+  );
+
+  it.each(['serviceName', 'severityText', 'bodyContains'] as const)(
+    'rejects an empty %s filter at the public schema boundary',
     (field) => {
       expect(queryLogsInputSchema.safeParse({ [field]: '' }).success).toBe(
         false,

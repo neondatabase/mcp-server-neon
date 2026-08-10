@@ -1239,7 +1239,7 @@ export const NEON_TOOLS = [
   {
     name: 'list_log_fields' as const,
     scope: 'observability',
-    description: `List the log fields whose values list_log_field_values can enumerate for a branch, such as service_name, severity_text, scope_name, and entity_type. The set is computed per branch and grows as fields are observed, so read it rather than assuming a fixed set. Fields without a structured query_logs input can be filtered through raw logql. ${LOGS_AVAILABILITY}`,
+    description: `List the log fields whose values list_log_field_values can enumerate for a branch. The endpoint currently returns \`service_name\`, \`severity_text\`, \`scope_name\`, and \`entity_type\`. Call this tool instead of hardcoding that set so clients remain compatible if the endpoint adds fields. Fields without a structured query_logs input can be filtered through raw logql. ${LOGS_AVAILABILITY}`,
     inputSchema: listLogFieldsInputSchema,
     readOnlySafe: true,
     annotations: {
