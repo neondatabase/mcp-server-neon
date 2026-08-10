@@ -39,6 +39,9 @@ import {
   getDocResourceInputSchema,
 } from './toolsSchema';
 
+const LOGS_AVAILABILITY =
+  'Logs require the Neon Platform Beta and are currently only available for projects in the aws-us-east-2 region. A branch without logs access returns HTTP 404 with reason "telemetry_not_enabled".';
+
 type NeonToolDefinition = {
   name: string;
   scope: ScopeCategory | null;
@@ -1209,16 +1212,19 @@ export const NEON_TOOLS = [
   </use_case>
 
   <workflow>
-    1. Pick the source (defaults to "function"). Optionally narrow by serviceName, minSeverity, or bodyContains.
-    2. Set a time window: \`since\` (relative, e.g. "1h" — default) OR startTime/endTime (absolute RFC3339).
+    1. For structured queries, pick the source (defaults to "function") and optionally narrow by serviceName, minSeverity, or bodyContains. For a raw query, supply \`logql\` and omit structured filters.
+    2. Set a time window: \`since\` (relative, e.g. "1h" — default, optionally ending at endTime) OR startTime/endTime (absolute RFC3339).
     3. Use list_log_fields / list_log_field_values first if you need to discover valid service names or severities.
   </workflow>
 
   <important_notes>
+    - ${LOGS_AVAILABILITY}
     - Defaults to the project's default branch and the last 1 hour if unspecified.
-    - Results are newest-first and capped by \`limit\` (default 100); \`truncated: true\` means the window was larger than the cap — narrow the filters or time range.
+    - Results are newest-first and capped by \`limit\` (default 100); \`truncated: true\` means more records matched than were returned — narrow the filters or time range.
     - \`minSeverity\` follows OTel ordering (trace < debug < info < warn < error < fatal), so "error" also returns FATAL.
-    - Advanced: pass a raw LogQL \`query\` to bypass structured filters. Only stream selectors \`{label="v"}\` and line filters (|= |~ != !~) are supported — no aggregations or parsers.
+    - The returned preferred \`logql\` field and legacy \`query\` field contain the LogQL these filters stand for. Always pass \`logql\` back to refine it by hand.
+    - Advanced: pass raw \`logql\` instead of the structured filters. Only stream selectors \`{label="v"}\` and line filters (|= |~ != !~) are supported — no aggregations or parsers. Combining \`logql\` with structured filters is rejected.
+    - \`query\` remains available as a legacy input alias for \`logql\` and preserves its previous override behavior: when supplied, structured filters are ignored. Do not supply both raw fields.
   </important_notes>`,
     inputSchema: queryLogsInputSchema,
     readOnlySafe: true,
@@ -1233,8 +1239,7 @@ export const NEON_TOOLS = [
   {
     name: 'list_log_fields' as const,
     scope: 'observability',
-    description:
-      'List the log fields (labels) you can filter on for a branch, such as service_name, severity_text, scope_name, and entity_type. Use this before query_logs or list_log_field_values to discover valid field names.',
+    description: `List the log fields whose values list_log_field_values can enumerate for a branch. The endpoint currently returns \`service_name\`, \`severity_text\`, \`scope_name\`, and \`entity_type\`. Call this tool instead of hardcoding that set so clients remain compatible if the endpoint adds fields. Fields without a structured query_logs input can be filtered through raw logql. ${LOGS_AVAILABILITY}`,
     inputSchema: listLogFieldsInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -1248,8 +1253,7 @@ export const NEON_TOOLS = [
   {
     name: 'list_log_field_values' as const,
     scope: 'observability',
-    description:
-      'List the distinct values of a log field (e.g. all service_name or severity_text values seen) within a branch and time window. Use this to discover concrete values to pass to query_logs. Only advertised fields (from list_log_fields) resolve; others return an empty list.',
+    description: `List the distinct values of a log field (e.g. all service_name or severity_text values seen) within a branch and time window. Use values with the corresponding query_logs structured input when one exists, or with raw logql otherwise. The field must be one of the names list_log_fields reports for the branch; anything else is rejected as an unknown field rather than returning an empty list. \`truncated: true\` means more distinct values exist than were returned because the endpoint's result limit or server scan cap was reached, so the list is an arbitrary subset — narrow the time window and ask again before filtering on it. ${LOGS_AVAILABILITY}`,
     inputSchema: listLogFieldValuesInputSchema,
     readOnlySafe: true,
     annotations: {

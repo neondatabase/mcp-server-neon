@@ -40,10 +40,3 @@ export type Environment = 'development' | 'production' | 'preview';
 
 // Derived values
 export const NEON_CONSOLE_HOST = NEON_API_HOST.replace(/\/api\/v2$/, '');
-
-// Telemetry (OpenTelemetry) read API. Lives at /telemetry/v1 on the console host —
-// a sibling of /api/v2, and NOT part of the public OpenAPI spec / generated client.
-// Defaults to the console host derived from NEON_API_HOST; overridable for
-// preview/staging where it may be served from a different origin.
-export const NEON_TELEMETRY_API_HOST =
-  process.env.NEON_TELEMETRY_API_HOST ?? `${NEON_CONSOLE_HOST}/telemetry/v1`;

@@ -40,6 +40,13 @@ function errorResponse(error: unknown) {
   };
 }
 
+function apiErrorReason(body: unknown): string | undefined {
+  if (typeof body !== 'object' || body === null || !('reason' in body)) {
+    return undefined;
+  }
+  return typeof body.reason === 'string' ? body.reason : undefined;
+}
+
 export function handleToolError(
   error: unknown,
   properties: Record<string, string>,
@@ -48,6 +55,7 @@ export function handleToolError(
   if (error instanceof NeonDbError || isClientError(error)) {
     return errorResponse(error);
   } else if (error instanceof NeonApiError && error.status < 500) {
+    const reason = apiErrorReason(error.body);
     return {
       isError: true,
       content: [
@@ -57,7 +65,7 @@ export function handleToolError(
         },
         {
           type: 'text' as const,
-          text: `[HTTP ${error.status}] ${error.message}`,
+          text: `[HTTP ${error.status}] ${error.message}${reason ? ` (reason: ${reason})` : ''}`,
         },
       ],
     };
