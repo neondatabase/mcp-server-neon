@@ -25,11 +25,9 @@ const originalFetch = globalThis.fetch;
 
 const listedInspectSchema = z.object({
   properties: z.object({
-    params: z.object({
-      properties: z.object({ check: z.object({ enum: z.array(z.string()) }) }),
-      required: z.array(z.string()),
-    }),
+    check: z.object({ enum: z.array(z.string()) }),
   }),
+  required: z.array(z.string()),
 });
 
 function createTestContext(overrides?: Partial<ServerContext>): ServerContext {
@@ -179,10 +177,8 @@ describe('MCP server e2e tool calls', () => {
 
       expect(inspectTool?.annotations?.readOnlyHint).toBe(true);
       const schema = listedInspectSchema.parse(inspectTool?.inputSchema);
-      expect(schema.properties.params.properties.check.enum).toEqual([
-        ...INSPECT_CHECKS,
-      ]);
-      expect(schema.properties.params.required).toContain('check');
+      expect(schema.properties.check.enum).toEqual([...INSPECT_CHECKS]);
+      expect(schema.required).toContain('check');
     });
   });
 
@@ -190,7 +186,7 @@ describe('MCP server e2e tool calls', () => {
     await withConnectedClient(createTestContext(), async (client) => {
       const result = await client.callTool({
         name: 'inspect_database',
-        arguments: { params: { projectId: 'project-1', check: 'cache-hit' } },
+        arguments: { projectId: 'project-1', check: 'cache-hit' },
       });
 
       expect(result.isError).toBe(true);
