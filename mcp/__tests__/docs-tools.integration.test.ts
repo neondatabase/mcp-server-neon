@@ -7,7 +7,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NEON_HANDLERS } from '../tools/tools';
-import { NEON_DOCS_BASE_URL, NEON_DOCS_INDEX_URL } from '../resources';
+import { NEON_DOCS_INDEX_URL } from '../../lib/config';
+import { NEON_DOCS_BASE_URL } from '../resources';
 import { InvalidArgumentError, NotFoundError } from '../server/errors';
 
 type ToolResult = {

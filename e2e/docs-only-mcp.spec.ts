@@ -12,6 +12,7 @@
  */
 
 import { test, expect, type APIResponse } from '@playwright/test';
+import { DOCS_FIXTURE_MARKER } from './docs-fixture.js';
 
 const MCP_HEADERS = {
   'Content-Type': 'application/json',
@@ -111,13 +112,10 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     expect(toolNames).toEqual(['get_doc_resource', 'list_docs_resources']);
   });
 
-  // Skipped from merge-gating CI per CLAUDE.md ("Merge-gating tests must be
-  // deterministic. Do not make third-party uptime ... a required CI
-  // dependency."). The fetch to NEON_DOCS_INDEX_URL happens server-side in
-  // the dev server, so Playwright's request.route() cannot intercept it.
-  // Restore by stubbing at the dev-server level (e.g., a test-only env var
-  // that swaps NEON_DOCS_INDEX_URL with a local fixture URL).
-  test.skip('tools/call list_docs_resources returns the markdown index', async ({
+  // Reads the docs index from the fixture server that `playwright.config.ts`
+  // points NEON_DOCS_INDEX_URL at, so this stays deterministic and off the
+  // network while still exercising the real handler and fetch.
+  test('tools/call list_docs_resources returns the markdown index', async ({
     request,
   }) => {
     const response = await request.post('/mcp?category=docs', {
@@ -143,7 +141,11 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     expect(callResult?.result).toBeDefined();
     expect(callResult!.result!.isError).not.toBe(true);
     expect(callResult!.result!.content?.[0]?.type).toBe('text');
-    expect(callResult!.result!.content?.[0]?.text).toBeTruthy();
+    // Matching the fixture's marker proves the index was fetched and returned,
+    // rather than the tool answering with an error string or an empty body.
+    expect(callResult!.result!.content?.[0]?.text).toContain(
+      DOCS_FIXTURE_MARKER,
+    );
   });
 
   test('mixed categories still require auth', async ({ request }) => {
