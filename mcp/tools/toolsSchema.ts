@@ -969,13 +969,13 @@ export const queryLogsInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Relative lookback window ending at `endTime`, or now when omitted, as a duration (e.g. "30m", "1h", "24h"). Defaults to the last hour. Ignored when startTime is set.',
+      'Relative lookback window ending at `endTime`, or now when omitted, as a duration (e.g. "30m", "1h", "24h"). Defaults to the last hour; the maximum supported window is `7d`. Ignored when startTime is set.',
     ),
   startTime: z
     .string()
     .optional()
     .describe(
-      'Absolute start of the window, RFC3339 (e.g. "2026-07-16T09:00:00Z"). Overrides `since`.',
+      'Absolute start of the window, RFC3339 (e.g. "2026-07-16T09:00:00Z"). Overrides `since`; the startTime/endTime window must not span more than seven days.',
     ),
   endTime: z
     .string()
@@ -1034,6 +1034,7 @@ export const listLogFieldValuesInputSchema = z.object({
     .optional(),
   field: z
     .string()
+    .min(1, 'field cannot be empty')
     .describe(
       'The log field (label) whose distinct values to list, e.g. "service_name" or "severity_text". Use list_log_fields to discover valid field names.',
     ),
@@ -1041,7 +1042,7 @@ export const listLogFieldValuesInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Relative lookback window as a duration (e.g. "6h", "24h"). If omitted, the server default lookback (6 hours) applies.',
+      'Relative lookback window as a duration (e.g. "6h", "24h"). If omitted, the server default lookback (6 hours) applies; the maximum supported window is `7d`.',
     ),
 });
 

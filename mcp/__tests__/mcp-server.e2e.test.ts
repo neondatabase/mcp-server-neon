@@ -100,10 +100,19 @@ describe('MCP server e2e tool calls', () => {
       const listLogFieldsTool = result.tools.find(
         (tool) => tool.name === 'list_log_fields',
       );
+      const listLogFieldValuesTool = result.tools.find(
+        (tool) => tool.name === 'list_log_field_values',
+      );
 
       expect(toolNames).toContain('query_logs');
       expect(toolNames).toContain('list_log_fields');
       expect(toolNames).toContain('list_log_field_values');
+      expect(queryLogsTool?.description).toContain(
+        'For structured queries, pick the source',
+      );
+      expect(queryLogsTool?.description).toContain(
+        'The returned preferred `logql` field',
+      );
       expect(listLogFieldsTool?.description).toContain(
         'currently returns `service_name`, `severity_text`, `scope_name`, and `entity_type`',
       );
@@ -121,6 +130,36 @@ describe('MCP server e2e tool calls', () => {
                 type: 'string',
                 description: expect.stringContaining(
                   'overriding any structured filters',
+                ),
+              },
+              since: {
+                type: 'string',
+                description: expect.stringContaining(
+                  'maximum supported window is `7d`',
+                ),
+              },
+              startTime: {
+                type: 'string',
+                description: expect.stringContaining(
+                  'must not span more than seven days',
+                ),
+              },
+            },
+          },
+        },
+      });
+      expect(listLogFieldValuesTool?.description).toContain('server scan cap');
+      expect(listLogFieldValuesTool?.inputSchema).toMatchObject({
+        type: 'object',
+        properties: {
+          params: {
+            type: 'object',
+            properties: {
+              field: { type: 'string', minLength: 1 },
+              since: {
+                type: 'string',
+                description: expect.stringContaining(
+                  'maximum supported window is `7d`',
                 ),
               },
             },

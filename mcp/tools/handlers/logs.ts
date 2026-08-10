@@ -121,8 +121,8 @@ export async function handleQueryLogs(
   const records = page.logs.slice(0, params.limit);
 
   return {
-    query,
     logql: query,
+    query,
     scope,
     count: records.length,
     truncated: page.is_truncated || records.length < page.logs.length,

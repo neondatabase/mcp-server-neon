@@ -12,7 +12,10 @@ import { describe, it, expect, vi } from 'vitest';
 import type { Api, ProjectBranchLogRecord } from '../neon-client';
 import { InvalidArgumentError } from '../server/errors';
 import { NEON_HANDLERS } from '../tools/tools';
-import { queryLogsInputSchema } from '../tools/toolsSchema';
+import {
+  listLogFieldValuesInputSchema,
+  queryLogsInputSchema,
+} from '../tools/toolsSchema';
 
 type ToolResult = { content: Array<{ type: string; text: string }> };
 
@@ -127,6 +130,9 @@ describe('query_logs handler', () => {
       '{entity_type="function", service_name="api", trace_id="0123456789abcdef0123456789abcdef", severity_text=~"(?i)(ERROR|FATAL)[0-9]*"} |= "boom"',
     );
     expect(payload.logql).toBe(payload.query);
+    expect(Object.keys(payload).indexOf('logql')).toBeLessThan(
+      Object.keys(payload).indexOf('query'),
+    );
     expect(payload.count).toBe(1);
     expect(payload.truncated).toBe(false);
     // The SDK-only fields (severity_number, entity_id, trace_id, attributes) are
@@ -444,6 +450,12 @@ describe('query_logs handler', () => {
 });
 
 describe('list_log_fields / list_log_field_values handlers', () => {
+  it('rejects an empty field at the public schema boundary', () => {
+    expect(listLogFieldValuesInputSchema.safeParse({ field: '' }).success).toBe(
+      false,
+    );
+  });
+
   it('lists the fields reported for the branch', async () => {
     const listLogFields = vi
       .fn()
