@@ -122,29 +122,24 @@ describe('MCP server e2e tool calls', () => {
       expect(queryLogsTool?.inputSchema).toMatchObject({
         type: 'object',
         properties: {
-          params: {
-            type: 'object',
-            properties: {
-              logql: { type: 'string' },
-              query: {
-                type: 'string',
-                description: expect.stringContaining(
-                  'overriding any structured filters',
-                ),
-              },
-              since: {
-                type: 'string',
-                description: expect.stringContaining(
-                  'maximum supported window is `7d`',
-                ),
-              },
-              startTime: {
-                type: 'string',
-                description: expect.stringContaining(
-                  'must not span more than seven days',
-                ),
-              },
-            },
+          logql: { type: 'string' },
+          query: {
+            type: 'string',
+            description: expect.stringContaining(
+              'overriding any structured filters',
+            ),
+          },
+          since: {
+            type: 'string',
+            description: expect.stringContaining(
+              'maximum supported window is `7d`',
+            ),
+          },
+          startTime: {
+            type: 'string',
+            description: expect.stringContaining(
+              'must not span more than seven days',
+            ),
           },
         },
       });
@@ -152,17 +147,12 @@ describe('MCP server e2e tool calls', () => {
       expect(listLogFieldValuesTool?.inputSchema).toMatchObject({
         type: 'object',
         properties: {
-          params: {
-            type: 'object',
-            properties: {
-              field: { type: 'string', minLength: 1 },
-              since: {
-                type: 'string',
-                description: expect.stringContaining(
-                  'maximum supported window is `7d`',
-                ),
-              },
-            },
+          field: { type: 'string', minLength: 1 },
+          since: {
+            type: 'string',
+            description: expect.stringContaining(
+              'maximum supported window is `7d`',
+            ),
           },
         },
       });
