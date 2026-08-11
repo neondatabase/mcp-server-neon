@@ -1,18 +1,13 @@
 #!/usr/bin/env node
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
-import type {
-  ServerNotification,
-  ServerRequest,
-} from '@modelcontextprotocol/sdk/types.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { invokeTool, toolRegistration } from '../tools/registration';
 import { logger } from '../utils/logger';
 import { generateTraceId } from '../utils/trace';
 import { createNeonClient } from './api';
 import { track } from '../analytics/analytics';
 import { captureException, startSpan } from '@sentry/node';
-import { ServerContext } from '../types/context';
+import type { ServerContext as NeonServerContext } from '../types/context';
 import { setSentryTags } from '../sentry/utils';
 import { ToolHandlerExtraParams } from '../tools/types';
 import { handleToolError } from './errors';
@@ -24,7 +19,7 @@ import {
 } from '../tools/grant-filter';
 import pkg from '../../package.json';
 
-export const createMcpServer = async (context: ServerContext) => {
+export const createMcpServer = async (context: NeonServerContext) => {
   const server = new McpServer(
     {
       name: 'mcp-server-neon',
@@ -94,16 +89,12 @@ export const createMcpServer = async (context: ServerContext) => {
 
   // Register tools. Schema shape and argument handling come from the shared
   // module, so a tool call here takes the same arguments as one against the
-  // deployed route. `tools/list` output is not yet identical — the route
-  // overrides it, this server uses the SDK's own rendering.
+  // deployed route.
   availableTools.forEach((tool) => {
     server.registerTool(
       tool.name,
       toolRegistration(tool),
-      async (
-        args: unknown,
-        extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
-      ) => {
+      async (args: unknown) => {
         const traceId = generateTraceId();
         return await startSpan(
           {
@@ -137,7 +128,6 @@ export const createMcpServer = async (context: ServerContext) => {
             });
 
             const extraArgs: ToolHandlerExtraParams = {
-              ...extra,
               account: context.account,
               readOnly: context.readOnly,
               clientApplication,

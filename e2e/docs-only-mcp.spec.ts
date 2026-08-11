@@ -12,6 +12,10 @@
  */
 
 import { test, expect, type APIResponse } from '@playwright/test';
+import {
+  Client,
+  StreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client';
 import { DOCS_FIXTURE_MARKER } from './docs-fixture.js';
 
 const MCP_HEADERS = {
@@ -31,7 +35,7 @@ const initializeRequest: JsonRpcRequest = {
   id: 1,
   method: 'initialize',
   params: {
-    protocolVersion: '2025-03-26',
+    protocolVersion: '2025-11-25',
     capabilities: {},
     clientInfo: { name: 'docs-only-e2e', version: '1.0.0' },
   },
@@ -64,7 +68,7 @@ async function readJsonRpcMessages(
 }
 
 test.describe('Docs-only MCP endpoint (no OAuth)', () => {
-  test('initialize succeeds without Authorization header on ?category=docs', async ({
+  test('legacy initialize succeeds without Authorization header on ?category=docs', async ({
     request,
   }) => {
     const response = await request.post('/mcp?category=docs', {
@@ -87,6 +91,34 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
         serverInfo: expect.objectContaining({ name: 'mcp-server-neon' }),
       }),
     });
+  });
+
+  test('negotiates the stateless 2026-07-28 protocol', async () => {
+    const port = process.env.E2E_PORT ?? '3100';
+    const transport = new StreamableHTTPClientTransport(
+      new URL(`http://localhost:${port}/mcp?category=docs`),
+    );
+    const client = new Client(
+      { name: 'docs-only-modern-e2e', version: '1.0.0' },
+      {
+        versionNegotiation: {
+          mode: { pin: '2026-07-28' },
+        },
+      },
+    );
+
+    try {
+      await client.connect(transport);
+      const result = await client.listTools();
+
+      expect(transport.protocolVersion).toBe('2026-07-28');
+      expect(result.tools.map((tool) => tool.name).sort()).toEqual([
+        'get_doc_resource',
+        'list_docs_resources',
+      ]);
+    } finally {
+      await client.close();
+    }
   });
 
   test('tools/list returns only the docs tools', async ({ request }) => {

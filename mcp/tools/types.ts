@@ -1,4 +1,5 @@
-import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
+import type { z } from 'zod';
 import { Api } from '../neon-client';
 
 import { NEON_TOOLS } from './definitions';
@@ -12,13 +13,7 @@ type ToolParams<T extends NeonToolName = NeonToolName> = Extract<
   { name: T }
 >['inputSchema'];
 
-export type ToolHandler<T extends NeonToolName> = ToolCallback<{
-  params: ToolParams<T>;
-}>;
-
-export type ToolHandlerExtraParams = Parameters<
-  ToolHandler<NeonToolName>
->['1'] & {
+export type ToolHandlerExtraParams = {
   account: AuthContext['extra']['account'];
   readOnly?: AuthContext['extra']['readOnly'];
   /** Detected client application type (e.g., 'cursor', 'claude', 'other') */
@@ -26,12 +21,10 @@ export type ToolHandlerExtraParams = Parameters<
 };
 
 export type ToolHandlerExtended<T extends NeonToolName> = (
-  ...args: [
-    args: Parameters<ToolHandler<T>>['0'],
-    neonClient: Api<unknown>,
-    extra: ToolHandlerExtraParams,
-  ]
-) => ReturnType<ToolHandler<T>>;
+  args: { params: z.output<ToolParams<T>> },
+  neonClient: Api<unknown>,
+  extra: ToolHandlerExtraParams,
+) => CallToolResult | Promise<CallToolResult>;
 
 // Create a type for the tool handlers that directly maps each tool to its appropriate input schema
 export type ToolHandlers = {

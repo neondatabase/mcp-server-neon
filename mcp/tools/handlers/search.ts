@@ -1,7 +1,7 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResult } from '@modelcontextprotocol/server';
 import { Api, Branch, Organization, ProjectListItem } from '../../neon-client';
 import { searchInputSchema } from '../toolsSchema';
-import { z } from 'zod/v3';
+import { z } from 'zod';
 import { ToolHandlerExtraParams } from '../types';
 import { handleListProjects } from './list-projects';
 import { CONSOLE_URLS, generateConsoleUrl } from './urls';

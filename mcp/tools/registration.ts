@@ -14,8 +14,7 @@
  * and in what they log. Those differences are theirs to keep. This module owns
  * only the contract a client sees.
  */
-
-import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
+import type { ToolAnnotations } from '@modelcontextprotocol/server';
 import type { Api } from '../neon-client';
 import type { GrantContext } from '../utils/grant-context';
 import { NEON_HANDLERS } from './tools';
@@ -30,11 +29,13 @@ type NeonTool = (typeof NEON_TOOLS)[number];
  * `{"name":"run_sql","arguments":{"sql":"…","projectId":"…"}}`.
  */
 export function toolRegistration(tool: NeonTool): {
+  title?: string;
   description: string;
   inputSchema: NeonTool['inputSchema'];
   annotations: ToolAnnotations;
 } {
   return {
+    title: tool.annotations?.title,
     description: tool.description,
     // NOTE: This intentionally stays strongly typed (no cast). If this starts failing
     // after an SDK upgrade, treat it as a schema-type compatibility regression between

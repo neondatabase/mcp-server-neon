@@ -1,4 +1,4 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResult } from '@modelcontextprotocol/server';
 import {
   Api,
   NeonAuthAddOAuthProviderRequest,
@@ -8,7 +8,7 @@ import {
   NeonAuthUpdateOAuthProviderRequest,
 } from '../../neon-client';
 import { configureNeonAuthInputSchema } from '../toolsSchema';
-import { z } from 'zod/v3';
+import { z } from 'zod';
 import { getDefaultBranch } from './utils';
 import {
   fetchEmailProviderSlice,

@@ -1,7 +1,7 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResult } from '@modelcontextprotocol/server';
 import { Api, NeonAuthIntegration } from '../../neon-client';
 import { getNeonAuthConfigInputSchema } from '../toolsSchema';
-import { z } from 'zod/v3';
+import { z } from 'zod';
 import { resolveNeonAuthBranchId } from './neon-auth-config';
 import { fetchNeonAuthConfigurableSettings } from './neon-auth-settings-snapshot';
 import { ToolHandlerExtraParams } from '../types';

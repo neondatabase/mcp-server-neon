@@ -1,3 +1,4 @@
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 /**
  * A project-scoped grant has `projectId` stripped out of every published tool
  * schema, so the client cannot send it and `injectProjectId` is its only source.
@@ -11,8 +12,6 @@
  * about — against a loopback server that records the request rather than a mock.
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

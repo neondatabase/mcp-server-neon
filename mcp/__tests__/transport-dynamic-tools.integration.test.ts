@@ -137,7 +137,7 @@ async function anonymousDocsCall(
 
 async function listToolsForToken(token: string) {
   await mcpCall(token, 'initialize', 1, {
-    protocolVersion: '2025-03-26',
+    protocolVersion: '2025-11-25',
     capabilities: {},
     clientInfo: { name: 'test-client', version: '1.0.0' },
   });
@@ -354,7 +354,7 @@ describe('transport dynamic tool composition', () => {
       'initialize',
       10,
       {
-        protocolVersion: '2025-03-26',
+        protocolVersion: '2025-11-25',
         capabilities: {},
         clientInfo: { name: 'test-client', version: '1.0.0' },
       },
@@ -389,7 +389,7 @@ describe('transport dynamic tool composition', () => {
       'initialize',
       20,
       {
-        protocolVersion: '2025-03-26',
+        protocolVersion: '2025-11-25',
         capabilities: {},
         clientInfo: { name: 'test-client', version: '1.0.0' },
       },
@@ -462,7 +462,7 @@ describe('transport dynamic tool composition', () => {
         id: 1,
         method: 'initialize',
         params: {
-          protocolVersion: '2025-03-26',
+          protocolVersion: '2025-11-25',
           capabilities: {},
           clientInfo: { name: 'docs-only-integration', version: '1.0.0' },
         },

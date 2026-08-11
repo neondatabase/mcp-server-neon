@@ -1,24 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-schema-compat.js';
-import { normalizeObjectSchema } from '@modelcontextprotocol/sdk/server/zod-compat.js';
+import { z } from 'zod';
 import { NEON_TOOLS } from '../tools/definitions';
 import { toolRegistration } from '../tools/registration';
 
 /**
- * The published JSON Schema, converted the same way the server converts it —
- * some tool schemas are refined objects rather than plain ones, so reading
- * `.shape` off them does not work.
+ * The published JSON Schema, converted the same way the SDK converts it.
  */
-function publishedProperties(inputSchema: unknown): string[] {
-  const normalized = normalizeObjectSchema(inputSchema as never);
-  // Refined schemas do not normalize, and the route publishes `{type:'object'}`
-  // for them — no properties at all. That is its own bug, tracked separately;
-  // here it just means there is nothing to read.
-  if (!normalized) return [];
-  const jsonSchema = toJsonSchemaCompat(normalized, {
-    strictUnions: true,
-    pipeStrategy: 'input',
-  }) as { properties?: Record<string, unknown> };
+function publishedProperties(inputSchema: z.ZodType): string[] {
+  const jsonSchema = z.toJSONSchema(inputSchema, {
+    target: 'draft-7',
+    io: 'input',
+  });
   return Object.keys(jsonSchema.properties ?? {});
 }
 
@@ -52,6 +44,7 @@ describe('tool registration wire contract', () => {
       expect(registration.description).toBe(tool.description);
       expect(registration.annotations).toBe(tool.annotations);
       expect(registration.inputSchema).toBe(tool.inputSchema);
+      expect(registration.title).toBe(tool.annotations.title);
     }
   });
 });

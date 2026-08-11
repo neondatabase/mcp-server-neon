@@ -231,15 +231,11 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 
 </details>
 
-### Server-Sent Events (SSE) Transport (Deprecated)
+### Transport compatibility
 
-MCP supports two remote server transports: the deprecated Server-Sent Events (SSE) and the newer, recommended Streamable HTTP. If your LLM client doesn't support Streamable HTTP yet, you can switch the endpoint from `https://mcp.neon.tech/mcp` to `https://mcp.neon.tech/sse` to use SSE instead.
-
-Run the following command to add the Neon MCP Server for all detected agents and editors in your workspace using the SSE transport:
-
-```bash
-npx add-mcp https://mcp.neon.tech/sse --type sse
-```
+`https://mcp.neon.tech/mcp` uses stateless Streamable HTTP. It supports the
+MCP 2026-07-28 protocol and a stateless fallback for 2025-era clients. The
+deprecated HTTP+SSE `/sse` and `/message` endpoints return `410 Gone`.
 
 ## Remote Server Architecture
 
@@ -250,7 +246,7 @@ The remote server runs as a Next.js App Router application on Vercel at `mcp.neo
 
 Core implementation areas:
 
-- `app/api/[transport]/route.ts`: MCP transport endpoint for Streamable HTTP (`/mcp`) and SSE (`/sse`)
+- `app/api/[transport]/route.ts`: stateless Streamable HTTP endpoint (`/mcp`)
 - `app/api/authorize/`, `app/callback/`, `app/api/token/`, `app/api/revoke/`: OAuth flow endpoints
 - `app/.well-known/`: OAuth discovery metadata endpoints
 - `mcp/`: MCP server, tools, handlers, analytics, and Sentry integration

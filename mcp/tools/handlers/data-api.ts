@@ -1,7 +1,7 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResult } from '@modelcontextprotocol/server';
 import { Api, NeonAuthSupportedAuthProvider } from '../../neon-client';
 import { provisionNeonDataApiInputSchema } from '../toolsSchema';
-import { z } from 'zod/v3';
+import { z } from 'zod';
 import { getDefaultDatabase } from '../utils';
 import { getDefaultBranch } from './utils';
 import { ToolHandlerExtraParams } from '../types';

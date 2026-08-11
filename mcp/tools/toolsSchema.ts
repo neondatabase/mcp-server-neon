@@ -4,14 +4,7 @@ import {
   NeonAuthEmailVerificationMethod,
   NeonAuthOauthProviderId,
 } from '../neon-client';
-// IMPORTANT: Use zod/v3 types for MCP registration compatibility.
-// @modelcontextprotocol/sdk@1.25.x accepts schemas typed through its zod-compat layer
-// (zod/v3 or zod/v4/core). Using plain `zod` imports here can create type-identity
-// mismatches at registerTool boundaries in Next.js builds.
-//
-// Revisit this once the MCP SDK publishes a single-zod type surface that no longer
-// requires cross-version compatibility shims.
-import { z } from 'zod/v3';
+import { z } from 'zod';
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
 import {
   INSPECT_CHECK_LIST,

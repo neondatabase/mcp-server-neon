@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest';
+
+const { GET, POST } = await import('../../app/api/[transport]/route');
+
+const MCP_HEADERS = {
+  'Content-Type': 'application/json',
+  Accept: 'application/json, text/event-stream',
+};
+
+function legacyToolsListRequest(origin?: string): Request {
+  return new Request('http://localhost/api/mcp?category=docs', {
+    method: 'POST',
+    headers: {
+      ...MCP_HEADERS,
+      ...(origin ? { Origin: origin } : {}),
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/list',
+      params: {},
+    }),
+  });
+}
+
+describe('stateless MCP transport boundary', () => {
+  it.each([
+    ['GET', 'http://localhost/api/sse', GET],
+    ['GET', 'http://localhost/sse', GET],
+    ['POST', 'http://localhost/api/message?sessionId=old', POST],
+    ['POST', 'http://localhost/message?sessionId=old', POST],
+  ])('returns 410 for retired %s %s', async (_method, url, handler) => {
+    const response = await handler(new Request(url, { method: _method }));
+
+    expect(response.status).toBe(410);
+    await expect(response.json()).resolves.toEqual({
+      error: 'transport_gone',
+      message: 'HTTP+SSE was removed. Connect to /mcp using Streamable HTTP.',
+    });
+  });
+
+  it('rejects an untrusted Origin before docs-only and auth handling', async () => {
+    const response = await POST(
+      legacyToolsListRequest('https://attacker.example'),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      jsonrpc: '2.0',
+      error: {
+        code: -32000,
+        message: 'Invalid Origin: attacker.example',
+      },
+      id: null,
+    });
+  });
+
+  it('accepts the configured development Origin', async () => {
+    const response = await POST(
+      legacyToolsListRequest('http://localhost:3000'),
+    );
+
+    expect(response.status).toBe(200);
+  });
+});

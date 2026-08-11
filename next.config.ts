@@ -28,6 +28,10 @@ const nextConfig: NextConfig = {
         destination: '/api/sse',
       },
       {
+        source: '/message',
+        destination: '/api/message',
+      },
+      {
         source: '/health',
         destination: '/api/health',
       },

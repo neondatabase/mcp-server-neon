@@ -1,7 +1,7 @@
-import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
+import type { ToolAnnotations } from '@modelcontextprotocol/server';
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
 import type { ScopeCategory } from '../utils/grant-context';
-import type { ZodTypeAny } from 'zod/v3';
+import type { ZodTypeAny } from 'zod';
 import {
   completeDatabaseMigrationInputSchema,
   completeQueryTuningInputSchema,

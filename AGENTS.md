@@ -6,7 +6,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 ## Project Overview
 
-This is the **Neon MCP Server** - a Model Context Protocol server that bridges natural language requests to the Neon API, enabling LLMs to manage Lakebase Postgres databases on Neon through conversational commands. The project implements remote (SSE/Streamable HTTP) MCP server transports with OAuth authentication support.
+This is the **Neon MCP Server** - a Model Context Protocol server that bridges natural language requests to the Neon API, enabling LLMs to manage Lakebase Postgres databases on Neon through conversational commands. The project implements a stateless Streamable HTTP transport with OAuth authentication support.
 
 **Architecture Note**: The project is a Next.js application at the repository root, deployed on Vercel serverless infrastructure and accessible at `mcp.neon.tech`.
 
@@ -166,9 +166,9 @@ infrastructure.
    - `handlers/`: Individual tool handler implementations organized by feature
 
 3. **Remote Transport (`app/api/[transport]/route.ts`)**
-   - Next.js API route handling SSE and Streamable HTTP transports
-   - Uses `mcp-handler` library for serverless MCP protocol handling
-   - SSE sessions are bound to caller identity via `mcp/server/session-binding.ts` (Redis-backed; verifies the POST /message caller matches the GET /sse owner using a hashed binding key)
+   - Next.js API route handling stateless Streamable HTTP
+   - Uses `mcp-handler` 2.x for MCP 2026-07-28 plus stateless 2025-era compatibility
+   - Rejects untrusted `Origin` headers before docs-only or authenticated handling
 
 4. **OAuth System (`lib/oauth/` and `mcp/oauth/`)**
    - OAuth 2.0 server implementation for remote MCP authentication
@@ -287,7 +287,7 @@ normally provided through `.env.local`. Key variables:
 .                         # Repo root IS the Next.js app (deployed to mcp.neon.tech)
 ├── app/                 # Next.js App Router
 │   ├── api/            # API routes for remote MCP server
-│   │   ├── [transport]/route.ts  # Main MCP handler (SSE/Streamable HTTP)
+│   │   ├── [transport]/route.ts  # Stateless Streamable HTTP MCP handler
 │   │   ├── authorize/  # OAuth authorization endpoint (renders consent UI)
 │   │   ├── token/      # OAuth token exchange
 │   │   ├── register/   # Dynamic client registration
@@ -320,7 +320,6 @@ normally provided through `.env.local`. Key variables:
 │   │   ├── api.ts            # Neon API client factory
 │   │   ├── account.ts        # Account resolution (user/org/project-scoped)
 │   │   ├── errors.ts         # Error handling utilities
-│   │   └── session-binding.ts # Redis-backed SSE session-to-caller binding
 │   ├── tools/          # Tool definitions and handlers
 │   │   ├── index.ts        # Re-exports definitions and handlers
 │   │   ├── definitions.ts  # Tool definitions (NEON_TOOLS) with annotations
@@ -383,8 +382,7 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 
 - **Next.js App Router**: API routes handle MCP protocol and OAuth flow
 - **mcp-handler library**: Abstracts MCP protocol complexity for serverless environments
-- **Vercel Fluid Compute**: Supports up to 800s function duration for SSE connections
-- **Upstash Redis**: Session storage via Vercel KV (`KV_URL` environment variable)
+- **Upstash Redis**: API-key caching and OAuth refresh coordination via Vercel KV (`KV_URL` environment variable)
 - **Postgres via Keyv**: Token persistence using `OAUTH_DATABASE_URL`
 
 ### API Endpoints
@@ -392,7 +390,7 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 | Route                                     | Purpose                                                                           |
 | ----------------------------------------- | --------------------------------------------------------------------------------- |
 | `/api/mcp`                                | Streamable HTTP transport (recommended)                                           |
-| `/api/sse`                                | Server-Sent Events transport (deprecated)                                         |
+| `/api/sse`, `/api/message`                | Retired HTTP+SSE endpoints (`410 Gone`)                                           |
 | `/api/authorize`                          | OAuth authorization initiation                                                    |
 | `/callback`                               | OAuth callback handler                                                            |
 | `/api/token`                              | OAuth token exchange                                                              |
@@ -422,7 +420,7 @@ In addition to the top-level scopes, the server exposes **scope categories** via
 | `UPSTREAM_OAUTH_HOST`         | Neon OAuth provider URL                 |
 | `CLIENT_ID` / `CLIENT_SECRET` | OAuth client credentials                |
 | `COOKIE_SECRET`               | Secret for signed cookies               |
-| `KV_URL`                      | Vercel KV (Upstash Redis) URL           |
+| `KV_URL`                      | Vercel KV URL for caches and locks      |
 | `OAUTH_DATABASE_URL`          | Postgres URL for token storage          |
 | `SENTRY_DSN`                  | Sentry error tracking DSN               |
 | `ANALYTICS_WRITE_KEY`         | Segment analytics write key             |

@@ -8,7 +8,7 @@
  */
 
 import type { Api, ProjectBranchLogRecord } from '../../neon-client';
-import { z } from 'zod/v3';
+import { z } from 'zod';
 import { InvalidArgumentError } from '../../server/errors';
 import type { ToolHandlerExtraParams } from '../types';
 import { getDefaultBranch, getOnlyProject } from './utils';

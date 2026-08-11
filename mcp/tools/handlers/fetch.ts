@@ -1,7 +1,7 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResult } from '@modelcontextprotocol/server';
 import { Api, MemberWithUser, ProjectListItem } from '../../neon-client';
 import { fetchInputSchema } from '../toolsSchema';
-import { z } from 'zod/v3';
+import { z } from 'zod';
 import { handleDescribeProject } from './decribe-project';
 import { handleDescribeBranch } from './describe-branch';
 import { ToolHandlerExtraParams } from '../types';
