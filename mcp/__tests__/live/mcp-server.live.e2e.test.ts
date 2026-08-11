@@ -4,10 +4,16 @@ import { config as loadEnv } from 'dotenv';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { neon } from '@neondatabase/serverless';
 import { z } from 'zod';
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { NeonApiClient } from '../../neon-client';
+import {
+  INSPECT_CHECKS,
+  INSPECT_QUERIES,
+  type InspectCheck,
+} from '../../inspect/queries';
 
 loadEnv({ path: '.env.test', quiet: true });
 
@@ -17,6 +23,12 @@ process.env.SENTRY_DSN = '';
 
 const PROJECT_PREFIX = 'smoke-mcp-live';
 const LIVE_TEST_TIMEOUT_MS = 120_000;
+const OTHER_DATABASE = 'mcp_scope_other';
+const DEFAULT_LOCK_TABLE = 'mcp_scope_default_lock';
+const OTHER_LOCK_TABLE = 'mcp_scope_other_lock';
+const DEFAULT_LOCK_MARKER = 'mcp_scope_default_session';
+const OTHER_LOCK_MARKER = 'mcp_scope_other_session';
+const LOCK_HOLD_SECONDS = 15;
 
 const toolResultSchema = z.object({
   content: z.array(z.unknown()),
@@ -52,6 +64,43 @@ const tableDescriptionSchema = z.object({
   formatted: z.string(),
 });
 
+const inspectResultSchema = z.object({
+  check: z.enum(INSPECT_CHECKS),
+  describe: z.string(),
+  projectId: z.string(),
+  branchId: z.string(),
+  databaseName: z.string(),
+  fields: z.array(z.string()),
+  totalRowCount: z.number(),
+  rows: z.array(z.record(z.string(), z.unknown())),
+  truncated: z.boolean(),
+  note: z.string().optional(),
+});
+
+const lockResultSchema = inspectResultSchema.extend({
+  check: z.literal('locks'),
+  rows: z.array(
+    z.object({
+      relname: z.string().nullable(),
+      locktype: z.string(),
+      query: z.string(),
+    }),
+  ),
+});
+
+/**
+ * A check whose SQL carries its own `LIMIT` must say so once it reaches that
+ * ceiling, otherwise a capped result reads as the complete one.
+ */
+function expectSqlCapDisclosed(
+  check: InspectCheck,
+  report: z.infer<typeof inspectResultSchema>,
+) {
+  const { sqlLimit } = INSPECT_QUERIES[check];
+  if (sqlLimit === undefined || report.totalRowCount !== sqlLimit) return;
+  expect(report.note).toContain(`at most ${sqlLimit} rows`);
+}
+
 function requireApiKey(): string {
   const name = 'NEON_API_KEY';
   const value = process.env[name]?.trim();
@@ -81,6 +130,15 @@ function assertToolSucceeded(toolName: string, result: unknown): string {
   return text;
 }
 
+function holdTableLock(uri: string, table: string, marker: string) {
+  const sql = neon(uri);
+  return sql.transaction([
+    sql.query(`LOCK TABLE ${table} IN ACCESS EXCLUSIVE MODE`),
+    sql.query('SELECT pg_current_xact_id()'),
+    sql.query(`SELECT pg_sleep(${LOCK_HOLD_SECONDS}) /* ${marker} */`),
+  ]);
+}
+
 describe.sequential('MCP server live Neon lifecycle', () => {
   let client: Client | undefined;
   let server: McpServer | undefined;
@@ -98,6 +156,39 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       name,
       arguments: params,
     });
+  }
+
+  async function inspectLocks(databaseName: string) {
+    if (!projectId) throw new Error('Test project was not created.');
+    const result = await callTool('inspect_database', {
+      projectId,
+      databaseName,
+      check: 'locks',
+    });
+    return lockResultSchema.parse(
+      JSON.parse(
+        assertToolSucceeded(`inspect_database/locks/${databaseName}`, result),
+      ),
+    );
+  }
+
+  async function waitForLockReports() {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const reports = await Promise.all([
+        inspectLocks('neondb'),
+        inspectLocks(OTHER_DATABASE),
+      ]);
+      const [fromDefault, fromOther] = reports;
+      const defaultReady = fromDefault.rows.some((row) =>
+        row.query.includes(DEFAULT_LOCK_MARKER),
+      );
+      const otherReady = fromOther.rows.some((row) =>
+        row.query.includes(OTHER_LOCK_MARKER),
+      );
+      if (defaultReady && otherReady) return reports;
+      await delay(250);
+    }
+    throw new Error('Both database lock holders did not become visible.');
   }
 
   async function findProject(id: string) {
@@ -335,6 +426,284 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         'NotFoundError: Table not found: crm.missing_property_options',
       );
       expect(text).not.toContain('relation');
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'reports only locks held in the inspected database',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!neonClient) throw new Error('Neon SDK client is not initialized.');
+
+      assertToolSucceeded(
+        'run_sql/create-scope-database',
+        await callTool('run_sql', {
+          projectId,
+          sql: `CREATE DATABASE ${OTHER_DATABASE}`,
+        }),
+      );
+      assertToolSucceeded(
+        'run_sql/create-default-lock-table',
+        await callTool('run_sql', {
+          projectId,
+          sql: `CREATE TABLE ${DEFAULT_LOCK_TABLE} (id int)`,
+        }),
+      );
+      assertToolSucceeded(
+        'run_sql/create-other-lock-table',
+        await callTool('run_sql', {
+          projectId,
+          databaseName: OTHER_DATABASE,
+          sql: `CREATE TABLE ${OTHER_LOCK_TABLE} (id int)`,
+        }),
+      );
+
+      const [defaultConnection, otherConnection] = await Promise.all([
+        neonClient.getConnectionUri({
+          projectId,
+          database_name: 'neondb',
+        }),
+        neonClient.getConnectionUri({
+          projectId,
+          database_name: OTHER_DATABASE,
+        }),
+      ]);
+      const lockHolders = Promise.all([
+        holdTableLock(
+          defaultConnection.data.uri,
+          DEFAULT_LOCK_TABLE,
+          DEFAULT_LOCK_MARKER,
+        ),
+        holdTableLock(
+          otherConnection.data.uri,
+          OTHER_LOCK_TABLE,
+          OTHER_LOCK_MARKER,
+        ),
+      ]);
+      const lockHoldersFinishedEarly = lockHolders.then(() => {
+        throw new Error('Lock holders finished before inspection completed.');
+      });
+
+      let reports: Awaited<ReturnType<typeof waitForLockReports>>;
+      try {
+        reports = await Promise.race([
+          waitForLockReports(),
+          lockHoldersFinishedEarly,
+        ]);
+      } finally {
+        await lockHolders;
+      }
+
+      const [fromDefault, fromOther] = reports;
+      for (const [report, localMarker, foreignMarker, localTable] of [
+        [
+          fromDefault,
+          DEFAULT_LOCK_MARKER,
+          OTHER_LOCK_MARKER,
+          DEFAULT_LOCK_TABLE,
+        ],
+        [fromOther, OTHER_LOCK_MARKER, DEFAULT_LOCK_MARKER, OTHER_LOCK_TABLE],
+      ] as const) {
+        const localRows = report.rows.filter((row) =>
+          row.query.includes(localMarker),
+        );
+        expect(localRows.length).toBeGreaterThan(0);
+        expect(
+          report.rows.some((row) => row.query.includes(foreignMarker)),
+        ).toBe(false);
+
+        const relationRows = localRows.filter(
+          (row) => row.locktype === 'relation',
+        );
+        expect(relationRows.map((row) => row.relname)).toContain(localTable);
+        expect(relationRows.every((row) => row.relname !== null)).toBe(true);
+        expect(localRows.map((row) => row.locktype)).toContain('transactionid');
+      }
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'discloses both response truncation and a SQL-level row cap',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const tableNames = Array.from(
+        { length: 26 },
+        (_, index) => `mcp_cap_table_${index}`,
+      );
+      assertToolSucceeded(
+        'run_sql_transaction/create-cap-tables',
+        await callTool('run_sql_transaction', {
+          projectId,
+          sqlStatements: tableNames.flatMap((tableName) => [
+            `CREATE TABLE ${tableName} (value integer)`,
+            `INSERT INTO ${tableName} VALUES (1)`,
+            `ANALYZE ${tableName}`,
+          ]),
+        }),
+      );
+
+      const report = inspectResultSchema.parse(
+        JSON.parse(
+          assertToolSucceeded(
+            'inspect_database/bloat',
+            await callTool('inspect_database', {
+              projectId,
+              check: 'bloat',
+              limit: 1,
+            }),
+          ),
+        ),
+      );
+      expect(report.totalRowCount).toBe(INSPECT_QUERIES.bloat.sqlLimit);
+      expect(report.rows).toHaveLength(1);
+      expect(report.truncated).toBe(true);
+      expect(report.note).toContain('Showing the first 1 of 25 rows');
+      expect(report.note).toContain('returns at most 25 rows');
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'reports the missing extension before it is installed',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const extensionChecks = INSPECT_CHECKS.filter(
+        (check) => INSPECT_QUERIES[check].requiresExtension,
+      );
+      expect(extensionChecks.length).toBeGreaterThan(0);
+
+      for (const check of extensionChecks) {
+        const result = await callTool('inspect_database', {
+          projectId,
+          check,
+        });
+        const parsedResult = toolResultSchema.parse(result);
+        const text = textContent(result);
+
+        expect(parsedResult.isError).toBe(true);
+        expect(text).toContain(
+          `CREATE EXTENSION IF NOT EXISTS ${INSPECT_QUERIES[check].requiresExtension};`,
+        );
+        // Installing an extension writes to the user's database, so the error
+        // must not read as something to do unattended.
+        expect(text).toContain('ask the user first');
+      }
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'runs every check that needs no extension against the real database',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      for (const check of INSPECT_CHECKS.filter(
+        (candidate) => !INSPECT_QUERIES[candidate].requiresExtension,
+      )) {
+        const result = await callTool('inspect_database', {
+          projectId,
+          check,
+        });
+        const report = inspectResultSchema.parse(
+          JSON.parse(assertToolSucceeded(`inspect_database/${check}`, result)),
+        );
+
+        expect(report.check).toBe(check);
+        expect(report.fields).toEqual(INSPECT_QUERIES[check].fields);
+        expect(report.totalRowCount).toBe(report.rows.length);
+        expect(report.truncated).toBe(false);
+        // Every returned row must use the declared columns, so the model can
+        // rely on `fields` for ordering.
+        for (const row of report.rows) {
+          expect(Object.keys(row).sort()).toEqual([...report.fields].sort());
+        }
+        if (report.totalRowCount === 0) {
+          expect(report.note).toBe(INSPECT_QUERIES[check].emptyMessage);
+        }
+        expectSqlCapDisclosed(check, report);
+      }
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'sees the tables it created and truncates to the requested limit',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const full = inspectResultSchema.parse(
+        JSON.parse(
+          assertToolSucceeded(
+            'inspect_database',
+            await callTool('inspect_database', {
+              projectId,
+              check: 'table-sizes',
+            }),
+          ),
+        ),
+      );
+      expect(full.totalRowCount).toBeGreaterThanOrEqual(2);
+      expect(full.rows.map((row) => row.name)).toContain('property_options');
+
+      const capped = inspectResultSchema.parse(
+        JSON.parse(
+          assertToolSucceeded(
+            'inspect_database',
+            await callTool('inspect_database', {
+              projectId,
+              check: 'table-sizes',
+              limit: 1,
+            }),
+          ),
+        ),
+      );
+      expect(capped.rows).toHaveLength(1);
+      expect(capped.totalRowCount).toBe(full.totalRowCount);
+      expect(capped.truncated).toBe(true);
+      expect(capped.note).toContain(`of ${full.totalRowCount} rows`);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'runs the extension-gated checks once their extensions exist',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const extensions = [
+        ...new Set(
+          INSPECT_CHECKS.map(
+            (check) => INSPECT_QUERIES[check].requiresExtension,
+          ).filter((name): name is string => Boolean(name)),
+        ),
+      ];
+      assertToolSucceeded(
+        'run_sql_transaction',
+        await callTool('run_sql_transaction', {
+          projectId,
+          sqlStatements: extensions.map(
+            (name) => `CREATE EXTENSION IF NOT EXISTS ${name}`,
+          ),
+        }),
+      );
+
+      for (const check of INSPECT_CHECKS.filter(
+        (candidate) => INSPECT_QUERIES[candidate].requiresExtension,
+      )) {
+        const report = inspectResultSchema.parse(
+          JSON.parse(
+            assertToolSucceeded(
+              `inspect_database/${check}`,
+              await callTool('inspect_database', { projectId, check }),
+            ),
+          ),
+        );
+        expect(report.check).toBe(check);
+        expect(report.fields).toEqual(INSPECT_QUERIES[check].fields);
+        for (const row of report.rows) {
+          expect(Object.keys(row).sort()).toEqual([...report.fields].sort());
+        }
+        expectSqlCapDisclosed(check, report);
+      }
     },
     LIVE_TEST_TIMEOUT_MS,
   );

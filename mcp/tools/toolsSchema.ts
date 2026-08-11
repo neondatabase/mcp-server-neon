@@ -13,6 +13,12 @@ import {
 // requires cross-version compatibility shims.
 import { z } from 'zod/v3';
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
+import {
+  INSPECT_CHECK_LIST,
+  INSPECT_CHECKS,
+  INSPECT_DEFAULT_LIMIT,
+  INSPECT_MAX_LIMIT,
+} from '../inspect/queries';
 import { SEVERITY_LEVELS } from '../otel/severity';
 
 type ZodObjectParams<T> = z.ZodObject<{ [key in keyof T]: z.ZodType<T[key]> }>;
@@ -829,6 +835,36 @@ export const listSlowQueriesInputSchema = z.object({
     .default(1000)
     .describe(
       'Minimum execution time in milliseconds to consider a query as slow',
+    ),
+});
+
+export const inspectDatabaseInputSchema = z.object({
+  check: z
+    .enum(INSPECT_CHECKS)
+    .describe(`Which diagnostic to run:\n${INSPECT_CHECK_LIST}`),
+  projectId: z.string().describe('The ID of the project to inspect'),
+  branchId: z
+    .string()
+    .optional()
+    .describe(
+      'An optional ID of the branch. If not provided the default branch is used.',
+    ),
+  databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
+  computeId: z
+    .string()
+    .optional()
+    .describe(
+      'The ID of the compute/endpoint. If not provided, the read-write compute associated with the branch will be used.',
+    ),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(INSPECT_MAX_LIMIT)
+    .optional()
+    .default(INSPECT_DEFAULT_LIMIT)
+    .describe(
+      'Maximum number of rows to return. The response reports how many rows the check produced and whether they were truncated, so raise this only when `truncated` is true. A few checks are capped in SQL and say so in their description.',
     ),
 });
 
