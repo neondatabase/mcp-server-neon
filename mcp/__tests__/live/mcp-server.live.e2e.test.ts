@@ -4,6 +4,7 @@ import { config as loadEnv } from 'dotenv';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { neon } from '@neondatabase/serverless';
 import { z } from 'zod';
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -22,6 +23,12 @@ process.env.SENTRY_DSN = '';
 
 const PROJECT_PREFIX = 'smoke-mcp-live';
 const LIVE_TEST_TIMEOUT_MS = 120_000;
+const OTHER_DATABASE = 'mcp_scope_other';
+const DEFAULT_LOCK_TABLE = 'mcp_scope_default_lock';
+const OTHER_LOCK_TABLE = 'mcp_scope_other_lock';
+const DEFAULT_LOCK_MARKER = 'mcp_scope_default_session';
+const OTHER_LOCK_MARKER = 'mcp_scope_other_session';
+const LOCK_HOLD_SECONDS = 15;
 
 const toolResultSchema = z.object({
   content: z.array(z.unknown()),
@@ -70,6 +77,17 @@ const inspectResultSchema = z.object({
   note: z.string().optional(),
 });
 
+const lockResultSchema = inspectResultSchema.extend({
+  check: z.literal('locks'),
+  rows: z.array(
+    z.object({
+      relname: z.string().nullable(),
+      locktype: z.string(),
+      query: z.string(),
+    }),
+  ),
+});
+
 /**
  * A check whose SQL carries its own `LIMIT` must say so once it reaches that
  * ceiling, otherwise a capped result reads as the complete one.
@@ -112,6 +130,15 @@ function assertToolSucceeded(toolName: string, result: unknown): string {
   return text;
 }
 
+function holdTableLock(uri: string, table: string, marker: string) {
+  const sql = neon(uri);
+  return sql.transaction([
+    sql.query(`LOCK TABLE ${table} IN ACCESS EXCLUSIVE MODE`),
+    sql.query('SELECT pg_current_xact_id()'),
+    sql.query(`SELECT pg_sleep(${LOCK_HOLD_SECONDS}) /* ${marker} */`),
+  ]);
+}
+
 describe.sequential('MCP server live Neon lifecycle', () => {
   let client: Client | undefined;
   let server: McpServer | undefined;
@@ -129,6 +156,39 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       name,
       arguments: params,
     });
+  }
+
+  async function inspectLocks(databaseName: string) {
+    if (!projectId) throw new Error('Test project was not created.');
+    const result = await callTool('inspect_database', {
+      projectId,
+      databaseName,
+      check: 'locks',
+    });
+    return lockResultSchema.parse(
+      JSON.parse(
+        assertToolSucceeded(`inspect_database/locks/${databaseName}`, result),
+      ),
+    );
+  }
+
+  async function waitForLockReports() {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const reports = await Promise.all([
+        inspectLocks('neondb'),
+        inspectLocks(OTHER_DATABASE),
+      ]);
+      const [fromDefault, fromOther] = reports;
+      const defaultReady = fromDefault.rows.some((row) =>
+        row.query.includes(DEFAULT_LOCK_MARKER),
+      );
+      const otherReady = fromOther.rows.some((row) =>
+        row.query.includes(OTHER_LOCK_MARKER),
+      );
+      if (defaultReady && otherReady) return reports;
+      await delay(250);
+    }
+    throw new Error('Both database lock holders did not become visible.');
   }
 
   async function findProject(id: string) {
@@ -366,6 +426,100 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         'NotFoundError: Table not found: crm.missing_property_options',
       );
       expect(text).not.toContain('relation');
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'reports only locks held in the inspected database',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!neonClient) throw new Error('Neon SDK client is not initialized.');
+
+      assertToolSucceeded(
+        'run_sql/create-scope-database',
+        await callTool('run_sql', {
+          projectId,
+          sql: `CREATE DATABASE ${OTHER_DATABASE}`,
+        }),
+      );
+      assertToolSucceeded(
+        'run_sql/create-default-lock-table',
+        await callTool('run_sql', {
+          projectId,
+          sql: `CREATE TABLE ${DEFAULT_LOCK_TABLE} (id int)`,
+        }),
+      );
+      assertToolSucceeded(
+        'run_sql/create-other-lock-table',
+        await callTool('run_sql', {
+          projectId,
+          databaseName: OTHER_DATABASE,
+          sql: `CREATE TABLE ${OTHER_LOCK_TABLE} (id int)`,
+        }),
+      );
+
+      const [defaultConnection, otherConnection] = await Promise.all([
+        neonClient.getConnectionUri({
+          projectId,
+          database_name: 'neondb',
+        }),
+        neonClient.getConnectionUri({
+          projectId,
+          database_name: OTHER_DATABASE,
+        }),
+      ]);
+      const lockHolders = Promise.all([
+        holdTableLock(
+          defaultConnection.data.uri,
+          DEFAULT_LOCK_TABLE,
+          DEFAULT_LOCK_MARKER,
+        ),
+        holdTableLock(
+          otherConnection.data.uri,
+          OTHER_LOCK_TABLE,
+          OTHER_LOCK_MARKER,
+        ),
+      ]);
+      const lockHoldersFinishedEarly = lockHolders.then(() => {
+        throw new Error('Lock holders finished before inspection completed.');
+      });
+
+      let reports: Awaited<ReturnType<typeof waitForLockReports>>;
+      try {
+        reports = await Promise.race([
+          waitForLockReports(),
+          lockHoldersFinishedEarly,
+        ]);
+      } finally {
+        await lockHolders;
+      }
+
+      const [fromDefault, fromOther] = reports;
+      for (const [report, localMarker, foreignMarker, localTable] of [
+        [
+          fromDefault,
+          DEFAULT_LOCK_MARKER,
+          OTHER_LOCK_MARKER,
+          DEFAULT_LOCK_TABLE,
+        ],
+        [fromOther, OTHER_LOCK_MARKER, DEFAULT_LOCK_MARKER, OTHER_LOCK_TABLE],
+      ] as const) {
+        const localRows = report.rows.filter((row) =>
+          row.query.includes(localMarker),
+        );
+        expect(localRows.length).toBeGreaterThan(0);
+        expect(
+          report.rows.some((row) => row.query.includes(foreignMarker)),
+        ).toBe(false);
+
+        const relationRows = localRows.filter(
+          (row) => row.locktype === 'relation',
+        );
+        expect(relationRows.map((row) => row.relname)).toContain(localTable);
+        expect(relationRows.every((row) => row.relname !== null)).toBe(true);
+        expect(localRows.map((row) => row.locktype)).toContain('transactionid');
+      }
     },
     LIVE_TEST_TIMEOUT_MS,
   );

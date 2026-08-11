@@ -5,7 +5,7 @@
  *
  * Every query is copied verbatim from the `neon` CLI, where the same catalog
  * powers `neon inspect db <check>`:
- * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ d9fa78f.
+ * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ d0c84e3.
  * The CLI does not publish this module, so the SQL is duplicated rather than
  * imported. Keep the SQL a verbatim copy — port fixes in both directions instead
  * of letting the two catalogs diverge.
@@ -144,7 +144,10 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   'long-running-queries': {
     describe: 'Queries running longer than 5 minutes (pg_stat_activity)',
     fields: ['pid', 'duration', 'state', 'query'],
-    emptyMessage: 'No long-running queries.',
+    emptyMessage: 'No long-running queries in this database.',
+    // `pg_stat_activity` spans every database on the compute, so without the
+    // `datname` filter this reports queries the caller did not ask about and
+    // cannot act on.
     sql: /* sql */ `
       SELECT
         pid,
@@ -152,7 +155,8 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
         state,
         query
       FROM pg_stat_activity
-      WHERE state <> 'idle'
+      WHERE datname = current_database()
+        AND state <> 'idle'
         AND query NOT ILIKE '%pg_stat_activity%'
         AND now() - query_start > interval '5 minutes'
       ORDER BY now() - query_start DESC;
@@ -162,7 +166,16 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
     describe:
       'Locks held with the acquiring query and its age (pg_locks + pg_stat_activity)',
     fields: ['pid', 'relname', 'mode', 'locktype', 'granted', 'age', 'query'],
-    emptyMessage: 'No locks held.',
+    emptyMessage: 'No locks held in this database.',
+    // Restricting to backends connected to this database does two things.
+    // `pg_locks` covers the whole compute, so it otherwise reports locks the
+    // caller did not ask about; and `l.relation` is an OID that only means
+    // anything in `l.database`, so joining a foreign database's OID against the
+    // local `pg_class` returned a null name, or a different relation that
+    // happened to share the OID. Filtering on the holding session means no
+    // foreign-database OID reaches that join. Filtering on `l.database`
+    // instead would drop `transactionid` and `virtualxid` locks, which carry
+    // no database.
     sql: /* sql */ `
       SELECT
         a.pid,
@@ -175,7 +188,8 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
       FROM pg_locks l
       JOIN pg_stat_activity a ON a.pid = l.pid
       LEFT JOIN pg_class c ON c.oid = l.relation
-      WHERE a.query <> '<insufficient privilege>'
+      WHERE a.datname = current_database()
+        AND a.query <> '<insufficient privilege>'
         AND l.pid <> pg_backend_pid()
       ORDER BY a.query_start;
     `,

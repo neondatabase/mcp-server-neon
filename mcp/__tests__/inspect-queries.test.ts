@@ -55,6 +55,29 @@ describe('inspect query catalog', () => {
       );
     }
   });
+
+  it.each([
+    [
+      'long-running-queries',
+      'datname = current_database()',
+      'No long-running queries in this database.',
+    ],
+    [
+      'locks',
+      'a.datname = current_database()',
+      'No locks held in this database.',
+    ],
+  ] as const)(
+    '%s is scoped to the inspected database',
+    (check, filter, note) => {
+      expect(INSPECT_QUERIES[check].sql).toContain(filter);
+      expect(INSPECT_QUERIES[check].emptyMessage).toBe(note);
+    },
+  );
+
+  it('scopes locks by the holding session, not the lock database', () => {
+    expect(INSPECT_QUERIES.locks.sql).not.toMatch(/\bl\.database\s*=/);
+  });
 });
 
 describe('inspectDatabaseInputSchema', () => {
