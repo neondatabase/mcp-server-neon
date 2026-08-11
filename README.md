@@ -242,8 +242,9 @@ that only support local stdio servers, bridge the endpoint with
 [`mcp-remote`](https://www.npmjs.com/package/mcp-remote).
 
 Requests that include an `Origin` header are accepted only when its hostname
-matches the server deployment; other origins receive `403 Forbidden`. CLI and
-server-side clients that omit `Origin` are unaffected.
+matches the server deployment; other origins receive `403 Forbidden` to prevent
+DNS rebinding against MCP HTTP endpoints. CLI and server-side clients that omit
+`Origin` are unaffected.
 
 ## Remote Server Architecture
 

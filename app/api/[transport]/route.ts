@@ -918,7 +918,7 @@ function retiredTransportResponse(method: string): Response {
       : JSON.stringify({
           error: 'transport_gone',
           message:
-            'HTTP+SSE was removed. Connect to /mcp using Streamable HTTP.',
+            'HTTP+SSE was removed. Connect to https://mcp.neon.tech/mcp using Streamable HTTP. Stdio-only clients can bridge it with `npx -y mcp-remote https://mcp.neon.tech/mcp`. See https://neon.com/docs/ai/neon-mcp-server.',
         });
   return new Response(body, {
     status: 410,

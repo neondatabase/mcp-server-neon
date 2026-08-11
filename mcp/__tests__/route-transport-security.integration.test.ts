@@ -35,7 +35,8 @@ describe('stateless MCP transport boundary', () => {
     expect(response.status).toBe(410);
     await expect(response.json()).resolves.toEqual({
       error: 'transport_gone',
-      message: 'HTTP+SSE was removed. Connect to /mcp using Streamable HTTP.',
+      message:
+        'HTTP+SSE was removed. Connect to https://mcp.neon.tech/mcp using Streamable HTTP. Stdio-only clients can bridge it with `npx -y mcp-remote https://mcp.neon.tech/mcp`. See https://neon.com/docs/ai/neon-mcp-server.',
     });
   });
 
