@@ -1,6 +1,7 @@
 // Initialize Sentry (must be first import)
 import '../../../mcp/sentry/instrument';
 import {
+  CLIENT_INFO_META_KEY,
   localhostAllowedOrigins,
   McpServer,
   originValidationResponse,
@@ -85,6 +86,19 @@ const MCP_ALLOWED_ORIGIN_HOSTNAMES = [
   new URL(SERVER_HOST).hostname,
   ...(process.env.NODE_ENV === 'production' ? [] : localhostAllowedOrigins()),
 ].filter((hostname, index, hostnames) => hostnames.indexOf(hostname) === index);
+
+function getRequestClientName(ctx: McpServerContext): string | undefined {
+  const envelope: unknown = ctx.mcpReq.envelope;
+  if (!envelope || typeof envelope !== 'object') return undefined;
+  if (!(CLIENT_INFO_META_KEY in envelope)) return undefined;
+
+  const clientInfo = envelope[CLIENT_INFO_META_KEY];
+  if (!clientInfo || typeof clientInfo !== 'object') return undefined;
+  if (!('name' in clientInfo) || typeof clientInfo.name !== 'string') {
+    return undefined;
+  }
+  return clientInfo.name;
+}
 
 type AuthenticatedAuthInfo = AuthInfo & {
   extra?: {
@@ -176,8 +190,12 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         const transport = authInfo.extra.transport ?? 'stream';
         const neonClient = createNeonClient(apiKey);
 
-        // Use User-Agent as clientName fallback if MCP handshake hasn't provided it yet
-        if (clientName === 'unknown' && authInfo.extra.userAgent) {
+        const requestClientName = getRequestClientName(ctx);
+        if (requestClientName) {
+          clientName = requestClientName;
+          clientApplication = detectClientApplication(clientName);
+        } else if (clientName === 'unknown' && authInfo.extra.userAgent) {
+          // Legacy stateless requests have no per-request client metadata.
           clientName = authInfo.extra.userAgent;
           clientApplication = detectClientApplication(clientName);
         }
@@ -554,10 +572,19 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
       server.registerTool(
         getDocResourceTool.name,
         toolRegistration(getDocResourceTool),
-        async (args: { slug: string }) =>
-          runDocsTool(getDocResourceTool.name, userAgent, () =>
-            getDocResource({ slug: args.slug }),
-          ),
+        async (args: unknown) => {
+          assert(
+            !!args &&
+              typeof args === 'object' &&
+              'slug' in args &&
+              typeof args.slug === 'string',
+            'get_doc_resource arguments were not validated',
+          );
+          const { slug } = args;
+          return runDocsTool(getDocResourceTool.name, userAgent, () =>
+            getDocResource({ slug }),
+          );
+        },
       );
     },
     {

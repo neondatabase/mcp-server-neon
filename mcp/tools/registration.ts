@@ -14,7 +14,10 @@
  * and in what they log. Those differences are theirs to keep. This module owns
  * only the contract a client sees.
  */
-import type { ToolAnnotations } from '@modelcontextprotocol/server';
+import type {
+  StandardSchemaWithJSON,
+  ToolAnnotations,
+} from '@modelcontextprotocol/server';
 import type { Api } from '../neon-client';
 import type { GrantContext } from '../utils/grant-context';
 import { NEON_HANDLERS } from './tools';
@@ -24,6 +27,24 @@ import type { ToolHandlerExtended, ToolHandlerExtraParams } from './types';
 
 type NeonTool = (typeof NEON_TOOLS)[number];
 
+function withClosedJsonSchema(
+  schema: NeonTool['inputSchema'],
+): StandardSchemaWithJSON {
+  const standard = schema['~standard'];
+  return {
+    '~standard': {
+      ...standard,
+      jsonSchema: {
+        ...standard.jsonSchema,
+        input: (options) => ({
+          ...standard.jsonSchema.input(options),
+          additionalProperties: false,
+        }),
+      },
+    },
+  };
+}
+
 /**
  * What `registerTool` is given. Flat, because that is what a client sends:
  * `{"name":"run_sql","arguments":{"sql":"…","projectId":"…"}}`.
@@ -31,15 +52,15 @@ type NeonTool = (typeof NEON_TOOLS)[number];
 export function toolRegistration(tool: NeonTool): {
   title?: string;
   description: string;
-  inputSchema: NeonTool['inputSchema'];
+  inputSchema: StandardSchemaWithJSON;
   annotations: ToolAnnotations;
 } {
   return {
     title: tool.annotations?.title,
     description: tool.description,
-    // Preserve the existing JSON Schema contract for clients that require
-    // additionalProperties: false for tool inputs.
-    inputSchema: tool.inputSchema.strict(),
+    // Keep the published contract closed while retaining Zod's existing
+    // runtime behavior of stripping unspecified arguments.
+    inputSchema: withClosedJsonSchema(tool.inputSchema),
     annotations: tool.annotations,
   };
 }

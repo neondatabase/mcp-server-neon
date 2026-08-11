@@ -76,6 +76,7 @@ async function mcpCall(
   params?: unknown,
   queryString = '',
   userAgent?: string,
+  mcpHeaders?: Record<string, string>,
 ) {
   const req = new Request(`http://localhost/api/mcp${queryString}`, {
     method: 'POST',
@@ -84,6 +85,7 @@ async function mcpCall(
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
       ...(userAgent ? { 'User-Agent': userAgent } : {}),
+      ...mcpHeaders,
     },
     body: JSON.stringify({
       jsonrpc: '2.0',
@@ -219,6 +221,56 @@ describe('transport dynamic tool composition', () => {
       { name: 'run_sql', arguments: { sql: 'select 1' } },
       '',
       'v0bot',
+    );
+
+    const attribution = { clientName: 'v0bot', clientApplication: 'v0' };
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event: 'server_init',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        event: 'tool_call',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
+  });
+
+  it('attributes modern stateless calls from per-request metadata', async () => {
+    const oauthToken = 'oauth-modern-client-application';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write', {
+        projectId: 'proj_analytics',
+        scopes: null,
+      }),
+    );
+
+    await mcpCall(
+      oauthToken,
+      'tools/call',
+      1,
+      {
+        name: 'run_sql',
+        arguments: { sql: 'select 1' },
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientInfo': {
+            name: 'v0bot',
+            version: '1.0.0',
+          },
+          'io.modelcontextprotocol/clientCapabilities': {},
+        },
+      },
+      '',
+      undefined,
+      {
+        'Mcp-Method': 'tools/call',
+        'Mcp-Name': 'run_sql',
+      },
     );
 
     const attribution = { clientName: 'v0bot', clientApplication: 'v0' };

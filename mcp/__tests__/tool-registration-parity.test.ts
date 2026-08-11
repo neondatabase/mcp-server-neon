@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
+import type { StandardSchemaWithJSON } from '@modelcontextprotocol/server';
 import { NEON_TOOLS } from '../tools/definitions';
 import { toolRegistration } from '../tools/registration';
 
 /**
- * The draft-7 JSON Schema published by the REST catalog.
+ * The draft-7 JSON Schema published by the MCP SDK.
  */
-function publishedSchema(inputSchema: z.ZodType) {
-  return z.toJSONSchema(inputSchema, {
-    target: 'draft-7',
-    io: 'input',
+function publishedSchema(inputSchema: StandardSchemaWithJSON) {
+  return inputSchema['~standard'].jsonSchema.input({
+    target: 'draft-07',
   });
 }
 
@@ -29,9 +28,11 @@ describe('tool registration wire contract', () => {
       const tool = NEON_TOOLS.find((candidate) => candidate.name === name);
       if (!tool) throw new Error(`Unknown tool ${name}`);
 
-      const properties = Object.keys(
-        publishedSchema(toolRegistration(tool).inputSchema).properties ?? {},
-      );
+      const schema = publishedSchema(toolRegistration(tool).inputSchema);
+      const properties =
+        schema.properties && typeof schema.properties === 'object'
+          ? Object.keys(schema.properties)
+          : [];
 
       expect(properties).not.toContain('params');
     },
@@ -53,6 +54,23 @@ describe('tool registration wire contract', () => {
 
     const schema = publishedSchema(toolRegistration(tool).inputSchema);
     expect(schema.properties).toHaveProperty(expectedProperty);
+  });
+
+  it('keeps stripping unspecified runtime arguments', async () => {
+    const tool = NEON_TOOLS.find(
+      (candidate) => candidate.name === 'list_projects',
+    );
+    if (!tool) throw new Error('Unknown tool list_projects');
+
+    const result = await toolRegistration(tool).inputSchema[
+      '~standard'
+    ].validate({
+      unspecified: true,
+    });
+    if ('issues' in result) {
+      throw new Error('Expected unspecified arguments to be stripped');
+    }
+    expect(result.value).not.toHaveProperty('unspecified');
   });
 
   it('carries the description and annotations through unchanged', () => {
