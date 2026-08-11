@@ -94,7 +94,8 @@ function applyProjectScopeFilter(
   tools: NeonTool[],
   grant: GrantContext,
 ): NeonTool[] {
-  if (!grant.projectId) return tools;
+  const projectId = grant.projectId;
+  if (!projectId) return tools;
 
   return tools
     .filter(
@@ -103,7 +104,7 @@ function applyProjectScopeFilter(
         !PROJECT_SCOPED_EXCLUDED_TOOLS.has(tool.name),
     )
     .map((tool) => {
-      const modified = removeProjectIdFromSchema(tool);
+      const modified = removeProjectIdFromSchema(tool, projectId);
       return modified ?? tool;
     });
 }
@@ -114,7 +115,10 @@ function applyProjectScopeFilter(
  *
  * Uses Zod's shape manipulation to create a new schema without the projectId field.
  */
-function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
+function removeProjectIdFromSchema(
+  tool: NeonTool,
+  projectId: string,
+): NeonTool | null {
   const schema = tool.inputSchema;
 
   // Only Zod objects can have keys removed
@@ -131,7 +135,19 @@ function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
     }
   }
 
-  const newSchema = z.object(newShape);
+  // Re-parse with the granted project ID so root-level refinements from the
+  // original schema still run after projectId is removed from the wire shape.
+  const newSchema = z.object(newShape).superRefine((value, context) => {
+    const result = schema.safeParse({ ...value, projectId });
+    if (result.success) return;
+    for (const issue of result.error.issues) {
+      context.addIssue({
+        code: 'custom',
+        message: issue.message,
+        path: issue.path,
+      });
+    }
+  });
 
   return {
     ...tool,

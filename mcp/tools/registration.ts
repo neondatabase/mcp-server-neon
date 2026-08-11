@@ -37,10 +37,9 @@ export function toolRegistration(tool: NeonTool): {
   return {
     title: tool.annotations?.title,
     description: tool.description,
-    // NOTE: This intentionally stays strongly typed (no cast). If this starts failing
-    // after an SDK upgrade, treat it as a schema-type compatibility regression between
-    // MCP SDK zod-compat types and our tool schema definitions.
-    inputSchema: tool.inputSchema,
+    // Preserve the existing JSON Schema contract for clients that require
+    // additionalProperties: false for tool inputs.
+    inputSchema: tool.inputSchema.strict(),
     annotations: tool.annotations,
   };
 }

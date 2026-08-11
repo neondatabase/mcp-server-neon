@@ -237,6 +237,14 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 MCP 2026-07-28 protocol and a stateless fallback for 2025-era clients. The
 deprecated HTTP+SSE `/sse` and `/message` endpoints return `410 Gone`.
 
+Connect Streamable HTTP clients to `https://mcp.neon.tech/mcp`. For clients
+that only support local stdio servers, bridge the endpoint with
+[`mcp-remote`](https://www.npmjs.com/package/mcp-remote).
+
+Requests that include an `Origin` header are accepted only when its hostname
+matches the server deployment; other origins receive `403 Forbidden`. CLI and
+server-side clients that omit `Origin` are unaffected.
+
 ## Remote Server Architecture
 
 The remote server runs as a Next.js App Router application on Vercel at `mcp.neon.tech`.

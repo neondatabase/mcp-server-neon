@@ -116,7 +116,7 @@ export function GET(req: Request) {
         // constraint (e.g. "min 3 chars") couldn't be enforced
         // programmatically (#257). Draft 7 is the conservative default and
         // is universally supported by JSON Schema validators.
-        inputSchema: z.toJSONSchema(tool.inputSchema, {
+        inputSchema: z.toJSONSchema(tool.inputSchema.strict(), {
           target: 'draft-7',
           io: 'input',
         }),

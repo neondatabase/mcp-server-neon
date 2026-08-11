@@ -382,6 +382,7 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 
 - **Next.js App Router**: API routes handle MCP protocol and OAuth flow
 - **mcp-handler library**: Abstracts MCP protocol complexity for serverless environments
+- **Vercel Fluid Compute**: 800-second API route ceiling for long-running tool calls
 - **Upstash Redis**: API-key caching and OAuth refresh coordination via Vercel KV (`KV_URL` environment variable)
 - **Postgres via Keyv**: Token persistence using `OAUTH_DATABASE_URL`
 

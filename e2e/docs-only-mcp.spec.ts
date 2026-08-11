@@ -93,6 +93,25 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     });
   });
 
+  test('negotiates the stateless 2025-03-26 fallback', async ({ request }) => {
+    const response = await request.post('/mcp?category=docs', {
+      headers: MCP_HEADERS,
+      data: {
+        ...initializeRequest,
+        params: {
+          ...initializeRequest.params,
+          protocolVersion: '2025-03-26',
+        },
+      },
+    });
+    expect(response.status()).toBeLessThan(300);
+
+    const messages = await readJsonRpcMessages(response);
+    expect(messages.find((message) => message.id === 1)).toMatchObject({
+      result: { protocolVersion: '2025-03-26' },
+    });
+  });
+
   test('negotiates the stateless 2026-07-28 protocol', async () => {
     const port = process.env.E2E_PORT ?? '3100';
     const transport = new StreamableHTTPClientTransport(
@@ -116,6 +135,11 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
         'get_doc_resource',
         'list_docs_resources',
       ]);
+      for (const tool of result.tools) {
+        expect(tool.inputSchema).toMatchObject({
+          additionalProperties: false,
+        });
+      }
     } finally {
       await client.close();
     }

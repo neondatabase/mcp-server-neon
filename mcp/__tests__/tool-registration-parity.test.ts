@@ -4,14 +4,13 @@ import { NEON_TOOLS } from '../tools/definitions';
 import { toolRegistration } from '../tools/registration';
 
 /**
- * The published JSON Schema, converted the same way the SDK converts it.
+ * The draft-7 JSON Schema published by the REST catalog.
  */
-function publishedProperties(inputSchema: z.ZodType): string[] {
-  const jsonSchema = z.toJSONSchema(inputSchema, {
+function publishedSchema(inputSchema: z.ZodType) {
+  return z.toJSONSchema(inputSchema, {
     target: 'draft-7',
     io: 'input',
   });
-  return Object.keys(jsonSchema.properties ?? {});
 }
 
 /**
@@ -30,20 +29,37 @@ describe('tool registration wire contract', () => {
       const tool = NEON_TOOLS.find((candidate) => candidate.name === name);
       if (!tool) throw new Error(`Unknown tool ${name}`);
 
-      const properties = publishedProperties(
-        toolRegistration(tool).inputSchema,
+      const properties = Object.keys(
+        publishedSchema(toolRegistration(tool).inputSchema).properties ?? {},
       );
 
       expect(properties).not.toContain('params');
     },
   );
 
+  it('rejects unspecified properties in every published tool schema', () => {
+    for (const tool of NEON_TOOLS) {
+      const schema = publishedSchema(toolRegistration(tool).inputSchema);
+      expect(schema.additionalProperties).toBe(false);
+    }
+  });
+
+  it.each([
+    ['configure_neon_auth', 'operation'],
+    ['provision_neon_data_api', 'authProvider'],
+  ])('publishes the refined %s input fields', (name, expectedProperty) => {
+    const tool = NEON_TOOLS.find((candidate) => candidate.name === name);
+    if (!tool) throw new Error(`Unknown tool ${name}`);
+
+    const schema = publishedSchema(toolRegistration(tool).inputSchema);
+    expect(schema.properties).toHaveProperty(expectedProperty);
+  });
+
   it('carries the description and annotations through unchanged', () => {
     for (const tool of NEON_TOOLS) {
       const registration = toolRegistration(tool);
       expect(registration.description).toBe(tool.description);
       expect(registration.annotations).toBe(tool.annotations);
-      expect(registration.inputSchema).toBe(tool.inputSchema);
       expect(registration.title).toBe(tool.annotations.title);
     }
   });

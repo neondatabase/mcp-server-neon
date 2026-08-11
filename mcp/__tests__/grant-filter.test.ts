@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import {
   filterToolsForGrant,
   getAvailableTools,
@@ -67,6 +68,44 @@ describe('filterToolsForGrant', () => {
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
   });
+
+  it.each([
+    {
+      name: 'configure_neon_auth',
+      invalid: { operation: 'add_trusted_origin' },
+      valid: {
+        operation: 'add_trusted_origin',
+        trusted_origin: 'https://example.com',
+      },
+      issue: 'trusted_origin',
+    },
+    {
+      name: 'provision_neon_data_api',
+      invalid: { authProvider: 'external' },
+      valid: {
+        authProvider: 'external',
+        jwksUrl: 'https://example.com/.well-known/jwks.json',
+      },
+      issue: 'jwksUrl',
+    },
+  ])(
+    'removes projectId from $name without dropping refinements',
+    ({ name, invalid, valid, issue }) => {
+      const tool = filterToolsForGrant(
+        NEON_TOOLS,
+        grant({ projectId: 'proj-123' }),
+      ).find((candidate) => candidate.name === name);
+      if (!tool) throw new Error(`Tool ${name} not found`);
+      expect(tool.inputSchema).toBeInstanceOf(z.ZodObject);
+      expect('projectId' in tool.inputSchema.shape).toBe(false);
+
+      const invalidResult = tool.inputSchema.safeParse(invalid);
+      expect(invalidResult.success).toBe(false);
+      if (invalidResult.success) throw new Error(`Expected ${name} to reject`);
+      expect(JSON.stringify(invalidResult.error.issues)).toContain(issue);
+      expect(tool.inputSchema.safeParse(valid).success).toBe(true);
+    },
+  );
 });
 
 describe('getAvailableTools', () => {

@@ -76,7 +76,6 @@ const JSON_RESPONSE_HEADERS = { 'Content-Type': 'application/json' } as const;
 
 const HTTP_STATUS = {
   unauthorized: 401,
-  forbidden: 403,
 } as const;
 
 const PROTECTED_RESOURCE_METADATA_PATH =
@@ -807,8 +806,7 @@ function getStaticToolContext(req: Request): StaticToolContext {
  * Mirroring GET keeps HEAD useful: probes learn the endpoint is alive, and the
  * status matches what a GET would have returned.
  */
-function headMirrorResponse(pathname: string): Response {
-  void pathname;
+function headMirrorResponse(): Response {
   // The streamable-HTTP transport is POST-only; GET is 405 (mcp-handler).
   return new Response(null, {
     status: 405,
@@ -841,7 +839,7 @@ const authHandler = withMcpAuth(
 // discovery. Only the handler differs: it answers directly instead of handing the
 // request to mcp-handler, which would never respond to a HEAD.
 const headAuthHandler = withMcpAuth(
-  async (req) => headMirrorResponse(new URL(req.url).pathname),
+  async () => headMirrorResponse(),
   verifyToken,
   {
     required: true,
@@ -940,7 +938,7 @@ const handleRequest = (req: Request) => {
   // anonymous HEAD probe hang.
   if (normalizedReq.method === 'HEAD') {
     if (isDocsOnlyRequest(url.searchParams)) {
-      return headMirrorResponse(url.pathname);
+      return headMirrorResponse();
     }
     return Promise.resolve(headAuthHandler(normalizedReq)).then((resolved) =>
       stripBody(rewriteResourceMetadataHeader(resolved, req)),
