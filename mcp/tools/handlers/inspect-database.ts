@@ -111,11 +111,14 @@ export async function handleInspectDatabase(
       note = `Showing the first ${limit} of ${rows.length} rows. Raise \`limit\` to see more.`;
     } else if (truncated) {
       note = `Showing the first ${limit} of ${rows.length} rows, which is the maximum this tool returns. Narrow the question with \`run_sql\` to see the rest.`;
-    } else if (query.sqlLimit !== undefined && rows.length === query.sqlLimit) {
+    }
+
+    if (query.sqlLimit !== undefined && rows.length === query.sqlLimit) {
       // The query capped the result before `limit` could, so `totalRowCount` is
       // the cap rather than the real total. Saying so stops a caller reporting a
       // capped list as the complete one.
-      note = `The \`${check}\` check returns at most ${query.sqlLimit} rows, and hit that cap, so there may be more. Use \`run_sql\` for the full ranking.`;
+      const sqlCapNote = `The \`${check}\` check returns at most ${query.sqlLimit} rows, and hit that cap, so there may be more. Use \`run_sql\` for the full ranking.`;
+      note = note === undefined ? sqlCapNote : `${note} ${sqlCapNote}`;
     }
 
     return {

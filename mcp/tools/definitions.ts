@@ -828,6 +828,7 @@ export const NEON_TOOLS = [
     <important_notes>
       This tool queries the pg_stat_statements extension to find queries that are taking longer than expected.
       The tool will return queries sorted by execution time, with the slowest queries first.
+      For sizes, index and scan usage, locks, cache hit rate, bloat, or replication state, use \`inspect_database\`.
     </important_notes>`,
     inputSchema: listSlowQueriesInputSchema,
     readOnlySafe: true,

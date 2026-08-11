@@ -525,6 +525,47 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    'discloses both response truncation and a SQL-level row cap',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const tableNames = Array.from(
+        { length: 26 },
+        (_, index) => `mcp_cap_table_${index}`,
+      );
+      assertToolSucceeded(
+        'run_sql_transaction/create-cap-tables',
+        await callTool('run_sql_transaction', {
+          projectId,
+          sqlStatements: tableNames.flatMap((tableName) => [
+            `CREATE TABLE ${tableName} (value integer)`,
+            `INSERT INTO ${tableName} VALUES (1)`,
+            `ANALYZE ${tableName}`,
+          ]),
+        }),
+      );
+
+      const report = inspectResultSchema.parse(
+        JSON.parse(
+          assertToolSucceeded(
+            'inspect_database/bloat',
+            await callTool('inspect_database', {
+              projectId,
+              check: 'bloat',
+              limit: 1,
+            }),
+          ),
+        ),
+      );
+      expect(report.totalRowCount).toBe(INSPECT_QUERIES.bloat.sqlLimit);
+      expect(report.rows).toHaveLength(1);
+      expect(report.truncated).toBe(true);
+      expect(report.note).toContain('Showing the first 1 of 25 rows');
+      expect(report.note).toContain('returns at most 25 rows');
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'reports the missing extension before it is installed',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');

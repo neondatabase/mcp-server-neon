@@ -84,7 +84,7 @@ Follow these phases in order. Each phase builds on the previous one.
 1. Read the MCP client config file (e.g. `.cursor/mcp.json`, `.codex/config_proj.toml`) to find the `neon-preview` server entry.
 2. Report the current URL, noting which query params are set (`readonly`, `category`, `projectId`) and any legacy headers.
 3. Determine what behavior to expect from this config:
-   - Which tools should be visible (e.g. 29 for full access, 18 for read-only, fewer for category-filtered).
+   - Which tools should be visible (e.g. 35 for full access, 23 for read-only, fewer for category-filtered).
    - Whether write tools should be available.
    - Whether project-agnostic tools (`list_projects`, `create_project`, `search`, `fetch`) should be hidden.
 
@@ -95,7 +95,7 @@ Follow these phases in order. Each phase builds on the previous one.
    - If `readonly=true`: confirm write tools (e.g. `create_project`, `create_branch`, `prepare_database_migration`) are NOT available.
    - If `category` is set: confirm only tools in those categories are available.
    - If `projectId` is set: confirm `list_projects`, `create_project`, `delete_project`, `list_organizations`, `list_shared_projects`, `search`, and `fetch` are NOT available.
-   - If no params: confirm all 29 tools are available.
+   - If no params: confirm all 35 tools are available.
 3. Try calling a tool that should NOT be available given the config. Confirm it fails or is absent.
 
 ### Phase 3: Exercise Available Tools
