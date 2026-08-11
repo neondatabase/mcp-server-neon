@@ -39,6 +39,17 @@ describe('stateless MCP transport boundary', () => {
     });
   });
 
+  it('returns 404 instead of serving MCP on an unknown dynamic route', async () => {
+    const response = await POST(
+      new Request('http://localhost/api/not-mcp?category=docs', {
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.text()).resolves.toBe('');
+  });
+
   it('rejects an untrusted Origin before docs-only and auth handling', async () => {
     const response = await POST(
       legacyToolsListRequest('https://attacker.example'),

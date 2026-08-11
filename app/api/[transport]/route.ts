@@ -67,6 +67,11 @@ const RETIRED_TRANSPORT_PATHS = new Set<string>([
   ROUTE_PATHS.legacyMessage,
 ]);
 
+const ACTIVE_TRANSPORT_PATHS = new Set<string>([
+  ROUTE_PATHS.canonicalMcp,
+  ROUTE_PATHS.legacyMcp,
+]);
+
 const JSON_RESPONSE_HEADERS = { 'Content-Type': 'application/json' } as const;
 
 const HTTP_STATUS = {
@@ -903,6 +908,10 @@ const handleRequest = (req: Request) => {
 
   if (RETIRED_TRANSPORT_PATHS.has(url.pathname)) {
     return retiredTransportResponse(req.method);
+  }
+
+  if (!ACTIVE_TRANSPORT_PATHS.has(url.pathname)) {
+    return new Response(null, { status: 404 });
   }
 
   const originRejection = originValidationResponse(
