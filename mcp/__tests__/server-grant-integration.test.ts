@@ -108,4 +108,20 @@ describe('createMcpServer grant + read-only integration', () => {
     const readOnlyTools = NEON_TOOLS.filter((t) => t.readOnlySafe);
     expect(names).toHaveLength(readOnlyTools.length);
   });
+
+  it('does not register get_connection_string in readOnly context', async () => {
+    // The tool returns a URI carrying the branch owner role's password, which
+    // authenticates against the read-write compute.
+    const server = await createMcpServer(buildContext({ readOnly: true }));
+
+    expect(getRegisteredToolNames(server)).not.toContain(
+      'get_connection_string',
+    );
+  });
+
+  it('registers get_connection_string in write mode', async () => {
+    const server = await createMcpServer(buildContext());
+
+    expect(getRegisteredToolNames(server)).toContain('get_connection_string');
+  });
 });

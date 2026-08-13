@@ -216,7 +216,6 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 - `describe_branch`, `list_branch_computes`, `compare_database_schema`
 - `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`
 - `list_slow_queries`, `explain_sql_statement`, `inspect_database`
-- `get_connection_string`
 - `get_neon_auth_config`
 - `query_logs`, `list_log_fields`, `list_log_field_values`
 - `search`, `fetch`, `list_docs_resources`, `get_doc_resource`
@@ -225,6 +224,7 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 
 - `create_project`, `delete_project`
 - `create_branch`, `delete_branch`, `reset_from_parent`
+- `get_connection_string` (the connection string carries a privileged role password, so it is withheld in read-only mode; copy it from the [Neon Console](https://console.neon.tech) instead)
 - `provision_neon_auth`, `configure_neon_auth`, `provision_neon_data_api`
 - `prepare_database_migration`, `complete_database_migration`
 - `prepare_query_tuning`, `complete_query_tuning`

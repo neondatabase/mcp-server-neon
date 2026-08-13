@@ -307,6 +307,9 @@ describe('MCP server e2e tool calls', () => {
         expect(toolNames).toContain('list_docs_resources');
         expect(toolNames).toContain('get_doc_resource');
         expect(toolNames).not.toContain('create_project');
+        // Withheld even though it mutates nothing: the URI carries the branch
+        // owner role's password, which works against the read-write compute.
+        expect(toolNames).not.toContain('get_connection_string');
       },
     );
   });

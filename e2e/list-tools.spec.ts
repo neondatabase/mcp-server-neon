@@ -53,17 +53,21 @@ test.describe('/api/list-tools endpoint', () => {
     expect(names).not.toContain('fetch');
   });
 
-  test('returns 23 tools for readonly=true', async ({ request }) => {
+  test('returns 22 tools for readonly=true', async ({ request }) => {
     const response = await request.get('/api/list-tools?readonly=true');
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(23);
+    expect(body.tools).toHaveLength(22);
     expect(body.readOnly).toBe(true);
 
     for (const tool of body.tools) {
       expect(tool.readOnlySafe).toBe(true);
     }
+
+    expect(body.tools.map((tool: { name: string }) => tool.name)).not.toContain(
+      'get_connection_string',
+    );
   });
 
   test('includes warnings for invalid scope categories', async ({

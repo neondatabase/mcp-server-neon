@@ -1474,6 +1474,16 @@ You MUST follow these steps:
   },
 
   get_connection_string: async ({ params }, neonClient, extra) => {
+    // Second layer behind the `readOnlySafe: false` filter in definitions.ts.
+    // Registration-time filtering already keeps this tool off a read-only
+    // server, so this is unreachable today — it is here so the guarantee does
+    // not depend on that filtering alone.
+    if (extra.readOnly) {
+      throw new InvalidArgumentError(
+        'get_connection_string is unavailable in read-only mode because the connection string contains a privileged role password that would grant write access outside this server. Copy the connection string from https://console.neon.tech instead, or remove the read-only configuration (readonly query param, OAuth scope).',
+      );
+    }
+
     const result = await handleGetConnectionString(
       {
         projectId: params.projectId,
@@ -1484,7 +1494,6 @@ You MUST follow these steps:
       },
       neonClient,
       extra,
-      { enforceReadOnlyReplica: true },
     );
     return {
       content: [

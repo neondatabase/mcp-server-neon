@@ -453,9 +453,15 @@ export const NEON_TOOLS = [
     name: 'get_connection_string' as const,
     scope: 'branches',
     description:
-      'Get a PostgreSQL connection string for a Neon database. All parameters are optional; the tool resolves the project, branch, and database automatically if not specified. In read-only mode, this tool can only return connection strings for read-replica endpoints. If no read replica exists and the user needs a DATABASE_URL, explain that limitation and guide them to https://console.neon.tech to copy the DATABASE_URL manually.',
+      'Get a PostgreSQL connection string for a Neon database. All parameters are optional; the tool resolves the project, branch, and database automatically if not specified. Requires write access: the connection string carries a privileged role password, so it is unavailable in read-only mode. A read-only caller who needs a DATABASE_URL must copy it from https://console.neon.tech manually.',
     inputSchema: getConnectionStringInputSchema,
-    readOnlySafe: true,
+    // Not `readOnlySafe` despite `readOnlyHint: true`: the call mutates nothing,
+    // but the URI it returns embeds the branch owner role's password. That role
+    // is a `neon_superuser` member with `CREATEROLE`, and its password
+    // authenticates against the read-write compute no matter which endpoint
+    // host the URI names — so handing it to a read-only caller lets them leave
+    // the sandbox entirely and run DDL/DML directly.
+    readOnlySafe: false,
     annotations: {
       title: 'Get Connection String',
       readOnlyHint: true,
@@ -871,7 +877,7 @@ export const NEON_TOOLS = [
     name: 'list_branch_computes' as const,
     scope: 'branches',
     description:
-      'List compute endpoints for a project or branch. Do not use when you need a connection string (use `get_connection_string` instead).',
+      'List compute endpoints for a project or branch. Do not use when you need a connection string: use `get_connection_string`, which requires write access and is unavailable in read-only mode.',
     inputSchema: listBranchComputesInputSchema,
     readOnlySafe: true,
     annotations: {
