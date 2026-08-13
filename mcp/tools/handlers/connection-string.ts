@@ -10,11 +10,11 @@ import { getDefaultBranch, getOnlyProject } from './utils';
  * connection to reach Postgres at all.
  *
  * The URI embeds the branch owner role's password, so it must never be handed
- * to a read-only caller. That is enforced at the tool layer — the
- * `get_connection_string` tool is not `readOnlySafe` and refuses when
- * `extra.readOnly` is set — not here, because these internal callers stay safe
- * in read-only mode through query-level protections (read-only transactions)
- * and never surface the URI to the client.
+ * to a read-only caller. That is enforced by withholding the tool itself —
+ * `get_connection_string` is not `readOnlySafe`, so it is never registered on a
+ * read-only server — not here, because these internal callers stay safe in
+ * read-only mode through query-level protections (read-only transactions) and
+ * never surface the URI to the client.
  */
 export async function handleGetConnectionString(
   {
