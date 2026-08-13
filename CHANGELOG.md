@@ -33,6 +33,11 @@ Observability:
 
 - Emit a structured `[SLO] refresh outcome=<bucket> elapsedMs=<n> clientId=<id> ...` log line at every refresh-grant exit point. Buckets: `success`, `correct_invalid_grant`, `cliff_upstream`, `transient_lock_timeout`, `transient_persist_failure`, `transient_upstream_5xx`, `transient_upstream_network`, `bad_request`. The new `transient_upstream_network` bucket separates network-layer failures from HTTP 5xx so the diagnostic vector is preserved even though both are excluded from the SLO denominator.
 
+Tool authorization:
+
+- `get_connection_string` now requires write access. The connection string carries a privileged role password, so a read-only caller could use it to connect directly and write. Read-only tool count drops from 23 to 22, and the read-only notice now points users at the Neon Console for a `DATABASE_URL`.
+- Remove the read-replica selection this tool applied in read-only mode. It rewrote the URI's hostname while leaving the credentials untouched, so it never restricted what the string could be used for. Internal callers such as `run_sql` and `inspect_database` are unaffected.
+
 Transport security:
 
 - Bind SSE sessions to the caller identity that opened them. Previously any caller who knew or guessed a live `sessionId` could `POST /api/message` and inject responses into the victim's SSE stream; the binding key is hashed and stored in Redis alongside the existing session record.

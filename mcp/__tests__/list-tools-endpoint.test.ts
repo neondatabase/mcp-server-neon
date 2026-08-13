@@ -75,10 +75,13 @@ describe('/api/list-tools endpoint', () => {
   it('filters to readOnlySafe tools with readonly=true', async () => {
     const body = await callListTools({ readonly: 'true' });
     expect(body.readOnly).toBe(true);
-    expect(body.tools).toHaveLength(23);
+    expect(body.tools).toHaveLength(22);
     for (const tool of body.tools) {
       expect(tool.readOnlySafe).toBe(true);
     }
+    expect(body.tools.map((t) => t.name)).not.toContain(
+      'get_connection_string',
+    );
   });
 
   it('supports legacy x-read-only header', async () => {
@@ -89,7 +92,7 @@ describe('/api/list-tools endpoint', () => {
     const res = await GET(req);
     const body = (await res.json()) as ListToolsResponse;
     expect(body.readOnly).toBe(true);
-    expect(body.tools).toHaveLength(23);
+    expect(body.tools).toHaveLength(22);
   });
 
   it('readonly query param takes precedence over x-read-only header', async () => {

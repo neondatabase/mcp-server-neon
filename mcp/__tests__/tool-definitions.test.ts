@@ -115,22 +115,59 @@ describe('docs tools definitions', () => {
   });
 });
 
-describe('read-only safety consistency', () => {
-  it('tools with readOnlyHint: true are marked readOnlySafe: true', () => {
-    for (const tool of NEON_TOOLS) {
-      if (tool.annotations.readOnlyHint) {
-        expect(
-          tool.readOnlySafe,
-          `${tool.name} has readOnlyHint but not readOnlySafe`,
-        ).toBe(true);
-      }
-    }
+/**
+ * The exact set of tools a read-only caller may reach.
+ *
+ * This is an allowlist rather than a count on purpose: changing the read-only
+ * surface is a security decision, so it should require editing a named list and
+ * explaining the entry in review, not just moving a number that happens to
+ * still match.
+ *
+ * Note that `readOnlySafe` and `annotations.readOnlyHint` are independent axes,
+ * and neither implies the other:
+ *   - `run_sql` mutates (`readOnlyHint: false`) but is reachable, because
+ *     read-only mode wraps it in a read-only transaction.
+ *   - `get_connection_string` mutates nothing (`readOnlyHint: true`) but is not
+ *     reachable, because the URI it returns carries a privileged role password
+ *     that works against the read-write compute.
+ */
+const READ_ONLY_TOOLS = [
+  'compare_database_schema',
+  'describe_branch',
+  'describe_project',
+  'describe_table_schema',
+  'explain_sql_statement',
+  'fetch',
+  'get_database_tables',
+  'get_doc_resource',
+  'get_neon_auth_config',
+  'inspect_database',
+  'list_branch_computes',
+  'list_docs_resources',
+  'list_log_field_values',
+  'list_log_fields',
+  'list_organizations',
+  'list_projects',
+  'list_shared_projects',
+  'list_slow_queries',
+  'query_logs',
+  'run_sql',
+  'run_sql_transaction',
+  'search',
+];
+
+describe('read-only tool surface', () => {
+  it('exposes exactly the allowlisted tools', () => {
+    const readOnlyNames = NEON_TOOLS.filter((t) => t.readOnlySafe).map(
+      (t) => t.name,
+    );
+
+    expect([...readOnlyNames].sort()).toEqual([...READ_ONLY_TOOLS].sort());
   });
 
-  it('counts expected number of read-only tools', () => {
-    const readOnlyTools = NEON_TOOLS.filter((t) => t.readOnlySafe);
-    // run_sql and run_sql_transaction are readOnlySafe but not readOnlyHint
-    // (they can both read and write)
-    expect(readOnlyTools.length).toBeGreaterThanOrEqual(21);
+  it('withholds get_connection_string, which returns a privileged password', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'get_connection_string');
+
+    expect(tool!.readOnlySafe).toBe(false);
   });
 });

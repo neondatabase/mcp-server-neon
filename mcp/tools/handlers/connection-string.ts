@@ -1,10 +1,21 @@
-import { Api, EndpointType } from '../../neon-client';
+import { Api } from '../../neon-client';
 import { ToolHandlerExtraParams } from '../types';
 import { startSpan } from '@sentry/node';
 import { getDefaultDatabase } from '../utils';
 import { getDefaultBranch, getOnlyProject } from './utils';
-import { InvalidArgumentError } from '../../server/errors';
 
+/**
+ * Resolves a connection URI for internal callers such as `run_sql`,
+ * `get_database_tables`, `describe_branch` and `inspect_database`, which need a
+ * connection to reach Postgres at all.
+ *
+ * The URI embeds the branch owner role's password, so it must never be handed
+ * to a read-only caller. That is enforced by withholding the tool itself —
+ * `get_connection_string` is not `readOnlySafe`, so it is never registered on a
+ * read-only server — not here, because these internal callers stay safe in
+ * read-only mode through query-level protections (read-only transactions) and
+ * never surface the URI to the client.
+ */
 export async function handleGetConnectionString(
   {
     projectId,
@@ -21,13 +32,7 @@ export async function handleGetConnectionString(
   },
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
-  options?: {
-    enforceReadOnlyReplica?: boolean;
-  },
 ) {
-  const readOnlyReplicaError =
-    'this MCP server is in read-only mode and no read replica endpoint can be found - create a read replica first using the Neon UI to enable get_connection_string in read-only mode or remove the read-only mode configuration (HTTP header, OAuth scope settings)';
-
   return await startSpan(
     {
       name: 'get_connection_string',
@@ -42,27 +47,6 @@ export async function handleGetConnectionString(
       if (!branchId) {
         const defaultBranch = await getDefaultBranch(projectId, neonClient);
         branchId = defaultBranch.id;
-      }
-
-      // Only enforce read-replica endpoint selection for the
-      // get_connection_string tool. Other read-only-safe tools can run against
-      // a read-write endpoint because query-level protections prevent writes.
-      if (extra.readOnly && options?.enforceReadOnlyReplica) {
-        const branchEndpoints = await neonClient.listProjectBranchEndpoints(
-          projectId,
-          branchId,
-        );
-        const readOnlyEndpoint = branchEndpoints.data.endpoints.find(
-          (endpoint) =>
-            endpoint.type === EndpointType.ReadOnly &&
-            endpoint.disabled !== true,
-        );
-
-        if (!readOnlyEndpoint) {
-          throw new InvalidArgumentError(readOnlyReplicaError);
-        }
-
-        computeId = readOnlyEndpoint.id;
       }
 
       // If databaseName is not provided, use default `neondb` or first database

@@ -164,6 +164,8 @@ export function getAccessControlNotices(
         'All write-access tools have been removed. All remaining tools are limited to read-only operations ' +
         '(for example, read-only SQL queries). Do not try to work around this restriction; it is intentional. ' +
         'If the user requests changes to Neon resources, inform them about the read-only configuration. ' +
+        'Connection strings are unavailable in this mode because they carry a privileged role password; ' +
+        'if the user needs a DATABASE_URL, tell them to copy it from https://console.neon.tech. ' +
         'The user can remove read-only mode by removing the readonly query param from the MCP server URL, ' +
         'or by logging out and back in with OAuth and selecting full access.',
     );
