@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { SERVER_HOST } from '../../lib/config';
 
 const { GET, POST } = await import('../../app/api/[transport]/route');
+const mcpUrl = new URL('/mcp', SERVER_HOST).href;
 
 const MCP_HEADERS = {
   'Content-Type': 'application/json',
@@ -35,8 +37,7 @@ describe('stateless MCP transport boundary', () => {
     expect(response.status).toBe(410);
     await expect(response.json()).resolves.toEqual({
       error: 'transport_gone',
-      message:
-        'HTTP+SSE was removed. Connect to https://mcp.neon.tech/mcp using Streamable HTTP. Stdio-only clients can bridge it with `npx -y mcp-remote https://mcp.neon.tech/mcp`. See https://neon.com/docs/ai/neon-mcp-server.',
+      message: `HTTP+SSE was removed. Connect to ${mcpUrl} using Streamable HTTP. Stdio-only clients can bridge it with \`npx -y mcp-remote ${mcpUrl}\`. See https://neon.com/docs/ai/neon-mcp-server.`,
     });
   });
 

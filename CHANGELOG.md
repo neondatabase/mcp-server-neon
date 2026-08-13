@@ -2,6 +2,12 @@
 
 # [NEXT]
 
+MCP transport:
+
+- Migrate the remote `/mcp` route to stateless MCP 2026-07-28 (SDK v2 + mcp-handler 2.1.0) with a stateless fallback for 2025-era Streamable HTTP clients.
+- Retire HTTP+SSE. `GET/POST /sse`, `/message`, `/api/sse`, and `/api/message` return `410 Gone` pointing at Streamable HTTP `/mcp`. The Redis session-binding module is removed with the transport.
+- Validate `Origin` on Streamable HTTP requests: a present-and-invalid Origin is `403`; a missing Origin is allowed (CLI and server-side clients).
+
 OAuth refresh-token chain stability — drove the reconstructed refresh-grant SLO from ~93% to 100% in production by closing the cross-instance reuse race and the surrounding cliff/retry-storm paths.
 
 Refresh-token reliability:
@@ -35,8 +41,6 @@ Observability:
 
 Transport security:
 
-- Bind SSE sessions to the caller identity that opened them. Previously any caller who knew or guessed a live `sessionId` could `POST /api/message` and inject responses into the victim's SSE stream; the binding key is hashed and stored in Redis alongside the existing session record.
-- Bind the SSE session-identity to the OAuth `client_id` instead of the bearer token. Hourly token refreshes (handled cleanly by the refresh-chain fixes above) used to rotate the bearer and so flip the identity hash, which caused the next `POST /api/message` to return a `403 session_not_owned` — Cursor's MCP client interpreted that as an auth failure and prompted the user to re-authenticate. `client_id` is stable across token rotations for a given registered MCP client, so the binding now survives refreshes; cross-account and cross-OAuth-client POSTs still mismatch as before.
 - Relay upstream OAuth error redirects from `/callback` to the originating MCP client per RFC 6749 §4.1.2.1. Previously when upstream Hydra redirected to `/callback?error=…&state=…` (no `code`), the route returned a generic `400 {"error":"invalid_request","error_description":"Missing code or state"}` and the user was stranded on a Neon page. Now the `error`, `error_description`, `error_uri` and the client's original `state` are forwarded to the registered `redirect_uri` so Cursor / ChatGPT / Claude can present a meaningful retry UI on their own side. The well-known Hydra fingerprint `error=error&error_description=The error is unrecognizable` is preserved and tracked separately as `upstream_unmapped_error` in the auth-callback SLO so it's visible in dashboards instead of being conflated with user-driven cancels.
 - Add an auth-flow SLO at `/callback` — `[SLO] auth-callback outcome=<bucket> elapsedMs=<n> ...` emitted at every exit point, mirroring the refresh SLO at `/api/token`. Buckets: `success`, `correct_user_denied`, `upstream_unmapped_error`, `upstream_5xx`, `upstream_other_error`, `state_decode_failed`, `bad_request`, `internal_error`. See `ai-notes/auth-callback-slo.md` for the definition and targets.
 - Fix `lib/errors.ts` constant typo that silently suppressed structured upstream-error handling. The handler compared against `'RESPONSE_BODY_ERROR'` while oauth4webapi's actual constant is `'OAUTH_RESPONSE_BODY_ERROR'`, so every conforming OAuth error body from upstream (status 400 + JSON `{error, error_description}`) fell through to the generic `500 server_error` path instead of being relayed as a `400` with the upstream message. Also adds handling for `OAUTH_RESPONSE_IS_NOT_CONFORM` (upstream returned an unexpected HTTP status — e.g. Hydra 500 with non-JSON body): now returns `502 upstream_error` with the upstream status included in the description, instead of a generic `500`.

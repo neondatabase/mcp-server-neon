@@ -239,7 +239,11 @@ deprecated HTTP+SSE `/sse` and `/message` endpoints return `410 Gone`.
 
 Connect Streamable HTTP clients to `https://mcp.neon.tech/mcp`. For clients
 that only support local stdio servers, bridge the endpoint with
-[`mcp-remote`](https://www.npmjs.com/package/mcp-remote).
+[`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
+
+```bash
+npx -y mcp-remote https://mcp.neon.tech/mcp
+```
 
 Requests that include an `Origin` header are accepted only when its hostname
 matches the server deployment; other origins receive `403 Forbidden` to prevent

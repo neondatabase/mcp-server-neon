@@ -135,6 +135,12 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
         'get_doc_resource',
         'list_docs_resources',
       ]);
+      expect(
+        Object.fromEntries(result.tools.map((tool) => [tool.name, tool.title])),
+      ).toEqual({
+        get_doc_resource: 'Get Documentation Resource',
+        list_docs_resources: 'List Documentation Resources',
+      });
       for (const tool of result.tools) {
         expect(tool.inputSchema).toMatchObject({
           additionalProperties: false,
