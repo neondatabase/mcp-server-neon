@@ -238,11 +238,19 @@ MCP 2026-07-28 protocol and a stateless fallback for 2025-era clients. The
 deprecated HTTP+SSE `/sse` and `/message` endpoints return `410 Gone`.
 
 Connect Streamable HTTP clients to `https://mcp.neon.tech/mcp`. For clients
-that only support local stdio servers, bridge the endpoint with
-[`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
+that only support local stdio servers, put this in the client config so
+[`mcp-remote`](https://www.npmjs.com/package/mcp-remote) bridges to Streamable
+HTTP:
 
-```bash
-npx -y mcp-remote https://mcp.neon.tech/mcp
+```json
+{
+  "mcpServers": {
+    "Neon": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.neon.tech/mcp"]
+    }
+  }
+}
 ```
 
 Requests that include an `Origin` header are accepted only when its hostname
