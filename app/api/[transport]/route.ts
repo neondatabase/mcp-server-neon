@@ -913,7 +913,7 @@ function rewriteResourceMetadataHeader(
 
 function retiredTransportMessage(): string {
   const mcpUrl = new URL('/mcp', SERVER_HOST).href;
-  return `HTTP+SSE was removed. Connect to ${mcpUrl} using Streamable HTTP. Stdio-only clients can bridge it with \`npx -y mcp-remote ${mcpUrl}\`. See https://neon.com/docs/ai/neon-mcp-server.`;
+  return `HTTP+SSE was removed. Connect to ${mcpUrl} using Streamable HTTP. Stdio-only clients can bridge it with \`npx -y mcp-remote ${mcpUrl}\`. See https://neon.com/docs/ai/neon-mcp-server#retired-sse.`;
 }
 
 function retiredTransportResponse(method: string): Response {
