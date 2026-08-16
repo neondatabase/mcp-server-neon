@@ -630,7 +630,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         ),
       );
 
-      expect(report.databaseName).toBe(first);
+      expect(report.databaseName).toBeUndefined();
       expect(report.databases).toEqual([first]);
       expect(report.fields).toEqual(
         INSPECT_QUERIES['replication-slots'].fields,
@@ -661,7 +661,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       const text = textContent(result);
 
       expect(parsedResult.isError).toBe(true);
-      expect(text).toContain('(database neondb)');
+      expect(text).toContain('database "neondb"');
+      expect(text).not.toContain('(database neondb)');
       expect(text).toContain(
         'Pass databaseName to try a database that already has the "pg_stat_statements" extension.',
       );

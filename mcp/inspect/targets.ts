@@ -70,5 +70,13 @@ export const formatInspectQueryError = (
       : input.scope === 'compute'
         ? '. Pass databaseName to connect through a different database.'
         : '. Pass databaseName to inspect one database.';
-  return `${input.reason} (database ${input.database})${hint}`;
+  const alreadyNamesDatabase = input.reason.includes(
+    `database "${input.database}"`,
+  );
+  const tagged = alreadyNamesDatabase
+    ? input.reason
+    : `${input.reason} (database ${input.database})`;
+  const suffix =
+    hint.startsWith('.') && tagged.endsWith('.') ? hint.slice(1) : hint;
+  return `${tagged}${suffix}`;
 };

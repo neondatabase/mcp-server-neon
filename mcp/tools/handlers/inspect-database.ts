@@ -182,6 +182,7 @@ export async function handleInspectDatabase(
       branchId,
       batches,
       includeDatabaseColumn: selection.includeDatabaseColumn,
+      includeDatabaseName: databaseName !== undefined,
       limit,
     });
   });

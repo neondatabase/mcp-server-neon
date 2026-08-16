@@ -24,6 +24,7 @@ describe('assembleInspectReport', () => {
         },
       ],
       includeDatabaseColumn: false,
+      includeDatabaseName: true,
       limit: 50,
     });
 
@@ -46,6 +47,7 @@ describe('assembleInspectReport', () => {
         },
       ],
       includeDatabaseColumn: true,
+      includeDatabaseName: false,
       limit: 50,
     });
 
@@ -65,6 +67,7 @@ describe('assembleInspectReport', () => {
         { database: 'neondb', rows: [] },
       ],
       includeDatabaseColumn: true,
+      includeDatabaseName: false,
       limit: 50,
     });
 
@@ -88,6 +91,7 @@ describe('assembleInspectReport', () => {
         },
       ],
       includeDatabaseColumn: true,
+      includeDatabaseName: false,
       limit: 1000,
     });
 
@@ -110,6 +114,7 @@ describe('assembleInspectReport', () => {
         { database: 'neondb', rows: [{ ...bloatRow }] },
       ],
       includeDatabaseColumn: true,
+      includeDatabaseName: false,
       limit: 50,
     });
 
@@ -129,6 +134,7 @@ describe('assembleInspectReport', () => {
         },
       ],
       includeDatabaseColumn: false,
+      includeDatabaseName: true,
       limit: 50,
     });
 
@@ -154,13 +160,32 @@ describe('assembleInspectReport', () => {
         },
       ],
       includeDatabaseColumn: true,
+      includeDatabaseName: false,
       limit: 1,
     });
 
     expect(report.rows).toHaveLength(1);
     expect(report.totalRowCount).toBe(2);
     expect(report.truncated).toBe(true);
-    expect(report.note).toContain('Showing the first 1 of 2 rows');
+    expect(report.note).toBe(
+      'Showing the first 1 of 2 rows, which cover only the databases analytics (of 2). Raise `limit` to reach the rest.',
+    );
+  });
+
+  it('does not put databaseName on a compute-wide omit', () => {
+    const report = assembleInspectReport({
+      check: 'replication-slots',
+      query: INSPECT_QUERIES['replication-slots'],
+      projectId: 'proj-1',
+      branchId: 'br-1',
+      batches: [{ database: 'other_db', rows: [] }],
+      includeDatabaseColumn: false,
+      includeDatabaseName: false,
+      limit: 50,
+    });
+
+    expect(report.databaseName).toBeUndefined();
+    expect(report.databases).toEqual(['other_db']);
   });
 
   it('names the response ceiling when limit is already at the maximum', () => {
@@ -180,6 +205,7 @@ describe('assembleInspectReport', () => {
         },
       ],
       includeDatabaseColumn: false,
+      includeDatabaseName: true,
       limit: INSPECT_MAX_LIMIT,
     });
 

@@ -328,7 +328,7 @@ Notes:
 
 **SQL Querying and Optimization:**
 
-- **`inspect_database`**: Runs one of 14 predefined read-only Postgres diagnostics against a branch — relation and index sizes, index and sequential-scan usage, active queries and locks, the heaviest and most frequent queries, cache hit rate and working-set size, autovacuum and bloat estimates, and replication state. Same checks as the `neon inspect db` CLI command. Omit `databaseName` to cover every database the API lists for the branch; pass a name to inspect one. Four of them need the `pg_stat_statements` or `neon` extension.
+- **`inspect_database`**: Runs one of 14 predefined read-only Postgres diagnostics against a branch — relation and index sizes, index and sequential-scan usage, active queries and locks, the heaviest and most frequent queries, cache hit rate and working-set size, autovacuum and bloat estimates, and replication state. Same checks as the `neon inspect db` CLI command. Omit `databaseName` to cover every database on the branch; pass a name to inspect one. Four of them need the `pg_stat_statements` or `neon` extension.
 - **`list_slow_queries`**: Identifies performance bottlenecks by finding the slowest queries in a database. Requires the pg_stat_statements extension.
 - **`explain_sql_statement`**: Provides detailed execution plans for SQL queries to help identify performance bottlenecks.
 - **`prepare_query_tuning`**: Analyzes query performance and suggests optimizations, like index creation. Creates a temporary branch for safely testing these optimizations.

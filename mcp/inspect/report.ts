@@ -30,8 +30,46 @@ type AssembleInspectReportInput = {
   branchId: string;
   batches: InspectDatabaseBatch[];
   includeDatabaseColumn: boolean;
+  includeDatabaseName: boolean;
   limit: number;
 };
+
+function databasesIn(rows: Record<string, unknown>[]): string[] {
+  const names: string[] = [];
+  for (const row of rows) {
+    if (typeof row.database === 'string' && !names.includes(row.database)) {
+      names.push(row.database);
+    }
+  }
+  return names;
+}
+
+function truncationNote(
+  displayed: Record<string, unknown>[],
+  totalRowCount: number,
+  limit: number,
+  includeDatabaseColumn: boolean,
+  ran: string[],
+  allRows: Record<string, unknown>[],
+): string {
+  const dropped = includeDatabaseColumn
+    ? databasesIn(allRows).filter(
+        (name) => !databasesIn(displayed).includes(name),
+      )
+    : [];
+  if (dropped.length > 0) {
+    const covered = databasesIn(displayed).join(', ');
+    return `Showing the first ${limit} of ${totalRowCount} rows, which cover only the databases ${covered} (of ${ran.length}). ${
+      limit < INSPECT_MAX_LIMIT
+        ? 'Raise `limit` to reach the rest.'
+        : 'Narrow the question with `run_sql` to see the rest.'
+    }`;
+  }
+  if (limit < INSPECT_MAX_LIMIT) {
+    return `Showing the first ${limit} of ${totalRowCount} rows. Raise \`limit\` to see more.`;
+  }
+  return `Showing the first ${limit} of ${totalRowCount} rows, which is the maximum this tool returns. Narrow the question with \`run_sql\` to see the rest.`;
+}
 
 export function assembleInspectReport({
   check,
@@ -40,6 +78,7 @@ export function assembleInspectReport({
   branchId,
   batches,
   includeDatabaseColumn,
+  includeDatabaseName,
   limit,
 }: AssembleInspectReportInput): InspectDatabaseResult {
   const databases = batches.map((batch) => batch.database);
@@ -53,15 +92,21 @@ export function assembleInspectReport({
     : query.fields;
 
   const truncated = rows.length > limit;
+  const displayed = truncated ? rows.slice(0, limit) : rows;
   let note: string | undefined;
   if (rows.length === 0) {
     note = includeDatabaseColumn
       ? (query.emptyMessageAll ?? query.emptyMessage)
       : query.emptyMessage;
-  } else if (truncated && limit < INSPECT_MAX_LIMIT) {
-    note = `Showing the first ${limit} of ${rows.length} rows. Raise \`limit\` to see more.`;
   } else if (truncated) {
-    note = `Showing the first ${limit} of ${rows.length} rows, which is the maximum this tool returns. Narrow the question with \`run_sql\` to see the rest.`;
+    note = truncationNote(
+      displayed,
+      rows.length,
+      limit,
+      includeDatabaseColumn,
+      databases,
+      rows,
+    );
   }
 
   // Combined length is not a per-database cap: 25+25 would miss it and 24+1
@@ -81,11 +126,11 @@ export function assembleInspectReport({
     describe: query.describe,
     projectId,
     branchId,
-    ...(includeDatabaseColumn ? {} : { databaseName: databases[0] }),
+    ...(includeDatabaseName ? { databaseName: databases[0] } : {}),
     databases,
     fields,
     totalRowCount: rows.length,
-    rows: truncated ? rows.slice(0, limit) : rows,
+    rows: displayed,
     truncated,
     ...(note !== undefined && { note }),
   };

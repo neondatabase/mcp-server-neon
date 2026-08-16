@@ -126,6 +126,21 @@ describe('formatInspectQueryError', () => {
     );
   });
 
+  it('does not repeat a database the reason already named', () => {
+    expect(
+      formatInspectQueryError({
+        reason:
+          'The "outliers" check needs the "pg_stat_statements" extension, which is not installed on database "neondb".',
+        database: 'neondb',
+        offerDatabaseNameHint: true,
+        scope: 'database',
+        requiresExtension: 'pg_stat_statements',
+      }),
+    ).toBe(
+      'The "outliers" check needs the "pg_stat_statements" extension, which is not installed on database "neondb". Pass databaseName to try a database that already has the "pg_stat_statements" extension.',
+    );
+  });
+
   it('does not attach the extension hint to a connection error', () => {
     expect(
       formatInspectQueryError({
