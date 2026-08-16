@@ -96,11 +96,8 @@ function rethrowInspectError(
 }
 
 /**
- * Runs one catalog check against a branch and returns its rows.
- *
- * Unlike `get_connection_string`, this does not require a read-only replica in
- * read-only mode: every check is wrapped in a `READ ONLY` transaction, which is
- * the query-level protection that makes a read-write endpoint safe here.
+ * Every check runs in a `READ ONLY` transaction, so read-only mode does not
+ * require a read-only replica.
  */
 export async function handleInspectDatabase(
   {

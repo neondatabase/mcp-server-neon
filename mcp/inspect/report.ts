@@ -17,7 +17,6 @@ export type InspectDatabaseResult = {
   databaseName?: string;
   databases: string[];
   fields: readonly string[];
-  /** Rows the check produced, which `rows` may be a truncated prefix of. */
   totalRowCount: number;
   rows: Record<string, unknown>[];
   truncated: boolean;

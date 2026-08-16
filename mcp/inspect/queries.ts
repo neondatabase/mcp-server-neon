@@ -57,7 +57,6 @@ export type InspectQuery = {
   fields: readonly string[];
   /** Explanation to return instead of an empty row set. */
   emptyMessage: string;
-  /** Empty-set copy when the check covered every API-listed database. */
   emptyMessageAll?: string;
   /**
    * Row ceiling the SQL itself imposes, for the checks that carry a `LIMIT`.
