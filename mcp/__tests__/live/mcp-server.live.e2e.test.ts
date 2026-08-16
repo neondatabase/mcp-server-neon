@@ -69,7 +69,8 @@ const inspectResultSchema = z.object({
   describe: z.string(),
   projectId: z.string(),
   branchId: z.string(),
-  databaseName: z.string(),
+  databaseName: z.string().optional(),
+  databases: z.array(z.string()),
   fields: z.array(z.string()),
   totalRowCount: z.number(),
   rows: z.array(z.record(z.string(), z.unknown())),
@@ -81,6 +82,7 @@ const lockResultSchema = inspectResultSchema.extend({
   check: z.literal('locks'),
   rows: z.array(
     z.object({
+      database: z.string().optional(),
       relname: z.string().nullable(),
       locktype: z.string(),
       query: z.string(),
@@ -431,6 +433,36 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    'adds a database column when databaseName is omitted on a one-database branch',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const report = inspectResultSchema.parse(
+        JSON.parse(
+          assertToolSucceeded(
+            'inspect_database/table-sizes/omit-one',
+            await callTool('inspect_database', {
+              projectId,
+              check: 'table-sizes',
+            }),
+          ),
+        ),
+      );
+
+      expect(report.databaseName).toBeUndefined();
+      expect(report.databases).toEqual(['neondb']);
+      expect(report.fields).toEqual([
+        'database',
+        ...INSPECT_QUERIES['table-sizes'].fields,
+      ]);
+      expect(report.rows.map((row) => row.database)).toEqual(
+        report.rows.map(() => 'neondb'),
+      );
+      expect(report.rows.map((row) => row.name)).toContain('property_options');
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'reports only locks held in the inspected database',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
@@ -486,9 +518,24 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       });
 
       let reports: Awaited<ReturnType<typeof waitForLockReports>>;
+      let fromAll: z.infer<typeof lockResultSchema> | undefined;
       try {
         reports = await Promise.race([
           waitForLockReports(),
+          lockHoldersFinishedEarly,
+        ]);
+        fromAll = await Promise.race([
+          lockResultSchema.parseAsync(
+            JSON.parse(
+              assertToolSucceeded(
+                'inspect_database/locks/omit',
+                await callTool('inspect_database', {
+                  projectId,
+                  check: 'locks',
+                }),
+              ),
+            ),
+          ),
           lockHoldersFinishedEarly,
         ]);
       } finally {
@@ -520,6 +567,105 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         expect(relationRows.every((row) => row.relname !== null)).toBe(true);
         expect(localRows.map((row) => row.locktype)).toContain('transactionid');
       }
+
+      if (!fromAll) {
+        throw new Error('Omit lock report was not collected.');
+      }
+      expect(fromAll.databaseName).toBeUndefined();
+      expect([...fromAll.databases].sort()).toEqual(
+        ['neondb', OTHER_DATABASE].sort(),
+      );
+      expect(fromAll.fields[0]).toBe('database');
+      expect(
+        fromAll.rows.some((row) => row.query.includes(DEFAULT_LOCK_MARKER)),
+      ).toBe(true);
+      expect(
+        fromAll.rows.some((row) => row.query.includes(OTHER_LOCK_MARKER)),
+      ).toBe(true);
+      expect(
+        fromAll.rows
+          .filter((row) => row.query.includes(DEFAULT_LOCK_MARKER))
+          .every((row) => row.database === 'neondb'),
+      ).toBe(true);
+      expect(
+        fromAll.rows
+          .filter((row) => row.query.includes(OTHER_LOCK_MARKER))
+          .every((row) => row.database === OTHER_DATABASE),
+      ).toBe(true);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'runs a compute-wide omit once against the first API-listed database',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!neonClient) throw new Error('Neon SDK client is not initialized.');
+
+      const branches = await neonClient.listProjectBranches({ projectId });
+      const defaultBranch = branches.data.branches.find(
+        (branch) => branch.default,
+      );
+      if (!defaultBranch) {
+        throw new Error('Default branch was not found.');
+      }
+      const listed = await neonClient.listProjectBranchDatabases(
+        projectId,
+        defaultBranch.id,
+      );
+      const first = listed.data.databases[0]?.name;
+      if (!first) {
+        throw new Error('Branch listed no databases.');
+      }
+
+      const report = inspectResultSchema.parse(
+        JSON.parse(
+          assertToolSucceeded(
+            'inspect_database/replication-slots/omit',
+            await callTool('inspect_database', {
+              projectId,
+              check: 'replication-slots',
+            }),
+          ),
+        ),
+      );
+
+      expect(report.databaseName).toBe(first);
+      expect(report.databases).toEqual([first]);
+      expect(report.fields).toEqual(
+        INSPECT_QUERIES['replication-slots'].fields,
+      );
+      expect(report.fields).not.toContain('database');
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'fails the whole omit run when a later database is missing an extension',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      assertToolSucceeded(
+        'run_sql/create-pg-stat-statements-other',
+        await callTool('run_sql', {
+          projectId,
+          databaseName: OTHER_DATABASE,
+          sql: 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements',
+        }),
+      );
+
+      const result = await callTool('inspect_database', {
+        projectId,
+        check: 'outliers',
+      });
+      const parsedResult = toolResultSchema.parse(result);
+      const text = textContent(result);
+
+      expect(parsedResult.isError).toBe(true);
+      expect(text).toContain('(database neondb)');
+      expect(text).toContain(
+        'Pass databaseName to try a database that already has the "pg_stat_statements" extension.',
+      );
+      expect(text).toContain('ask the user first');
     },
     LIVE_TEST_TIMEOUT_MS,
   );
@@ -550,6 +696,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
             'inspect_database/bloat',
             await callTool('inspect_database', {
               projectId,
+              databaseName: 'neondb',
               check: 'bloat',
               limit: 1,
             }),
@@ -577,6 +724,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       for (const check of extensionChecks) {
         const result = await callTool('inspect_database', {
           projectId,
+          databaseName: 'neondb',
           check,
         });
         const parsedResult = toolResultSchema.parse(result);
@@ -603,6 +751,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       )) {
         const result = await callTool('inspect_database', {
           projectId,
+          databaseName: 'neondb',
           check,
         });
         const report = inspectResultSchema.parse(
@@ -610,6 +759,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         );
 
         expect(report.check).toBe(check);
+        expect(report.databaseName).toBe('neondb');
+        expect(report.databases).toEqual(['neondb']);
         expect(report.fields).toEqual(INSPECT_QUERIES[check].fields);
         expect(report.totalRowCount).toBe(report.rows.length);
         expect(report.truncated).toBe(false);
@@ -637,6 +788,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
             'inspect_database',
             await callTool('inspect_database', {
               projectId,
+              databaseName: 'neondb',
               check: 'table-sizes',
             }),
           ),
@@ -651,6 +803,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
             'inspect_database',
             await callTool('inspect_database', {
               projectId,
+              databaseName: 'neondb',
               check: 'table-sizes',
               limit: 1,
             }),
@@ -693,7 +846,11 @@ describe.sequential('MCP server live Neon lifecycle', () => {
           JSON.parse(
             assertToolSucceeded(
               `inspect_database/${check}`,
-              await callTool('inspect_database', { projectId, check }),
+              await callTool('inspect_database', {
+                projectId,
+                databaseName: 'neondb',
+                check,
+              }),
             ),
           ),
         );

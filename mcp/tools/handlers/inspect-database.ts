@@ -2,14 +2,23 @@ import { NeonDbError, neon } from '@neondatabase/serverless';
 import { startSpan } from '@sentry/node';
 import {
   INSPECT_DEFAULT_LIMIT,
-  INSPECT_MAX_LIMIT,
   INSPECT_QUERIES,
   type InspectCheck,
 } from '../../inspect/queries';
+import {
+  assembleInspectReport,
+  type InspectDatabaseBatch,
+  type InspectDatabaseResult,
+} from '../../inspect/report';
+import {
+  formatInspectQueryError,
+  selectInspectTargets,
+} from '../../inspect/targets';
 import { Api } from '../../neon-client';
 import { NotFoundError } from '../../server/errors';
 import { ToolHandlerExtraParams } from '../types';
 import { handleGetConnectionString } from './connection-string';
+import { getDefaultBranch, getOnlyProject } from './utils';
 
 type InspectDatabaseParams = {
   check: InspectCheck;
@@ -18,20 +27,6 @@ type InspectDatabaseParams = {
   databaseName?: string;
   computeId?: string;
   limit?: number;
-};
-
-type InspectDatabaseResult = {
-  check: InspectCheck;
-  describe: string;
-  projectId: string;
-  branchId: string;
-  databaseName: string;
-  fields: readonly string[];
-  /** Rows the check produced, which `rows` may be a truncated prefix of. */
-  totalRowCount: number;
-  rows: Record<string, unknown>[];
-  truncated: boolean;
-  note?: string;
 };
 
 /**
@@ -58,8 +53,50 @@ async function runDiagnostic<T>(
   }
 }
 
+async function runInspectOnDatabase(
+  check: InspectCheck,
+  uri: string,
+  databaseName: string,
+): Promise<Record<string, unknown>[]> {
+  const query = INSPECT_QUERIES[check];
+  const sql = neon(uri);
+
+  if (query.requiresExtension) {
+    const installed = await runDiagnostic(check, () =>
+      sql.query('SELECT 1 FROM pg_extension WHERE extname = $1', [
+        query.requiresExtension,
+      ]),
+    );
+    if (installed.length === 0) {
+      throw new NotFoundError(
+        `The "${check}" check needs the "${query.requiresExtension}" extension, which is not installed on database "${databaseName}". Installing it writes to the user's database, so ask the user first, then run \`CREATE EXTENSION IF NOT EXISTS ${query.requiresExtension};\` with run_sql.`,
+      );
+    }
+  }
+
+  const [rows] = await runDiagnostic(check, () =>
+    sql.transaction([sql.query(query.sql)], { readOnly: true }),
+  );
+  return rows;
+}
+
+function rethrowInspectError(
+  error: unknown,
+  wrapped: string | undefined,
+): never {
+  if (wrapped === undefined) {
+    throw error instanceof Error ? error : new Error(String(error));
+  }
+  if (error instanceof NotFoundError) {
+    throw new NotFoundError(wrapped);
+  }
+  throw new Error(wrapped, {
+    cause: error instanceof Error ? error : undefined,
+  });
+}
+
 /**
- * Runs one catalog check against a branch database and returns its rows.
+ * Runs one catalog check against a branch and returns its rows.
  *
  * Unlike `get_connection_string`, this does not require a read-only replica in
  * read-only mode: every check is wrapped in a `READ ONLY` transaction, which is
@@ -79,59 +116,76 @@ export async function handleInspectDatabase(
 ): Promise<InspectDatabaseResult> {
   return await startSpan({ name: 'inspect_database' }, async () => {
     const query = INSPECT_QUERIES[check];
-    const connection = await handleGetConnectionString(
-      { projectId, branchId, databaseName, computeId },
-      neonClient,
-      extra,
-    );
-    const sql = neon(connection.uri);
 
-    if (query.requiresExtension) {
-      const installed = await runDiagnostic(check, () =>
-        sql.query('SELECT 1 FROM pg_extension WHERE extname = $1', [
-          query.requiresExtension,
-        ]),
+    if (!projectId) {
+      const project = await getOnlyProject(neonClient, extra);
+      projectId = project.id;
+    }
+    if (!branchId) {
+      const defaultBranch = await getDefaultBranch(projectId, neonClient);
+      branchId = defaultBranch.id;
+    }
+
+    let branchDatabaseCount = 1;
+    let selection;
+    if (databaseName !== undefined) {
+      selection = selectInspectTargets({
+        databaseName,
+        branchDatabases: [],
+        scope: query.scope,
+      });
+    } else {
+      const { data } = await neonClient.listProjectBranchDatabases(
+        projectId,
+        branchId,
       );
-      if (installed.length === 0) {
-        throw new NotFoundError(
-          `The "${check}" check needs the "${query.requiresExtension}" extension, which is not installed on database "${connection.databaseName}". Installing it writes to the user's database, so ask the user first, then run \`CREATE EXTENSION IF NOT EXISTS ${query.requiresExtension};\` with run_sql.`,
+      const branchDatabases = data.databases.map((database) => database.name);
+      if (branchDatabases.length === 0) {
+        throw new NotFoundError('No databases found in your project branch');
+      }
+      branchDatabaseCount = branchDatabases.length;
+      selection = selectInspectTargets({
+        branchDatabases,
+        scope: query.scope,
+      });
+    }
+
+    const batches: InspectDatabaseBatch[] = [];
+    for (const name of selection.databases) {
+      try {
+        const connection = await handleGetConnectionString(
+          { projectId, branchId, databaseName: name, computeId },
+          neonClient,
+          extra,
+        );
+        batches.push({
+          database: name,
+          rows: await runInspectOnDatabase(check, connection.uri, name),
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        rethrowInspectError(
+          error,
+          formatInspectQueryError({
+            reason,
+            database: name,
+            databaseName,
+            offerDatabaseNameHint: branchDatabaseCount > 1,
+            scope: query.scope,
+            requiresExtension: query.requiresExtension,
+          }),
         );
       }
     }
 
-    const [rows] = await runDiagnostic(check, () =>
-      sql.transaction([sql.query(query.sql)], { readOnly: true }),
-    );
-
-    const truncated = rows.length > limit;
-    let note: string | undefined;
-    if (rows.length === 0) {
-      note = query.emptyMessage;
-    } else if (truncated && limit < INSPECT_MAX_LIMIT) {
-      note = `Showing the first ${limit} of ${rows.length} rows. Raise \`limit\` to see more.`;
-    } else if (truncated) {
-      note = `Showing the first ${limit} of ${rows.length} rows, which is the maximum this tool returns. Narrow the question with \`run_sql\` to see the rest.`;
-    }
-
-    if (query.sqlLimit !== undefined && rows.length === query.sqlLimit) {
-      // The query capped the result before `limit` could, so `totalRowCount` is
-      // the cap rather than the real total. Saying so stops a caller reporting a
-      // capped list as the complete one.
-      const sqlCapNote = `The \`${check}\` check returns at most ${query.sqlLimit} rows, and hit that cap, so there may be more. Use \`run_sql\` for the full ranking.`;
-      note = note === undefined ? sqlCapNote : `${note} ${sqlCapNote}`;
-    }
-
-    return {
+    return assembleInspectReport({
       check,
-      describe: query.describe,
-      projectId: connection.projectId,
-      branchId: connection.branchId,
-      databaseName: connection.databaseName,
-      fields: query.fields,
-      totalRowCount: rows.length,
-      rows: truncated ? rows.slice(0, limit) : rows,
-      truncated,
-      ...(note !== undefined && { note }),
-    };
+      query,
+      projectId,
+      branchId,
+      batches,
+      includeDatabaseColumn: selection.includeDatabaseColumn,
+      limit,
+    });
   });
 }
