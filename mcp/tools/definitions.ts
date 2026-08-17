@@ -859,7 +859,7 @@ export const NEON_TOOLS = [
 
       Three checks read alike and are not: \`long-running-queries\` is what is running right now and has been for over five minutes, \`outliers\` is cumulative execution time since statistics were last reset, and \`calls\` is call frequency over that same history.
 
-      \`lfc-hit-rate\`, \`working-set\`, and \`replication-slots\` describe the whole compute rather than the selected database, and cache counters reset when the compute restarts. \`bloat\` is a statistical estimate, not a measurement.
+      Omit \`databaseName\` to run a database-scoped check against every database on the branch. The result adds a \`database\` column. \`lfc-hit-rate\`, \`working-set\`, and \`replication-slots\` are compute-wide: they run once against the first listed database, and cache counters reset when the compute restarts. One failing database fails the whole run. \`bloat\` is a statistical estimate, not a measurement.
 
       When a check needs an extension that is not installed, the tool says so and names the \`CREATE EXTENSION\` statement. Installing it writes to the user's database — ask before running it.
     </important_notes>`,

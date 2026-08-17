@@ -26,6 +26,7 @@ const originalFetch = globalThis.fetch;
 const listedInspectSchema = z.object({
   properties: z.object({
     check: z.object({ enum: z.array(z.string()) }),
+    databaseName: z.object({ description: z.string() }).optional(),
   }),
   required: z.array(z.string()),
 });
@@ -179,6 +180,7 @@ describe('MCP server e2e tool calls', () => {
       const schema = listedInspectSchema.parse(inspectTool?.inputSchema);
       expect(schema.properties.check.enum).toEqual([...INSPECT_CHECKS]);
       expect(schema.required).toContain('check');
+      expect(schema.properties.databaseName?.description).toContain('Omit');
     });
   });
 

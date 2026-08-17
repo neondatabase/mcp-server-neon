@@ -144,7 +144,7 @@ Run through the applicable subset of these tests based on the current config. Sk
 
 **Performance Tool Check:**
 - `neon-preview.list_slow_queries`
-- `neon-preview.inspect_database` with `check: table-sizes` (no extension needed)
+- `neon-preview.inspect_database` with `check: table-sizes` (no extension needed; omit `databaseName` to cover every database on the branch)
 - `neon-preview.inspect_database` with `check: outliers` (expect the `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;` hint until it is installed)
 
 **Read-Only Connection String Guard** (only when `readonly=true`):

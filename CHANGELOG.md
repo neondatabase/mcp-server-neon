@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+`inspect_database`: omitting `databaseName` now covers every database on the branch (same contract as `neon inspect db` 3.4.0). Database-scoped checks add a `database` column; compute-wide checks run once against the first listed database. One failing database fails the whole run.
+
 OAuth refresh-token chain stability — drove the reconstructed refresh-grant SLO from ~93% to 100% in production by closing the cross-instance reuse race and the surrounding cliff/retry-storm paths.
 
 Refresh-token reliability:

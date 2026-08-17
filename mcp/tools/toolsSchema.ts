@@ -25,6 +25,9 @@ type ZodObjectParams<T> = z.ZodObject<{ [key in keyof T]: z.ZodType<T[key]> }>;
 
 const DATABASE_NAME_DESCRIPTION = `The name of the database. If not provided, the default ${NEON_DEFAULT_DATABASE_NAME} or first available database is used.`;
 
+const INSPECT_DATABASE_NAME_DESCRIPTION =
+  'Database to inspect. Omit to cover every database on the branch. Ranking and SQL row limits stay per database. One failing database fails the whole run. Compute-wide checks run once against the first listed database. The response `limit` applies to the combined rows after that.';
+
 export const listProjectsInputSchema = z.object({
   cursor: z
     .string()
@@ -849,7 +852,11 @@ export const inspectDatabaseInputSchema = z.object({
     .describe(
       'An optional ID of the branch. If not provided the default branch is used.',
     ),
-  databaseName: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
+  databaseName: z
+    .string()
+    .min(1, 'databaseName cannot be empty. Omit it to cover every database.')
+    .optional()
+    .describe(INSPECT_DATABASE_NAME_DESCRIPTION),
   computeId: z
     .string()
     .optional()
@@ -864,7 +871,7 @@ export const inspectDatabaseInputSchema = z.object({
     .optional()
     .default(INSPECT_DEFAULT_LIMIT)
     .describe(
-      'Maximum number of rows to return. The response reports how many rows the check produced and whether they were truncated, so raise this only when `truncated` is true. A few checks are capped in SQL and say so in their description.',
+      'Maximum number of rows to return from the combined result. Per-database ranking and SQL caps are applied first. The response reports how many rows the check produced and whether they were truncated, so raise this only when `truncated` is true. A few checks are capped in SQL and say so in their description.',
     ),
 });
 

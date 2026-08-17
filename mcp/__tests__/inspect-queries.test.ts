@@ -61,23 +61,50 @@ describe('inspect query catalog', () => {
       'long-running-queries',
       'datname = current_database()',
       'No long-running queries in this database.',
+      'No long-running queries in any database.',
     ],
     [
       'locks',
       'a.datname = current_database()',
       'No locks held in this database.',
+      'No locks held in any database.',
     ],
   ] as const)(
     '%s is scoped to the inspected database',
-    (check, filter, note) => {
+    (check, filter, note, noteAll) => {
       expect(INSPECT_QUERIES[check].sql).toContain(filter);
       expect(INSPECT_QUERIES[check].emptyMessage).toBe(note);
+      expect(INSPECT_QUERIES[check].emptyMessageAll).toBe(noteAll);
     },
   );
 
   it('scopes locks by the holding session, not the lock database', () => {
     expect(INSPECT_QUERIES.locks.sql).not.toMatch(/\bl\.database\s*=/);
   });
+
+  it.each([
+    'table-sizes',
+    'index-sizes',
+    'unused-indexes',
+    'seq-scans',
+    'long-running-queries',
+    'locks',
+    'outliers',
+    'calls',
+    'vacuum-stats',
+    'bloat',
+    'subscriptions',
+  ] as const)('%s is database-scoped', (check) => {
+    expect(INSPECT_QUERIES[check].scope).toBe('database');
+  });
+
+  it.each(['lfc-hit-rate', 'working-set', 'replication-slots'] as const)(
+    '%s is compute-scoped and says so',
+    (check) => {
+      expect(INSPECT_QUERIES[check].scope).toBe('compute');
+      expect(INSPECT_QUERIES[check].describe).toContain('compute-wide');
+    },
+  );
 });
 
 describe('inspectDatabaseInputSchema', () => {
@@ -133,5 +160,14 @@ describe('inspectDatabaseInputSchema', () => {
     expect(
       inspectDatabaseInputSchema.safeParse({ check: 'locks' }).success,
     ).toBe(false);
+  });
+
+  it('rejects an empty databaseName', () => {
+    const result = inspectDatabaseInputSchema.safeParse({
+      check: 'locks',
+      projectId: 'project-1',
+      databaseName: '',
+    });
+    expect(result.success).toBe(false);
   });
 });
