@@ -38,5 +38,11 @@ export const SENTRY_DSN =
 // Environment
 export type Environment = 'development' | 'production' | 'preview';
 
+// Encoding for row-shaped tool results: 'json' (default) or 'gcf' (Graph Compact Format,
+// fewer tokens for query results, lossless). Off by default; requires the optional
+// @blackwell-systems/gcf dependency. See mcp/tools/gcf-format.ts.
+export const RESPONSE_FORMAT: 'json' | 'gcf' =
+  process.env.NEON_MCP_RESPONSE_FORMAT === 'gcf' ? 'gcf' : 'json';
+
 // Derived values
 export const NEON_CONSOLE_HOST = NEON_API_HOST.replace(/\/api\/v2$/, '');

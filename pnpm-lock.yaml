@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@blackwell-systems/gcf':
+        specifier: 2.6.1
+        version: 2.6.1
       '@keyv/postgres':
         specifier: 2.1.2
         version: 2.1.2
@@ -191,6 +194,10 @@ packages:
   '@babel/types@7.29.0':
     resolution: {integrity: sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==}
     engines: {node: '>=6.9.0'}
+
+  '@blackwell-systems/gcf@2.6.1':
+    resolution: {integrity: sha512-Yxa26qsRbno3s9wCIF8ka8Kpdm5/Pc0kkGC2NFxhR4ghFD9sqZN6DufgsA87YeGr1zhEZn5xIpYq4whk/wcnxQ==}
+    hasBin: true
 
   '@colors/colors@1.6.0':
     resolution: {integrity: sha512-Ir+AOibqzrIsL6ajt3Rz3LskB7OiMVHqltZmspbW/TJuTVuyOMirVqAkjfY6JISiLHgyNqicAC8AyHHGzNd/dA==}
@@ -3883,6 +3890,8 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
+
+  '@blackwell-systems/gcf@2.6.1': {}
 
   '@colors/colors@1.6.0': {}
 

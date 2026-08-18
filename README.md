@@ -409,9 +409,27 @@ Required for remote server runtime:
 
 Optional:
 
-| Variable    | Description                                                                       |
-| ----------- | --------------------------------------------------------------------------------- |
-| `LOG_LEVEL` | Winston log level: `error`, `warn`, `info` (default), `debug`, `verbose`, `silly` |
+| Variable                   | Description                                                                                               |
+| -------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `LOG_LEVEL`                | Winston log level: `error`, `warn`, `info` (default), `debug`, `verbose`, `silly`                         |
+| `NEON_MCP_RESPONSE_FORMAT` | Encoding for row-shaped tool results: `json` (default) or `gcf`. See [Response format](#response-format). |
+
+### Response format
+
+`run_sql` and `run_sql_transaction` return query rows as an array of uniform objects, where
+each row repeats the same column names. Setting `NEON_MCP_RESPONSE_FORMAT=gcf` encodes those
+results as a [Graph Compact Format](https://gcformat.com) generic-profile block instead of
+JSON: the repeated column names are factored into a single header, so the result costs fewer
+tokens when it crosses the LLM boundary (about 40% fewer than compact JSON, more against the
+pretty-printed default), losslessly. GCF's generic-profile comprehension is 100% on frontier
+models and ties or beats JSON on smaller models, so the model reads the compact form as
+accurately as JSON: see [gcformat.com/guide/benchmarks](https://gcformat.com/guide/benchmarks).
+
+The encoding is opt-in and conservative: off by default, and a result is encoded as GCF only
+when it is a uniform row array, the wire is strictly smaller than the equivalent JSON
+(never-grow), and it decodes back to the same rows (lossless). Otherwise JSON is used. GCF
+support needs the optional [`@blackwell-systems/gcf`](https://www.npmjs.com/package/@blackwell-systems/gcf)
+package (installed with the server's optional dependencies); if it is absent, JSON is used.
 
 ### Testing Pyramid
 
