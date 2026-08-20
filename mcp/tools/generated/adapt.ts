@@ -14,6 +14,7 @@ import {
   READ_ONLY_SAFE_OPERATION_OVERRIDES,
   type GeneratedOperationId,
 } from './operations';
+import { sanitizeGeneratedResult } from './sanitize';
 
 const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project within an organization.
 If using a personal API key, include \`org_id\` in the project body to specify which organization to create the project in.
@@ -175,7 +176,7 @@ export function createGeneratedToolHandlers(): ToolHandlers {
         apiKey: extra.apiKey,
         signal: extra.signal,
       });
-      return jsonTextResult(result.data);
+      return jsonTextResult(sanitizeGeneratedResult(operationId, result.data));
     };
     handlers[tool.id] = handler;
   }
