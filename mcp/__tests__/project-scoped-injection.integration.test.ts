@@ -100,9 +100,7 @@ describe('project-scoped grants', () => {
       const published = publishedSchemaSchema.parse(getProject?.inputSchema);
       const properties = published.properties ?? {};
       expect(Object.keys(properties)).not.toContain('projectId');
-      // get_project's path object only carried project_id, so the published
-      // schema drops `path` rather than leaving an empty object. Other
-      // generated tools keep path and omit only project_id.
+      // A path containing only project_id disappears when that field is removed.
       const path = properties.path;
       if (
         path &&

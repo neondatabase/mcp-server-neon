@@ -45,8 +45,6 @@ function toolByName(toolName: string): NeonTool | undefined {
 }
 
 /**
- * Run a tool the way the wire delivers it.
- *
  * The project id is injected before the handler sees the arguments because a
  * project-scoped grant has it stripped out of the published schema, so the
  * client cannot send it and this is its only source.

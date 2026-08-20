@@ -110,9 +110,7 @@ export function GET(req: Request) {
         scope: tool.scope ?? 'global',
         readOnlySafe: tool.readOnlySafe,
         description: tool.description,
-        // Host tools are Zod 3 (`zod-to-json-schema`). Generated tools are
-        // Zod 4 (`toJSONSchema`). Mixing the two converters is required
-        // because neither library accepts the other major version.
+        // Neither converter accepts both Zod major versions.
         inputSchema:
           '_zod' in tool.inputSchema
             ? toJSONSchema(tool.inputSchema, { target: 'draft-7' })

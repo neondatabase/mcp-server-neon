@@ -1,12 +1,3 @@
-/**
- * Tool filtering based on grant context.
- *
- * Handles:
- * - Scope-category-based filtering
- * - Project-scoped mode: hiding project-agnostic tools and removing projectId
- *   from host schemas / path.project_id from generated schemas
- */
-
 import { z } from 'zod/v3';
 import { z as z4 } from 'zod';
 import type { GrantContext, ScopeCategory } from '../utils/grant-context';
@@ -35,14 +26,6 @@ function isZod4Object(schema: unknown): schema is z4.ZodObject<z4.ZodRawShape> {
   );
 }
 
-/**
- * Filter tools based on the grant context.
- *
- * Returns a new array of tools with:
- * 1. Scope-category filtering applied
- * 2. Project-agnostic tools removed (if project-scoped)
- * 3. projectId / path.project_id removed from schemas (if project-scoped)
- */
 export function filterToolsForGrant(
   tools: readonly NeonTool[],
   grant: GrantContext,
@@ -75,11 +58,6 @@ function applyScopeCategoryFilter(
   });
 }
 
-/**
- * Apply project-scoped filtering.
- * When a projectId is set, hide tools that are not project-scoped and
- * strip the project identifier from published schemas.
- */
 function applyProjectScopeFilter(
   tools: NeonTool[],
   grant: GrantContext,
@@ -143,10 +121,6 @@ function removeGeneratedProjectId(tool: NeonTool): NeonTool | null {
   };
 }
 
-/**
- * Remove the project identifier from a tool's published input schema.
- * Host tools use root `projectId`; generated tools use `path.project_id`.
- */
 function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
   if (tool.kind === 'generated') {
     return removeGeneratedProjectId(tool);
@@ -283,10 +257,6 @@ export function getAccessControlWarnings(
   return warnings;
 }
 
-/**
- * Inject the granted project id into tool call args when in project-scoped mode.
- * Host tools receive root `projectId`. Generated tools receive `path.project_id`.
- */
 export function injectProjectId(
   args: Record<string, unknown>,
   grant: GrantContext,

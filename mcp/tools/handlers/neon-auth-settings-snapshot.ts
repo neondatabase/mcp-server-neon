@@ -9,18 +9,10 @@ import {
 } from '../../neon-client';
 import { NeonApiError } from '@neon/sdk';
 
-/**
- * Sentinel value used in `get_neon_auth_config` to indicate that a secret
- * (OAuth `client_secret`, SMTP `password`) is set on the server but redacted
- * in transit. The presence of this string ALWAYS means "secret is set";
- * `null` ALWAYS means "secret is not set". Never echo upstream's actual
- * secret value.
- */
+/** Lets callers distinguish configured secrets from null without exposing values. */
 export const REDACTED_SECRET = '***redacted***' as const;
 
 /**
- * Canonical Neon Auth settings shape returned by get_neon_auth_config.
- *
  * `trusted_origins` reflects the Better Auth `trustedOrigins` list. Better
  * Auth uses it to (a) validate the request Origin/Referer header for CSRF on
  * state-changing endpoints and (b) authorize URLs passed via callbackURL,
@@ -32,8 +24,7 @@ export const REDACTED_SECRET = '***redacted***' as const;
  * endpoint "trusted domain" / "redirect URI whitelist", but the runtime
  * semantics are broader.
  *
- * Friendly names in `auth_methods.email_password` map to the Neon Auth API as
- * follows:
+ * Client-facing names avoid exposing the Neon Auth API's inverted flags:
  *   - allow_sign_up                   ↔ !disable_sign_up
  *   - verify_email_on_sign_up         ↔ send_verification_email_on_sign_up
  *   - verify_email_on_sign_in         ↔ send_verification_email_on_sign_in

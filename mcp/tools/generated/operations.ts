@@ -1,15 +1,9 @@
 import type { NeonOperationId } from '@neon/tools';
 import type { ScopeCategory } from '../../utils/grant-context';
 
-/**
- * Management API operations this server exposes, keyed by OpenAPI operation id
- * and assigned to a `?category=` scope.
- *
- * Left out on purpose: API keys, AI Gateway credentials, billing, org
- * membership writes and invitations, transfers, Auth (legacy), consumption,
- * org VPC, getAuthDetails, and secret-returning GETs (connection URI, role
- * password, Auth OAuth listings, email provider, plugin configs).
- */
+// Absent on purpose: API keys, AI Gateway credentials, billing, org membership
+// writes, transfers, Auth (legacy), consumption, org VPC, getAuthDetails, and
+// GETs that return a secret (connection URI, role password, Auth listings).
 export const GENERATED_OPERATION_SCOPES = {
   listProjects: 'projects',
   listSharedProjects: 'projects',
