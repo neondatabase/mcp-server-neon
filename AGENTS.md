@@ -412,7 +412,7 @@ The server supports three top-level scopes: `read`, `write`, and `*`. These are 
 
 During authorization, users can uncheck "Full access" to request only `read` scope, which enables read-only mode.
 
-In addition to the top-level scopes, the server exposes **scope categories** via the non-standard `x-neon-scope-categories` field on the same metadata document: `projects`, `branches`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`. These drive fine-grained tool filtering (see Grant Context above) and can also constrain a token to a single project. The `observability` category covers the OpenTelemetry logs tools (`query_logs`, `list_log_fields`, `list_log_field_values`). See `mcp/utils/grant-context.ts` for grant resolution.
+In addition to the top-level scopes, the server exposes **scope categories** via the non-standard `x-neon-scope-categories` field on the same metadata document: `projects`, `branches`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`, `functions`, `storage`. These drive fine-grained tool filtering (see Grant Context above) and can also constrain a token to a single project. The `observability` category covers logs (`query_project_branch_logs`, `list_project_branch_log_fields`, `list_project_branch_log_field_values`) plus advisor and AI Gateway GETs. See `mcp/utils/grant-context.ts` for grant resolution.
 
 ### Environment Variables (Vercel)
 

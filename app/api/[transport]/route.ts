@@ -403,6 +403,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
               },
               async (span) => {
                 const {
+                  apiKey,
                   account,
                   authMethod,
                   readOnly,
@@ -447,6 +448,8 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   account,
                   readOnly,
                   clientApplication: clientApp,
+                  apiKey,
+                  signal: extra.signal,
                 };
 
                 try {
@@ -696,7 +699,7 @@ function createDocsOnlyMcpHandler() {
   return createMcpHandler(
     (server: McpServer) => {
       async function runDocsTool(
-        toolName: 'list_docs_resources' | 'get_doc_resource',
+        toolName: string,
         userAgent: string | undefined,
         call: () => Promise<string>,
       ) {

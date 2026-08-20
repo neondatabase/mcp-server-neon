@@ -98,7 +98,7 @@ describe('createMcpServer grant + read-only integration', () => {
 
     expect(names).not.toContain('list_projects');
     expect(names).not.toContain('create_project');
-    expect(names).toContain('describe_project');
+    expect(names).toContain('get_project');
     expect(names).toContain('run_sql');
   });
 

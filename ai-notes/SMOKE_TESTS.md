@@ -12,16 +12,16 @@ This document defines a repeatable smoke-test flow for the Neon MCP server. Use 
 The `/api/list-tools` endpoint accepts the same query params and returns the resolved grant, read-only state, and visible tools — no auth required:
 
 ```bash
-# Full access (35 tools)
+# Full access
 curl https://mcp.neon.tech/api/list-tools
 
-# Read-only (22 tools)
+# Read-only
 curl "https://mcp.neon.tech/api/list-tools?readonly=true"
 
-# Querying category only (11 tools)
+# Querying category only
 curl "https://mcp.neon.tech/api/list-tools?category=querying"
 
-# Project-scoped (28 tools, no project-agnostic tools)
+# Project-scoped (no project-agnostic tools)
 curl "https://mcp.neon.tech/api/list-tools?projectId=proj-123"
 ```
 
@@ -92,10 +92,10 @@ Follow these phases in order. Each phase builds on the previous one.
 
 1. Call `neon-preview.list_projects` (or any read-safe tool) to confirm auth works.
 2. Verify the tool surface matches expectations from Phase 1:
-   - If `readonly=true`: confirm write tools (e.g. `create_project`, `create_branch`, `prepare_database_migration`) and `get_connection_string` are NOT available.
+   - If `readonly=true`: confirm write tools (e.g. `create_project`, `create_project_branch`, `prepare_database_migration`) and `get_connection_string` are NOT available.
    - If `category` is set: confirm only tools in those categories are available.
    - If `projectId` is set: confirm `list_projects`, `create_project`, `delete_project`, `list_organizations`, `list_shared_projects`, `search`, and `fetch` are NOT available.
-   - If no params: confirm all 35 tools are available.
+   - If no params: confirm the full tool list from `/api/list-tools` is available.
 3. Try calling a tool that should NOT be available given the config. Confirm it fails or is absent.
 
 ### Phase 3: Exercise Available Tools
@@ -109,10 +109,10 @@ Run through the applicable subset of these tests based on the current config. Sk
 **Project Lifecycle** (skip if read-only or project-scoped):
 - `neon-preview.create_project` with name `manual-smoke-YYYY-MM-DD`
 - `neon-preview.list_projects` with `search`
-- `neon-preview.describe_project`
+- `neon-preview.get_project`
 
 **Branch Lifecycle** (skip if read-only):
-- `neon-preview.create_branch` (e.g. `smoke-child`)
+- `neon-preview.create_project_branch` (e.g. `smoke-child`)
 - `neon-preview.describe_branch` for main and child
 
 **SQL + Schema Basics:**

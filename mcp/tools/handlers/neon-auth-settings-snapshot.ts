@@ -10,17 +10,16 @@ import {
 import { NeonApiError } from '@neon/sdk';
 
 /**
- * Sentinel value used in `get_neon_auth_config` and configure success
- * snapshots to indicate that a secret (OAuth `client_secret`, SMTP
- * `password`) is set on the server but redacted in transit. The presence of
- * this string ALWAYS means "secret is set"; `null` ALWAYS means "secret is
- * not set". Never echo upstream's actual secret value.
+ * Sentinel value used in `get_neon_auth_config` to indicate that a secret
+ * (OAuth `client_secret`, SMTP `password`) is set on the server but redacted
+ * in transit. The presence of this string ALWAYS means "secret is set";
+ * `null` ALWAYS means "secret is not set". Never echo upstream's actual
+ * secret value.
  */
 export const REDACTED_SECRET = '***redacted***' as const;
 
 /**
- * Canonical Neon Auth settings shape shared by get_neon_auth_config and
- * configure_neon_auth success responses (same keys configure reads/writes).
+ * Canonical Neon Auth settings shape returned by get_neon_auth_config.
  *
  * `trusted_origins` reflects the Better Auth `trustedOrigins` list. Better
  * Auth uses it to (a) validate the request Origin/Referer header for CSRF on
@@ -33,9 +32,8 @@ export const REDACTED_SECRET = '***redacted***' as const;
  * endpoint "trusted domain" / "redirect URI whitelist", but the runtime
  * semantics are broader.
  *
- * The `auth_methods.email_password` block mirrors the input shape accepted by
- * `configure_neon_auth update_auth_methods` so that read and write stay in
- * lockstep. Friendly names map to the Neon Auth API as follows:
+ * Friendly names in `auth_methods.email_password` map to the Neon Auth API as
+ * follows:
  *   - allow_sign_up                   ↔ !disable_sign_up
  *   - verify_email_on_sign_up         ↔ send_verification_email_on_sign_up
  *   - verify_email_on_sign_in         ↔ send_verification_email_on_sign_in
@@ -143,14 +141,23 @@ function emailProviderSnapshot(
   data: NeonAuthEmailServerConfig,
 ): EmailProviderSnapshot {
   if (data.type === 'standard') {
+    if (
+      data.host === undefined ||
+      data.port === undefined ||
+      data.username === undefined
+    ) {
+      throw new Error(
+        'Standard email provider is missing host, port, or username',
+      );
+    }
     return {
       type: 'standard',
       host: data.host,
       port: data.port,
       username: data.username,
       password: data.password ? REDACTED_SECRET : null,
-      sender_email: data.sender_email,
-      sender_name: data.sender_name,
+      sender_email: data.sender_email ?? '',
+      sender_name: data.sender_name ?? '',
     };
   }
   return {
@@ -313,84 +320,4 @@ export async function fetchNeonAuthConfigurableSettings(
     oauthRes,
     emailProviderRes,
   );
-}
-
-/**
- * Slice-only fetch + stringify for OAuth providers. Used by the
- * configure_neon_auth `*_oauth_provider` operations to keep their success
- * responses focused — per product preference we don't dump the full
- * settings snapshot when the change only affects this slice.
- */
-export async function fetchOAuthProvidersSlice(
-  neonClient: Api<unknown>,
-  projectId: string,
-  branchId: string,
-): Promise<{ providers: OAuthProviderSnapshot[]; error?: string }> {
-  const res = await neonClient.listBranchNeonAuthOauthProviders(
-    projectId,
-    branchId,
-  );
-  if (res.status === 200 && res.data) {
-    return { providers: res.data.providers.map(oauthProviderSnapshot) };
-  }
-  return { providers: [], error: `${res.status} ${res.statusText}` };
-}
-
-/**
- * Slice-only fetch + stringify for the email provider config. Same
- * rationale as `fetchOAuthProvidersSlice`: focused responses for focused
- * operations.
- */
-export async function fetchEmailProviderSlice(
-  neonClient: Api<unknown>,
-  projectId: string,
-  branchId: string,
-): Promise<{ provider: EmailProviderSnapshot | null; error?: string }> {
-  const res = await safeFetchEmailProvider(neonClient, projectId, branchId);
-  if (res.status === 200 && res.data) {
-    return { provider: emailProviderSnapshot(res.data) };
-  }
-  if (res.status === 404) {
-    return { provider: null };
-  }
-  return {
-    provider: null,
-    error: `${res.status} ${res.statusText}`,
-  };
-}
-
-export function stringifyNeonAuthConfigurableSettings(
-  title: string,
-  settings: NeonAuthConfigurableSettings,
-  errors: NeonAuthConfigurableSettingsErrors,
-): string {
-  const body: Record<string, unknown> = { ...settings };
-  if (Object.keys(errors).length > 0) {
-    body._errors = errors;
-  }
-  return `${title}\n\`\`\`json\n${JSON.stringify(body, null, 2)}\n\`\`\``;
-}
-
-export function stringifyOAuthProvidersSlice(
-  title: string,
-  providers: OAuthProviderSnapshot[],
-  error?: string,
-): string {
-  const body: Record<string, unknown> = { oauth_providers: providers };
-  if (error) {
-    body._errors = { oauth_providers: error };
-  }
-  return `${title}\n\`\`\`json\n${JSON.stringify(body, null, 2)}\n\`\`\``;
-}
-
-export function stringifyEmailProviderSlice(
-  title: string,
-  provider: EmailProviderSnapshot | null,
-  error?: string,
-): string {
-  const body: Record<string, unknown> = { email_provider: provider };
-  if (error) {
-    body._errors = { email_provider: error };
-  }
-  return `${title}\n\`\`\`json\n${JSON.stringify(body, null, 2)}\n\`\`\``;
 }

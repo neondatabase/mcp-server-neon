@@ -2,7 +2,7 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Api, NeonAuthIntegration } from '../../neon-client';
 import { getNeonAuthConfigInputSchema } from '../toolsSchema';
 import { z } from 'zod/v3';
-import { resolveNeonAuthBranchId } from './neon-auth-config';
+import { resolveNeonAuthBranchId } from './neon-auth-branch';
 import { fetchNeonAuthConfigurableSettings } from './neon-auth-settings-snapshot';
 import { ToolHandlerExtraParams } from '../types';
 
@@ -49,7 +49,7 @@ export async function handleGetNeonAuthConfig(
           type: 'text',
           text:
             integrationRes.status === 404
-              ? 'Neon Auth is not provisioned for this branch (HTTP 404). Use provision_neon_auth first.'
+              ? 'Neon Auth is not provisioned for this branch (HTTP 404). Use create_neon_auth first.'
               : `Failed to load Neon Auth integration (${integrationRes.status} ${integrationRes.statusText}).`,
         },
       ],

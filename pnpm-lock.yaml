@@ -13,10 +13,13 @@ importers:
         version: 2.1.2
       '@modelcontextprotocol/sdk':
         specifier: 1.25.3
-        version: 1.25.3(hono@4.12.11)(zod@4.3.6)
+        version: 1.25.3(hono@4.12.11)(zod@4.4.3)
       '@neon/sdk':
-        specifier: 2.0.0
-        version: 2.0.0
+        specifier: 2.1.0
+        version: 2.1.0
+      '@neon/tools':
+        specifier: 0.2.0
+        version: 0.2.0
       '@neondatabase/serverless':
         specifier: 1.0.0
         version: 1.0.0
@@ -37,7 +40,7 @@ importers:
         version: 5.3.2
       mcp-handler:
         specifier: 1.0.6
-        version: 1.0.6(@modelcontextprotocol/sdk@1.25.3(hono@4.12.11)(zod@4.3.6))(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
+        version: 1.0.6(@modelcontextprotocol/sdk@1.25.3(hono@4.12.11)(zod@4.4.3))(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
       next:
         specifier: 16.1.1
         version: 16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -60,11 +63,11 @@ importers:
         specifier: 3.17.0
         version: 3.17.0
       zod:
-        specifier: 4.3.6
-        version: 4.3.6
+        specifier: 4.4.3
+        version: 4.4.3
       zod-to-json-schema:
         specifier: 3.25.2
-        version: 3.25.2(zod@4.3.6)
+        version: 3.25.2(zod@4.4.3)
     devDependencies:
       '@playwright/test':
         specifier: 1.58.2
@@ -797,8 +800,12 @@ packages:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
 
-  '@neon/sdk@2.0.0':
-    resolution: {integrity: sha512-pg08olEnIf1FOGynAS9h22hPI11pBfk2DLjFq7RASHS3nXV6ljqSBaZ/fLhypT430VJK3YnTOhYQCcDDn8ASUA==}
+  '@neon/sdk@2.1.0':
+    resolution: {integrity: sha512-TBTDbDTjgW9ygh+qAlOMkc35/ITBJAV1IQTR7vstix7xMdxgb45qmmYPVoB3Kdbtx8swf+49y3UzqVwHoHdW7g==}
+    engines: {node: '>=20.19.0'}
+
+  '@neon/tools@0.2.0':
+    resolution: {integrity: sha512-gfMwWOKbZ8sp6oighWrsJ9v1zEc7kGVdrc5JLCp41Q0aKs8djXPSMiFZC6ZD5FqTIsB3GmJHZGYVjmUCasS17Q==}
     engines: {node: '>=20.19.0'}
 
   '@neondatabase/serverless@1.0.0':
@@ -3772,8 +3779,8 @@ packages:
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
 
-  zod@4.3.6:
-    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
 
@@ -4272,7 +4279,7 @@ snapshots:
     dependencies:
       '@lukeed/csprng': 1.1.0
 
-  '@modelcontextprotocol/sdk@1.25.3(hono@4.12.11)(zod@4.3.6)':
+  '@modelcontextprotocol/sdk@1.25.3(hono@4.12.11)(zod@4.4.3)':
     dependencies:
       '@hono/node-server': 1.19.12(hono@4.12.11)
       ajv: 8.18.0
@@ -4288,8 +4295,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 4.3.6
-      zod-to-json-schema: 3.25.2(zod@4.3.6)
+      zod: 4.4.3
+      zod-to-json-schema: 3.25.2(zod@4.4.3)
     transitivePeerDependencies:
       - hono
       - supports-color
@@ -4308,7 +4315,12 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@neon/sdk@2.0.0': {}
+  '@neon/sdk@2.1.0': {}
+
+  '@neon/tools@0.2.0':
+    dependencies:
+      '@neon/sdk': 2.1.0
+      zod: 4.4.3
 
   '@neondatabase/serverless@1.0.0':
     dependencies:
@@ -5867,8 +5879,8 @@ snapshots:
       '@babel/parser': 7.29.2
       eslint: 9.27.0(jiti@2.6.1)
       hermes-parser: 0.25.1
-      zod: 4.3.6
-      zod-validation-error: 4.0.2(zod@4.3.6)
+      zod: 4.4.3
+      zod-validation-error: 4.0.2(zod@4.4.3)
     transitivePeerDependencies:
       - supports-color
 
@@ -6440,7 +6452,7 @@ snapshots:
       smol-toml: 1.6.1
       strip-json-comments: 5.0.3
       typescript: 5.8.3
-      zod: 4.3.6
+      zod: 4.4.3
     transitivePeerDependencies:
       - '@emnapi/core'
       - '@emnapi/runtime'
@@ -6534,9 +6546,9 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mcp-handler@1.0.6(@modelcontextprotocol/sdk@1.25.3(hono@4.12.11)(zod@4.3.6))(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)):
+  mcp-handler@1.0.6(@modelcontextprotocol/sdk@1.25.3(hono@4.12.11)(zod@4.4.3))(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)):
     dependencies:
-      '@modelcontextprotocol/sdk': 1.25.3(hono@4.12.11)(zod@4.3.6)
+      '@modelcontextprotocol/sdk': 1.25.3(hono@4.12.11)(zod@4.4.3)
       chalk: 5.6.2
       commander: 11.1.0
       redis: 4.6.0
@@ -7570,12 +7582,12 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
-  zod-to-json-schema@3.25.2(zod@4.3.6):
+  zod-to-json-schema@3.25.2(zod@4.4.3):
     dependencies:
-      zod: 4.3.6
+      zod: 4.4.3
 
-  zod-validation-error@4.0.2(zod@4.3.6):
+  zod-validation-error@4.0.2(zod@4.4.3):
     dependencies:
-      zod: 4.3.6
+      zod: 4.4.3
 
-  zod@4.3.6: {}
+  zod@4.4.3: {}

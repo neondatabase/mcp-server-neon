@@ -212,20 +212,14 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 <details>
 <summary><strong>Tools available in read-only mode</strong></summary>
 
-- `list_projects`, `list_shared_projects`, `describe_project`, `list_organizations`
-- `describe_branch`, `list_branch_computes`, `compare_database_schema`
-- `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`
-- `list_slow_queries`, `explain_sql_statement`, `inspect_database`
-- `get_neon_auth_config`
-- `query_logs`, `list_log_fields`, `list_log_field_values`
-- `search`, `fetch`, `list_docs_resources`, `get_doc_resource`
+Host tools: `list_organizations`, `describe_branch`, `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`, `list_slow_queries`, `explain_sql_statement`, `inspect_database`, `get_neon_auth_config`, `search`, `fetch`, `list_docs_resources`, `get_doc_resource`.
+
+Generated Management API tools that are GET and do not return secrets, plus `query_project_branch_logs` (POST, read-only). Preview the exact set with `/api/list-tools?readonly=true`.
 
 **Tools requiring write access:**
 
-- `create_project`, `delete_project`
-- `create_branch`, `delete_branch`, `reset_from_parent`
+- Generated Management API writes (`create_project`, `create_project_branch`, `delete_project`, …)
 - `get_connection_string` (the connection string carries a privileged role password, so it is withheld in read-only mode; copy it from the [Neon Console](https://console.neon.tech) instead)
-- `provision_neon_auth`, `configure_neon_auth`, `provision_neon_data_api`
 - `prepare_database_migration`, `complete_database_migration`
 - `prepare_query_tuning`, `complete_query_tuning`
 
@@ -286,32 +280,35 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 - `data_api`
 - `observability`
 - `docs`
+- `functions`
+- `storage`
 - `null` (tools without a scope category)
 
 Notes:
 
-- `compare_database_schema` is categorized under `schema`.
-- `provision_neon_data_api` is categorized under `data_api` (separate from `neon_auth`).
+- Management API tools come from `@neon/tools` and keep OpenAPI `{path, query, body}` inputs.
+- `get_project_branch_schema` and `get_project_branch_schema_comparison` are categorized under `schema`.
+- JWKS tools are categorized under `data_api`.
 - Read-only enforcement still relies on `readOnlySafe` and server-side read-only logic; `scope` is category metadata, not a standalone read/write switch.
-- In project-scoped mode (`?projectId=...`), `search` and `fetch` are not available.
+- In project-scoped mode (`?projectId=...`), tools without a project path (`list_projects`, `create_project`, `list_organizations`, `get_organization`, `get_active_regions`, `search`, `fetch`, …) are hidden. `delete_project` is also hidden.
 
 **Project Management:**
 
-- **`list_projects`**: Lists the first 10 Neon projects in your account, providing a summary of each project. If you can't find a specific project, increase the limit by passing a higher value to the `limit` parameter.
-- **`list_shared_projects`**: Lists Neon projects shared with the current user. Supports a search parameter and limiting the number of projects returned (default: 10).
-- **`describe_project`**: Fetches detailed information about a specific Neon project, including its ID, name, and associated branches and databases.
-- **`create_project`**: Creates a new Neon project in your Neon account. A project acts as a container for branches, databases, roles, and computes.
+- **`list_projects`**: Lists Neon projects. OpenAPI query parameters (`limit`, `cursor`, `search`, `org_id`).
+- **`list_shared_projects`**: Lists Neon projects shared with the current user.
+- **`get_project`**: Fetches a Neon project by id.
+- **`create_project`**: Creates a Neon project. After it succeeds, call `get_connection_string` for a DATABASE_URL.
 - **`delete_project`**: Deletes an existing Neon project and all its associated resources.
 - **`list_organizations`**: Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.
 
 **Branch Management:**
 
-- **`create_branch`**: Creates a new branch within a specified Neon project. Leverages [Neon's branching](https://neon.com/docs/introduction/branching) feature for development, testing, or migrations.
-- **`delete_branch`**: Deletes an existing branch from a Neon project.
-- **`describe_branch`**: Retrieves details about a specific branch, such as its name, ID, and parent branch.
-- **`list_branch_computes`**: Lists compute endpoints for a project or specific branch, including compute ID, type, size, last active time, and autoscaling information.
-- **`compare_database_schema`**: Shows the schema diff between the child branch and its parent.
-- **`reset_from_parent`**: Resets the current branch to its parent's state, discarding local changes. Automatically preserves to backup if branch has children, or optionally preserve on request with a custom name.
+- **`create_project_branch`**: Creates a branch in a Neon project. Pass an endpoint in the body if you need a compute.
+- **`delete_project_branch`**: Deletes an existing branch from a Neon project.
+- **`describe_branch`**: Retrieves a tree of databases, schemas, tables, views, and functions on a branch.
+- **`list_project_endpoints`** / **`list_project_branch_endpoints`**: Lists compute endpoints for a project or branch.
+- **`get_project_branch_schema_comparison`**: Shows the schema diff between a branch and a comparison target.
+- **`restore_project_branch`**: Restores a branch from a parent or snapshot. Pass ids in the OpenAPI body.
 
 **SQL Query Execution:**
 
@@ -336,13 +333,14 @@ Notes:
 
 **Neon Auth:**
 
-- **`provision_neon_auth`**: Provisions Neon Auth for a Neon project. It allows developers to easily set up authentication infrastructure by creating an integration with an Auth provider.
-- **`configure_neon_auth`**: Configures an existing Neon Auth integration for a branch — managing trusted origins, localhost access, authentication methods, OAuth providers, and the transactional email provider.
-- **`get_neon_auth_config`**: Reads the full Neon Auth configuration for a branch, including integration metadata and configurable settings (secrets are redacted).
+- **`create_neon_auth`**: Provisions Neon Auth for a branch.
+- **`get_neon_auth_config`**: Reads the full Neon Auth configuration for a branch, including integration metadata and configurable settings (secrets are redacted). Use generated Auth write tools to change settings.
+- Generated current Auth tools cover domains, OAuth providers, users, plugins, and webhooks. Secret-returning Auth GETs are not exposed.
 
 **Neon Data API:**
 
-- **`provision_neon_data_api`**: Provisions the Neon Data API for HTTP-based database access with optional JWT authentication via Neon Auth or external JWKS providers.
+- **`create_project_branch_data_api`**, **`get_project_branch_data_api`**, **`update_project_branch_data_api`**, **`delete_project_branch_data_api`**: Manage the Data API for a branch database.
+- **`add_project_jwks`**, **`get_project_jwks`**, **`delete_project_jwks`**: Manage JWKS entries used by the Data API.
 
 **Search and Discovery:**
 
@@ -351,14 +349,22 @@ Notes:
 
 **Observability:** these tools require the Neon Platform Beta and are currently only available for projects in the `aws-us-east-2` region. A branch without logs access returns HTTP 404 with reason `telemetry_not_enabled`.
 
-- **`query_logs`**: Queries OpenTelemetry logs emitted by Neon serverless functions and other services. Use structured filters for source, service name, severity, and time window, or raw `logql` for stream selectors and line filters the structured inputs cannot express.
-- **`list_log_fields`**: Lists the log fields you can enumerate values for on a branch, such as `service_name`, `severity_text`, and `scope_name`. Use before `list_log_field_values`.
-- **`list_log_field_values`**: Lists the distinct values of a log field within a branch and time window, to discover concrete values for structured filters or raw `logql`.
+- **`query_project_branch_logs`**: Queries OpenTelemetry logs for a branch. POST in the Management API; treated as read-only by this server.
+- **`list_project_branch_log_fields`**: Lists the log fields you can enumerate values for on a branch.
+- **`list_project_branch_log_field_values`**: Lists the distinct values of a log field within a branch and time window.
 
 **Documentation and Resources:**
 
 - **`list_docs_resources`**: Lists all available Neon documentation pages by fetching the index from `https://neon.com/docs/llms.txt`. Returns page URLs and titles that can be fetched individually using the `get_doc_resource` tool.
 - **`get_doc_resource`**: Fetches a specific Neon documentation page as markdown content. Use the `list_docs_resources` tool first to discover available page slugs, then pass the slug to this tool.
+
+**Functions:**
+
+- **`list_project_branch_functions`**, **`get_project_branch_function`**, **`update_project_branch_function`**, **`delete_project_branch_function`**, **`create_project_branch_function_deployment`**
+
+**Storage:**
+
+- Bucket and object tools (`list_project_branch_buckets`, `presign_project_branch_bucket_object`, `get_project_branch_storage`, …)
 
 ### Migrations
 

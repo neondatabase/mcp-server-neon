@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod/v3';
 import {
   filterToolsForGrant,
   getAvailableTools,
@@ -7,8 +8,20 @@ import {
   getAccessControlWarnings,
   injectProjectId,
 } from '../tools/grant-filter';
-import type { GrantContext, ScopeCategory } from '../utils/grant-context';
+import type { GrantContext } from '../utils/grant-context';
+import { SCOPE_CATEGORIES } from '../utils/grant-context';
 import { NEON_TOOLS } from '../tools/definitions';
+
+function isZod4Object(
+  schema: unknown,
+): schema is { shape: Record<string, unknown> } {
+  return (
+    typeof schema === 'object' &&
+    schema !== null &&
+    '_zod' in schema &&
+    'shape' in schema
+  );
+}
 
 function grant(overrides: Partial<GrantContext> = {}): GrantContext {
   return {
@@ -48,12 +61,54 @@ describe('filterToolsForGrant', () => {
       grant({ projectId: 'proj-123', scopes: null }),
     );
     const names = tools.map((t) => t.name);
-    expect(tools).toHaveLength(28);
+    expect(tools).toHaveLength(
+      NEON_TOOLS.filter((tool) => tool.projectScoped).length,
+    );
     expect(names).not.toContain('list_projects');
     expect(names).not.toContain('create_project');
+    expect(names).not.toContain('delete_project');
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
-    expect(names).toContain('describe_project');
+    expect(names).toContain('get_project');
+  });
+
+  it('strips host projectId and generated path.project_id from published schemas', () => {
+    const tools = filterToolsForGrant(
+      NEON_TOOLS,
+      grant({ projectId: 'proj-123' }),
+    );
+
+    const runSql = tools.find((tool) => tool.name === 'run_sql');
+    expect(runSql).toBeDefined();
+    expect(runSql?.inputSchema instanceof z.ZodObject).toBe(true);
+    if (!(runSql?.inputSchema instanceof z.ZodObject)) {
+      throw new Error('run_sql must keep a Zod 3 object schema');
+    }
+    expect('projectId' in runSql.inputSchema.shape).toBe(false);
+
+    const getProject = tools.find((tool) => tool.name === 'get_project');
+    expect(getProject && isZod4Object(getProject.inputSchema)).toBe(true);
+    if (!getProject || !isZod4Object(getProject.inputSchema)) {
+      throw new Error('get_project must keep a Zod 4 object schema');
+    }
+    expect('path' in getProject.inputSchema.shape).toBe(false);
+
+    const queryLogs = tools.find(
+      (tool) => tool.name === 'query_project_branch_logs',
+    );
+    expect(queryLogs && isZod4Object(queryLogs.inputSchema)).toBe(true);
+    if (!queryLogs || !isZod4Object(queryLogs.inputSchema)) {
+      throw new Error(
+        'query_project_branch_logs must keep a Zod 4 object schema',
+      );
+    }
+    const pathSchema = queryLogs.inputSchema.shape.path;
+    expect(isZod4Object(pathSchema)).toBe(true);
+    if (!isZod4Object(pathSchema)) {
+      throw new Error('query_project_branch_logs.path must remain an object');
+    }
+    expect('project_id' in pathSchema.shape).toBe(false);
+    expect('branch_id' in pathSchema.shape).toBe(true);
   });
 
   it('combines scope and project filtering', () => {
@@ -217,6 +272,18 @@ describe('injectProjectId', () => {
     });
   });
 
+  it('injects path.project_id for generated tools', () => {
+    expect(
+      injectProjectId(
+        { path: { branch_id: 'br-1' } },
+        grant({ projectId: 'proj-123' }),
+        { kind: 'generated', projectScoped: true },
+      ),
+    ).toEqual({
+      path: { branch_id: 'br-1', project_id: 'proj-123' },
+    });
+  });
+
   it('returns args unchanged when not project-scoped', () => {
     const args = { projectId: 'proj-keep', branchId: 'br-1' };
     expect(injectProjectId(args, grant())).toEqual(args);
@@ -225,18 +292,7 @@ describe('injectProjectId', () => {
 
 describe('scope coverage sanity', () => {
   it('all declared scope categories produce a deterministic result', () => {
-    const categories: ScopeCategory[] = [
-      'projects',
-      'branches',
-      'schema',
-      'querying',
-      'neon_auth',
-      'data_api',
-      'observability',
-      'docs',
-    ];
-
-    for (const category of categories) {
+    for (const category of SCOPE_CATEGORIES) {
       const tools = filterToolsForGrant(
         NEON_TOOLS,
         grant({ scopes: [category] }),

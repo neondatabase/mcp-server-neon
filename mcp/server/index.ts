@@ -141,6 +141,8 @@ export const createMcpServer = async (context: ServerContext) => {
               account: context.account,
               readOnly: context.readOnly,
               clientApplication,
+              apiKey: context.apiKey,
+              signal: extra.signal,
             };
             try {
               const result = await invokeTool(

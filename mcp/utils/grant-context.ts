@@ -20,6 +20,8 @@ export const SCOPE_CATEGORIES = [
   'data_api',
   'observability',
   'docs',
+  'functions',
+  'storage',
 ] as const;
 
 export type ScopeCategory = (typeof SCOPE_CATEGORIES)[number];

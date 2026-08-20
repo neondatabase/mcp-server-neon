@@ -305,17 +305,18 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     'creates a prefixed project through the MCP protocol and verifies it with @neon/sdk',
     async () => {
       const result = await callTool('create_project', {
-        name: projectName,
-        org_id: testOrgId,
+        body: {
+          project: {
+            name: projectName,
+            org_id: testOrgId,
+          },
+        },
       });
       const text = assertToolSucceeded('create_project', result);
-      const match = text.match(/project_id is "([^"]+)"/);
-      if (!match?.[1]) {
-        throw new Error(
-          'create_project response did not contain a project ID.',
-        );
-      }
-      projectId = match[1];
+      const created = z
+        .object({ project: z.object({ id: z.string() }) })
+        .parse(JSON.parse(text));
+      projectId = created.project.id;
 
       if (!neonClient) throw new Error('Neon SDK client is not initialized.');
       const response = await neonClient.getProject(projectId);
@@ -879,7 +880,9 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         );
       }
 
-      const result = await callTool('delete_project', { projectId: id });
+      const result = await callTool('delete_project', {
+        path: { project_id: id },
+      });
       assertToolSucceeded('delete_project', result);
       await waitForProjectDeletion(id);
       projectId = undefined;

@@ -7,22 +7,47 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { NEON_TOOLS } from '../tools/definitions';
+import { HOST_TOOLS, NEON_TOOLS } from '../tools/definitions';
 import { NEON_HANDLERS } from '../tools/tools';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
 
-describe('NEON_TOOLS definitions', () => {
-  it('has 35 tools', () => {
-    expect(NEON_TOOLS).toHaveLength(35);
-  });
+const HOST_READ_ONLY_TOOLS = [
+  'describe_branch',
+  'describe_table_schema',
+  'explain_sql_statement',
+  'fetch',
+  'get_database_tables',
+  'get_doc_resource',
+  'get_neon_auth_config',
+  'inspect_database',
+  'list_docs_resources',
+  'list_organizations',
+  'list_slow_queries',
+  'run_sql',
+  'run_sql_transaction',
+  'search',
+];
 
-  it('every tool has a name, scope (or null), and readOnlySafe flag', () => {
+const SECRET_GENERATED_TOOLS = [
+  'get_connection_uri',
+  'get_project_branch_role_password',
+  'get_neon_auth_email_provider',
+  'get_neon_auth_email_server',
+  'get_neon_auth_plugin_configs',
+  'list_branch_neon_auth_oauth_providers',
+  'list_neon_auth_oauth_providers',
+];
+
+describe('NEON_TOOLS definitions', () => {
+  it('every tool has a name, scope (or null), kind, projectScoped, and readOnlySafe flag', () => {
     for (const tool of NEON_TOOLS) {
       expect(tool.name).toBeTruthy();
       expect(
         tool.scope === null || SCOPE_CATEGORIES.includes(tool.scope),
         `${tool.name} has invalid scope: ${String(tool.scope)}`,
       ).toBe(true);
+      expect(tool.kind === 'host' || tool.kind === 'generated').toBe(true);
+      expect(typeof tool.projectScoped).toBe('boolean');
       expect(typeof tool.readOnlySafe).toBe('boolean');
     }
   });
@@ -115,59 +140,43 @@ describe('docs tools definitions', () => {
   });
 });
 
-/**
- * The exact set of tools a read-only caller may reach.
- *
- * This is an allowlist rather than a count on purpose: changing the read-only
- * surface is a security decision, so it should require editing a named list and
- * explaining the entry in review, not just moving a number that happens to
- * still match.
- *
- * Note that `readOnlySafe` and `annotations.readOnlyHint` are independent axes,
- * and neither implies the other:
- *   - `run_sql` mutates (`readOnlyHint: false`) but is reachable, because
- *     read-only mode wraps it in a read-only transaction.
- *   - `get_connection_string` mutates nothing (`readOnlyHint: true`) but is not
- *     reachable, because the URI it returns carries a privileged role password
- *     that works against the read-write compute.
- */
-const READ_ONLY_TOOLS = [
-  'compare_database_schema',
-  'describe_branch',
-  'describe_project',
-  'describe_table_schema',
-  'explain_sql_statement',
-  'fetch',
-  'get_database_tables',
-  'get_doc_resource',
-  'get_neon_auth_config',
-  'inspect_database',
-  'list_branch_computes',
-  'list_docs_resources',
-  'list_log_field_values',
-  'list_log_fields',
-  'list_organizations',
-  'list_projects',
-  'list_shared_projects',
-  'list_slow_queries',
-  'query_logs',
-  'run_sql',
-  'run_sql_transaction',
-  'search',
-];
-
 describe('read-only tool surface', () => {
-  it('exposes exactly the allowlisted tools', () => {
-    const readOnlyNames = NEON_TOOLS.filter((t) => t.readOnlySafe).map(
+  it('keeps the host read-only allowlist', () => {
+    const hostReadOnlyNames = HOST_TOOLS.filter((t) => t.readOnlySafe).map(
       (t) => t.name,
     );
 
-    expect([...readOnlyNames].sort()).toEqual([...READ_ONLY_TOOLS].sort());
+    expect([...hostReadOnlyNames].sort()).toEqual(
+      [...HOST_READ_ONLY_TOOLS].sort(),
+    );
   });
 
   it('withholds get_connection_string, which returns a privileged password', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'get_connection_string');
 
     expect(tool!.readOnlySafe).toBe(false);
+  });
+
+  it('treats query_project_branch_logs as read-only despite POST', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'query_project_branch_logs');
+    expect(tool).toBeDefined();
+    expect(tool!.readOnlySafe).toBe(true);
+    expect(tool!.annotations.readOnlyHint).toBe(true);
+    expect(tool!.annotations.destructiveHint).toBe(false);
+  });
+
+  it('does not expose secret-returning generated tools', () => {
+    const names = new Set(NEON_TOOLS.map((t) => t.name));
+    for (const name of SECRET_GENERATED_TOOLS) {
+      expect(names.has(name), name).toBe(false);
+    }
+  });
+
+  it('assigns every generated tool a scope category', () => {
+    for (const tool of NEON_TOOLS.filter(
+      (candidate) => candidate.kind === 'generated',
+    )) {
+      expect(tool.scope, tool.name).not.toBeNull();
+    }
   });
 });

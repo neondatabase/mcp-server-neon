@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { toJSONSchema } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { resolveGrantFromSearchParams } from '../../../mcp/utils/grant-context';
 import { isReadOnly } from '../../../mcp/utils/read-only';
@@ -109,14 +110,13 @@ export function GET(req: Request) {
         scope: tool.scope ?? 'global',
         readOnlySafe: tool.readOnlySafe,
         description: tool.description,
-        // JSON Schema (draft 7) representation of the tool's input schema,
-        // produced from the Zod schema via `zod-to-json-schema`. Lets
-        // external integrations validate calls before dispatch — closes
-        // the gap the issue called out where the description's prose
-        // constraint (e.g. "min 3 chars") couldn't be enforced
-        // programmatically (#257). Draft 7 is the conservative default and
-        // is universally supported by JSON Schema validators.
-        inputSchema: zodToJsonSchema(tool.inputSchema),
+        // Host tools are Zod 3 (`zod-to-json-schema`). Generated tools are
+        // Zod 4 (`toJSONSchema`). Mixing the two converters is required
+        // because neither library accepts the other major version.
+        inputSchema:
+          '_zod' in tool.inputSchema
+            ? toJSONSchema(tool.inputSchema, { target: 'draft-7' })
+            : zodToJsonSchema(tool.inputSchema),
       })),
     };
 

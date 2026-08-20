@@ -94,18 +94,27 @@ describe('project-scoped grants', () => {
       // A scoped client cannot send projectId — it is not in the schema it was
       // given — so this is exactly the call a real one makes.
       const listed = await client.listTools();
-      const describeProject = listed.tools.find(
-        (tool) => tool.name === 'describe_project',
+      const getProject = listed.tools.find(
+        (tool) => tool.name === 'get_project',
       );
-      const published = publishedSchemaSchema.parse(
-        describeProject?.inputSchema,
-      );
-      expect(Object.keys(published.properties ?? {})).not.toContain(
-        'projectId',
-      );
+      const published = publishedSchemaSchema.parse(getProject?.inputSchema);
+      const properties = published.properties ?? {};
+      expect(Object.keys(properties)).not.toContain('projectId');
+      // get_project's path object only carried project_id, so the published
+      // schema drops `path` rather than leaving an empty object. Other
+      // generated tools keep path and omit only project_id.
+      const path = properties.path;
+      if (
+        path &&
+        typeof path === 'object' &&
+        'properties' in path &&
+        path.properties
+      ) {
+        expect(path.properties).not.toHaveProperty('project_id');
+      }
 
       const result = await client.callTool({
-        name: 'describe_project',
+        name: 'get_project',
         arguments: {},
       });
       expect(result.isError).not.toBe(true);

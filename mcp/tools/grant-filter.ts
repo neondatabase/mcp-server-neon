@@ -3,34 +3,15 @@
  *
  * Handles:
  * - Scope-category-based filtering
- * - Project-scoped mode: hiding project-agnostic tools and removing projectId from schemas
+ * - Project-scoped mode: hiding project-agnostic tools and removing projectId
+ *   from host schemas / path.project_id from generated schemas
  */
 
 import { z } from 'zod/v3';
+import { z as z4 } from 'zod';
 import type { GrantContext, ScopeCategory } from '../utils/grant-context';
 import { NEON_TOOLS } from './definitions';
-
-type NeonTool = (typeof NEON_TOOLS)[number];
-
-/**
- * Tools that are hidden when in project-scoped mode.
- * These tools don't make sense when the agent is scoped to a single project.
- */
-const PROJECT_AGNOSTIC_TOOLS: ReadonlySet<string> = new Set([
-  'list_projects',
-  'list_organizations',
-  'list_shared_projects',
-  'create_project',
-  'delete_project',
-]);
-
-/**
- * Additional tools hidden in project-scoped mode.
- */
-const PROJECT_SCOPED_EXCLUDED_TOOLS: ReadonlySet<string> = new Set([
-  'search',
-  'fetch',
-]);
+import type { NeonTool } from './tool-definition';
 
 /**
  * Tools that are always available regardless of scope categories.
@@ -41,13 +22,26 @@ const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
   'fetch',
 ]);
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isZod4Object(schema: unknown): schema is z4.ZodObject<z4.ZodRawShape> {
+  return (
+    typeof schema === 'object' &&
+    schema !== null &&
+    '_zod' in schema &&
+    'shape' in schema
+  );
+}
+
 /**
  * Filter tools based on the grant context.
  *
  * Returns a new array of tools with:
  * 1. Scope-category filtering applied
  * 2. Project-agnostic tools removed (if project-scoped)
- * 3. projectId removed from schemas (if project-scoped)
+ * 3. projectId / path.project_id removed from schemas (if project-scoped)
  */
 export function filterToolsForGrant(
   tools: readonly NeonTool[],
@@ -69,26 +63,22 @@ function applyScopeCategoryFilter(
     return [...tools];
   }
   if (scopes.length === 0) {
-    // Header was present but no valid categories were supplied.
     return tools.filter((tool) => ALWAYS_AVAILABLE_TOOLS.has(tool.name));
   }
 
   const scopeSet = new Set(scopes);
 
   return tools.filter((tool) => {
-    // Always-available tools pass through
     if (ALWAYS_AVAILABLE_TOOLS.has(tool.name)) return true;
-    // Tools without a scope are always available
     if (!tool.scope) return true;
-    // Check if tool's scope category is in the enabled set
     return scopeSet.has(tool.scope);
   });
 }
 
 /**
  * Apply project-scoped filtering.
- * When a projectId is set, hide project-agnostic tools, hide
- * excluded discovery tools, and remove projectId from tool schemas.
+ * When a projectId is set, hide tools that are not project-scoped and
+ * strip the project identifier from published schemas.
  */
 function applyProjectScopeFilter(
   tools: NeonTool[],
@@ -97,33 +87,20 @@ function applyProjectScopeFilter(
   if (!grant.projectId) return tools;
 
   return tools
-    .filter(
-      (tool) =>
-        !PROJECT_AGNOSTIC_TOOLS.has(tool.name) &&
-        !PROJECT_SCOPED_EXCLUDED_TOOLS.has(tool.name),
-    )
+    .filter((tool) => tool.projectScoped)
     .map((tool) => {
       const modified = removeProjectIdFromSchema(tool);
       return modified ?? tool;
     });
 }
 
-/**
- * Remove projectId from a tool's input schema if present.
- * Returns a new tool object with the modified schema, or null if no modification needed.
- *
- * Uses Zod's shape manipulation to create a new schema without the projectId field.
- */
-function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
+function removeHostProjectId(tool: NeonTool): NeonTool | null {
   const schema = tool.inputSchema;
-
-  // Only Zod objects can have keys removed
   if (!(schema instanceof z.ZodObject)) return null;
 
   const shape = schema.shape as Record<string, z.ZodTypeAny>;
   if (!('projectId' in shape)) return null;
 
-  // Build a new shape without projectId
   const newShape: Record<string, z.ZodTypeAny> = {};
   for (const [key, value] of Object.entries(shape)) {
     if (key !== 'projectId') {
@@ -131,12 +108,50 @@ function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
     }
   }
 
-  const newSchema = z.object(newShape);
+  return {
+    ...tool,
+    inputSchema: z.object(newShape),
+  };
+}
+
+function removeGeneratedProjectId(tool: NeonTool): NeonTool | null {
+  const schema = tool.inputSchema;
+  if (!isZod4Object(schema)) return null;
+
+  const pathSchema = schema.shape.path;
+  if (!isZod4Object(pathSchema)) return null;
+  if (!('project_id' in pathSchema.shape)) return null;
+
+  const restPath = Object.fromEntries(
+    Object.entries(pathSchema.shape).filter(([key]) => key !== 'project_id'),
+  );
+  const newShape = Object.fromEntries(
+    Object.entries(schema.shape).flatMap(([key, value]) => {
+      if (key !== 'path') {
+        return [[key, value]];
+      }
+      if (Object.keys(restPath).length === 0) {
+        return [];
+      }
+      return [['path', z4.object(restPath)]];
+    }),
+  );
 
   return {
     ...tool,
-    inputSchema: newSchema,
-  } as NeonTool;
+    inputSchema: z4.object(newShape),
+  };
+}
+
+/**
+ * Remove the project identifier from a tool's published input schema.
+ * Host tools use root `projectId`; generated tools use `path.project_id`.
+ */
+function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
+  if (tool.kind === 'generated') {
+    return removeGeneratedProjectId(tool);
+  }
+  return removeHostProjectId(tool);
 }
 
 /**
@@ -170,8 +185,6 @@ export function getAccessControlNotices(
         'or by logging out and back in with OAuth and selecting full access.',
     );
   } else {
-    // Safety notice: only fires when destructive tools survive the grant filter
-    // (e.g., the `docs` scope exposes no destructive tools, so no notice).
     const hasExposedDestructive = getFilteredTools(grant, false).some(
       (tool) => tool.annotations?.destructiveHint === true,
     );
@@ -235,13 +248,10 @@ export function getAvailableTools(
   if (notices.length === 0) return tools;
 
   const noticesSuffix = `\n\n<notice>\n${notices.join('\n\n')}\n</notice>`;
-  return tools.map(
-    (tool) =>
-      ({
-        ...tool,
-        description: `${tool.description}${noticesSuffix}`,
-      }) as NeonTool,
-  );
+  return tools.map((tool) => ({
+    ...tool,
+    description: `${tool.description}${noticesSuffix}`,
+  }));
 }
 
 /**
@@ -258,7 +268,6 @@ export function getAccessControlWarnings(
   void _readOnly;
   const warnings: string[] = [];
 
-  // X-Neon-Scopes was provided but no valid scope categories were recognized.
   if (grant.scopes !== null && grant.scopes.length === 0) {
     const discoveryToolsText = grant.projectId
       ? 'No tools are available.'
@@ -275,13 +284,22 @@ export function getAccessControlWarnings(
 }
 
 /**
- * Inject projectId into tool call args when in project-scoped mode.
- * This should be called before passing args to the tool handler.
+ * Inject the granted project id into tool call args when in project-scoped mode.
+ * Host tools receive root `projectId`. Generated tools receive `path.project_id`.
  */
 export function injectProjectId(
   args: Record<string, unknown>,
   grant: GrantContext,
+  tool?: Pick<NeonTool, 'kind' | 'projectScoped'>,
 ): Record<string, unknown> {
   if (!grant.projectId) return args;
+  if (tool && !tool.projectScoped) return args;
+  if (tool?.kind === 'generated') {
+    const path = isPlainObject(args.path) ? args.path : {};
+    return {
+      ...args,
+      path: { ...path, project_id: grant.projectId },
+    };
+  }
   return { ...args, projectId: grant.projectId };
 }

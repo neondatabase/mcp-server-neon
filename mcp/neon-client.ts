@@ -19,7 +19,6 @@ import {
   type NeonAuthOauthProviderType,
   type NeonAuthUpdateOAuthProviderRequest,
   type Organization,
-  type ProjectBranchLogRecord,
   type ProjectBranchLogsQueryResponse,
   type ProjectCreateRequest,
   type ProjectListItem,
@@ -31,17 +30,12 @@ export type {
   AuthDetailsResponse,
   Branch,
   MemberWithUser,
-  NeonAuthAddOAuthProviderRequest,
   NeonAuthEmailAndPasswordConfig,
-  NeonAuthEmailAndPasswordConfigUpdate,
   NeonAuthEmailServerConfig,
   NeonAuthIntegration,
   NeonAuthOauthProvider,
   NeonAuthOauthProviderType,
-  NeonAuthUpdateOAuthProviderRequest,
   Organization,
-  ProjectBranchLogRecord,
-  ProjectCreateRequest,
   ProjectListItem,
 };
 
@@ -50,11 +44,9 @@ export type NeonAuthEmailVerificationMethod =
 export type NeonAuthOauthProviderId = SdkNeonAuthOauthProviderId;
 
 export type ListProjectsParams = NonNullable<ListProjectsData['query']>;
-export type ListSharedProjectsParams = NonNullable<
-  ListSharedProjectsData['query']
->;
+type ListSharedProjectsParams = NonNullable<ListSharedProjectsData['query']>;
 
-export type GetProjectBranchSchemaComparisonParams = {
+type GetProjectBranchSchemaComparisonParams = {
   projectId: string;
   branchId: string;
   db_name: string;
@@ -152,7 +144,7 @@ const USER_AGENT = `mcp-server-neon/${pkg.version}`;
  * `@neon/sdk` sends no user agent and its config exposes no way to set a header,
  * so identifying ourselves means wrapping `fetch`.
  */
-const fetchAsMcpServer: typeof fetch = (input, init) => {
+export const fetchAsMcpServer: typeof fetch = (input, init) => {
   // The SDK calls this as `fetch(request)` with auth and content headers already
   // on the Request, so the header has to be added to that request rather than
   // supplied alongside it — passing an `init.headers` would replace them all.
