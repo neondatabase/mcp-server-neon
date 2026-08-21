@@ -32,7 +32,7 @@ This is a quick way to verify that the MCP server is configured correctly and th
 ### Safety Rules
 
 - Run all tests only against `neon-preview` (staging account).
-- The `neon` MCP server is production. Never run destructive cleanup calls (`delete_branch`, `delete_project`) on production resources (the `neon` MCP server) only against `neon-preview`.
+- The `neon` MCP server is production. Never run destructive cleanup calls (`delete_project_branch`, `delete_project`) on production resources (the `neon` MCP server) only against `neon-preview`.
 - Use clearly prefixed temporary resource names, e.g. `manual-smoke-YYYY-MM-DD`.
 
 ### Server Configuration
@@ -84,7 +84,7 @@ Follow these phases in order. Each phase builds on the previous one.
 1. Read the MCP client config file (e.g. `.cursor/mcp.json`, `.codex/config_proj.toml`) to find the `neon-preview` server entry.
 2. Report the current URL, noting which query params are set (`readonly`, `category`, `projectId`) and any legacy headers.
 3. Determine what behavior to expect from this config:
-   - Which tools should be visible (e.g. 35 for full access, 22 for read-only, fewer for category-filtered).
+   - Which tools should be visible (e.g. 134 for full access, 61 for read-only, fewer for category-filtered).
    - Whether write tools should be available.
    - Whether project-agnostic tools (`list_projects`, `create_project`, `search`, `fetch`) should be hidden.
 
@@ -125,7 +125,7 @@ Run through the applicable subset of these tests based on the current config. Sk
 
 **Schema Diff:**
 - On child branch only: `neon-preview.run_sql` to create a child-only object
-- `neon-preview.compare_database_schema` using the child branch
+- `neon-preview.get_project_branch_schema_comparison` using the child branch
 
 **Migration Flow** (skip if read-only):
 - `neon-preview.prepare_database_migration`
@@ -154,7 +154,7 @@ Run through the applicable subset of these tests based on the current config. Sk
 
 ### Phase 4: Cleanup
 
-- `neon-preview.delete_branch` for any test child branch(es) created
+- `neon-preview.delete_project_branch` for any test child branch(es) created
 - `neon-preview.delete_project` for any test project created
 - `neon-preview.list_projects` with `search` to verify cleanup
 - Skip if no resources were created (e.g. read-only config).
