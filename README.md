@@ -74,13 +74,13 @@ Connect to Neon's managed MCP server using OAuth for authentication. This is the
 Run the following command to add the Neon MCP Server for all detected agents and editors in your workspace:
 
 ```bash
-npx add-mcp https://mcp.neon.tech/mcp
+npx add-mcp "https://mcp.neon.tech/mcp?category=projects&category=branches&category=querying&category=schema"
 ```
 
-The unfiltered URL publishes 134 tools (~227 KB on `tools/list`). VS Code Copilot caps a request at 128 tools. A smaller start:
+That URL publishes 65 tools. The unfiltered URL publishes 134 tools (~227 KB on every `tools/list`). VS Code Copilot caps a request at 128 tools.
 
 ```bash
-npx add-mcp "https://mcp.neon.tech/mcp?category=projects&category=branches&category=querying&category=schema"
+npx add-mcp https://mcp.neon.tech/mcp
 ```
 
 Add the `-g` flag to add the Neon MCP Server to the global MCP server list instead of project-scoped.
@@ -294,7 +294,8 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 
 Notes:
 
-- The unfiltered URL publishes 134 tools (~227 KB on `tools/list`). VS Code Copilot caps a request at 128 tools. Pass `?category=` to stay under it. `projects`, `branches`, `querying`, and `schema` is 65 tools and includes `list_projects` plus the schema tools those workflows call.
+- The unfiltered URL publishes 134 tools (~227 KB on every `tools/list`). VS Code Copilot caps a request at 128 tools. Pass `?category=` to stay under it. `projects`, `branches`, `querying`, and `schema` is 65 tools and includes `list_projects` plus the schema tools those workflows call.
+- `?category=branches` does not include compute tools. Those are `?category=endpoints`.
 - Management API tools come from `@neon/tools` with flat arguments.
 - `get_project_branch_schema` and `get_project_branch_schema_comparison` are categorized under `schema`.
 - JWKS tools are categorized under `data_api`.
@@ -312,10 +313,11 @@ Notes:
 
 **Branch Management:**
 
-- **`create_branch`**: Creates a branch in a Neon project. Pass `endpoints` if you need a compute. `branch` stays a nested object.
-- **`delete_branch`**: Deletes an existing branch from a Neon project.
+- **`list_project_branches`**: Lists branches in a project. Use it to resolve a branch name to a `br-…` id.
+- **`create_branch`**: Creates a branch. Default is no compute. A connectable branch is `{ "project_id": "…", "branch": { "name": "feature-x" }, "endpoints": [{ "type": "read_write" }] }`. Then call `get_connection_string`.
+- **`delete_branch`**: Deletes a branch (`{ "project_id": "…", "branch_id": "br-…" }`).
 - **`describe_branch`**: Retrieves a tree of databases, schemas, tables, views, and functions on a branch.
-- Generated branch tools take `branch_id` as a branch id (`br-...`), not a name. Call `list_project_branches` to resolve a name.
+- Generated branch tools take `branch_id` as a branch id (`br-...`), not a name.
 - **`restore_project_branch`**: Restores a branch from a parent or snapshot.
 
 **Compute endpoints** (`?category=endpoints`):

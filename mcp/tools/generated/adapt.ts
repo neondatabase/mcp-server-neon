@@ -26,6 +26,26 @@ This tool does not return a connection string. After it succeeds, call \`get_con
 You can specify a region (\`region_id\`) and Postgres version (\`pg_version\`).
 Neon supports Postgres 14 through 18, with 19 rolling out to enabled regions.`;
 
+const CREATE_BRANCH_DESCRIPTION = `Creates a branch in a Neon project.
+
+The default is a branch with no compute. Pass \`endpoints: [{ "type": "read_write" }]\` if the caller will connect or run SQL. \`get_connection_string\` fails on a branch with no endpoint.
+
+This tool does not return a connection string. After it succeeds with an endpoint, call \`get_connection_string\` with the new branch id.
+
+\`branch\` is a nested object: \`{ "project_id": "…", "branch": { "name": "feature-x" }, "endpoints": [{ "type": "read_write" }] }\`.`;
+
+const DELETE_PROJECT_DESCRIPTION = `Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For removing single branches, use \`delete_branch\` instead.
+
+Arguments: \`{ "project_id": "…" }\`.`;
+
+const DELETE_BRANCH_DESCRIPTION = `Delete a branch and all its data. NEVER run autonomously; always ask the user first. For deleting an entire project, use \`delete_project\` instead.
+
+Arguments: \`{ "project_id": "…", "branch_id": "br-…" }\`. \`branch_id\` is a branch id, not a name.`;
+
+const CREATE_PROJECT_ENDPOINT_DESCRIPTION = `Creates a compute endpoint on a branch.
+
+This tool does not return a connection string. After it succeeds, call \`get_connection_string\` with the project and branch id to obtain a DATABASE_URL.`;
+
 const BRANCH_ID_NOTE =
   'branch_id is a branch id (br-...), not a branch name. Call list_project_branches to resolve a name.';
 
@@ -49,6 +69,10 @@ function createGeneratedNeonTools() {
     names: GENERATED_TOOL_NAMES,
     descriptions: {
       createProject: CREATE_PROJECT_DESCRIPTION,
+      createProjectBranch: CREATE_BRANCH_DESCRIPTION,
+      deleteProject: DELETE_PROJECT_DESCRIPTION,
+      deleteProjectBranch: DELETE_BRANCH_DESCRIPTION,
+      createProjectEndpoint: CREATE_PROJECT_ENDPOINT_DESCRIPTION,
     },
   });
 }

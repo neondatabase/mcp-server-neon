@@ -154,6 +154,7 @@ export function getAccessControlNotices(
     notices.push(
       `Notice: The MCP server is currently configured and scoped to one project only (${grant.projectId}). ` +
         'Project management tools have been removed. All remaining tools are scoped to this project and can only interact with it. ' +
+        'Do not send `project_id`; it is supplied by the connection. ' +
         'This is intentional. If the user requests changes to another project, inform them about the project-scoping configuration. ' +
         'The user can remove project scoping by removing the projectId query param from the MCP server URL, ' +
         'and by logging out and back in after removing the param when using OAuth.',

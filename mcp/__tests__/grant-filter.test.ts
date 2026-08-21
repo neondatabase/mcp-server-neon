@@ -201,6 +201,9 @@ describe('getAccessControlNotices', () => {
     expect(
       notices.some((n) => n.includes('scoped to one project only (p-1)')),
     ).toBe(true);
+    expect(notices.some((n) => n.includes('Do not send `project_id`'))).toBe(
+      true,
+    );
   });
 
   it('returns both notices when both modes are active', () => {

@@ -263,6 +263,29 @@ describe('generated tool interface', () => {
     ).toBe(true);
   });
 
+  it('tells create_branch to pass an endpoint before get_connection_string', () => {
+    const createBranch = NEON_TOOLS.find(
+      (tool) => tool.name === 'create_branch',
+    );
+    expect(createBranch?.description).toContain(
+      'endpoints: [{ "type": "read_write" }]',
+    );
+    expect(createBranch?.description).toContain('get_connection_string');
+  });
+
+  it('keeps the never-run-autonomously text on delete_branch and delete_project', () => {
+    const deleteBranch = NEON_TOOLS.find(
+      (tool) => tool.name === 'delete_branch',
+    );
+    const deleteProject = NEON_TOOLS.find(
+      (tool) => tool.name === 'delete_project',
+    );
+    expect(deleteBranch?.description).toContain('NEVER run autonomously');
+    expect(deleteBranch?.description).toContain('delete_project');
+    expect(deleteProject?.description).toContain('NEVER run autonomously');
+    expect(deleteProject?.description).toContain('delete_branch');
+  });
+
   it('notes branch id on generated tools that take a path branch_id', () => {
     const note = 'branch_id is a branch id (br-...), not a branch name';
     for (const tool of NEON_TOOLS.filter(
