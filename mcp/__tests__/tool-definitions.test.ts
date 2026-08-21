@@ -244,6 +244,21 @@ describe('generated tool interface', () => {
     expect(generatedShape(deleteProject!)).not.toHaveProperty('projectId');
   });
 
+  it('marks additive creates as non-destructive and deletes as destructive', () => {
+    const createProject = NEON_TOOLS.find(
+      (tool) => tool.name === 'create_project',
+    );
+    const createBranch = NEON_TOOLS.find(
+      (tool) => tool.name === 'create_project_branch',
+    );
+    const deleteProject = NEON_TOOLS.find(
+      (tool) => tool.name === 'delete_project',
+    );
+    expect(createProject?.annotations.destructiveHint).toBe(false);
+    expect(createBranch?.annotations.destructiveHint).toBe(false);
+    expect(deleteProject?.annotations.destructiveHint).toBe(true);
+  });
+
   it('notes branch id on generated tools that take path.branch_id', () => {
     const note = 'path.branch_id is a branch id (br-...), not a branch name';
     for (const tool of NEON_TOOLS.filter(

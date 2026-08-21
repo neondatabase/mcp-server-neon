@@ -48,6 +48,35 @@ describe('sanitizeGeneratedResult', () => {
     ).toEqual(data);
   });
 
+  it('strips Auth provider secrets', () => {
+    const sanitized = sanitizeGeneratedResult('createNeonAuth', {
+      base_url: 'https://auth.example',
+      jwks_url: 'https://auth.example/jwks',
+      secret_server_key: 'secret',
+      pub_client_key: 'pub',
+    });
+    expect(sanitized).toEqual({
+      base_url: 'https://auth.example',
+      jwks_url: 'https://auth.example/jwks',
+      pub_client_key: 'pub',
+    });
+  });
+
+  it('strips OAuth client_secret from a provider write', () => {
+    const sanitized = sanitizeGeneratedResult(
+      'addBranchNeonAuthOauthProvider',
+      {
+        id: 'github',
+        client_id: 'id',
+        client_secret: 'secret',
+      },
+    );
+    expect(sanitized).toEqual({
+      id: 'github',
+      client_id: 'id',
+    });
+  });
+
   it('strips a stored password from a role GET', () => {
     const sanitized = sanitizeGeneratedResult('getProjectBranchRole', {
       role: { name: 'app', password: 'secret', protected: false },

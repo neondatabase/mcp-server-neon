@@ -5,6 +5,12 @@ const KEEP_ROLE_PASSWORD = new Set<GeneratedOperationId>([
   'resetProjectBranchRolePassword',
 ]);
 
+const DROP_KEYS = new Set([
+  'connection_uris',
+  'secret_server_key',
+  'client_secret',
+]);
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -24,28 +30,40 @@ function omitRolePassword(role: unknown): unknown {
  * Create payloads omit connection_uris and roles[].password because
  * get_connection_string owns URI retrieval. GET role may include a stored
  * password; only role create/reset keep role.password as their result.
+ * Auth create and OAuth-provider writes return provider secrets.
  */
 export function sanitizeGeneratedResult(
   operationId: GeneratedOperationId,
   data: unknown,
 ): unknown {
+  return sanitizeValue(operationId, data);
+}
+
+function sanitizeValue(
+  operationId: GeneratedOperationId,
+  data: unknown,
+): unknown {
+  if (Array.isArray(data)) {
+    return data.map((item) => sanitizeValue(operationId, item));
+  }
   if (!isPlainObject(data)) {
     return data;
   }
 
-  const keepRolePassword = KEEP_ROLE_PASSWORD.has(operationId);
   const next: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
-    if (key === 'connection_uris') continue;
+    if (DROP_KEYS.has(key)) continue;
     if (key === 'roles' && Array.isArray(value)) {
       next[key] = value.map(omitRolePassword);
       continue;
     }
-    if (key === 'role' && !keepRolePassword) {
-      next[key] = omitRolePassword(value);
+    if (key === 'role') {
+      next[key] = KEEP_ROLE_PASSWORD.has(operationId)
+        ? value
+        : omitRolePassword(value);
       continue;
     }
-    next[key] = value;
+    next[key] = sanitizeValue(operationId, value);
   }
   return next;
 }

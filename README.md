@@ -77,6 +77,12 @@ Run the following command to add the Neon MCP Server for all detected agents and
 npx add-mcp https://mcp.neon.tech/mcp
 ```
 
+The unfiltered URL publishes 134 tools (~227 KB on `tools/list`). VS Code Copilot caps a request at 128 tools. A smaller start:
+
+```bash
+npx add-mcp "https://mcp.neon.tech/mcp?category=branches&category=querying"
+```
+
 Add the `-g` flag to add the Neon MCP Server to the global MCP server list instead of project-scoped.
 
 Alternatively, you can add the following "Neon" entry to your client's MCP server configuration file (e.g., `mcp.json`, `mcp_config.json`):
@@ -310,6 +316,7 @@ Notes:
 - **`delete_project_branch`**: Deletes an existing branch from a Neon project.
 - **`describe_branch`**: Retrieves a tree of databases, schemas, tables, views, and functions on a branch.
 - Generated branch tools take `path.branch_id` as a branch id (`br-...`), not a name. Call `list_project_branches` to resolve a name.
+- **`restore_project_branch`**: Restores a branch from a parent or snapshot. Pass ids in the OpenAPI body.
 
 **Compute endpoints** (`?category=endpoints`):
 
@@ -318,8 +325,10 @@ Notes:
 **Snapshots** (`?category=snapshots`):
 
 - **`list_snapshots`**, **`get_snapshot_schedule`**, **`set_snapshot_schedule`**, **`create_snapshot`**, **`update_snapshot`**, **`delete_snapshot`**, **`restore_snapshot`**
-- **`get_project_branch_schema_comparison`**: Shows the schema diff between a branch and a comparison target.
-- **`restore_project_branch`**: Restores a branch from a parent or snapshot. Pass ids in the OpenAPI body.
+
+**Schema** (`?category=schema`):
+
+- **`get_project_branch_schema`**, **`get_project_branch_schema_comparison`**
 
 **SQL Query Execution:**
 

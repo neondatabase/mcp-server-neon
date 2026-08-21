@@ -128,10 +128,25 @@ function generatedAnnotations(
   return {
     title: tool.title,
     readOnlyHint: tool.annotations.readOnlyHint,
-    destructiveHint: tool.annotations.destructiveHint ?? !readOnlySafe,
+    destructiveHint: generatedDestructiveHint(operationId, tool),
     idempotentHint: tool.annotations.idempotentHint ?? readOnlySafe,
     openWorldHint: tool.annotations.openWorldHint,
   };
+}
+
+const DESTRUCTIVE_OPERATION_PREFIX =
+  /^(delete|remove|disable|restore|reset|revoke|suspend|restart|update)/i;
+
+function generatedDestructiveHint(
+  operationId: GeneratedOperationId,
+  tool: GeneratedNeonTool,
+): boolean {
+  const method = tool.metadata.method;
+  if (method === 'GET') return false;
+  if (method === 'DELETE' || method === 'PUT' || method === 'PATCH') {
+    return true;
+  }
+  return DESTRUCTIVE_OPERATION_PREFIX.test(operationId);
 }
 
 export function createGeneratedToolDefinitions(): NeonTool[] {
