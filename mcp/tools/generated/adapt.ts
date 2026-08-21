@@ -28,13 +28,17 @@ Plan limits define how many projects you can create.
 You can specify a region (\`region_id\`) and Postgres version (\`pg_version\`).
 Neon supports Postgres 14 through 18, with 19 rolling out to enabled regions.
 
-\`pooled\` defaults to true. Set \`pooled: false\` for a direct host.`;
+\`pooled\` defaults to true. Set \`pooled: false\` for a direct host.
+
+If the API omits a connection URI (more than one role or database), the project may already exist and the error has no id. Call \`list_projects\` before retrying.`;
 
 const CREATE_BRANCH_DESCRIPTION = `Creates a branch with a read-write compute, waits until it is ready, and returns a connection string.
 
 Arguments: \`{ "project_id": "…", "name": "feature-x" }\`. \`parent_id\` defaults to the project's default branch.
 
-\`pooled\` defaults to true. Set \`pooled: false\` for a direct host.`;
+\`pooled\` defaults to true. Set \`pooled: false\` for a direct host.
+
+If the API omits a connection URI (parent with more than one role or database), the branch may already exist and the error has no id. Call \`list_project_branches\` before retrying.`;
 
 const DELETE_PROJECT_DESCRIPTION = `Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For removing single branches, use \`delete_branch\` instead.
 

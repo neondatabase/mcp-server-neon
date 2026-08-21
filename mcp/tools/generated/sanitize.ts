@@ -29,8 +29,8 @@ function omitRolePassword(role: unknown): unknown {
 }
 
 /**
- * Connection URIs have a dedicated tool; role create and reset responses keep
- * passwords because producing a credential is the requested operation.
+ * Password-creation and connection workflows retain credentials because
+ * returning the credential is the requested operation.
  */
 export function sanitizeGeneratedResult(
   operationId: SanitizedToolId,
