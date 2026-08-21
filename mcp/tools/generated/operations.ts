@@ -2,8 +2,9 @@ import type { NeonOperationId } from '@neon/tools';
 import type { ScopeCategory } from '../../utils/grant-context';
 
 // Absent on purpose: API keys, AI Gateway credentials, billing, org membership
-// writes, transfers, Auth (legacy), consumption, org VPC, getAuthDetails, and
-// GETs that return a secret (connection URI, role password, Auth listings).
+// writes, transfers, Auth (legacy), consumption, org VPC, getAuthDetails,
+// GETs that return a secret (connection URI, role password, Auth listings),
+// and getProjectBranchBucketObject (raw object bytes in the tool result).
 export const GENERATED_OPERATION_SCOPES = {
   listProjects: 'projects',
   listSharedProjects: 'projects',
@@ -123,7 +124,6 @@ export const GENERATED_OPERATION_SCOPES = {
   createProjectBranchBucket: 'storage',
   deleteProjectBranchBucket: 'storage',
   listProjectBranchBucketObjects: 'storage',
-  getProjectBranchBucketObject: 'storage',
   deleteProjectBranchBucketObject: 'storage',
   deleteProjectBranchBucketObjectsByPrefix: 'storage',
   presignProjectBranchBucketObject: 'storage',
@@ -142,4 +142,8 @@ export const READ_ONLY_SAFE_OPERATION_OVERRIDES = new Set<GeneratedOperationId>(
 
 export const PROJECT_SCOPED_OPERATION_OVERRIDES = {
   deleteProject: false,
+  grantPermissionToProject: false,
+  revokePermissionFromProject: false,
+  setProjectMemberRole: false,
+  removeProjectMemberRole: false,
 } as const satisfies Partial<Record<GeneratedOperationId, boolean>>;

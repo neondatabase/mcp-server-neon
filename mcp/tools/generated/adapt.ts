@@ -101,8 +101,11 @@ function generatedProjectScoped(
   operationId: GeneratedOperationId,
   tool: GeneratedNeonTool,
 ): boolean {
-  if (operationId === 'deleteProject') {
-    return PROJECT_SCOPED_OPERATION_OVERRIDES.deleteProject;
+  const overrides: Partial<Record<GeneratedOperationId, boolean>> =
+    PROJECT_SCOPED_OPERATION_OVERRIDES;
+  const override = overrides[operationId];
+  if (override !== undefined) {
+    return override;
   }
   return hasPathProjectId(tool);
 }

@@ -67,9 +67,14 @@ describe('filterToolsForGrant', () => {
     expect(names).not.toContain('list_projects');
     expect(names).not.toContain('create_project');
     expect(names).not.toContain('delete_project');
+    expect(names).not.toContain('grant_permission_to_project');
+    expect(names).not.toContain('revoke_permission_from_project');
+    expect(names).not.toContain('set_project_member_role');
+    expect(names).not.toContain('remove_project_member_role');
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
     expect(names).toContain('get_project');
+    expect(names).toContain('list_project_members');
   });
 
   it('strips host projectId and generated path.project_id from published schemas', () => {

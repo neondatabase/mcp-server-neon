@@ -38,6 +38,8 @@ const SECRET_GENERATED_TOOLS = [
   'list_neon_auth_oauth_providers',
 ];
 
+const OMITTED_BLOB_TOOLS = ['get_project_branch_bucket_object'];
+
 describe('NEON_TOOLS definitions', () => {
   it('every tool has a name, scope (or null), kind, projectScoped, and readOnlySafe flag', () => {
     for (const tool of NEON_TOOLS) {
@@ -168,6 +170,13 @@ describe('read-only tool surface', () => {
   it('does not expose secret-returning generated tools', () => {
     const names = new Set(NEON_TOOLS.map((t) => t.name));
     for (const name of SECRET_GENERATED_TOOLS) {
+      expect(names.has(name), name).toBe(false);
+    }
+  });
+
+  it('does not expose the raw bucket-object GET', () => {
+    const names = new Set(NEON_TOOLS.map((t) => t.name));
+    for (const name of OMITTED_BLOB_TOOLS) {
       expect(names.has(name), name).toBe(false);
     }
   });
