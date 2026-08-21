@@ -267,7 +267,9 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         const authMethod = authInfo.extra.authMethod;
         const account = authInfo.extra.account;
         const readOnly = authInfo.extra.readOnly ?? false;
-        const grant = { ...(authInfo.extra.grant ?? DEFAULT_GRANT) };
+        // SSE message POSTs omit the connection query string, so API-key auth
+        // resolves an unscoped grant. Use the grant captured when the stream opened.
+        const grant = { ...staticToolContext.grant };
         const client = authInfo.extra.client;
         const transport = authInfo.extra.transport ?? 'sse';
         const neonClient = createNeonClient(apiKey);
