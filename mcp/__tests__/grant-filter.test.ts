@@ -110,6 +110,12 @@ describe('filterToolsForGrant', () => {
     }
     expect('project_id' in queryLogs.inputSchema.shape).toBe(false);
     expect('branch_id' in queryLogs.inputSchema.shape).toBe(true);
+    expect(
+      queryLogs.inputSchema.safeParse({
+        branch_id: 'br-1',
+        project_id: 'proj-123',
+      }).success,
+    ).toBe(true);
   });
 
   it('combines scope and project filtering', () => {

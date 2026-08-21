@@ -6,8 +6,8 @@
 
 # Neon MCP Server
 
-[![Install MCP Server in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en-US/install-mcp?name=Neon&config=eyJ1cmwiOiJodHRwczovL21jcC5uZW9uLnRlY2gvbWNwIn0%3D)
-[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=Neon&config=%7B%22url%22%3A%20%22https%3A//mcp.neon.tech/mcp%22%7D)
+[![Install MCP Server in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en-US/install-mcp?name=Neon&config=eyJ1cmwiOiJodHRwczovL21jcC5uZW9uLnRlY2gvbWNwP2NhdGVnb3J5PXByb2plY3RzJmNhdGVnb3J5PWJyYW5jaGVzJmNhdGVnb3J5PWVuZHBvaW50cyZjYXRlZ29yeT1xdWVyeWluZyZjYXRlZ29yeT1zY2hlbWEifQ%3D%3D)
+[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=Neon&config=%7B%22url%22%3A%22https%3A%2F%2Fmcp.neon.tech%2Fmcp%3Fcategory%3Dprojects%26category%3Dbranches%26category%3Dendpoints%26category%3Dquerying%26category%3Dschema%22%7D)
 
 **Neon MCP Server** is an open-source tool that lets you interact with your Lakebase Postgres databases on Neon in **natural language**.
 
@@ -74,10 +74,10 @@ Connect to Neon's managed MCP server using OAuth for authentication. This is the
 Run the following command to add the Neon MCP Server for all detected agents and editors in your workspace:
 
 ```bash
-npx add-mcp "https://mcp.neon.tech/mcp?category=projects&category=branches&category=querying&category=schema"
+npx add-mcp "https://mcp.neon.tech/mcp?category=projects&category=branches&category=endpoints&category=querying&category=schema"
 ```
 
-That URL publishes 65 tools. The unfiltered URL publishes 134 tools (~227 KB on every `tools/list`). VS Code Copilot caps a request at 128 tools.
+That URL publishes projects, branches, compute endpoints, querying, and schema. The unfiltered URL publishes 134 tools (~227 KB on every `tools/list`). VS Code Copilot caps a request at 128 tools. Use it only when you want every category:
 
 ```bash
 npx add-mcp https://mcp.neon.tech/mcp
@@ -92,7 +92,7 @@ Alternatively, you can add the following "Neon" entry to your client's MCP serve
   "mcpServers": {
     "Neon": {
       "type": "http",
-      "url": "https://mcp.neon.tech/mcp"
+      "url": "https://mcp.neon.tech/mcp?category=projects&category=branches&category=endpoints&category=querying&category=schema"
     }
   }
 }
@@ -104,7 +104,7 @@ Alternatively, you can add the following "Neon" entry to your client's MCP serve
 {
   "mcpServers": {
     "Neon": {
-      "url": "https://mcp.neon.tech/mcp"
+      "url": "https://mcp.neon.tech/mcp?category=projects&category=branches&category=endpoints&category=querying&category=schema"
     }
   }
 }
@@ -124,7 +124,7 @@ Remote MCP Server also supports authentication using an API key in the `Authoriz
 [Create a Neon API key](https://console.neon.tech/app/settings?modal=create_api_key) in the Neon Console. Next, run the following command to add the Neon MCP Server for all detected agents and editors in your workspace:
 
 ```bash
-npx add-mcp https://mcp.neon.tech/mcp --header "Authorization: Bearer <$NEON_API_KEY>"
+npx add-mcp "https://mcp.neon.tech/mcp?category=projects&category=branches&category=endpoints&category=querying&category=schema" --header "Authorization: Bearer <$NEON_API_KEY>"
 ```
 
 Alternatively, you can add the following "Neon" entry to your client's MCP server configuration file (e.g., `mcp.json`, `mcp_config.json`):
@@ -134,7 +134,7 @@ Alternatively, you can add the following "Neon" entry to your client's MCP serve
   "mcpServers": {
     "Neon": {
       "type": "http",
-      "url": "https://mcp.neon.tech/mcp",
+      "url": "https://mcp.neon.tech/mcp?category=projects&category=branches&category=endpoints&category=querying&category=schema",
       "headers": {
         "Authorization": "Bearer <$NEON_API_KEY>"
       }
@@ -294,7 +294,7 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 
 Notes:
 
-- The unfiltered URL publishes 134 tools (~227 KB on every `tools/list`). VS Code Copilot caps a request at 128 tools. Pass `?category=` to stay under it. `projects`, `branches`, `querying`, and `schema` is 65 tools and includes `list_projects` plus the schema tools those workflows call.
+- The unfiltered URL publishes 134 tools (~227 KB on every `tools/list`). VS Code Copilot caps a request at 128 tools. Pass `?category=` to stay under it. `projects`, `branches`, `endpoints`, `querying`, and `schema` includes `list_projects`, compute tools, and the schema tools those workflows call.
 - `?category=branches` does not include compute tools. Those are `?category=endpoints`.
 - Management API tools come from `@neon/tools` with flat arguments.
 - `get_project_branch_schema` and `get_project_branch_schema_comparison` are categorized under `schema`.

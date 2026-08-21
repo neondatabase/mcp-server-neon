@@ -103,7 +103,7 @@ function removeGeneratedProjectId(tool: NeonTool): NeonTool | null {
 
   return {
     ...tool,
-    inputSchema: z4.strictObject(newShape),
+    inputSchema: z4.object(newShape),
   };
 }
 
