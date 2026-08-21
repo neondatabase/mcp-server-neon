@@ -222,6 +222,19 @@ describe('getAccessControlNotices', () => {
       expect(instructions).toContain(notice);
     }
   });
+
+  it('puts unknown-category warnings on server instructions', () => {
+    const instructions = formatAccessControlInstructions(
+      grant({
+        projectId: 'p-1',
+        scopes: [],
+        unknownCategories: ['compute'],
+      }),
+      false,
+    );
+    expect(instructions).toContain('compute');
+    expect(instructions).toContain('No tools are available');
+  });
 });
 
 describe('getAccessControlWarnings', () => {

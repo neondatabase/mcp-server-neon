@@ -212,9 +212,12 @@ export function formatAccessControlInstructions(
   grant: GrantContext,
   readOnly: boolean,
 ): string | undefined {
-  const notices = getAccessControlNotices(grant, readOnly);
-  if (notices.length === 0) return undefined;
-  return notices.join('\n\n');
+  const parts = [
+    ...getAccessControlNotices(grant, readOnly),
+    ...getAccessControlWarnings(grant, readOnly),
+  ];
+  if (parts.length === 0) return undefined;
+  return parts.join('\n\n');
 }
 
 /**

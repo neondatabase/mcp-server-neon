@@ -80,7 +80,7 @@ npx add-mcp https://mcp.neon.tech/mcp
 The unfiltered URL publishes 134 tools (~227 KB on `tools/list`). VS Code Copilot caps a request at 128 tools. A smaller start:
 
 ```bash
-npx add-mcp "https://mcp.neon.tech/mcp?category=branches&category=querying"
+npx add-mcp "https://mcp.neon.tech/mcp?category=projects&category=branches&category=querying"
 ```
 
 Add the `-g` flag to add the Neon MCP Server to the global MCP server list instead of project-scoped.
@@ -294,7 +294,7 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 
 Notes:
 
-- The unfiltered URL publishes 134 tools (~202 KB of name, description, and schema). VS Code Copilot caps a request at 128 tools. Pass `?category=` to stay under it: `branches` is 28 tools, `branches` plus `querying` is 37.
+- The unfiltered URL publishes 134 tools (~227 KB on `tools/list`). VS Code Copilot caps a request at 128 tools. Pass `?category=` to stay under it. `projects` plus `branches` plus `querying` is 61 tools and includes `list_projects`.
 - Management API tools come from `@neon/tools` and keep OpenAPI `{path, query, body}` inputs.
 - `get_project_branch_schema` and `get_project_branch_schema_comparison` are categorized under `schema`.
 - JWKS tools are categorized under `data_api`.

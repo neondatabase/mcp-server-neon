@@ -265,6 +265,14 @@ describe('generated tool interface', () => {
       NEON_TOOLS.find((tool) => tool.name === 'start_anonymization')
         ?.annotations.destructiveHint,
     ).toBe(true);
+    expect(
+      NEON_TOOLS.find((tool) => tool.name === 'assign_project_vpc_endpoint')
+        ?.annotations.destructiveHint,
+    ).toBe(true);
+    expect(
+      NEON_TOOLS.find((tool) => tool.name === 'set_default_project_branch')
+        ?.annotations.destructiveHint,
+    ).toBe(true);
   });
 
   it('notes branch id on generated tools that take path.branch_id', () => {

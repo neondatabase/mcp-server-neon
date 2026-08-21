@@ -141,6 +141,10 @@ const DESTRUCTIVE_POST_OPERATIONS = new Set<GeneratedOperationId>([
   'finalizeRestoreBranch',
   'startAnonymization',
   'createProjectBranchAnonymized',
+  'assignProjectVPCEndpoint',
+  'setDefaultProjectBranch',
+  'createProjectBranchFunctionDeployment',
+  'presignProjectBranchBucketObject',
 ]);
 
 function generatedDestructiveHint(
