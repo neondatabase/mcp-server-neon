@@ -1,10 +1,9 @@
-import type { NeonOperationId } from '@neon/tools';
+import type { NeonOperationId, NeonWorkflowId } from '@neon/tools';
 import type { ScopeCategory } from '../../utils/grant-context';
 
 export const GENERATED_OPERATION_SCOPES = {
   listProjects: 'projects',
   listSharedProjects: 'projects',
-  createProject: 'projects',
   deleteProject: 'projects',
   getProject: 'projects',
   updateProject: 'projects',
@@ -30,7 +29,6 @@ export const GENERATED_OPERATION_SCOPES = {
   countProjectBranches: 'branches',
   getProjectBranch: 'branches',
   updateProjectBranch: 'branches',
-  createProjectBranch: 'branches',
   deleteProjectBranch: 'branches',
   setDefaultProjectBranch: 'branches',
   restoreProjectBranch: 'branches',
@@ -132,6 +130,15 @@ export type GeneratedOperationId = keyof typeof GENERATED_OPERATION_SCOPES;
 export const GENERATED_OPERATION_IDS = Object.keys(
   GENERATED_OPERATION_SCOPES,
 ) as GeneratedOperationId[];
+
+export const WORKFLOW_SCOPES = {
+  createProjectAndConnect: 'projects',
+  createBranchWithCompute: 'branches',
+} as const satisfies Record<NeonWorkflowId, ScopeCategory>;
+
+export type WorkflowToolId = keyof typeof WORKFLOW_SCOPES;
+
+export const WORKFLOW_IDS = Object.keys(WORKFLOW_SCOPES) as WorkflowToolId[];
 
 export const READ_ONLY_SAFE_OPERATION_OVERRIDES = new Set<GeneratedOperationId>(
   ['queryProjectBranchLogs'],

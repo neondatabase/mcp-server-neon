@@ -307,14 +307,14 @@ Notes:
 - **`list_projects`**: Lists Neon projects. Arguments are `{ "limit": 10 }`.
 - **`list_shared_projects`**: Lists Neon projects shared with the current user. Same flat query fields.
 - **`get_project`**: Fetches a Neon project by id (`{ "project_id": "…" }`).
-- **`create_project`**: Creates a Neon project. Arguments are `{ "name": "…", "org_id": "…", "region_id": "…" }`. After it succeeds, call `get_connection_string` for a DATABASE_URL.
+- **`create_project`**: Creates a Neon project, waits for the default compute, and returns a connection string. Arguments are `{ "name": "…", "org_id": "…", "region_id": "…" }`.
 - **`delete_project`**: Deletes an existing Neon project. Arguments are `{ "project_id": "…" }`.
 - **`list_organizations`**: Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.
 
 **Branch Management:**
 
 - **`list_project_branches`**: Lists branches in a project. Use it to resolve a branch name to a `br-…` id.
-- **`create_branch`**: Creates a branch. Default is no compute. A connectable branch is `{ "project_id": "…", "branch": { "name": "feature-x" }, "endpoints": [{ "type": "read_write" }] }`. Then call `get_connection_string`.
+- **`create_branch`**: Creates a branch with a read-write compute, waits until it is ready, and returns a connection string. Arguments are `{ "project_id": "…", "name": "feature-x" }`.
 - **`delete_branch`**: Deletes a branch (`{ "project_id": "…", "branch_id": "br-…" }`).
 - **`describe_branch`**: Retrieves a tree of databases, schemas, tables, views, and functions on a branch.
 - Generated branch tools take `branch_id` as a branch id (`br-...`), not a name.

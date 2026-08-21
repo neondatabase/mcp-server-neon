@@ -2,28 +2,29 @@ import { describe, expect, it } from 'vitest';
 import { sanitizeGeneratedResult } from '../tools/generated/sanitize';
 
 describe('sanitizeGeneratedResult', () => {
-  it('strips connection_uris and role passwords from a create-project body', () => {
-    const sanitized = sanitizeGeneratedResult('createProject', {
+  it('keeps connectionString on workflow results and strips leftover credentials', () => {
+    const sanitized = sanitizeGeneratedResult('createProjectAndConnect', {
       project: { id: 'proj-1', name: 'demo' },
+      connectionString: 'postgresql://neondb_owner:secret@host/neondb',
       connection_uris: [
         {
           connection_uri: 'postgresql://neondb_owner:secret@host/neondb',
         },
       ],
       roles: [{ name: 'neondb_owner', password: 'secret' }],
-      branch: { id: 'br-1' },
     });
 
     expect(sanitized).toEqual({
       project: { id: 'proj-1', name: 'demo' },
+      connectionString: 'postgresql://neondb_owner:secret@host/neondb',
       roles: [{ name: 'neondb_owner' }],
-      branch: { id: 'br-1' },
     });
   });
 
-  it('strips the same credential fields from a create-branch body', () => {
-    const sanitized = sanitizeGeneratedResult('createProjectBranch', {
+  it('keeps connectionString on createBranchWithCompute', () => {
+    const sanitized = sanitizeGeneratedResult('createBranchWithCompute', {
       branch: { id: 'br-1' },
+      connectionString: 'postgresql://neondb_owner:secret@host/neondb',
       connection_uris: [
         { connection_uri: 'postgresql://neondb_owner:secret@host/neondb' },
       ],
@@ -32,6 +33,7 @@ describe('sanitizeGeneratedResult', () => {
 
     expect(sanitized).toEqual({
       branch: { id: 'br-1' },
+      connectionString: 'postgresql://neondb_owner:secret@host/neondb',
       roles: [{ name: 'neondb_owner' }],
     });
   });

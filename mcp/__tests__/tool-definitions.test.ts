@@ -226,6 +226,7 @@ describe('generated tool interface', () => {
     expect(generatedShape(listShared!)).toHaveProperty('limit');
     expect(generatedShape(createProject!)).toHaveProperty('name');
     expect(generatedShape(createProject!)).toHaveProperty('org_id');
+    expect(generatedShape(createProject!)).toHaveProperty('pooled');
     expect(generatedShape(deleteProject!)).toHaveProperty('project_id');
     expect(generatedShape(listProjects!)).not.toHaveProperty('query');
     expect(generatedShape(createProject!)).not.toHaveProperty('body');
@@ -263,14 +264,17 @@ describe('generated tool interface', () => {
     ).toBe(true);
   });
 
-  it('tells create_branch to pass an endpoint before get_connection_string', () => {
+  it('describes create_branch as a compute workflow that returns a connection string', () => {
     const createBranch = NEON_TOOLS.find(
       (tool) => tool.name === 'create_branch',
     );
-    expect(createBranch?.description).toContain(
-      'endpoints: [{ "type": "read_write" }]',
-    );
-    expect(createBranch?.description).toContain('get_connection_string');
+    const shape = generatedShape(createBranch!);
+    expect(shape).toHaveProperty('project_id');
+    expect(shape).toHaveProperty('name');
+    expect(shape).toHaveProperty('pooled');
+    expect(shape).not.toHaveProperty('branch');
+    expect(shape).not.toHaveProperty('endpoints');
+    expect(createBranch?.description).toContain('connection string');
   });
 
   it('keeps the never-run-autonomously text on delete_branch and delete_project', () => {

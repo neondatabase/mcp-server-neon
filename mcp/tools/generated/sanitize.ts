@@ -1,6 +1,8 @@
-import type { GeneratedOperationId } from './operations';
+import type { GeneratedOperationId, WorkflowToolId } from './operations';
 
-const KEEP_ROLE_PASSWORD = new Set<GeneratedOperationId>([
+type SanitizedToolId = GeneratedOperationId | WorkflowToolId;
+
+const KEEP_ROLE_PASSWORD = new Set<SanitizedToolId>([
   'createProjectBranchRole',
   'resetProjectBranchRolePassword',
 ]);
@@ -31,16 +33,13 @@ function omitRolePassword(role: unknown): unknown {
  * passwords because producing a credential is the requested operation.
  */
 export function sanitizeGeneratedResult(
-  operationId: GeneratedOperationId,
+  operationId: SanitizedToolId,
   data: unknown,
 ): unknown {
   return sanitizeValue(operationId, data);
 }
 
-function sanitizeValue(
-  operationId: GeneratedOperationId,
-  data: unknown,
-): unknown {
+function sanitizeValue(operationId: SanitizedToolId, data: unknown): unknown {
   if (Array.isArray(data)) {
     return data.map((item) => sanitizeValue(operationId, item));
   }

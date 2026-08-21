@@ -12,27 +12,29 @@ import {
   GENERATED_OPERATION_SCOPES,
   PROJECT_SCOPED_OPERATION_OVERRIDES,
   READ_ONLY_SAFE_OPERATION_OVERRIDES,
+  WORKFLOW_IDS,
+  WORKFLOW_SCOPES,
   type GeneratedOperationId,
+  type WorkflowToolId,
 } from './operations';
 import { sanitizeGeneratedResult } from './sanitize';
 
-const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project within an organization.
+const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project, waits until the default compute is ready, and returns a connection string.
+
 If using a personal API key, include \`org_id\` to specify which organization to create the project in.
 If using an org API key, \`org_id\` is automatically inferred from the key.
 Plan limits define how many projects you can create.
 
-This tool does not return a connection string. After it succeeds, call \`get_connection_string\` with the new project id to obtain a DATABASE_URL.
-
 You can specify a region (\`region_id\`) and Postgres version (\`pg_version\`).
-Neon supports Postgres 14 through 18, with 19 rolling out to enabled regions.`;
+Neon supports Postgres 14 through 18, with 19 rolling out to enabled regions.
 
-const CREATE_BRANCH_DESCRIPTION = `Creates a branch in a Neon project.
+\`pooled\` defaults to true. Set \`pooled: false\` for a direct host.`;
 
-The default is a branch with no compute. Pass \`endpoints: [{ "type": "read_write" }]\` if the caller will connect or run SQL. \`get_connection_string\` fails on a branch with no endpoint.
+const CREATE_BRANCH_DESCRIPTION = `Creates a branch with a read-write compute, waits until it is ready, and returns a connection string.
 
-This tool does not return a connection string. After it succeeds with an endpoint, call \`get_connection_string\` with the new branch id.
+Arguments: \`{ "project_id": "…", "name": "feature-x" }\`. \`parent_id\` defaults to the project's default branch.
 
-\`branch\` is a nested object: \`{ "project_id": "…", "branch": { "name": "feature-x" }, "endpoints": [{ "type": "read_write" }] }\`.`;
+\`pooled\` defaults to true. Set \`pooled: false\` for a direct host.`;
 
 const DELETE_PROJECT_DESCRIPTION = `Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For removing single branches, use \`delete_branch\` instead.
 
@@ -50,9 +52,15 @@ const BRANCH_ID_NOTE =
   'branch_id is a branch id (br-...), not a branch name. Call list_project_branches to resolve a name.';
 
 const GENERATED_TOOL_NAMES = {
-  createProjectBranch: 'create_branch',
   deleteProjectBranch: 'delete_branch',
 } as const;
+
+const WORKFLOW_TOOL_NAMES = {
+  createProjectAndConnect: 'create_project',
+  createBranchWithCompute: 'create_branch',
+} as const;
+
+const WORKFLOW_WAIT = { timeoutMs: 120_000 } as const;
 
 const LOG_QUERY_ANNOTATIONS = {
   readOnlyHint: true,
@@ -64,12 +72,17 @@ const LOG_QUERY_ANNOTATIONS = {
 function createGeneratedNeonTools() {
   return createNeonTools({
     operations: GENERATED_OPERATION_IDS,
+    workflows: WORKFLOW_IDS,
     baseUrl: NEON_API_HOST,
     fetch: fetchAsMcpServer,
-    names: GENERATED_TOOL_NAMES,
+    wait: WORKFLOW_WAIT,
+    names: {
+      ...GENERATED_TOOL_NAMES,
+      ...WORKFLOW_TOOL_NAMES,
+    },
     descriptions: {
-      createProject: CREATE_PROJECT_DESCRIPTION,
-      createProjectBranch: CREATE_BRANCH_DESCRIPTION,
+      createProjectAndConnect: CREATE_PROJECT_DESCRIPTION,
+      createBranchWithCompute: CREATE_BRANCH_DESCRIPTION,
       deleteProject: DELETE_PROJECT_DESCRIPTION,
       deleteProjectBranch: DELETE_BRANCH_DESCRIPTION,
       createProjectEndpoint: CREATE_PROJECT_ENDPOINT_DESCRIPTION,
@@ -178,16 +191,38 @@ function generatedDestructiveHint(
   );
 }
 
+function workflowToolDefinition(
+  workflowId: WorkflowToolId,
+  tool: GeneratedNeonTool,
+): NeonTool {
+  return {
+    kind: 'generated',
+    name: tool.id,
+    scope: WORKFLOW_SCOPES[workflowId],
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+    readOnlySafe: false,
+    projectScoped: hasPathKey(tool, 'project_id'),
+    annotations: {
+      title: tool.title,
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  };
+}
+
 export function createGeneratedToolDefinitions(): NeonTool[] {
   const tools = getGeneratedNeonTools();
-  return GENERATED_OPERATION_IDS.map((operationId) => {
+  const operations = GENERATED_OPERATION_IDS.map((operationId) => {
     const tool = tools[operationId];
     const readOnlySafe = generatedReadOnlySafe(operationId, tool);
     const description = hasPathKey(tool, 'branch_id')
       ? `${tool.description}\n\n${BRANCH_ID_NOTE}`
       : tool.description;
     return {
-      kind: 'generated',
+      kind: 'generated' as const,
       name: tool.id,
       scope: GENERATED_OPERATION_SCOPES[operationId],
       description,
@@ -197,6 +232,10 @@ export function createGeneratedToolDefinitions(): NeonTool[] {
       annotations: generatedAnnotations(operationId, tool, readOnlySafe),
     };
   });
+  const workflows = WORKFLOW_IDS.map((workflowId) =>
+    workflowToolDefinition(workflowId, tools[workflowId]),
+  );
+  return [...operations, ...workflows];
 }
 
 function jsonTextResult(data: unknown) {
@@ -214,8 +253,10 @@ export function createGeneratedToolHandlers(): ToolHandlers {
   const tools = getGeneratedNeonTools();
   const handlers: ToolHandlers = {};
 
-  for (const operationId of GENERATED_OPERATION_IDS) {
-    const tool = tools[operationId];
+  const register = (
+    id: GeneratedOperationId | WorkflowToolId,
+    tool: GeneratedNeonTool,
+  ) => {
     const handler: ToolHandlerExtended = async (args, _neonClient, extra) => {
       if (!extra?.apiKey) {
         throw new Error(`Tool ${tool.id} requires an API key`);
@@ -229,9 +270,16 @@ export function createGeneratedToolHandlers(): ToolHandlers {
         apiKey: extra.apiKey,
         signal: extra.signal,
       });
-      return jsonTextResult(sanitizeGeneratedResult(operationId, result.data));
+      return jsonTextResult(sanitizeGeneratedResult(id, result.data));
     };
     handlers[tool.id] = handler;
+  };
+
+  for (const operationId of GENERATED_OPERATION_IDS) {
+    register(operationId, tools[operationId]);
+  }
+  for (const workflowId of WORKFLOW_IDS) {
+    register(workflowId, tools[workflowId]);
   }
 
   return handlers;
