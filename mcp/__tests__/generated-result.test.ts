@@ -77,6 +77,18 @@ describe('sanitizeGeneratedResult', () => {
     });
   });
 
+  it('strips an SMTP password from an email-provider update', () => {
+    const sanitized = sanitizeGeneratedResult('updateNeonAuthEmailProvider', {
+      email_provider: 'standard',
+      password: 'smtp-secret',
+      host: 'smtp.example',
+    });
+    expect(sanitized).toEqual({
+      email_provider: 'standard',
+      host: 'smtp.example',
+    });
+  });
+
   it('strips a stored password from a role GET', () => {
     const sanitized = sanitizeGeneratedResult('getProjectBranchRole', {
       role: { name: 'app', password: 'secret', protected: false },

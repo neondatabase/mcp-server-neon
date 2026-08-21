@@ -53,6 +53,7 @@ function sanitizeValue(
   const next: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
     if (DROP_KEYS.has(key)) continue;
+    if (key === 'password' && !KEEP_ROLE_PASSWORD.has(operationId)) continue;
     if (key === 'roles' && Array.isArray(value)) {
       next[key] = value.map(omitRolePassword);
       continue;
