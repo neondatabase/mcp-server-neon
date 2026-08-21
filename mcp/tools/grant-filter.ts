@@ -177,6 +177,13 @@ export function getAccessControlNotices(
         'and by logging out and back in after removing the param when using OAuth.',
     );
   }
+  if (grant.unknownCategories?.length) {
+    notices.push(
+      'Notice: Unknown category query values were ignored: ' +
+        `${grant.unknownCategories.join(', ')}. ` +
+        `Valid values: ${SCOPE_CATEGORIES.join(', ')}.`,
+    );
+  }
   return notices;
 }
 
@@ -233,14 +240,6 @@ export function getAccessControlWarnings(
 ): string[] {
   void _readOnly;
   const warnings: string[] = [];
-
-  if (grant.unknownCategories?.length) {
-    warnings.push(
-      '⚠️ Warning: Unknown category query values were ignored: ' +
-        `${grant.unknownCategories.join(', ')}. ` +
-        `Valid values: ${SCOPE_CATEGORIES.join(', ')}.`,
-    );
-  }
 
   if (grant.scopes !== null && grant.scopes.length === 0) {
     const discoveryToolsText = grant.projectId

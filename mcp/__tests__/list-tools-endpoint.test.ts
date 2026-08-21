@@ -60,7 +60,7 @@ describe('/api/list-tools endpoint', () => {
     const body = await callListTools({ category: 'foo,bar' });
     expect(body.grant.scopes).toEqual([]);
     expect(body.tools.map((t) => t.name).sort()).toEqual(['fetch', 'search']);
-    expect(body.warnings?.some((w) => w.includes('foo, bar'))).toBe(true);
+    expect(body.notices?.some((n) => n.includes('foo, bar'))).toBe(true);
     expect(
       body.warnings?.some((w) => w.includes('No valid scope categories')),
     ).toBe(true);

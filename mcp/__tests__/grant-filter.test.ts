@@ -223,6 +223,19 @@ describe('getAccessControlNotices', () => {
     }
   });
 
+  it('names unknown category values on notices, not per-call warnings', () => {
+    const mixed = grant({
+      scopes: ['branches'],
+      unknownCategories: ['compute'],
+    });
+    expect(
+      getAccessControlNotices(mixed, false).some((notice) =>
+        notice.includes('compute'),
+      ),
+    ).toBe(true);
+    expect(getAccessControlWarnings(mixed, false)).toEqual([]);
+  });
+
   it('puts unknown-category warnings on server instructions', () => {
     const instructions = formatAccessControlInstructions(
       grant({
@@ -238,16 +251,6 @@ describe('getAccessControlNotices', () => {
 });
 
 describe('getAccessControlWarnings', () => {
-  it('warns when some category values are unknown', () => {
-    const warnings = getAccessControlWarnings(
-      grant({ scopes: ['branches'], unknownCategories: ['compute'] }),
-      false,
-    );
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('compute');
-    expect(warnings[0]).toContain('endpoints');
-  });
-
   it('warns when no valid scope categories are set', () => {
     const warnings = getAccessControlWarnings(grant({ scopes: [] }), false);
     expect(warnings).toHaveLength(1);
