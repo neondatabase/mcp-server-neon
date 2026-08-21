@@ -305,12 +305,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     'creates a prefixed project through the MCP protocol and verifies it with @neon/sdk',
     async () => {
       const result = await callTool('create_project', {
-        body: {
-          project: {
-            name: projectName,
-            org_id: testOrgId,
-          },
-        },
+        name: projectName,
+        org_id: testOrgId,
       });
       const text = assertToolSucceeded('create_project', result);
       const created = z
@@ -881,7 +877,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       }
 
       const result = await callTool('delete_project', {
-        path: { project_id: id },
+        project_id: id,
       });
       assertToolSucceeded('delete_project', result);
       await waitForProjectDeletion(id);

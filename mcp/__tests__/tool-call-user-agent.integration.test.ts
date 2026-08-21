@@ -142,9 +142,9 @@ async function callTool(name: string, params: Record<string, unknown>) {
 
 describe('user agent on Neon API requests made by tool calls', () => {
   it('identifies the MCP server on SDK-backed requests, without disturbing what the SDK put on them', async () => {
-    await callTool('create_project_branch', {
-      path: { project_id: 'proj-1' },
-      body: { branch: { name: 'test-branch' } },
+    await callTool('create_branch', {
+      project_id: 'proj-1',
+      branch: { name: 'test-branch' },
     });
 
     expect(recorded).toEqual([
@@ -165,8 +165,8 @@ describe('user agent on Neon API requests made by tool calls', () => {
 
   it('identifies the MCP server on logs requests', async () => {
     await callTool('query_project_branch_logs', {
-      path: { project_id: 'proj-1', branch_id: 'br-1' },
-      body: {},
+      project_id: 'proj-1',
+      branch_id: 'br-1',
     });
 
     expect(recorded).toEqual([

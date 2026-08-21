@@ -224,7 +224,7 @@ Generated Management API tools that are GET and do not return secrets, plus `que
 
 **Tools requiring write access:**
 
-- Generated Management API writes (`create_project`, `create_project_branch`, `delete_project`, …)
+- Generated Management API writes (`create_project`, `create_branch`, `delete_project`, …)
 - `get_connection_string` (the connection string carries a privileged role password, so it is withheld in read-only mode; copy it from the [Neon Console](https://console.neon.tech) instead)
 - `prepare_database_migration`, `complete_database_migration`
 - `prepare_query_tuning`, `complete_query_tuning`
@@ -295,7 +295,7 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 Notes:
 
 - The unfiltered URL publishes 134 tools (~227 KB on `tools/list`). VS Code Copilot caps a request at 128 tools. Pass `?category=` to stay under it. `projects`, `branches`, `querying`, and `schema` is 65 tools and includes `list_projects` plus the schema tools those workflows call.
-- Management API tools come from `@neon/tools` and keep OpenAPI `{path, query, body}` inputs.
+- Management API tools come from `@neon/tools` with flat arguments.
 - `get_project_branch_schema` and `get_project_branch_schema_comparison` are categorized under `schema`.
 - JWKS tools are categorized under `data_api`.
 - Read-only enforcement still relies on `readOnlySafe` and server-side read-only logic; `scope` is category metadata, not a standalone read/write switch.
@@ -303,20 +303,20 @@ Notes:
 
 **Project Management:**
 
-- **`list_projects`**: Lists Neon projects. Arguments are `{ "query": { "limit": 10 } }`, not a flat `{ "limit": 10 }`.
-- **`list_shared_projects`**: Lists Neon projects shared with the current user. Same `{ "query": … }` envelope.
-- **`get_project`**: Fetches a Neon project by id (`{ "path": { "project_id": "…" } }`).
-- **`create_project`**: Creates a Neon project. Arguments are `{ "body": { "project": { "name": "…" } } }`, not a flat `{ "name": "…" }`. After it succeeds, call `get_connection_string` for a DATABASE_URL.
-- **`delete_project`**: Deletes an existing Neon project. Arguments are `{ "path": { "project_id": "…" } }`, not `{ "projectId": "…" }`.
+- **`list_projects`**: Lists Neon projects. Arguments are `{ "limit": 10 }`.
+- **`list_shared_projects`**: Lists Neon projects shared with the current user. Same flat query fields.
+- **`get_project`**: Fetches a Neon project by id (`{ "project_id": "…" }`).
+- **`create_project`**: Creates a Neon project. Arguments are `{ "name": "…", "org_id": "…", "region_id": "…" }`. After it succeeds, call `get_connection_string` for a DATABASE_URL.
+- **`delete_project`**: Deletes an existing Neon project. Arguments are `{ "project_id": "…" }`.
 - **`list_organizations`**: Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.
 
 **Branch Management:**
 
-- **`create_project_branch`**: Creates a branch in a Neon project. Pass an endpoint in the body if you need a compute.
-- **`delete_project_branch`**: Deletes an existing branch from a Neon project.
+- **`create_branch`**: Creates a branch in a Neon project. Pass `endpoints` if you need a compute. `branch` stays a nested object.
+- **`delete_branch`**: Deletes an existing branch from a Neon project.
 - **`describe_branch`**: Retrieves a tree of databases, schemas, tables, views, and functions on a branch.
-- Generated branch tools take `path.branch_id` as a branch id (`br-...`), not a name. Call `list_project_branches` to resolve a name.
-- **`restore_project_branch`**: Restores a branch from a parent or snapshot. Pass ids in the OpenAPI body.
+- Generated branch tools take `branch_id` as a branch id (`br-...`), not a name. Call `list_project_branches` to resolve a name.
+- **`restore_project_branch`**: Restores a branch from a parent or snapshot.
 
 **Compute endpoints** (`?category=endpoints`):
 

@@ -17,17 +17,22 @@ import {
 import { sanitizeGeneratedResult } from './sanitize';
 
 const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project within an organization.
-If using a personal API key, include \`org_id\` in the project body to specify which organization to create the project in.
+If using a personal API key, include \`org_id\` to specify which organization to create the project in.
 If using an org API key, \`org_id\` is automatically inferred from the key.
 Plan limits define how many projects you can create.
 
 This tool does not return a connection string. After it succeeds, call \`get_connection_string\` with the new project id to obtain a DATABASE_URL.
 
-You can specify a region and Postgres version in the request body.
+You can specify a region (\`region_id\`) and Postgres version (\`pg_version\`).
 Neon supports Postgres 14 through 18, with 19 rolling out to enabled regions.`;
 
 const BRANCH_ID_NOTE =
-  'path.branch_id is a branch id (br-...), not a branch name. Call list_project_branches to resolve a name.';
+  'branch_id is a branch id (br-...), not a branch name. Call list_project_branches to resolve a name.';
+
+const GENERATED_TOOL_NAMES = {
+  createProjectBranch: 'create_branch',
+  deleteProjectBranch: 'delete_branch',
+} as const;
 
 const LOG_QUERY_ANNOTATIONS = {
   readOnlyHint: true,
@@ -36,9 +41,19 @@ const LOG_QUERY_ANNOTATIONS = {
   openWorldHint: false,
 } as const satisfies ToolAnnotations;
 
-type GeneratedTools = ReturnType<
-  typeof createNeonTools<typeof GENERATED_OPERATION_IDS>
->;
+function createGeneratedNeonTools() {
+  return createNeonTools({
+    operations: GENERATED_OPERATION_IDS,
+    baseUrl: NEON_API_HOST,
+    fetch: fetchAsMcpServer,
+    names: GENERATED_TOOL_NAMES,
+    descriptions: {
+      createProject: CREATE_PROJECT_DESCRIPTION,
+    },
+  });
+}
+
+type GeneratedTools = ReturnType<typeof createGeneratedNeonTools>;
 
 type CachedTools = {
   host: string;
@@ -52,42 +67,19 @@ function getGeneratedNeonTools(): GeneratedTools {
     return cached.tools;
   }
 
-  const tools = createNeonTools({
-    operations: GENERATED_OPERATION_IDS,
-    baseUrl: NEON_API_HOST,
-    fetch: fetchAsMcpServer,
-    descriptions: {
-      createProject: CREATE_PROJECT_DESCRIPTION,
-    },
-  });
+  const tools = createGeneratedNeonTools();
   cached = { host: NEON_API_HOST, tools };
   return tools;
 }
 
 function hasPathKey(tool: GeneratedNeonTool, key: string): boolean {
-  const schema = tool.inputSchema;
-  if (
-    !('shape' in schema) ||
-    typeof schema.shape !== 'object' ||
-    !schema.shape
-  ) {
-    return false;
-  }
-  const shape = schema.shape;
-  if (!('path' in shape)) {
-    return false;
-  }
-  const pathSchema = shape.path;
-  if (
-    typeof pathSchema !== 'object' ||
-    pathSchema === null ||
-    !('shape' in pathSchema) ||
-    typeof pathSchema.shape !== 'object' ||
-    pathSchema.shape === null
-  ) {
-    return false;
-  }
-  return key in pathSchema.shape;
+  return tool.metadata.path.includes(`{${key}}`);
+}
+
+export function generatedToolPathHas(id: string, key: string): boolean {
+  const tools = getGeneratedNeonTools();
+  const tool = Object.values(tools).find((candidate) => candidate.id === id);
+  return tool !== undefined && hasPathKey(tool, key);
 }
 
 function generatedReadOnlySafe(

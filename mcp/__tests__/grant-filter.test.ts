@@ -78,7 +78,7 @@ describe('filterToolsForGrant', () => {
     expect(names).toContain('list_project_members');
   });
 
-  it('strips host projectId and generated path.project_id from published schemas', () => {
+  it('strips host projectId and generated project_id from published schemas', () => {
     const tools = filterToolsForGrant(
       NEON_TOOLS,
       grant({ projectId: 'proj-123' }),
@@ -97,7 +97,7 @@ describe('filterToolsForGrant', () => {
     if (!getProject || !isZod4Object(getProject.inputSchema)) {
       throw new Error('get_project must keep a Zod 4 object schema');
     }
-    expect('path' in getProject.inputSchema.shape).toBe(false);
+    expect('project_id' in getProject.inputSchema.shape).toBe(false);
 
     const queryLogs = tools.find(
       (tool) => tool.name === 'query_project_branch_logs',
@@ -108,13 +108,8 @@ describe('filterToolsForGrant', () => {
         'query_project_branch_logs must keep a Zod 4 object schema',
       );
     }
-    const pathSchema = queryLogs.inputSchema.shape.path;
-    expect(isZod4Object(pathSchema)).toBe(true);
-    if (!isZod4Object(pathSchema)) {
-      throw new Error('query_project_branch_logs.path must remain an object');
-    }
-    expect('project_id' in pathSchema.shape).toBe(false);
-    expect('branch_id' in pathSchema.shape).toBe(true);
+    expect('project_id' in queryLogs.inputSchema.shape).toBe(false);
+    expect('branch_id' in queryLogs.inputSchema.shape).toBe(true);
   });
 
   it('combines scope and project filtering', () => {
@@ -285,15 +280,15 @@ describe('injectProjectId', () => {
     });
   });
 
-  it('injects path.project_id for generated tools', () => {
+  it('injects project_id for generated tools', () => {
     expect(
-      injectProjectId(
-        { path: { branch_id: 'br-1' } },
-        grant({ projectId: 'proj-123' }),
-        { kind: 'generated', projectScoped: true },
-      ),
+      injectProjectId({ branch_id: 'br-1' }, grant({ projectId: 'proj-123' }), {
+        kind: 'generated',
+        projectScoped: true,
+      }),
     ).toEqual({
-      path: { branch_id: 'br-1', project_id: 'proj-123' },
+      branch_id: 'br-1',
+      project_id: 'proj-123',
     });
   });
 

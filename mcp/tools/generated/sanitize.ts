@@ -27,10 +27,8 @@ function omitRolePassword(role: unknown): unknown {
 }
 
 /**
- * Create payloads omit connection_uris and roles[].password because
- * get_connection_string owns URI retrieval. GET role may include a stored
- * password; only role create/reset keep role.password as their result.
- * Auth create and OAuth-provider writes return provider secrets.
+ * Connection URIs have a dedicated tool; role create and reset responses keep
+ * passwords because producing a credential is the requested operation.
  */
 export function sanitizeGeneratedResult(
   operationId: GeneratedOperationId,

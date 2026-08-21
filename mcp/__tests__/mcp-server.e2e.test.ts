@@ -120,20 +120,22 @@ describe('MCP server e2e tool calls', () => {
       expect(queryLogsTool?.inputSchema).toMatchObject({
         type: 'object',
         properties: {
-          path: { type: 'object' },
-          body: { type: 'object' },
+          project_id: { type: 'string' },
+          branch_id: { type: 'string' },
         },
       });
       expect(listLogFieldsTool?.inputSchema).toMatchObject({
         type: 'object',
         properties: {
-          path: { type: 'object' },
+          project_id: { type: 'string' },
+          branch_id: { type: 'string' },
         },
       });
       expect(listLogFieldValuesTool?.inputSchema).toMatchObject({
         type: 'object',
         properties: {
-          path: { type: 'object' },
+          project_id: { type: 'string' },
+          branch_id: { type: 'string' },
         },
       });
     });

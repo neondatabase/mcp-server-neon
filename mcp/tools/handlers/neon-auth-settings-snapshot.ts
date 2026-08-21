@@ -9,7 +9,6 @@ import {
 } from '../../neon-client';
 import { NeonApiError } from '@neon/sdk';
 
-/** Lets callers distinguish configured secrets from null without exposing values. */
 export const REDACTED_SECRET = '***redacted***' as const;
 
 /**

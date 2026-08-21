@@ -209,9 +209,7 @@ describe('SSE connection grant on tool invocation', () => {
 
     expect(getProjectSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        params: expect.objectContaining({
-          path: expect.objectContaining({ project_id: SCOPED_PROJECT_ID }),
-        }),
+        params: expect.objectContaining({ project_id: SCOPED_PROJECT_ID }),
       }),
       expect.anything(),
       expect.anything(),

@@ -8,6 +8,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { HOST_TOOLS, NEON_TOOLS } from '../tools/definitions';
+import { generatedToolPathHas } from '../tools/generated/adapt';
 import { NEON_HANDLERS } from '../tools/tools';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
 
@@ -206,22 +207,8 @@ function generatedShape(
   return schema.shape as Record<string, unknown>;
 }
 
-function pathShape(tool: (typeof NEON_TOOLS)[number]): Record<string, unknown> {
-  const path = generatedShape(tool).path;
-  if (
-    typeof path !== 'object' ||
-    path === null ||
-    !('shape' in path) ||
-    typeof path.shape !== 'object' ||
-    path.shape === null
-  ) {
-    return {};
-  }
-  return path.shape as Record<string, unknown>;
-}
-
 describe('generated tool interface', () => {
-  it('keeps OpenAPI envelopes on the four same-name project tools', () => {
+  it('exposes flat arguments on the four same-name project tools', () => {
     const listProjects = NEON_TOOLS.find(
       (tool) => tool.name === 'list_projects',
     );
@@ -235,13 +222,14 @@ describe('generated tool interface', () => {
       (tool) => tool.name === 'delete_project',
     );
 
-    expect(Object.keys(generatedShape(listProjects!))).toEqual(['query']);
-    expect(Object.keys(generatedShape(listShared!))).toEqual(['query']);
-    expect(Object.keys(generatedShape(createProject!))).toEqual(['body']);
-    expect(Object.keys(generatedShape(deleteProject!))).toEqual(['path']);
-    expect(generatedShape(listProjects!)).not.toHaveProperty('limit');
-    expect(generatedShape(createProject!)).not.toHaveProperty('name');
-    expect(generatedShape(deleteProject!)).not.toHaveProperty('projectId');
+    expect(generatedShape(listProjects!)).toHaveProperty('limit');
+    expect(generatedShape(listShared!)).toHaveProperty('limit');
+    expect(generatedShape(createProject!)).toHaveProperty('name');
+    expect(generatedShape(createProject!)).toHaveProperty('org_id');
+    expect(generatedShape(deleteProject!)).toHaveProperty('project_id');
+    expect(generatedShape(listProjects!)).not.toHaveProperty('query');
+    expect(generatedShape(createProject!)).not.toHaveProperty('body');
+    expect(generatedShape(deleteProject!)).not.toHaveProperty('path');
   });
 
   it('marks additive creates as non-destructive and deletes as destructive', () => {
@@ -249,7 +237,7 @@ describe('generated tool interface', () => {
       (tool) => tool.name === 'create_project',
     );
     const createBranch = NEON_TOOLS.find(
-      (tool) => tool.name === 'create_project_branch',
+      (tool) => tool.name === 'create_branch',
     );
     const deleteProject = NEON_TOOLS.find(
       (tool) => tool.name === 'delete_project',
@@ -275,13 +263,12 @@ describe('generated tool interface', () => {
     ).toBe(true);
   });
 
-  it('notes branch id on generated tools that take path.branch_id', () => {
-    const note = 'path.branch_id is a branch id (br-...), not a branch name';
+  it('notes branch id on generated tools that take a path branch_id', () => {
+    const note = 'branch_id is a branch id (br-...), not a branch name';
     for (const tool of NEON_TOOLS.filter(
       (candidate) => candidate.kind === 'generated',
     )) {
-      const hasBranchId = 'branch_id' in pathShape(tool);
-      if (hasBranchId) {
+      if (generatedToolPathHas(tool.name, 'branch_id')) {
         expect(tool.description, tool.name).toContain(note);
       } else {
         expect(tool.description, tool.name).not.toContain(note);

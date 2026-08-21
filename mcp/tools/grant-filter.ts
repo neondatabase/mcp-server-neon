@@ -17,10 +17,6 @@ const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
   'fetch',
 ]);
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function isZod4Object(schema: unknown): schema is z4.ZodObject<z4.ZodRawShape> {
   return (
     typeof schema === 'object' &&
@@ -99,29 +95,15 @@ function removeHostProjectId(tool: NeonTool): NeonTool | null {
 function removeGeneratedProjectId(tool: NeonTool): NeonTool | null {
   const schema = tool.inputSchema;
   if (!isZod4Object(schema)) return null;
+  if (!('project_id' in schema.shape)) return null;
 
-  const pathSchema = schema.shape.path;
-  if (!isZod4Object(pathSchema)) return null;
-  if (!('project_id' in pathSchema.shape)) return null;
-
-  const restPath = Object.fromEntries(
-    Object.entries(pathSchema.shape).filter(([key]) => key !== 'project_id'),
-  );
   const newShape = Object.fromEntries(
-    Object.entries(schema.shape).flatMap(([key, value]) => {
-      if (key !== 'path') {
-        return [[key, value]];
-      }
-      if (Object.keys(restPath).length === 0) {
-        return [];
-      }
-      return [['path', z4.object(restPath)]];
-    }),
+    Object.entries(schema.shape).filter(([key]) => key !== 'project_id'),
   );
 
   return {
     ...tool,
-    inputSchema: z4.object(newShape),
+    inputSchema: z4.strictObject(newShape),
   };
 }
 
@@ -264,11 +246,7 @@ export function injectProjectId(
   if (!grant.projectId) return args;
   if (tool && !tool.projectScoped) return args;
   if (tool?.kind === 'generated') {
-    const path = isPlainObject(args.path) ? args.path : {};
-    return {
-      ...args,
-      path: { ...path, project_id: grant.projectId },
-    };
+    return { ...args, project_id: grant.projectId };
   }
   return { ...args, projectId: grant.projectId };
 }
