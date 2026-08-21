@@ -1,5 +1,3 @@
-import type { GeneratedOperationId } from './operations';
-
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -16,15 +14,13 @@ function omitRolePassword(role: unknown): unknown {
 }
 
 /**
- * create_project's API 201 includes connection_uris and role passwords.
- * The published tool description says it does not return a connection
- * string; get_connection_string is the write-mode path for that.
+ * Create-project and create-branch 201s include connection_uris and
+ * passwords on the roles array. get_connection_string is the write-mode
+ * path for a URI. Role create/reset keep a top-level role.password;
+ * that is the result of those tools.
  */
-export function sanitizeGeneratedResult(
-  operationId: GeneratedOperationId,
-  data: unknown,
-): unknown {
-  if (operationId !== 'createProject' || !isPlainObject(data)) {
+export function sanitizeGeneratedResult(data: unknown): unknown {
+  if (!isPlainObject(data)) {
     return data;
   }
 
