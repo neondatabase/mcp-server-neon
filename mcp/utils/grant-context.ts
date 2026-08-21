@@ -33,7 +33,6 @@ export type GrantContext = {
   projectId: string | null;
   /** Scope categories. null means all categories are allowed. */
   scopes: ScopeCategory[] | null;
-  /** `?category=` values that are not in SCOPE_CATEGORIES. */
   unknownCategories?: string[];
 };
 
