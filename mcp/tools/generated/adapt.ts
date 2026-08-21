@@ -38,6 +38,8 @@ Arguments: \`{ "project_id": "…", "name": "feature-x" }\`. \`parent_id\` defau
 
 \`pooled\` defaults to true. Set \`pooled: false\` for a direct host.
 
+This tool copies the parent at head. For a point in time, call \`restore_project_branch\` with \`source_branch_id\` and \`source_timestamp\` or \`source_lsn\`.
+
 If the API omits a connection URI (parent with more than one role or database), the branch may already exist and the error has no id. Call \`list_project_branches\` before retrying.`;
 
 const DELETE_PROJECT_DESCRIPTION = `Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For removing single branches, use \`delete_branch\` instead.
