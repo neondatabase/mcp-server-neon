@@ -6,6 +6,7 @@ import {
   getFilteredTools,
   getAccessControlNotices,
   getAccessControlWarnings,
+  formatAccessControlInstructions,
   injectProjectId,
 } from '../tools/grant-filter';
 import type { GrantContext } from '../utils/grant-context';
@@ -143,34 +144,18 @@ describe('getAvailableTools', () => {
     expect(tools).toHaveLength(NEON_TOOLS.length);
   });
 
-  it('appends read-only notice to tool descriptions when read-only is enabled', () => {
-    const tools = getAvailableTools(grant(), true);
+  it('does not copy access-control notices into tool descriptions', () => {
+    const tools = getAvailableTools(grant({ projectId: 'proj-123' }), true);
     expect(tools.length).toBeGreaterThan(0);
     for (const tool of tools) {
-      expect(tool.description).toContain(
-        'configured with read-only permissions',
-      );
-      expect(tool.description).toContain('<notice>');
-    }
-  });
-
-  it('appends project-scoped notice with project id to tool descriptions', () => {
-    const tools = getAvailableTools(grant({ projectId: 'proj-123' }), false);
-    expect(tools.length).toBeGreaterThan(0);
-    for (const tool of tools) {
-      expect(tool.description).toContain(
-        'configured and scoped to one project only (proj-123)',
-      );
+      expect(tool.description).not.toContain('<notice>');
+      expect(tool.description).not.toContain('read-only permissions');
+      expect(tool.description).not.toContain('scoped to one project only');
     }
   });
 });
 
 describe('getFilteredTools (no notice suffix)', () => {
-  // Issue #257: the REST endpoint surfaces notices as a top-level field,
-  // so the filtered tool list must NOT carry the <notice> block in
-  // descriptions. The MCP-protocol path (getAvailableTools) keeps the
-  // notice inline as today.
-
   it('returns the same set of tools as getAvailableTools', () => {
     const filtered = getFilteredTools(grant({ scopes: ['querying'] }), false);
     const available = getAvailableTools(grant({ scopes: ['querying'] }), false);
@@ -228,16 +213,13 @@ describe('getAccessControlNotices', () => {
     expect(notices).toHaveLength(2);
   });
 
-  it('produces the same notices that getAvailableTools concatenates', () => {
-    // Round-trip guard: the MCP-protocol path concatenates the same notices
-    // we surface separately. If the strings ever drift, the regression
-    // shows up here.
-    const tools = getAvailableTools(grant({ projectId: 'p-1' }), true);
-    const notices = getAccessControlNotices(grant({ projectId: 'p-1' }), true);
-    for (const tool of tools) {
-      for (const notice of notices) {
-        expect(tool.description).toContain(notice);
-      }
+  it('joins the same notices into server instructions', () => {
+    const scoped = grant({ projectId: 'p-1' });
+    const notices = getAccessControlNotices(scoped, true);
+    const instructions = formatAccessControlInstructions(scoped, true);
+    expect(instructions).toBeDefined();
+    for (const notice of notices) {
+      expect(instructions).toContain(notice);
     }
   });
 });
@@ -304,5 +286,45 @@ describe('scope coverage sanity', () => {
       );
       expect(tools.length).toBeGreaterThanOrEqual(2);
     }
+  });
+
+  it('puts compute endpoint tools in endpoints', () => {
+    const names = filterToolsForGrant(
+      NEON_TOOLS,
+      grant({ scopes: ['endpoints'] }),
+    )
+      .map((tool) => tool.name)
+      .filter((name) => name !== 'search' && name !== 'fetch')
+      .sort();
+    expect(names).toEqual([
+      'create_project_endpoint',
+      'delete_project_endpoint',
+      'get_project_endpoint',
+      'list_project_branch_endpoints',
+      'list_project_endpoints',
+      'restart_project_endpoint',
+      'start_project_endpoint',
+      'suspend_project_endpoint',
+      'update_project_endpoint',
+    ]);
+  });
+
+  it('puts snapshot tools in snapshots', () => {
+    const names = filterToolsForGrant(
+      NEON_TOOLS,
+      grant({ scopes: ['snapshots'] }),
+    )
+      .map((tool) => tool.name)
+      .filter((name) => name !== 'search' && name !== 'fetch')
+      .sort();
+    expect(names).toEqual([
+      'create_snapshot',
+      'delete_snapshot',
+      'get_snapshot_schedule',
+      'list_snapshots',
+      'restore_snapshot',
+      'set_snapshot_schedule',
+      'update_snapshot',
+    ]);
   });
 });

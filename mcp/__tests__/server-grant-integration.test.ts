@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Client } from '@modelcontextprotocol/sdk/client';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { GrantContext } from '../utils/grant-context';
 import type { ServerContext } from '../types/context';
 import { NEON_TOOLS } from '../tools/definitions';
@@ -123,5 +125,31 @@ describe('createMcpServer grant + read-only integration', () => {
     const server = await createMcpServer(buildContext());
 
     expect(getRegisteredToolNames(server)).toContain('get_connection_string');
+  });
+
+  it('puts access-control notices on initialize instructions', async () => {
+    const mcpServer = await createMcpServer(
+      buildContext({
+        grant: { projectId: 'proj-123', scopes: null },
+        readOnly: true,
+      }),
+    );
+    const client = new Client({ name: 'test-client', version: '1.0.0' });
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+
+    try {
+      await mcpServer.connect(serverTransport);
+      await client.connect(clientTransport);
+      const instructions = client.getInstructions() ?? '';
+      expect(instructions).toContain('read-only permissions');
+      expect(instructions).toContain('scoped to one project only (proj-123)');
+      const listed = await client.listTools();
+      for (const tool of listed.tools) {
+        expect(tool.description ?? '').not.toContain('read-only permissions');
+      }
+    } finally {
+      await Promise.allSettled([client.close(), mcpServer.close()]);
+    }
   });
 });

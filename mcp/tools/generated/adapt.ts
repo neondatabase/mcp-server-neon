@@ -26,6 +26,9 @@ This tool does not return a connection string. After it succeeds, call \`get_con
 You can specify a region and Postgres version in the request body.
 Neon supports Postgres 14 through 18, with 19 rolling out to enabled regions.`;
 
+const BRANCH_ID_NOTE =
+  'path.branch_id is a branch id (br-...), not a branch name. Call list_project_branches to resolve a name.';
+
 const LOG_QUERY_ANNOTATIONS = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -61,7 +64,7 @@ function getGeneratedNeonTools(): GeneratedTools {
   return tools;
 }
 
-function hasPathProjectId(tool: GeneratedNeonTool): boolean {
+function hasPathKey(tool: GeneratedNeonTool, key: string): boolean {
   const schema = tool.inputSchema;
   if (
     !('shape' in schema) ||
@@ -84,7 +87,7 @@ function hasPathProjectId(tool: GeneratedNeonTool): boolean {
   ) {
     return false;
   }
-  return 'project_id' in pathSchema.shape;
+  return key in pathSchema.shape;
 }
 
 function generatedReadOnlySafe(
@@ -107,7 +110,7 @@ function generatedProjectScoped(
   if (override !== undefined) {
     return override;
   }
-  return hasPathProjectId(tool);
+  return hasPathKey(tool, 'project_id');
 }
 
 function generatedAnnotations(
@@ -136,11 +139,14 @@ export function createGeneratedToolDefinitions(): NeonTool[] {
   return GENERATED_OPERATION_IDS.map((operationId) => {
     const tool = tools[operationId];
     const readOnlySafe = generatedReadOnlySafe(operationId, tool);
+    const description = hasPathKey(tool, 'branch_id')
+      ? `${tool.description}\n\n${BRANCH_ID_NOTE}`
+      : tool.description;
     return {
       kind: 'generated',
       name: tool.id,
       scope: GENERATED_OPERATION_SCOPES[operationId],
-      description: tool.description,
+      description,
       inputSchema: tool.inputSchema,
       readOnlySafe,
       projectScoped: generatedProjectScoped(operationId, tool),

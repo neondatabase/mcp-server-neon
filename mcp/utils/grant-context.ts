@@ -14,6 +14,8 @@ import { parseResourceIdentifier } from '../../lib/oauth/protected-resource-meta
 export const SCOPE_CATEGORIES = [
   'projects',
   'branches',
+  'endpoints',
+  'snapshots',
   'schema',
   'querying',
   'neon_auth',

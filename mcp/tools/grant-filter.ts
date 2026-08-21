@@ -134,13 +134,8 @@ function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
  * with destructive tools exposed (safety), project-scoped (scope). Empty array
  * when none apply.
  *
- * Exposed separately from `getAvailableTools` so the `/api/list-tools` REST
- * endpoint can surface notices as a top-level field instead of duplicating
- * the same block inside every tool's `description` (see
- * github.com/neondatabase/mcp-server-neon/issues/257). The MCP-protocol tool
- * registration path keeps the notice inline by going through
- * `getAvailableTools`, which still concatenates these into descriptions for
- * LLM consumption.
+ * Returned separately so each server-level notice is sent once instead of
+ * being duplicated across every tool description.
  */
 export function getAccessControlNotices(
   grant: GrantContext,
@@ -202,30 +197,20 @@ export function getFilteredTools(
   return tools;
 }
 
-/**
- * Get the final list of available tools after applying grant context and
- * read-only filtering, with access-control notices appended to each tool's
- * `description`. This is what the MCP server (server/index.ts) and the MCP
- * transport route ([transport]/route.ts) register so LLM clients see the
- * notice inline alongside the tool descriptions.
- *
- * For the REST `/api/list-tools` endpoint, prefer `getFilteredTools` +
- * `getAccessControlNotices` separately to avoid duplicating the notice block
- * across every tool description.
- */
 export function getAvailableTools(
   grant: GrantContext,
   readOnly: boolean,
 ): NeonTool[] {
-  const tools = getFilteredTools(grant, readOnly);
-  const notices = getAccessControlNotices(grant, readOnly);
-  if (notices.length === 0) return tools;
+  return getFilteredTools(grant, readOnly);
+}
 
-  const noticesSuffix = `\n\n<notice>\n${notices.join('\n\n')}\n</notice>`;
-  return tools.map((tool) => ({
-    ...tool,
-    description: `${tool.description}${noticesSuffix}`,
-  }));
+export function formatAccessControlInstructions(
+  grant: GrantContext,
+  readOnly: boolean,
+): string | undefined {
+  const notices = getAccessControlNotices(grant, readOnly);
+  if (notices.length === 0) return undefined;
+  return notices.join('\n\n');
 }
 
 /**

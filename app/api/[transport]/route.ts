@@ -45,6 +45,7 @@ import {
 import {
   getAvailableTools,
   getAccessControlWarnings,
+  formatAccessControlInstructions,
 } from '../../../mcp/tools/grant-filter';
 import { invokeTool, toolRegistration } from '../../../mcp/tools/registration';
 import { NEON_TOOLS } from '../../../mcp/tools/definitions';
@@ -267,8 +268,8 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         const authMethod = authInfo.extra.authMethod;
         const account = authInfo.extra.account;
         const readOnly = authInfo.extra.readOnly ?? false;
-        // SSE message POSTs omit the connection query string, so API-key auth
-        // resolves an unscoped grant. Use the grant captured when the stream opened.
+        // SSE message POSTs omit the connection query string, so reuse the grant
+        // captured when the stream opened.
         const grant = { ...staticToolContext.grant };
         const client = authInfo.extra.client;
         const transport = authInfo.extra.transport ?? 'sse';
@@ -543,6 +544,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         tools: {},
         resources: {},
       },
+      instructions: formatAccessControlInstructions(
+        staticToolContext.grant,
+        staticToolContext.readOnly,
+      ),
     },
     {
       redisUrl: process.env.KV_URL || process.env.REDIS_URL,

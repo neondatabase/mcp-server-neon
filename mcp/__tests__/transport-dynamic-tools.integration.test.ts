@@ -198,6 +198,34 @@ describe('transport dynamic tool composition', () => {
     expect(flushAnalyticsSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('returns access-control notices on initialize, not in tool descriptions', async () => {
+    const oauthToken = 'oauth-instructions';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read', {
+        projectId: 'proj_instructions',
+        scopes: null,
+      }),
+    );
+
+    const init = await mcpCall(oauthToken, 'initialize', 1, {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test-client', version: '1.0.0' },
+    });
+    const initBody = init.body as {
+      result?: { instructions?: string };
+    };
+    expect(initBody.result?.instructions).toContain('read-only permissions');
+    expect(initBody.result?.instructions).toContain(
+      'scoped to one project only (proj_instructions)',
+    );
+
+    const tools = await listToolsForToken(oauthToken);
+    for (const tool of tools) {
+      expect(JSON.stringify(tool)).not.toContain('read-only permissions');
+    }
+  });
+
   // Every streamable-HTTP request builds a fresh server instance, so the
   // `initialize` handshake and the `tools/call` land on different ones and
   // `clientInfo` is gone by the time anything is tracked. The User-Agent is

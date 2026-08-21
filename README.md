@@ -274,6 +274,8 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 
 - `projects`
 - `branches`
+- `endpoints`
+- `snapshots`
 - `schema`
 - `querying`
 - `neon_auth`
@@ -286,6 +288,7 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 
 Notes:
 
+- The unfiltered URL publishes 134 tools (~202 KB of name, description, and schema). VS Code Copilot caps a request at 128 tools. Pass `?category=` to stay under it: `branches` is 28 tools, `branches` plus `querying` is 37.
 - Management API tools come from `@neon/tools` and keep OpenAPI `{path, query, body}` inputs.
 - `get_project_branch_schema` and `get_project_branch_schema_comparison` are categorized under `schema`.
 - JWKS tools are categorized under `data_api`.
@@ -294,11 +297,11 @@ Notes:
 
 **Project Management:**
 
-- **`list_projects`**: Lists Neon projects. OpenAPI query parameters (`limit`, `cursor`, `search`, `org_id`).
-- **`list_shared_projects`**: Lists Neon projects shared with the current user.
-- **`get_project`**: Fetches a Neon project by id.
-- **`create_project`**: Creates a Neon project. After it succeeds, call `get_connection_string` for a DATABASE_URL.
-- **`delete_project`**: Deletes an existing Neon project and all its associated resources.
+- **`list_projects`**: Lists Neon projects. Arguments are `{ "query": { "limit": 10 } }`, not a flat `{ "limit": 10 }`.
+- **`list_shared_projects`**: Lists Neon projects shared with the current user. Same `{ "query": … }` envelope.
+- **`get_project`**: Fetches a Neon project by id (`{ "path": { "project_id": "…" } }`).
+- **`create_project`**: Creates a Neon project. Arguments are `{ "body": { "project": { "name": "…" } } }`, not a flat `{ "name": "…" }`. After it succeeds, call `get_connection_string` for a DATABASE_URL.
+- **`delete_project`**: Deletes an existing Neon project. Arguments are `{ "path": { "project_id": "…" } }`, not `{ "projectId": "…" }`.
 - **`list_organizations`**: Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.
 
 **Branch Management:**
@@ -306,7 +309,15 @@ Notes:
 - **`create_project_branch`**: Creates a branch in a Neon project. Pass an endpoint in the body if you need a compute.
 - **`delete_project_branch`**: Deletes an existing branch from a Neon project.
 - **`describe_branch`**: Retrieves a tree of databases, schemas, tables, views, and functions on a branch.
-- **`list_project_endpoints`** / **`list_project_branch_endpoints`**: Lists compute endpoints for a project or branch.
+- Generated branch tools take `path.branch_id` as a branch id (`br-...`), not a name. Call `list_project_branches` to resolve a name.
+
+**Compute endpoints** (`?category=endpoints`):
+
+- **`list_project_endpoints`**, **`list_project_branch_endpoints`**, **`get_project_endpoint`**, **`create_project_endpoint`**, **`update_project_endpoint`**, **`delete_project_endpoint`**, **`start_project_endpoint`**, **`suspend_project_endpoint`**, **`restart_project_endpoint`**
+
+**Snapshots** (`?category=snapshots`):
+
+- **`list_snapshots`**, **`get_snapshot_schedule`**, **`set_snapshot_schedule`**, **`create_snapshot`**, **`update_snapshot`**, **`delete_snapshot`**, **`restore_snapshot`**
 - **`get_project_branch_schema_comparison`**: Shows the schema diff between a branch and a comparison target.
 - **`restore_project_branch`**: Restores a branch from a parent or snapshot. Pass ids in the OpenAPI body.
 
@@ -333,9 +344,15 @@ Notes:
 
 **Neon Auth:**
 
-- **`create_neon_auth`**: Provisions Neon Auth for a branch.
-- **`get_neon_auth_config`**: Reads the full Neon Auth configuration for a branch, including integration metadata and configurable settings (secrets are redacted). Use generated Auth write tools to change settings.
-- Generated current Auth tools cover domains, OAuth providers, users, plugins, and webhooks. Secret-returning Auth GETs are not exposed.
+- **`create_neon_auth`**, **`get_neon_auth`**, **`disable_neon_auth`**
+- **`get_neon_auth_config`**: host tool; secrets redacted. Use generated Auth write tools to change settings.
+- **`add_branch_neon_auth_oauth_provider`**, **`update_branch_neon_auth_oauth_provider`**, **`delete_branch_neon_auth_oauth_provider`**
+- **`add_branch_neon_auth_trusted_domain`**, **`list_branch_neon_auth_trusted_domains`**, **`delete_branch_neon_auth_trusted_domain`**
+- **`create_branch_neon_auth_new_user`**, **`delete_branch_neon_auth_user`**, **`update_neon_auth_user_role`**
+- **`get_neon_auth_allow_localhost`**, **`update_neon_auth_allow_localhost`**
+- **`get_neon_auth_email_and_password_config`**, **`update_neon_auth_email_and_password_config`**, **`update_neon_auth_email_provider`**
+- **`get_neon_auth_phone_number_plugin`**, **`update_neon_auth_phone_number_plugin`**, **`update_neon_auth_magic_link_plugin`**, **`update_neon_auth_organization_plugin`**
+- **`get_neon_auth_webhook_config`**, **`update_neon_auth_webhook_config`**, **`update_neon_auth_config`**, **`send_neon_auth_test_email`**
 
 **Neon Data API:**
 
@@ -364,7 +381,9 @@ Notes:
 
 **Storage:**
 
-- Bucket and object tools (`list_project_branch_buckets`, `presign_project_branch_bucket_object`, `get_project_branch_storage`, …)
+- **`list_project_branch_buckets`**, **`create_project_branch_bucket`**, **`delete_project_branch_bucket`**
+- **`list_project_branch_bucket_objects`**, **`delete_project_branch_bucket_object`**, **`delete_project_branch_bucket_objects_by_prefix`**
+- **`presign_project_branch_bucket_object`**, **`get_project_branch_storage`**
 
 ### Migrations
 

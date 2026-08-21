@@ -189,3 +189,72 @@ describe('read-only tool surface', () => {
     }
   });
 });
+
+function generatedShape(
+  tool: (typeof NEON_TOOLS)[number],
+): Record<string, unknown> {
+  const schema = tool.inputSchema;
+  if (
+    typeof schema !== 'object' ||
+    schema === null ||
+    !('shape' in schema) ||
+    typeof schema.shape !== 'object' ||
+    schema.shape === null
+  ) {
+    return {};
+  }
+  return schema.shape as Record<string, unknown>;
+}
+
+function pathShape(tool: (typeof NEON_TOOLS)[number]): Record<string, unknown> {
+  const path = generatedShape(tool).path;
+  if (
+    typeof path !== 'object' ||
+    path === null ||
+    !('shape' in path) ||
+    typeof path.shape !== 'object' ||
+    path.shape === null
+  ) {
+    return {};
+  }
+  return path.shape as Record<string, unknown>;
+}
+
+describe('generated tool interface', () => {
+  it('keeps OpenAPI envelopes on the four same-name project tools', () => {
+    const listProjects = NEON_TOOLS.find(
+      (tool) => tool.name === 'list_projects',
+    );
+    const listShared = NEON_TOOLS.find(
+      (tool) => tool.name === 'list_shared_projects',
+    );
+    const createProject = NEON_TOOLS.find(
+      (tool) => tool.name === 'create_project',
+    );
+    const deleteProject = NEON_TOOLS.find(
+      (tool) => tool.name === 'delete_project',
+    );
+
+    expect(Object.keys(generatedShape(listProjects!))).toEqual(['query']);
+    expect(Object.keys(generatedShape(listShared!))).toEqual(['query']);
+    expect(Object.keys(generatedShape(createProject!))).toEqual(['body']);
+    expect(Object.keys(generatedShape(deleteProject!))).toEqual(['path']);
+    expect(generatedShape(listProjects!)).not.toHaveProperty('limit');
+    expect(generatedShape(createProject!)).not.toHaveProperty('name');
+    expect(generatedShape(deleteProject!)).not.toHaveProperty('projectId');
+  });
+
+  it('notes branch id on generated tools that take path.branch_id', () => {
+    const note = 'path.branch_id is a branch id (br-...), not a branch name';
+    for (const tool of NEON_TOOLS.filter(
+      (candidate) => candidate.kind === 'generated',
+    )) {
+      const hasBranchId = 'branch_id' in pathShape(tool);
+      if (hasBranchId) {
+        expect(tool.description, tool.name).toContain(note);
+      } else {
+        expect(tool.description, tool.name).not.toContain(note);
+      }
+    }
+  });
+});
