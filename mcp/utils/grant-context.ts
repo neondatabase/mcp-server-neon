@@ -33,6 +33,8 @@ export type GrantContext = {
   projectId: string | null;
   /** Scope categories. null means all categories are allowed. */
   scopes: ScopeCategory[] | null;
+  /** `?category=` values that are not in SCOPE_CATEGORIES. */
+  unknownCategories?: string[];
 };
 
 /**
@@ -90,8 +92,15 @@ export function resolveGrantFromSearchParams(
     allCategories.length > 0
       ? allCategories.filter(isValidScopeCategory)
       : null;
+  const unknownCategories = allCategories.filter(
+    (category) => !isValidScopeCategory(category),
+  );
   const projectId = params.get('projectId')?.trim() || null;
-  return { projectId, scopes };
+  return {
+    projectId,
+    scopes,
+    ...(unknownCategories.length > 0 ? { unknownCategories } : {}),
+  };
 }
 
 /**
@@ -142,6 +151,9 @@ export function resolveGrantFromToken(token: {
     return {
       projectId: token.grant.projectId ?? null,
       scopes: token.grant.scopes ?? null,
+      ...(token.grant.unknownCategories?.length
+        ? { unknownCategories: token.grant.unknownCategories }
+        : {}),
     };
   }
   return { ...DEFAULT_GRANT };

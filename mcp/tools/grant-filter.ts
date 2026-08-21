@@ -1,6 +1,10 @@
 import { z } from 'zod/v3';
 import { z as z4 } from 'zod';
-import type { GrantContext, ScopeCategory } from '../utils/grant-context';
+import {
+  SCOPE_CATEGORIES,
+  type GrantContext,
+  type ScopeCategory,
+} from '../utils/grant-context';
 import { NEON_TOOLS } from './definitions';
 import type { NeonTool } from './tool-definition';
 
@@ -226,6 +230,14 @@ export function getAccessControlWarnings(
 ): string[] {
   void _readOnly;
   const warnings: string[] = [];
+
+  if (grant.unknownCategories?.length) {
+    warnings.push(
+      '⚠️ Warning: Unknown category query values were ignored: ' +
+        `${grant.unknownCategories.join(', ')}. ` +
+        `Valid values: ${SCOPE_CATEGORIES.join(', ')}.`,
+    );
+  }
 
   if (grant.scopes !== null && grant.scopes.length === 0) {
     const discoveryToolsText = grant.projectId

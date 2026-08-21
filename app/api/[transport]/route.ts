@@ -1059,6 +1059,9 @@ function getStaticToolContext(req: Request): StaticToolContext {
       ? {
           projectId: grantFromAuth.projectId ?? null,
           scopes: grantFromAuth.scopes ?? null,
+          ...(grantFromAuth.unknownCategories?.length
+            ? { unknownCategories: grantFromAuth.unknownCategories }
+            : {}),
         }
       : DEFAULT_GRANT;
 

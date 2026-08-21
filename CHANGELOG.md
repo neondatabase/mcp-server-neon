@@ -2,7 +2,7 @@
 
 # [NEXT]
 
-Management API tools now come from `@neon/tools`. Host tools stay for SQL, inspect, migrations, query tuning, docs, search, and redacted `get_neon_auth_config`. New `?category=` values: `functions`, `storage`. Renames include `create_branch` → `create_project_branch`, `describe_project` → `get_project`, `query_logs` → `query_project_branch_logs`, `provision_neon_auth` → `create_neon_auth`. There are no aliases for the old names.
+Management API tools now come from `@neon/tools`. Host tools stay for SQL, inspect, migrations, query tuning, docs, search, and redacted `get_neon_auth_config`. New `?category=` values: `functions`, `storage`, `endpoints`, `snapshots`. `?category=branches` no longer includes compute-endpoint tools; those are `?category=endpoints`. Unknown `?category=` values are ignored and named on the tool response. `list_projects`, `list_shared_projects`, `create_project`, and `delete_project` keep their names and now take OpenAPI `{path, query, body}` arguments. Renames include `create_branch` → `create_project_branch`, `describe_project` → `get_project`, `query_logs` → `query_project_branch_logs`, `provision_neon_auth` → `create_neon_auth`. There are no aliases for the old names.
 
 `inspect_database`: omitting `databaseName` now covers every database on the branch (same contract as `neon inspect db` 3.4.0). Database-scoped checks add a `database` column; compute-wide checks run once against the first listed database. One failing database fails the whole run.
 

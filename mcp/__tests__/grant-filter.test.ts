@@ -225,6 +225,16 @@ describe('getAccessControlNotices', () => {
 });
 
 describe('getAccessControlWarnings', () => {
+  it('warns when some category values are unknown', () => {
+    const warnings = getAccessControlWarnings(
+      grant({ scopes: ['branches'], unknownCategories: ['compute'] }),
+      false,
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('compute');
+    expect(warnings[0]).toContain('endpoints');
+  });
+
   it('warns when no valid scope categories are set', () => {
     const warnings = getAccessControlWarnings(grant({ scopes: [] }), false);
     expect(warnings).toHaveLength(1);
