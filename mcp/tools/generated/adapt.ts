@@ -38,7 +38,7 @@ Arguments: \`{ "project_id": "…", "name": "feature-x" }\`. \`parent_id\` defau
 
 \`pooled\` defaults to true. Set \`pooled: false\` for a direct host.
 
-This tool copies the parent at head. For a point in time, call \`restore_project_branch\` with \`source_branch_id\` and \`source_timestamp\` or \`source_lsn\`.
+This tool copies the parent at head. For a point in time, create the branch here first, then call \`restore_project_branch\` with \`branch_id\` set to the new branch and \`source_branch_id\` set to the parent, plus \`source_timestamp\` or \`source_lsn\`. Calling \`restore_project_branch\` on the parent rewinds the parent.
 
 If the API omits a connection URI (parent with more than one role or database), the branch may already exist and the error has no id. Call \`list_project_branches\` before retrying.`;
 

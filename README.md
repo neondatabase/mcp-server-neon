@@ -318,7 +318,7 @@ Notes:
 - **`delete_branch`**: Deletes a branch (`{ "project_id": "…", "branch_id": "br-…" }`).
 - **`describe_branch`**: Retrieves a tree of databases, schemas, tables, views, and functions on a branch.
 - Generated branch tools take `branch_id` as a branch id (`br-...`), not a name.
-- **`restore_project_branch`**: Restores a branch from a parent or snapshot.
+- **`restore_project_branch`**: Rewinds `branch_id` in place to a point on `source_branch_id` (`source_timestamp` or `source_lsn`). Pass `preserve_under_name` to keep the current head.
 
 **Compute endpoints** (`?category=endpoints`):
 
