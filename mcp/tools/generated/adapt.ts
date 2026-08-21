@@ -137,6 +137,12 @@ function generatedAnnotations(
 const DESTRUCTIVE_OPERATION_PREFIX =
   /^(delete|remove|disable|restore|reset|revoke|suspend|restart|update)/i;
 
+const DESTRUCTIVE_POST_OPERATIONS = new Set<GeneratedOperationId>([
+  'finalizeRestoreBranch',
+  'startAnonymization',
+  'createProjectBranchAnonymized',
+]);
+
 function generatedDestructiveHint(
   operationId: GeneratedOperationId,
   tool: GeneratedNeonTool,
@@ -146,7 +152,10 @@ function generatedDestructiveHint(
   if (method === 'DELETE' || method === 'PUT' || method === 'PATCH') {
     return true;
   }
-  return DESTRUCTIVE_OPERATION_PREFIX.test(operationId);
+  return (
+    DESTRUCTIVE_OPERATION_PREFIX.test(operationId) ||
+    DESTRUCTIVE_POST_OPERATIONS.has(operationId)
+  );
 }
 
 export function createGeneratedToolDefinitions(): NeonTool[] {

@@ -257,6 +257,14 @@ describe('generated tool interface', () => {
     expect(createProject?.annotations.destructiveHint).toBe(false);
     expect(createBranch?.annotations.destructiveHint).toBe(false);
     expect(deleteProject?.annotations.destructiveHint).toBe(true);
+    expect(
+      NEON_TOOLS.find((tool) => tool.name === 'finalize_restore_branch')
+        ?.annotations.destructiveHint,
+    ).toBe(true);
+    expect(
+      NEON_TOOLS.find((tool) => tool.name === 'start_anonymization')
+        ?.annotations.destructiveHint,
+    ).toBe(true);
   });
 
   it('notes branch id on generated tools that take path.branch_id', () => {
