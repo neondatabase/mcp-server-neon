@@ -3,7 +3,7 @@ import { sanitizeGeneratedResult } from '../tools/generated/sanitize';
 
 describe('sanitizeGeneratedResult', () => {
   it('strips connection_uris and role passwords from a create-project body', () => {
-    const sanitized = sanitizeGeneratedResult({
+    const sanitized = sanitizeGeneratedResult('createProject', {
       project: { id: 'proj-1', name: 'demo' },
       connection_uris: [
         {
@@ -22,7 +22,7 @@ describe('sanitizeGeneratedResult', () => {
   });
 
   it('strips the same credential fields from a create-branch body', () => {
-    const sanitized = sanitizeGeneratedResult({
+    const sanitized = sanitizeGeneratedResult('createProjectBranch', {
       branch: { id: 'br-1' },
       connection_uris: [
         { connection_uri: 'postgresql://neondb_owner:secret@host/neondb' },
@@ -36,10 +36,24 @@ describe('sanitizeGeneratedResult', () => {
     });
   });
 
-  it('keeps a role-create password on the role object', () => {
+  it('keeps a password on role create and reset', () => {
     const data = {
       role: { name: 'app', password: 'secret' },
     };
-    expect(sanitizeGeneratedResult(data)).toEqual(data);
+    expect(sanitizeGeneratedResult('createProjectBranchRole', data)).toEqual(
+      data,
+    );
+    expect(
+      sanitizeGeneratedResult('resetProjectBranchRolePassword', data),
+    ).toEqual(data);
+  });
+
+  it('strips a stored password from a role GET', () => {
+    const sanitized = sanitizeGeneratedResult('getProjectBranchRole', {
+      role: { name: 'app', password: 'secret', protected: false },
+    });
+    expect(sanitized).toEqual({
+      role: { name: 'app', protected: false },
+    });
   });
 });

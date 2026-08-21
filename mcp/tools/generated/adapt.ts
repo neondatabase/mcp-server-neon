@@ -179,7 +179,7 @@ export function createGeneratedToolHandlers(): ToolHandlers {
         apiKey: extra.apiKey,
         signal: extra.signal,
       });
-      return jsonTextResult(sanitizeGeneratedResult(result.data));
+      return jsonTextResult(sanitizeGeneratedResult(operationId, result.data));
     };
     handlers[tool.id] = handler;
   }
