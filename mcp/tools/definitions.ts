@@ -325,7 +325,7 @@ const HOST_TOOL_DRAFTS = [
     name: 'get_connection_string' as const,
     scope: 'branches',
     description:
-      'Get a PostgreSQL connection string for a Neon database. All parameters are optional; the tool resolves the project, branch, and database automatically if not specified. Requires write access: the connection string carries a privileged role password, so it is unavailable in read-only mode. A read-only caller who needs a DATABASE_URL must copy it from https://console.neon.tech manually.',
+      'Get a PostgreSQL connection string for a Neon database. The branch must have a compute endpoint; a branch created without `endpoints` has none. All parameters are optional; the tool resolves the project, branch, and database automatically if not specified. Requires write access: the connection string carries a privileged role password, so it is unavailable in read-only mode. A read-only caller who needs a DATABASE_URL must copy it from https://console.neon.tech manually.',
     inputSchema: getConnectionStringInputSchema,
     // Not `readOnlySafe` despite `readOnlyHint: true`: the call mutates nothing,
     // but the URI it returns embeds the branch owner role's password. That role

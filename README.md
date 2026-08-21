@@ -294,7 +294,7 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 
 Notes:
 
-- The unfiltered URL publishes 134 tools (~227 KB on every `tools/list`). VS Code Copilot caps a request at 128 tools. Pass `?category=` to stay under it. `projects`, `branches`, `endpoints`, `querying`, and `schema` includes `list_projects`, compute tools, and the schema tools those workflows call.
+- The unfiltered URL publishes 134 tools (~227 KB on every `tools/list`). VS Code Copilot caps a request at 128 tools. Pass `?category=` to stay under it. The recommended URL (`projects`, `branches`, `endpoints`, `querying`, `schema`) includes `list_projects`, compute tools, and the schema tools those workflows call. Neon Auth, Data API, snapshots, functions, storage, observability, and docs need their own `?category=` values.
 - `?category=branches` does not include compute tools. Those are `?category=endpoints`.
 - Management API tools come from `@neon/tools` with flat arguments.
 - `get_project_branch_schema` and `get_project_branch_schema_comparison` are categorized under `schema`.
@@ -353,7 +353,7 @@ Notes:
 - **`prepare_query_tuning`**: Analyzes query performance and suggests optimizations, like index creation. Creates a temporary branch for safely testing these optimizations.
 - **`complete_query_tuning`**: Finalizes query tuning by either applying optimizations to the main branch or discarding them. Cleans up the temporary tuning branch.
 
-**Neon Auth:**
+**Neon Auth** (`?category=neon_auth`):
 
 - **`create_neon_auth`**, **`get_neon_auth`**, **`disable_neon_auth`**
 - **`get_neon_auth_config`**: host tool; secrets redacted. Use generated Auth write tools to change settings.
@@ -365,7 +365,7 @@ Notes:
 - **`get_neon_auth_phone_number_plugin`**, **`update_neon_auth_phone_number_plugin`**, **`update_neon_auth_magic_link_plugin`**, **`update_neon_auth_organization_plugin`**
 - **`get_neon_auth_webhook_config`**, **`update_neon_auth_webhook_config`**, **`update_neon_auth_config`**, **`send_neon_auth_test_email`**
 
-**Neon Data API:**
+**Neon Data API** (`?category=data_api`):
 
 - **`create_project_branch_data_api`**, **`get_project_branch_data_api`**, **`update_project_branch_data_api`**, **`delete_project_branch_data_api`**: Manage the Data API for a branch database.
 - **`add_project_jwks`**, **`get_project_jwks`**, **`delete_project_jwks`**: Manage JWKS entries used by the Data API.
@@ -375,22 +375,22 @@ Notes:
 - **`search`**: Searches across organizations, projects, and branches matching a query. Returns IDs, titles, and direct links to the Neon Console.
 - **`fetch`**: Fetches detailed information about a specific organization, project, or branch using an ID (typically from the search tool).
 
-**Observability:** these tools require the Neon Platform Beta and are currently only available for projects in the `aws-us-east-2` region. A branch without logs access returns HTTP 404 with reason `telemetry_not_enabled`.
+**Observability** (`?category=observability`): these tools require the Neon Platform Beta and are currently only available for projects in the `aws-us-east-2` region. A branch without logs access returns HTTP 404 with reason `telemetry_not_enabled`.
 
 - **`query_project_branch_logs`**: Queries OpenTelemetry logs for a branch. POST in the Management API; treated as read-only by this server.
 - **`list_project_branch_log_fields`**: Lists the log fields you can enumerate values for on a branch.
 - **`list_project_branch_log_field_values`**: Lists the distinct values of a log field within a branch and time window.
 
-**Documentation and Resources:**
+**Documentation and Resources** (`?category=docs`):
 
 - **`list_docs_resources`**: Lists all available Neon documentation pages by fetching the index from `https://neon.com/docs/llms.txt`. Returns page URLs and titles that can be fetched individually using the `get_doc_resource` tool.
 - **`get_doc_resource`**: Fetches a specific Neon documentation page as markdown content. Use the `list_docs_resources` tool first to discover available page slugs, then pass the slug to this tool.
 
-**Functions:**
+**Functions** (`?category=functions`):
 
 - **`list_project_branch_functions`**, **`get_project_branch_function`**, **`update_project_branch_function`**, **`delete_project_branch_function`**, **`create_project_branch_function_deployment`**
 
-**Storage:**
+**Storage** (`?category=storage`):
 
 - **`list_project_branch_buckets`**, **`create_project_branch_bucket`**, **`delete_project_branch_bucket`**
 - **`list_project_branch_bucket_objects`**, **`delete_project_branch_bucket_object`**, **`delete_project_branch_bucket_objects_by_prefix`**
