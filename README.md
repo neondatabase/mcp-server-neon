@@ -77,7 +77,7 @@ Run the following command to add the Neon MCP Server for all detected agents and
 npx add-mcp "https://mcp.neon.tech/mcp?category=projects&category=branches&category=endpoints&category=querying&category=schema"
 ```
 
-That URL publishes projects, branches, compute endpoints, querying, and schema. The unfiltered URL publishes 134 tools (~227 KB on every `tools/list`). VS Code Copilot caps a request at 128 tools. Use it only when you want every category:
+That URL publishes projects, branches, compute endpoints, querying, and schema. Preview the exact set with `/api/list-tools`. VS Code Copilot caps a request at 128 tools. The unfiltered URL publishes every category:
 
 ```bash
 npx add-mcp https://mcp.neon.tech/mcp
@@ -295,8 +295,9 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 Notes:
 
 - Management API tools come from `@neon/tools`. Selectors are SDK paths (`projects.list`); published names are those paths in snake_case (`projects_list`). `create_project`, `create_branch`, and `delete_branch` keep those names.
-- `?category=branches` does not include compute tools. Those are `?category=endpoints`.
-- Schema tools are host tools (`get_database_tables`, `describe_table_schema`, `describe_branch`). There is no generated schema-compare tool.
+- `?category=branches` includes branch, role, and database tools (`postgres_roles_*`, `postgres_databases_*`). A token already issued for `branches` gains those writes. Compute listing is `?category=endpoints`. Snapshot restore is `?category=snapshots`.
+- Project member and permission writes are not published. `projects_members_list` and `projects_permissions_list` are reads.
+- Schema tools are host tools (`get_database_tables`, `describe_table_schema`). There is no generated schema-compare tool.
 - Read-only enforcement still relies on `readOnlySafe` and server-side read-only logic; `scope` is category metadata, not a standalone read/write switch.
 - In project-scoped mode (`?projectId=...`), tools without a project path (`projects_list`, `create_project`, `list_organizations`, `regions_list`, `search`, `fetch`, …) are hidden. `projects_delete` is also hidden.
 

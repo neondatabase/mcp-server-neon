@@ -69,9 +69,7 @@ describe('filterToolsForGrant', () => {
     expect(names).not.toContain('create_project');
     expect(names).not.toContain('projects_delete');
     expect(names).not.toContain('projects_permissions_grant');
-    expect(names).not.toContain('projects_permissions_revoke');
     expect(names).not.toContain('projects_members_set_role');
-    expect(names).not.toContain('projects_members_remove_role');
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
     expect(names).toContain('projects_get');

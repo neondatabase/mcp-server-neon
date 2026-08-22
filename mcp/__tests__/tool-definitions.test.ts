@@ -32,6 +32,10 @@ const HOST_READ_ONLY_TOOLS = [
 const SECRET_GENERATED_TOOLS = [
   'postgres_connection_string',
   'postgres_roles_password',
+  'projects_permissions_grant',
+  'projects_permissions_revoke',
+  'projects_members_set_role',
+  'projects_members_remove_role',
 ];
 
 const OMITTED_BLOB_TOOLS = ['storage_objects_get'];

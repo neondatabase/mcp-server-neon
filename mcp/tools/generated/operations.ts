@@ -9,11 +9,7 @@ export const GENERATED_TOOL_SCOPES = {
   'projects.delete': 'projects',
   'projects.recover': 'projects',
   'projects.permissions.list': 'projects',
-  'projects.permissions.grant': 'projects',
-  'projects.permissions.revoke': 'projects',
   'projects.members.list': 'projects',
-  'projects.members.setRole': 'projects',
-  'projects.members.removeRole': 'projects',
   'regions.list': 'projects',
   'operations.list': 'projects',
   'operations.get': 'projects',
@@ -108,8 +104,4 @@ export const READ_ONLY_SAFE_TOOL_OVERRIDES = new Set<GeneratedToolId>([
 
 export const PROJECT_SCOPED_TOOL_OVERRIDES = {
   'projects.delete': false,
-  'projects.permissions.grant': false,
-  'projects.permissions.revoke': false,
-  'projects.members.setRole': false,
-  'projects.members.removeRole': false,
 } as const satisfies Partial<Record<GeneratedToolId, boolean>>;
