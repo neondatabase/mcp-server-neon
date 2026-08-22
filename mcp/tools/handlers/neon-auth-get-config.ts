@@ -49,7 +49,7 @@ export async function handleGetNeonAuthConfig(
           type: 'text',
           text:
             integrationRes.status === 404
-              ? 'Neon Auth is not provisioned for this branch (HTTP 404). Use create_neon_auth first.'
+              ? 'Neon Auth is not provisioned for this branch (HTTP 404). Use auth_create first.'
               : `Failed to load Neon Auth integration (${integrationRes.status} ${integrationRes.statusText}).`,
         },
       ],
