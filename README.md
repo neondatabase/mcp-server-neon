@@ -77,7 +77,7 @@ Run the following command to add the Neon MCP Server for all detected agents and
 npx add-mcp "https://mcp.neon.tech/mcp?category=projects&category=branches&category=endpoints&category=querying&category=schema"
 ```
 
-That URL publishes projects, branches, compute endpoints, querying, and schema. Preview the exact set with `/api/list-tools`. VS Code Copilot caps a request at 128 tools. The unfiltered URL publishes every category:
+That URL publishes projects, branches, compute endpoints, querying, and schema. Preview it with `/api/list-tools?category=projects&category=branches&category=endpoints&category=querying&category=schema`. The unfiltered URL publishes every category:
 
 ```bash
 npx add-mcp https://mcp.neon.tech/mcp
@@ -328,7 +328,7 @@ Notes:
 
 **Schema** (`?category=schema`):
 
-- Host tools only: `get_database_tables`, `describe_table_schema`, `describe_branch`.
+- Host tools only: `get_database_tables`, `describe_table_schema`.
 
 **SQL Query Execution:**
 

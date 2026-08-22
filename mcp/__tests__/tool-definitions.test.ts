@@ -32,6 +32,9 @@ const HOST_READ_ONLY_TOOLS = [
 const SECRET_GENERATED_TOOLS = [
   'postgres_connection_string',
   'postgres_roles_password',
+];
+
+const OMITTED_ACCESS_CONTROL_WRITES = [
   'projects_permissions_grant',
   'projects_permissions_revoke',
   'projects_members_set_role',
@@ -170,6 +173,13 @@ describe('read-only tool surface', () => {
   it('does not expose secret-returning generated tools', () => {
     const names = new Set(NEON_TOOLS.map((t) => t.name));
     for (const name of SECRET_GENERATED_TOOLS) {
+      expect(names.has(name), name).toBe(false);
+    }
+  });
+
+  it('does not expose project member or permission writes', () => {
+    const names = new Set(NEON_TOOLS.map((t) => t.name));
+    for (const name of OMITTED_ACCESS_CONTROL_WRITES) {
       expect(names.has(name), name).toBe(false);
     }
   });
