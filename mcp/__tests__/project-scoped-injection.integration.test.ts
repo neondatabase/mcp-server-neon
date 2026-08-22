@@ -100,7 +100,7 @@ describe('project-scoped grants', () => {
       const published = publishedSchemaSchema.parse(getProject?.inputSchema);
       const properties = published.properties ?? {};
       expect(Object.keys(properties)).not.toContain('projectId');
-      // A path containing only project_id disappears when that field is removed.
+      // The converter omits `path` when `project_id` is its only field.
       const path = properties.path;
       if (
         path &&
