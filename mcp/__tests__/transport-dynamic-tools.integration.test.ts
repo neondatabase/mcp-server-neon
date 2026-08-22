@@ -325,7 +325,7 @@ describe('transport dynamic tool composition', () => {
 
     expect(unscopedNames.has('run_sql')).toBe(true);
     expect(scopedNames.has('run_sql')).toBe(true);
-    expect(scopedNames.has('list_projects')).toBe(false);
+    expect(scopedNames.has('projects_list')).toBe(false);
 
     // Unscoped variant still requires projectId from caller -> handler should not run.
     await mcpCall(unscopedToken, 'tools/call', 3, {
@@ -364,7 +364,7 @@ describe('transport dynamic tool composition', () => {
 
     expect(fullNames.has('create_project')).toBe(true);
     expect(readOnlyNames.has('create_project')).toBe(false);
-    expect(readOnlyNames.has('list_projects')).toBe(true);
+    expect(readOnlyNames.has('projects_list')).toBe(true);
   });
 
   it('ignores runtime URL grant params for OAuth tokens', async () => {

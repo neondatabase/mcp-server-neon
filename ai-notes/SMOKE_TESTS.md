@@ -32,7 +32,7 @@ This is a quick way to verify that the MCP server is configured correctly and th
 ### Safety Rules
 
 - Run all tests only against `neon-preview` (staging account).
-- The `neon` MCP server is production. Never run destructive cleanup calls (`delete_branch`, `delete_project`) on production resources (the `neon` MCP server) only against `neon-preview`.
+- The `neon` MCP server is production. Never run destructive cleanup calls (`delete_branch`, `projects_delete`) on production resources (the `neon` MCP server) only against `neon-preview`.
 - Use clearly prefixed temporary resource names, e.g. `manual-smoke-YYYY-MM-DD`.
 
 ### Server Configuration
@@ -84,17 +84,17 @@ Follow these phases in order. Each phase builds on the previous one.
 1. Read the MCP client config file (e.g. `.cursor/mcp.json`, `.codex/config_proj.toml`) to find the `neon-preview` server entry.
 2. Report the current URL, noting which query params are set (`readonly`, `category`, `projectId`) and any legacy headers.
 3. Determine what behavior to expect from this config:
-   - Which tools should be visible (e.g. 134 for full access, 61 for read-only, fewer for category-filtered).
+   - Which tools should be visible (full access, read-only, or category-filtered).
    - Whether write tools should be available.
-   - Whether project-agnostic tools (`list_projects`, `create_project`, `search`, `fetch`) should be hidden.
+   - Whether project-agnostic tools (`projects_list`, `create_project`, `search`, `fetch`) should be hidden.
 
 ### Phase 2: Validate Tool Visibility
 
-1. Call `neon-preview.list_projects` (or any read-safe tool) to confirm auth works.
+1. Call `neon-preview.projects_list` (or any read-safe tool) to confirm auth works.
 2. Verify the tool surface matches expectations from Phase 1:
    - If `readonly=true`: confirm write tools (e.g. `create_project`, `create_branch`, `prepare_database_migration`) and `get_connection_string` are NOT available.
    - If `category` is set: confirm only tools in those categories are available.
-   - If `projectId` is set: confirm `list_projects`, `create_project`, `delete_project`, `list_organizations`, `list_shared_projects`, `search`, and `fetch` are NOT available.
+   - If `projectId` is set: confirm `projects_list`, `create_project`, `projects_delete`, `list_organizations`, `search`, and `fetch` are NOT available.
    - If no params: confirm the full tool list from `/api/list-tools` is available.
 3. Try calling a tool that should NOT be available given the config. Confirm it fails or is absent.
 
@@ -104,12 +104,12 @@ Run through the applicable subset of these tests based on the current config. Sk
 
 **Discovery / Auth Sanity:**
 - `neon-preview.list_organizations`
-- `neon-preview.list_projects`
+- `neon-preview.projects_list`
 
 **Project Lifecycle** (skip if read-only or project-scoped):
 - `neon-preview.create_project` with name `manual-smoke-YYYY-MM-DD`
-- `neon-preview.list_projects` with `search`
-- `neon-preview.get_project`
+- `neon-preview.projects_list` with `search`
+- `neon-preview.projects_get`
 
 **Branch Lifecycle** (skip if read-only):
 - `neon-preview.create_branch` (e.g. `smoke-child`)
@@ -122,10 +122,6 @@ Run through the applicable subset of these tests based on the current config. Sk
 - `neon-preview.get_database_tables`
 - `neon-preview.describe_table_schema`
 - `neon-preview.explain_sql_statement`
-
-**Schema Diff:**
-- On child branch only: `neon-preview.run_sql` to create a child-only object
-- `neon-preview.get_project_branch_schema_comparison` using the child branch
 
 **Migration Flow** (skip if read-only):
 - `neon-preview.prepare_database_migration`
@@ -155,8 +151,8 @@ Run through the applicable subset of these tests based on the current config. Sk
 ### Phase 4: Cleanup
 
 - `neon-preview.delete_branch` for any test child branch(es) created
-- `neon-preview.delete_project` for any test project created
-- `neon-preview.list_projects` with `search` to verify cleanup
+- `neon-preview.projects_delete` for any test project created
+- `neon-preview.projects_list` with `search` to verify cleanup
 - Skip if no resources were created (e.g. read-only config).
 
 ### Phase 5: Report Results for This Configuration

@@ -95,7 +95,7 @@ describe('project-scoped grants', () => {
       // given — so this is exactly the call a real one makes.
       const listed = await client.listTools();
       const getProject = listed.tools.find(
-        (tool) => tool.name === 'get_project',
+        (tool) => tool.name === 'projects_get',
       );
       const published = publishedSchemaSchema.parse(getProject?.inputSchema);
       const properties = published.properties ?? {};
@@ -112,7 +112,7 @@ describe('project-scoped grants', () => {
       }
 
       const result = await client.callTool({
-        name: 'get_project',
+        name: 'projects_get',
         arguments: {},
       });
       expect(result.isError).not.toBe(true);

@@ -30,16 +30,11 @@ const HOST_READ_ONLY_TOOLS = [
 ];
 
 const SECRET_GENERATED_TOOLS = [
-  'get_connection_uri',
-  'get_project_branch_role_password',
-  'get_neon_auth_email_provider',
-  'get_neon_auth_email_server',
-  'get_neon_auth_plugin_configs',
-  'list_branch_neon_auth_oauth_providers',
-  'list_neon_auth_oauth_providers',
+  'postgres_connection_string',
+  'postgres_roles_password',
 ];
 
-const OMITTED_BLOB_TOOLS = ['get_project_branch_bucket_object'];
+const OMITTED_BLOB_TOOLS = ['storage_objects_get'];
 
 describe('NEON_TOOLS definitions', () => {
   it('every tool has a name, scope (or null), kind, projectScoped, and readOnlySafe flag', () => {
@@ -160,8 +155,8 @@ describe('read-only tool surface', () => {
     expect(tool!.readOnlySafe).toBe(false);
   });
 
-  it('treats query_project_branch_logs as read-only despite POST', () => {
-    const tool = NEON_TOOLS.find((t) => t.name === 'query_project_branch_logs');
+  it('treats logs_query as read-only despite POST', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'logs_query');
     expect(tool).toBeDefined();
     expect(tool!.readOnlySafe).toBe(true);
     expect(tool!.annotations.readOnlyHint).toBe(true);
@@ -208,22 +203,18 @@ function generatedShape(
 }
 
 describe('generated tool interface', () => {
-  it('exposes flat arguments on the four same-name project tools', () => {
+  it('exposes flat arguments on the project list, create, and delete tools', () => {
     const listProjects = NEON_TOOLS.find(
-      (tool) => tool.name === 'list_projects',
-    );
-    const listShared = NEON_TOOLS.find(
-      (tool) => tool.name === 'list_shared_projects',
+      (tool) => tool.name === 'projects_list',
     );
     const createProject = NEON_TOOLS.find(
       (tool) => tool.name === 'create_project',
     );
     const deleteProject = NEON_TOOLS.find(
-      (tool) => tool.name === 'delete_project',
+      (tool) => tool.name === 'projects_delete',
     );
 
     expect(generatedShape(listProjects!)).toHaveProperty('limit');
-    expect(generatedShape(listShared!)).toHaveProperty('limit');
     expect(generatedShape(createProject!)).toHaveProperty('name');
     expect(generatedShape(createProject!)).toHaveProperty('org_id');
     expect(generatedShape(createProject!)).toHaveProperty('pooled');
@@ -241,25 +232,17 @@ describe('generated tool interface', () => {
       (tool) => tool.name === 'create_branch',
     );
     const deleteProject = NEON_TOOLS.find(
-      (tool) => tool.name === 'delete_project',
+      (tool) => tool.name === 'projects_delete',
     );
     expect(createProject?.annotations.destructiveHint).toBe(false);
     expect(createBranch?.annotations.destructiveHint).toBe(false);
     expect(deleteProject?.annotations.destructiveHint).toBe(true);
     expect(
-      NEON_TOOLS.find((tool) => tool.name === 'finalize_restore_branch')
+      NEON_TOOLS.find((tool) => tool.name === 'branches_finalize_restore')
         ?.annotations.destructiveHint,
     ).toBe(true);
     expect(
-      NEON_TOOLS.find((tool) => tool.name === 'start_anonymization')
-        ?.annotations.destructiveHint,
-    ).toBe(true);
-    expect(
-      NEON_TOOLS.find((tool) => tool.name === 'assign_project_vpc_endpoint')
-        ?.annotations.destructiveHint,
-    ).toBe(true);
-    expect(
-      NEON_TOOLS.find((tool) => tool.name === 'set_default_project_branch')
+      NEON_TOOLS.find((tool) => tool.name === 'branches_set_default')
         ?.annotations.destructiveHint,
     ).toBe(true);
   });
@@ -277,15 +260,15 @@ describe('generated tool interface', () => {
     expect(createBranch?.description).toContain('connection string');
   });
 
-  it('keeps the never-run-autonomously text on delete_branch and delete_project', () => {
+  it('keeps the never-run-autonomously text on delete_branch and projects_delete', () => {
     const deleteBranch = NEON_TOOLS.find(
       (tool) => tool.name === 'delete_branch',
     );
     const deleteProject = NEON_TOOLS.find(
-      (tool) => tool.name === 'delete_project',
+      (tool) => tool.name === 'projects_delete',
     );
     expect(deleteBranch?.description).toContain('NEVER run autonomously');
-    expect(deleteBranch?.description).toContain('delete_project');
+    expect(deleteBranch?.description).toContain('projects_delete');
     expect(deleteProject?.description).toContain('NEVER run autonomously');
     expect(deleteProject?.description).toContain('delete_branch');
   });

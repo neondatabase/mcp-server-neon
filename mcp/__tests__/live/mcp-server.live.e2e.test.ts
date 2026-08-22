@@ -876,10 +876,10 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         );
       }
 
-      const result = await callTool('delete_project', {
+      const result = await callTool('projects_delete', {
         project_id: id,
       });
-      assertToolSucceeded('delete_project', result);
+      assertToolSucceeded('projects_delete', result);
       await waitForProjectDeletion(id);
       projectId = undefined;
     },

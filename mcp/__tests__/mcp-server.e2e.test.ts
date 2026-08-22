@@ -105,18 +105,18 @@ describe('MCP server e2e tool calls', () => {
       const result = await client.listTools();
       const toolNames = result.tools.map((tool) => tool.name);
       const queryLogsTool = result.tools.find(
-        (tool) => tool.name === 'query_project_branch_logs',
+        (tool) => tool.name === 'logs_query',
       );
       const listLogFieldsTool = result.tools.find(
-        (tool) => tool.name === 'list_project_branch_log_fields',
+        (tool) => tool.name === 'logs_fields',
       );
       const listLogFieldValuesTool = result.tools.find(
-        (tool) => tool.name === 'list_project_branch_log_field_values',
+        (tool) => tool.name === 'logs_field_values',
       );
 
-      expect(toolNames).toContain('query_project_branch_logs');
-      expect(toolNames).toContain('list_project_branch_log_fields');
-      expect(toolNames).toContain('list_project_branch_log_field_values');
+      expect(toolNames).toContain('logs_query');
+      expect(toolNames).toContain('logs_fields');
+      expect(toolNames).toContain('logs_field_values');
       expect(queryLogsTool?.inputSchema).toMatchObject({
         type: 'object',
         properties: {

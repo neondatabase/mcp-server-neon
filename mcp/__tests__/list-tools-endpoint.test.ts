@@ -73,11 +73,11 @@ describe('/api/list-tools endpoint', () => {
       getFilteredTools({ projectId: 'proj-123', scopes: null }, false).length,
     );
     const names = body.tools.map((t) => t.name);
-    expect(names).not.toContain('list_projects');
+    expect(names).not.toContain('projects_list');
     expect(names).not.toContain('create_project');
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
-    expect(names).toContain('get_project');
+    expect(names).toContain('projects_get');
   });
 
   it('filters to readOnlySafe tools with readonly=true', async () => {
@@ -157,7 +157,7 @@ describe('/api/list-tools endpoint', () => {
       expect(search?.scope).toBe('global');
       expect(fetch_?.scope).toBe('global');
       // Sanity-check that other tools keep their named scope.
-      const listProjects = body.tools.find((t) => t.name === 'list_projects');
+      const listProjects = body.tools.find((t) => t.name === 'projects_list');
       expect(listProjects?.scope).toBe('projects');
     });
 

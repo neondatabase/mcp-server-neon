@@ -8,14 +8,11 @@ import { fetchAsMcpServer } from '../../neon-client';
 import type { NeonTool } from '../tool-definition';
 import type { ToolHandlerExtended, ToolHandlers } from '../types';
 import {
-  GENERATED_OPERATION_IDS,
-  GENERATED_OPERATION_SCOPES,
-  PROJECT_SCOPED_OPERATION_OVERRIDES,
-  READ_ONLY_SAFE_OPERATION_OVERRIDES,
-  WORKFLOW_IDS,
-  WORKFLOW_SCOPES,
-  type GeneratedOperationId,
-  type WorkflowToolId,
+  GENERATED_TOOL_IDS,
+  GENERATED_TOOL_SCOPES,
+  PROJECT_SCOPED_TOOL_OVERRIDES,
+  READ_ONLY_SAFE_TOOL_OVERRIDES,
+  type GeneratedToolId,
 } from './operations';
 import { sanitizeGeneratedResult } from './sanitize';
 
@@ -30,7 +27,7 @@ Neon supports Postgres 14 through 18, with 19 rolling out to enabled regions.
 
 \`pooled\` defaults to true. Set \`pooled: false\` for a direct host.
 
-If the API omits a connection URI (more than one role or database), the project may already exist and the error has no id. Call \`list_projects\` before retrying.`;
+If the API omits a connection URI (more than one role or database), the project may already exist and the error has no id. Call \`projects_list\` before retrying.`;
 
 const CREATE_BRANCH_DESCRIPTION = `Creates a branch with a read-write compute, waits until it is ready, and returns a connection string.
 
@@ -38,15 +35,15 @@ Arguments: \`{ "project_id": "…", "name": "feature-x" }\`. \`parent_id\` defau
 
 \`pooled\` defaults to true. Set \`pooled: false\` for a direct host.
 
-This tool copies the parent at head. For a point in time, create the branch here first, then call \`restore_project_branch\` with \`branch_id\` set to the new branch and \`source_branch_id\` set to the parent, plus \`source_timestamp\` or \`source_lsn\`. Calling \`restore_project_branch\` on the parent rewinds the parent.
+This tool copies the parent at head. For a point in time, create the branch here first, then call \`snapshots_restore\` with \`target_branch_id\` set to the new branch, plus a snapshot or source point. Calling \`snapshots_restore\` without a target creates a new branch.
 
-If the API omits a connection URI (parent with more than one role or database), the branch may already exist and the error has no id. Call \`list_project_branches\` before retrying.`;
+If the API omits a connection URI (parent with more than one role or database), the branch may already exist and the error has no id. Call \`branches_list\` before retrying.`;
 
 const DELETE_PROJECT_DESCRIPTION = `Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For removing single branches, use \`delete_branch\` instead.
 
 Arguments: \`{ "project_id": "…" }\`.`;
 
-const DELETE_BRANCH_DESCRIPTION = `Delete a branch and all its data. NEVER run autonomously; always ask the user first. For deleting an entire project, use \`delete_project\` instead.
+const DELETE_BRANCH_DESCRIPTION = `Delete a branch and all its data. NEVER run autonomously; always ask the user first. For deleting an entire project, use \`projects_delete\` instead.
 
 Arguments: \`{ "project_id": "…", "branch_id": "br-…" }\`. \`branch_id\` is a branch id, not a name.`;
 
@@ -55,18 +52,20 @@ const CREATE_PROJECT_ENDPOINT_DESCRIPTION = `Creates a compute endpoint on a bra
 This tool does not return a connection string. After it succeeds, call \`get_connection_string\` with the project and branch id to obtain a DATABASE_URL.`;
 
 const BRANCH_ID_NOTE =
-  'branch_id is a branch id (br-...), not a branch name. Call list_project_branches to resolve a name.';
+  'branch_id is a branch id (br-...), not a branch name. Call branches_list to resolve a name.';
 
-const GENERATED_TOOL_NAMES = {
-  deleteProjectBranch: 'delete_branch',
+const TOOL_NAMES = {
+  'projects.createAndConnect': 'create_project',
+  'branches.createWithCompute': 'create_branch',
+  'branches.delete': 'delete_branch',
 } as const;
 
-const WORKFLOW_TOOL_NAMES = {
-  createProjectAndConnect: 'create_project',
-  createBranchWithCompute: 'create_branch',
-} as const;
+const WAIT = { timeoutMs: 120_000 } as const;
 
-const WORKFLOW_WAIT = { timeoutMs: 120_000 } as const;
+const CREATE_TOOLS = new Set<GeneratedToolId>([
+  'projects.createAndConnect',
+  'branches.createWithCompute',
+]);
 
 const LOG_QUERY_ANNOTATIONS = {
   readOnlyHint: true,
@@ -77,21 +76,17 @@ const LOG_QUERY_ANNOTATIONS = {
 
 function createGeneratedNeonTools() {
   return createNeonTools({
-    operations: GENERATED_OPERATION_IDS,
-    workflows: WORKFLOW_IDS,
+    tools: GENERATED_TOOL_IDS,
     baseUrl: NEON_API_HOST,
     fetch: fetchAsMcpServer,
-    wait: WORKFLOW_WAIT,
-    names: {
-      ...GENERATED_TOOL_NAMES,
-      ...WORKFLOW_TOOL_NAMES,
-    },
+    wait: WAIT,
+    names: TOOL_NAMES,
     descriptions: {
-      createProjectAndConnect: CREATE_PROJECT_DESCRIPTION,
-      createBranchWithCompute: CREATE_BRANCH_DESCRIPTION,
-      deleteProject: DELETE_PROJECT_DESCRIPTION,
-      deleteProjectBranch: DELETE_BRANCH_DESCRIPTION,
-      createProjectEndpoint: CREATE_PROJECT_ENDPOINT_DESCRIPTION,
+      'projects.createAndConnect': CREATE_PROJECT_DESCRIPTION,
+      'branches.createWithCompute': CREATE_BRANCH_DESCRIPTION,
+      'projects.delete': DELETE_PROJECT_DESCRIPTION,
+      'branches.delete': DELETE_BRANCH_DESCRIPTION,
+      'postgres.endpoints.create': CREATE_PROJECT_ENDPOINT_DESCRIPTION,
     },
   });
 }
@@ -126,22 +121,22 @@ export function generatedToolPathHas(id: string, key: string): boolean {
 }
 
 function generatedReadOnlySafe(
-  operationId: GeneratedOperationId,
+  toolId: GeneratedToolId,
   tool: GeneratedNeonTool,
 ): boolean {
-  if (READ_ONLY_SAFE_OPERATION_OVERRIDES.has(operationId)) {
+  if (READ_ONLY_SAFE_TOOL_OVERRIDES.has(toolId)) {
     return true;
   }
   return tool.metadata.method === 'GET' && !tool.requiresApproval;
 }
 
 function generatedProjectScoped(
-  operationId: GeneratedOperationId,
+  toolId: GeneratedToolId,
   tool: GeneratedNeonTool,
 ): boolean {
-  const overrides: Partial<Record<GeneratedOperationId, boolean>> =
-    PROJECT_SCOPED_OPERATION_OVERRIDES;
-  const override = overrides[operationId];
+  const overrides: Partial<Record<GeneratedToolId, boolean>> =
+    PROJECT_SCOPED_TOOL_OVERRIDES;
+  const override = overrides[toolId];
   if (override !== undefined) {
     return override;
   }
@@ -149,41 +144,53 @@ function generatedProjectScoped(
 }
 
 function generatedAnnotations(
-  operationId: GeneratedOperationId,
+  toolId: GeneratedToolId,
   tool: GeneratedNeonTool,
   readOnlySafe: boolean,
 ): ToolAnnotations {
-  if (operationId === 'queryProjectBranchLogs') {
+  if (toolId === 'logs.query') {
     return {
       title: tool.title,
       ...LOG_QUERY_ANNOTATIONS,
     };
   }
 
+  if (CREATE_TOOLS.has(toolId)) {
+    return {
+      title: tool.title,
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    };
+  }
+
   return {
     title: tool.title,
     readOnlyHint: tool.annotations.readOnlyHint,
-    destructiveHint: generatedDestructiveHint(operationId, tool),
+    destructiveHint: generatedDestructiveHint(toolId, tool),
     idempotentHint: tool.annotations.idempotentHint ?? readOnlySafe,
     openWorldHint: tool.annotations.openWorldHint,
   };
 }
 
-const DESTRUCTIVE_OPERATION_PREFIX =
+const DESTRUCTIVE_SEGMENT_PREFIX =
   /^(delete|remove|disable|restore|reset|revoke|suspend|restart|update)/i;
 
-const DESTRUCTIVE_POST_OPERATIONS = new Set<GeneratedOperationId>([
-  'finalizeRestoreBranch',
-  'startAnonymization',
-  'createProjectBranchAnonymized',
-  'assignProjectVPCEndpoint',
-  'setDefaultProjectBranch',
-  'createProjectBranchFunctionDeployment',
-  'presignProjectBranchBucketObject',
+const DESTRUCTIVE_POST_TOOLS = new Set<GeneratedToolId>([
+  'branches.finalizeRestore',
+  'branches.setDefault',
+  'functions.deploy',
+  'storage.objects.presign',
 ]);
 
+function lastSegment(toolId: GeneratedToolId): string {
+  const parts = toolId.split('.');
+  return parts[parts.length - 1] ?? toolId;
+}
+
 function generatedDestructiveHint(
-  operationId: GeneratedOperationId,
+  toolId: GeneratedToolId,
   tool: GeneratedNeonTool,
 ): boolean {
   const method = tool.metadata.method;
@@ -192,56 +199,30 @@ function generatedDestructiveHint(
     return true;
   }
   return (
-    DESTRUCTIVE_OPERATION_PREFIX.test(operationId) ||
-    DESTRUCTIVE_POST_OPERATIONS.has(operationId)
+    DESTRUCTIVE_SEGMENT_PREFIX.test(lastSegment(toolId)) ||
+    DESTRUCTIVE_POST_TOOLS.has(toolId)
   );
-}
-
-function workflowToolDefinition(
-  workflowId: WorkflowToolId,
-  tool: GeneratedNeonTool,
-): NeonTool {
-  return {
-    kind: 'generated',
-    name: tool.id,
-    scope: WORKFLOW_SCOPES[workflowId],
-    description: tool.description,
-    inputSchema: tool.inputSchema,
-    readOnlySafe: false,
-    projectScoped: hasPathKey(tool, 'project_id'),
-    annotations: {
-      title: tool.title,
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: true,
-    },
-  };
 }
 
 export function createGeneratedToolDefinitions(): NeonTool[] {
   const tools = getGeneratedNeonTools();
-  const operations = GENERATED_OPERATION_IDS.map((operationId) => {
-    const tool = tools[operationId];
-    const readOnlySafe = generatedReadOnlySafe(operationId, tool);
+  return GENERATED_TOOL_IDS.map((toolId) => {
+    const tool = tools[toolId];
+    const readOnlySafe = generatedReadOnlySafe(toolId, tool);
     const description = hasPathKey(tool, 'branch_id')
       ? `${tool.description}\n\n${BRANCH_ID_NOTE}`
       : tool.description;
     return {
       kind: 'generated' as const,
       name: tool.id,
-      scope: GENERATED_OPERATION_SCOPES[operationId],
+      scope: GENERATED_TOOL_SCOPES[toolId],
       description,
       inputSchema: tool.inputSchema,
       readOnlySafe,
-      projectScoped: generatedProjectScoped(operationId, tool),
-      annotations: generatedAnnotations(operationId, tool, readOnlySafe),
+      projectScoped: generatedProjectScoped(toolId, tool),
+      annotations: generatedAnnotations(toolId, tool, readOnlySafe),
     };
   });
-  const workflows = WORKFLOW_IDS.map((workflowId) =>
-    workflowToolDefinition(workflowId, tools[workflowId]),
-  );
-  return [...operations, ...workflows];
 }
 
 function jsonTextResult(data: unknown) {
@@ -259,10 +240,8 @@ export function createGeneratedToolHandlers(): ToolHandlers {
   const tools = getGeneratedNeonTools();
   const handlers: ToolHandlers = {};
 
-  const register = (
-    id: GeneratedOperationId | WorkflowToolId,
-    tool: GeneratedNeonTool,
-  ) => {
+  for (const toolId of GENERATED_TOOL_IDS) {
+    const tool = tools[toolId];
     const handler: ToolHandlerExtended = async (args, _neonClient, extra) => {
       if (!extra?.apiKey) {
         throw new Error(`Tool ${tool.id} requires an API key`);
@@ -276,16 +255,9 @@ export function createGeneratedToolHandlers(): ToolHandlers {
         apiKey: extra.apiKey,
         signal: extra.signal,
       });
-      return jsonTextResult(sanitizeGeneratedResult(id, result.data));
+      return jsonTextResult(sanitizeGeneratedResult(toolId, result.data));
     };
     handlers[tool.id] = handler;
-  };
-
-  for (const operationId of GENERATED_OPERATION_IDS) {
-    register(operationId, tools[operationId]);
-  }
-  for (const workflowId of WORKFLOW_IDS) {
-    register(workflowId, tools[workflowId]);
   }
 
   return handlers;

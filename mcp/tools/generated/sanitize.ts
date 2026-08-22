@@ -1,10 +1,8 @@
-import type { GeneratedOperationId, WorkflowToolId } from './operations';
+import type { GeneratedToolId } from './operations';
 
-type SanitizedToolId = GeneratedOperationId | WorkflowToolId;
-
-const KEEP_ROLE_PASSWORD = new Set<SanitizedToolId>([
-  'createProjectBranchRole',
-  'resetProjectBranchRolePassword',
+const KEEP_ROLE_PASSWORD = new Set<GeneratedToolId>([
+  'postgres.roles.create',
+  'postgres.roles.resetPassword',
 ]);
 
 const DROP_KEYS = new Set([
@@ -29,19 +27,19 @@ function omitRolePassword(role: unknown): unknown {
 }
 
 /**
- * Password-creation and connection workflows retain credentials because
+ * Password-creation and connection tools retain credentials because
  * returning the credential is the requested operation.
  */
 export function sanitizeGeneratedResult(
-  operationId: SanitizedToolId,
+  toolId: GeneratedToolId,
   data: unknown,
 ): unknown {
-  return sanitizeValue(operationId, data);
+  return sanitizeValue(toolId, data);
 }
 
-function sanitizeValue(operationId: SanitizedToolId, data: unknown): unknown {
+function sanitizeValue(toolId: GeneratedToolId, data: unknown): unknown {
   if (Array.isArray(data)) {
-    return data.map((item) => sanitizeValue(operationId, item));
+    return data.map((item) => sanitizeValue(toolId, item));
   }
   if (!isPlainObject(data)) {
     return data;
@@ -50,18 +48,18 @@ function sanitizeValue(operationId: SanitizedToolId, data: unknown): unknown {
   const next: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
     if (DROP_KEYS.has(key)) continue;
-    if (key === 'password' && !KEEP_ROLE_PASSWORD.has(operationId)) continue;
+    if (key === 'password' && !KEEP_ROLE_PASSWORD.has(toolId)) continue;
     if (key === 'roles' && Array.isArray(value)) {
       next[key] = value.map(omitRolePassword);
       continue;
     }
     if (key === 'role') {
-      next[key] = KEEP_ROLE_PASSWORD.has(operationId)
+      next[key] = KEEP_ROLE_PASSWORD.has(toolId)
         ? value
         : omitRolePassword(value);
       continue;
     }
-    next[key] = sanitizeValue(operationId, value);
+    next[key] = sanitizeValue(toolId, value);
   }
   return next;
 }

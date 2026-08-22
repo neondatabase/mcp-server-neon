@@ -220,11 +220,11 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 
 Host tools: `list_organizations`, `describe_branch`, `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`, `list_slow_queries`, `explain_sql_statement`, `inspect_database`, `get_neon_auth_config`, `search`, `fetch`, `list_docs_resources`, `get_doc_resource`.
 
-Generated Management API tools that are GET and do not return secrets, plus `query_project_branch_logs` (POST, read-only). Preview the exact set with `/api/list-tools?readonly=true`.
+Generated Management API tools that are GET and do not return secrets, plus `logs_query` (POST, read-only). Preview the exact set with `/api/list-tools?readonly=true`.
 
 **Tools requiring write access:**
 
-- Generated Management API writes (`create_project`, `create_branch`, `delete_project`, …)
+- Generated Management API writes (`create_project`, `create_branch`, `projects_delete`, …)
 - `get_connection_string` (the connection string carries a privileged role password, so it is withheld in read-only mode; copy it from the [Neon Console](https://console.neon.tech) instead)
 - `prepare_database_migration`, `complete_database_migration`
 - `prepare_query_tuning`, `complete_query_tuning`
@@ -294,43 +294,40 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 
 Notes:
 
-- The unfiltered URL publishes 134 tools (~227 KB on every `tools/list`). VS Code Copilot caps a request at 128 tools. Pass `?category=` to stay under it. The recommended URL (`projects`, `branches`, `endpoints`, `querying`, `schema`) includes `list_projects`, compute tools, and the schema tools those workflows call. Neon Auth, Data API, snapshots, functions, storage, observability, and docs need their own `?category=` values.
+- Management API tools come from `@neon/tools`. Selectors are SDK paths (`projects.list`); published names are those paths in snake_case (`projects_list`). `create_project`, `create_branch`, and `delete_branch` keep those names.
 - `?category=branches` does not include compute tools. Those are `?category=endpoints`.
-- Management API tools come from `@neon/tools` with flat arguments.
-- `get_project_branch_schema` and `get_project_branch_schema_comparison` are categorized under `schema`.
-- JWKS tools are categorized under `data_api`.
+- Schema tools are host tools (`get_database_tables`, `describe_table_schema`, `describe_branch`). There is no generated schema-compare tool.
 - Read-only enforcement still relies on `readOnlySafe` and server-side read-only logic; `scope` is category metadata, not a standalone read/write switch.
-- In project-scoped mode (`?projectId=...`), tools without a project path (`list_projects`, `create_project`, `list_organizations`, `get_organization`, `get_active_regions`, `search`, `fetch`, …) are hidden. `delete_project` is also hidden.
+- In project-scoped mode (`?projectId=...`), tools without a project path (`projects_list`, `create_project`, `list_organizations`, `regions_list`, `search`, `fetch`, …) are hidden. `projects_delete` is also hidden.
 
 **Project Management:**
 
-- **`list_projects`**: Lists Neon projects. Arguments are `{ "limit": 10 }`.
-- **`list_shared_projects`**: Lists Neon projects shared with the current user. Same flat query fields.
-- **`get_project`**: Fetches a Neon project by id (`{ "project_id": "…" }`).
+- **`projects_list`**: Lists Neon projects. `limit` caps how many items come back.
+- **`projects_get`**: Fetches a Neon project by id (`{ "project_id": "…" }`).
 - **`create_project`**: Creates a Neon project, waits for the default compute, and returns a connection string. Arguments are `{ "name": "…", "org_id": "…", "region_id": "…" }`.
-- **`delete_project`**: Deletes an existing Neon project. Arguments are `{ "project_id": "…" }`.
+- **`projects_delete`**: Deletes an existing Neon project. Arguments are `{ "project_id": "…" }`.
 - **`list_organizations`**: Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.
 
 **Branch Management:**
 
-- **`list_project_branches`**: Lists branches in a project. Use it to resolve a branch name to a `br-…` id.
+- **`branches_list`**: Lists branches in a project. Use it to resolve a branch name to a `br-…` id.
 - **`create_branch`**: Creates a branch with a read-write compute, waits until it is ready, and returns a connection string. Arguments are `{ "project_id": "…", "name": "feature-x" }`.
 - **`delete_branch`**: Deletes a branch (`{ "project_id": "…", "branch_id": "br-…" }`).
 - **`describe_branch`**: Retrieves a tree of databases, schemas, tables, views, and functions on a branch.
 - Generated branch tools take `branch_id` as a branch id (`br-...`), not a name.
-- **`restore_project_branch`**: Rewinds `branch_id` in place to a point on `source_branch_id` (`source_timestamp` or `source_lsn`). Pass `preserve_under_name` to keep the current head.
+- **`snapshots_restore`**: Restores a snapshot. Pass `target_branch_id` to restore onto an existing branch; omit it to create a new one.
 
 **Compute endpoints** (`?category=endpoints`):
 
-- **`list_project_endpoints`**, **`list_project_branch_endpoints`**, **`get_project_endpoint`**, **`create_project_endpoint`**, **`update_project_endpoint`**, **`delete_project_endpoint`**, **`start_project_endpoint`**, **`suspend_project_endpoint`**, **`restart_project_endpoint`**
+- **`postgres_endpoints_list`**, **`postgres_endpoints_list_by_branch`**, **`postgres_endpoints_get`**, **`postgres_endpoints_create`**, **`postgres_endpoints_update`**, **`postgres_endpoints_delete`**, **`postgres_endpoints_start`**, **`postgres_endpoints_suspend`**, **`postgres_endpoints_restart`**
 
 **Snapshots** (`?category=snapshots`):
 
-- **`list_snapshots`**, **`get_snapshot_schedule`**, **`set_snapshot_schedule`**, **`create_snapshot`**, **`update_snapshot`**, **`delete_snapshot`**, **`restore_snapshot`**
+- **`snapshots_list`**, **`snapshots_get_schedule`**, **`snapshots_set_schedule`**, **`snapshots_create`**, **`snapshots_update`**, **`snapshots_delete`**, **`snapshots_restore`**
 
 **Schema** (`?category=schema`):
 
-- **`get_project_branch_schema`**, **`get_project_branch_schema_comparison`**
+- Host tools only: `get_database_tables`, `describe_table_schema`, `describe_branch`.
 
 **SQL Query Execution:**
 
@@ -355,20 +352,15 @@ Notes:
 
 **Neon Auth** (`?category=neon_auth`):
 
-- **`create_neon_auth`**, **`get_neon_auth`**, **`disable_neon_auth`**
+- **`auth_create`**, **`auth_get`**, **`auth_disable`**, **`auth_update_config`**
 - **`get_neon_auth_config`**: host tool; secrets redacted. Use generated Auth write tools to change settings.
-- **`add_branch_neon_auth_oauth_provider`**, **`update_branch_neon_auth_oauth_provider`**, **`delete_branch_neon_auth_oauth_provider`**
-- **`add_branch_neon_auth_trusted_domain`**, **`list_branch_neon_auth_trusted_domains`**, **`delete_branch_neon_auth_trusted_domain`**
-- **`create_branch_neon_auth_new_user`**, **`delete_branch_neon_auth_user`**, **`update_neon_auth_user_role`**
-- **`get_neon_auth_allow_localhost`**, **`update_neon_auth_allow_localhost`**
-- **`get_neon_auth_email_and_password_config`**, **`update_neon_auth_email_and_password_config`**, **`update_neon_auth_email_provider`**
-- **`get_neon_auth_phone_number_plugin`**, **`update_neon_auth_phone_number_plugin`**, **`update_neon_auth_magic_link_plugin`**, **`update_neon_auth_organization_plugin`**
-- **`get_neon_auth_webhook_config`**, **`update_neon_auth_webhook_config`**, **`update_neon_auth_config`**, **`send_neon_auth_test_email`**
+- **`auth_oauth_providers_list`**, **`auth_oauth_providers_add`**, **`auth_oauth_providers_update`**, **`auth_oauth_providers_delete`**
+- **`auth_trusted_domains_list`**, **`auth_trusted_domains_add`**, **`auth_trusted_domains_delete`**
+- **`auth_users_create`**, **`auth_users_delete`**, **`auth_users_update_role`**
 
 **Neon Data API** (`?category=data_api`):
 
-- **`create_project_branch_data_api`**, **`get_project_branch_data_api`**, **`update_project_branch_data_api`**, **`delete_project_branch_data_api`**: Manage the Data API for a branch database.
-- **`add_project_jwks`**, **`get_project_jwks`**, **`delete_project_jwks`**: Manage JWKS entries used by the Data API.
+- **`postgres_data_api_create`**, **`postgres_data_api_get`**, **`postgres_data_api_update`**, **`postgres_data_api_delete`**: Manage the Data API for a branch database.
 
 **Search and Discovery:**
 
@@ -377,9 +369,9 @@ Notes:
 
 **Observability** (`?category=observability`): these tools require the Neon Platform Beta and are currently only available for projects in the `aws-us-east-2` region. A branch without logs access returns HTTP 404 with reason `telemetry_not_enabled`.
 
-- **`query_project_branch_logs`**: Queries OpenTelemetry logs for a branch. POST in the Management API; treated as read-only by this server.
-- **`list_project_branch_log_fields`**: Lists the log fields you can enumerate values for on a branch.
-- **`list_project_branch_log_field_values`**: Lists the distinct values of a log field within a branch and time window.
+- **`logs_query`**: Queries OpenTelemetry logs for a branch. POST in the Management API; treated as read-only by this server.
+- **`logs_fields`**: Lists the log fields you can enumerate values for on a branch.
+- **`logs_field_values`**: Lists the distinct values of a log field within a branch and time window.
 
 **Documentation and Resources** (`?category=docs`):
 
@@ -388,13 +380,13 @@ Notes:
 
 **Functions** (`?category=functions`):
 
-- **`list_project_branch_functions`**, **`get_project_branch_function`**, **`update_project_branch_function`**, **`delete_project_branch_function`**, **`create_project_branch_function_deployment`**
+- **`functions_list`**, **`functions_get`**, **`functions_update`**, **`functions_delete`**, **`functions_deploy`**
 
 **Storage** (`?category=storage`):
 
-- **`list_project_branch_buckets`**, **`create_project_branch_bucket`**, **`delete_project_branch_bucket`**
-- **`list_project_branch_bucket_objects`**, **`delete_project_branch_bucket_object`**, **`delete_project_branch_bucket_objects_by_prefix`**
-- **`presign_project_branch_bucket_object`**, **`get_project_branch_storage`**
+- **`storage_buckets_list`**, **`storage_buckets_create`**, **`storage_buckets_delete`**
+- **`storage_objects_list`**, **`storage_objects_delete`**, **`storage_objects_delete_by_prefix`**
+- **`storage_objects_presign`**, **`storage_get`**
 
 ### Migrations
 

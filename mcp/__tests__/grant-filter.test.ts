@@ -65,17 +65,17 @@ describe('filterToolsForGrant', () => {
     expect(tools).toHaveLength(
       NEON_TOOLS.filter((tool) => tool.projectScoped).length,
     );
-    expect(names).not.toContain('list_projects');
+    expect(names).not.toContain('projects_list');
     expect(names).not.toContain('create_project');
-    expect(names).not.toContain('delete_project');
-    expect(names).not.toContain('grant_permission_to_project');
-    expect(names).not.toContain('revoke_permission_from_project');
-    expect(names).not.toContain('set_project_member_role');
-    expect(names).not.toContain('remove_project_member_role');
+    expect(names).not.toContain('projects_delete');
+    expect(names).not.toContain('projects_permissions_grant');
+    expect(names).not.toContain('projects_permissions_revoke');
+    expect(names).not.toContain('projects_members_set_role');
+    expect(names).not.toContain('projects_members_remove_role');
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
-    expect(names).toContain('get_project');
-    expect(names).toContain('list_project_members');
+    expect(names).toContain('projects_get');
+    expect(names).toContain('projects_members_list');
   });
 
   it('strips host projectId and generated project_id from published schemas', () => {
@@ -92,21 +92,17 @@ describe('filterToolsForGrant', () => {
     }
     expect('projectId' in runSql.inputSchema.shape).toBe(false);
 
-    const getProject = tools.find((tool) => tool.name === 'get_project');
+    const getProject = tools.find((tool) => tool.name === 'projects_get');
     expect(getProject && isZod4Object(getProject.inputSchema)).toBe(true);
     if (!getProject || !isZod4Object(getProject.inputSchema)) {
-      throw new Error('get_project must keep a Zod 4 object schema');
+      throw new Error('projects_get must keep a Zod 4 object schema');
     }
     expect('project_id' in getProject.inputSchema.shape).toBe(false);
 
-    const queryLogs = tools.find(
-      (tool) => tool.name === 'query_project_branch_logs',
-    );
+    const queryLogs = tools.find((tool) => tool.name === 'logs_query');
     expect(queryLogs && isZod4Object(queryLogs.inputSchema)).toBe(true);
     if (!queryLogs || !isZod4Object(queryLogs.inputSchema)) {
-      throw new Error(
-        'query_project_branch_logs must keep a Zod 4 object schema',
-      );
+      throw new Error('logs_query must keep a Zod 4 object schema');
     }
     expect('project_id' in queryLogs.inputSchema.shape).toBe(false);
     expect('branch_id' in queryLogs.inputSchema.shape).toBe(true);
@@ -327,15 +323,15 @@ describe('scope coverage sanity', () => {
       .filter((name) => name !== 'search' && name !== 'fetch')
       .sort();
     expect(names).toEqual([
-      'create_project_endpoint',
-      'delete_project_endpoint',
-      'get_project_endpoint',
-      'list_project_branch_endpoints',
-      'list_project_endpoints',
-      'restart_project_endpoint',
-      'start_project_endpoint',
-      'suspend_project_endpoint',
-      'update_project_endpoint',
+      'postgres_endpoints_create',
+      'postgres_endpoints_delete',
+      'postgres_endpoints_get',
+      'postgres_endpoints_list',
+      'postgres_endpoints_list_by_branch',
+      'postgres_endpoints_restart',
+      'postgres_endpoints_start',
+      'postgres_endpoints_suspend',
+      'postgres_endpoints_update',
     ]);
   });
 
@@ -348,13 +344,13 @@ describe('scope coverage sanity', () => {
       .filter((name) => name !== 'search' && name !== 'fetch')
       .sort();
     expect(names).toEqual([
-      'create_snapshot',
-      'delete_snapshot',
-      'get_snapshot_schedule',
-      'list_snapshots',
-      'restore_snapshot',
-      'set_snapshot_schedule',
-      'update_snapshot',
+      'snapshots_create',
+      'snapshots_delete',
+      'snapshots_get_schedule',
+      'snapshots_list',
+      'snapshots_restore',
+      'snapshots_set_schedule',
+      'snapshots_update',
     ]);
   });
 });

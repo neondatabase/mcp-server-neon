@@ -48,13 +48,13 @@ test.describe('/api/list-tools endpoint', () => {
     expect(body.grant.projectId).toBe('proj-123');
 
     const names = body.tools.map((t: { name: string }) => t.name);
-    expect(names).not.toContain('list_projects');
+    expect(names).not.toContain('projects_list');
     expect(names).not.toContain('list_organizations');
     expect(names).not.toContain('create_project');
-    expect(names).not.toContain('delete_project');
+    expect(names).not.toContain('projects_delete');
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
-    expect(names).toContain('get_project');
+    expect(names).toContain('projects_get');
   });
 
   test('returns readOnlySafe tools for readonly=true', async ({ request }) => {
