@@ -342,18 +342,12 @@ describe('configureNeonAuthInputSchema', () => {
       projectId: 'proj-1',
       test_email: {
         recipient_email: 'not-an-email',
-        host: 'smtp.example.com',
-        port: 587,
-        username: 'apikey',
-        password: 'secret',
-        sender_email: 'noreply@example.com',
-        sender_name: 'Acme',
       },
     });
     expect(r.success).toBe(false);
   });
 
-  it('accepts send_test_email with full SMTP credentials + recipient', () => {
+  it('rejects send_test_email when SMTP fields are supplied', () => {
     const r = configureNeonAuthInputSchema.safeParse({
       operation: 'send_test_email',
       projectId: 'proj-1',
@@ -365,6 +359,17 @@ describe('configureNeonAuthInputSchema', () => {
         password: 'secret',
         sender_email: 'noreply@example.com',
         sender_name: 'Acme',
+      },
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('accepts send_test_email with recipient_email only', () => {
+    const r = configureNeonAuthInputSchema.safeParse({
+      operation: 'send_test_email',
+      projectId: 'proj-1',
+      test_email: {
+        recipient_email: 'tester@example.com',
       },
     });
     expect(r.success).toBe(true);
@@ -830,13 +835,13 @@ describe('handleConfigureNeonAuth', () => {
   });
 
   it('send_test_email passes through upstream success and does not reload the snapshot', async () => {
-    const sendNeonAuthTestEmail = vi.fn().mockResolvedValue({
+    const sendNeonAuthEmailProviderTest = vi.fn().mockResolvedValue({
       status: 200,
       data: { success: true },
     });
     const listBranchNeonAuthTrustedDomains = vi.fn();
     const neonClient = {
-      sendNeonAuthTestEmail,
+      sendNeonAuthEmailProviderTest,
       // Snapshot fetchers MUST NOT be invoked. We hand in spies that would
       // throw on any access to assert the no-reload contract.
       listBranchNeonAuthTrustedDomains,
@@ -851,12 +856,6 @@ describe('handleConfigureNeonAuth', () => {
         projectId: 'proj-1',
         test_email: {
           recipient_email: 'tester@example.com',
-          host: 'smtp.example.com',
-          port: 587,
-          username: 'apikey',
-          password: 'secret',
-          sender_email: 'noreply@example.com',
-          sender_name: 'Acme',
         },
       }),
       neonClient as never,
@@ -864,32 +863,26 @@ describe('handleConfigureNeonAuth', () => {
     );
 
     expect(result.isError).toBeFalsy();
-    expect(sendNeonAuthTestEmail).toHaveBeenCalledWith('proj-1', 'br-default', {
-      recipient_email: 'tester@example.com',
-      host: 'smtp.example.com',
-      port: 587,
-      username: 'apikey',
-      password: 'secret',
-      sender_email: 'noreply@example.com',
-      sender_name: 'Acme',
-    });
+    expect(sendNeonAuthEmailProviderTest).toHaveBeenCalledWith(
+      'proj-1',
+      'br-default',
+      { recipient_email: 'tester@example.com' },
+    );
     expect(listBranchNeonAuthTrustedDomains).not.toHaveBeenCalled();
     if (result.content[0].type === 'text') {
       const text = result.content[0].text;
       expect(text).toContain('Test email dispatched to tester@example.com');
-      // Defense-in-depth: the supplied SMTP password must never surface in
-      // the rendered output, even on the success path.
-      expect(text).not.toContain('secret');
+      expect(text).toContain('using the saved email provider');
     }
   });
 
   it('send_test_email surfaces upstream failures via isError and the upstream error message', async () => {
-    const sendNeonAuthTestEmail = vi.fn().mockResolvedValue({
+    const sendNeonAuthEmailProviderTest = vi.fn().mockResolvedValue({
       status: 200,
       data: { success: false, error_message: 'auth failed: 535' },
     });
     const neonClient = {
-      sendNeonAuthTestEmail,
+      sendNeonAuthEmailProviderTest,
       listProjectBranches: vi.fn().mockResolvedValue({
         data: { branches: [{ id: 'br-default', default: true }] },
       }),
@@ -901,12 +894,6 @@ describe('handleConfigureNeonAuth', () => {
         projectId: 'proj-1',
         test_email: {
           recipient_email: 'tester@example.com',
-          host: 'smtp.example.com',
-          port: 587,
-          username: 'apikey',
-          password: 'wrong',
-          sender_email: 'noreply@example.com',
-          sender_name: 'Acme',
         },
       }),
       neonClient as never,
@@ -919,10 +906,8 @@ describe('handleConfigureNeonAuth', () => {
       expect(text).toContain(
         'Test email could NOT be sent to tester@example.com',
       );
+      expect(text).toContain('using the saved email provider');
       expect(text).toContain('auth failed: 535');
-      // Defense-in-depth: the wrong password must never surface in the
-      // rendered failure message either.
-      expect(text).not.toContain('wrong');
     }
   });
 
@@ -1325,7 +1310,7 @@ describe('handleConfigureNeonAuth', () => {
   it('send_test_email returns isError=true on resolved 5xx and surfaces upstream error_message when present', async () => {
     const neonClient = {
       ...defaultSnapshotMocks(),
-      sendNeonAuthTestEmail: vi.fn().mockResolvedValue({
+      sendNeonAuthEmailProviderTest: vi.fn().mockResolvedValue({
         status: 500,
         statusText: 'Internal Server Error',
         data: { error_message: 'upstream relay refused' },
@@ -1339,12 +1324,6 @@ describe('handleConfigureNeonAuth', () => {
         branchId: 'br-1',
         test_email: {
           recipient_email: 'tester@example.com',
-          host: 'smtp.example.com',
-          port: 587,
-          username: 'apikey',
-          password: 'sensitive-password',
-          sender_email: 'noreply@example.com',
-          sender_name: 'Acme',
         },
       }),
       neonClient as never,
@@ -1358,9 +1337,6 @@ describe('handleConfigureNeonAuth', () => {
       // Item #3: the resolved-non-200 path must include the upstream
       // error_message when the upstream body carries one.
       expect(text).toContain('upstream relay refused');
-      // S5: the supplied SMTP password must never surface, even on this
-      // branch.
-      expect(text).not.toContain('sensitive-password');
     }
   });
 });

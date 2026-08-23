@@ -494,18 +494,10 @@ export async function handleConfigureNeonAuth(
     }
     case 'send_test_email': {
       const t = props.test_email!;
-      const res = await neonClient.sendNeonAuthTestEmail(
+      const res = await neonClient.sendNeonAuthEmailProviderTest(
         props.projectId,
         branchId,
-        {
-          recipient_email: t.recipient_email,
-          host: t.host,
-          port: t.port,
-          username: t.username,
-          password: t.password,
-          sender_email: t.sender_email,
-          sender_name: t.sender_name,
-        },
+        { recipient_email: t.recipient_email },
       );
       if (res.status !== 200) {
         // In practice the SDK throws on 4xx/5xx and the outer wrapper handles
@@ -538,8 +530,8 @@ export async function handleConfigureNeonAuth(
       // that doesn't mutate Neon Auth state.
       const { success, error_message } = res.data;
       const header = success
-        ? `Test email dispatched to ${t.recipient_email} via ${t.host}:${t.port}.`
-        : `Test email could NOT be sent to ${t.recipient_email} via ${t.host}:${t.port}.`;
+        ? `Test email dispatched to ${t.recipient_email} using the saved email provider.`
+        : `Test email could NOT be sent to ${t.recipient_email} using the saved email provider.`;
       const detail = error_message ? `\nUpstream error: ${error_message}` : '';
       return {
         isError: !success,

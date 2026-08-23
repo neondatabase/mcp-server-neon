@@ -133,6 +133,39 @@ function success<T>(data: T, status = 200): ApiResponse<T> {
   };
 }
 
+type NeonAuthEmailProviderTestCall = {
+  client?: ReturnType<typeof createSdkClient>['client'];
+  path: { project_id: string; branch_id: string };
+  body: { recipient_email: string };
+  headers?: Record<string, string>;
+  throwOnError?: boolean;
+  responseStyle?: 'fields' | 'data';
+};
+
+type NeonAuthEmailProviderTestResult = {
+  success: boolean;
+  error_message?: string;
+};
+
+function isNeonAuthEmailProviderTestResult(
+  value: unknown,
+): value is NeonAuthEmailProviderTestResult {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  if (!('success' in value) || typeof value.success !== 'boolean') {
+    return false;
+  }
+  if (
+    'error_message' in value &&
+    value.error_message !== undefined &&
+    typeof value.error_message !== 'string'
+  ) {
+    return false;
+  }
+  return true;
+}
+
 async function readPage<T>(
   page: Promise<
     | { data: { items: T[]; cursor?: string }; error: undefined }
@@ -517,25 +550,34 @@ export function createNeonClient(apiKey: string) {
       return success(data);
     },
 
-    async sendNeonAuthTestEmail(
+    async sendNeonAuthEmailProviderTest(
       projectId: string,
       branchId: string,
-      request: {
-        recipient_email: string;
-        host: string;
-        port: number;
-        username: string;
-        password: string;
-        sender_email: string;
-        sender_name: string;
-      },
+      request: { recipient_email: string },
     ) {
-      const data = await raw.sendNeonAuthTestEmail({
+      // `security` attaches bearer auth. `wrapRaw` preserves NeonError
+      // conversion; direct `client.post` would throw raw JSON.
+      const data = await raw.wrapRaw((options: NeonAuthEmailProviderTestCall) =>
+        (options.client ?? neon.client).post({
+          security: [{ scheme: 'bearer', type: 'http' }],
+          url: '/projects/{project_id}/branches/{branch_id}/auth/email_provider/test',
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            ...options.headers,
+          },
+        }),
+      )({
         client: neon.client,
         path: { project_id: projectId, branch_id: branchId },
-        body: request,
+        body: { recipient_email: request.recipient_email },
         throwOnError: true,
       });
+      if (!isNeonAuthEmailProviderTestResult(data)) {
+        throw new Error(
+          'Neon Auth email provider test returned an unexpected body',
+        );
+      }
       return success(data);
     },
 
