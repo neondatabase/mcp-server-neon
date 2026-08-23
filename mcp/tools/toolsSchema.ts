@@ -413,7 +413,7 @@ const sendTestEmailSchema = z
   })
   .strict()
   .describe(
-    "Send a test message through the branch's already-saved email provider. Only recipient_email is supplied; the stored SMTP settings and password are used server-side. A shared provider, a missing configuration, or a non-Better-Auth integration is rejected by the API.",
+    'Send a test message through the custom SMTP provider saved on the branch (email_provider type=standard). Only recipient_email is supplied; the stored settings and password are used server-side. Requires update_email_provider to have saved a standard provider first. A shared provider, a missing configuration, or a non-Better-Auth integration is rejected by the API.',
   );
 
 /**
@@ -573,7 +573,7 @@ export const configureNeonAuthInputSchema = z
     test_email: sendTestEmailSchema
       .optional()
       .describe(
-        'Recipient for a test email through the saved email provider. Required for send_test_email.',
+        'Recipient for a test email through the custom SMTP provider saved on the branch (email_provider type=standard). Required for send_test_email.',
       ),
   })
   .superRefine((val, ctx) => {

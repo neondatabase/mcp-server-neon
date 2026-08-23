@@ -123,7 +123,7 @@ describe('send_test_email over the wire', () => {
     expect(result.content[0]).toMatchObject({
       type: 'text',
       text: expect.stringContaining(
-        'Test email dispatched to tester@example.com using the saved email provider.',
+        'Test email dispatched to tester@example.com using the SMTP provider saved on this branch.',
       ),
     });
   });
