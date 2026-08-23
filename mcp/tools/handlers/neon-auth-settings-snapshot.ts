@@ -1,7 +1,7 @@
 import {
   Api,
   NeonAuthEmailAndPasswordConfig,
-  NeonAuthEmailServerConfig,
+  NeonAuthEmailServerConfigResponse,
   NeonAuthEmailVerificationMethod,
   NeonAuthOauthProvider,
   NeonAuthOauthProviderId,
@@ -71,11 +71,6 @@ type OAuthProviderSnapshot = {
   client_secret: typeof REDACTED_SECRET | null;
 };
 
-/**
- * Email provider snapshot, discriminated by `type` to mirror the upstream
- * `NeonAuthEmailServerConfig` union. As with OAuth, the SMTP `password` is
- * redacted to `REDACTED_SECRET` whenever the upstream indicates one is set.
- */
 type EmailProviderSnapshot =
   | {
       type: 'standard';
@@ -140,7 +135,7 @@ function oauthProviderSnapshot(
 }
 
 function emailProviderSnapshot(
-  data: NeonAuthEmailServerConfig,
+  data: NeonAuthEmailServerConfigResponse,
 ): EmailProviderSnapshot {
   if (data.type === 'standard') {
     return {
@@ -165,7 +160,7 @@ function buildNeonAuthConfigurableSettingsFromSlices(
   localhostRes: Slice<{ allow_localhost: boolean }>,
   emailRes: Slice<NeonAuthEmailAndPasswordConfig>,
   oauthRes: Slice<{ providers: NeonAuthOauthProvider[] }>,
-  emailProviderRes: Slice<NeonAuthEmailServerConfig>,
+  emailProviderRes: Slice<NeonAuthEmailServerConfigResponse>,
 ): {
   settings: NeonAuthConfigurableSettings;
   errors: NeonAuthConfigurableSettingsErrors;
@@ -268,7 +263,7 @@ async function safeFetchEmailProvider(
   neonClient: Api<unknown>,
   projectId: string,
   branchId: string,
-): Promise<Slice<NeonAuthEmailServerConfig>> {
+): Promise<Slice<NeonAuthEmailServerConfigResponse>> {
   try {
     return await neonClient.getNeonAuthEmailProvider(projectId, branchId);
   } catch (err) {

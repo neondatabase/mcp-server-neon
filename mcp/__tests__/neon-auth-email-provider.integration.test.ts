@@ -1,6 +1,6 @@
 /**
- * Stubbed-client tests cannot verify the wire request or wrapRaw's 4xx/5xx
- * conversion.
+ * Stubbed-client tests cannot verify the wire request or how a 4xx and a 5xx
+ * come back from the generated raw helper.
  */
 
 import { createServer, type Server } from 'node:http';
