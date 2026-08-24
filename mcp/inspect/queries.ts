@@ -5,7 +5,7 @@
  *
  * Every query is copied verbatim from the `neon` CLI, where the same catalog
  * powers `neon inspect db <check>`:
- * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ 1bcedaf.
+ * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ df56774.
  * The CLI does not publish this module, so the SQL is duplicated rather than
  * imported. Keep the SQL a verbatim copy — port fixes in both directions instead
  * of letting the two catalogs diverge.
@@ -179,7 +179,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   },
   'stalled-queries': {
     describe:
-      'Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers (compute-wide)',
+      'Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers, oldest query group first (compute-wide)',
     scope: 'compute',
     fields: [
       'observed_at',

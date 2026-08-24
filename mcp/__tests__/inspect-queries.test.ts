@@ -133,7 +133,7 @@ describe('inspect query catalog', () => {
     expect(INSPECT_QUERIES['stalled-queries']).toMatchObject({
       scope: 'compute',
       describe:
-        'Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers (compute-wide)',
+        'Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers, oldest query group first (compute-wide)',
       emptyMessage:
         'No active queries running longer than 30 seconds on this compute.',
       sql: expect.stringContaining(
