@@ -237,6 +237,26 @@ describe('generated tool interface', () => {
     expect(TOOL_NAMES['logs.fieldValues']).toBe('list_log_field_values');
   });
 
+  it('does not tell the agent to pass a cursor on query_logs', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'query_logs');
+    expect(tool).toBeDefined();
+    expect(generatedShape(tool!)).not.toHaveProperty('cursor');
+    expect(tool!.description).toContain('There is no `cursor` argument');
+    expect(tool!.description).not.toMatch(/pass the returned `next_cursor`/i);
+  });
+
+  it('says omitting limit on list_projects returns every project', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'list_projects');
+    expect(tool!.description).toContain(
+      'Omitting `limit` returns every project',
+    );
+  });
+
+  it('says describe_project returns the project record only', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'describe_project');
+    expect(tool!.description).toContain('Call `list_branches` for branches');
+  });
+
   it('exposes flat arguments on the project list, create, and delete tools', () => {
     const listProjects = NEON_TOOLS.find(
       (tool) => tool.name === 'list_projects',

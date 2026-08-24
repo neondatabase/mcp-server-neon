@@ -30,13 +30,32 @@ Neon supports Postgres 14 through 18, with 19 rolling out to enabled regions.
 
 If the API omits a connection URI (more than one role or database), the project may already exist and the error has no id. Call \`list_projects\` before retrying.`;
 
+const LIST_PROJECTS_DESCRIPTION = `Retrieves a list of projects for the specified organization.
+If using a personal API key, include the \`org_id\` parameter to specify which organization to work with.
+If using an org API key, \`org_id\` is automatically inferred from the key.
+
+Omitting \`limit\` returns every project. Pass \`limit\` to cap how many come back. There is no cursor argument.`;
+
+const DESCRIBE_PROJECT_DESCRIPTION = `Retrieves information about the specified project.
+Returned details include the project settings, compute configuration, history retention, owner information, and current usage metrics.
+
+This tool returns the project record only. Call \`list_branches\` for branches.`;
+
+const QUERY_LOGS_DESCRIPTION = `Returns logs emitted by services running on the specified branch.
+
+All supplied filters are combined with AND. Give the window either as \`since\` (a duration ending at \`end_time\`, or now) or as \`start_time\`. Supplying both is rejected. If no time range is supplied, the query covers the previous hour. The maximum window is seven days.
+
+\`limit\` caps how many records come back in total. There is no \`cursor\` argument.
+
+Arguments: \`{ "project_id": "…", "branch_id": "br-…" }\`.`;
+
 const CREATE_BRANCH_DESCRIPTION = `Creates a branch with a read-write compute, waits until it is ready, and returns a connection string.
 
 Arguments: \`{ "project_id": "…", "name": "feature-x" }\`. \`parent_id\` defaults to the project's default branch.
 
 \`pooled\` defaults to true. Set \`pooled: false\` for a direct host.
 
-This tool copies the parent at head. For a point in time, create the branch here first, then call \`restore_snapshot\` with \`target_branch_id\` set to the new branch, plus a snapshot or source point. Calling \`restore_snapshot\` without a target creates a new branch.
+This tool copies the parent at head. Point-in-time restore is \`restore_snapshot\`, which is published when \`?category=snapshots\` is granted. Pass \`target_branch_id\` to restore onto this branch; omitting the target creates a new branch.
 
 If the API omits a connection URI (parent with more than one role or database), the branch may already exist and the error has no id. Call \`list_branches\` before retrying.`;
 
@@ -78,10 +97,13 @@ function createGeneratedNeonTools() {
     names: TOOL_NAMES,
     descriptions: {
       'projects.createAndConnect': CREATE_PROJECT_DESCRIPTION,
+      'projects.list': LIST_PROJECTS_DESCRIPTION,
+      'projects.get': DESCRIBE_PROJECT_DESCRIPTION,
       'branches.createWithCompute': CREATE_BRANCH_DESCRIPTION,
       'projects.delete': DELETE_PROJECT_DESCRIPTION,
       'branches.delete': DELETE_BRANCH_DESCRIPTION,
       'postgres.endpoints.create': CREATE_PROJECT_ENDPOINT_DESCRIPTION,
+      'logs.query': QUERY_LOGS_DESCRIPTION,
     },
   });
 }
