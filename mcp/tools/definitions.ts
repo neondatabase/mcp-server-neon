@@ -857,9 +857,9 @@ export const NEON_TOOLS = [
     <important_notes>
       Not for: arbitrary SQL (\`run_sql\`), the slowest queries by average execution time with your own threshold and limit (\`list_slow_queries\`), the plan of one statement (\`explain_sql_statement\`), applying an optimization (\`prepare_query_tuning\`), compute and Neon Function logs (\`query_logs\`), or listing tables and columns (\`get_database_tables\`, \`describe_table_schema\`).
 
-      Three checks read alike and are not: \`long-running-queries\` is what is running right now and has been for over five minutes, \`outliers\` is cumulative execution time since statistics were last reset, and \`calls\` is call frequency over that same history.
+      Several checks read alike and are not: \`long-running-queries\` is what is running right now in the inspected database and has been for over five minutes; \`stalled-queries\` is a compute-wide snapshot of active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers; \`outliers\` is cumulative execution time since statistics were last reset; and \`calls\` is call frequency over that same history.
 
-      Omit \`databaseName\` to run a database-scoped check against every database on the branch. The result adds a \`database\` column. \`lfc-hit-rate\`, \`working-set\`, and \`replication-slots\` are compute-wide: they run once against the first listed database, and cache counters reset when the compute restarts. One failing database fails the whole run. \`bloat\` is a statistical estimate, not a measurement.
+      Omit \`databaseName\` to run a database-scoped check against every database on the branch. The result adds a \`database\` column. \`stalled-queries\`, \`lfc-hit-rate\`, \`working-set\`, and \`replication-slots\` are compute-wide: they run once against the first listed database. For \`lfc-hit-rate\` and \`working-set\`, cache counters reset when the compute restarts. One failing database fails the whole run. \`bloat\` is a statistical estimate, not a measurement.
 
       When a check needs an extension that is not installed, the tool says so and names the \`CREATE EXTENSION\` statement. Installing it writes to the user's database — ask before running it.
     </important_notes>`,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { assembleInspectReport } from '../inspect/report';
 import {
   INSPECT_CHECK_LIST,
   INSPECT_CHECKS,
@@ -6,7 +7,27 @@ import {
   INSPECT_MAX_LIMIT,
   INSPECT_QUERIES,
 } from '../inspect/queries';
+import { selectInspectTargets } from '../inspect/targets';
 import { inspectDatabaseInputSchema } from '../tools/toolsSchema';
+
+const STALLED_QUERY_ROW = {
+  observed_at: '2026-08-24 10:00:00+00',
+  query_start: '2026-08-24 09:59:00+00',
+  query_group: 42,
+  pid: 42,
+  leader_pid: null,
+  role: 'leader',
+  backend_type: 'client backend',
+  database: 'neondb',
+  application_name: 'psql',
+  query_id: '1234567890',
+  state: 'active',
+  wait_event_type: 'Lock',
+  wait_event: 'transactionid',
+  blocking_pids: '{99}',
+  duration: '00:01:00',
+  query: 'SELECT pg_sleep(60)',
+};
 
 describe('inspect query catalog', () => {
   it('offers a query for every check and no orphans', () => {
@@ -98,13 +119,76 @@ describe('inspect query catalog', () => {
     expect(INSPECT_QUERIES[check].scope).toBe('database');
   });
 
-  it.each(['lfc-hit-rate', 'working-set', 'replication-slots'] as const)(
-    '%s is compute-scoped and says so',
-    (check) => {
-      expect(INSPECT_QUERIES[check].scope).toBe('compute');
-      expect(INSPECT_QUERIES[check].describe).toContain('compute-wide');
-    },
-  );
+  it.each([
+    'stalled-queries',
+    'lfc-hit-rate',
+    'working-set',
+    'replication-slots',
+  ] as const)('%s is compute-scoped and says so', (check) => {
+    expect(INSPECT_QUERIES[check].scope).toBe('compute');
+    expect(INSPECT_QUERIES[check].describe).toContain('compute-wide');
+  });
+
+  it('stalled-queries preserves its diagnostic SQL filter and fields', () => {
+    expect(INSPECT_QUERIES['stalled-queries']).toMatchObject({
+      scope: 'compute',
+      sql: expect.stringContaining(
+        "backend_type IN ('client backend', 'parallel worker')",
+      ),
+      fields: [
+        'observed_at',
+        'query_start',
+        'query_group',
+        'pid',
+        'leader_pid',
+        'role',
+        'backend_type',
+        'database',
+        'application_name',
+        'query_id',
+        'state',
+        'wait_event_type',
+        'wait_event',
+        'blocking_pids',
+        'duration',
+        'query',
+      ],
+    });
+    expect(INSPECT_QUERIES['stalled-queries'].sql).toContain(
+      "interval '30 seconds'",
+    );
+  });
+
+  it('stalled-queries runs once when multiple databases exist', () => {
+    expect(
+      selectInspectTargets({
+        branchDatabases: ['analytics', 'neondb'],
+        scope: INSPECT_QUERIES['stalled-queries'].scope,
+      }),
+    ).toEqual({
+      databases: ['analytics'],
+      includeDatabaseColumn: false,
+    });
+  });
+
+  it('stalled-queries reports and retains every structured field', () => {
+    const report = assembleInspectReport({
+      check: 'stalled-queries',
+      query: INSPECT_QUERIES['stalled-queries'],
+      projectId: 'proj-1',
+      branchId: 'br-1',
+      batches: [{ database: 'analytics', rows: [STALLED_QUERY_ROW] }],
+      includeDatabaseColumn: false,
+      includeDatabaseName: false,
+      limit: 50,
+    });
+
+    expect(report.fields).toEqual(INSPECT_QUERIES['stalled-queries'].fields);
+    expect(report.rows).toEqual([STALLED_QUERY_ROW]);
+    expect(Object.keys(report.rows[0] ?? {}).sort()).toEqual(
+      [...report.fields].sort(),
+    );
+  });
 });
 
 describe('inspectDatabaseInputSchema', () => {
