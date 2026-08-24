@@ -98,9 +98,9 @@ describe('createMcpServer grant + read-only integration', () => {
     const server = await createMcpServer(buildContext({ grant }));
     const names = getRegisteredToolNames(server);
 
-    expect(names).not.toContain('projects_list');
+    expect(names).not.toContain('list_projects');
     expect(names).not.toContain('create_project');
-    expect(names).toContain('projects_get');
+    expect(names).toContain('describe_project');
     expect(names).toContain('run_sql');
   });
 

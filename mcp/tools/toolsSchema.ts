@@ -176,7 +176,7 @@ export const getNeonAuthConfigInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Branch ID. If omitted, the project default branch is used (same as auth_create).',
+      'Branch ID. If omitted, the project default branch is used (same as provision_neon_auth).',
     ),
 });
 

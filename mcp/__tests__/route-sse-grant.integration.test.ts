@@ -108,7 +108,7 @@ vi.mock('../tools/tools', async () => {
     ...actual,
     NEON_HANDLERS: {
       ...actual.NEON_HANDLERS,
-      projects_get: getProjectSpy,
+      describe_project: getProjectSpy,
     },
   };
 });
@@ -183,7 +183,7 @@ describe('SSE connection grant on tool invocation', () => {
     expect(response.status).toBe(200);
     await response.body?.cancel();
 
-    const getProject = mocks.toolHandlers.get('projects_get');
+    const getProject = mocks.toolHandlers.get('describe_project');
     expect(getProject).toBeDefined();
 
     await getProject?.(

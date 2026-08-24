@@ -7,6 +7,7 @@ import { NEON_API_HOST } from '../../constants';
 import { fetchAsMcpServer } from '../../neon-client';
 import type { NeonTool } from '../tool-definition';
 import type { ToolHandlerExtended, ToolHandlers } from '../types';
+import { TOOL_NAMES } from './names';
 import {
   GENERATED_TOOL_IDS,
   GENERATED_TOOL_SCOPES,
@@ -27,7 +28,7 @@ Neon supports Postgres 14 through 18, with 19 rolling out to enabled regions.
 
 \`pooled\` defaults to true. Set \`pooled: false\` for a direct host.
 
-If the API omits a connection URI (more than one role or database), the project may already exist and the error has no id. Call \`projects_list\` before retrying.`;
+If the API omits a connection URI (more than one role or database), the project may already exist and the error has no id. Call \`list_projects\` before retrying.`;
 
 const CREATE_BRANCH_DESCRIPTION = `Creates a branch with a read-write compute, waits until it is ready, and returns a connection string.
 
@@ -35,15 +36,15 @@ Arguments: \`{ "project_id": "…", "name": "feature-x" }\`. \`parent_id\` defau
 
 \`pooled\` defaults to true. Set \`pooled: false\` for a direct host.
 
-This tool copies the parent at head. For a point in time, create the branch here first, then call \`snapshots_restore\` with \`target_branch_id\` set to the new branch, plus a snapshot or source point. Calling \`snapshots_restore\` without a target creates a new branch.
+This tool copies the parent at head. For a point in time, create the branch here first, then call \`restore_snapshot\` with \`target_branch_id\` set to the new branch, plus a snapshot or source point. Calling \`restore_snapshot\` without a target creates a new branch.
 
-If the API omits a connection URI (parent with more than one role or database), the branch may already exist and the error has no id. Call \`branches_list\` before retrying.`;
+If the API omits a connection URI (parent with more than one role or database), the branch may already exist and the error has no id. Call \`list_branches\` before retrying.`;
 
 const DELETE_PROJECT_DESCRIPTION = `Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For removing single branches, use \`delete_branch\` instead.
 
 Arguments: \`{ "project_id": "…" }\`.`;
 
-const DELETE_BRANCH_DESCRIPTION = `Delete a branch and all its data. NEVER run autonomously; always ask the user first. For deleting an entire project, use \`projects_delete\` instead.
+const DELETE_BRANCH_DESCRIPTION = `Delete a branch and all its data. NEVER run autonomously; always ask the user first. For deleting an entire project, use \`delete_project\` instead.
 
 Arguments: \`{ "project_id": "…", "branch_id": "br-…" }\`. \`branch_id\` is a branch id, not a name.`;
 
@@ -52,13 +53,7 @@ const CREATE_PROJECT_ENDPOINT_DESCRIPTION = `Creates a compute endpoint on a bra
 This tool does not return a connection string. After it succeeds, call \`get_connection_string\` with the project and branch id to obtain a DATABASE_URL.`;
 
 const BRANCH_ID_NOTE =
-  'branch_id is a branch id (br-...), not a branch name. Call branches_list to resolve a name.';
-
-const TOOL_NAMES = {
-  'projects.createAndConnect': 'create_project',
-  'branches.createWithCompute': 'create_branch',
-  'branches.delete': 'delete_branch',
-} as const;
+  'branch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.';
 
 const WAIT = { timeoutMs: 120_000 } as const;
 

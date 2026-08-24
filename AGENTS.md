@@ -412,7 +412,7 @@ The server supports three top-level scopes: `read`, `write`, and `*`. These are 
 
 During authorization, users can uncheck "Full access" to request only `read` scope, which enables read-only mode.
 
-In addition to the top-level scopes, the server exposes **scope categories** via the non-standard `x-neon-scope-categories` field on the same metadata document: `projects`, `branches`, `endpoints`, `snapshots`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`, `functions`, `storage`. These drive fine-grained tool filtering (see Grant Context above) and can also constrain a token to a single project. The `observability` category covers logs (`logs_query`, `logs_fields`, `logs_field_values`) plus the AI Gateway GET. See `mcp/utils/grant-context.ts` for grant resolution.
+In addition to the top-level scopes, the server exposes **scope categories** via the non-standard `x-neon-scope-categories` field on the same metadata document: `projects`, `branches`, `endpoints`, `snapshots`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`, `functions`, `storage`. These drive fine-grained tool filtering (see Grant Context above) and can also constrain a token to a single project. The `observability` category covers logs (`query_logs`, `list_log_fields`, `list_log_field_values`) plus the AI Gateway GET. See `mcp/utils/grant-context.ts` for grant resolution.
 
 ### Environment Variables (Vercel)
 

@@ -65,15 +65,15 @@ describe('filterToolsForGrant', () => {
     expect(tools).toHaveLength(
       NEON_TOOLS.filter((tool) => tool.projectScoped).length,
     );
-    expect(names).not.toContain('projects_list');
+    expect(names).not.toContain('list_projects');
     expect(names).not.toContain('create_project');
-    expect(names).not.toContain('projects_delete');
+    expect(names).not.toContain('delete_project');
     expect(names).not.toContain('projects_permissions_grant');
     expect(names).not.toContain('projects_members_set_role');
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
-    expect(names).toContain('projects_get');
-    expect(names).toContain('projects_members_list');
+    expect(names).toContain('describe_project');
+    expect(names).toContain('list_project_members');
   });
 
   it('strips host projectId and generated project_id from published schemas', () => {
@@ -90,17 +90,17 @@ describe('filterToolsForGrant', () => {
     }
     expect('projectId' in runSql.inputSchema.shape).toBe(false);
 
-    const getProject = tools.find((tool) => tool.name === 'projects_get');
+    const getProject = tools.find((tool) => tool.name === 'describe_project');
     expect(getProject && isZod4Object(getProject.inputSchema)).toBe(true);
     if (!getProject || !isZod4Object(getProject.inputSchema)) {
-      throw new Error('projects_get must keep a Zod 4 object schema');
+      throw new Error('describe_project must keep a Zod 4 object schema');
     }
     expect('project_id' in getProject.inputSchema.shape).toBe(false);
 
-    const queryLogs = tools.find((tool) => tool.name === 'logs_query');
+    const queryLogs = tools.find((tool) => tool.name === 'query_logs');
     expect(queryLogs && isZod4Object(queryLogs.inputSchema)).toBe(true);
     if (!queryLogs || !isZod4Object(queryLogs.inputSchema)) {
-      throw new Error('logs_query must keep a Zod 4 object schema');
+      throw new Error('query_logs must keep a Zod 4 object schema');
     }
     expect('project_id' in queryLogs.inputSchema.shape).toBe(false);
     expect('branch_id' in queryLogs.inputSchema.shape).toBe(true);
@@ -321,15 +321,15 @@ describe('scope coverage sanity', () => {
       .filter((name) => name !== 'search' && name !== 'fetch')
       .sort();
     expect(names).toEqual([
-      'postgres_endpoints_create',
-      'postgres_endpoints_delete',
-      'postgres_endpoints_get',
-      'postgres_endpoints_list',
-      'postgres_endpoints_list_by_branch',
-      'postgres_endpoints_restart',
-      'postgres_endpoints_start',
-      'postgres_endpoints_suspend',
-      'postgres_endpoints_update',
+      'create_postgres_endpoint',
+      'delete_postgres_endpoint',
+      'get_postgres_endpoint',
+      'list_branch_computes',
+      'list_postgres_endpoints',
+      'restart_postgres_endpoint',
+      'start_postgres_endpoint',
+      'suspend_postgres_endpoint',
+      'update_postgres_endpoint',
     ]);
   });
 
@@ -342,13 +342,13 @@ describe('scope coverage sanity', () => {
       .filter((name) => name !== 'search' && name !== 'fetch')
       .sort();
     expect(names).toEqual([
-      'snapshots_create',
-      'snapshots_delete',
-      'snapshots_get_schedule',
-      'snapshots_list',
-      'snapshots_restore',
-      'snapshots_set_schedule',
-      'snapshots_update',
+      'create_snapshot',
+      'delete_snapshot',
+      'get_snapshot_schedule',
+      'list_snapshots',
+      'restore_snapshot',
+      'set_snapshot_schedule',
+      'update_snapshot',
     ]);
   });
 });

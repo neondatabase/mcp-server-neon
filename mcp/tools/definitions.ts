@@ -348,7 +348,7 @@ const HOST_TOOL_DRAFTS = [
     inputSchema: getNeonAuthConfigInputSchema,
     readOnlySafe: true,
     description: `
-    Read full Neon Auth configuration for a branch with secrets redacted. Do not use when you need to update config (use the generated Neon Auth write tools such as \`auth_update_config\` or \`auth_oauth_providers_add\`). Requires Neon Auth to be provisioned first (use \`auth_create\`). Returns Neon Auth (Better Auth) for a branch as one JSON object: integration metadata (base_url, jwks_url, db_name, auth_provider, branch_id, created_at, owned_by, transfer_status, auth_provider_project_id), branch_name from the Neon branch API, project_id and resolved branch_id, plus configurable fields (trusted_origins, allow_localhost, auth_methods.email_password, oauth_providers, email_provider). Top-level base_url, jwks_url, and db_name duplicate integration for quick copy. Optional _errors records partial fetch failures for configurable slices.
+    Read full Neon Auth configuration for a branch with secrets redacted. Do not use when you need to update config (use the generated Neon Auth write tools such as \`update_auth_config\` or \`add_auth_oauth_provider\`). Requires Neon Auth to be provisioned first (use \`provision_neon_auth\`). Returns Neon Auth (Better Auth) for a branch as one JSON object: integration metadata (base_url, jwks_url, db_name, auth_provider, branch_id, created_at, owned_by, transfer_status, auth_provider_project_id), branch_name from the Neon branch API, project_id and resolved branch_id, plus configurable fields (trusted_origins, allow_localhost, auth_methods.email_password, oauth_providers, email_provider). Top-level base_url, jwks_url, and db_name duplicate integration for quick copy. Optional _errors records partial fetch failures for configurable slices.
 
     Secrets — OAuth client_secret and the SMTP password — are NEVER returned. When the upstream config indicates a secret is set, this endpoint surfaces it as the literal sentinel "***redacted***"; when no secret is set the field is null. Use the matching generated Neon Auth write tools to write or rotate these values.
     `,
@@ -603,7 +603,7 @@ const HOST_TOOL_DRAFTS = [
     </use_case>
 
     <important_notes>
-      Not for: arbitrary SQL (\`run_sql\`), the slowest queries by average execution time with your own threshold and limit (\`list_slow_queries\`), the plan of one statement (\`explain_sql_statement\`), applying an optimization (\`prepare_query_tuning\`), compute and Neon Function logs (\`logs_query\`), or listing tables and columns (\`get_database_tables\`, \`describe_table_schema\`).
+      Not for: arbitrary SQL (\`run_sql\`), the slowest queries by average execution time with your own threshold and limit (\`list_slow_queries\`), the plan of one statement (\`explain_sql_statement\`), applying an optimization (\`prepare_query_tuning\`), compute and Neon Function logs (\`query_logs\`), or listing tables and columns (\`get_database_tables\`, \`describe_table_schema\`).
 
       Three checks read alike and are not: \`long-running-queries\` is what is running right now and has been for over five minutes, \`outliers\` is cumulative execution time since statistics were last reset, and \`calls\` is call frequency over that same history.
 
@@ -624,7 +624,7 @@ const HOST_TOOL_DRAFTS = [
   {
     name: 'search' as const,
     scope: null,
-    description: `Search across all organizations, projects, and branches by keyword. Returns matching items with id, title, and URL. Query must be at least 3 characters. Do not use when you need all projects (use \`projects_list\` instead).`,
+    description: `Search across all organizations, projects, and branches by keyword. Returns matching items with id, title, and URL. Query must be at least 3 characters. Do not use when you need all projects (use \`list_projects\` instead).`,
     inputSchema: searchInputSchema,
     readOnlySafe: true,
     annotations: {

@@ -180,7 +180,7 @@ describe('user agent on Neon API requests made by tool calls', () => {
   });
 
   it('identifies the MCP server on logs requests', async () => {
-    await callTool('logs_query', {
+    await callTool('query_logs', {
       project_id: 'proj-1',
       branch_id: 'br-1',
     });
