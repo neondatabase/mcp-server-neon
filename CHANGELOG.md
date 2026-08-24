@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+`configure_neon_auth` `send_test_email` now takes only `recipient_email` and sends through the custom SMTP provider already saved on the branch (`email_provider type=standard`). Supplying `host`, `port`, `username`, `password`, `sender_email`, or `sender_name` fails schema validation. A GET snapshot of a standard provider reports `password` as `***redacted***` when the API returns an empty string.
+
 `inspect_database`: omitting `databaseName` now covers every database on the branch (same contract as `neon inspect db` 3.4.0). Database-scoped checks add a `database` column; compute-wide checks run once against the first listed database. One failing database fails the whole run.
 
 OAuth refresh-token chain stability — drove the reconstructed refresh-grant SLO from ~93% to 100% in production by closing the cross-instance reuse race and the surrounding cliff/retry-storm paths.

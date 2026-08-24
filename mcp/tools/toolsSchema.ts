@@ -334,7 +334,6 @@ const oauthProviderConfigSchema = z
   })
   .strict();
 
-// `update_email_provider` and `send_test_email` reuse the same SMTP fields.
 const standardEmailServerFields = {
   host: z
     .string()
@@ -411,11 +410,10 @@ const sendTestEmailSchema = z
       .min(1)
       .max(256)
       .describe('Email address to deliver the test message to.'),
-    ...standardEmailServerFields,
   })
   .strict()
   .describe(
-    'Test SMTP credentials end-to-end before saving them. Sends a single message from sender_email to recipient_email through the supplied host/port/username/password. Does NOT read from or write to the saved email_provider config — pass the credentials you want to verify.',
+    'Send a test message through the custom SMTP provider saved on the branch (email_provider type=standard). Only recipient_email is supplied; the stored settings and password are used server-side. Requires update_email_provider to have saved a standard provider first. A shared provider, a missing configuration, or a non-Better-Auth integration is rejected by the API.',
   );
 
 /**
@@ -575,7 +573,7 @@ export const configureNeonAuthInputSchema = z
     test_email: sendTestEmailSchema
       .optional()
       .describe(
-        'SMTP credentials + recipient for a one-off test email. Required for send_test_email.',
+        'Recipient for a test email through the custom SMTP provider saved on the branch (email_provider type=standard). Required for send_test_email.',
       ),
   })
   .superRefine((val, ctx) => {
