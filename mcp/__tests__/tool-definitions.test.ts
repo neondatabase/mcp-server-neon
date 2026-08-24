@@ -242,14 +242,24 @@ describe('generated tool interface', () => {
     expect(tool).toBeDefined();
     expect(generatedShape(tool!)).not.toHaveProperty('cursor');
     expect(tool!.description).toContain('There is no `cursor` argument');
+    expect(tool!.description).not.toMatch(/add the `cursor` value/i);
     expect(tool!.description).not.toMatch(/pass the returned `next_cursor`/i);
   });
 
-  it('says omitting limit on list_projects returns every project', () => {
+  it('does not tell the agent to pass a cursor on list_operations', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'list_operations');
+    expect(tool).toBeDefined();
+    expect(generatedShape(tool!)).not.toHaveProperty('cursor');
+    expect(tool!.description).toContain('There is no `cursor` argument');
+    expect(tool!.description).not.toMatch(/add the `cursor` value/i);
+  });
+
+  it('says list_projects walks every page and has no cursor argument', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'list_projects');
     expect(tool!.description).toContain(
-      'Omitting `limit` returns every project',
+      'This tool returns every page. Pass limit to cap how many items come back. Do not pass a cursor.',
     );
+    expect(generatedShape(tool!)).not.toHaveProperty('cursor');
   });
 
   it('says describe_project returns the project record only', () => {

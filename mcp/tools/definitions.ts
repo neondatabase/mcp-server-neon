@@ -348,7 +348,7 @@ const HOST_TOOL_DRAFTS = [
     inputSchema: getNeonAuthConfigInputSchema,
     readOnlySafe: true,
     description: `
-    Read full Neon Auth configuration for a branch with secrets redacted. Requires Neon Auth to be provisioned first (use \`provision_neon_auth\`). Returns Neon Auth (Better Auth) for a branch as one JSON object: integration metadata (base_url, jwks_url, db_name, auth_provider, branch_id, created_at, owned_by, transfer_status, auth_provider_project_id), branch_name from the Neon branch API, project_id and resolved branch_id, plus configurable fields (trusted_origins, allow_localhost, auth_methods.email_password, oauth_providers, email_provider). Top-level base_url, jwks_url, and db_name duplicate integration for quick copy. Optional _errors records partial fetch failures for configurable slices.
+    Read full Neon Auth configuration for a branch with secrets redacted. Requires Neon Auth to be provisioned first (use \`provision_neon_auth\`). Returns Neon Auth (Better Auth) for a branch as one JSON object: integration metadata (base_url, jwks_url, db_name, auth_provider, branch_id, created_at, owned_by, transfer_status, auth_provider_project_id), branch_name from the Neon branch API, project_id and resolved branch_id, plus returned fields (trusted_origins, allow_localhost, auth_methods.email_password, oauth_providers, email_provider). Top-level base_url, jwks_url, and db_name duplicate integration for quick copy. Optional _errors records partial fetch failures for configurable slices.
 
     Secrets — OAuth client_secret and the SMTP password — are NEVER returned. When the upstream config indicates a secret is set, this endpoint surfaces it as the literal sentinel "***redacted***"; when no secret is set the field is null.
 
