@@ -132,6 +132,10 @@ describe('inspect query catalog', () => {
   it('stalled-queries preserves its diagnostic SQL filter and fields', () => {
     expect(INSPECT_QUERIES['stalled-queries']).toMatchObject({
       scope: 'compute',
+      describe:
+        'Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers (compute-wide)',
+      emptyMessage:
+        'No active queries running longer than 30 seconds on this compute.',
       sql: expect.stringContaining(
         "backend_type IN ('client backend', 'parallel worker')",
       ),

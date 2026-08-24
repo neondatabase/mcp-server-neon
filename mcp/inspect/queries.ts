@@ -179,7 +179,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   },
   'stalled-queries': {
     describe:
-      'Active queries running longer than 30 seconds with parallel workers, waits, and blockers (compute-wide)',
+      'Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers (compute-wide)',
     scope: 'compute',
     fields: [
       'observed_at',
@@ -199,7 +199,8 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
       'duration',
       'query',
     ],
-    emptyMessage: 'No active queries running longer than 30 seconds.',
+    emptyMessage:
+      'No active queries running longer than 30 seconds on this compute.',
     sql: /* sql */ `
       WITH activity AS MATERIALIZED (
         SELECT *
