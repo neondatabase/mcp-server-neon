@@ -26,7 +26,7 @@ type ZodObjectParams<T> = z.ZodObject<{ [key in keyof T]: z.ZodType<T[key]> }>;
 const DATABASE_NAME_DESCRIPTION = `The name of the database. If not provided, the default ${NEON_DEFAULT_DATABASE_NAME} or first available database is used.`;
 
 const INSPECT_DATABASE_NAME_DESCRIPTION =
-  'Database to inspect. Omit to cover every database on the branch. Ranking and SQL row limits stay per database. One failing database fails the whole run. Compute-wide checks run once against the first listed database. The response `limit` applies to the combined rows after that.';
+  'For a database-scoped check, the database to inspect. Omit to cover every database on the branch. Ranking and SQL row limits stay per database. One failing database fails the whole run. For a compute-wide check, the database to connect through; the check still runs once for the whole compute and the result does not include `databaseName`. The response `limit` applies to the combined rows after that.';
 
 export const listProjectsInputSchema = z.object({
   cursor: z

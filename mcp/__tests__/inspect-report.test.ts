@@ -188,6 +188,28 @@ describe('assembleInspectReport', () => {
     expect(report.databases).toEqual(['other_db']);
   });
 
+  it('does not put databaseName on a compute-wide check when the caller named a database', () => {
+    const report = assembleInspectReport({
+      check: 'stalled-queries',
+      query: INSPECT_QUERIES['stalled-queries'],
+      projectId: 'proj-1',
+      branchId: 'br-1',
+      batches: [
+        {
+          database: 'neondb',
+          rows: [{ database: 'analytics', pid: 1 }],
+        },
+      ],
+      includeDatabaseColumn: false,
+      includeDatabaseName: true,
+      limit: 50,
+    });
+
+    expect(report.databaseName).toBeUndefined();
+    expect(report.databases).toEqual(['neondb']);
+    expect(report.rows[0]?.database).toBe('analytics');
+  });
+
   it('names the response ceiling when limit is already at the maximum', () => {
     const report = assembleInspectReport({
       check: 'table-sizes',

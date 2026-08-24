@@ -261,4 +261,10 @@ describe('inspectDatabaseInputSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('describes databaseName as a connection hop for compute-wide checks', () => {
+    expect(inspectDatabaseInputSchema.shape.databaseName.description).toContain(
+      'the result does not include `databaseName`',
+    );
+  });
 });
