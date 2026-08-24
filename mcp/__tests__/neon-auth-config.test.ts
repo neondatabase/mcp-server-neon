@@ -872,7 +872,9 @@ describe('handleConfigureNeonAuth', () => {
     if (result.content[0].type === 'text') {
       const text = result.content[0].text;
       expect(text).toContain('Test email dispatched to tester@example.com');
-      expect(text).toContain('using the SMTP provider saved on this branch');
+      expect(text).toContain(
+        'using the custom SMTP provider saved on this branch',
+      );
     }
   });
 
@@ -906,7 +908,9 @@ describe('handleConfigureNeonAuth', () => {
       expect(text).toContain(
         'Test email could NOT be sent to tester@example.com',
       );
-      expect(text).toContain('using the SMTP provider saved on this branch');
+      expect(text).toContain(
+        'using the custom SMTP provider saved on this branch',
+      );
       expect(text).toContain('auth failed: 535');
     }
   });

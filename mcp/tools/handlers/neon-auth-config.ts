@@ -530,8 +530,8 @@ export async function handleConfigureNeonAuth(
       // that doesn't mutate Neon Auth state.
       const { success, error_message } = res.data;
       const header = success
-        ? `Test email dispatched to ${t.recipient_email} using the SMTP provider saved on this branch.`
-        : `Test email could NOT be sent to ${t.recipient_email} using the SMTP provider saved on this branch.`;
+        ? `Test email dispatched to ${t.recipient_email} using the custom SMTP provider saved on this branch.`
+        : `Test email could NOT be sent to ${t.recipient_email} using the custom SMTP provider saved on this branch.`;
       const detail = error_message ? `\nUpstream error: ${error_message}` : '';
       return {
         isError: !success,

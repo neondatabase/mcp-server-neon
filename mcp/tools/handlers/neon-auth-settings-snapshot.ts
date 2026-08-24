@@ -143,7 +143,9 @@ function emailProviderSnapshot(
       host: data.host,
       port: data.port,
       username: data.username,
-      password: data.password ? REDACTED_SECRET : null,
+      // The API returns "" for a configured password, so an empty response
+      // still maps to the redaction sentinel.
+      password: REDACTED_SECRET,
       sender_email: data.sender_email,
       sender_name: data.sender_name,
     };

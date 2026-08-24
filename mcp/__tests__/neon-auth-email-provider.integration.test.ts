@@ -1,6 +1,6 @@
 /**
- * Stubbed-client tests cannot verify the wire request or how a 4xx and a 5xx
- * come back from the generated raw helper.
+ * Stubbed-client tests cannot verify the generated helper's wire request or
+ * error responses.
  */
 
 import { createServer, type Server } from 'node:http';
@@ -65,8 +65,8 @@ beforeEach(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address() as AddressInfo;
 
-  // NEON_API_HOST is captured at module load. Importing before setting it would
-  // send these tests to the real Neon API.
+  // NEON_API_HOST is captured at module load, so set it before importing to
+  // keep requests on the local server.
   vi.resetModules();
   process.env.NEON_API_HOST = `http://127.0.0.1:${port}/api/v2`;
 
@@ -123,7 +123,7 @@ describe('send_test_email over the wire', () => {
     expect(result.content[0]).toMatchObject({
       type: 'text',
       text: expect.stringContaining(
-        'Test email dispatched to tester@example.com using the SMTP provider saved on this branch.',
+        'Test email dispatched to tester@example.com using the custom SMTP provider saved on this branch.',
       ),
     });
   });
