@@ -24,7 +24,7 @@ const STALLED_QUERY_ROW = {
   state: 'active',
   wait_event_type: 'Lock',
   wait_event: 'transactionid',
-  blocking_pids: '{99}',
+  blocking_pids: '99',
   duration: '00:01:00',
   query: 'SELECT pg_sleep(60)',
 };
@@ -156,6 +156,9 @@ describe('inspect query catalog', () => {
     });
     expect(INSPECT_QUERIES['stalled-queries'].sql).toContain(
       "interval '30 seconds'",
+    );
+    expect(INSPECT_QUERIES['stalled-queries'].sql).toContain(
+      "array_to_string(pg_blocking_pids(a.pid), ',')",
     );
   });
 

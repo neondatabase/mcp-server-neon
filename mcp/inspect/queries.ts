@@ -5,7 +5,7 @@
  *
  * Every query is copied verbatim from the `neon` CLI, where the same catalog
  * powers `neon inspect db <check>`:
- * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ 5abe208.
+ * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ 6ff43d7.
  * The CLI does not publish this module, so the SQL is duplicated rather than
  * imported. Keep the SQL a verbatim copy — port fixes in both directions instead
  * of letting the two catalogs diverge.
@@ -230,7 +230,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
         a.state,
         a.wait_event_type,
         a.wait_event,
-        pg_blocking_pids(a.pid)::text AS blocking_pids,
+        array_to_string(pg_blocking_pids(a.pid), ',') AS blocking_pids,
         (statement_timestamp() - a.query_start)::text AS duration,
         a.query
       FROM activity a
