@@ -13,6 +13,7 @@ import {
   type NeonAuthEmailAndPasswordConfigUpdate,
   type NeonAuthEmailVerificationMethod as SdkNeonAuthEmailVerificationMethod,
   type NeonAuthEmailServerConfig,
+  type NeonAuthEmailServerConfigResponse,
   type NeonAuthIntegration,
   type NeonAuthOauthProviderId as SdkNeonAuthOauthProviderId,
   type NeonAuthOauthProvider,
@@ -31,7 +32,7 @@ export type {
   Branch,
   MemberWithUser,
   NeonAuthEmailAndPasswordConfig,
-  NeonAuthEmailServerConfig,
+  NeonAuthEmailServerConfigResponse,
   NeonAuthIntegration,
   NeonAuthOauthProvider,
   NeonAuthOauthProviderType,
@@ -509,23 +510,15 @@ export function createNeonClient(apiKey: string) {
       return success(data);
     },
 
-    async sendNeonAuthTestEmail(
+    async sendNeonAuthEmailProviderTest(
       projectId: string,
       branchId: string,
-      request: {
-        recipient_email: string;
-        host: string;
-        port: number;
-        username: string;
-        password: string;
-        sender_email: string;
-        sender_name: string;
-      },
+      request: { recipient_email: string },
     ) {
-      const data = await raw.sendNeonAuthTestEmail({
+      const data = await raw.sendNeonAuthEmailProviderTest({
         client: neon.client,
         path: { project_id: projectId, branch_id: branchId },
-        body: request,
+        body: { recipient_email: request.recipient_email },
         throwOnError: true,
       });
       return success(data);

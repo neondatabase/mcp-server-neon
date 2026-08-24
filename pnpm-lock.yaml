@@ -15,8 +15,8 @@ importers:
         specifier: 1.25.3
         version: 1.25.3(hono@4.12.11)(zod@4.4.3)
       '@neon/sdk':
-        specifier: 2.1.0
-        version: 2.1.0
+        specifier: 2.2.0
+        version: 2.2.0
       '@neon/tools':
         specifier: 0.6.0
         version: 0.6.0
@@ -799,10 +799,6 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
-
-  '@neon/sdk@2.1.0':
-    resolution: {integrity: sha512-TBTDbDTjgW9ygh+qAlOMkc35/ITBJAV1IQTR7vstix7xMdxgb45qmmYPVoB3Kdbtx8swf+49y3UzqVwHoHdW7g==}
-    engines: {node: '>=20.19.0'}
 
   '@neon/sdk@2.2.0':
     resolution: {integrity: sha512-XOM/q3afQ/GA5c94MN2pUv05O/wTYcA4JIz4xtop0MntbA5mqG6bRFkVb7/Wyy0e17k6HAguaz4GIwGzYb9xgw==}
@@ -4318,8 +4314,6 @@ snapshots:
       '@emnapi/runtime': 1.9.2
       '@tybys/wasm-util': 0.10.1
     optional: true
-
-  '@neon/sdk@2.1.0': {}
 
   '@neon/sdk@2.2.0': {}
 

@@ -4,6 +4,8 @@
 
 Management API tools now come from `@neon/tools` 0.6.0. Hosts select SDK method paths (`projects.list`); published names are those paths in snake_case (`projects_list`). `create_project`, `create_branch`, and `delete_branch` keep those names. Operation-backed writes wait. Raw Management API operations, `operations.waitFor`, compute-less creates, JWKS, VPC, anonymization, masking, schema compare, org-member reads, and project member/permission writes are not tools. Host tools stay for SQL, inspect, migrations, query tuning, docs, search, `list_organizations`, `get_connection_string`, and redacted `get_neon_auth_config`. New `?category=` values: `functions`, `storage`, `endpoints`, `snapshots`. `?category=branches` includes role and database tools and no longer includes compute-endpoint tools (`?category=endpoints`). A token already issued for `branches` gains those role and database writes. Unknown `?category=` values are ignored and named on initialize notices. `limit` on a list tool caps how many items come back.
 
+A GET snapshot of a standard email provider reports `password` as `***redacted***` when the API returns an empty string.
+
 `inspect_database`: omitting `databaseName` now covers every database on the branch (same contract as `neon inspect db` 3.4.0). Database-scoped checks add a `database` column; compute-wide checks run once against the first listed database. One failing database fails the whole run.
 
 OAuth refresh-token chain stability — drove the reconstructed refresh-grant SLO from ~93% to 100% in production by closing the cross-instance reuse race and the surrounding cliff/retry-storm paths.
