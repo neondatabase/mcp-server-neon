@@ -1,6 +1,7 @@
+import { publishedId } from '@neon/tools';
 import type { GeneratedToolId } from './operations';
 
-export const TOOL_NAMES = {
+export const PINNED_MCP_NAMES = {
   'projects.list': 'list_projects',
   'projects.get': 'describe_project',
   'projects.createAndConnect': 'create_project',
@@ -90,3 +91,11 @@ export const TOOL_NAMES = {
   'storage.objects.deleteByPrefix': 'delete_storage_objects_by_prefix',
   'storage.objects.presign': 'presign_storage_object',
 } as const satisfies Record<GeneratedToolId, string>;
+
+export const TOOL_NAMES = Object.fromEntries(
+  (
+    Object.entries(PINNED_MCP_NAMES) as Array<
+      [GeneratedToolId, (typeof PINNED_MCP_NAMES)[GeneratedToolId]]
+    >
+  ).filter(([id, name]) => publishedId(id) !== name),
+);

@@ -7,9 +7,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { publishedId } from '@neon/tools';
 import { HOST_TOOLS, NEON_TOOLS } from '../tools/definitions';
 import { generatedToolPathHas } from '../tools/generated/adapt';
-import { TOOL_NAMES } from '../tools/generated/names';
+import { PINNED_MCP_NAMES, TOOL_NAMES } from '../tools/generated/names';
+import { GENERATED_TOOL_IDS } from '../tools/generated/operations';
 import { NEON_HANDLERS } from '../tools/tools';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
 
@@ -218,23 +220,41 @@ function generatedShape(
 }
 
 describe('generated tool interface', () => {
-  it('publishes historical MCP names for tools that already existed', () => {
-    expect(TOOL_NAMES['projects.list']).toBe('list_projects');
-    expect(TOOL_NAMES['projects.get']).toBe('describe_project');
-    expect(TOOL_NAMES['projects.createAndConnect']).toBe('create_project');
-    expect(TOOL_NAMES['projects.delete']).toBe('delete_project');
-    expect(TOOL_NAMES['branches.createWithCompute']).toBe('create_branch');
-    expect(TOOL_NAMES['branches.delete']).toBe('delete_branch');
-    expect(TOOL_NAMES['postgres.endpoints.listByBranch']).toBe(
+  it('pins every generated MCP name', () => {
+    expect(Object.keys(PINNED_MCP_NAMES).sort()).toEqual(
+      [...GENERATED_TOOL_IDS].sort(),
+    );
+    expect(PINNED_MCP_NAMES['projects.list']).toBe('list_projects');
+    expect(PINNED_MCP_NAMES['projects.get']).toBe('describe_project');
+    expect(PINNED_MCP_NAMES['projects.createAndConnect']).toBe(
+      'create_project',
+    );
+    expect(PINNED_MCP_NAMES['projects.delete']).toBe('delete_project');
+    expect(PINNED_MCP_NAMES['branches.createWithCompute']).toBe(
+      'create_branch',
+    );
+    expect(PINNED_MCP_NAMES['branches.delete']).toBe('delete_branch');
+    expect(PINNED_MCP_NAMES['postgres.endpoints.listByBranch']).toBe(
       'list_branch_computes',
     );
-    expect(TOOL_NAMES['auth.create']).toBe('provision_neon_auth');
-    expect(TOOL_NAMES['postgres.dataApi.create']).toBe(
+    expect(PINNED_MCP_NAMES['auth.create']).toBe('provision_neon_auth');
+    expect(PINNED_MCP_NAMES['postgres.dataApi.create']).toBe(
       'provision_neon_data_api',
     );
-    expect(TOOL_NAMES['logs.query']).toBe('query_logs');
-    expect(TOOL_NAMES['logs.fields']).toBe('list_log_fields');
-    expect(TOOL_NAMES['logs.fieldValues']).toBe('list_log_field_values');
+    expect(PINNED_MCP_NAMES['logs.query']).toBe('query_logs');
+    expect(PINNED_MCP_NAMES['logs.fields']).toBe('list_log_fields');
+    expect(PINNED_MCP_NAMES['logs.fieldValues']).toBe('list_log_field_values');
+  });
+
+  it('overrides only names that differ from @neon/tools', () => {
+    for (const id of GENERATED_TOOL_IDS) {
+      const pinned = PINNED_MCP_NAMES[id];
+      if (publishedId(id) === pinned) {
+        expect(TOOL_NAMES).not.toHaveProperty(id);
+      } else {
+        expect(TOOL_NAMES[id]).toBe(pinned);
+      }
+    }
   });
 
   it('does not tell the agent to pass a cursor on query_logs', () => {
