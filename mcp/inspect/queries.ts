@@ -5,7 +5,7 @@
  *
  * Every query is copied verbatim from the `neon` CLI, where the same catalog
  * powers `neon inspect db <check>`:
- * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ 5abe208.
+ * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ 6ff43d7.
  * The CLI does not publish this module, so the SQL is duplicated rather than
  * imported. Keep the SQL a verbatim copy — port fixes in both directions instead
  * of letting the two catalogs diverge.
@@ -35,6 +35,7 @@ export const INSPECT_CHECKS = [
   'unused-indexes',
   'seq-scans',
   'long-running-queries',
+  'stalled-queries',
   'locks',
   'outliers',
   'calls',
@@ -174,6 +175,69 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
         AND query NOT ILIKE '%pg_stat_activity%'
         AND now() - query_start > interval '5 minutes'
       ORDER BY now() - query_start DESC;
+    `,
+  },
+  'stalled-queries': {
+    describe:
+      'Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers (compute-wide)',
+    scope: 'compute',
+    fields: [
+      'observed_at',
+      'query_start',
+      'query_group',
+      'pid',
+      'leader_pid',
+      'role',
+      'backend_type',
+      'database',
+      'application_name',
+      'query_id',
+      'state',
+      'wait_event_type',
+      'wait_event',
+      'blocking_pids',
+      'duration',
+      'query',
+    ],
+    emptyMessage:
+      'No active queries running longer than 30 seconds on this compute.',
+    sql: /* sql */ `
+      WITH activity AS MATERIALIZED (
+        SELECT *
+        FROM pg_stat_activity
+        WHERE state = 'active'
+          AND backend_type IN ('client backend', 'parallel worker')
+          AND pid <> pg_backend_pid()
+      ),
+      stalled_groups AS (
+        SELECT DISTINCT COALESCE(leader_pid, pid) AS query_group
+        FROM activity
+        WHERE query_start <= statement_timestamp() - interval '30 seconds'
+      )
+      SELECT
+        statement_timestamp() AS observed_at,
+        a.query_start,
+        g.query_group,
+        a.pid,
+        a.leader_pid,
+        CASE
+          WHEN a.leader_pid IS NULL THEN 'leader'
+          ELSE 'worker'
+        END AS role,
+        a.backend_type,
+        a.datname AS database,
+        a.application_name,
+        a.query_id::text AS query_id,
+        a.state,
+        a.wait_event_type,
+        a.wait_event,
+        array_to_string(pg_blocking_pids(a.pid), ',') AS blocking_pids,
+        (statement_timestamp() - a.query_start)::text AS duration,
+        a.query
+      FROM activity a
+      JOIN stalled_groups g
+        ON g.query_group = COALESCE(a.leader_pid, a.pid)
+      ORDER BY g.query_group, a.leader_pid NULLS FIRST, a.pid;
     `,
   },
   locks: {
