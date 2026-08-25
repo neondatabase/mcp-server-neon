@@ -182,7 +182,7 @@ infrastructure.
 
 6. **Grant Context & Tool Filtering (`mcp/utils/grant-context.ts`, `mcp/tools/grant-filter.ts`)**
    - Fine-grained access control beyond plain read/write: per-category scopes (`projects`, `branches`, `endpoints`, `snapshots`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`, `functions`, `storage`) and optional project-scoping to a single `projectId`
-   - Grant resolved from OAuth resource URI query params (authorize-time), OAuth token grant field (runtime), or direct MCP URL query params for API-key auth
+   - Grant resolved from OAuth resource URI query params (authorize-time), OAuth token grant field (runtime), or direct MCP URL query params for API-key auth. Those URL params stay camelCase (`projectId`, `category`, `readonly`).
    - `grant-filter.ts` filters `NEON_TOOLS` by scope category, hides project-agnostic tools in project-scoped mode, and strips `project_id` from input schemas when scoped
    - Exposed publicly via `GET /api/list-tools` (stateless preview of tool visibility for a given grant)
 
@@ -205,15 +205,21 @@ infrastructure.
 
 - **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry error reporting.
 
+## Tool arguments
+
+Every MCP tool argument is `snake_case` — host tools (`run_sql`, `inspect_database`, …) and generated Management API tools. Host schemas are `.strict()`: a camelCase alias (`projectId`) fails validation. URL grant query params stay camelCase (`?projectId=`, `?category=`, `?readonly=`). Internal TypeScript helpers stay camelCase; `HOST_HANDLERS` maps wire keys at the boundary.
+
 ## Adding New Tools
 
 1. Define the tool schema in `mcp/tools/toolsSchema.ts`:
 
 ```typescript
-export const myNewToolInputSchema = z.object({
-  project_id: z.string().describe('The Neon project ID'),
-  // ... other fields
-});
+export const myNewToolInputSchema = z
+  .object({
+    project_id: z.string().describe('The Neon project ID'),
+    // ... other fields
+  })
+  .strict();
 ```
 
 2. Add the tool definition to `NEON_TOOLS` array in `mcp/tools/definitions.ts`:

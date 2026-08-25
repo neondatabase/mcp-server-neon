@@ -980,9 +980,9 @@ const HOST_HANDLERS: ToolHandlers = {
     const result = await handleRunSql(
       {
         sql: params.sql,
-        databaseName: params.databaseName,
-        projectId: params.projectId,
-        branchId: params.branchId,
+        databaseName: params.database_name,
+        projectId: params.project_id,
+        branchId: params.branch_id,
       },
       neonClient,
       extra,
@@ -997,10 +997,10 @@ const HOST_HANDLERS: ToolHandlers = {
     async (params, neonClient, extra) => {
       const result = await handleRunSqlTransaction(
         {
-          sqlStatements: params.sqlStatements,
-          databaseName: params.databaseName,
-          projectId: params.projectId,
-          branchId: params.branchId,
+          sqlStatements: params.sql_statements,
+          databaseName: params.database_name,
+          projectId: params.project_id,
+          branchId: params.branch_id,
         },
         neonClient,
         extra,
@@ -1016,10 +1016,10 @@ const HOST_HANDLERS: ToolHandlers = {
     async (params, neonClient, extra) => {
       const result = await handleDescribeTableSchema(
         {
-          tableName: params.tableName,
-          databaseName: params.databaseName,
-          projectId: params.projectId,
-          branchId: params.branchId,
+          tableName: params.table_name,
+          databaseName: params.database_name,
+          projectId: params.project_id,
+          branchId: params.branch_id,
         },
         neonClient,
         extra,
@@ -1035,9 +1035,9 @@ const HOST_HANDLERS: ToolHandlers = {
     async (params, neonClient, extra) => {
       const result = await handleGetDatabaseTables(
         {
-          projectId: params.projectId,
-          branchId: params.branchId,
-          databaseName: params.databaseName,
+          projectId: params.project_id,
+          branchId: params.branch_id,
+          databaseName: params.database_name,
         },
         neonClient,
         extra,
@@ -1058,9 +1058,9 @@ const HOST_HANDLERS: ToolHandlers = {
     async (params, neonClient, extra) => {
       const result = await handleSchemaMigration(
         {
-          migrationSql: params.migrationSql,
-          databaseName: params.databaseName,
-          projectId: params.projectId,
+          migrationSql: params.migration_sql,
+          databaseName: params.database_name,
+          projectId: params.project_id,
         },
         neonClient,
         extra,
@@ -1074,12 +1074,12 @@ const HOST_HANDLERS: ToolHandlers = {
 
 <migration_context>
 You MUST pass ALL these values to complete_database_migration:
-- migrationId: ${result.migrationId}
-- migrationSql: ${result.migrationSql}
-- databaseName: ${result.databaseName}
-- projectId: ${result.projectId}
-- temporaryBranchId: ${result.branch.id}
-- parentBranchId: ${result.parentBranchId}
+- migration_id: ${result.migrationId}
+- migration_sql: ${result.migrationSql}
+- database_name: ${result.databaseName}
+- project_id: ${result.projectId}
+- temporary_branch_id: ${result.branch.id}
+- parent_branch_id: ${result.parentBranchId}
 </migration_context>
 
 <temporary_branch>
@@ -1101,7 +1101,7 @@ You MUST follow these steps:
             }\` (branch ID: ${result.branch.id})
 2. Verify the changes meet your requirements
 3. If satisfied, use \`complete_database_migration\` with ALL the values from migration_context above
-4. If not satisfied, use \`complete_database_migration\` with applyChanges: false to cancel and cleanup
+4. If not satisfied, use \`complete_database_migration\` with apply_changes: false to cancel and cleanup
 </next_actions>
             `,
           },
@@ -1115,13 +1115,13 @@ You MUST follow these steps:
     async (params, neonClient, extra) => {
       const result = await handleCommitMigration(
         {
-          migrationId: params.migrationId,
-          migrationSql: params.migrationSql,
-          databaseName: params.databaseName,
-          projectId: params.projectId,
-          temporaryBranchId: params.temporaryBranchId,
-          parentBranchId: params.parentBranchId,
-          applyChanges: params.applyChanges,
+          migrationId: params.migration_id,
+          migrationSql: params.migration_sql,
+          databaseName: params.database_name,
+          projectId: params.project_id,
+          temporaryBranchId: params.temporary_branch_id,
+          parentBranchId: params.parent_branch_id,
+          applyChanges: params.apply_changes,
         },
         neonClient,
         extra,
@@ -1148,9 +1148,9 @@ You MUST follow these steps:
     async (params, neonClient, extra) => {
       return await handleDescribeBranch(
         {
-          projectId: params.projectId,
-          branchId: params.branchId,
-          databaseName: params.databaseName,
+          projectId: params.project_id,
+          branchId: params.branch_id,
+          databaseName: params.database_name,
         },
         neonClient,
         extra,
@@ -1163,11 +1163,11 @@ You MUST follow these steps:
     async (params, neonClient, extra) => {
       const result = await handleGetConnectionString(
         {
-          projectId: params.projectId,
-          branchId: params.branchId,
-          computeId: params.computeId,
-          databaseName: params.databaseName,
-          roleName: params.roleName,
+          projectId: params.project_id,
+          branchId: params.branch_id,
+          computeId: params.compute_id,
+          databaseName: params.database_name,
+          roleName: params.role_name,
         },
         neonClient,
         extra,
@@ -1200,7 +1200,14 @@ You MUST follow these steps:
   get_neon_auth_config: host(
     getNeonAuthConfigInputSchema,
     async (params, neonClient, extra) => {
-      return handleGetNeonAuthConfig(params, neonClient, extra);
+      return handleGetNeonAuthConfig(
+        {
+          projectId: params.project_id,
+          branchId: params.branch_id,
+        },
+        neonClient,
+        extra,
+      );
     },
   ),
 
@@ -1208,7 +1215,15 @@ You MUST follow these steps:
     explainSqlStatementInputSchema,
     async (params, neonClient, extra) => {
       const result = await handleExplainSqlStatement(
-        { params },
+        {
+          params: {
+            sql: params.sql,
+            databaseName: params.database_name,
+            projectId: params.project_id,
+            branchId: params.branch_id,
+            analyze: params.analyze,
+          },
+        },
         neonClient,
         extra,
       );
@@ -1222,8 +1237,8 @@ You MUST follow these steps:
       const result = await handleQueryTuning(
         {
           sql: params.sql,
-          databaseName: params.databaseName,
-          projectId: params.projectId,
+          databaseName: params.database_name,
+          projectId: params.project_id,
         },
         neonClient,
         extra,
@@ -1234,12 +1249,12 @@ You MUST follow these steps:
             type: 'text',
             text: JSON.stringify(
               {
-                tuningId: result.tuningId,
-                databaseName: result.databaseName,
-                projectId: result.projectId,
-                temporaryBranch: result.temporaryBranch,
-                executionPlan: result.originalPlan,
-                tableSchemas: result.tableSchemas,
+                tuning_id: result.tuningId,
+                database_name: result.databaseName,
+                project_id: result.projectId,
+                temporary_branch_id: result.temporaryBranch.id,
+                execution_plan: result.originalPlan,
+                table_schemas: result.tableSchemas,
                 sql: result.sql,
               },
               null,
@@ -1256,18 +1271,21 @@ You MUST follow these steps:
     async (params, neonClient, extra) => {
       const result = await handleCompleteTuning(
         {
-          suggestedSqlStatements: params.suggestedSqlStatements,
-          applyChanges: params.applyChanges,
-          tuningId: params.tuningId,
-          databaseName: params.databaseName,
-          projectId: params.projectId,
+          suggestedSqlStatements: params.suggested_sql_statements,
+          applyChanges: params.apply_changes,
+          tuningId: params.tuning_id,
+          databaseName: params.database_name,
+          projectId: params.project_id,
           temporaryBranch: {
-            id: params.temporaryBranchId,
-            project_id: params.projectId,
+            id: params.temporary_branch_id,
+            project_id: params.project_id,
           } as Branch,
-          shouldDeleteTemporaryBranch: params.shouldDeleteTemporaryBranch,
-          branch: params.branchId
-            ? ({ id: params.branchId, project_id: params.projectId } as Branch)
+          shouldDeleteTemporaryBranch: params.should_delete_temporary_branch,
+          branch: params.branch_id
+            ? ({
+                id: params.branch_id,
+                project_id: params.project_id,
+              } as Branch)
             : undefined,
         },
         neonClient,
@@ -1290,10 +1308,10 @@ You MUST follow these steps:
     async (params, neonClient, extra) => {
       const result = await handleListSlowQueries(
         {
-          projectId: params.projectId,
-          branchId: params.branchId,
-          databaseName: params.databaseName,
-          computeId: params.computeId,
+          projectId: params.project_id,
+          branchId: params.branch_id,
+          databaseName: params.database_name,
+          computeId: params.compute_id,
           limit: params.limit,
         },
         neonClient,
@@ -1316,10 +1334,10 @@ You MUST follow these steps:
       const result = await handleInspectDatabase(
         {
           check: params.check,
-          projectId: params.projectId,
-          branchId: params.branchId,
-          databaseName: params.databaseName,
-          computeId: params.computeId,
+          projectId: params.project_id,
+          branchId: params.branch_id,
+          databaseName: params.database_name,
+          computeId: params.compute_id,
           limit: params.limit,
         },
         neonClient,

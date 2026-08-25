@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod/v3';
 import { publishedId } from '@neon/tools';
 import { HOST_TOOLS, NEON_TOOLS } from '../tools/definitions';
 import { generatedToolPathHas } from '../tools/generated/adapt';
@@ -173,6 +174,41 @@ describe('read-only tool surface', () => {
     expect(tool!.annotations.destructiveHint).toBe(false);
   });
 
+  it('publishes every tool argument in snake_case', () => {
+    for (const tool of NEON_TOOLS) {
+      for (const key of Object.keys(toolShape(tool))) {
+        expect(key, `${tool.name}.${key}`).toMatch(/^[a-z][a-z0-9_]*$/);
+      }
+    }
+  });
+
+  it('rejects camelCase aliases on host tool schemas', () => {
+    const runSql = HOST_TOOLS.find((tool) => tool.name === 'run_sql');
+    expect(runSql).toBeDefined();
+    if (!(runSql?.inputSchema instanceof z.ZodObject)) {
+      throw new Error('run_sql must keep a Zod 3 object schema');
+    }
+    expect(
+      runSql.inputSchema.safeParse({
+        sql: 'select 1',
+        project_id: 'proj-1',
+      }).success,
+    ).toBe(true);
+    expect(
+      runSql.inputSchema.safeParse({
+        sql: 'select 1',
+        projectId: 'proj-1',
+      }).success,
+    ).toBe(false);
+    expect(
+      runSql.inputSchema.safeParse({
+        sql: 'select 1',
+        project_id: 'proj-1',
+        projectId: 'proj-1',
+      }).success,
+    ).toBe(false);
+  });
+
   it('does not expose secret-returning generated tools', () => {
     const names = new Set(NEON_TOOLS.map((t) => t.name));
     for (const name of SECRET_GENERATED_TOOLS) {
@@ -206,6 +242,10 @@ describe('read-only tool surface', () => {
 function generatedShape(
   tool: (typeof NEON_TOOLS)[number],
 ): Record<string, unknown> {
+  return toolShape(tool);
+}
+
+function toolShape(tool: (typeof NEON_TOOLS)[number]): Record<string, unknown> {
   const schema = tool.inputSchema;
   if (
     typeof schema !== 'object' ||

@@ -282,17 +282,17 @@ const HOST_TOOL_DRAFTS = [
 
     <important_notes>
       You MUST pass ALL values from the \`prepare_database_migration\` response:
-      - migrationId: The migration ID
-      - migrationSql: The exact SQL from prepare step
-      - databaseName: The database name
-      - projectId: The project ID
-      - temporaryBranchId: The temporary branch to delete
-      - parentBranchId: The branch to apply migration to
-      - applyChanges: Set to true to apply the migration, or false to just delete the temp branch without applying
+      - migration_id: The migration ID
+      - migration_sql: The exact SQL from prepare step
+      - database_name: The database name
+      - project_id: The project ID
+      - temporary_branch_id: The temporary branch to delete
+      - parent_branch_id: The branch to apply migration to
+      - apply_changes: Set to true to apply the migration, or false to just delete the temp branch without applying
     </important_notes>
 
     <workflow>
-      1. If applyChanges is true, applies the migration SQL to the parent branch
+      1. If apply_changes is true, applies the migration SQL to the parent branch
       2. Deletes the temporary branch (cleanup)
       3. Returns confirmation of the operation
     </workflow>`,
@@ -547,7 +547,7 @@ const HOST_TOOL_DRAFTS = [
         This tool is the ONLY way to finally apply changes after the \`prepare_query_tuning\` tool to the main branch.
         You MUST NOT use \`prepare_database_migration\` or other tools to apply query tuning changes.
         You MUST pass the \`tuning_id\` obtained from the \`prepare_query_tuning\` tool, NOT the temporary branch ID as \`tuning_id\` to this tool.
-        You MUST pass the temporary branch ID used in the \`prepare_query_tuning\` tool as TEMPORARY branchId to this tool.
+        You MUST pass the temporary branch ID used in the \`prepare_query_tuning\` tool as \`temporary_branch_id\` to this tool.
         The tool OPTIONALLY receives a second branch ID or name which can be used instead of the main branch to apply the changes.
         This tool MUST be called after tool \`prepare_query_tuning\` even when the user rejects the changes, to ensure proper cleanup of temporary branches.
     </important_notes>    
@@ -609,7 +609,7 @@ const HOST_TOOL_DRAFTS = [
 
       Three checks read alike and are not: \`long-running-queries\` is what is running right now and has been for over five minutes, \`outliers\` is cumulative execution time since statistics were last reset, and \`calls\` is call frequency over that same history.
 
-      Omit \`databaseName\` to run a database-scoped check against every database on the branch. The result adds a \`database\` column. \`lfc-hit-rate\`, \`working-set\`, and \`replication-slots\` are compute-wide: they run once against the first listed database, and cache counters reset when the compute restarts. One failing database fails the whole run. \`bloat\` is a statistical estimate, not a measurement.
+      Omit \`database_name\` to run a database-scoped check against every database on the branch. The result adds a \`database\` column. \`lfc-hit-rate\`, \`working-set\`, and \`replication-slots\` are compute-wide: they run once against the first listed database, and cache counters reset when the compute restarts. One failing database fails the whole run. \`bloat\` is a statistical estimate, not a measurement.
 
       When a check needs an extension that is not installed, the tool says so and names the \`CREATE EXTENSION\` statement. Installing it writes to the user's database — ask before running it.
     </important_notes>`,

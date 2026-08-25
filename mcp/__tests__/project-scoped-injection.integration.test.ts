@@ -91,7 +91,7 @@ describe('project-scoped grants', () => {
       await mcpServer.connect(serverTransport);
       await client.connect(clientTransport);
 
-      // A scoped client cannot send projectId — it is not in the schema it was
+      // A scoped client cannot send project_id — it is not in the schema it was
       // given — so this is exactly the call a real one makes.
       const listed = await client.listTools();
       const getProject = listed.tools.find(
@@ -99,7 +99,15 @@ describe('project-scoped grants', () => {
       );
       const published = publishedSchemaSchema.parse(getProject?.inputSchema);
       const properties = published.properties ?? {};
+      expect(Object.keys(properties)).not.toContain('project_id');
       expect(Object.keys(properties)).not.toContain('projectId');
+
+      const runSql = listed.tools.find((tool) => tool.name === 'run_sql');
+      const runSqlPublished = publishedSchemaSchema.parse(runSql?.inputSchema);
+      const runSqlProperties = runSqlPublished.properties ?? {};
+      expect(Object.keys(runSqlProperties)).toContain('sql');
+      expect(Object.keys(runSqlProperties)).not.toContain('project_id');
+      expect(Object.keys(runSqlProperties)).not.toContain('projectId');
       // The converter omits `path` when `project_id` is its only field.
       const path = properties.path;
       if (

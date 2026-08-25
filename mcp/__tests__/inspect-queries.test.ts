@@ -112,7 +112,7 @@ describe('inspectDatabaseInputSchema', () => {
     for (const check of INSPECT_CHECKS) {
       const parsed = inspectDatabaseInputSchema.parse({
         check,
-        projectId: 'project-1',
+        project_id: 'project-1',
       });
       expect(parsed.check).toBe(check);
     }
@@ -121,7 +121,7 @@ describe('inspectDatabaseInputSchema', () => {
   it('rejects a check that is not in the catalog', () => {
     const result = inspectDatabaseInputSchema.safeParse({
       check: 'cache-hit',
-      projectId: 'project-1',
+      project_id: 'project-1',
     });
     expect(result.success).toBe(false);
   });
@@ -130,27 +130,27 @@ describe('inspectDatabaseInputSchema', () => {
     expect(
       inspectDatabaseInputSchema.parse({
         check: 'locks',
-        projectId: 'project-1',
+        project_id: 'project-1',
       }).limit,
     ).toBe(INSPECT_DEFAULT_LIMIT);
     expect(
       inspectDatabaseInputSchema.safeParse({
         check: 'locks',
-        projectId: 'project-1',
+        project_id: 'project-1',
         limit: 0,
       }).success,
     ).toBe(false);
     expect(
       inspectDatabaseInputSchema.safeParse({
         check: 'locks',
-        projectId: 'project-1',
+        project_id: 'project-1',
         limit: INSPECT_MAX_LIMIT,
       }).success,
     ).toBe(true);
     expect(
       inspectDatabaseInputSchema.safeParse({
         check: 'locks',
-        projectId: 'project-1',
+        project_id: 'project-1',
         limit: INSPECT_MAX_LIMIT + 1,
       }).success,
     ).toBe(false);
@@ -162,11 +162,11 @@ describe('inspectDatabaseInputSchema', () => {
     ).toBe(false);
   });
 
-  it('rejects an empty databaseName', () => {
+  it('rejects an empty database_name', () => {
     const result = inspectDatabaseInputSchema.safeParse({
       check: 'locks',
-      projectId: 'project-1',
-      databaseName: '',
+      project_id: 'project-1',
+      database_name: '',
     });
     expect(result.success).toBe(false);
   });

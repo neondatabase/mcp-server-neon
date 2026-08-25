@@ -77,18 +77,11 @@ function removeHostProjectId(tool: NeonTool): NeonTool | null {
   if (!(schema instanceof z.ZodObject)) return null;
 
   const shape = schema.shape as Record<string, z.ZodTypeAny>;
-  if (!('projectId' in shape)) return null;
-
-  const newShape: Record<string, z.ZodTypeAny> = {};
-  for (const [key, value] of Object.entries(shape)) {
-    if (key !== 'projectId') {
-      newShape[key] = value;
-    }
-  }
+  if (!('project_id' in shape)) return null;
 
   return {
     ...tool,
-    inputSchema: z.object(newShape),
+    inputSchema: schema.omit({ project_id: true }).strict(),
   };
 }
 
@@ -246,8 +239,5 @@ export function injectProjectId(
 ): Record<string, unknown> {
   if (!grant.projectId) return args;
   if (tool && !tool.projectScoped) return args;
-  if (tool?.kind === 'generated') {
-    return { ...args, project_id: grant.projectId };
-  }
-  return { ...args, projectId: grant.projectId };
+  return { ...args, project_id: grant.projectId };
 }

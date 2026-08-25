@@ -26,7 +26,7 @@ const originalFetch = globalThis.fetch;
 const listedInspectSchema = z.object({
   properties: z.object({
     check: z.object({ enum: z.array(z.string()) }),
-    databaseName: z.object({ description: z.string() }).optional(),
+    database_name: z.object({ description: z.string() }).optional(),
   }),
   required: z.array(z.string()),
 });
@@ -152,7 +152,7 @@ describe('MCP server e2e tool calls', () => {
       const schema = listedInspectSchema.parse(inspectTool?.inputSchema);
       expect(schema.properties.check.enum).toEqual([...INSPECT_CHECKS]);
       expect(schema.required).toContain('check');
-      expect(schema.properties.databaseName?.description).toContain('Omit');
+      expect(schema.properties.database_name?.description).toContain('Omit');
     });
   });
 
@@ -160,7 +160,7 @@ describe('MCP server e2e tool calls', () => {
     await withConnectedClient(createTestContext(), async (client) => {
       const result = await client.callTool({
         name: 'inspect_database',
-        arguments: { projectId: 'project-1', check: 'cache-hit' },
+        arguments: { project_id: 'project-1', check: 'cache-hit' },
       });
 
       expect(result.isError).toBe(true);

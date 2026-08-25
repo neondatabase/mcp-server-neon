@@ -163,8 +163,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   async function inspectLocks(databaseName: string) {
     if (!projectId) throw new Error('Test project was not created.');
     const result = await callTool('inspect_database', {
-      projectId,
-      databaseName,
+      project_id: projectId,
+      database_name: databaseName,
       check: 'locks',
     });
     return lockResultSchema.parse(
@@ -326,8 +326,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
       const result = await callTool('run_sql_transaction', {
-        projectId,
-        sqlStatements: [
+        project_id: projectId,
+        sql_statements: [
           'CREATE SCHEMA crm',
           'CREATE TABLE public.property_options (public_marker text)',
           'CREATE TABLE crm.property_options (id bigint PRIMARY KEY, property_id bigint NOT NULL, option_value text NOT NULL, CONSTRAINT property_options_unique UNIQUE (property_id, option_value))',
@@ -344,8 +344,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
       const result = await callTool('describe_table_schema', {
-        projectId,
-        tableName: 'property_options',
+        project_id: projectId,
+        table_name: 'property_options',
       });
       const description = tableDescriptionSchema.parse(
         JSON.parse(assertToolSucceeded('describe_table_schema', result)),
@@ -366,8 +366,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
       const result = await callTool('describe_table_schema', {
-        projectId,
-        tableName: 'crm.property_options',
+        project_id: projectId,
+        table_name: 'crm.property_options',
       });
       const description = tableDescriptionSchema.parse(
         JSON.parse(assertToolSucceeded('describe_table_schema', result)),
@@ -414,8 +414,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
       const result = await callTool('describe_table_schema', {
-        projectId,
-        tableName: 'crm.missing_property_options',
+        project_id: projectId,
+        table_name: 'crm.missing_property_options',
       });
       const parsedResult = toolResultSchema.parse(result);
       const text = textContent(result);
@@ -438,7 +438,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
           assertToolSucceeded(
             'inspect_database/table-sizes/omit-one',
             await callTool('inspect_database', {
-              projectId,
+              project_id: projectId,
               check: 'table-sizes',
             }),
           ),
@@ -468,22 +468,22 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       assertToolSucceeded(
         'run_sql/create-scope-database',
         await callTool('run_sql', {
-          projectId,
+          project_id: projectId,
           sql: `CREATE DATABASE ${OTHER_DATABASE}`,
         }),
       );
       assertToolSucceeded(
         'run_sql/create-default-lock-table',
         await callTool('run_sql', {
-          projectId,
+          project_id: projectId,
           sql: `CREATE TABLE ${DEFAULT_LOCK_TABLE} (id int)`,
         }),
       );
       assertToolSucceeded(
         'run_sql/create-other-lock-table',
         await callTool('run_sql', {
-          projectId,
-          databaseName: OTHER_DATABASE,
+          project_id: projectId,
+          database_name: OTHER_DATABASE,
           sql: `CREATE TABLE ${OTHER_LOCK_TABLE} (id int)`,
         }),
       );
@@ -527,7 +527,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
               assertToolSucceeded(
                 'inspect_database/locks/omit',
                 await callTool('inspect_database', {
-                  projectId,
+                  project_id: projectId,
                   check: 'locks',
                 }),
               ),
@@ -620,7 +620,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
           assertToolSucceeded(
             'inspect_database/replication-slots/omit',
             await callTool('inspect_database', {
-              projectId,
+              project_id: projectId,
               check: 'replication-slots',
             }),
           ),
@@ -644,14 +644,14 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       assertToolSucceeded(
         'run_sql/create-pg-stat-statements-other',
         await callTool('run_sql', {
-          projectId,
-          databaseName: OTHER_DATABASE,
+          project_id: projectId,
+          database_name: OTHER_DATABASE,
           sql: 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements',
         }),
       );
 
       const result = await callTool('inspect_database', {
-        projectId,
+        project_id: projectId,
         check: 'outliers',
       });
       const parsedResult = toolResultSchema.parse(result);
@@ -661,7 +661,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       expect(text).toContain('database "neondb"');
       expect(text).not.toContain('(database neondb)');
       expect(text).toContain(
-        'Pass databaseName to try a database that already has the "pg_stat_statements" extension.',
+        'Pass database_name to try a database that already has the "pg_stat_statements" extension.',
       );
       expect(text).toContain('ask the user first');
     },
@@ -679,8 +679,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       assertToolSucceeded(
         'run_sql_transaction/create-cap-tables',
         await callTool('run_sql_transaction', {
-          projectId,
-          sqlStatements: tableNames.flatMap((tableName) => [
+          project_id: projectId,
+          sql_statements: tableNames.flatMap((tableName) => [
             `CREATE TABLE ${tableName} (value integer)`,
             `INSERT INTO ${tableName} VALUES (1)`,
             `ANALYZE ${tableName}`,
@@ -693,8 +693,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
           assertToolSucceeded(
             'inspect_database/bloat',
             await callTool('inspect_database', {
-              projectId,
-              databaseName: 'neondb',
+              project_id: projectId,
+              database_name: 'neondb',
               check: 'bloat',
               limit: 1,
             }),
@@ -721,8 +721,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
 
       for (const check of extensionChecks) {
         const result = await callTool('inspect_database', {
-          projectId,
-          databaseName: 'neondb',
+          project_id: projectId,
+          database_name: 'neondb',
           check,
         });
         const parsedResult = toolResultSchema.parse(result);
@@ -748,8 +748,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         (candidate) => !INSPECT_QUERIES[candidate].requiresExtension,
       )) {
         const result = await callTool('inspect_database', {
-          projectId,
-          databaseName: 'neondb',
+          project_id: projectId,
+          database_name: 'neondb',
           check,
         });
         const report = inspectResultSchema.parse(
@@ -785,8 +785,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
           assertToolSucceeded(
             'inspect_database',
             await callTool('inspect_database', {
-              projectId,
-              databaseName: 'neondb',
+              project_id: projectId,
+              database_name: 'neondb',
               check: 'table-sizes',
             }),
           ),
@@ -800,8 +800,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
           assertToolSucceeded(
             'inspect_database',
             await callTool('inspect_database', {
-              projectId,
-              databaseName: 'neondb',
+              project_id: projectId,
+              database_name: 'neondb',
               check: 'table-sizes',
               limit: 1,
             }),
@@ -830,8 +830,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       assertToolSucceeded(
         'run_sql_transaction',
         await callTool('run_sql_transaction', {
-          projectId,
-          sqlStatements: extensions.map(
+          project_id: projectId,
+          sql_statements: extensions.map(
             (name) => `CREATE EXTENSION IF NOT EXISTS ${name}`,
           ),
         }),
@@ -845,8 +845,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
             assertToolSucceeded(
               `inspect_database/${check}`,
               await callTool('inspect_database', {
-                projectId,
-                databaseName: 'neondb',
+                project_id: projectId,
+                database_name: 'neondb',
                 check,
               }),
             ),

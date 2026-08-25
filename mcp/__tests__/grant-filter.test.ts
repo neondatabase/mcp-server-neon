@@ -76,7 +76,7 @@ describe('filterToolsForGrant', () => {
     expect(names).toContain('list_project_members');
   });
 
-  it('strips host projectId and generated project_id from published schemas', () => {
+  it('strips host and generated project_id from published schemas', () => {
     const tools = filterToolsForGrant(
       NEON_TOOLS,
       grant({ projectId: 'proj-123' }),
@@ -88,7 +88,18 @@ describe('filterToolsForGrant', () => {
     if (!(runSql?.inputSchema instanceof z.ZodObject)) {
       throw new Error('run_sql must keep a Zod 3 object schema');
     }
-    expect('projectId' in runSql.inputSchema.shape).toBe(false);
+    expect('project_id' in runSql.inputSchema.shape).toBe(false);
+    expect('sql' in runSql.inputSchema.shape).toBe(true);
+    expect(runSql.inputSchema.safeParse({ sql: 'select 1' }).success).toBe(
+      true,
+    );
+    expect(
+      runSql.inputSchema.safeParse({ sql: 'select 1', projectId: 'p' }).success,
+    ).toBe(false);
+    expect(
+      runSql.inputSchema.safeParse({ sql: 'select 1', project_id: 'p' })
+        .success,
+    ).toBe(false);
 
     const getProject = tools.find((tool) => tool.name === 'describe_project');
     expect(getProject && isZod4Object(getProject.inputSchema)).toBe(true);
@@ -107,7 +118,6 @@ describe('filterToolsForGrant', () => {
     expect(
       queryLogs.inputSchema.safeParse({
         branch_id: 'br-1',
-        project_id: 'proj-123',
       }).success,
     ).toBe(true);
   });
@@ -275,17 +285,15 @@ describe('getAccessControlWarnings', () => {
 });
 
 describe('injectProjectId', () => {
-  it('injects project id when grant is project-scoped', () => {
-    const args = { branchId: 'br-1' };
-    expect(injectProjectId(args, grant({ projectId: 'proj-123' }))).toEqual({
-      branchId: 'br-1',
-      projectId: 'proj-123',
+  it('injects project_id for host and generated tools when grant is project-scoped', () => {
+    const args = { branch_id: 'br-1' };
+    const scoped = grant({ projectId: 'proj-123' });
+    expect(injectProjectId(args, scoped)).toEqual({
+      branch_id: 'br-1',
+      project_id: 'proj-123',
     });
-  });
-
-  it('injects project_id for generated tools', () => {
     expect(
-      injectProjectId({ branch_id: 'br-1' }, grant({ projectId: 'proj-123' }), {
+      injectProjectId(args, scoped, {
         kind: 'generated',
         projectScoped: true,
       }),
@@ -293,10 +301,19 @@ describe('injectProjectId', () => {
       branch_id: 'br-1',
       project_id: 'proj-123',
     });
+    expect(
+      injectProjectId({ sql: 'select 1' }, scoped, {
+        kind: 'host',
+        projectScoped: true,
+      }),
+    ).toEqual({
+      sql: 'select 1',
+      project_id: 'proj-123',
+    });
   });
 
   it('returns args unchanged when not project-scoped', () => {
-    const args = { projectId: 'proj-keep', branchId: 'br-1' };
+    const args = { project_id: 'proj-keep', branch_id: 'br-1' };
     expect(injectProjectId(args, grant())).toEqual(args);
   });
 });

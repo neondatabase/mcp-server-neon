@@ -24,10 +24,6 @@ import { NEON_TOOLS } from './definitions';
 import type { NeonTool } from './tool-definition';
 import type { ToolHandlerExtraParams } from './types';
 
-/**
- * What `registerTool` is given. Flat, because that is what a client sends:
- * `{"name":"run_sql","arguments":{"sql":"…","projectId":"…"}}`.
- */
 export function toolRegistration(tool: NeonTool): {
   description: string;
   inputSchema: NeonTool['inputSchema'];

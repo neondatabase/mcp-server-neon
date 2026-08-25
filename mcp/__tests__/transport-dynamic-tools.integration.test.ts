@@ -327,19 +327,27 @@ describe('transport dynamic tool composition', () => {
     expect(scopedNames.has('run_sql')).toBe(true);
     expect(scopedNames.has('list_projects')).toBe(false);
 
-    // Unscoped variant still requires projectId from caller -> handler should not run.
     await mcpCall(unscopedToken, 'tools/call', 3, {
       name: 'run_sql',
       arguments: { sql: 'select 1' },
     });
     expect(runSqlSpy).toHaveBeenCalledTimes(0);
 
-    // Project-scoped variant injects projectId from auth grant -> handler runs.
     await mcpCall(scopedToken, 'tools/call', 4, {
       name: 'run_sql',
       arguments: { sql: 'select 1' },
     });
     expect(runSqlSpy).toHaveBeenCalledTimes(1);
+    expect(runSqlSpy).toHaveBeenCalledWith(
+      {
+        params: expect.objectContaining({
+          sql: 'select 1',
+          project_id: 'proj_123',
+        }),
+      },
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it('isolates cached handlers by auth context key', async () => {
@@ -400,7 +408,7 @@ describe('transport dynamic tool composition', () => {
       '?projectId=proj_123',
     );
 
-    // If query params were merged at runtime, run_sql would receive injected projectId.
+    // If query params were merged at runtime, run_sql would receive injected project_id.
     // OAuth must only use the grant persisted from authorize/token flow.
     expect(runSqlSpy).toHaveBeenCalledTimes(0);
   });
