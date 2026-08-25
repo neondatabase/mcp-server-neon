@@ -359,6 +359,13 @@ describe('generated tool interface', () => {
     expect(tool!.description).toContain('Call `list_branches` for branches');
   });
 
+  it('names restore_snapshot on finalize_branch_restore', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'finalize_branch_restore');
+    expect(tool!.description).toContain('restore_snapshot');
+    expect(tool!.description).toContain('finalize_restore: false');
+    expect(tool!.description).not.toContain('restoreSnapshot');
+  });
+
   it('exposes flat arguments on the project list, create, and delete tools', () => {
     const listProjects = NEON_TOOLS.find(
       (tool) => tool.name === 'list_projects',

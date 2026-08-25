@@ -72,6 +72,15 @@ const DELETE_BRANCH_DESCRIPTION = `Delete a branch and all its data. NEVER run a
 
 Arguments: \`{ "project_id": "…", "branch_id": "br-…" }\`. \`branch_id\` is a branch id, not a name.`;
 
+const FINALIZE_BRANCH_RESTORE_DESCRIPTION = `Finalize the restore operation for a branch created from a snapshot.
+This operation updates the branch so it functions as the original branch it replaced.
+This includes:
+  - Reassigning any computes from the original branch to the restored branch (this will restart the computes)
+  - Renaming the restored branch to the original branch's name
+  - Renaming the original branch so it no longer uses the original name
+
+This operation only applies to branches created using \`restore_snapshot\` with \`finalize_restore: false\`.`;
+
 const CREATE_PROJECT_ENDPOINT_DESCRIPTION = `Creates a compute endpoint on a branch.
 
 This tool does not return a connection string. After it succeeds, call \`get_connection_string\` with the project and branch id to obtain a DATABASE_URL.`;
@@ -106,6 +115,7 @@ function createGeneratedNeonTools() {
       'branches.createWithCompute': CREATE_BRANCH_DESCRIPTION,
       'projects.delete': DELETE_PROJECT_DESCRIPTION,
       'branches.delete': DELETE_BRANCH_DESCRIPTION,
+      'branches.finalizeRestore': FINALIZE_BRANCH_RESTORE_DESCRIPTION,
       'postgres.endpoints.create': CREATE_PROJECT_ENDPOINT_DESCRIPTION,
       'logs.query': QUERY_LOGS_DESCRIPTION,
       'operations.list': LIST_OPERATIONS_DESCRIPTION,

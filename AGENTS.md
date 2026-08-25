@@ -207,7 +207,7 @@ infrastructure.
 
 ## Tool arguments
 
-Every MCP tool argument is `snake_case` — host tools (`run_sql`, `inspect_database`, …) and generated Management API tools. Host schemas are `.strict()`: a camelCase alias (`projectId`) fails validation. URL grant query params stay camelCase (`?projectId=`, `?category=`, `?readonly=`). Internal TypeScript helpers stay camelCase; `HOST_HANDLERS` maps wire keys at the boundary.
+Every MCP tool argument is `snake_case` — host tools (`run_sql`, `inspect_database`, …) and generated Management API tools. Published schemas reject unknown keys: a camelCase alias (`projectId`) fails validation. URL grant query params stay camelCase (`?projectId=`, `?category=`, `?readonly=`) because those strings are already in issued OAuth grants and installed MCP URLs. Internal TypeScript helpers stay camelCase; `HOST_HANDLERS` maps wire keys at the boundary.
 
 ## Adding New Tools
 
