@@ -18,6 +18,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import pkg from '../../package.json';
+import { track } from '../analytics/analytics';
 
 // Tool calls emit a Segment event, and the write key has a production default.
 vi.mock('../analytics/analytics', () => ({
@@ -177,6 +178,12 @@ describe('user agent on Neon API requests made by tool calls', () => {
       branch: { name: 'test-branch' },
       endpoints: [{ type: 'read_write' }],
     });
+    expect(vi.mocked(track)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'tool_call',
+        properties: expect.objectContaining({ toolName: 'create_branch' }),
+      }),
+    );
   });
 
   it('identifies the MCP server on logs requests', async () => {

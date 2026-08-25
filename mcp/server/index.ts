@@ -118,6 +118,7 @@ export const createMcpServer = async (context: ServerContext) => {
           async (span) => {
             const properties = {
               authMethod: context.authMethod,
+              toolName: tool.name,
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
               projectScoped: String(!!grant.projectId),
