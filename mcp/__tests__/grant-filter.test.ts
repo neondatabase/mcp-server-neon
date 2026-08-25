@@ -120,6 +120,29 @@ describe('filterToolsForGrant', () => {
         branch_id: 'br-1',
       }).success,
     ).toBe(true);
+    expect(
+      queryLogs.inputSchema.safeParse({
+        branch_id: 'br-1',
+        projectId: 'p',
+      }).success,
+    ).toBe(false);
+
+    const restoreSnapshot = tools.find(
+      (tool) => tool.name === 'restore_snapshot',
+    );
+    expect(restoreSnapshot && isZod4Object(restoreSnapshot.inputSchema)).toBe(
+      true,
+    );
+    if (!restoreSnapshot || !isZod4Object(restoreSnapshot.inputSchema)) {
+      throw new Error('restore_snapshot must keep a Zod 4 object schema');
+    }
+    expect('project_id' in restoreSnapshot.inputSchema.shape).toBe(false);
+    expect(
+      restoreSnapshot.inputSchema.safeParse({
+        snapshot_id: 'ss-1',
+        targetBranchId: 'br-intended',
+      }).success,
+    ).toBe(false);
   });
 
   it('combines scope and project filtering', () => {

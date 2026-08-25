@@ -209,6 +209,38 @@ describe('read-only tool surface', () => {
     ).toBe(false);
   });
 
+  it('rejects camelCase aliases on generated tool schemas', () => {
+    const describeProject = NEON_TOOLS.find(
+      (tool) => tool.name === 'describe_project',
+    );
+    expect(describeProject).toBeDefined();
+    const schema = describeProject?.inputSchema;
+    if (
+      typeof schema !== 'object' ||
+      schema === null ||
+      !('safeParse' in schema) ||
+      typeof schema.safeParse !== 'function'
+    ) {
+      throw new Error('describe_project must keep a parseable schema');
+    }
+    expect(
+      schema.safeParse({
+        project_id: 'proj-1',
+      }).success,
+    ).toBe(true);
+    expect(
+      schema.safeParse({
+        projectId: 'proj-1',
+      }).success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({
+        project_id: 'proj-1',
+        projectId: 'proj-1',
+      }).success,
+    ).toBe(false);
+  });
+
   it('does not expose secret-returning generated tools', () => {
     const names = new Set(NEON_TOOLS.map((t) => t.name));
     for (const name of SECRET_GENERATED_TOOLS) {
