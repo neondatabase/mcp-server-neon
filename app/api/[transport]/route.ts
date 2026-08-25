@@ -419,7 +419,6 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
                 const properties = {
                   authMethod,
-                  // Since 2026-08-10, Lake flatten only copies camelCase keys.
                   toolName: tool.name,
                   tool_name: tool.name,
                   readOnly: String(readOnly),
