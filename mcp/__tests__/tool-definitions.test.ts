@@ -360,10 +360,15 @@ describe('generated tool interface', () => {
   });
 
   it('names restore_snapshot on finalize_branch_restore', () => {
+    const restore = NEON_TOOLS.find((t) => t.name === 'restore_snapshot');
+    expect(generatedShape(restore!)).toHaveProperty('finalize');
+    expect(generatedShape(restore!)).not.toHaveProperty('finalize_restore');
+
     const tool = NEON_TOOLS.find((t) => t.name === 'finalize_branch_restore');
     expect(tool!.description).toContain('restore_snapshot');
-    expect(tool!.description).toContain('finalize_restore: false');
+    expect(tool!.description).toContain('finalize: false');
     expect(tool!.description).not.toContain('restoreSnapshot');
+    expect(tool!.description).not.toContain('finalize_restore');
   });
 
   it('exposes flat arguments on the project list, create, and delete tools', () => {

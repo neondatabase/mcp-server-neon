@@ -79,7 +79,7 @@ This includes:
   - Renaming the restored branch to the original branch's name
   - Renaming the original branch so it no longer uses the original name
 
-This operation only applies to branches created using \`restore_snapshot\` with \`finalize_restore: false\`.`;
+This operation only applies to branches created using \`restore_snapshot\` with \`finalize: false\`.`;
 
 const CREATE_PROJECT_ENDPOINT_DESCRIPTION = `Creates a compute endpoint on a branch.
 
