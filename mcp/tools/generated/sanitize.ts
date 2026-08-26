@@ -7,6 +7,7 @@ const KEEP_ROLE_PASSWORD = new Set<GeneratedToolId>([
 
 const DROP_KEYS = new Set([
   'connection_uris',
+  'connectionString',
   'secret_server_key',
   'client_secret',
 ]);

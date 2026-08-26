@@ -4,7 +4,7 @@ import type { GeneratedToolId } from './operations';
 export const PINNED_MCP_NAMES = {
   'projects.list': 'list_projects',
   'projects.get': 'describe_project',
-  'projects.createAndConnect': 'create_project',
+  'projects.create': 'create_project',
   'projects.update': 'update_project',
   'projects.delete': 'delete_project',
   'projects.recover': 'recover_project',
@@ -16,7 +16,7 @@ export const PINNED_MCP_NAMES = {
 
   'branches.list': 'list_branches',
   'branches.get': 'get_branch',
-  'branches.createWithCompute': 'create_branch',
+  'branches.create': 'create_branch',
   'branches.update': 'update_branch',
   'branches.delete': 'delete_branch',
   'branches.getDefault': 'get_default_branch',

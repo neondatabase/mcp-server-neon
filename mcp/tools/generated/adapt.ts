@@ -17,7 +17,7 @@ import {
 } from './operations';
 import { sanitizeGeneratedResult } from './sanitize';
 
-const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project, waits until the default compute is ready, and returns a connection string.
+const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project and waits until the default compute is ready.
 
 If using a personal API key, include \`org_id\` to specify which organization to create the project in.
 If using an org API key, \`org_id\` is automatically inferred from the key.
@@ -26,9 +26,7 @@ Plan limits define how many projects you can create.
 You can specify a region (\`region_id\`) and Postgres version (\`pg_version\`).
 Neon supports Postgres 14 through 18, with 19 rolling out to enabled regions.
 
-\`pooled\` defaults to true. Set \`pooled: false\` for a direct host.
-
-If the API omits a connection URI (more than one role or database), the project may already exist and the error has no id. Call \`list_projects\` before retrying.`;
+This tool does not return a connection string. After it succeeds, call \`get_connection_string\` with the project id.`;
 
 const DESCRIBE_PROJECT_DESCRIPTION = `Retrieves information about the specified project.
 Returned details include the project settings, compute configuration, history retention, owner information, and current usage metrics.
@@ -64,15 +62,15 @@ const COMPARE_DATABASE_SCHEMA_DESCRIPTION = `Compare one database's SQL schema o
 
 \`database_name\` is required. Use \`${NEON_DEFAULT_DATABASE_NAME}\` when the caller does not name a database. Omitting \`base_branch_id\` compares against the parent. \`base_branch_id\` is a branch id (\`br-...\`), not a name. Pass \`lsn\`, \`timestamp\`, \`base_lsn\`, or \`base_timestamp\` only for a point-in-time comparison.`;
 
-const CREATE_BRANCH_DESCRIPTION = `Creates a branch with a read-write compute, waits until it is ready, and returns a connection string.
+const CREATE_BRANCH_DESCRIPTION = `Creates a branch with a read-write compute and waits until it is ready.
 
 Arguments: \`{ "project_id": "…", "name": "feature-x" }\`. \`parent_id\` defaults to the project's default branch.
 
-\`pooled\` defaults to true. Set \`pooled: false\` for a direct host.
+Pass \`no_compute: true\` to skip the endpoint. Do not combine \`no_compute\` with \`compute\`.
 
-This tool copies the parent at head. Point-in-time restore is a separate tool, \`restore_snapshot\`, published when \`?category=snapshots\` is granted. After this create succeeds, pass the new branch id as \`restore_snapshot\`'s \`target_branch_id\`; omitting that target creates another branch.
+This tool does not return a connection string. After it succeeds, call \`get_connection_string\` with the project and branch id.
 
-If the API omits a connection URI (parent with more than one role or database), the branch may already exist and the error has no id. Call \`list_branches\` before retrying.`;
+This tool copies the parent at head. Point-in-time restore is a separate tool, \`restore_snapshot\`, published when \`?category=snapshots\` is granted. After this create succeeds, pass the new branch id as \`restore_snapshot\`'s \`target_branch_id\`; omitting that target creates another branch.`;
 
 const DELETE_PROJECT_DESCRIPTION = `Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For removing single branches, use \`delete_branch\` instead.
 
@@ -101,8 +99,8 @@ const BRANCH_ID_NOTE =
 const WAIT = { timeoutMs: 120_000 } as const;
 
 const CREATE_TOOLS = new Set<GeneratedToolId>([
-  'projects.createAndConnect',
-  'branches.createWithCompute',
+  'projects.create',
+  'branches.create',
 ]);
 
 const LOG_QUERY_ANNOTATIONS = {
@@ -120,9 +118,9 @@ function createGeneratedNeonTools() {
     wait: WAIT,
     names: TOOL_NAMES,
     descriptions: {
-      'projects.createAndConnect': CREATE_PROJECT_DESCRIPTION,
+      'projects.create': CREATE_PROJECT_DESCRIPTION,
       'projects.get': DESCRIBE_PROJECT_DESCRIPTION,
-      'branches.createWithCompute': CREATE_BRANCH_DESCRIPTION,
+      'branches.create': CREATE_BRANCH_DESCRIPTION,
       'branches.resetFromParent': RESET_FROM_PARENT_DESCRIPTION,
       'branches.compareSchema': COMPARE_DATABASE_SCHEMA_DESCRIPTION,
       'projects.delete': DELETE_PROJECT_DESCRIPTION,

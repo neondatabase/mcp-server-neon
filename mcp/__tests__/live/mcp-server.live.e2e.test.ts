@@ -343,8 +343,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     'compares a child branch schema, then resets it from parent',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
-      // create_branch cannot return a connection URI after the suite adds
-      // mcp_scope_other; keep this ahead of that CREATE DATABASE.
+      // create_branch does not return a connection URI. Keep this ahead of
+      // CREATE DATABASE mcp_scope_other so later SQL still has one database.
       const table = `mcp_reset_${randomUUID().slice(0, 8)}`;
       const created = await callTool('create_branch', {
         project_id: projectId,

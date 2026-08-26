@@ -298,13 +298,9 @@ describe('generated tool interface', () => {
     );
     expect(PINNED_MCP_NAMES['projects.list']).toBe('list_projects');
     expect(PINNED_MCP_NAMES['projects.get']).toBe('describe_project');
-    expect(PINNED_MCP_NAMES['projects.createAndConnect']).toBe(
-      'create_project',
-    );
+    expect(PINNED_MCP_NAMES['projects.create']).toBe('create_project');
     expect(PINNED_MCP_NAMES['projects.delete']).toBe('delete_project');
-    expect(PINNED_MCP_NAMES['branches.createWithCompute']).toBe(
-      'create_branch',
-    );
+    expect(PINNED_MCP_NAMES['branches.create']).toBe('create_branch');
     expect(PINNED_MCP_NAMES['branches.resetFromParent']).toBe(
       'reset_from_parent',
     );
@@ -391,7 +387,11 @@ describe('generated tool interface', () => {
     expect(generatedShape(listProjects!)).toHaveProperty('limit');
     expect(generatedShape(createProject!)).toHaveProperty('name');
     expect(generatedShape(createProject!)).toHaveProperty('org_id');
-    expect(generatedShape(createProject!)).toHaveProperty('pooled');
+    expect(generatedShape(createProject!)).not.toHaveProperty('pooled');
+    expect(createProject?.description).toContain('get_connection_string');
+    expect(createProject?.description).not.toContain(
+      'returns a connection string',
+    );
     expect(generatedShape(deleteProject!)).toHaveProperty('project_id');
     expect(generatedShape(listProjects!)).not.toHaveProperty('query');
     expect(generatedShape(createProject!)).not.toHaveProperty('body');
@@ -421,17 +421,21 @@ describe('generated tool interface', () => {
     ).toBe(true);
   });
 
-  it('describes create_branch as a compute workflow that returns a connection string', () => {
+  it('describes create_branch as a compute workflow without a connection string', () => {
     const createBranch = NEON_TOOLS.find(
       (tool) => tool.name === 'create_branch',
     );
     const shape = generatedShape(createBranch!);
     expect(shape).toHaveProperty('project_id');
     expect(shape).toHaveProperty('name');
-    expect(shape).toHaveProperty('pooled');
+    expect(shape).toHaveProperty('no_compute');
+    expect(shape).not.toHaveProperty('pooled');
     expect(shape).not.toHaveProperty('branch');
     expect(shape).not.toHaveProperty('endpoints');
-    expect(createBranch?.description).toContain('connection string');
+    expect(createBranch?.description).toContain('get_connection_string');
+    expect(createBranch?.description).not.toContain(
+      'returns a connection string',
+    );
   });
 
   it('pins reset_from_parent and compare_database_schema', () => {

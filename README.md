@@ -305,14 +305,14 @@ Notes:
 
 - **`list_projects`**: Lists Neon projects. `limit` caps how many items come back.
 - **`describe_project`**: Fetches a Neon project by id (`{ "project_id": "…" }`).
-- **`create_project`**: Creates a Neon project, waits for the default compute, and returns a connection string. Arguments are `{ "name": "…", "org_id": "…", "region_id": "…" }`.
+- **`create_project`**: Creates a Neon project and waits for the default compute. Does not return a connection string. Arguments are `{ "name": "…", "org_id": "…", "region_id": "…" }`. Call `get_connection_string` after it succeeds.
 - **`delete_project`**: Deletes an existing Neon project. Arguments are `{ "project_id": "…" }`.
 - **`list_organizations`**: Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.
 
 **Branch Management:**
 
 - **`list_branches`**: Lists branches in a project. Use it to resolve a branch name to a `br-…` id.
-- **`create_branch`**: Creates a branch with a read-write compute, waits until it is ready, and returns a connection string. Arguments are `{ "project_id": "…", "name": "feature-x" }`.
+- **`create_branch`**: Creates a branch with a read-write compute and waits until it is ready. Does not return a connection string. Arguments are `{ "project_id": "…", "name": "feature-x" }`. Pass `no_compute: true` to skip the endpoint. Call `get_connection_string` after it succeeds.
 - **`reset_from_parent`**: Resets a branch to its parent's current HEAD (`{ "project_id": "…", "branch_id": "br-…" }`). Discards writes since the branch diverged. `preserve_under_name` is required when the branch has children; those children move to the new branch. Parent HEAD only; point-in-time restore is `restore_snapshot`.
 - **`delete_branch`**: Deletes a branch (`{ "project_id": "…", "branch_id": "br-…" }`).
 - **`describe_branch`**: Retrieves a tree of databases, schemas, tables, views, and functions on a branch.
