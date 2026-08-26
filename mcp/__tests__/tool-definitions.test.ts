@@ -440,7 +440,9 @@ describe('generated tool interface', () => {
     expect(reset?.readOnlySafe).toBe(false);
     expect(reset?.annotations.destructiveHint).toBe(true);
     expect(reset?.description).toContain('NEVER run autonomously');
-    expect(reset?.description).toContain('those children move to the new branch');
+    expect(reset?.description).toContain(
+      'those children move to the new branch',
+    );
     expect(generatedShape(reset!)).toHaveProperty('preserve_under_name');
     expect(generatedShape(reset!)).not.toHaveProperty('preserveUnderName');
     expect(
