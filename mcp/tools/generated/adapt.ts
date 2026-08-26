@@ -3,7 +3,7 @@ import {
   type NeonTool as GeneratedNeonTool,
 } from '@neon/tools';
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
-import { NEON_API_HOST } from '../../constants';
+import { NEON_API_HOST, NEON_DEFAULT_DATABASE_NAME } from '../../constants';
 import { fetchAsMcpServer } from '../../neon-client';
 import type { NeonTool } from '../tool-definition';
 import type { ToolHandlerExtended, ToolHandlers } from '../types';
@@ -53,6 +53,18 @@ Operations older than 6 months may be deleted from our systems.
 If you need more history than that, you should store your own history.
 
 Omitting \`limit\` returns every remaining operation. Pass \`limit\` to cap how many come back. There is no \`cursor\` argument.`;
+
+const RESET_FROM_PARENT_DESCRIPTION = `Reset a branch to its parent's current HEAD. Discards every change the branch has written since it diverged. NEVER run autonomously; always ask the user first.
+
+Arguments: \`{ "project_id": "…", "branch_id": "br-…" }\`. \`preserve_under_name\` saves the current state under a new branch first and is required when the branch has children.
+
+This is parent HEAD only. Point-in-time restore is \`restore_snapshot\`, published when \`?category=snapshots\` is granted.`;
+
+const COMPARE_DATABASE_SCHEMA_DESCRIPTION = `Compare one database's SQL schema on a branch to another branch. Returns \`{ "diff": "…" }\`, a unified SQL diff. Empty when the schemas match.
+
+\`database_name\` is required. Use \`${NEON_DEFAULT_DATABASE_NAME}\` when the caller does not name a database. Omitting \`base_branch_id\` compares against the parent.
+
+After a non-empty diff, propose a zero-downtime migration for the parent, ask before running each statement, and use \`run_sql\`. Suggest a snapshot or point-in-time restore first. Re-run this tool after applying the migration.`;
 
 const CREATE_BRANCH_DESCRIPTION = `Creates a branch with a read-write compute, waits until it is ready, and returns a connection string.
 
@@ -113,6 +125,8 @@ function createGeneratedNeonTools() {
       'projects.createAndConnect': CREATE_PROJECT_DESCRIPTION,
       'projects.get': DESCRIBE_PROJECT_DESCRIPTION,
       'branches.createWithCompute': CREATE_BRANCH_DESCRIPTION,
+      'branches.resetFromParent': RESET_FROM_PARENT_DESCRIPTION,
+      'branches.compareSchema': COMPARE_DATABASE_SCHEMA_DESCRIPTION,
       'projects.delete': DELETE_PROJECT_DESCRIPTION,
       'branches.delete': DELETE_BRANCH_DESCRIPTION,
       'branches.finalizeRestore': FINALIZE_BRANCH_RESTORE_DESCRIPTION,

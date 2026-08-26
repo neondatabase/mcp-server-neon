@@ -117,6 +117,10 @@ describe('MCP server e2e tool calls', () => {
       expect(toolNames).toContain('query_logs');
       expect(toolNames).toContain('list_log_fields');
       expect(toolNames).toContain('list_log_field_values');
+      expect(toolNames).toContain('reset_from_parent');
+      expect(toolNames).toContain('compare_database_schema');
+      expect(toolNames).not.toContain('reset_from_parent_branches');
+      expect(toolNames).not.toContain('compare_schema_branches');
       expect(queryLogsTool?.inputSchema).toMatchObject({
         type: 'object',
         properties: {

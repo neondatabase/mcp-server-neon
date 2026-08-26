@@ -83,6 +83,8 @@ describe('createMcpServer grant + read-only integration', () => {
 
     expect(names).toContain('describe_table_schema');
     expect(names).toContain('get_database_tables');
+    expect(names).toContain('compare_database_schema');
+    expect(names).not.toContain('reset_from_parent');
     expect(names).toContain('list_docs_resources');
     expect(names).toContain('get_doc_resource');
     expect(names).toContain('search');
@@ -109,6 +111,8 @@ describe('createMcpServer grant + read-only integration', () => {
     const names = getRegisteredToolNames(server);
     const readOnlyTools = NEON_TOOLS.filter((t) => t.readOnlySafe);
     expect(names).toHaveLength(readOnlyTools.length);
+    expect(names).toContain('compare_database_schema');
+    expect(names).not.toContain('reset_from_parent');
   });
 
   it('does not register get_connection_string in readOnly context', async () => {

@@ -340,6 +340,96 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    'compares a child branch schema, then resets it from parent',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      // create_branch cannot return a connection URI after the suite adds
+      // mcp_scope_other; keep this ahead of that CREATE DATABASE.
+      const table = `mcp_reset_${randomUUID().slice(0, 8)}`;
+      const created = await callTool('create_branch', {
+        project_id: projectId,
+        name: `mcp-reset-${randomUUID().slice(0, 8)}`,
+      });
+      const branch = z
+        .object({ branch: z.object({ id: z.string() }) })
+        .parse(JSON.parse(assertToolSucceeded('create_branch', created)));
+      const branchId = branch.branch.id;
+
+      const matching = z
+        .object({ diff: z.string().nullable().optional() })
+        .parse(
+          JSON.parse(
+            assertToolSucceeded(
+              'compare_database_schema',
+              await callTool('compare_database_schema', {
+                project_id: projectId,
+                branch_id: branchId,
+                database_name: 'neondb',
+              }),
+            ),
+          ),
+        );
+      expect(matching.diff ?? '').toBe('');
+
+      assertToolSucceeded(
+        'run_sql',
+        await callTool('run_sql', {
+          project_id: projectId,
+          branch_id: branchId,
+          sql: `CREATE TABLE ${table} (id int)`,
+        }),
+      );
+
+      const diverged = z
+        .object({ diff: z.string().nullable().optional() })
+        .parse(
+          JSON.parse(
+            assertToolSucceeded(
+              'compare_database_schema',
+              await callTool('compare_database_schema', {
+                project_id: projectId,
+                branch_id: branchId,
+                database_name: 'neondb',
+              }),
+            ),
+          ),
+        );
+      expect(diverged.diff ?? '').toContain(table);
+
+      assertToolSucceeded(
+        'reset_from_parent',
+        await callTool('reset_from_parent', {
+          project_id: projectId,
+          branch_id: branchId,
+        }),
+      );
+
+      const after = z.object({ diff: z.string().nullable().optional() }).parse(
+        JSON.parse(
+          assertToolSucceeded(
+            'compare_database_schema',
+            await callTool('compare_database_schema', {
+              project_id: projectId,
+              branch_id: branchId,
+              database_name: 'neondb',
+            }),
+          ),
+        ),
+      );
+      expect(after.diff ?? '').toBe('');
+
+      assertToolSucceeded(
+        'delete_branch',
+        await callTool('delete_branch', {
+          project_id: projectId,
+          branch_id: branchId,
+        }),
+      );
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'preserves default public-schema describe behavior',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');

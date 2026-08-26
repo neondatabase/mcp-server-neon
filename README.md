@@ -294,10 +294,10 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 
 Notes:
 
-- Management API tools come from `@neon/tools`. Selectors are SDK paths (`projects.list`); published MCP names are verb-first (`list_projects`, `delete_project`, `query_logs`). Historical names stay where they already existed (`describe_project`, `provision_neon_auth`, `provision_neon_data_api`, `list_branch_computes`).
+- Management API tools come from `@neon/tools`. Selectors are SDK paths (`projects.list`); published MCP names are verb-first (`list_projects`, `delete_project`, `query_logs`). Historical names stay where they already existed (`describe_project`, `create_branch`, `reset_from_parent`, `compare_database_schema`, `provision_neon_auth`, `provision_neon_data_api`, `list_branch_computes`).
 - `?category=branches` includes branch, role, and database tools (`list_postgres_roles`, `create_postgres_database`, …). A token already issued for `branches` gains those writes. Compute listing is `?category=endpoints`. Snapshot restore is `?category=snapshots`.
 - Project member and permission writes are not published. `list_project_members` and `list_project_permissions` are reads.
-- Schema tools are host tools (`get_database_tables`, `describe_table_schema`). There is no generated schema-compare tool.
+- Schema tools (`?category=schema`) are the host tools `get_database_tables` and `describe_table_schema`, plus generated `compare_database_schema`.
 - Read-only enforcement still relies on `readOnlySafe` and server-side read-only logic; `scope` is category metadata, not a standalone read/write switch.
 - In project-scoped mode (`?projectId=...`), tools without a project path (`list_projects`, `create_project`, `list_organizations`, `list_regions`, `search`, `fetch`, …) are hidden. `delete_project` is also hidden.
 
@@ -313,6 +313,7 @@ Notes:
 
 - **`list_branches`**: Lists branches in a project. Use it to resolve a branch name to a `br-…` id.
 - **`create_branch`**: Creates a branch with a read-write compute, waits until it is ready, and returns a connection string. Arguments are `{ "project_id": "…", "name": "feature-x" }`.
+- **`reset_from_parent`**: Resets a branch to its parent's current HEAD (`{ "project_id": "…", "branch_id": "br-…" }`). Discards writes since the branch diverged. `preserve_under_name` is required when the branch has children. Parent HEAD only; point-in-time restore is `restore_snapshot`.
 - **`delete_branch`**: Deletes a branch (`{ "project_id": "…", "branch_id": "br-…" }`).
 - **`describe_branch`**: Retrieves a tree of databases, schemas, tables, views, and functions on a branch.
 - Generated branch tools take `branch_id` as a branch id (`br-...`), not a name.
@@ -328,7 +329,8 @@ Notes:
 
 **Schema** (`?category=schema`):
 
-- Host tools only: `get_database_tables`, `describe_table_schema`.
+- **`get_database_tables`**, **`describe_table_schema`**
+- **`compare_database_schema`**: SQL schema diff of one database against another branch. `database_name` is required. Omitting `base_branch_id` compares against the parent.
 
 **SQL Query Execution:**
 

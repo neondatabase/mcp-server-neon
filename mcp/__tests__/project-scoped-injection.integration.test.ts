@@ -91,8 +91,7 @@ describe('project-scoped grants', () => {
       await mcpServer.connect(serverTransport);
       await client.connect(clientTransport);
 
-      // A scoped client cannot send project_id — it is not in the schema it was
-      // given — so this is exactly the call a real one makes.
+      // The scoped schema omits project_id, so the empty call below matches a real client.
       const listed = await client.listTools();
       const getProject = listed.tools.find(
         (tool) => tool.name === 'describe_project',

@@ -21,6 +21,8 @@ export const GENERATED_TOOL_SCOPES = {
   'branches.delete': 'branches',
   'branches.getDefault': 'branches',
   'branches.setDefault': 'branches',
+  'branches.resetFromParent': 'branches',
+  'branches.compareSchema': 'schema',
   'branches.finalizeRestore': 'branches',
   'postgres.roles.list': 'branches',
   'postgres.roles.get': 'branches',

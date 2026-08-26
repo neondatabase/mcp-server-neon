@@ -21,6 +21,8 @@ export const PINNED_MCP_NAMES = {
   'branches.delete': 'delete_branch',
   'branches.getDefault': 'get_default_branch',
   'branches.setDefault': 'set_default_branch',
+  'branches.resetFromParent': 'reset_from_parent',
+  'branches.compareSchema': 'compare_database_schema',
   'branches.finalizeRestore': 'finalize_branch_restore',
   'postgres.roles.list': 'list_postgres_roles',
   'postgres.roles.get': 'get_postgres_role',

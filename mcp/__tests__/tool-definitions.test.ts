@@ -305,6 +305,12 @@ describe('generated tool interface', () => {
     expect(PINNED_MCP_NAMES['branches.createWithCompute']).toBe(
       'create_branch',
     );
+    expect(PINNED_MCP_NAMES['branches.resetFromParent']).toBe(
+      'reset_from_parent',
+    );
+    expect(PINNED_MCP_NAMES['branches.compareSchema']).toBe(
+      'compare_database_schema',
+    );
     expect(PINNED_MCP_NAMES['branches.delete']).toBe('delete_branch');
     expect(PINNED_MCP_NAMES['postgres.endpoints.listByBranch']).toBe(
       'list_branch_computes',
@@ -426,6 +432,52 @@ describe('generated tool interface', () => {
     expect(shape).not.toHaveProperty('branch');
     expect(shape).not.toHaveProperty('endpoints');
     expect(createBranch?.description).toContain('connection string');
+  });
+
+  it('pins reset_from_parent and compare_database_schema', () => {
+    const reset = NEON_TOOLS.find((tool) => tool.name === 'reset_from_parent');
+    expect(reset?.scope).toBe('branches');
+    expect(reset?.readOnlySafe).toBe(false);
+    expect(reset?.annotations.destructiveHint).toBe(true);
+    expect(reset?.description).toContain('NEVER run autonomously');
+    expect(generatedShape(reset!)).toHaveProperty('preserve_under_name');
+    expect(generatedShape(reset!)).not.toHaveProperty('preserveUnderName');
+    expect(
+      reset?.inputSchema.safeParse({
+        project_id: 'proj',
+        branch_id: 'br-1',
+      }).success,
+    ).toBe(true);
+    expect(
+      reset?.inputSchema.safeParse({
+        project_id: 'proj',
+        branch_id: 'br-1',
+        preserveUnderName: 'old',
+      }).success,
+    ).toBe(false);
+
+    const compare = NEON_TOOLS.find(
+      (tool) => tool.name === 'compare_database_schema',
+    );
+    expect(compare?.scope).toBe('schema');
+    expect(compare?.readOnlySafe).toBe(true);
+    expect(compare?.annotations.readOnlyHint).toBe(true);
+    expect(generatedShape(compare!)).toHaveProperty('database_name');
+    expect(generatedShape(compare!)).not.toHaveProperty('db_name');
+    expect(
+      compare?.inputSchema.safeParse({
+        project_id: 'proj',
+        branch_id: 'br-1',
+        database_name: 'neondb',
+      }).success,
+    ).toBe(true);
+    expect(
+      compare?.inputSchema.safeParse({
+        project_id: 'proj',
+        branch_id: 'br-1',
+        db_name: 'neondb',
+      }).success,
+    ).toBe(false);
   });
 
   it('keeps the never-run-autonomously text on delete_branch and delete_project', () => {
