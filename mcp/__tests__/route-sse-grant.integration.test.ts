@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { GrantContext } from '../utils/grant-context';
 
-const { getProjectSpy } = vi.hoisted(() => ({
+const { getProjectSpy, runSqlSpy, apiKeysGetSpy } = vi.hoisted(() => ({
   getProjectSpy: vi.fn(async () => ({
     content: [{ type: 'text', text: '{}' }],
   })),
+  runSqlSpy: vi.fn(async () => ({
+    content: [{ type: 'text', text: '[]' }],
+  })),
+  apiKeysGetSpy: vi.fn(),
 }));
 
 const mocks = vi.hoisted(() => ({
@@ -109,7 +113,22 @@ vi.mock('../tools/tools', async () => {
     NEON_HANDLERS: {
       ...actual.NEON_HANDLERS,
       describe_project: getProjectSpy,
+      run_sql: runSqlSpy,
     },
+  };
+});
+
+vi.mock('../oauth/kv-store', async () => {
+  const actual =
+    await vi.importActual<typeof import('../oauth/kv-store')>(
+      '../oauth/kv-store',
+    );
+  return {
+    ...actual,
+    getApiKeys: () => ({
+      get: apiKeysGetSpy,
+      set: vi.fn().mockResolvedValue(undefined),
+    }),
   };
 });
 
@@ -149,7 +168,15 @@ function buildOAuthToken(accessToken: string, grant: GrantContext) {
   };
 }
 
-describe('SSE connection grant on tool invocation', () => {
+const API_KEY = 'napi-sse-readonly';
+const API_ACCOUNT = {
+  id: 'user-api',
+  name: 'API User',
+  email: 'api@example.com',
+  isOrg: false,
+} as const;
+
+describe('SSE connection context on tool invocation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.setSpy.mockReset();
@@ -160,6 +187,8 @@ describe('SSE connection grant on tool invocation', () => {
     mocks.setSpy.mockResolvedValue('OK');
     mocks.toolHandlers.clear();
     getProjectSpy.mockClear();
+    runSqlSpy.mockClear();
+    apiKeysGetSpy.mockReset();
     process.env.KV_URL = 'redis://localhost:6379';
   });
 
@@ -213,6 +242,58 @@ describe('SSE connection grant on tool invocation', () => {
       }),
       expect.anything(),
       expect.anything(),
+    );
+  });
+
+  it('keeps the SSE connection read-only when the message extra is not', async () => {
+    vi.mocked(model.getAccessToken).mockResolvedValue(undefined as never);
+    apiKeysGetSpy.mockResolvedValue({
+      apiKey: API_KEY,
+      authMethod: 'api_key_user',
+      account: API_ACCOUNT,
+    });
+
+    const response = await GET(
+      new Request('http://localhost/api/sse?readonly=true', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+          Accept: 'text/event-stream',
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    await response.body?.cancel();
+
+    const runSql = mocks.toolHandlers.get('run_sql');
+    expect(runSql).toBeDefined();
+
+    await runSql?.(
+      {
+        sql: 'INSERT INTO t VALUES (1)',
+        project_id: 'proj-sse',
+        database_name: 'neondb',
+      },
+      {
+        authInfo: {
+          token: API_KEY,
+          clientId: 'api-key',
+          extra: {
+            apiKey: API_KEY,
+            authMethod: 'api_key_user',
+            account: API_ACCOUNT,
+            readOnly: false,
+            grant: { projectId: null, scopes: null },
+            transport: 'sse',
+          },
+        },
+      },
+    );
+
+    expect(runSqlSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ readOnly: true }),
     );
   });
 });

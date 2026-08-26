@@ -267,9 +267,9 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         const apiKey = authInfo.extra.apiKey;
         const authMethod = authInfo.extra.authMethod;
         const account = authInfo.extra.account;
-        const readOnly = authInfo.extra.readOnly ?? false;
-        // SSE message POSTs omit the connection query string, so reuse the grant
-        // captured when the stream opened.
+        // SSE message POSTs omit the connection query string, so reuse the
+        // read-only mode and grant captured when the stream opened.
+        const readOnly = staticToolContext.readOnly;
         const grant = { ...staticToolContext.grant };
         const client = authInfo.extra.client;
         const transport = authInfo.extra.transport ?? 'sse';
