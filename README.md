@@ -313,7 +313,7 @@ Notes:
 
 - **`list_branches`**: Lists branches in a project. Use it to resolve a branch name to a `br-…` id.
 - **`create_branch`**: Creates a branch with a read-write compute, waits until it is ready, and returns a connection string. Arguments are `{ "project_id": "…", "name": "feature-x" }`.
-- **`reset_from_parent`**: Resets a branch to its parent's current HEAD (`{ "project_id": "…", "branch_id": "br-…" }`). Discards writes since the branch diverged. `preserve_under_name` is required when the branch has children. Parent HEAD only; point-in-time restore is `restore_snapshot`.
+- **`reset_from_parent`**: Resets a branch to its parent's current HEAD (`{ "project_id": "…", "branch_id": "br-…" }`). Discards writes since the branch diverged. `preserve_under_name` is required when the branch has children; those children move to the new branch. Parent HEAD only; point-in-time restore is `restore_snapshot`.
 - **`delete_branch`**: Deletes a branch (`{ "project_id": "…", "branch_id": "br-…" }`).
 - **`describe_branch`**: Retrieves a tree of databases, schemas, tables, views, and functions on a branch.
 - Generated branch tools take `branch_id` as a branch id (`br-...`), not a name.
@@ -330,7 +330,7 @@ Notes:
 **Schema** (`?category=schema`):
 
 - **`get_database_tables`**, **`describe_table_schema`**
-- **`compare_database_schema`**: SQL schema diff of one database against another branch. `database_name` is required. Omitting `base_branch_id` compares against the parent.
+- **`compare_database_schema`**: SQL schema diff of one database against another branch. `database_name` is required. Omitting `base_branch_id` compares against the parent. Optional `lsn`, `timestamp`, `base_lsn`, `base_timestamp` are point-in-time only.
 
 **SQL Query Execution:**
 

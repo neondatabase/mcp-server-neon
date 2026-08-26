@@ -56,15 +56,13 @@ Omitting \`limit\` returns every remaining operation. Pass \`limit\` to cap how 
 
 const RESET_FROM_PARENT_DESCRIPTION = `Reset a branch to its parent's current HEAD. Discards every change the branch has written since it diverged. NEVER run autonomously; always ask the user first.
 
-Arguments: \`{ "project_id": "…", "branch_id": "br-…" }\`. \`preserve_under_name\` saves the current state under a new branch first and is required when the branch has children.
+Arguments: \`{ "project_id": "…", "branch_id": "br-…" }\`. \`preserve_under_name\` saves the current state under a new branch first and is required when the branch has children; those children move to the new branch.
 
 This is parent HEAD only. Point-in-time restore is \`restore_snapshot\`, published when \`?category=snapshots\` is granted.`;
 
 const COMPARE_DATABASE_SCHEMA_DESCRIPTION = `Compare one database's SQL schema on a branch to another branch. Returns \`{ "diff": "…" }\`, a unified SQL diff. Empty when the schemas match.
 
-\`database_name\` is required. Use \`${NEON_DEFAULT_DATABASE_NAME}\` when the caller does not name a database. Omitting \`base_branch_id\` compares against the parent.
-
-After a non-empty diff, propose a zero-downtime migration for the parent, ask before running each statement, and use \`run_sql\`. Suggest a snapshot or point-in-time restore first. Re-run this tool after applying the migration.`;
+\`database_name\` is required. Use \`${NEON_DEFAULT_DATABASE_NAME}\` when the caller does not name a database. Omitting \`base_branch_id\` compares against the parent. \`base_branch_id\` is a branch id (\`br-...\`), not a name. Pass \`lsn\`, \`timestamp\`, \`base_lsn\`, or \`base_timestamp\` only for a point-in-time comparison.`;
 
 const CREATE_BRANCH_DESCRIPTION = `Creates a branch with a read-write compute, waits until it is ready, and returns a connection string.
 

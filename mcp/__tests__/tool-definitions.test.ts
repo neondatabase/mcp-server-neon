@@ -440,6 +440,7 @@ describe('generated tool interface', () => {
     expect(reset?.readOnlySafe).toBe(false);
     expect(reset?.annotations.destructiveHint).toBe(true);
     expect(reset?.description).toContain('NEVER run autonomously');
+    expect(reset?.description).toContain('those children move to the new branch');
     expect(generatedShape(reset!)).toHaveProperty('preserve_under_name');
     expect(generatedShape(reset!)).not.toHaveProperty('preserveUnderName');
     expect(
@@ -463,7 +464,11 @@ describe('generated tool interface', () => {
     expect(compare?.readOnlySafe).toBe(true);
     expect(compare?.annotations.readOnlyHint).toBe(true);
     expect(generatedShape(compare!)).toHaveProperty('database_name');
+    expect(generatedShape(compare!)).toHaveProperty('base_branch_id');
+    expect(generatedShape(compare!)).toHaveProperty('lsn');
     expect(generatedShape(compare!)).not.toHaveProperty('db_name');
+    expect(compare?.description).not.toContain('run_sql');
+    expect(compare?.description).toContain('base_branch_id');
     expect(
       compare?.inputSchema.safeParse({
         project_id: 'proj',
