@@ -232,12 +232,27 @@ export function getAccessControlWarnings(
   return warnings;
 }
 
+function schemaHasProjectId(schema: NeonTool['inputSchema']): boolean {
+  if (schema instanceof z.ZodObject) {
+    return 'project_id' in schema.shape;
+  }
+  if (isZod4Object(schema)) {
+    return 'project_id' in schema.shape;
+  }
+  return false;
+}
+
 export function injectProjectId(
   args: Record<string, unknown>,
   grant: GrantContext,
-  tool?: Pick<NeonTool, 'kind' | 'projectScoped'>,
+  tool?: Pick<NeonTool, 'kind' | 'projectScoped'> & {
+    inputSchema?: NeonTool['inputSchema'];
+  },
 ): Record<string, unknown> {
   if (!grant.projectId) return args;
   if (tool && !tool.projectScoped) return args;
+  if (tool?.inputSchema && !schemaHasProjectId(tool.inputSchema)) {
+    return args;
+  }
   return { ...args, project_id: grant.projectId };
 }

@@ -339,6 +339,18 @@ describe('injectProjectId', () => {
     const args = { project_id: 'proj-keep', branch_id: 'br-1' };
     expect(injectProjectId(args, grant())).toEqual(args);
   });
+
+  it('does not inject project_id when the tool schema has none', () => {
+    const scoped = grant({ projectId: 'proj-123' });
+    const getDoc = NEON_TOOLS.find((t) => t.name === 'get_doc_resource');
+    const listDocs = NEON_TOOLS.find((t) => t.name === 'list_docs_resources');
+    expect(getDoc).toBeDefined();
+    expect(listDocs).toBeDefined();
+    expect(injectProjectId({ slug: 'docs/x.md' }, scoped, getDoc)).toEqual({
+      slug: 'docs/x.md',
+    });
+    expect(injectProjectId({}, scoped, listDocs)).toEqual({});
+  });
 });
 
 describe('scope coverage sanity', () => {
