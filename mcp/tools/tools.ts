@@ -7,6 +7,7 @@ import {
   ProjectCreateRequest,
 } from '../neon-client';
 import { neon } from '@neondatabase/serverless';
+import { formatToolResult } from './gcf-format';
 import crypto from 'crypto';
 import { InvalidArgumentError, NotFoundError } from '../server/errors';
 
@@ -1234,7 +1235,7 @@ export const NEON_HANDLERS = {
       extra,
     );
     return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      content: [formatToolResult(result)],
     };
   },
 
@@ -1250,7 +1251,7 @@ export const NEON_HANDLERS = {
       extra,
     );
     return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      content: [formatToolResult(result)],
     };
   },
 

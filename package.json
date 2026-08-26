@@ -28,6 +28,7 @@
     "test:e2e": "pnpm test:e2e:mcp && pnpm test:e2e:web"
   },
   "dependencies": {
+    "@blackwell-systems/gcf": "2.6.1",
     "@keyv/postgres": "2.1.2",
     "@modelcontextprotocol/sdk": "1.25.3",
     "@neon/sdk": "2.2.0",
