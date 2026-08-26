@@ -108,11 +108,6 @@ function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
 }
 
 /**
- * Build the access-control notices for the given grant + read-only combination.
- * Each notice covers one active condition: read-only (restriction), write mode
- * with destructive tools exposed (safety), project-scoped (scope). Empty array
- * when none apply.
- *
  * Returned separately so each server-level notice is sent once instead of
  * being duplicated across every tool description.
  */

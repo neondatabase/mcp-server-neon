@@ -41,9 +41,8 @@ function toolByName(toolName: string): NeonTool | undefined {
 }
 
 /**
- * The project id is injected before the handler sees the arguments because a
- * project-scoped grant has it stripped out of the published schema, so the
- * client cannot send it and this is its only source.
+ * Project-scoped grants strip `project_id` from the published schema, so the
+ * client can supply it only through the grant.
  */
 export async function invokeTool(
   toolName: string,
