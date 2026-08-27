@@ -21,10 +21,14 @@ import { DEFAULT_GRANT } from '../utils/grant-context';
 import {
   getAvailableTools,
   getAccessControlWarnings,
+  formatAccessControlInstructions,
 } from '../tools/grant-filter';
 import pkg from '../../package.json';
 
 export const createMcpServer = async (context: ServerContext) => {
+  const grant = { ...(context.grant ?? DEFAULT_GRANT) };
+  const readOnly = context.readOnly ?? false;
+
   const server = new McpServer(
     {
       name: 'mcp-server-neon',
@@ -34,6 +38,7 @@ export const createMcpServer = async (context: ServerContext) => {
       capabilities: {
         tools: {},
       },
+      instructions: formatAccessControlInstructions(grant, readOnly),
     },
   );
 
@@ -42,8 +47,6 @@ export const createMcpServer = async (context: ServerContext) => {
   // Compute client info once at server instantiation
   let clientName = context.userAgent ?? 'unknown';
   let clientApplication = detectClientApplication(clientName);
-
-  const grant = { ...(context.grant ?? DEFAULT_GRANT) };
 
   // Track server initialization
   const trackServerInit = () => {
@@ -86,7 +89,6 @@ export const createMcpServer = async (context: ServerContext) => {
 
   // Filter tools based on grant context (presets, scopes, project scoping)
   // and read-only mode (readonly query param / x-read-only header / OAuth scopes)
-  const readOnly = context.readOnly ?? false;
   const availableTools = getAvailableTools(grant, readOnly);
 
   // Compute access control warnings once (appended to every tool response)
@@ -116,6 +118,7 @@ export const createMcpServer = async (context: ServerContext) => {
           async (span) => {
             const properties = {
               authMethod: context.authMethod,
+              toolName: tool.name,
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
               projectScoped: String(!!grant.projectId),
@@ -141,6 +144,8 @@ export const createMcpServer = async (context: ServerContext) => {
               account: context.account,
               readOnly: context.readOnly,
               clientApplication,
+              apiKey: context.apiKey,
+              signal: extra.signal,
             };
             try {
               const result = await invokeTool(

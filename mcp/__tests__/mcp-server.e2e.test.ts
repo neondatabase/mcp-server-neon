@@ -26,7 +26,7 @@ const originalFetch = globalThis.fetch;
 const listedInspectSchema = z.object({
   properties: z.object({
     check: z.object({ enum: z.array(z.string()) }),
-    databaseName: z.object({ description: z.string() }).optional(),
+    database_name: z.object({ description: z.string() }).optional(),
   }),
   required: z.array(z.string()),
 });
@@ -117,53 +117,29 @@ describe('MCP server e2e tool calls', () => {
       expect(toolNames).toContain('query_logs');
       expect(toolNames).toContain('list_log_fields');
       expect(toolNames).toContain('list_log_field_values');
-      expect(queryLogsTool?.description).toContain(
-        'For structured queries, pick the source',
-      );
-      expect(queryLogsTool?.description).toContain(
-        'The returned preferred `logql` field',
-      );
-      expect(listLogFieldsTool?.description).toContain(
-        'currently returns `service_name`, `severity_text`, `scope_name`, and `entity_type`',
-      );
-      expect(listLogFieldsTool?.description).toContain(
-        'Call this tool instead of hardcoding that set',
-      );
+      expect(toolNames).toContain('reset_from_parent');
+      expect(toolNames).toContain('compare_database_schema');
+      expect(toolNames).not.toContain('reset_from_parent_branches');
+      expect(toolNames).not.toContain('compare_schema_branches');
       expect(queryLogsTool?.inputSchema).toMatchObject({
         type: 'object',
         properties: {
-          logql: { type: 'string' },
-          query: {
-            type: 'string',
-            description: expect.stringContaining(
-              'overriding any structured filters',
-            ),
-          },
-          since: {
-            type: 'string',
-            description: expect.stringContaining(
-              'maximum supported window is `7d`',
-            ),
-          },
-          startTime: {
-            type: 'string',
-            description: expect.stringContaining(
-              'must not span more than seven days',
-            ),
-          },
+          project_id: { type: 'string' },
+          branch_id: { type: 'string' },
         },
       });
-      expect(listLogFieldValuesTool?.description).toContain('server scan cap');
+      expect(listLogFieldsTool?.inputSchema).toMatchObject({
+        type: 'object',
+        properties: {
+          project_id: { type: 'string' },
+          branch_id: { type: 'string' },
+        },
+      });
       expect(listLogFieldValuesTool?.inputSchema).toMatchObject({
         type: 'object',
         properties: {
-          field: { type: 'string', minLength: 1 },
-          since: {
-            type: 'string',
-            description: expect.stringContaining(
-              'maximum supported window is `7d`',
-            ),
-          },
+          project_id: { type: 'string' },
+          branch_id: { type: 'string' },
         },
       });
     });
@@ -180,7 +156,10 @@ describe('MCP server e2e tool calls', () => {
       const schema = listedInspectSchema.parse(inspectTool?.inputSchema);
       expect(schema.properties.check.enum).toEqual([...INSPECT_CHECKS]);
       expect(schema.required).toContain('check');
-      expect(schema.properties.databaseName?.description).toContain('Omit');
+      expect(schema.properties.database_name?.description).toContain('Omit');
+      expect(schema.properties.database_name?.description).toContain(
+        'does not include `databaseName`',
+      );
     });
   });
 
@@ -188,7 +167,7 @@ describe('MCP server e2e tool calls', () => {
     await withConnectedClient(createTestContext(), async (client) => {
       const result = await client.callTool({
         name: 'inspect_database',
-        arguments: { projectId: 'project-1', check: 'cache-hit' },
+        arguments: { project_id: 'project-1', check: 'cache-hit' },
       });
 
       expect(result.isError).toBe(true);

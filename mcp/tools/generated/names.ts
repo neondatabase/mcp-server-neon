@@ -1,0 +1,103 @@
+import { publishedId } from '@neon/tools';
+import type { GeneratedToolId } from './operations';
+
+export const PINNED_MCP_NAMES = {
+  'projects.list': 'list_projects',
+  'projects.get': 'describe_project',
+  'projects.create': 'create_project',
+  'projects.update': 'update_project',
+  'projects.delete': 'delete_project',
+  'projects.recover': 'recover_project',
+  'projects.permissions.list': 'list_project_permissions',
+  'projects.members.list': 'list_project_members',
+  'regions.list': 'list_regions',
+  'operations.list': 'list_operations',
+  'operations.get': 'get_operation',
+
+  'branches.list': 'list_branches',
+  'branches.get': 'get_branch',
+  'branches.create': 'create_branch',
+  'branches.update': 'update_branch',
+  'branches.delete': 'delete_branch',
+  'branches.getDefault': 'get_default_branch',
+  'branches.setDefault': 'set_default_branch',
+  'branches.resetFromParent': 'reset_from_parent',
+  'branches.compareSchema': 'compare_database_schema',
+  'branches.finalizeRestore': 'finalize_branch_restore',
+  'postgres.roles.list': 'list_postgres_roles',
+  'postgres.roles.get': 'get_postgres_role',
+  'postgres.roles.create': 'create_postgres_role',
+  'postgres.roles.delete': 'delete_postgres_role',
+  'postgres.roles.resetPassword': 'reset_postgres_role_password',
+  'postgres.databases.list': 'list_postgres_databases',
+  'postgres.databases.get': 'get_postgres_database',
+  'postgres.databases.create': 'create_postgres_database',
+  'postgres.databases.update': 'update_postgres_database',
+  'postgres.databases.delete': 'delete_postgres_database',
+
+  'postgres.endpoints.list': 'list_postgres_endpoints',
+  'postgres.endpoints.listByBranch': 'list_branch_computes',
+  'postgres.endpoints.get': 'get_postgres_endpoint',
+  'postgres.endpoints.create': 'create_postgres_endpoint',
+  'postgres.endpoints.update': 'update_postgres_endpoint',
+  'postgres.endpoints.delete': 'delete_postgres_endpoint',
+  'postgres.endpoints.start': 'start_postgres_endpoint',
+  'postgres.endpoints.suspend': 'suspend_postgres_endpoint',
+  'postgres.endpoints.restart': 'restart_postgres_endpoint',
+
+  'snapshots.list': 'list_snapshots',
+  'snapshots.getSchedule': 'get_snapshot_schedule',
+  'snapshots.setSchedule': 'set_snapshot_schedule',
+  'snapshots.create': 'create_snapshot',
+  'snapshots.update': 'update_snapshot',
+  'snapshots.delete': 'delete_snapshot',
+  'snapshots.restore': 'restore_snapshot',
+
+  'auth.get': 'get_auth',
+  'auth.create': 'provision_neon_auth',
+  'auth.disable': 'disable_auth',
+  'auth.updateConfig': 'update_auth_config',
+  'auth.oauthProviders.list': 'list_auth_oauth_providers',
+  'auth.oauthProviders.add': 'add_auth_oauth_provider',
+  'auth.oauthProviders.update': 'update_auth_oauth_provider',
+  'auth.oauthProviders.delete': 'delete_auth_oauth_provider',
+  'auth.trustedDomains.list': 'list_auth_trusted_domains',
+  'auth.trustedDomains.add': 'add_auth_trusted_domain',
+  'auth.trustedDomains.delete': 'delete_auth_trusted_domain',
+  'auth.users.create': 'create_auth_user',
+  'auth.users.delete': 'delete_auth_user',
+  'auth.users.updateRole': 'update_auth_user_role',
+
+  'postgres.dataApi.get': 'get_data_api',
+  'postgres.dataApi.create': 'provision_neon_data_api',
+  'postgres.dataApi.update': 'update_data_api',
+  'postgres.dataApi.delete': 'delete_data_api',
+
+  'logs.query': 'query_logs',
+  'logs.fields': 'list_log_fields',
+  'logs.fieldValues': 'list_log_field_values',
+  'aiGateway.get': 'get_ai_gateway',
+
+  'functions.list': 'list_functions',
+  'functions.get': 'get_function',
+  'functions.update': 'update_function',
+  'functions.delete': 'delete_function',
+  'functions.deploy': 'deploy_function',
+
+  'storage.get': 'get_storage',
+  'storage.buckets.list': 'list_storage_buckets',
+  'storage.buckets.create': 'create_storage_bucket',
+  'storage.buckets.delete': 'delete_storage_bucket',
+  'storage.objects.list': 'list_storage_objects',
+  'storage.objects.delete': 'delete_storage_object',
+  'storage.objects.deleteByPrefix': 'delete_storage_objects_by_prefix',
+  'storage.objects.presign': 'presign_storage_object',
+} as const satisfies Record<GeneratedToolId, string>;
+
+export const TOOL_NAMES = Object.fromEntries(
+  (
+    Object.entries(PINNED_MCP_NAMES) as Array<
+      [GeneratedToolId, (typeof PINNED_MCP_NAMES)[GeneratedToolId]]
+    >
+  ).filter(([id, name]) => publishedId(id) !== name),
+);

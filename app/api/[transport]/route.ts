@@ -45,6 +45,7 @@ import {
 import {
   getAvailableTools,
   getAccessControlWarnings,
+  formatAccessControlInstructions,
 } from '../../../mcp/tools/grant-filter';
 import { invokeTool, toolRegistration } from '../../../mcp/tools/registration';
 import { NEON_TOOLS } from '../../../mcp/tools/definitions';
@@ -266,8 +267,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         const apiKey = authInfo.extra.apiKey;
         const authMethod = authInfo.extra.authMethod;
         const account = authInfo.extra.account;
-        const readOnly = authInfo.extra.readOnly ?? false;
-        const grant = { ...(authInfo.extra.grant ?? DEFAULT_GRANT) };
+        // SSE message POSTs omit the connection query string, so reuse the
+        // read-only mode and grant captured when the stream opened.
+        const readOnly = staticToolContext.readOnly;
+        const grant = { ...staticToolContext.grant };
         const client = authInfo.extra.client;
         const transport = authInfo.extra.transport ?? 'sse';
         const neonClient = createNeonClient(apiKey);
@@ -403,6 +406,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
               },
               async (span) => {
                 const {
+                  apiKey,
                   account,
                   authMethod,
                   readOnly,
@@ -419,6 +423,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
                 const properties = {
                   authMethod,
+                  toolName: tool.name,
                   tool_name: tool.name,
                   readOnly: String(readOnly),
                   projectScoped: String(!!grant.projectId),
@@ -447,6 +452,8 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   account,
                   readOnly,
                   clientApplication: clientApp,
+                  apiKey,
+                  signal: extra.signal,
                 };
 
                 try {
@@ -538,6 +545,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         tools: {},
         resources: {},
       },
+      instructions: formatAccessControlInstructions(
+        staticToolContext.grant,
+        staticToolContext.readOnly,
+      ),
     },
     {
       redisUrl: process.env.KV_URL || process.env.REDIS_URL,
@@ -696,7 +707,7 @@ function createDocsOnlyMcpHandler() {
   return createMcpHandler(
     (server: McpServer) => {
       async function runDocsTool(
-        toolName: 'list_docs_resources' | 'get_doc_resource',
+        toolName: string,
         userAgent: string | undefined,
         call: () => Promise<string>,
       ) {
@@ -713,6 +724,7 @@ function createDocsOnlyMcpHandler() {
           async (span) => {
             const properties = {
               authMethod: 'anonymous',
+              toolName,
               tool_name: toolName,
               readOnly: 'true',
               projectScoped: 'false',
@@ -1049,6 +1061,9 @@ function getStaticToolContext(req: Request): StaticToolContext {
       ? {
           projectId: grantFromAuth.projectId ?? null,
           scopes: grantFromAuth.scopes ?? null,
+          ...(grantFromAuth.unknownCategories?.length
+            ? { unknownCategories: grantFromAuth.unknownCategories }
+            : {}),
         }
       : DEFAULT_GRANT;
 

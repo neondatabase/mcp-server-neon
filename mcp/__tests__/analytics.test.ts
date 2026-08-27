@@ -34,7 +34,11 @@ describe('analytics delivery', () => {
     track({
       userId: 'user-1',
       event: 'tool_call',
-      properties: { authMethod: 'oauth', tool_name: 'run_sql' },
+      properties: {
+        authMethod: 'oauth',
+        toolName: 'run_sql',
+        tool_name: 'run_sql',
+      },
     });
     await flushAnalytics();
 
