@@ -309,10 +309,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         org_id: testOrgId,
       });
       const text = assertToolSucceeded('create_project', result);
-      const created = z
-        .object({ project: z.object({ id: z.string() }) })
-        .parse(JSON.parse(text));
-      projectId = created.project.id;
+      const created = z.object({ id: z.string() }).parse(JSON.parse(text));
+      projectId = created.id;
 
       if (!neonClient) throw new Error('Neon SDK client is not initialized.');
       const response = await neonClient.getProject(projectId);
@@ -351,9 +349,9 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         name: `mcp-reset-${randomUUID().slice(0, 8)}`,
       });
       const branch = z
-        .object({ branch: z.object({ id: z.string() }) })
+        .object({ id: z.string() })
         .parse(JSON.parse(assertToolSucceeded('create_branch', created)));
-      const branchId = branch.branch.id;
+      const branchId = branch.id;
 
       const matching = z
         .object({ diff: z.string().nullable().optional() })

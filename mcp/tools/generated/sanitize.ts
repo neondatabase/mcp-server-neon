@@ -27,10 +27,6 @@ function omitRolePassword(role: unknown): unknown {
   return next;
 }
 
-/**
- * Password-creation and connection tools retain credentials because
- * returning the credential is the requested operation.
- */
 export function sanitizeGeneratedResult(
   toolId: GeneratedToolId,
   data: unknown,

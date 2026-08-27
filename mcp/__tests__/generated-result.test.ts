@@ -4,7 +4,8 @@ import { sanitizeGeneratedResult } from '../tools/generated/sanitize';
 describe('sanitizeGeneratedResult', () => {
   it('strips connectionString and leftover credentials from create results', () => {
     const sanitized = sanitizeGeneratedResult('projects.create', {
-      project: { id: 'proj-1', name: 'demo' },
+      id: 'proj-1',
+      name: 'demo',
       connectionString: 'postgresql://neondb_owner:secret@host/neondb',
       connection_uris: [
         {
@@ -15,14 +16,15 @@ describe('sanitizeGeneratedResult', () => {
     });
 
     expect(sanitized).toEqual({
-      project: { id: 'proj-1', name: 'demo' },
+      id: 'proj-1',
+      name: 'demo',
       roles: [{ name: 'neondb_owner' }],
     });
   });
 
   it('strips connectionString from branch create', () => {
     const sanitized = sanitizeGeneratedResult('branches.create', {
-      branch: { id: 'br-1' },
+      id: 'br-1',
       connectionString: 'postgresql://neondb_owner:secret@host/neondb',
       connection_uris: [
         { connection_uri: 'postgresql://neondb_owner:secret@host/neondb' },
@@ -31,7 +33,7 @@ describe('sanitizeGeneratedResult', () => {
     });
 
     expect(sanitized).toEqual({
-      branch: { id: 'br-1' },
+      id: 'br-1',
       roles: [{ name: 'neondb_owner' }],
     });
   });
