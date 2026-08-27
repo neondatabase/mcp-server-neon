@@ -198,6 +198,34 @@ describe('transport dynamic tool composition', () => {
     expect(flushAnalyticsSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('returns access-control notices on initialize, not in tool descriptions', async () => {
+    const oauthToken = 'oauth-instructions';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read', {
+        projectId: 'proj_instructions',
+        scopes: null,
+      }),
+    );
+
+    const init = await mcpCall(oauthToken, 'initialize', 1, {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test-client', version: '1.0.0' },
+    });
+    const initBody = init.body as {
+      result?: { instructions?: string };
+    };
+    expect(initBody.result?.instructions).toContain('read-only permissions');
+    expect(initBody.result?.instructions).toContain(
+      'scoped to one project only (proj_instructions)',
+    );
+
+    const tools = await listToolsForToken(oauthToken);
+    for (const tool of tools) {
+      expect(JSON.stringify(tool)).not.toContain('read-only permissions');
+    }
+  });
+
   // Every streamable-HTTP request builds a fresh server instance, so the
   // `initialize` handshake and the `tools/call` land on different ones and
   // `clientInfo` is gone by the time anything is tracked. The User-Agent is
@@ -299,19 +327,27 @@ describe('transport dynamic tool composition', () => {
     expect(scopedNames.has('run_sql')).toBe(true);
     expect(scopedNames.has('list_projects')).toBe(false);
 
-    // Unscoped variant still requires projectId from caller -> handler should not run.
     await mcpCall(unscopedToken, 'tools/call', 3, {
       name: 'run_sql',
       arguments: { sql: 'select 1' },
     });
     expect(runSqlSpy).toHaveBeenCalledTimes(0);
 
-    // Project-scoped variant injects projectId from auth grant -> handler runs.
     await mcpCall(scopedToken, 'tools/call', 4, {
       name: 'run_sql',
       arguments: { sql: 'select 1' },
     });
     expect(runSqlSpy).toHaveBeenCalledTimes(1);
+    expect(runSqlSpy).toHaveBeenCalledWith(
+      {
+        params: expect.objectContaining({
+          sql: 'select 1',
+          project_id: 'proj_123',
+        }),
+      },
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it('isolates cached handlers by auth context key', async () => {
@@ -372,7 +408,7 @@ describe('transport dynamic tool composition', () => {
       '?projectId=proj_123',
     );
 
-    // If query params were merged at runtime, run_sql would receive injected projectId.
+    // If query params were merged at runtime, run_sql would receive injected project_id.
     // OAuth must only use the grant persisted from authorize/token flow.
     expect(runSqlSpy).toHaveBeenCalledTimes(0);
   });

@@ -52,10 +52,25 @@ const fixtures: Record<string, { status: number; body: unknown }> = {
         parent_id: 'br-parent',
         name: 'test-branch',
       },
-      endpoints: [],
+      endpoints: [
+        {
+          id: 'ep-1',
+          host: 'ep-xxx.us-east-1.aws.neon.tech',
+          type: 'read_write',
+        },
+      ],
       databases: [],
       roles: [],
-      connection_uris: [],
+      connection_uris: [
+        {
+          connection_uri:
+            'postgresql://neondb_owner:secret@ep-xxx.us-east-1.aws.neon.tech/neondb',
+          connection_parameters: {
+            host: 'ep-xxx.us-east-1.aws.neon.tech',
+            pooler_host: 'ep-xxx-pooler.us-east-1.aws.neon.tech',
+          },
+        },
+      ],
       operations: [],
     },
   },
@@ -144,8 +159,8 @@ async function callTool(name: string, params: Record<string, unknown>) {
 describe('user agent on Neon API requests made by tool calls', () => {
   it('identifies the MCP server on SDK-backed requests, without disturbing what the SDK put on them', async () => {
     await callTool('create_branch', {
-      projectId: 'proj-1',
-      branchName: 'test-branch',
+      project_id: 'proj-1',
+      name: 'test-branch',
     });
 
     expect(recorded).toEqual([
@@ -161,6 +176,7 @@ describe('user agent on Neon API requests made by tool calls', () => {
     ]);
     expect(JSON.parse(recorded[0].body)).toMatchObject({
       branch: { name: 'test-branch' },
+      endpoints: [{ type: 'read_write' }],
     });
     expect(vi.mocked(track)).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -171,7 +187,10 @@ describe('user agent on Neon API requests made by tool calls', () => {
   });
 
   it('identifies the MCP server on logs requests', async () => {
-    await callTool('query_logs', { projectId: 'proj-1', branchId: 'br-1' });
+    await callTool('query_logs', {
+      project_id: 'proj-1',
+      branch_id: 'br-1',
+    });
 
     expect(recorded).toEqual([
       expect.objectContaining({

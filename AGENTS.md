@@ -181,8 +181,8 @@ infrastructure.
    - Registered alongside tools but don't execute operations
 
 6. **Grant Context & Tool Filtering (`mcp/utils/grant-context.ts`, `mcp/tools/grant-filter.ts`)**
-   - Fine-grained access control beyond plain read/write: per-category scopes (`projects`, `branches`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`) and optional project-scoping to a single `projectId`
-   - Grant resolved from OAuth resource URI query params (authorize-time), OAuth token grant field (runtime), or direct MCP URL query params for API-key auth
+   - Fine-grained access control beyond plain read/write: per-category scopes (`projects`, `branches`, `endpoints`, `snapshots`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`, `functions`, `storage`) and optional project-scoping to a single `projectId`
+   - Grant resolved from OAuth resource URI query params (authorize-time), OAuth token grant field (runtime), or direct MCP URL query params for API-key auth. Those URL params stay camelCase (`projectId`, `category`, `readonly`).
    - `grant-filter.ts` filters `NEON_TOOLS` by scope category, hides project-agnostic tools in project-scoped mode, and strips `project_id` from input schemas when scoped
    - Exposed publicly via `GET /api/list-tools` (stateless preview of tool visibility for a given grant)
 
@@ -205,15 +205,21 @@ infrastructure.
 
 - **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry error reporting.
 
+## Tool arguments
+
+Every MCP tool argument is `snake_case` — host tools (`run_sql`, `inspect_database`, …) and generated Management API tools. Published schemas reject unknown keys: a camelCase alias (`projectId`) fails validation. URL grant query params stay camelCase (`?projectId=`, `?category=`, `?readonly=`) because those strings are already in issued OAuth grants and installed MCP URLs. Internal TypeScript helpers stay camelCase; `HOST_HANDLERS` maps wire keys at the boundary.
+
 ## Adding New Tools
 
 1. Define the tool schema in `mcp/tools/toolsSchema.ts`:
 
 ```typescript
-export const myNewToolInputSchema = z.object({
-  project_id: z.string().describe('The Neon project ID'),
-  // ... other fields
-});
+export const myNewToolInputSchema = z
+  .object({
+    project_id: z.string().describe('The Neon project ID'),
+    // ... other fields
+  })
+  .strict();
 ```
 
 2. Add the tool definition to `NEON_TOOLS` array in `mcp/tools/definitions.ts`:
@@ -412,7 +418,7 @@ The server supports three top-level scopes: `read`, `write`, and `*`. These are 
 
 During authorization, users can uncheck "Full access" to request only `read` scope, which enables read-only mode.
 
-In addition to the top-level scopes, the server exposes **scope categories** via the non-standard `x-neon-scope-categories` field on the same metadata document: `projects`, `branches`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`. These drive fine-grained tool filtering (see Grant Context above) and can also constrain a token to a single project. The `observability` category covers the OpenTelemetry logs tools (`query_logs`, `list_log_fields`, `list_log_field_values`). See `mcp/utils/grant-context.ts` for grant resolution.
+In addition to the top-level scopes, the server exposes **scope categories** via the non-standard `x-neon-scope-categories` field on the same metadata document: `projects`, `branches`, `endpoints`, `snapshots`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`, `functions`, `storage`. These drive fine-grained tool filtering (see Grant Context above) and can also constrain a token to a single project. The `observability` category covers logs (`query_logs`, `list_log_fields`, `list_log_field_values`) plus the AI Gateway GET. See `mcp/utils/grant-context.ts` for grant resolution.
 
 ### Environment Variables (Vercel)
 

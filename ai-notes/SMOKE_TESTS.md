@@ -12,16 +12,16 @@ This document defines a repeatable smoke-test flow for the Neon MCP server. Use 
 The `/api/list-tools` endpoint accepts the same query params and returns the resolved grant, read-only state, and visible tools — no auth required:
 
 ```bash
-# Full access (35 tools)
+# Full access
 curl https://mcp.neon.tech/api/list-tools
 
-# Read-only (22 tools)
+# Read-only
 curl "https://mcp.neon.tech/api/list-tools?readonly=true"
 
-# Querying category only (11 tools)
+# Querying category only
 curl "https://mcp.neon.tech/api/list-tools?category=querying"
 
-# Project-scoped (28 tools, no project-agnostic tools)
+# Project-scoped (no project-agnostic tools)
 curl "https://mcp.neon.tech/api/list-tools?projectId=proj-123"
 ```
 
@@ -84,7 +84,7 @@ Follow these phases in order. Each phase builds on the previous one.
 1. Read the MCP client config file (e.g. `.cursor/mcp.json`, `.codex/config_proj.toml`) to find the `neon-preview` server entry.
 2. Report the current URL, noting which query params are set (`readonly`, `category`, `projectId`) and any legacy headers.
 3. Determine what behavior to expect from this config:
-   - Which tools should be visible (e.g. 35 for full access, 22 for read-only, fewer for category-filtered).
+   - Which tools should be visible (full access, read-only, or category-filtered).
    - Whether write tools should be available.
    - Whether project-agnostic tools (`list_projects`, `create_project`, `search`, `fetch`) should be hidden.
 
@@ -94,8 +94,8 @@ Follow these phases in order. Each phase builds on the previous one.
 2. Verify the tool surface matches expectations from Phase 1:
    - If `readonly=true`: confirm write tools (e.g. `create_project`, `create_branch`, `prepare_database_migration`) and `get_connection_string` are NOT available.
    - If `category` is set: confirm only tools in those categories are available.
-   - If `projectId` is set: confirm `list_projects`, `create_project`, `delete_project`, `list_organizations`, `list_shared_projects`, `search`, and `fetch` are NOT available.
-   - If no params: confirm all 35 tools are available.
+   - If `projectId` is set: confirm `list_projects`, `create_project`, `delete_project`, `list_organizations`, `search`, and `fetch` are NOT available.
+   - If no params: confirm the full tool list from `/api/list-tools` is available.
 3. Try calling a tool that should NOT be available given the config. Confirm it fails or is absent.
 
 ### Phase 3: Exercise Available Tools
@@ -123,10 +123,6 @@ Run through the applicable subset of these tests based on the current config. Sk
 - `neon-preview.describe_table_schema`
 - `neon-preview.explain_sql_statement`
 
-**Schema Diff:**
-- On child branch only: `neon-preview.run_sql` to create a child-only object
-- `neon-preview.compare_database_schema` using the child branch
-
 **Migration Flow** (skip if read-only):
 - `neon-preview.prepare_database_migration`
 - Validate in temporary branch with `neon-preview.run_sql`
@@ -144,7 +140,7 @@ Run through the applicable subset of these tests based on the current config. Sk
 
 **Performance Tool Check:**
 - `neon-preview.list_slow_queries`
-- `neon-preview.inspect_database` with `check: table-sizes` (no extension needed; omit `databaseName` to cover every database on the branch)
+- `neon-preview.inspect_database` with `check: table-sizes` (no extension needed; omit `database_name` to cover every database on the branch)
 - `neon-preview.inspect_database` with `check: outliers` (expect the `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;` hint until it is installed)
 
 **Read-Only Connection String Guard** (only when `readonly=true`):

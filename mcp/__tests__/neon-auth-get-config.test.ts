@@ -480,6 +480,7 @@ describe('handleGetNeonAuthConfig', () => {
     expect(result.isError).toBe(true);
     if (result.content[0].type === 'text') {
       expect(result.content[0].text).toContain('not provisioned');
+      expect(result.content[0].text).toContain('provision_neon_auth');
     }
   });
 });

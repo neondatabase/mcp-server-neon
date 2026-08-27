@@ -1,12 +1,13 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Api, NeonAuthIntegration } from '../../neon-client';
-import { getNeonAuthConfigInputSchema } from '../toolsSchema';
-import { z } from 'zod/v3';
-import { resolveNeonAuthBranchId } from './neon-auth-config';
+import { resolveNeonAuthBranchId } from './neon-auth-branch';
 import { fetchNeonAuthConfigurableSettings } from './neon-auth-settings-snapshot';
 import { ToolHandlerExtraParams } from '../types';
 
-type Props = z.infer<typeof getNeonAuthConfigInputSchema>;
+type Props = {
+  projectId: string;
+  branchId?: string;
+};
 
 function integrationPayload(int: NeonAuthIntegration) {
   const payload: Record<string, unknown> = {
