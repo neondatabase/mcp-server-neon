@@ -101,6 +101,7 @@ describe('resolveGrantFromSearchParams', () => {
     ).toEqual({
       projectId: null,
       scopes: ['schema'],
+      unknownCategories: ['invalid'],
     });
   });
 
@@ -110,6 +111,7 @@ describe('resolveGrantFromSearchParams', () => {
     ).toEqual({
       projectId: null,
       scopes: [],
+      unknownCategories: ['foo', 'bar'],
     });
   });
 

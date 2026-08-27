@@ -1,36 +1,12 @@
-/**
- * Tool filtering based on grant context.
- *
- * Handles:
- * - Scope-category-based filtering
- * - Project-scoped mode: hiding project-agnostic tools and removing projectId from schemas
- */
-
 import { z } from 'zod/v3';
-import type { GrantContext, ScopeCategory } from '../utils/grant-context';
+import { z as z4 } from 'zod';
+import {
+  SCOPE_CATEGORIES,
+  type GrantContext,
+  type ScopeCategory,
+} from '../utils/grant-context';
 import { NEON_TOOLS } from './definitions';
-
-type NeonTool = (typeof NEON_TOOLS)[number];
-
-/**
- * Tools that are hidden when in project-scoped mode.
- * These tools don't make sense when the agent is scoped to a single project.
- */
-const PROJECT_AGNOSTIC_TOOLS: ReadonlySet<string> = new Set([
-  'list_projects',
-  'list_organizations',
-  'list_shared_projects',
-  'create_project',
-  'delete_project',
-]);
-
-/**
- * Additional tools hidden in project-scoped mode.
- */
-const PROJECT_SCOPED_EXCLUDED_TOOLS: ReadonlySet<string> = new Set([
-  'search',
-  'fetch',
-]);
+import type { NeonTool } from './tool-definition';
 
 /**
  * Tools that are always available regardless of scope categories.
@@ -41,14 +17,15 @@ const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
   'fetch',
 ]);
 
-/**
- * Filter tools based on the grant context.
- *
- * Returns a new array of tools with:
- * 1. Scope-category filtering applied
- * 2. Project-agnostic tools removed (if project-scoped)
- * 3. projectId removed from schemas (if project-scoped)
- */
+function isZod4Object(schema: unknown): schema is z4.ZodObject<z4.ZodRawShape> {
+  return (
+    typeof schema === 'object' &&
+    schema !== null &&
+    '_zod' in schema &&
+    'shape' in schema
+  );
+}
+
 export function filterToolsForGrant(
   tools: readonly NeonTool[],
   grant: GrantContext,
@@ -69,27 +46,18 @@ function applyScopeCategoryFilter(
     return [...tools];
   }
   if (scopes.length === 0) {
-    // Header was present but no valid categories were supplied.
     return tools.filter((tool) => ALWAYS_AVAILABLE_TOOLS.has(tool.name));
   }
 
   const scopeSet = new Set(scopes);
 
   return tools.filter((tool) => {
-    // Always-available tools pass through
     if (ALWAYS_AVAILABLE_TOOLS.has(tool.name)) return true;
-    // Tools without a scope are always available
     if (!tool.scope) return true;
-    // Check if tool's scope category is in the enabled set
     return scopeSet.has(tool.scope);
   });
 }
 
-/**
- * Apply project-scoped filtering.
- * When a projectId is set, hide project-agnostic tools, hide
- * excluded discovery tools, and remove projectId from tool schemas.
- */
 function applyProjectScopeFilter(
   tools: NeonTool[],
   grant: GrantContext,
@@ -97,61 +65,51 @@ function applyProjectScopeFilter(
   if (!grant.projectId) return tools;
 
   return tools
-    .filter(
-      (tool) =>
-        !PROJECT_AGNOSTIC_TOOLS.has(tool.name) &&
-        !PROJECT_SCOPED_EXCLUDED_TOOLS.has(tool.name),
-    )
+    .filter((tool) => tool.projectScoped)
     .map((tool) => {
       const modified = removeProjectIdFromSchema(tool);
       return modified ?? tool;
     });
 }
 
-/**
- * Remove projectId from a tool's input schema if present.
- * Returns a new tool object with the modified schema, or null if no modification needed.
- *
- * Uses Zod's shape manipulation to create a new schema without the projectId field.
- */
-function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
+function removeHostProjectId(tool: NeonTool): NeonTool | null {
   const schema = tool.inputSchema;
-
-  // Only Zod objects can have keys removed
   if (!(schema instanceof z.ZodObject)) return null;
 
   const shape = schema.shape as Record<string, z.ZodTypeAny>;
-  if (!('projectId' in shape)) return null;
-
-  // Build a new shape without projectId
-  const newShape: Record<string, z.ZodTypeAny> = {};
-  for (const [key, value] of Object.entries(shape)) {
-    if (key !== 'projectId') {
-      newShape[key] = value;
-    }
-  }
-
-  const newSchema = z.object(newShape);
+  if (!('project_id' in shape)) return null;
 
   return {
     ...tool,
-    inputSchema: newSchema,
-  } as NeonTool;
+    inputSchema: schema.omit({ project_id: true }).strict(),
+  };
+}
+
+function removeGeneratedProjectId(tool: NeonTool): NeonTool | null {
+  const schema = tool.inputSchema;
+  if (!isZod4Object(schema)) return null;
+  if (!('project_id' in schema.shape)) return null;
+
+  const newShape = Object.fromEntries(
+    Object.entries(schema.shape).filter(([key]) => key !== 'project_id'),
+  );
+
+  return {
+    ...tool,
+    inputSchema: z4.strictObject(newShape),
+  };
+}
+
+function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
+  if (tool.kind === 'generated') {
+    return removeGeneratedProjectId(tool);
+  }
+  return removeHostProjectId(tool);
 }
 
 /**
- * Build the access-control notices for the given grant + read-only combination.
- * Each notice covers one active condition: read-only (restriction), write mode
- * with destructive tools exposed (safety), project-scoped (scope). Empty array
- * when none apply.
- *
- * Exposed separately from `getAvailableTools` so the `/api/list-tools` REST
- * endpoint can surface notices as a top-level field instead of duplicating
- * the same block inside every tool's `description` (see
- * github.com/neondatabase/mcp-server-neon/issues/257). The MCP-protocol tool
- * registration path keeps the notice inline by going through
- * `getAvailableTools`, which still concatenates these into descriptions for
- * LLM consumption.
+ * Returned separately so each server-level notice is sent once instead of
+ * being duplicated across every tool description.
  */
 export function getAccessControlNotices(
   grant: GrantContext,
@@ -170,8 +128,6 @@ export function getAccessControlNotices(
         'or by logging out and back in with OAuth and selecting full access.',
     );
   } else {
-    // Safety notice: only fires when destructive tools survive the grant filter
-    // (e.g., the `docs` scope exposes no destructive tools, so no notice).
     const hasExposedDestructive = getFilteredTools(grant, false).some(
       (tool) => tool.annotations?.destructiveHint === true,
     );
@@ -186,9 +142,17 @@ export function getAccessControlNotices(
     notices.push(
       `Notice: The MCP server is currently configured and scoped to one project only (${grant.projectId}). ` +
         'Project management tools have been removed. All remaining tools are scoped to this project and can only interact with it. ' +
+        'Do not send `project_id`; it is supplied by the connection. ' +
         'This is intentional. If the user requests changes to another project, inform them about the project-scoping configuration. ' +
         'The user can remove project scoping by removing the projectId query param from the MCP server URL, ' +
         'and by logging out and back in after removing the param when using OAuth.',
+    );
+  }
+  if (grant.unknownCategories?.length) {
+    notices.push(
+      'Notice: Unknown category query values were ignored: ' +
+        `${grant.unknownCategories.join(', ')}. ` +
+        `Valid values: ${SCOPE_CATEGORIES.join(', ')}.`,
     );
   }
   return notices;
@@ -215,33 +179,23 @@ export function getFilteredTools(
   return tools;
 }
 
-/**
- * Get the final list of available tools after applying grant context and
- * read-only filtering, with access-control notices appended to each tool's
- * `description`. This is what the MCP server (server/index.ts) and the MCP
- * transport route ([transport]/route.ts) register so LLM clients see the
- * notice inline alongside the tool descriptions.
- *
- * For the REST `/api/list-tools` endpoint, prefer `getFilteredTools` +
- * `getAccessControlNotices` separately to avoid duplicating the notice block
- * across every tool description.
- */
 export function getAvailableTools(
   grant: GrantContext,
   readOnly: boolean,
 ): NeonTool[] {
-  const tools = getFilteredTools(grant, readOnly);
-  const notices = getAccessControlNotices(grant, readOnly);
-  if (notices.length === 0) return tools;
+  return getFilteredTools(grant, readOnly);
+}
 
-  const noticesSuffix = `\n\n<notice>\n${notices.join('\n\n')}\n</notice>`;
-  return tools.map(
-    (tool) =>
-      ({
-        ...tool,
-        description: `${tool.description}${noticesSuffix}`,
-      }) as NeonTool,
-  );
+export function formatAccessControlInstructions(
+  grant: GrantContext,
+  readOnly: boolean,
+): string | undefined {
+  const parts = [
+    ...getAccessControlNotices(grant, readOnly),
+    ...getAccessControlWarnings(grant, readOnly),
+  ];
+  if (parts.length === 0) return undefined;
+  return parts.join('\n\n');
 }
 
 /**
@@ -258,7 +212,6 @@ export function getAccessControlWarnings(
   void _readOnly;
   const warnings: string[] = [];
 
-  // X-Neon-Scopes was provided but no valid scope categories were recognized.
   if (grant.scopes !== null && grant.scopes.length === 0) {
     const discoveryToolsText = grant.projectId
       ? 'No tools are available.'
@@ -274,14 +227,27 @@ export function getAccessControlWarnings(
   return warnings;
 }
 
-/**
- * Inject projectId into tool call args when in project-scoped mode.
- * This should be called before passing args to the tool handler.
- */
+function schemaHasProjectId(schema: NeonTool['inputSchema']): boolean {
+  if (schema instanceof z.ZodObject) {
+    return 'project_id' in schema.shape;
+  }
+  if (isZod4Object(schema)) {
+    return 'project_id' in schema.shape;
+  }
+  return false;
+}
+
 export function injectProjectId(
   args: Record<string, unknown>,
   grant: GrantContext,
+  tool?: Pick<NeonTool, 'kind' | 'projectScoped'> & {
+    inputSchema?: NeonTool['inputSchema'];
+  },
 ): Record<string, unknown> {
   if (!grant.projectId) return args;
-  return { ...args, projectId: grant.projectId };
+  if (tool && !tool.projectScoped) return args;
+  if (tool?.inputSchema && !schemaHasProjectId(tool.inputSchema)) {
+    return args;
+  }
+  return { ...args, project_id: grant.projectId };
 }
