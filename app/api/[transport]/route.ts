@@ -419,6 +419,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
                 const properties = {
                   authMethod,
+                  toolName: tool.name,
                   tool_name: tool.name,
                   readOnly: String(readOnly),
                   projectScoped: String(!!grant.projectId),
@@ -713,6 +714,7 @@ function createDocsOnlyMcpHandler() {
           async (span) => {
             const properties = {
               authMethod: 'anonymous',
+              toolName,
               tool_name: toolName,
               readOnly: 'true',
               projectScoped: 'false',
