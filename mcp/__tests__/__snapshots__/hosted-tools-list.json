@@ -723,7 +723,7 @@
   {
     "name": "list_projects",
     "title": "List projects",
-    "description": "List Neon projects you own. Returns every page. Pass limit to cap how many. There is no `cursor` argument.",
+    "description": "List Neon projects you own. Returns every page. Pass limit to cap how many. There is no `cursor` argument. Pass `org_id` with a personal API key to list that org's projects.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1726,7 +1726,7 @@
   {
     "name": "finalize_branch_restore",
     "title": "Finalize branch restore from snapshot",
-    "description": "Finalize a branch created with `restore_snapshot` and `finalize: false`: reassign computes and swap names so it replaces the original branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Finalize a branch created with `restore_snapshot` and `finalize: false`: reassign computes (this restarts them) and swap names so it replaces the original branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "type": "object",
       "properties": {

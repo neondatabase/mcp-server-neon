@@ -375,6 +375,7 @@ describe('generated tool interface', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'list_projects');
     expect(tool!.description).toContain('Returns every page');
     expect(tool!.description).toContain('There is no `cursor` argument');
+    expect(tool!.description).toContain('org_id');
     expect(generatedShape(tool!)).not.toHaveProperty('cursor');
   });
 
@@ -391,6 +392,7 @@ describe('generated tool interface', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'finalize_branch_restore');
     expect(tool!.description).toContain('restore_snapshot');
     expect(tool!.description).toContain('finalize: false');
+    expect(tool!.description).toContain('restarts');
     expect(tool!.description).not.toContain('restoreSnapshot');
     expect(tool!.description).not.toContain('finalize_restore');
   });

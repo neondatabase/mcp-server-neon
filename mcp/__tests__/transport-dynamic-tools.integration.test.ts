@@ -472,7 +472,7 @@ describe('transport dynamic tool composition', () => {
       description: tool.description,
       inputSchema: tool.inputSchema,
     }));
-    expect(JSON.stringify(selected).length / 4).toBeLessThan(17_100);
+    expect(JSON.stringify(selected).length / 4).toBeLessThan(17_200);
 
     for (const tool of tools) {
       expect(tool.inputSchema).not.toHaveProperty('$schema');

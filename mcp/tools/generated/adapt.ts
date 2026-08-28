@@ -17,7 +17,7 @@ import {
 } from './operations';
 import { sanitizeGeneratedResult } from './sanitize';
 
-const LIST_PROJECTS_DESCRIPTION = `List Neon projects you own. Returns every page. Pass limit to cap how many. There is no \`cursor\` argument.`;
+const LIST_PROJECTS_DESCRIPTION = `List Neon projects you own. Returns every page. Pass limit to cap how many. There is no \`cursor\` argument. Pass \`org_id\` with a personal API key to list that org's projects.`;
 
 const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project and waits until the default compute is ready. Pass \`org_id\` with a personal API key. Does not return a connection string; call \`get_connection_string\` with the project id.`;
 
@@ -37,7 +37,7 @@ const DELETE_PROJECT_DESCRIPTION = `Delete a Neon project and all its data. NEVE
 
 const DELETE_BRANCH_DESCRIPTION = `Delete a branch and all its data. NEVER run autonomously; always ask the user first. For the whole project, use \`delete_project\`.`;
 
-const FINALIZE_BRANCH_RESTORE_DESCRIPTION = `Finalize a branch created with \`restore_snapshot\` and \`finalize: false\`: reassign computes and swap names so it replaces the original branch.`;
+const FINALIZE_BRANCH_RESTORE_DESCRIPTION = `Finalize a branch created with \`restore_snapshot\` and \`finalize: false\`: reassign computes (this restarts them) and swap names so it replaces the original branch.`;
 
 const CREATE_PROJECT_ENDPOINT_DESCRIPTION = `Creates a compute endpoint on a branch. Does not return a connection string; call \`get_connection_string\`.`;
 
