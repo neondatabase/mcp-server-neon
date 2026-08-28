@@ -455,6 +455,7 @@ describe('generated tool interface', () => {
     expect(shape).not.toHaveProperty('branch');
     expect(shape).not.toHaveProperty('endpoints');
     expect(createBranch?.description).toContain('get_connection_string');
+    expect(createBranch?.description).toContain('restore_snapshot');
     expect(createBranch?.description).not.toContain(
       'returns a connection string',
     );
@@ -469,6 +470,7 @@ describe('generated tool interface', () => {
     expect(reset?.description).toContain(
       'those children move to the new branch',
     );
+    expect(reset?.description).toContain('restore_snapshot');
     expect(generatedShape(reset!)).toHaveProperty('preserve_under_name');
     expect(generatedShape(reset!)).not.toHaveProperty('preserveUnderName');
     expect(
@@ -552,9 +554,17 @@ describe('generated tool interface', () => {
     expect(completeMigration?.description).toContain(
       'prepare_database_migration',
     );
+    expect(completeMigration?.description).toContain(
+      'Set apply_changes false to discard',
+    );
+    expect(completeMigration?.description).not.toContain(
+      'apply_changes from prepare_database_migration',
+    );
     expect(prepareTuning?.description).toContain('tuning_id');
+    expect(prepareTuning?.description).toContain('explain_sql_statement');
     expect(prepareTuning?.description).toContain('prepare_database_migration');
     expect(completeTuning?.description).toContain('even when the user rejects');
+    expect(completeTuning?.description).toContain('explain_sql_statement');
     expect(authConfig?.description).toContain('redacted');
     expect(runSql?.description).toContain('temporary branch');
   });

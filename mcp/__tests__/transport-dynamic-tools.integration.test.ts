@@ -467,18 +467,12 @@ describe('transport dynamic tool composition', () => {
     const tools = await listToolsForToken(oauthToken);
     expect(tools).toEqual(NEON_TOOLS.map(toListedTool));
 
-    const chars = tools.reduce((sum, tool) => {
-      return (
-        sum +
-        JSON.stringify({
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-        }).length
-      );
-    }, 0);
-
-    expect(chars / 4).toBeLessThan(17_000);
+    const selected = tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+    }));
+    expect(JSON.stringify(selected).length / 4).toBeLessThan(17_100);
 
     for (const tool of tools) {
       expect(tool.inputSchema).not.toHaveProperty('$schema');

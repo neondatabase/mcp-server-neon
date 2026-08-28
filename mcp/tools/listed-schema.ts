@@ -12,6 +12,14 @@ function isJsonSchemaUnboundedInt(value: unknown): boolean {
   );
 }
 
+function isZodRfc3339DateTimePattern(value: unknown): boolean {
+  return (
+    typeof value === 'string' &&
+    value.includes('-02-29') &&
+    value.includes('T(?:')
+  );
+}
+
 /**
  * tools/list clients count inputSchema toward a catalog-size cap. Zod/OpenAPI
  * emit draft $schema URIs, int64 sentinel bounds, and RFC3339 regexes that
@@ -35,7 +43,13 @@ export function compactListedJsonSchema(node: unknown): unknown {
     ) {
       continue;
     }
-    if (key === 'pattern' && node.format === 'date-time') continue;
+    if (
+      key === 'pattern' &&
+      node.format === 'date-time' &&
+      isZodRfc3339DateTimePattern(value)
+    ) {
+      continue;
+    }
     out[key] = compactListedJsonSchema(value);
   }
   return out;

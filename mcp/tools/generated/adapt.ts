@@ -27,11 +27,11 @@ const QUERY_LOGS_DESCRIPTION = `Returns logs for a branch. Pass \`limit\` to cap
 
 const LIST_OPERATIONS_DESCRIPTION = `Lists operations for a project. Omitting \`limit\` returns every remaining page. There is no \`cursor\` argument.`;
 
-const RESET_FROM_PARENT_DESCRIPTION = `Reset a branch to its parent's current HEAD. NEVER run autonomously; always ask the user first. \`preserve_under_name\` saves the current state first and is required when the branch has children; those children move to the new branch.`;
+const RESET_FROM_PARENT_DESCRIPTION = `Reset a branch to its parent's current HEAD. NEVER run autonomously; always ask the user first. \`preserve_under_name\` saves the current state first and is required when the branch has children; those children move to the new branch. Point-in-time restore is \`restore_snapshot\`.`;
 
 const COMPARE_DATABASE_SCHEMA_DESCRIPTION = `Compare one database's SQL schema on a branch to another. \`database_name\` is required. Omit \`base_branch_id\` to compare against the parent; it is a branch id (\`br-...\`), not a name. Pass \`lsn\`, \`timestamp\`, \`base_lsn\`, or \`base_timestamp\` only for a point-in-time comparison.`;
 
-const CREATE_BRANCH_DESCRIPTION = `Creates a branch with a read-write compute and waits until it is ready. Pass \`no_compute: true\` to skip the endpoint. Does not return a connection string; call \`get_connection_string\` with the project and branch id.`;
+const CREATE_BRANCH_DESCRIPTION = `Creates a branch with a read-write compute and waits until it is ready. Pass \`no_compute: true\` to skip the endpoint. Does not return a connection string; call \`get_connection_string\` with the project and branch id. Copies the parent at HEAD; point-in-time restore is \`restore_snapshot\`.`;
 
 const DELETE_PROJECT_DESCRIPTION = `Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For a single branch, use \`delete_branch\`.`;
 

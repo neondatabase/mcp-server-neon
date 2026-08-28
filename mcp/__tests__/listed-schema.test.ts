@@ -33,9 +33,24 @@ describe('compactListedJsonSchema', () => {
       compactListedJsonSchema({
         type: 'string',
         format: 'date-time',
-        pattern: '^[0-9]{4}-',
+        pattern:
+          '^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$',
       }),
     ).toEqual({ type: 'string', format: 'date-time' });
+  });
+
+  it('keeps a non-RFC3339 pattern next to format date-time', () => {
+    expect(
+      compactListedJsonSchema({
+        type: 'string',
+        format: 'date-time',
+        pattern: '^[0-9]{4}-',
+      }),
+    ).toEqual({
+      type: 'string',
+      format: 'date-time',
+      pattern: '^[0-9]{4}-',
+    });
   });
 
   it('keeps pattern when format is uuid, email, or byte', () => {

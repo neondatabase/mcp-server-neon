@@ -208,7 +208,7 @@
   {
     "name": "complete_database_migration",
     "title": "Complete Database Migration",
-    "description": "Apply or discard a prepared migration and delete the temporary branch. NEVER run autonomously; always ask the user first. Pass migration_id, migration_sql, database_name, project_id, temporary_branch_id, parent_branch_id, and apply_changes from prepare_database_migration.",
+    "description": "Apply or discard a prepared migration and delete the temporary branch. NEVER run autonomously; always ask the user first. Pass migration_id, migration_sql, database_name, project_id, temporary_branch_id, and parent_branch_id from prepare_database_migration. Set apply_changes false to discard; omitting it applies the migration.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -410,7 +410,7 @@
   {
     "name": "prepare_query_tuning",
     "title": "Prepare Query Tuning",
-    "description": "Analyze a slow query on a temporary branch and return a tuning_id. Apply suggested SQL with run_sql on that branch, then complete_query_tuning with the tuning_id (not the branch id) — even if the user rejects, so the temporary branch is deleted. Do not use prepare_database_migration.",
+    "description": "Analyze a slow query on a temporary branch and return a tuning_id. Apply suggested SQL with run_sql on that branch, re-run explain_sql_statement there, then complete_query_tuning with the tuning_id (not the branch id) — even if the user rejects, so the temporary branch is deleted. Do not use prepare_database_migration.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -449,7 +449,7 @@
   {
     "name": "complete_query_tuning",
     "title": "Complete Query Tuning",
-    "description": "Apply or discard query-tuning changes and delete the temporary branch. NEVER run autonomously. Pass the tuning_id from prepare_query_tuning, not the branch id, plus temporary_branch_id. Call this even when the user rejects the changes. Do not use prepare_database_migration.",
+    "description": "Apply or discard query-tuning changes and delete the temporary branch. NEVER run autonomously. Before calling, apply suggested SQL with run_sql on the temporary branch and re-run explain_sql_statement. Pass the tuning_id from prepare_query_tuning, not the branch id, plus temporary_branch_id. Call this even when the user rejects the changes. Do not use prepare_database_migration.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1449,7 +1449,7 @@
   {
     "name": "create_branch",
     "title": "Create branch",
-    "description": "Creates a branch with a read-write compute and waits until it is ready. Pass `no_compute: true` to skip the endpoint. Does not return a connection string; call `get_connection_string` with the project and branch id.",
+    "description": "Creates a branch with a read-write compute and waits until it is ready. Pass `no_compute: true` to skip the endpoint. Does not return a connection string; call `get_connection_string` with the project and branch id. Copies the parent at HEAD; point-in-time restore is `restore_snapshot`.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1640,7 +1640,7 @@
   {
     "name": "reset_from_parent",
     "title": "Reset branch from parent",
-    "description": "Reset a branch to its parent's current HEAD. NEVER run autonomously; always ask the user first. `preserve_under_name` saves the current state first and is required when the branch has children; those children move to the new branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Reset a branch to its parent's current HEAD. NEVER run autonomously; always ask the user first. `preserve_under_name` saves the current state first and is required when the branch has children; those children move to the new branch. Point-in-time restore is `restore_snapshot`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "type": "object",
       "properties": {
