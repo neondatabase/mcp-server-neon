@@ -14,16 +14,12 @@ import { parseResourceIdentifier } from '../../lib/oauth/protected-resource-meta
 export const SCOPE_CATEGORIES = [
   'projects',
   'branches',
-  'endpoints',
-  'snapshots',
   'schema',
   'querying',
   'neon_auth',
   'data_api',
   'observability',
   'docs',
-  'functions',
-  'storage',
 ] as const;
 
 export type ScopeCategory = (typeof SCOPE_CATEGORIES)[number];
@@ -33,7 +29,6 @@ export type GrantContext = {
   projectId: string | null;
   /** Scope categories. null means all categories are allowed. */
   scopes: ScopeCategory[] | null;
-  unknownCategories?: string[];
 };
 
 /**
@@ -91,15 +86,8 @@ export function resolveGrantFromSearchParams(
     allCategories.length > 0
       ? allCategories.filter(isValidScopeCategory)
       : null;
-  const unknownCategories = allCategories.filter(
-    (category) => !isValidScopeCategory(category),
-  );
   const projectId = params.get('projectId')?.trim() || null;
-  return {
-    projectId,
-    scopes,
-    ...(unknownCategories.length > 0 ? { unknownCategories } : {}),
-  };
+  return { projectId, scopes };
 }
 
 /**
@@ -150,9 +138,6 @@ export function resolveGrantFromToken(token: {
     return {
       projectId: token.grant.projectId ?? null,
       scopes: token.grant.scopes ?? null,
-      ...(token.grant.unknownCategories?.length
-        ? { unknownCategories: token.grant.unknownCategories }
-        : {}),
     };
   }
   return { ...DEFAULT_GRANT };

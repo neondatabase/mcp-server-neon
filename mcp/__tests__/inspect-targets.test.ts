@@ -61,9 +61,7 @@ describe('selectInspectTargets', () => {
         branchDatabases: ['neondb', 'other_db'],
         scope: 'database',
       }),
-    ).toThrow(
-      'database_name cannot be empty. Omit it to cover every database.',
-    );
+    ).toThrow('databaseName cannot be empty. Omit it to cover every database.');
   });
 
   it('throws when the branch has no databases', () => {
@@ -109,7 +107,7 @@ describe('formatInspectQueryError', () => {
         scope: 'database',
       }),
     ).toBe(
-      'missing neon (database analytics). Pass database_name to inspect one database.',
+      'missing neon (database analytics). Pass databaseName to inspect one database.',
     );
   });
 
@@ -124,7 +122,7 @@ describe('formatInspectQueryError', () => {
         requiresExtension: 'neon',
       }),
     ).toBe(
-      'This query needs the "neon" extension, which is not installed. (database analytics). Pass database_name to try a database that already has the "neon" extension.',
+      'This query needs the "neon" extension, which is not installed. (database analytics). Pass databaseName to try a database that already has the "neon" extension.',
     );
   });
 
@@ -139,7 +137,7 @@ describe('formatInspectQueryError', () => {
         requiresExtension: 'pg_stat_statements',
       }),
     ).toBe(
-      'The "outliers" check needs the "pg_stat_statements" extension, which is not installed on database "neondb". Pass database_name to try a database that already has the "pg_stat_statements" extension.',
+      'The "outliers" check needs the "pg_stat_statements" extension, which is not installed on database "neondb". Pass databaseName to try a database that already has the "pg_stat_statements" extension.',
     );
   });
 
@@ -153,7 +151,7 @@ describe('formatInspectQueryError', () => {
         requiresExtension: 'neon',
       }),
     ).toBe(
-      'Could not connect to Postgres (database analytics). Pass database_name to connect through a different database.',
+      'Could not connect to Postgres (database analytics). Pass databaseName to connect through a different database.',
     );
   });
 
@@ -166,7 +164,7 @@ describe('formatInspectQueryError', () => {
         scope: 'compute',
       }),
     ).toBe(
-      'missing neon (database analytics). Pass database_name to connect through a different database.',
+      'missing neon (database analytics). Pass databaseName to connect through a different database.',
     );
   });
 });

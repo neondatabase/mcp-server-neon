@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { GET, OPTIONS } from '../../app/api/list-tools/route';
-import { NEON_TOOLS } from '../../mcp/tools/definitions';
-import { getFilteredTools } from '../../mcp/tools/grant-filter';
 
 type ListToolsResponse = {
   grant: {
@@ -42,7 +40,7 @@ async function callListTools(
 describe('/api/list-tools endpoint', () => {
   it('returns all tools by default', async () => {
     const body = await callListTools();
-    expect(body.tools).toHaveLength(NEON_TOOLS.length);
+    expect(body.tools).toHaveLength(35);
     expect(body.readOnly).toBe(false);
     expect(body.grant).toEqual({
       projectId: null,
@@ -60,32 +58,24 @@ describe('/api/list-tools endpoint', () => {
     const body = await callListTools({ category: 'foo,bar' });
     expect(body.grant.scopes).toEqual([]);
     expect(body.tools.map((t) => t.name).sort()).toEqual(['fetch', 'search']);
-    expect(body.notices?.some((n) => n.includes('foo, bar'))).toBe(true);
-    expect(
-      body.warnings?.some((w) => w.includes('No valid scope categories')),
-    ).toBe(true);
+    expect(body.warnings?.[0]).toContain('No valid scope categories');
   });
 
   it('filters project-agnostic tools in project-scoped mode', async () => {
     const body = await callListTools({ projectId: 'proj-123' });
     expect(body.grant.projectId).toBe('proj-123');
-    expect(body.tools).toHaveLength(
-      getFilteredTools({ projectId: 'proj-123', scopes: null }, false).length,
-    );
+    expect(body.tools).toHaveLength(28);
     const names = body.tools.map((t) => t.name);
     expect(names).not.toContain('list_projects');
     expect(names).not.toContain('create_project');
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
-    expect(names).toContain('describe_project');
   });
 
   it('filters to readOnlySafe tools with readonly=true', async () => {
     const body = await callListTools({ readonly: 'true' });
     expect(body.readOnly).toBe(true);
-    expect(body.tools).toHaveLength(
-      getFilteredTools({ projectId: null, scopes: null }, true).length,
-    );
+    expect(body.tools).toHaveLength(22);
     for (const tool of body.tools) {
       expect(tool.readOnlySafe).toBe(true);
     }
@@ -102,9 +92,7 @@ describe('/api/list-tools endpoint', () => {
     const res = await GET(req);
     const body = (await res.json()) as ListToolsResponse;
     expect(body.readOnly).toBe(true);
-    expect(body.tools).toHaveLength(
-      getFilteredTools({ projectId: null, scopes: null }, true).length,
-    );
+    expect(body.tools).toHaveLength(22);
   });
 
   it('readonly query param takes precedence over x-read-only header', async () => {
@@ -116,7 +104,7 @@ describe('/api/list-tools endpoint', () => {
     const res = await GET(req);
     const body = (await res.json()) as ListToolsResponse;
     expect(body.readOnly).toBe(false);
-    expect(body.tools).toHaveLength(NEON_TOOLS.length);
+    expect(body.tools).toHaveLength(35);
   });
 
   it('OPTIONS returns expected CORS allow-headers', () => {

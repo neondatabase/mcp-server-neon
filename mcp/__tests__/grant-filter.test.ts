@@ -1,28 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { z } from 'zod/v3';
 import {
   filterToolsForGrant,
   getAvailableTools,
   getFilteredTools,
   getAccessControlNotices,
   getAccessControlWarnings,
-  formatAccessControlInstructions,
   injectProjectId,
 } from '../tools/grant-filter';
-import type { GrantContext } from '../utils/grant-context';
-import { SCOPE_CATEGORIES } from '../utils/grant-context';
+import type { GrantContext, ScopeCategory } from '../utils/grant-context';
 import { NEON_TOOLS } from '../tools/definitions';
-
-function isZod4Object(
-  schema: unknown,
-): schema is { shape: Record<string, unknown> } {
-  return (
-    typeof schema === 'object' &&
-    schema !== null &&
-    '_zod' in schema &&
-    'shape' in schema
-  );
-}
 
 function grant(overrides: Partial<GrantContext> = {}): GrantContext {
   return {
@@ -62,87 +48,12 @@ describe('filterToolsForGrant', () => {
       grant({ projectId: 'proj-123', scopes: null }),
     );
     const names = tools.map((t) => t.name);
-    expect(tools).toHaveLength(
-      NEON_TOOLS.filter((tool) => tool.projectScoped).length,
-    );
+    expect(tools).toHaveLength(28);
     expect(names).not.toContain('list_projects');
     expect(names).not.toContain('create_project');
-    expect(names).not.toContain('delete_project');
-    expect(names).not.toContain('projects_permissions_grant');
-    expect(names).not.toContain('projects_members_set_role');
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
     expect(names).toContain('describe_project');
-    expect(names).toContain('list_project_members');
-  });
-
-  it('strips host and generated project_id from published schemas', () => {
-    const tools = filterToolsForGrant(
-      NEON_TOOLS,
-      grant({ projectId: 'proj-123' }),
-    );
-
-    const runSql = tools.find((tool) => tool.name === 'run_sql');
-    expect(runSql).toBeDefined();
-    expect(runSql?.inputSchema instanceof z.ZodObject).toBe(true);
-    if (!(runSql?.inputSchema instanceof z.ZodObject)) {
-      throw new Error('run_sql must keep a Zod 3 object schema');
-    }
-    expect('project_id' in runSql.inputSchema.shape).toBe(false);
-    expect('sql' in runSql.inputSchema.shape).toBe(true);
-    expect(runSql.inputSchema.safeParse({ sql: 'select 1' }).success).toBe(
-      true,
-    );
-    expect(
-      runSql.inputSchema.safeParse({ sql: 'select 1', projectId: 'p' }).success,
-    ).toBe(false);
-    expect(
-      runSql.inputSchema.safeParse({ sql: 'select 1', project_id: 'p' })
-        .success,
-    ).toBe(false);
-
-    const getProject = tools.find((tool) => tool.name === 'describe_project');
-    expect(getProject && isZod4Object(getProject.inputSchema)).toBe(true);
-    if (!getProject || !isZod4Object(getProject.inputSchema)) {
-      throw new Error('describe_project must keep a Zod 4 object schema');
-    }
-    expect('project_id' in getProject.inputSchema.shape).toBe(false);
-
-    const queryLogs = tools.find((tool) => tool.name === 'query_logs');
-    expect(queryLogs && isZod4Object(queryLogs.inputSchema)).toBe(true);
-    if (!queryLogs || !isZod4Object(queryLogs.inputSchema)) {
-      throw new Error('query_logs must keep a Zod 4 object schema');
-    }
-    expect('project_id' in queryLogs.inputSchema.shape).toBe(false);
-    expect('branch_id' in queryLogs.inputSchema.shape).toBe(true);
-    expect(
-      queryLogs.inputSchema.safeParse({
-        branch_id: 'br-1',
-      }).success,
-    ).toBe(true);
-    expect(
-      queryLogs.inputSchema.safeParse({
-        branch_id: 'br-1',
-        projectId: 'p',
-      }).success,
-    ).toBe(false);
-
-    const restoreSnapshot = tools.find(
-      (tool) => tool.name === 'restore_snapshot',
-    );
-    expect(restoreSnapshot && isZod4Object(restoreSnapshot.inputSchema)).toBe(
-      true,
-    );
-    if (!restoreSnapshot || !isZod4Object(restoreSnapshot.inputSchema)) {
-      throw new Error('restore_snapshot must keep a Zod 4 object schema');
-    }
-    expect('project_id' in restoreSnapshot.inputSchema.shape).toBe(false);
-    expect(
-      restoreSnapshot.inputSchema.safeParse({
-        snapshot_id: 'ss-1',
-        targetBranchId: 'br-intended',
-      }).success,
-    ).toBe(false);
   });
 
   it('combines scope and project filtering', () => {
@@ -172,18 +83,34 @@ describe('getAvailableTools', () => {
     expect(tools).toHaveLength(NEON_TOOLS.length);
   });
 
-  it('does not copy access-control notices into tool descriptions', () => {
-    const tools = getAvailableTools(grant({ projectId: 'proj-123' }), true);
+  it('appends read-only notice to tool descriptions when read-only is enabled', () => {
+    const tools = getAvailableTools(grant(), true);
     expect(tools.length).toBeGreaterThan(0);
     for (const tool of tools) {
-      expect(tool.description).not.toContain('<notice>');
-      expect(tool.description).not.toContain('read-only permissions');
-      expect(tool.description).not.toContain('scoped to one project only');
+      expect(tool.description).toContain(
+        'configured with read-only permissions',
+      );
+      expect(tool.description).toContain('<notice>');
+    }
+  });
+
+  it('appends project-scoped notice with project id to tool descriptions', () => {
+    const tools = getAvailableTools(grant({ projectId: 'proj-123' }), false);
+    expect(tools.length).toBeGreaterThan(0);
+    for (const tool of tools) {
+      expect(tool.description).toContain(
+        'configured and scoped to one project only (proj-123)',
+      );
     }
   });
 });
 
 describe('getFilteredTools (no notice suffix)', () => {
+  // Issue #257: the REST endpoint surfaces notices as a top-level field,
+  // so the filtered tool list must NOT carry the <notice> block in
+  // descriptions. The MCP-protocol path (getAvailableTools) keeps the
+  // notice inline as today.
+
   it('returns the same set of tools as getAvailableTools', () => {
     const filtered = getFilteredTools(grant({ scopes: ['querying'] }), false);
     const available = getAvailableTools(grant({ scopes: ['querying'] }), false);
@@ -234,9 +161,6 @@ describe('getAccessControlNotices', () => {
     expect(
       notices.some((n) => n.includes('scoped to one project only (p-1)')),
     ).toBe(true);
-    expect(notices.some((n) => n.includes('Do not send `project_id`'))).toBe(
-      true,
-    );
   });
 
   it('returns both notices when both modes are active', () => {
@@ -244,40 +168,17 @@ describe('getAccessControlNotices', () => {
     expect(notices).toHaveLength(2);
   });
 
-  it('joins the same notices into server instructions', () => {
-    const scoped = grant({ projectId: 'p-1' });
-    const notices = getAccessControlNotices(scoped, true);
-    const instructions = formatAccessControlInstructions(scoped, true);
-    expect(instructions).toBeDefined();
-    for (const notice of notices) {
-      expect(instructions).toContain(notice);
+  it('produces the same notices that getAvailableTools concatenates', () => {
+    // Round-trip guard: the MCP-protocol path concatenates the same notices
+    // we surface separately. If the strings ever drift, the regression
+    // shows up here.
+    const tools = getAvailableTools(grant({ projectId: 'p-1' }), true);
+    const notices = getAccessControlNotices(grant({ projectId: 'p-1' }), true);
+    for (const tool of tools) {
+      for (const notice of notices) {
+        expect(tool.description).toContain(notice);
+      }
     }
-  });
-
-  it('names unknown category values on notices, not per-call warnings', () => {
-    const mixed = grant({
-      scopes: ['branches'],
-      unknownCategories: ['compute'],
-    });
-    expect(
-      getAccessControlNotices(mixed, false).some((notice) =>
-        notice.includes('compute'),
-      ),
-    ).toBe(true);
-    expect(getAccessControlWarnings(mixed, false)).toEqual([]);
-  });
-
-  it('puts unknown-category warnings on server instructions', () => {
-    const instructions = formatAccessControlInstructions(
-      grant({
-        projectId: 'p-1',
-        scopes: [],
-        unknownCategories: ['compute'],
-      }),
-      false,
-    );
-    expect(instructions).toContain('compute');
-    expect(instructions).toContain('No tools are available');
   });
 });
 
@@ -308,99 +209,39 @@ describe('getAccessControlWarnings', () => {
 });
 
 describe('injectProjectId', () => {
-  it('injects project_id for host and generated tools when grant is project-scoped', () => {
-    const args = { branch_id: 'br-1' };
-    const scoped = grant({ projectId: 'proj-123' });
-    expect(injectProjectId(args, scoped)).toEqual({
-      branch_id: 'br-1',
-      project_id: 'proj-123',
-    });
-    expect(
-      injectProjectId(args, scoped, {
-        kind: 'generated',
-        projectScoped: true,
-      }),
-    ).toEqual({
-      branch_id: 'br-1',
-      project_id: 'proj-123',
-    });
-    expect(
-      injectProjectId({ sql: 'select 1' }, scoped, {
-        kind: 'host',
-        projectScoped: true,
-      }),
-    ).toEqual({
-      sql: 'select 1',
-      project_id: 'proj-123',
+  it('injects project id when grant is project-scoped', () => {
+    const args = { branchId: 'br-1' };
+    expect(injectProjectId(args, grant({ projectId: 'proj-123' }))).toEqual({
+      branchId: 'br-1',
+      projectId: 'proj-123',
     });
   });
 
   it('returns args unchanged when not project-scoped', () => {
-    const args = { project_id: 'proj-keep', branch_id: 'br-1' };
+    const args = { projectId: 'proj-keep', branchId: 'br-1' };
     expect(injectProjectId(args, grant())).toEqual(args);
-  });
-
-  it('does not inject project_id when the tool schema has none', () => {
-    const scoped = grant({ projectId: 'proj-123' });
-    const getDoc = NEON_TOOLS.find((t) => t.name === 'get_doc_resource');
-    const listDocs = NEON_TOOLS.find((t) => t.name === 'list_docs_resources');
-    expect(getDoc).toBeDefined();
-    expect(listDocs).toBeDefined();
-    expect(injectProjectId({ slug: 'docs/x.md' }, scoped, getDoc)).toEqual({
-      slug: 'docs/x.md',
-    });
-    expect(injectProjectId({}, scoped, listDocs)).toEqual({});
   });
 });
 
 describe('scope coverage sanity', () => {
   it('all declared scope categories produce a deterministic result', () => {
-    for (const category of SCOPE_CATEGORIES) {
+    const categories: ScopeCategory[] = [
+      'projects',
+      'branches',
+      'schema',
+      'querying',
+      'neon_auth',
+      'data_api',
+      'observability',
+      'docs',
+    ];
+
+    for (const category of categories) {
       const tools = filterToolsForGrant(
         NEON_TOOLS,
         grant({ scopes: [category] }),
       );
       expect(tools.length).toBeGreaterThanOrEqual(2);
     }
-  });
-
-  it('puts compute endpoint tools in endpoints', () => {
-    const names = filterToolsForGrant(
-      NEON_TOOLS,
-      grant({ scopes: ['endpoints'] }),
-    )
-      .map((tool) => tool.name)
-      .filter((name) => name !== 'search' && name !== 'fetch')
-      .sort();
-    expect(names).toEqual([
-      'create_postgres_endpoint',
-      'delete_postgres_endpoint',
-      'get_postgres_endpoint',
-      'list_branch_computes',
-      'list_postgres_endpoints',
-      'restart_postgres_endpoint',
-      'start_postgres_endpoint',
-      'suspend_postgres_endpoint',
-      'update_postgres_endpoint',
-    ]);
-  });
-
-  it('puts snapshot tools in snapshots', () => {
-    const names = filterToolsForGrant(
-      NEON_TOOLS,
-      grant({ scopes: ['snapshots'] }),
-    )
-      .map((tool) => tool.name)
-      .filter((name) => name !== 'search' && name !== 'fetch')
-      .sort();
-    expect(names).toEqual([
-      'create_snapshot',
-      'delete_snapshot',
-      'get_snapshot_schedule',
-      'list_snapshots',
-      'restore_snapshot',
-      'set_snapshot_schedule',
-      'update_snapshot',
-    ]);
   });
 });

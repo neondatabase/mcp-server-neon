@@ -1,27 +1,39 @@
-import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
-import type {
-  CallToolResult,
-  ServerNotification,
-  ServerRequest,
-} from '@modelcontextprotocol/sdk/types.js';
-import type { Api } from '../neon-client';
-import type { AuthContext } from '../types/auth';
-import type { ClientApplication } from '../utils/client-application';
+import { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { Api } from '../neon-client';
 
-export type ToolHandlerExtraParams = RequestHandlerExtra<
-  ServerRequest,
-  ServerNotification
-> & {
+import { NEON_TOOLS } from './definitions';
+import { AuthContext } from '../types/auth';
+import { ClientApplication } from '../utils/client-application';
+
+// Extract the tool names as a union type
+type NeonToolName = (typeof NEON_TOOLS)[number]['name'];
+type ToolParams<T extends NeonToolName = NeonToolName> = Extract<
+  (typeof NEON_TOOLS)[number],
+  { name: T }
+>['inputSchema'];
+
+export type ToolHandler<T extends NeonToolName> = ToolCallback<{
+  params: ToolParams<T>;
+}>;
+
+export type ToolHandlerExtraParams = Parameters<
+  ToolHandler<NeonToolName>
+>['1'] & {
   account: AuthContext['extra']['account'];
   readOnly?: AuthContext['extra']['readOnly'];
+  /** Detected client application type (e.g., 'cursor', 'claude', 'other') */
   clientApplication: ClientApplication;
-  apiKey?: string;
 };
 
-export type ToolHandlerExtended = (
-  args?: { params: Record<string, unknown> },
-  neonClient?: Api<unknown>,
-  extra?: ToolHandlerExtraParams,
-) => CallToolResult | Promise<CallToolResult>;
+export type ToolHandlerExtended<T extends NeonToolName> = (
+  ...args: [
+    args: Parameters<ToolHandler<T>>['0'],
+    neonClient: Api<unknown>,
+    extra: ToolHandlerExtraParams,
+  ]
+) => ReturnType<ToolHandler<T>>;
 
-export type ToolHandlers = Record<string, ToolHandlerExtended>;
+// Create a type for the tool handlers that directly maps each tool to its appropriate input schema
+export type ToolHandlers = {
+  [K in NeonToolName]: ToolHandlerExtended<K>;
+};

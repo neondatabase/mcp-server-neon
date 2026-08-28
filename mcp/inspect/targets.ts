@@ -22,7 +22,7 @@ export const selectInspectTargets = (
   if (input.databaseName !== undefined) {
     if (input.databaseName === '') {
       throw new Error(
-        'database_name cannot be empty. Omit it to cover every database.',
+        'databaseName cannot be empty. Omit it to cover every database.',
       );
     }
     return {
@@ -66,10 +66,10 @@ export const formatInspectQueryError = (
   const hint = !input.offerDatabaseNameHint
     ? ''
     : missingExtension
-      ? `. Pass database_name to try a database that already has the "${input.requiresExtension}" extension.`
+      ? `. Pass databaseName to try a database that already has the "${input.requiresExtension}" extension.`
       : input.scope === 'compute'
-        ? '. Pass database_name to connect through a different database.'
-        : '. Pass database_name to inspect one database.';
+        ? '. Pass databaseName to connect through a different database.'
+        : '. Pass databaseName to inspect one database.';
   const alreadyNamesDatabase = input.reason.includes(
     `database "${input.database}"`,
   );
