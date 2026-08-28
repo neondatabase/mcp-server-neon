@@ -489,6 +489,8 @@ describe('generated tool interface', () => {
     expect(generatedShape(compare!)).not.toHaveProperty('db_name');
     expect(compare?.description).not.toContain('run_sql');
     expect(compare?.description).toContain('base_branch_id');
+    expect(compare?.description).toContain('parent');
+    expect(compare?.description).toContain('point-in-time');
     expect(
       compare?.inputSchema.safeParse({
         project_id: 'proj',
