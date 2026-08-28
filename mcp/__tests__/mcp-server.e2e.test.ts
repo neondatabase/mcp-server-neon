@@ -19,13 +19,16 @@ vi.mock('../analytics/analytics', () => ({
 
 const { createMcpServer } = await import('../server/index');
 import type { ServerContext } from '../types/context';
-import { INSPECT_CHECKS } from '../inspect/queries';
+import { INSPECT_CHECKS, INSPECT_CHECK_LIST } from '../inspect/queries';
 
 const originalFetch = globalThis.fetch;
 
 const listedInspectSchema = z.object({
   properties: z.object({
-    check: z.object({ enum: z.array(z.string()) }),
+    check: z.object({
+      enum: z.array(z.string()),
+      description: z.string(),
+    }),
     database_name: z.object({ description: z.string() }).optional(),
   }),
   required: z.array(z.string()),
@@ -155,6 +158,7 @@ describe('MCP server e2e tool calls', () => {
       expect(inspectTool?.annotations?.readOnlyHint).toBe(true);
       const schema = listedInspectSchema.parse(inspectTool?.inputSchema);
       expect(schema.properties.check.enum).toEqual([...INSPECT_CHECKS]);
+      expect(schema.properties.check.description).toContain(INSPECT_CHECK_LIST);
       expect(schema.required).toContain('check');
       expect(schema.properties.database_name?.description).toContain('Omit');
       expect(schema.properties.database_name?.description).toContain(

@@ -1,25 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-schema-compat.js';
-import { normalizeObjectSchema } from '@modelcontextprotocol/sdk/server/zod-compat.js';
 import { NEON_TOOLS } from '../tools/definitions';
+import { toListedInputSchema } from '../tools/listed-schema';
 import { toolRegistration } from '../tools/registration';
+import type { ToolInputSchema } from '../tools/tool-definition';
 
 /**
  * The published JSON Schema, converted the same way the server converts it —
  * some tool schemas are refined objects rather than plain ones, so reading
  * `.shape` off them does not work.
  */
-function publishedProperties(inputSchema: unknown): string[] {
-  const normalized = normalizeObjectSchema(inputSchema as never);
-  // Refined schemas do not normalize, and the route publishes `{type:'object'}`
-  // for them — no properties at all. That is its own bug, tracked separately;
-  // here it just means there is nothing to read.
-  if (!normalized) return [];
-  const jsonSchema = toJsonSchemaCompat(normalized, {
-    strictUnions: true,
-    pipeStrategy: 'input',
-  }) as { properties?: Record<string, unknown> };
-  return Object.keys(jsonSchema.properties ?? {});
+function publishedProperties(inputSchema: ToolInputSchema): string[] {
+  const jsonSchema = toListedInputSchema(inputSchema);
+  const properties = jsonSchema.properties;
+  if (
+    typeof properties !== 'object' ||
+    properties === null ||
+    Array.isArray(properties)
+  ) {
+    return [];
+  }
+  return Object.keys(properties);
 }
 
 /**

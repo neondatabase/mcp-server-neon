@@ -350,9 +350,8 @@ describe('generated tool interface', () => {
 
   it('says list_projects walks every page and has no cursor argument', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'list_projects');
-    expect(tool!.description).toContain(
-      'This tool returns every page. Pass limit to cap how many items come back. Do not pass a cursor.',
-    );
+    expect(tool!.description).toContain('Returns every page');
+    expect(tool!.description).toContain('There is no `cursor` argument');
     expect(generatedShape(tool!)).not.toHaveProperty('cursor');
   });
 
@@ -502,6 +501,37 @@ describe('generated tool interface', () => {
     expect(deleteBranch?.description).toContain('delete_project');
     expect(deleteProject?.description).toContain('NEVER run autonomously');
     expect(deleteProject?.description).toContain('delete_branch');
+  });
+
+  it('keeps host workflow constraints in the short descriptions', () => {
+    const prepareMigration = NEON_TOOLS.find(
+      (tool) => tool.name === 'prepare_database_migration',
+    );
+    const completeMigration = NEON_TOOLS.find(
+      (tool) => tool.name === 'complete_database_migration',
+    );
+    const prepareTuning = NEON_TOOLS.find(
+      (tool) => tool.name === 'prepare_query_tuning',
+    );
+    const completeTuning = NEON_TOOLS.find(
+      (tool) => tool.name === 'complete_query_tuning',
+    );
+    const authConfig = NEON_TOOLS.find(
+      (tool) => tool.name === 'get_neon_auth_config',
+    );
+    const runSql = NEON_TOOLS.find((tool) => tool.name === 'run_sql');
+
+    expect(prepareMigration?.description).toContain(
+      'complete_database_migration',
+    );
+    expect(completeMigration?.description).toContain(
+      'prepare_database_migration',
+    );
+    expect(prepareTuning?.description).toContain('tuning_id');
+    expect(prepareTuning?.description).toContain('prepare_database_migration');
+    expect(completeTuning?.description).toContain('even when the user rejects');
+    expect(authConfig?.description).toContain('redacted');
+    expect(runSql?.description).toContain('temporary branch');
   });
 
   it('notes branch id on generated tools that take a path branch_id', () => {

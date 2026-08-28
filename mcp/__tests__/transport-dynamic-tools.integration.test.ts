@@ -156,6 +156,7 @@ async function listToolsForToken(token: string) {
   expect(listBody.error).toBeUndefined();
   return listBody.result.tools as Array<{
     name: string;
+    description?: string;
     inputSchema: { properties?: Record<string, unknown> };
   }>;
 }
@@ -450,6 +451,48 @@ describe('transport dynamic tool composition', () => {
     const toolNames = new Set(listBody.result.tools.map((t) => t.name));
     // If readonly query params overrode OAuth scopes, this would appear.
     expect(toolNames.has('create_project')).toBe(false);
+  });
+
+  it('keeps the default-grant tools/list catalog compact without dropping routing copy', async () => {
+    const oauthToken = 'oauth-catalog-size';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write', {
+        projectId: null,
+        scopes: null,
+      }),
+    );
+
+    const tools = await listToolsForToken(oauthToken);
+    const chars = tools.reduce((sum, tool) => {
+      return (
+        sum +
+        JSON.stringify({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+        }).length
+      );
+    }, 0);
+
+    expect(chars / 4).toBeLessThan(17_000);
+
+    for (const tool of tools) {
+      expect(tool.inputSchema).not.toHaveProperty('$schema');
+    }
+
+    const inspect = tools.find((tool) => tool.name === 'inspect_database');
+    expect(JSON.stringify(inspect?.inputSchema)).toContain('table-sizes');
+    expect(JSON.stringify(inspect?.inputSchema)).toContain('stalled-queries');
+    expect(JSON.stringify(inspect?.inputSchema)).toContain(
+      'Which diagnostic to run',
+    );
+
+    const branchIdNotes = tools.filter((tool) =>
+      tool.description?.includes(
+        'branch_id is a branch id (br-...), not a branch name',
+      ),
+    );
+    expect(branchIdNotes.length).toBeGreaterThan(40);
   });
 
   it('emits resource_metadata for the exact requested resource path and query', async () => {
