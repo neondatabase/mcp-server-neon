@@ -43,7 +43,11 @@ const CREATE_PROJECT_ENDPOINT_DESCRIPTION = `Creates a compute endpoint on a bra
 
 const DEPLOY_FUNCTION_DESCRIPTION = `Creates a deployment for the function. Supply at least one of \`zip\`, \`environment\`, or \`runtime\`; omitted fields inherit the latest version. The first deployment must include \`zip\`.`;
 
+const LIST_LOG_FIELDS_DESCRIPTION = `Lists the low-cardinality log fields observed on this branch. Call \`list_log_field_values\` with \`field_name\` to list distinct values.`;
+
 const LIST_LOG_FIELD_VALUES_DESCRIPTION = `Lists distinct values for a low-cardinality log field. Call \`list_log_fields\` first for \`field_name\`; a field the branch has never emitted returns \`unknown_field\`. Pass \`since\` or \`start_time\`, not both; default is the previous six hours, max seven days. Private beta.`;
+
+const RESTORE_SNAPSHOT_DESCRIPTION = `Restore a snapshot onto a new or existing branch. The call waits until the branch is ready. Pass \`target_branch_id\` to restore onto an existing branch; omit it to create one. Pass \`finalize: false\` then call \`finalize_branch_restore\` to swap names later.`;
 
 const BRANCH_ID_NOTE =
   'branch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.';
@@ -81,7 +85,9 @@ function createGeneratedNeonTools() {
       'branches.finalizeRestore': FINALIZE_BRANCH_RESTORE_DESCRIPTION,
       'postgres.endpoints.create': CREATE_PROJECT_ENDPOINT_DESCRIPTION,
       'logs.query': QUERY_LOGS_DESCRIPTION,
+      'logs.fields': LIST_LOG_FIELDS_DESCRIPTION,
       'logs.fieldValues': LIST_LOG_FIELD_VALUES_DESCRIPTION,
+      'snapshots.restore': RESTORE_SNAPSHOT_DESCRIPTION,
       'operations.list': LIST_OPERATIONS_DESCRIPTION,
       'functions.deploy': DEPLOY_FUNCTION_DESCRIPTION,
     },

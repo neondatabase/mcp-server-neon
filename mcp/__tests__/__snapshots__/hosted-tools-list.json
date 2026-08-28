@@ -2859,7 +2859,7 @@
   {
     "name": "restore_snapshot",
     "title": "Restore snapshot",
-    "description": "Restore a snapshot onto a new or existing branch. The call waits until operation-backed provisioning finishes. Preview callbacks are not available on this tool.",
+    "description": "Restore a snapshot onto a new or existing branch. The call waits until the branch is ready. Pass `target_branch_id` to restore onto an existing branch; omit it to create one. Pass `finalize: false` then call `finalize_branch_restore` to swap names later.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3815,7 +3815,7 @@
   {
     "name": "list_log_fields",
     "title": "List branch log fields",
-    "description": "Lists the low-cardinality log fields observed on this branch whose distinct values can be discovered with the log field-values endpoint.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists the low-cardinality log fields observed on this branch. Call `list_log_field_values` with `field_name` to list distinct values.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",

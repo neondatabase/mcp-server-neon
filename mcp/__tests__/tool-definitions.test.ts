@@ -348,6 +348,13 @@ describe('generated tool interface', () => {
     expect(tool!.description).toContain('not both');
   });
 
+  it('names list_log_field_values on list_log_fields', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'list_log_fields');
+    expect(tool!.description).toContain('list_log_field_values');
+    expect(tool!.description).toContain('field_name');
+    expect(tool!.description).not.toContain('field-values endpoint');
+  });
+
   it('keeps list_log_field_values window and field-discovery constraints', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'list_log_field_values');
     expect(tool!.description).toContain('list_log_fields');
@@ -388,6 +395,10 @@ describe('generated tool interface', () => {
     const restore = NEON_TOOLS.find((t) => t.name === 'restore_snapshot');
     expect(generatedShape(restore!)).toHaveProperty('finalize');
     expect(generatedShape(restore!)).not.toHaveProperty('finalize_restore');
+    expect(restore!.description).toContain('target_branch_id');
+    expect(restore!.description).toContain('finalize: false');
+    expect(restore!.description).toContain('finalize_branch_restore');
+    expect(restore!.description).not.toContain('preview callbacks');
 
     const tool = NEON_TOOLS.find((t) => t.name === 'finalize_branch_restore');
     expect(tool!.description).toContain('restore_snapshot');
