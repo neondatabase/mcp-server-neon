@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NEON_TOOLS } from '../tools/definitions';
+import { toListedTool } from '../tools/listed-schema';
 import type { GrantContext } from '../utils/grant-context';
 
 const { flushAnalyticsSpy, runSqlSpy, trackSpy } = vi.hoisted(() => ({
@@ -463,6 +465,8 @@ describe('transport dynamic tool composition', () => {
     );
 
     const tools = await listToolsForToken(oauthToken);
+    expect(tools).toEqual(NEON_TOOLS.map(toListedTool));
+
     const chars = tools.reduce((sum, tool) => {
       return (
         sum +
