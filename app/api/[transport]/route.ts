@@ -9,8 +9,6 @@ import {
   ListToolsRequestSchema,
   type RequestInfo,
 } from '@modelcontextprotocol/sdk/types.js';
-import { normalizeObjectSchema } from '@modelcontextprotocol/sdk/server/zod-compat.js';
-import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-schema-compat.js';
 import { captureException, startSpan } from '@sentry/node';
 import { NeonApiError } from '@neon/sdk';
 
@@ -48,6 +46,7 @@ import {
   formatAccessControlInstructions,
 } from '../../../mcp/tools/grant-filter';
 import { invokeTool, toolRegistration } from '../../../mcp/tools/registration';
+import { toListedTool } from '../../../mcp/tools/listed-schema';
 import { NEON_TOOLS } from '../../../mcp/tools/definitions';
 import { assert } from '../../../lib/assert';
 import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
@@ -515,23 +514,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         // Avoid relying on MCP SDK private fields (`_registeredTools`), which can
         // change across SDK versions and break request handling. Build the list from
         // our canonical tool definitions and convert schemas explicitly.
-        const tools = composedTools.map((tool) => {
-          const normalizedSchema = normalizeObjectSchema(tool.inputSchema);
-          const inputSchema = normalizedSchema
-            ? toJsonSchemaCompat(normalizedSchema, {
-                strictUnions: true,
-                pipeStrategy: 'input',
-              })
-            : { type: 'object' as const };
-
-          return {
-            name: tool.name,
-            title: tool.annotations?.title,
-            description: tool.description,
-            inputSchema,
-            annotations: tool.annotations,
-          };
-        });
+        const tools = composedTools.map(toListedTool);
 
         return { tools };
       });
@@ -788,23 +771,7 @@ function createDocsOnlyMcpHandler() {
       );
 
       server.server.setRequestHandler(ListToolsRequestSchema, async () => {
-        const tools = DOCS_ONLY_TOOLS.map((tool) => {
-          const normalizedSchema = normalizeObjectSchema(tool.inputSchema);
-          const inputSchema = normalizedSchema
-            ? toJsonSchemaCompat(normalizedSchema, {
-                strictUnions: true,
-                pipeStrategy: 'input',
-              })
-            : { type: 'object' as const };
-
-          return {
-            name: tool.name,
-            title: tool.annotations?.title,
-            description: tool.description,
-            inputSchema,
-            annotations: tool.annotations,
-          };
-        });
+        const tools = DOCS_ONLY_TOOLS.map(toListedTool);
 
         return { tools };
       });

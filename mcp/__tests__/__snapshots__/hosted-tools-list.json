@@ -1,0 +1,4485 @@
+[
+  {
+    "name": "list_organizations",
+    "title": "List Organizations",
+    "description": "List all organizations the current user belongs to. Supports optional `search` parameter to filter by name or ID.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "search": {
+          "type": "string",
+          "description": "Search organizations by name or ID. You can specify partial name or ID values to filter results."
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "List Organizations",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "run_sql",
+    "title": "Run SQL",
+    "description": "Execute one SQL statement on a Neon database. If a prior step created a temporary branch, pass that branch_id. NEVER run destructive SQL autonomously; always ask the user first.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sql": {
+          "type": "string",
+          "description": "The SQL query to execute"
+        },
+        "project_id": {
+          "type": "string",
+          "description": "The ID of the project to execute the query against"
+        },
+        "branch_id": {
+          "type": "string",
+          "description": "An optional ID of the branch to execute the query against. If not provided the default branch is used."
+        },
+        "database_name": {
+          "type": "string",
+          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+        }
+      },
+      "required": [
+        "sql",
+        "project_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Run SQL",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "run_sql_transaction",
+    "title": "Run SQL Transaction",
+    "description": "Execute multiple SQL statements as one transaction. If a prior step created a temporary branch, pass that branch_id. NEVER run destructive SQL autonomously; always ask the user first.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sql_statements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The SQL statements to execute"
+        },
+        "project_id": {
+          "type": "string",
+          "description": "The ID of the project to execute the query against"
+        },
+        "branch_id": {
+          "type": "string",
+          "description": "An optional ID of the branch to execute the query against. If not provided the default branch is used."
+        },
+        "database_name": {
+          "type": "string",
+          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+        }
+      },
+      "required": [
+        "sql_statements",
+        "project_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Run SQL Transaction",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "describe_table_schema",
+    "title": "Describe Table Schema",
+    "description": "Get column definitions, data types, and constraints for a specific table. Do not use when you need all tables in a database (use `get_database_tables` instead).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "table_name": {
+          "type": "string",
+          "description": "The table name, optionally schema-qualified (for example, crm.contacts)"
+        },
+        "project_id": {
+          "type": "string",
+          "description": "The ID of the project to execute the query against"
+        },
+        "branch_id": {
+          "type": "string",
+          "description": "An optional ID of the branch to execute the query against. If not provided the default branch is used."
+        },
+        "database_name": {
+          "type": "string",
+          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+        }
+      },
+      "required": [
+        "table_name",
+        "project_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Describe Table Schema",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_database_tables",
+    "title": "Get Database Tables",
+    "description": "List all tables in a Neon database. Do not use when you need column-level detail for a specific table (use `describe_table_schema` instead).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "The ID of the project"
+        },
+        "branch_id": {
+          "type": "string",
+          "description": "An optional ID of the branch. If not provided the default branch is used."
+        },
+        "database_name": {
+          "type": "string",
+          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Get Database Tables",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "prepare_database_migration",
+    "title": "Prepare Database Migration",
+    "description": "Apply a schema change on a temporary branch and return a migration_id. Test with run_sql on that branch, ask the user, then complete_database_migration — even if they reject, so the temporary branch is deleted. Pass every field from the prepare response.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "migration_sql": {
+          "type": "string",
+          "description": "The SQL to execute to create the migration"
+        },
+        "project_id": {
+          "type": "string",
+          "description": "The ID of the project to execute the query against"
+        },
+        "database_name": {
+          "type": "string",
+          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+        }
+      },
+      "required": [
+        "migration_sql",
+        "project_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Prepare Database Migration",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "complete_database_migration",
+    "title": "Complete Database Migration",
+    "description": "Apply or discard a prepared migration and delete the temporary branch. NEVER run autonomously; always ask the user first. Pass migration_id, migration_sql, database_name, project_id, temporary_branch_id, and parent_branch_id from prepare_database_migration. Set apply_changes false to discard; omitting it applies the migration.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "migration_id": {
+          "type": "string",
+          "description": "The migration ID from prepare_database_migration."
+        },
+        "migration_sql": {
+          "type": "string",
+          "description": "The SQL statements to apply. Pass the exact value from prepare_database_migration."
+        },
+        "database_name": {
+          "type": "string",
+          "description": "The database name. Pass the exact value from prepare_database_migration."
+        },
+        "project_id": {
+          "type": "string",
+          "description": "The project ID. Pass the exact value from prepare_database_migration."
+        },
+        "temporary_branch_id": {
+          "type": "string",
+          "description": "The temporary branch ID to delete after migration."
+        },
+        "parent_branch_id": {
+          "type": "string",
+          "description": "The parent branch ID where migration will be applied."
+        },
+        "apply_changes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to apply the migration. Set to false to just delete the temp branch without applying."
+        }
+      },
+      "required": [
+        "migration_id",
+        "migration_sql",
+        "database_name",
+        "project_id",
+        "temporary_branch_id",
+        "parent_branch_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Complete Database Migration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "describe_branch",
+    "title": "Describe Branch",
+    "description": "Get a tree view of all objects in a branch, including databases, schemas, tables, views, and functions. Do not use when you only need table names (use `get_database_tables` instead) or column detail (use `describe_table_schema` instead).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "The ID of the project"
+        },
+        "branch_id": {
+          "type": "string",
+          "description": "An ID of the branch to describe"
+        },
+        "database_name": {
+          "type": "string",
+          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Describe Branch",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_connection_string",
+    "title": "Get Connection String",
+    "description": "Get a PostgreSQL connection string for a Neon database. The branch must have a compute endpoint. `create_project` and `create_branch` do not return one; call this after they succeed. All parameters are optional; the tool resolves the project, branch, and database automatically if not specified. Requires write access: the connection string carries a privileged role password, so it is unavailable in read-only mode. A read-only caller who needs a DATABASE_URL must copy it from https://console.neon.tech manually.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "The ID of the project. If not provided, the only available project will be used."
+        },
+        "branch_id": {
+          "type": "string",
+          "description": "The ID or name of the branch. If not provided, the default branch will be used."
+        },
+        "compute_id": {
+          "type": "string",
+          "description": "The ID of the compute/endpoint. If not provided, the read-write compute associated with the branch will be used."
+        },
+        "database_name": {
+          "type": "string",
+          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+        },
+        "role_name": {
+          "type": "string",
+          "description": "The name of the role to connect with. If not provided, the database owner name will be used."
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Get Connection String",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_neon_auth_config",
+    "title": "Get Neon Auth configuration",
+    "description": "Read Neon Auth config for a branch with OAuth and SMTP secrets redacted as \"***redacted***\". Requires provision_neon_auth first.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "Neon project ID"
+        },
+        "branch_id": {
+          "type": "string",
+          "description": "Branch ID. If omitted, the project default branch is used (same as provision_neon_auth)."
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Get Neon Auth configuration",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "explain_sql_statement",
+    "title": "Explain SQL Statement",
+    "description": "Analyze the query execution plan for a SQL statement using EXPLAIN ANALYZE. Do not use when you need to execute the query for results (use `run_sql` instead).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sql": {
+          "type": "string",
+          "description": "The SQL statement to analyze"
+        },
+        "project_id": {
+          "type": "string",
+          "description": "The ID of the project to execute the query against"
+        },
+        "branch_id": {
+          "type": "string",
+          "description": "An optional ID of the branch to execute the query against. If not provided the default branch is used."
+        },
+        "database_name": {
+          "type": "string",
+          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+        },
+        "analyze": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to include ANALYZE in the EXPLAIN command"
+        }
+      },
+      "required": [
+        "sql",
+        "project_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Explain SQL Statement",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "prepare_query_tuning",
+    "title": "Prepare Query Tuning",
+    "description": "Analyze a slow query on a temporary branch and return a tuning_id. Apply suggested SQL with run_sql on that branch, re-run explain_sql_statement there, then complete_query_tuning with the tuning_id (not the branch id) — apply_changes true if they accept, omit it or pass false if they reject, so the temporary branch is deleted. Do not use prepare_database_migration.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sql": {
+          "type": "string",
+          "description": "The SQL statement to analyze and tune"
+        },
+        "database_name": {
+          "type": "string",
+          "description": "The name of the database to execute the query against"
+        },
+        "project_id": {
+          "type": "string",
+          "description": "The ID of the project to execute the query against"
+        },
+        "role_name": {
+          "type": "string",
+          "description": "The name of the role to connect with. If not provided, the default role (usually \"neondb_owner\") will be used."
+        }
+      },
+      "required": [
+        "sql",
+        "database_name",
+        "project_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Prepare Query Tuning",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "complete_query_tuning",
+    "title": "Complete Query Tuning",
+    "description": "Apply or discard query-tuning changes and delete the temporary branch. NEVER run autonomously. Before calling, apply suggested SQL with run_sql on the temporary branch and re-run explain_sql_statement. Pass the tuning_id from prepare_query_tuning, not the branch id, plus temporary_branch_id. Set apply_changes true to apply; omitting it discards. Call this even when the user rejects the changes. Do not use prepare_database_migration.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "suggested_sql_statements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The SQL DDL statements to execute to improve performance. These statements are the result of the prior steps, for example creating additional indexes."
+        },
+        "apply_changes": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to apply the suggested changes to the main branch"
+        },
+        "tuning_id": {
+          "type": "string",
+          "description": "The ID of the tuning to complete. This is NOT the branch ID. Remember this ID from the prior step using tool prepare_query_tuning."
+        },
+        "database_name": {
+          "type": "string",
+          "description": "The name of the database to execute the query against"
+        },
+        "project_id": {
+          "type": "string",
+          "description": "The ID of the project to execute the query against"
+        },
+        "role_name": {
+          "type": "string",
+          "description": "The name of the role to connect with. If you have used a specific role in prepare_query_tuning you MUST pass the same role again to this tool. If not provided, the default role (usually \"neondb_owner\") will be used."
+        },
+        "should_delete_temporary_branch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to delete the temporary branch after tuning"
+        },
+        "temporary_branch_id": {
+          "type": "string",
+          "description": "The ID of the temporary branch that needs to be deleted after tuning."
+        },
+        "branch_id": {
+          "type": "string",
+          "description": "The ID or name of the branch that receives the changes. If not provided, the default (main) branch will be used."
+        }
+      },
+      "required": [
+        "suggested_sql_statements",
+        "tuning_id",
+        "database_name",
+        "project_id",
+        "temporary_branch_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Complete Query Tuning",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_slow_queries",
+    "title": "List Slow Queries",
+    "description": "List queries from pg_stat_statements by execution time, slowest first. For sizes, indexes, locks, cache, bloat, or replication use inspect_database.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "The ID of the project to list slow queries from"
+        },
+        "branch_id": {
+          "type": "string",
+          "description": "An optional ID of the branch. If not provided the default branch is used."
+        },
+        "database_name": {
+          "type": "string",
+          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+        },
+        "compute_id": {
+          "type": "string",
+          "description": "The ID of the compute/endpoint. If not provided, the read-write compute associated with the branch will be used."
+        },
+        "limit": {
+          "type": "number",
+          "default": 10,
+          "description": "Maximum number of slow queries to return"
+        },
+        "min_execution_time": {
+          "type": "number",
+          "default": 1000,
+          "description": "Minimum execution time in milliseconds to consider a query as slow"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "List Slow Queries",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "inspect_database",
+    "title": "Inspect Database",
+    "description": "Run one read-only neon inspect db check (pick `check` from the input schema). Not for arbitrary SQL (`run_sql`), one statement's plan (`explain_sql_statement`), or applying indexes (`prepare_query_tuning`). Omit `database_name` to cover every database; some checks are compute-wide. If a check needs an extension, the tool names `CREATE EXTENSION`; ask before running it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "check": {
+          "type": "string",
+          "enum": [
+            "table-sizes",
+            "index-sizes",
+            "unused-indexes",
+            "seq-scans",
+            "long-running-queries",
+            "stalled-queries",
+            "locks",
+            "outliers",
+            "calls",
+            "lfc-hit-rate",
+            "working-set",
+            "vacuum-stats",
+            "bloat",
+            "replication-slots",
+            "subscriptions"
+          ],
+          "description": "Which diagnostic to run:\n`table-sizes`: Size of each table (including TOAST), largest first (pg_table_size)\n`index-sizes`: Size of each index, largest first (pg_relation_size)\n`unused-indexes`: Non-unique indexes with fewer than 50 scans — candidates for removal (pg_stat_user_indexes)\n`seq-scans`: Number of sequential scans recorded against each table (pg_stat_user_tables)\n`long-running-queries`: Queries running longer than 5 minutes (pg_stat_activity)\n`stalled-queries`: Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers, oldest query group first (compute-wide)\n`locks`: Locks held with the acquiring query and its age (pg_locks + pg_stat_activity)\n`outliers`: The 25 queries with the highest cumulative execution time since statistics were last reset (needs pg_stat_statements)\n`calls`: The 25 most frequently executed queries since statistics were last reset (needs pg_stat_statements)\n`lfc-hit-rate`: Local File Cache hit rate (compute-wide, needs neon extension)\n`working-set`: Estimated working set vs LFC size (compute-wide, needs neon extension)\n`vacuum-stats`: Autovacuum status per table: last (auto)vacuum, dead tuples, threshold\n`bloat`: Estimated bloat for the 25 most bloated tables (statistical estimate, no extension needed)\n`replication-slots`: Replication slots (compute-wide): kind, status, client, restart/confirmed-flush LSNs, and lag (pg_replication_slots + pg_stat_replication)\n`subscriptions`: Per-table logical replication progress on this subscriber (pg_subscription_rel)"
+        },
+        "project_id": {
+          "type": "string",
+          "description": "The ID of the project to inspect"
+        },
+        "branch_id": {
+          "type": "string",
+          "description": "An optional ID of the branch. If not provided the default branch is used."
+        },
+        "database_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "For a database-scoped check, the database to inspect. Omit to cover every database on the branch. Ranking and SQL row limits stay per database. One failing database fails the whole run. For a compute-wide check, the database to connect through; the check still runs once for the whole compute and the result does not include `databaseName`. The response `limit` applies to the combined rows after that."
+        },
+        "compute_id": {
+          "type": "string",
+          "description": "The ID of the compute/endpoint. If not provided, the read-write compute associated with the branch will be used."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 50,
+          "description": "Maximum number of rows to return from the combined result. Per-database ranking and SQL caps are applied first. The response reports how many rows the check produced and whether they were truncated, so raise this only when `truncated` is true. A few checks are capped in SQL and say so in their description."
+        }
+      },
+      "required": [
+        "check",
+        "project_id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Inspect Database",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "search",
+    "title": "Search",
+    "description": "Search across all organizations, projects, and branches by keyword. Returns matching items with id, title, and URL. Query must be at least 3 characters. Do not use when you need all projects (use `list_projects` instead).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 3,
+          "description": "The search query to find matching organizations, projects, or branches"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Search",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "fetch",
+    "title": "Fetch",
+    "description": "Fetch detailed information about a specific organization, project, or branch using the ID returned by the `search` tool.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The ID returned by the search tool to fetch detailed information about the entity"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Fetch",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_docs_resources",
+    "title": "List Documentation Resources",
+    "description": "List Neon documentation page slugs from neon.com/docs/llms.txt. Call this before get_doc_resource; do not guess slugs.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "List Documentation Resources",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "get_doc_resource",
+    "title": "Get Documentation Resource",
+    "description": "Fetch one Neon documentation page as markdown. Pass a slug from list_docs_resources (for example docs/guides/prisma.md).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "slug": {
+          "type": "string",
+          "description": "The docs page slug (path) to fetch, e.g. 'docs/guides/prisma.md'. Slugs use .md file endings matching the URLs in the documentation index. Use the list_docs_resources tool first to discover available slugs."
+        }
+      },
+      "required": [
+        "slug"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Get Documentation Resource",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "list_projects",
+    "title": "List projects",
+    "description": "List Neon projects you own. Returns every page. Pass limit to cap how many. There is no `cursor` argument. Pass `org_id` with a personal API key to list that org's projects.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 400
+        },
+        "search": {
+          "type": "string"
+        },
+        "org_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 30000
+        },
+        "recoverable": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List projects",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "describe_project",
+    "title": "Retrieve project details",
+    "description": "Retrieves the project record (settings, compute, usage). Call `list_branches` for branches.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve project details",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_project",
+    "title": "Create project",
+    "description": "Creates a Neon project and waits until the default compute is ready. Pass `org_id` with a personal API key. Does not return a connection string; call `get_connection_string` with the project id.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "settings": {
+          "type": "object",
+          "properties": {
+            "quota": {
+              "type": "object",
+              "properties": {
+                "active_time_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "compute_time_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "written_data_bytes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "data_transfer_bytes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "logical_size_bytes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "additionalProperties": false
+            },
+            "allowed_ips": {
+              "type": "object",
+              "properties": {
+                "ips": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "protected_branches_only": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "enable_logical_replication": {
+              "type": "boolean"
+            },
+            "maintenance_window": {
+              "type": "object",
+              "properties": {
+                "weekdays": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "start_time": {
+                  "type": "string"
+                },
+                "end_time": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "weekdays",
+                "start_time",
+                "end_time"
+              ],
+              "additionalProperties": false
+            },
+            "block_public_connections": {
+              "type": "boolean"
+            },
+            "block_vpc_connections": {
+              "type": "boolean"
+            },
+            "audit_log_level": {
+              "type": "string",
+              "enum": [
+                "base",
+                "extended",
+                "full"
+              ]
+            },
+            "hipaa": {
+              "type": "boolean"
+            },
+            "preload_libraries": {
+              "type": "object",
+              "properties": {
+                "use_defaults": {
+                  "type": "boolean"
+                },
+                "enabled_libraries": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "branch": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "role_name": {
+              "type": "string"
+            },
+            "database_name": {
+              "type": "string"
+            },
+            "annotations": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "autoscaling_limit_min_cu": {
+          "type": "number",
+          "minimum": 0.25
+        },
+        "autoscaling_limit_max_cu": {
+          "type": "number",
+          "minimum": 0.25
+        },
+        "provisioner": {
+          "type": "string"
+        },
+        "region_id": {
+          "type": "string"
+        },
+        "default_endpoint_settings": {
+          "type": "object",
+          "properties": {
+            "pg_settings": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "pgbouncer_settings": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "autoscaling_limit_min_cu": {
+              "type": "number",
+              "minimum": 0.25
+            },
+            "autoscaling_limit_max_cu": {
+              "type": "number",
+              "minimum": 0.25
+            },
+            "suspend_timeout_seconds": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 604800
+            }
+          },
+          "additionalProperties": false
+        },
+        "pg_version": {
+          "type": "integer",
+          "minimum": 14,
+          "maximum": 19
+        },
+        "store_passwords": {
+          "type": "boolean"
+        },
+        "history_retention_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2592000
+        },
+        "org_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Create project",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_project",
+    "title": "Update project",
+    "description": "Updates the specified project.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "quota": {
+              "type": "object",
+              "properties": {
+                "active_time_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "compute_time_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "written_data_bytes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "data_transfer_bytes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "logical_size_bytes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "additionalProperties": false
+            },
+            "allowed_ips": {
+              "type": "object",
+              "properties": {
+                "ips": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "protected_branches_only": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "enable_logical_replication": {
+              "type": "boolean"
+            },
+            "maintenance_window": {
+              "type": "object",
+              "properties": {
+                "weekdays": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "start_time": {
+                  "type": "string"
+                },
+                "end_time": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "weekdays",
+                "start_time",
+                "end_time"
+              ],
+              "additionalProperties": false
+            },
+            "block_public_connections": {
+              "type": "boolean"
+            },
+            "block_vpc_connections": {
+              "type": "boolean"
+            },
+            "audit_log_level": {
+              "type": "string",
+              "enum": [
+                "base",
+                "extended",
+                "full"
+              ]
+            },
+            "hipaa": {
+              "type": "boolean"
+            },
+            "preload_libraries": {
+              "type": "object",
+              "properties": {
+                "use_defaults": {
+                  "type": "boolean"
+                },
+                "enabled_libraries": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "default_endpoint_settings": {
+          "type": "object",
+          "properties": {
+            "pg_settings": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "pgbouncer_settings": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "autoscaling_limit_min_cu": {
+              "type": "number",
+              "minimum": 0.25
+            },
+            "autoscaling_limit_max_cu": {
+              "type": "number",
+              "minimum": 0.25
+            },
+            "suspend_timeout_seconds": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 604800
+            }
+          },
+          "additionalProperties": false
+        },
+        "history_retention_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2592000
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update project",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_project",
+    "title": "Delete project",
+    "description": "Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For a single branch, use `delete_branch`.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete project",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "recover_project",
+    "title": "Recover a deleted project",
+    "description": "Recovers a deleted project within the 7-day deletion recovery period.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Recover a deleted project",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_project_permissions",
+    "title": "List project access",
+    "description": "Retrieves details about users who have access to the project, including the permission `id`, the granted-to email address, and the date project access was granted.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List project access",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_project_members",
+    "title": "List org members and their project roles",
+    "description": "Lists organization members and their per-project roles for an org-owned project. Returns every page. Pass limit to cap how many.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List org members and their project roles",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_regions",
+    "title": "List regions",
+    "description": "Lists Neon regions available to the authenticated account.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List regions",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_operations",
+    "title": "List operations",
+    "description": "Lists operations for a project. Omitting `limit` returns every remaining page. There is no `cursor` argument.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List operations",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_operation",
+    "title": "Retrieve operation details",
+    "description": "Retrieves details for the specified operation.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        }
+      },
+      "required": [
+        "project_id",
+        "operation_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve operation details",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_branches",
+    "title": "List branches",
+    "description": "Retrieves a list of branches for the specified project. Returns every page. Pass limit to cap how many.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "search": {
+          "type": "string"
+        },
+        "sort_by": {
+          "type": "string",
+          "enum": [
+            "name",
+            "created_at",
+            "updated_at"
+          ]
+        },
+        "sort_order": {
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "include_deleted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List branches",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_branch",
+    "title": "Retrieve branch details",
+    "description": "Retrieves information about the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve branch details",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_branch",
+    "title": "Create branch",
+    "description": "Creates a branch with a read-write compute and waits until it is ready. Pass `no_compute: true` to skip the endpoint. Does not return a connection string; call `get_connection_string` with the project and branch id. Copies the parent at HEAD; point-in-time restore is `restore_snapshot`.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "parent_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "compute": {
+          "type": "object",
+          "properties": {
+            "min_cu": {
+              "type": "number",
+              "minimum": 0.25
+            },
+            "max_cu": {
+              "type": "number",
+              "minimum": 0.25
+            },
+            "suspend_timeout_seconds": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 604800
+            }
+          },
+          "additionalProperties": false
+        },
+        "no_compute": {
+          "type": "boolean",
+          "description": "Skip the read-write endpoint. Default false. Cannot be combined with compute."
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Create branch",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_branch",
+    "title": "Update branch",
+    "description": "Updates the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "protected": {
+          "type": "boolean"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update branch",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_branch",
+    "title": "Delete branch",
+    "description": "Delete a branch and all its data. NEVER run autonomously; always ask the user first. For the whole project, use `delete_project`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete branch",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_default_branch",
+    "title": "Get default branch",
+    "description": "Resolve the project's default branch by the default flag, not by name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Get default branch",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "set_default_branch",
+    "title": "Set branch as default",
+    "description": "Sets the specified branch as the project's default branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Set branch as default",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "reset_from_parent",
+    "title": "Reset branch from parent",
+    "description": "Reset a branch to its parent's current HEAD. Discards every change the branch has written since it diverged. NEVER run autonomously; always ask the user first. `preserve_under_name` saves the current state first and is required when the branch has children; those children move to the new branch. Point-in-time restore is `restore_snapshot`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "preserve_under_name": {
+          "description": "Name under which to save the current branch before the reset. Required when the branch has children; those children move to the new branch.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Reset branch from parent",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "compare_database_schema",
+    "title": "Compare database schema",
+    "description": "Compare one database's SQL schema on a branch to another. `database_name` is required. Omit `base_branch_id` to compare against the parent; it is a branch id (`br-...`), not a name. Pass `lsn`, `timestamp`, `base_lsn`, or `base_timestamp` only for a point-in-time comparison.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "database_name": {
+          "type": "string"
+        },
+        "base_branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "lsn": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+        },
+        "base_lsn": {
+          "type": "string"
+        },
+        "base_timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "database_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Compare database schema",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "finalize_branch_restore",
+    "title": "Finalize branch restore from snapshot",
+    "description": "Finalize a branch created with `restore_snapshot` and `finalize: false`: reassign computes (this restarts them) and swap names so it replaces the original branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Finalize branch restore from snapshot",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_postgres_roles",
+    "title": "List roles",
+    "description": "Retrieves a list of Postgres roles from the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List roles",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_postgres_role",
+    "title": "Retrieve role details",
+    "description": "Retrieves details about the specified role.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "role_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "role_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve role details",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_postgres_role",
+    "title": "Create role",
+    "description": "Creates a Postgres role in the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "no_login": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Create role",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_postgres_role",
+    "title": "Delete role",
+    "description": "Deletes the specified Postgres role from the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "role_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "role_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete role",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "reset_postgres_role_password",
+    "title": "Reset role password",
+    "description": "Resets the password for the specified Postgres role.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "role_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "role_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Reset role password",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_postgres_databases",
+    "title": "List databases",
+    "description": "Retrieves a list of databases for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List databases",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_postgres_database",
+    "title": "Retrieve database details",
+    "description": "Retrieves information about the specified database.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "database_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "database_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve database details",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_postgres_database",
+    "title": "Create database",
+    "description": "Creates a database in the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "owner_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "name",
+        "owner_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Create database",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_postgres_database",
+    "title": "Update database",
+    "description": "Updates the specified database in the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "database_name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "owner_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "database_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update database",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_postgres_database",
+    "title": "Delete database",
+    "description": "Deletes the specified database from the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "database_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "database_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete database",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_postgres_endpoints",
+    "title": "List compute endpoints",
+    "description": "Retrieves a list of compute endpoints for the specified project.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List compute endpoints",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_branch_computes",
+    "title": "List branch endpoints",
+    "description": "Retrieves a list of compute endpoints for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List branch endpoints",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_postgres_endpoint",
+    "title": "Retrieve compute endpoint details",
+    "description": "Retrieves information about the specified compute endpoint.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "endpoint_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "endpoint_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve compute endpoint details",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_postgres_endpoint",
+    "title": "Create compute endpoint",
+    "description": "Creates a compute endpoint on a branch. Does not return a connection string; call `get_connection_string`.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "region_id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "read_only",
+            "read_write"
+          ]
+        },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "pg_settings": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "pgbouncer_settings": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "preload_libraries": {
+              "type": "object",
+              "properties": {
+                "use_defaults": {
+                  "type": "boolean"
+                },
+                "enabled_libraries": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "autoscaling_limit_min_cu": {
+          "type": "number",
+          "minimum": 0.25
+        },
+        "autoscaling_limit_max_cu": {
+          "type": "number",
+          "minimum": 0.25
+        },
+        "provisioner": {
+          "type": "string"
+        },
+        "pooler_enabled": {
+          "type": "boolean"
+        },
+        "pooler_mode": {
+          "type": "string",
+          "enum": [
+            "transaction"
+          ]
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "passwordless_access": {
+          "type": "boolean"
+        },
+        "suspend_timeout_seconds": {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 604800
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Create compute endpoint",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_postgres_endpoint",
+    "title": "Update compute endpoint",
+    "description": "Updates the specified compute endpoint.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "endpoint_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "autoscaling_limit_min_cu": {
+          "type": "number",
+          "minimum": 0.25
+        },
+        "autoscaling_limit_max_cu": {
+          "type": "number",
+          "minimum": 0.25
+        },
+        "provisioner": {
+          "type": "string"
+        },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "pg_settings": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "pgbouncer_settings": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "preload_libraries": {
+              "type": "object",
+              "properties": {
+                "use_defaults": {
+                  "type": "boolean"
+                },
+                "enabled_libraries": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "pooler_enabled": {
+          "type": "boolean"
+        },
+        "pooler_mode": {
+          "type": "string",
+          "enum": [
+            "transaction"
+          ]
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "passwordless_access": {
+          "type": "boolean"
+        },
+        "suspend_timeout_seconds": {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 604800
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "project_id",
+        "endpoint_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update compute endpoint",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_postgres_endpoint",
+    "title": "Delete compute endpoint",
+    "description": "Deletes the specified compute endpoint.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "endpoint_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "endpoint_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete compute endpoint",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "start_postgres_endpoint",
+    "title": "Start compute endpoint",
+    "description": "Starts a compute endpoint.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "endpoint_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "endpoint_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Start compute endpoint",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "suspend_postgres_endpoint",
+    "title": "Suspend compute endpoint",
+    "description": "Suspends the specified compute endpoint.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "endpoint_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "endpoint_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Suspend compute endpoint",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "restart_postgres_endpoint",
+    "title": "Restart compute endpoint",
+    "description": "Restarts the specified compute endpoint by immediately suspending it and then starting it again.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "endpoint_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "endpoint_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Restart compute endpoint",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_snapshots",
+    "title": "List project snapshots",
+    "description": "Lists the snapshots for the specified project.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List project snapshots",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_snapshot_schedule",
+    "title": "Retrieve backup schedule",
+    "description": "Returns the backup schedule for the specified branch, including the configured snapshot frequencies.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve backup schedule",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "set_snapshot_schedule",
+    "title": "Set snapshot schedule",
+    "description": "Replace a branch's automatic snapshot schedule. Frequency must be daily, weekly, or monthly.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "schedule": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "frequency": {
+                "type": "string",
+                "enum": [
+                  "daily",
+                  "weekly",
+                  "monthly"
+                ]
+              },
+              "hour": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 23
+              },
+              "day": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 31
+              },
+              "month": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12
+              },
+              "retention_seconds": {
+                "type": "integer",
+                "minimum": 3600,
+                "maximum": 3024000
+              }
+            },
+            "required": [
+              "frequency"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "schedule"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Set snapshot schedule",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_snapshot",
+    "title": "Create snapshot",
+    "description": "Creates a snapshot from the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "lsn": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Create snapshot",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_snapshot",
+    "title": "Update snapshot",
+    "description": "Updates the specified snapshot.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "project_id",
+        "snapshot_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update snapshot",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_snapshot",
+    "title": "Delete snapshot",
+    "description": "Deletes the specified snapshot.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "snapshot_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete snapshot",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "restore_snapshot",
+    "title": "Restore snapshot",
+    "description": "Restore a snapshot onto a new or existing branch. The call waits until the branch is ready. Pass `target_branch_id` to restore onto an existing branch; omit it to create one. Pass `finalize: false` then call `finalize_branch_restore` to swap names later.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "target_branch_id": {
+          "type": "string"
+        },
+        "finalize": {
+          "type": "boolean",
+          "description": "Finalize immediately (move computes onto the restored branch). Defaults to true when restoring as a new branch and false when restoring onto an existing branch."
+        }
+      },
+      "required": [
+        "project_id",
+        "snapshot_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Restore snapshot",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_auth",
+    "title": "Retrieve Neon Auth details for the branch",
+    "description": "Retrieves the Neon Auth integration details for the specified branch, including the auth provider type and integration status.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve Neon Auth details for the branch",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "provision_neon_auth",
+    "title": "Enable Neon Auth for the branch",
+    "description": "Enables Neon Auth for the specified branch by connecting it to an authentication provider.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "auth_provider": {
+          "type": "string",
+          "enum": [
+            "mock",
+            "stack",
+            "better_auth"
+          ]
+        },
+        "database_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "auth_provider"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Enable Neon Auth for the branch",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "disable_auth",
+    "title": "Disable Neon Auth for the branch",
+    "description": "Disables the Neon Auth integration for the specified branch, removing the connection to the authentication provider.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "delete_data": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Disable Neon Auth for the branch",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_config",
+    "title": "Update auth configuration",
+    "description": "Updates the auth configuration for the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update auth configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_auth_oauth_providers",
+    "title": "List OAuth providers for the branch",
+    "description": "Lists the OAuth providers configured for the specified branch's Neon Auth integration.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List OAuth providers for the branch",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "add_auth_oauth_provider",
+    "title": "Add an OAuth provider",
+    "description": "Adds an OAuth provider configuration to the specified branch's Neon Auth integration.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "id": {
+          "type": "string",
+          "enum": [
+            "google",
+            "github",
+            "microsoft",
+            "vercel"
+          ]
+        },
+        "client_id": {
+          "type": "string"
+        },
+        "client_secret": {
+          "type": "string"
+        },
+        "microsoft_tenant_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Add an OAuth provider",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_oauth_provider",
+    "title": "Update OAuth provider",
+    "description": "Updates an OAuth provider for the specified project.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "oauth_provider_id": {
+          "type": "string",
+          "enum": [
+            "google",
+            "github",
+            "microsoft",
+            "vercel"
+          ]
+        },
+        "client_id": {
+          "type": "string"
+        },
+        "client_secret": {
+          "type": "string"
+        },
+        "microsoft_tenant_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "oauth_provider_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update OAuth provider",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_auth_oauth_provider",
+    "title": "Delete OAuth provider",
+    "description": "Deletes an OAuth provider from the specified project.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "oauth_provider_id": {
+          "type": "string",
+          "enum": [
+            "google",
+            "github",
+            "microsoft",
+            "vercel"
+          ]
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "oauth_provider_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete OAuth provider",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_auth_trusted_domains",
+    "title": "List domains in redirect_uri whitelist",
+    "description": "Lists the trusted domains in the redirect URI whitelist for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List domains in redirect_uri whitelist",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "add_auth_trusted_domain",
+    "title": "Add domain to redirect_uri whitelist",
+    "description": "Adds a domain to the redirect URI whitelist for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "domain": {
+          "type": "string",
+          "format": "uri"
+        },
+        "auth_provider": {
+          "type": "string",
+          "enum": [
+            "mock",
+            "stack",
+            "better_auth"
+          ]
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "domain",
+        "auth_provider"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Add domain to redirect_uri whitelist",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_auth_trusted_domain",
+    "title": "Delete domain from redirect_uri whitelist",
+    "description": "Removes a domain from the redirect URI whitelist for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "auth_provider": {
+          "type": "string",
+          "enum": [
+            "mock",
+            "stack",
+            "better_auth"
+          ]
+        },
+        "domains": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "domain": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "required": [
+              "domain"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "auth_provider",
+        "domains"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete domain from redirect_uri whitelist",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_auth_user",
+    "title": "Create new auth user",
+    "description": "Creates a new user in the Neon Auth user directory for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "format": "email",
+          "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "email"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Create new auth user",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_auth_user",
+    "title": "Delete auth user",
+    "description": "Deletes the specified user from the Neon Auth user directory for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "auth_user_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "auth_user_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete auth user",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_user_role",
+    "title": "Update auth user role",
+    "description": "Updates the role of a user in the Neon Auth user directory for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "auth_user_id": {
+          "type": "string"
+        },
+        "roles": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "auth_user_id",
+        "roles"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update auth user role",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_data_api",
+    "title": "Retrieve Neon Data API configuration",
+    "description": "Retrieves the Neon Data API configuration for the specified branch, including endpoint URL, enabled state, and database settings.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "database_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "database_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve Neon Data API configuration",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "provision_neon_data_api",
+    "title": "Create Neon Data API",
+    "description": "Creates a new instance of Neon Data API in the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "database_name": {
+          "type": "string"
+        },
+        "auth_provider": {
+          "type": "string",
+          "enum": [
+            "neon_auth",
+            "external"
+          ]
+        },
+        "jwks_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "provider_name": {
+          "type": "string"
+        },
+        "jwt_audience": {
+          "type": "string"
+        },
+        "add_default_grants": {
+          "type": "boolean"
+        },
+        "skip_auth_schema": {
+          "type": "boolean"
+        },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "db_aggregates_enabled": {
+              "type": "boolean"
+            },
+            "db_anon_role": {
+              "type": "string"
+            },
+            "db_extra_search_path": {
+              "type": "string"
+            },
+            "db_max_rows": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "db_schemas": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "jwt_role_claim_key": {
+              "type": "string"
+            },
+            "jwt_cache_max_lifetime": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "openapi_mode": {
+              "type": "string"
+            },
+            "server_cors_allowed_origins": {
+              "type": "string"
+            },
+            "server_timing_enabled": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "database_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Create Neon Data API",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_data_api",
+    "title": "Update Neon Data API",
+    "description": "Updates the Neon Data API configuration for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "database_name": {
+          "type": "string"
+        },
+        "db_aggregates_enabled": {
+          "type": "boolean"
+        },
+        "db_anon_role": {
+          "type": "string"
+        },
+        "db_extra_search_path": {
+          "type": "string"
+        },
+        "db_max_rows": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "db_schemas": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "jwt_role_claim_key": {
+          "type": "string"
+        },
+        "jwt_cache_max_lifetime": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "openapi_mode": {
+          "type": "string"
+        },
+        "server_cors_allowed_origins": {
+          "type": "string"
+        },
+        "server_timing_enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "database_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update Neon Data API",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_data_api",
+    "title": "Delete Neon Data API",
+    "description": "Deletes the Neon Data API for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "database_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "database_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete Neon Data API",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "query_logs",
+    "title": "Query branch logs",
+    "description": "Returns logs for a branch. Pass `limit` to cap how many. There is no `cursor` argument. Filters combine with AND. Pass `logql` instead of structured filters, not with them. Give the window as `since` or `start_time`, not both; default is the previous hour, max seven days; `end_time` is exclusive. Private beta; a branch without logs access returns HTTP 404 with reason \"telemetry_not_enabled\".\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "since": {
+          "type": "string",
+          "pattern": "^[0-9]{1,6}(ms|s|m|h|d)$"
+        },
+        "start_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+        },
+        "end_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "sort_order": {
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "function",
+            "storage",
+            "pg_endpoint"
+          ]
+        },
+        "service_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "minimum_severity": {
+          "type": "string",
+          "enum": [
+            "trace",
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "fatal"
+          ]
+        },
+        "severity_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "body_contains": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trace_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "logql": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Query branch logs",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_log_fields",
+    "title": "List branch log fields",
+    "description": "Lists the low-cardinality log fields observed on this branch. Call `list_log_field_values` with `field_name` to list distinct values.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List branch log fields",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_log_field_values",
+    "title": "List branch log field values",
+    "description": "Lists distinct values for a low-cardinality log field. Call `list_log_fields` first for `field_name`; a field the branch has never emitted returns `unknown_field`. Pass `since` or `start_time`, not both; default is the previous six hours, max seven days. Private beta.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "field_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "since": {
+          "type": "string",
+          "pattern": "^[0-9]{1,6}(ms|s|m|h|d)$"
+        },
+        "start_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+        },
+        "end_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "function",
+            "storage",
+            "pg_endpoint"
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "field_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List branch log field values",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_ai_gateway",
+    "title": "Get branch AI Gateway endpoint",
+    "description": "Returns the AI Gateway endpoint host for the specified branch, used to render code-snippet base URLs.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Get branch AI Gateway endpoint",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_functions",
+    "title": "List functions on the branch",
+    "description": "Lists functions on the specified branch. Returns every page. Pass limit to cap how many.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List functions on the branch",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_function",
+    "title": "Get function details",
+    "description": "Returns the function identified by its slug.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]{1,20}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "slug"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Get function details",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_function",
+    "title": "Update a function",
+    "description": "Updates the function's mutable metadata — currently only the display `name`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]{1,20}$"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "slug",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update a function",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_function",
+    "title": "Delete a function on the branch",
+    "description": "Deletes the function identified by its slug.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]{1,20}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "slug"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete a function on the branch",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "deploy_function",
+    "title": "Deploy code to a function",
+    "description": "Creates a deployment for the function. Supply at least one of `zip`, `environment`, or `runtime`; omitted fields inherit the latest version. The first deployment must include `zip`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]{1,20}$"
+        },
+        "zip": {
+          "type": "string",
+          "format": "base64",
+          "contentEncoding": "base64",
+          "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+          "description": "Base64-encoded binary file contents."
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "nodejs24"
+          ]
+        },
+        "environment": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "slug"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Deploy code to a function",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_storage",
+    "title": "Get branch object storage state",
+    "description": "Returns whether branchable object storage is usable for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Get branch object storage state",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_storage_buckets",
+    "title": "List buckets on the branch",
+    "description": "Lists branchable object storage buckets visible on the specified branch, including those inherited from ancestor branches.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List buckets on the branch",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_storage_bucket",
+    "title": "Create a bucket on the branch",
+    "description": "Creates a new branchable object storage bucket on the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "access_level": {
+          "type": "string",
+          "enum": [
+            "private",
+            "public_read"
+          ]
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Create a bucket on the branch",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_storage_bucket",
+    "title": "Delete a bucket on the branch",
+    "description": "Deletes the named bucket from the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "bucket_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "bucket_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete a bucket on the branch",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_storage_objects",
+    "title": "List objects in a bucket",
+    "description": "Lists objects visible in the named bucket on the specified branch, including those inherited from ancestor branches. Returns every page. Pass limit to cap how many.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "bucket_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "delimiter": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "bucket_name"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List objects in a bucket",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_storage_object",
+    "title": "Delete an object in a bucket",
+    "description": "Deletes the named object from the bucket on the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "bucket_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "object_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "bucket_name",
+        "object_key"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete an object in a bucket",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_storage_objects_by_prefix",
+    "title": "Delete every object under a key prefix (folder) in a bucket",
+    "description": "Soft-deletes every object on the specified branch whose key starts with `prefix`, in a single call.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "bucket_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "prefix": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "bucket_name",
+        "prefix"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete every object under a key prefix (folder) in a bucket",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "presign_storage_object",
+    "title": "Presign an upload or download for an object in a bucket",
+    "description": "Returns a presigned URL that transfers bytes directly to or from the object's bucket on the specified branch, without the caller ever handling S3 credentials.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "bucket_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "object_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "upload",
+            "download"
+          ]
+        },
+        "content_type": {
+          "type": "string"
+        },
+        "expires_in_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 604800
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "bucket_name",
+        "object_key",
+        "operation"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Presign an upload or download for an object in a bucket",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  }
+]

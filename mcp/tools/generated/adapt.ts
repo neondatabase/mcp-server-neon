@@ -3,7 +3,7 @@ import {
   type NeonTool as GeneratedNeonTool,
 } from '@neon/tools';
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
-import { NEON_API_HOST, NEON_DEFAULT_DATABASE_NAME } from '../../constants';
+import { NEON_API_HOST } from '../../constants';
 import { fetchAsMcpServer } from '../../neon-client';
 import type { NeonTool } from '../tool-definition';
 import type { ToolHandlerExtended, ToolHandlers } from '../types';
@@ -17,81 +17,37 @@ import {
 } from './operations';
 import { sanitizeGeneratedResult } from './sanitize';
 
-const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project and waits until the default compute is ready.
+const LIST_PROJECTS_DESCRIPTION = `List Neon projects you own. Returns every page. Pass limit to cap how many. There is no \`cursor\` argument. Pass \`org_id\` with a personal API key to list that org's projects.`;
 
-If using a personal API key, include \`org_id\` to specify which organization to create the project in.
-If using an org API key, \`org_id\` is automatically inferred from the key.
-Plan limits define how many projects you can create.
+const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project and waits until the default compute is ready. Pass \`org_id\` with a personal API key. Does not return a connection string; call \`get_connection_string\` with the project id.`;
 
-You can specify a region (\`region_id\`) and Postgres version (\`pg_version\`).
-Neon supports Postgres 14 through 18, with 19 rolling out to enabled regions.
+const DESCRIBE_PROJECT_DESCRIPTION = `Retrieves the project record (settings, compute, usage). Call \`list_branches\` for branches.`;
 
-This tool does not return a connection string. After it succeeds, call \`get_connection_string\` with the project id.`;
+const QUERY_LOGS_DESCRIPTION = `Returns logs for a branch. Pass \`limit\` to cap how many. There is no \`cursor\` argument. Filters combine with AND. Pass \`logql\` instead of structured filters, not with them. Give the window as \`since\` or \`start_time\`, not both; default is the previous hour, max seven days; \`end_time\` is exclusive. Private beta; a branch without logs access returns HTTP 404 with reason "telemetry_not_enabled".`;
 
-const DESCRIBE_PROJECT_DESCRIPTION = `Retrieves information about the specified project.
-Returned details include the project settings, compute configuration, history retention, owner information, and current usage metrics.
+const LIST_OPERATIONS_DESCRIPTION = `Lists operations for a project. Omitting \`limit\` returns every remaining page. There is no \`cursor\` argument.`;
 
-This tool returns the project record only. Call \`list_branches\` for branches.`;
+const RESET_FROM_PARENT_DESCRIPTION = `Reset a branch to its parent's current HEAD. Discards every change the branch has written since it diverged. NEVER run autonomously; always ask the user first. \`preserve_under_name\` saves the current state first and is required when the branch has children; those children move to the new branch. Point-in-time restore is \`restore_snapshot\`.`;
 
-const QUERY_LOGS_DESCRIPTION = `Returns logs emitted by services running on the specified branch.
+const COMPARE_DATABASE_SCHEMA_DESCRIPTION = `Compare one database's SQL schema on a branch to another. \`database_name\` is required. Omit \`base_branch_id\` to compare against the parent; it is a branch id (\`br-...\`), not a name. Pass \`lsn\`, \`timestamp\`, \`base_lsn\`, or \`base_timestamp\` only for a point-in-time comparison.`;
 
-All supplied filters are combined with AND. \`minimum_severity\` and \`severity_text\` are independent: setting both requires a record to clear the severity floor and match the exact text.
+const CREATE_BRANCH_DESCRIPTION = `Creates a branch with a read-write compute and waits until it is ready. Pass \`no_compute: true\` to skip the endpoint. Does not return a connection string; call \`get_connection_string\` with the project and branch id. Copies the parent at HEAD; point-in-time restore is \`restore_snapshot\`.`;
 
-Supply \`logql\` instead of the structured filters to run a raw LogQL expression. Combining it with any structured filter is rejected. \`limit\`, \`sort_order\`, and the time window still apply.
+const DELETE_PROJECT_DESCRIPTION = `Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For a single branch, use \`delete_branch\`.`;
 
-Give the window either as \`since\` (a duration ending at \`end_time\`, or now) or as \`start_time\`. Supplying both is rejected. If no time range is supplied, the query covers the previous hour. The maximum window is seven days. \`end_time\` is exclusive.
+const DELETE_BRANCH_DESCRIPTION = `Delete a branch and all its data. NEVER run autonomously; always ask the user first. For the whole project, use \`delete_project\`.`;
 
-\`limit\` caps how many records come back in total. There is no \`cursor\` argument.
+const FINALIZE_BRANCH_RESTORE_DESCRIPTION = `Finalize a branch created with \`restore_snapshot\` and \`finalize: false\`: reassign computes (this restarts them) and swap names so it replaces the original branch.`;
 
-**Note**: This endpoint is currently in Private Beta.`;
+const CREATE_PROJECT_ENDPOINT_DESCRIPTION = `Creates a compute endpoint on a branch. Does not return a connection string; call \`get_connection_string\`.`;
 
-const LIST_OPERATIONS_DESCRIPTION = `Retrieves a list of operations for the specified Neon project.
-The number of operations returned can be large.
-Operations older than 6 months may be deleted from our systems.
-If you need more history than that, you should store your own history.
+const DEPLOY_FUNCTION_DESCRIPTION = `Creates a deployment for the function. Supply at least one of \`zip\`, \`environment\`, or \`runtime\`; omitted fields inherit the latest version. The first deployment must include \`zip\`.`;
 
-Omitting \`limit\` returns every remaining operation. Pass \`limit\` to cap how many come back. There is no \`cursor\` argument.`;
+const LIST_LOG_FIELDS_DESCRIPTION = `Lists the low-cardinality log fields observed on this branch. Call \`list_log_field_values\` with \`field_name\` to list distinct values.`;
 
-const RESET_FROM_PARENT_DESCRIPTION = `Reset a branch to its parent's current HEAD. Discards every change the branch has written since it diverged. NEVER run autonomously; always ask the user first.
+const LIST_LOG_FIELD_VALUES_DESCRIPTION = `Lists distinct values for a low-cardinality log field. Call \`list_log_fields\` first for \`field_name\`; a field the branch has never emitted returns \`unknown_field\`. Pass \`since\` or \`start_time\`, not both; default is the previous six hours, max seven days. Private beta.`;
 
-Arguments: \`{ "project_id": "…", "branch_id": "br-…" }\`. \`preserve_under_name\` saves the current state under a new branch first and is required when the branch has children; those children move to the new branch.
-
-This is parent HEAD only. Point-in-time restore is \`restore_snapshot\`, published when \`?category=snapshots\` is granted.`;
-
-const COMPARE_DATABASE_SCHEMA_DESCRIPTION = `Compare one database's SQL schema on a branch to another branch. Returns \`{ "diff": "…" }\`, a unified SQL diff. Empty when the schemas match.
-
-\`database_name\` is required. Use \`${NEON_DEFAULT_DATABASE_NAME}\` when the caller does not name a database. Omitting \`base_branch_id\` compares against the parent. \`base_branch_id\` is a branch id (\`br-...\`), not a name. Pass \`lsn\`, \`timestamp\`, \`base_lsn\`, or \`base_timestamp\` only for a point-in-time comparison.`;
-
-const CREATE_BRANCH_DESCRIPTION = `Creates a branch with a read-write compute and waits until it is ready.
-
-Arguments: \`{ "project_id": "…", "name": "feature-x" }\`. \`parent_id\` defaults to the project's default branch.
-
-Pass \`no_compute: true\` to skip the endpoint. Do not combine \`no_compute\` with \`compute\`.
-
-This tool does not return a connection string. After it succeeds, call \`get_connection_string\` with the project and branch id.
-
-This tool copies the parent at head. Point-in-time restore is a separate tool, \`restore_snapshot\`, published when \`?category=snapshots\` is granted. After this create succeeds, pass the new branch id as \`restore_snapshot\`'s \`target_branch_id\`; omitting that target creates another branch.`;
-
-const DELETE_PROJECT_DESCRIPTION = `Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For removing single branches, use \`delete_branch\` instead.
-
-Arguments: \`{ "project_id": "…" }\`.`;
-
-const DELETE_BRANCH_DESCRIPTION = `Delete a branch and all its data. NEVER run autonomously; always ask the user first. For deleting an entire project, use \`delete_project\` instead.
-
-Arguments: \`{ "project_id": "…", "branch_id": "br-…" }\`. \`branch_id\` is a branch id, not a name.`;
-
-const FINALIZE_BRANCH_RESTORE_DESCRIPTION = `Finalize the restore operation for a branch created from a snapshot.
-This operation updates the branch so it functions as the original branch it replaced.
-This includes:
-  - Reassigning any computes from the original branch to the restored branch (this will restart the computes)
-  - Renaming the restored branch to the original branch's name
-  - Renaming the original branch so it no longer uses the original name
-
-This operation only applies to branches created using \`restore_snapshot\` with \`finalize: false\`.`;
-
-const CREATE_PROJECT_ENDPOINT_DESCRIPTION = `Creates a compute endpoint on a branch.
-
-This tool does not return a connection string. After it succeeds, call \`get_connection_string\` with the project and branch id to obtain a DATABASE_URL.`;
+const RESTORE_SNAPSHOT_DESCRIPTION = `Restore a snapshot onto a new or existing branch. The call waits until the branch is ready. Pass \`target_branch_id\` to restore onto an existing branch; omit it to create one. Pass \`finalize: false\` then call \`finalize_branch_restore\` to swap names later.`;
 
 const BRANCH_ID_NOTE =
   'branch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.';
@@ -118,6 +74,7 @@ function createGeneratedNeonTools() {
     wait: WAIT,
     names: TOOL_NAMES,
     descriptions: {
+      'projects.list': LIST_PROJECTS_DESCRIPTION,
       'projects.create': CREATE_PROJECT_DESCRIPTION,
       'projects.get': DESCRIBE_PROJECT_DESCRIPTION,
       'branches.create': CREATE_BRANCH_DESCRIPTION,
@@ -128,7 +85,11 @@ function createGeneratedNeonTools() {
       'branches.finalizeRestore': FINALIZE_BRANCH_RESTORE_DESCRIPTION,
       'postgres.endpoints.create': CREATE_PROJECT_ENDPOINT_DESCRIPTION,
       'logs.query': QUERY_LOGS_DESCRIPTION,
+      'logs.fields': LIST_LOG_FIELDS_DESCRIPTION,
+      'logs.fieldValues': LIST_LOG_FIELD_VALUES_DESCRIPTION,
+      'snapshots.restore': RESTORE_SNAPSHOT_DESCRIPTION,
       'operations.list': LIST_OPERATIONS_DESCRIPTION,
+      'functions.deploy': DEPLOY_FUNCTION_DESCRIPTION,
     },
   });
 }

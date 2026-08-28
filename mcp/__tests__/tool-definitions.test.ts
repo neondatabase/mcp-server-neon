@@ -354,6 +354,36 @@ describe('generated tool interface', () => {
     expect(tool!.description).not.toMatch(/pass the returned `next_cursor`/i);
   });
 
+  it('keeps query_logs filter and time-window constraints', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'query_logs');
+    expect(tool!.description).toContain('logql');
+    expect(tool!.description).toContain('since');
+    expect(tool!.description).toContain('start_time');
+    expect(tool!.description).toContain('not both');
+  });
+
+  it('names list_log_field_values on list_log_fields', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'list_log_fields');
+    expect(tool!.description).toContain('list_log_field_values');
+    expect(tool!.description).toContain('field_name');
+    expect(tool!.description).not.toContain('field-values endpoint');
+  });
+
+  it('keeps list_log_field_values window and field-discovery constraints', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'list_log_field_values');
+    expect(tool!.description).toContain('list_log_fields');
+    expect(tool!.description).toContain('unknown_field');
+    expect(tool!.description).toContain('six hours');
+    expect(tool!.description).not.toContain('previous hour');
+  });
+
+  it('keeps deploy_function zip and at-least-one-field constraints', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'deploy_function');
+    expect(tool!.description).toContain('zip');
+    expect(tool!.description).toContain('at least one');
+    expect(tool!.description).toContain('first deployment');
+  });
+
   it('does not tell the agent to pass a cursor on list_operations', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'list_operations');
     expect(tool).toBeDefined();
@@ -364,9 +394,9 @@ describe('generated tool interface', () => {
 
   it('says list_projects walks every page and has no cursor argument', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'list_projects');
-    expect(tool!.description).toContain(
-      'Returns every page. Pass limit to cap how many.',
-    );
+    expect(tool!.description).toContain('Returns every page');
+    expect(tool!.description).toContain('There is no `cursor` argument');
+    expect(tool!.description).toContain('org_id');
     expect(generatedShape(tool!)).not.toHaveProperty('cursor');
   });
 
@@ -379,10 +409,15 @@ describe('generated tool interface', () => {
     const restore = NEON_TOOLS.find((t) => t.name === 'restore_snapshot');
     expect(generatedShape(restore!)).toHaveProperty('finalize');
     expect(generatedShape(restore!)).not.toHaveProperty('finalize_restore');
+    expect(restore!.description).toContain('target_branch_id');
+    expect(restore!.description).toContain('finalize: false');
+    expect(restore!.description).toContain('finalize_branch_restore');
+    expect(restore!.description).not.toContain('preview callbacks');
 
     const tool = NEON_TOOLS.find((t) => t.name === 'finalize_branch_restore');
     expect(tool!.description).toContain('restore_snapshot');
     expect(tool!.description).toContain('finalize: false');
+    expect(tool!.description).toContain('restarts');
     expect(tool!.description).not.toContain('restoreSnapshot');
     expect(tool!.description).not.toContain('finalize_restore');
   });
@@ -447,6 +482,7 @@ describe('generated tool interface', () => {
     expect(shape).not.toHaveProperty('branch');
     expect(shape).not.toHaveProperty('endpoints');
     expect(createBranch?.description).toContain('get_connection_string');
+    expect(createBranch?.description).toContain('restore_snapshot');
     expect(createBranch?.description).not.toContain(
       'returns a connection string',
     );
@@ -461,6 +497,10 @@ describe('generated tool interface', () => {
     expect(reset?.description).toContain(
       'those children move to the new branch',
     );
+    expect(reset?.description).toContain(
+      'Discards every change the branch has written since it diverged',
+    );
+    expect(reset?.description).toContain('restore_snapshot');
     expect(generatedShape(reset!)).toHaveProperty('preserve_under_name');
     expect(generatedShape(reset!)).not.toHaveProperty('preserveUnderName');
     expect(
@@ -489,6 +529,8 @@ describe('generated tool interface', () => {
     expect(generatedShape(compare!)).not.toHaveProperty('db_name');
     expect(compare?.description).not.toContain('run_sql');
     expect(compare?.description).toContain('base_branch_id');
+    expect(compare?.description).toContain('parent');
+    expect(compare?.description).toContain('point-in-time');
     expect(
       compare?.inputSchema.safeParse({
         project_id: 'proj',
@@ -516,6 +558,52 @@ describe('generated tool interface', () => {
     expect(deleteBranch?.description).toContain('delete_project');
     expect(deleteProject?.description).toContain('NEVER run autonomously');
     expect(deleteProject?.description).toContain('delete_branch');
+  });
+
+  it('keeps host workflow constraints in the short descriptions', () => {
+    const prepareMigration = NEON_TOOLS.find(
+      (tool) => tool.name === 'prepare_database_migration',
+    );
+    const completeMigration = NEON_TOOLS.find(
+      (tool) => tool.name === 'complete_database_migration',
+    );
+    const prepareTuning = NEON_TOOLS.find(
+      (tool) => tool.name === 'prepare_query_tuning',
+    );
+    const completeTuning = NEON_TOOLS.find(
+      (tool) => tool.name === 'complete_query_tuning',
+    );
+    const authConfig = NEON_TOOLS.find(
+      (tool) => tool.name === 'get_neon_auth_config',
+    );
+    const inspect = NEON_TOOLS.find((tool) => tool.name === 'inspect_database');
+    const runSql = NEON_TOOLS.find((tool) => tool.name === 'run_sql');
+
+    expect(prepareMigration?.description).toContain(
+      'complete_database_migration',
+    );
+    expect(completeMigration?.description).toContain(
+      'prepare_database_migration',
+    );
+    expect(completeMigration?.description).toContain(
+      'Set apply_changes false to discard',
+    );
+    expect(completeMigration?.description).not.toContain(
+      'apply_changes from prepare_database_migration',
+    );
+    expect(prepareTuning?.description).toContain('tuning_id');
+    expect(prepareTuning?.description).toContain('explain_sql_statement');
+    expect(prepareTuning?.description).toContain('apply_changes true');
+    expect(prepareTuning?.description).toContain('prepare_database_migration');
+    expect(completeTuning?.description).toContain('even when the user rejects');
+    expect(completeTuning?.description).toContain('explain_sql_statement');
+    expect(completeTuning?.description).toContain(
+      'Set apply_changes true to apply',
+    );
+    expect(authConfig?.description).toContain('redacted');
+    expect(runSql?.description).toContain('temporary branch');
+    expect(inspect?.description).toContain('CREATE EXTENSION');
+    expect(inspect?.description).toContain('ask before');
   });
 
   it('notes branch id on generated tools that take a path branch_id', () => {
