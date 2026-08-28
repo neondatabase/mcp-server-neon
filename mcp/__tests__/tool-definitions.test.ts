@@ -365,7 +365,7 @@ describe('generated tool interface', () => {
   it('says list_projects walks every page and has no cursor argument', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'list_projects');
     expect(tool!.description).toContain(
-      'This tool returns every page. Pass limit to cap how many items come back. Do not pass a cursor.',
+      'Returns every page. Pass limit to cap how many.',
     );
     expect(generatedShape(tool!)).not.toHaveProperty('cursor');
   });
