@@ -126,9 +126,7 @@ export function assembleInspectReport({
     describe: query.describe,
     projectId,
     branchId,
-    ...(includeDatabaseName && query.scope === 'database'
-      ? { databaseName: databases[0] }
-      : {}),
+    ...(includeDatabaseName ? { databaseName: databases[0] } : {}),
     databases,
     fields,
     totalRowCount: rows.length,

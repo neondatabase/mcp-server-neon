@@ -157,9 +157,6 @@ describe('MCP server e2e tool calls', () => {
       expect(schema.properties.check.enum).toEqual([...INSPECT_CHECKS]);
       expect(schema.required).toContain('check');
       expect(schema.properties.database_name?.description).toContain('Omit');
-      expect(schema.properties.database_name?.description).toContain(
-        'does not include `databaseName`',
-      );
     });
   });
 

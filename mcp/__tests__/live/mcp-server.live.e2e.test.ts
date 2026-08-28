@@ -845,11 +845,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         );
 
         expect(report.check).toBe(check);
-        if (INSPECT_QUERIES[check].scope === 'database') {
-          expect(report.databaseName).toBe('neondb');
-        } else {
-          expect(report.databaseName).toBeUndefined();
-        }
+        expect(report.databaseName).toBe('neondb');
         expect(report.databases).toEqual(['neondb']);
         expect(report.fields).toEqual(INSPECT_QUERIES[check].fields);
         expect(report.totalRowCount).toBe(report.rows.length);

@@ -609,7 +609,7 @@ const HOST_TOOL_DRAFTS = [
 
       Several checks read alike and are not: \`long-running-queries\` is what is running right now in the inspected database and has been for over five minutes; \`stalled-queries\` is a compute-wide snapshot of active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers; \`outliers\` is cumulative execution time since statistics were last reset; and \`calls\` is call frequency over that same history.
 
-      Omit \`database_name\` to run a database-scoped check against every database on the branch. The result adds a \`database\` column. \`stalled-queries\`, \`lfc-hit-rate\`, \`working-set\`, and \`replication-slots\` are compute-wide: they run once against the first listed database. Passing \`database_name\` on those checks only chooses the connection; the result does not include \`databaseName\`. For \`lfc-hit-rate\` and \`working-set\`, cache counters reset when the compute restarts. One failing database fails the whole run. \`bloat\` is a statistical estimate, not a measurement.
+      Omit \`database_name\` to run a database-scoped check against every database on the branch. The result adds a \`database\` column. \`stalled-queries\`, \`lfc-hit-rate\`, \`working-set\`, and \`replication-slots\` are compute-wide: they run once against the first listed database. For \`lfc-hit-rate\` and \`working-set\`, cache counters reset when the compute restarts. One failing database fails the whole run. \`bloat\` is a statistical estimate, not a measurement.
 
       When a check needs an extension that is not installed, the tool says so and names the \`CREATE EXTENSION\` statement. Installing it writes to the user's database — ask before running it.
     </important_notes>`,
