@@ -133,7 +133,7 @@ describe('inspect query catalog', () => {
     expect(INSPECT_QUERIES['stalled-queries']).toMatchObject({
       scope: 'compute',
       describe:
-        'Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers, oldest query group first (compute-wide)',
+        'Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers (compute-wide)',
       emptyMessage:
         'No active queries running longer than 30 seconds on this compute.',
       sql: expect.stringContaining(
@@ -163,15 +163,6 @@ describe('inspect query catalog', () => {
     );
     expect(INSPECT_QUERIES['stalled-queries'].sql).toContain(
       "array_to_string(pg_blocking_pids(a.pid), ',')",
-    );
-    expect(INSPECT_QUERIES['stalled-queries'].sql).toContain(
-      'min(query_start) AS group_start',
-    );
-    expect(INSPECT_QUERIES['stalled-queries'].sql).toContain(
-      'ORDER BY g.group_start, g.query_group, a.leader_pid NULLS FIRST, a.pid',
-    );
-    expect(INSPECT_QUERIES['stalled-queries'].sql).not.toContain(
-      'SELECT DISTINCT COALESCE(leader_pid, pid) AS query_group',
     );
   });
 

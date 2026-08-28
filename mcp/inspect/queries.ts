@@ -5,7 +5,7 @@
  *
  * Every query is copied verbatim from the `neon` CLI, where the same catalog
  * powers `neon inspect db <check>`:
- * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ df56774.
+ * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ 6ff43d7.
  * The CLI does not publish this module, so the SQL is duplicated rather than
  * imported. Keep the SQL a verbatim copy — port fixes in both directions instead
  * of letting the two catalogs diverge.
@@ -179,7 +179,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   },
   'stalled-queries': {
     describe:
-      'Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers, oldest query group first (compute-wide)',
+      'Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers (compute-wide)',
     scope: 'compute',
     fields: [
       'observed_at',
@@ -210,12 +210,9 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
           AND pid <> pg_backend_pid()
       ),
       stalled_groups AS (
-        SELECT
-          COALESCE(leader_pid, pid) AS query_group,
-          min(query_start) AS group_start
+        SELECT DISTINCT COALESCE(leader_pid, pid) AS query_group
         FROM activity
         WHERE query_start <= statement_timestamp() - interval '30 seconds'
-        GROUP BY COALESCE(leader_pid, pid)
       )
       SELECT
         statement_timestamp() AS observed_at,
@@ -240,7 +237,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
       FROM activity a
       JOIN stalled_groups g
         ON g.query_group = COALESCE(a.leader_pid, a.pid)
-      ORDER BY g.group_start, g.query_group, a.leader_pid NULLS FIRST, a.pid;
+      ORDER BY g.query_group, a.leader_pid NULLS FIRST, a.pid;
     `,
   },
   locks: {
