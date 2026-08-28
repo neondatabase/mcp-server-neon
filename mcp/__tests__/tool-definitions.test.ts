@@ -568,9 +568,13 @@ describe('generated tool interface', () => {
     );
     expect(prepareTuning?.description).toContain('tuning_id');
     expect(prepareTuning?.description).toContain('explain_sql_statement');
+    expect(prepareTuning?.description).toContain('apply_changes true');
     expect(prepareTuning?.description).toContain('prepare_database_migration');
     expect(completeTuning?.description).toContain('even when the user rejects');
     expect(completeTuning?.description).toContain('explain_sql_statement');
+    expect(completeTuning?.description).toContain(
+      'Set apply_changes true to apply',
+    );
     expect(authConfig?.description).toContain('redacted');
     expect(runSql?.description).toContain('temporary branch');
     expect(inspect?.description).toContain('CREATE EXTENSION');

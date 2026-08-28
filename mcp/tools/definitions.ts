@@ -216,7 +216,7 @@ const HOST_TOOL_DRAFTS = [
     scope: 'querying',
     readOnlySafe: false,
     description:
-      'Analyze a slow query on a temporary branch and return a tuning_id. Apply suggested SQL with run_sql on that branch, re-run explain_sql_statement there, then complete_query_tuning with the tuning_id (not the branch id) — even if the user rejects, so the temporary branch is deleted. Do not use prepare_database_migration.',
+      'Analyze a slow query on a temporary branch and return a tuning_id. Apply suggested SQL with run_sql on that branch, re-run explain_sql_statement there, then complete_query_tuning with the tuning_id (not the branch id) — apply_changes true if they accept, omit it or pass false if they reject, so the temporary branch is deleted. Do not use prepare_database_migration.',
     inputSchema: prepareQueryTuningInputSchema,
     annotations: {
       title: 'Prepare Query Tuning',
@@ -231,7 +231,7 @@ const HOST_TOOL_DRAFTS = [
     scope: 'querying',
     readOnlySafe: false,
     description:
-      'Apply or discard query-tuning changes and delete the temporary branch. NEVER run autonomously. Before calling, apply suggested SQL with run_sql on the temporary branch and re-run explain_sql_statement. Pass the tuning_id from prepare_query_tuning, not the branch id, plus temporary_branch_id. Call this even when the user rejects the changes. Do not use prepare_database_migration.',
+      'Apply or discard query-tuning changes and delete the temporary branch. NEVER run autonomously. Before calling, apply suggested SQL with run_sql on the temporary branch and re-run explain_sql_statement. Pass the tuning_id from prepare_query_tuning, not the branch id, plus temporary_branch_id. Set apply_changes true to apply; omitting it discards. Call this even when the user rejects the changes. Do not use prepare_database_migration.',
     inputSchema: completeQueryTuningInputSchema,
     annotations: {
       title: 'Complete Query Tuning',
