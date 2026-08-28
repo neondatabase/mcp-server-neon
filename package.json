@@ -31,7 +31,7 @@
     "@keyv/postgres": "2.1.2",
     "@modelcontextprotocol/sdk": "1.25.3",
     "@neon/sdk": "3.0.0",
-    "@neon/tools": "1.0.0",
+    "@neon/tools": "1.1.1",
     "@neondatabase/serverless": "1.0.0",
     "@segment/analytics-node": "2.2.1",
     "@sentry/node": "9.19.0",
