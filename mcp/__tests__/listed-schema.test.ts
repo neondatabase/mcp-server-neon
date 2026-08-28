@@ -28,7 +28,7 @@ describe('compactListedJsonSchema', () => {
     ).toEqual({ type: 'integer', minimum: 1, maximum: 400 });
   });
 
-  it('drops pattern when format is already set', () => {
+  it('drops the RFC3339 regex next to format date-time', () => {
     expect(
       compactListedJsonSchema({
         type: 'string',
@@ -36,6 +36,20 @@ describe('compactListedJsonSchema', () => {
         pattern: '^[0-9]{4}-',
       }),
     ).toEqual({ type: 'string', format: 'date-time' });
+  });
+
+  it('keeps pattern when format is uuid, email, or byte', () => {
+    expect(
+      compactListedJsonSchema({
+        type: 'string',
+        format: 'uuid',
+        pattern: '^[0-9a-f-]{36}$',
+      }),
+    ).toEqual({
+      type: 'string',
+      format: 'uuid',
+      pattern: '^[0-9a-f-]{36}$',
+    });
   });
 
   it('keeps pattern when there is no format', () => {

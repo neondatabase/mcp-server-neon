@@ -23,7 +23,7 @@ const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project and waits until the d
 
 const DESCRIBE_PROJECT_DESCRIPTION = `Retrieves the project record (settings, compute, usage). Call \`list_branches\` for branches.`;
 
-const QUERY_LOGS_DESCRIPTION = `Returns logs for a branch. Pass \`limit\` to cap how many. There is no \`cursor\` argument. Private beta; a branch without logs access returns HTTP 404 with reason "telemetry_not_enabled".`;
+const QUERY_LOGS_DESCRIPTION = `Returns logs for a branch. Pass \`limit\` to cap how many. There is no \`cursor\` argument. Filters combine with AND. Pass \`logql\` instead of structured filters, not with them. Give the window as \`since\` or \`start_time\`, not both; default is the previous hour, max seven days; \`end_time\` is exclusive. Private beta; a branch without logs access returns HTTP 404 with reason "telemetry_not_enabled".`;
 
 const LIST_OPERATIONS_DESCRIPTION = `Lists operations for a project. Omitting \`limit\` returns every remaining page. There is no \`cursor\` argument.`;
 
@@ -40,6 +40,8 @@ const DELETE_BRANCH_DESCRIPTION = `Delete a branch and all its data. NEVER run a
 const FINALIZE_BRANCH_RESTORE_DESCRIPTION = `Finalize a branch created with \`restore_snapshot\` and \`finalize: false\`: reassign computes and swap names so it replaces the original branch.`;
 
 const CREATE_PROJECT_ENDPOINT_DESCRIPTION = `Creates a compute endpoint on a branch. Does not return a connection string; call \`get_connection_string\`.`;
+
+const DEPLOY_FUNCTION_DESCRIPTION = `Creates a deployment for the function. Supply at least one of \`zip\`, \`environment\`, or \`runtime\`; omitted fields inherit the latest version. The first deployment must include \`zip\`.`;
 
 const BRANCH_ID_NOTE =
   'branch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.';
@@ -78,6 +80,7 @@ function createGeneratedNeonTools() {
       'postgres.endpoints.create': CREATE_PROJECT_ENDPOINT_DESCRIPTION,
       'logs.query': QUERY_LOGS_DESCRIPTION,
       'operations.list': LIST_OPERATIONS_DESCRIPTION,
+      'functions.deploy': DEPLOY_FUNCTION_DESCRIPTION,
     },
   });
 }

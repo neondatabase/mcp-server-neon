@@ -340,6 +340,21 @@ describe('generated tool interface', () => {
     expect(tool!.description).not.toMatch(/pass the returned `next_cursor`/i);
   });
 
+  it('keeps query_logs filter and time-window constraints', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'query_logs');
+    expect(tool!.description).toContain('logql');
+    expect(tool!.description).toContain('since');
+    expect(tool!.description).toContain('start_time');
+    expect(tool!.description).toContain('not both');
+  });
+
+  it('keeps deploy_function zip and at-least-one-field constraints', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'deploy_function');
+    expect(tool!.description).toContain('zip');
+    expect(tool!.description).toContain('at least one');
+    expect(tool!.description).toContain('first deployment');
+  });
+
   it('does not tell the agent to pass a cursor on list_operations', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'list_operations');
     expect(tool).toBeDefined();

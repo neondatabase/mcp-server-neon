@@ -15,7 +15,8 @@ function isJsonSchemaUnboundedInt(value: unknown): boolean {
 /**
  * tools/list clients count inputSchema toward a catalog-size cap. Zod/OpenAPI
  * emit draft $schema URIs, int64 sentinel bounds, and RFC3339 regexes that
- * duplicate `format` — none of that is argument meaning.
+ * duplicate `format: "date-time"` — none of that is argument meaning. UUID,
+ * email, and base64 `pattern`s stay.
  */
 export function compactListedJsonSchema(node: unknown): unknown {
   if (Array.isArray(node)) {
@@ -34,7 +35,7 @@ export function compactListedJsonSchema(node: unknown): unknown {
     ) {
       continue;
     }
-    if (key === 'pattern' && typeof node.format === 'string') continue;
+    if (key === 'pattern' && node.format === 'date-time') continue;
     out[key] = compactListedJsonSchema(value);
   }
   return out;
