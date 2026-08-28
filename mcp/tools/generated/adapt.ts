@@ -164,7 +164,7 @@ function generatedAnnotations(
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
-      openWorldHint: true,
+      openWorldHint: tool.annotations.openWorldHint ?? false,
     };
   }
 
@@ -173,7 +173,7 @@ function generatedAnnotations(
     readOnlyHint: tool.annotations.readOnlyHint,
     destructiveHint: generatedDestructiveHint(toolId, tool),
     idempotentHint: tool.annotations.idempotentHint ?? readOnlySafe,
-    openWorldHint: tool.annotations.openWorldHint,
+    openWorldHint: tool.annotations.openWorldHint ?? false,
   };
 }
 
