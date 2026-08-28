@@ -348,6 +348,14 @@ describe('generated tool interface', () => {
     expect(tool!.description).toContain('not both');
   });
 
+  it('keeps list_log_field_values window and field-discovery constraints', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'list_log_field_values');
+    expect(tool!.description).toContain('list_log_fields');
+    expect(tool!.description).toContain('unknown_field');
+    expect(tool!.description).toContain('six hours');
+    expect(tool!.description).not.toContain('previous hour');
+  });
+
   it('keeps deploy_function zip and at-least-one-field constraints', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'deploy_function');
     expect(tool!.description).toContain('zip');
