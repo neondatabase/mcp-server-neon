@@ -562,7 +562,7 @@
   {
     "name": "inspect_database",
     "title": "Inspect Database",
-    "description": "Run one read-only neon inspect db check (pick `check` from the input schema). Not for arbitrary SQL (`run_sql`), one statement's plan (`explain_sql_statement`), or applying indexes (`prepare_query_tuning`). Omit `database_name` to cover every database; some checks are compute-wide.",
+    "description": "Run one read-only neon inspect db check (pick `check` from the input schema). Not for arbitrary SQL (`run_sql`), one statement's plan (`explain_sql_statement`), or applying indexes (`prepare_query_tuning`). Omit `database_name` to cover every database; some checks are compute-wide. If a check needs an extension, the tool names `CREATE EXTENSION`; ask before running it.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1640,7 +1640,7 @@
   {
     "name": "reset_from_parent",
     "title": "Reset branch from parent",
-    "description": "Reset a branch to its parent's current HEAD. NEVER run autonomously; always ask the user first. `preserve_under_name` saves the current state first and is required when the branch has children; those children move to the new branch. Point-in-time restore is `restore_snapshot`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Reset a branch to its parent's current HEAD. Discards every change the branch has written since it diverged. NEVER run autonomously; always ask the user first. `preserve_under_name` saves the current state first and is required when the branch has children; those children move to the new branch. Point-in-time restore is `restore_snapshot`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "type": "object",
       "properties": {

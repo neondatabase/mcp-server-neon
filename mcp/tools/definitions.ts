@@ -260,7 +260,7 @@ const HOST_TOOL_DRAFTS = [
     name: 'inspect_database' as const,
     scope: 'querying',
     description:
-      "Run one read-only neon inspect db check (pick `check` from the input schema). Not for arbitrary SQL (`run_sql`), one statement's plan (`explain_sql_statement`), or applying indexes (`prepare_query_tuning`). Omit `database_name` to cover every database; some checks are compute-wide.",
+      "Run one read-only neon inspect db check (pick `check` from the input schema). Not for arbitrary SQL (`run_sql`), one statement's plan (`explain_sql_statement`), or applying indexes (`prepare_query_tuning`). Omit `database_name` to cover every database; some checks are compute-wide. If a check needs an extension, the tool names `CREATE EXTENSION`; ask before running it.",
     inputSchema: inspectDatabaseInputSchema,
     readOnlySafe: true,
     annotations: {

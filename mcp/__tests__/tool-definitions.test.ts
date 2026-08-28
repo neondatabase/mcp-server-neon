@@ -472,6 +472,9 @@ describe('generated tool interface', () => {
     expect(reset?.description).toContain(
       'those children move to the new branch',
     );
+    expect(reset?.description).toContain(
+      'Discards every change the branch has written since it diverged',
+    );
     expect(reset?.description).toContain('restore_snapshot');
     expect(generatedShape(reset!)).toHaveProperty('preserve_under_name');
     expect(generatedShape(reset!)).not.toHaveProperty('preserveUnderName');
@@ -548,6 +551,7 @@ describe('generated tool interface', () => {
     const authConfig = NEON_TOOLS.find(
       (tool) => tool.name === 'get_neon_auth_config',
     );
+    const inspect = NEON_TOOLS.find((tool) => tool.name === 'inspect_database');
     const runSql = NEON_TOOLS.find((tool) => tool.name === 'run_sql');
 
     expect(prepareMigration?.description).toContain(
@@ -569,6 +573,8 @@ describe('generated tool interface', () => {
     expect(completeTuning?.description).toContain('explain_sql_statement');
     expect(authConfig?.description).toContain('redacted');
     expect(runSql?.description).toContain('temporary branch');
+    expect(inspect?.description).toContain('CREATE EXTENSION');
+    expect(inspect?.description).toContain('ask before');
   });
 
   it('notes branch id on generated tools that take a path branch_id', () => {
