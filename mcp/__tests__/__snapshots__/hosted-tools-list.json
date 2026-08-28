@@ -11,7 +11,8 @@
           "description": "Search organizations by name or ID. You can specify partial name or ID values to filter results."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "List Organizations",
@@ -49,7 +50,8 @@
         "sql",
         "project_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Run SQL",
@@ -90,7 +92,8 @@
         "sql_statements",
         "project_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Run SQL Transaction",
@@ -128,7 +131,8 @@
         "table_name",
         "project_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Describe Table Schema",
@@ -161,7 +165,8 @@
       "required": [
         "project_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Get Database Tables",
@@ -195,7 +200,8 @@
         "migration_sql",
         "project_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Prepare Database Migration",
@@ -250,7 +256,8 @@
         "temporary_branch_id",
         "parent_branch_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Complete Database Migration",
@@ -284,7 +291,8 @@
         "project_id",
         "branch_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Describe Branch",
@@ -325,7 +333,8 @@
       "required": [
         "project_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Get Connection String",
@@ -354,7 +363,8 @@
       "required": [
         "project_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Get Neon Auth configuration",
@@ -397,7 +407,8 @@
         "sql",
         "project_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Explain SQL Statement",
@@ -436,7 +447,8 @@
         "database_name",
         "project_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Prepare Query Tuning",
@@ -502,7 +514,8 @@
         "project_id",
         "temporary_branch_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Complete Query Tuning",
@@ -549,7 +562,8 @@
       "required": [
         "project_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "List Slow Queries",
@@ -616,7 +630,8 @@
         "check",
         "project_id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Inspect Database",
@@ -642,7 +657,8 @@
       "required": [
         "query"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Search",
@@ -668,7 +684,8 @@
       "required": [
         "id"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Fetch",
@@ -685,7 +702,8 @@
     "inputSchema": {
       "type": "object",
       "properties": {},
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "List Documentation Resources",
@@ -710,7 +728,8 @@
       "required": [
         "slug"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
       "title": "Get Documentation Resource",
@@ -725,6 +744,7 @@
     "title": "List projects",
     "description": "List Neon projects you own. Returns every page. Pass limit to cap how many. There is no `cursor` argument. Pass `org_id` with a personal API key to list that org's projects.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "limit": {
@@ -763,6 +783,7 @@
     "title": "Retrieve project details",
     "description": "Retrieves the project record (settings, compute, usage). Call `list_branches` for branches.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -788,6 +809,7 @@
     "title": "Create project",
     "description": "Creates a Neon project and waits until the default compute is ready. Pass `org_id` with a personal API key. Does not return a connection string; call `get_connection_string` with the project id.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "settings": {
@@ -798,23 +820,28 @@
               "properties": {
                 "active_time_seconds": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "compute_time_seconds": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "written_data_bytes": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "data_transfer_bytes": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "logical_size_bytes": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 9007199254740991
                 }
               },
               "additionalProperties": false
@@ -843,7 +870,9 @@
                 "weekdays": {
                   "type": "array",
                   "items": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
                   }
                 },
                 "start_time": {
@@ -1010,6 +1039,7 @@
     "title": "Update project",
     "description": "Updates the specified project.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1024,23 +1054,28 @@
               "properties": {
                 "active_time_seconds": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "compute_time_seconds": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "written_data_bytes": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "data_transfer_bytes": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "logical_size_bytes": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 9007199254740991
                 }
               },
               "additionalProperties": false
@@ -1069,7 +1104,9 @@
                 "weekdays": {
                   "type": "array",
                   "items": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
                   }
                 },
                 "start_time": {
@@ -1187,6 +1224,7 @@
     "title": "Delete project",
     "description": "Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For a single branch, use `delete_branch`.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1212,6 +1250,7 @@
     "title": "Recover a deleted project",
     "description": "Recovers a deleted project within the 7-day deletion recovery period.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1237,6 +1276,7 @@
     "title": "List project access",
     "description": "Retrieves details about users who have access to the project, including the permission `id`, the granted-to email address, and the date project access was granted.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1262,6 +1302,7 @@
     "title": "List org members and their project roles",
     "description": "Lists organization members and their per-project roles for an org-owned project. Returns every page. Pass limit to cap how many.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1292,6 +1333,7 @@
     "title": "List regions",
     "description": "Lists Neon regions available to the authenticated account.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {},
       "additionalProperties": false
@@ -1309,6 +1351,7 @@
     "title": "List operations",
     "description": "Lists operations for a project. Omitting `limit` returns every remaining page. There is no `cursor` argument.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1339,6 +1382,7 @@
     "title": "Retrieve operation details",
     "description": "Retrieves details for the specified operation.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1370,6 +1414,7 @@
     "title": "List branches",
     "description": "Retrieves a list of branches for the specified project. Returns every page. Pass limit to cap how many.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1421,6 +1466,7 @@
     "title": "Retrieve branch details",
     "description": "Retrieves information about the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1451,6 +1497,7 @@
     "title": "Create branch",
     "description": "Creates a branch with a read-write compute and waits until it is ready. Pass `no_compute: true` to skip the endpoint. Does not return a connection string; call `get_connection_string` with the project and branch id. Copies the parent at HEAD; point-in-time restore is `restore_snapshot`.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1508,6 +1555,7 @@
     "title": "Update branch",
     "description": "Updates the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1530,7 +1578,8 @@
           "anyOf": [
             {
               "type": "string",
-              "format": "date-time"
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
             },
             {
               "type": "null"
@@ -1557,6 +1606,7 @@
     "title": "Delete branch",
     "description": "Delete a branch and all its data. NEVER run autonomously; always ask the user first. For the whole project, use `delete_project`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1587,6 +1637,7 @@
     "title": "Get default branch",
     "description": "Resolve the project's default branch by the default flag, not by name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1612,6 +1663,7 @@
     "title": "Set branch as default",
     "description": "Sets the specified branch as the project's default branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1642,6 +1694,7 @@
     "title": "Reset branch from parent",
     "description": "Reset a branch to its parent's current HEAD. Discards every change the branch has written since it diverged. NEVER run autonomously; always ask the user first. `preserve_under_name` saves the current state first and is required when the branch has children; those children move to the new branch. Point-in-time restore is `restore_snapshot`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1676,6 +1729,7 @@
     "title": "Compare database schema",
     "description": "Compare one database's SQL schema on a branch to another. `database_name` is required. Omit `base_branch_id` to compare against the parent; it is a branch id (`br-...`), not a name. Pass `lsn`, `timestamp`, `base_lsn`, or `base_timestamp` only for a point-in-time comparison.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1698,14 +1752,16 @@
         },
         "timestamp": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
         },
         "base_lsn": {
           "type": "string"
         },
         "base_timestamp": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
         }
       },
       "required": [
@@ -1728,6 +1784,7 @@
     "title": "Finalize branch restore from snapshot",
     "description": "Finalize a branch created with `restore_snapshot` and `finalize: false`: reassign computes (this restarts them) and swap names so it replaces the original branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1761,6 +1818,7 @@
     "title": "List roles",
     "description": "Retrieves a list of Postgres roles from the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1791,6 +1849,7 @@
     "title": "Retrieve role details",
     "description": "Retrieves details about the specified role.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1825,6 +1884,7 @@
     "title": "Create role",
     "description": "Creates a Postgres role in the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1862,6 +1922,7 @@
     "title": "Delete role",
     "description": "Deletes the specified Postgres role from the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1896,6 +1957,7 @@
     "title": "Reset role password",
     "description": "Resets the password for the specified Postgres role.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1930,6 +1992,7 @@
     "title": "List databases",
     "description": "Retrieves a list of databases for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1960,6 +2023,7 @@
     "title": "Retrieve database details",
     "description": "Retrieves information about the specified database.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -1994,6 +2058,7 @@
     "title": "Create database",
     "description": "Creates a database in the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2032,6 +2097,7 @@
     "title": "Update database",
     "description": "Updates the specified database in the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2072,6 +2138,7 @@
     "title": "Delete database",
     "description": "Deletes the specified database from the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2106,6 +2173,7 @@
     "title": "List compute endpoints",
     "description": "Retrieves a list of compute endpoints for the specified project.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2131,6 +2199,7 @@
     "title": "List branch endpoints",
     "description": "Retrieves a list of compute endpoints for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2161,6 +2230,7 @@
     "title": "Retrieve compute endpoint details",
     "description": "Retrieves information about the specified compute endpoint.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2191,6 +2261,7 @@
     "title": "Create compute endpoint",
     "description": "Creates a compute endpoint on a branch. Does not return a connection string; call `get_connection_string`.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2307,6 +2378,7 @@
     "title": "Update compute endpoint",
     "description": "Updates the specified compute endpoint.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2416,6 +2488,7 @@
     "title": "Delete compute endpoint",
     "description": "Deletes the specified compute endpoint.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2446,6 +2519,7 @@
     "title": "Start compute endpoint",
     "description": "Starts a compute endpoint.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2476,6 +2550,7 @@
     "title": "Suspend compute endpoint",
     "description": "Suspends the specified compute endpoint.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2506,6 +2581,7 @@
     "title": "Restart compute endpoint",
     "description": "Restarts the specified compute endpoint by immediately suspending it and then starting it again.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2536,6 +2612,7 @@
     "title": "List project snapshots",
     "description": "Lists the snapshots for the specified project.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2561,6 +2638,7 @@
     "title": "Retrieve backup schedule",
     "description": "Returns the backup schedule for the specified branch, including the configured snapshot frequencies.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2591,6 +2669,7 @@
     "title": "Set snapshot schedule",
     "description": "Replace a branch's automatic snapshot schedule. Frequency must be daily, weekly, or monthly.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2662,6 +2741,7 @@
     "title": "Create snapshot",
     "description": "Creates a snapshot from the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2704,6 +2784,7 @@
     "title": "Update snapshot",
     "description": "Updates the specified snapshot.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2721,7 +2802,8 @@
           "anyOf": [
             {
               "type": "string",
-              "format": "date-time"
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
             },
             {
               "type": "null"
@@ -2748,6 +2830,7 @@
     "title": "Delete snapshot",
     "description": "Deletes the specified snapshot.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2778,6 +2861,7 @@
     "title": "Restore snapshot",
     "description": "Restore a snapshot onto a new or existing branch. The call waits until operation-backed provisioning finishes. Preview callbacks are not available on this tool.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2818,6 +2902,7 @@
     "title": "Retrieve Neon Auth details for the branch",
     "description": "Retrieves the Neon Auth integration details for the specified branch, including the auth provider type and integration status.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2848,6 +2933,7 @@
     "title": "Enable Neon Auth for the branch",
     "description": "Enables Neon Auth for the specified branch by connecting it to an authentication provider.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2890,6 +2976,7 @@
     "title": "Disable Neon Auth for the branch",
     "description": "Disables the Neon Auth integration for the specified branch, removing the connection to the authentication provider.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2923,6 +3010,7 @@
     "title": "Update auth configuration",
     "description": "Updates the auth configuration for the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2959,6 +3047,7 @@
     "title": "List OAuth providers for the branch",
     "description": "Lists the OAuth providers configured for the specified branch's Neon Auth integration.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -2989,6 +3078,7 @@
     "title": "Add an OAuth provider",
     "description": "Adds an OAuth provider configuration to the specified branch's Neon Auth integration.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3038,6 +3128,7 @@
     "title": "Update OAuth provider",
     "description": "Updates an OAuth provider for the specified project.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3087,6 +3178,7 @@
     "title": "Delete OAuth provider",
     "description": "Deletes an OAuth provider from the specified project.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3127,6 +3219,7 @@
     "title": "List domains in redirect_uri whitelist",
     "description": "Lists the trusted domains in the redirect URI whitelist for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3157,6 +3250,7 @@
     "title": "Add domain to redirect_uri whitelist",
     "description": "Adds a domain to the redirect URI whitelist for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3201,6 +3295,7 @@
     "title": "Delete domain from redirect_uri whitelist",
     "description": "Removes a domain from the redirect URI whitelist for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3257,6 +3352,7 @@
     "title": "Create new auth user",
     "description": "Creates a new user in the Neon Auth user directory for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3300,6 +3396,7 @@
     "title": "Delete auth user",
     "description": "Deletes the specified user from the Neon Auth user directory for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3334,6 +3431,7 @@
     "title": "Update auth user role",
     "description": "Updates the role of a user in the Neon Auth user directory for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3376,6 +3474,7 @@
     "title": "Retrieve Neon Data API configuration",
     "description": "Retrieves the Neon Data API configuration for the specified branch, including endpoint URL, enabled state, and database settings.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3410,6 +3509,7 @@
     "title": "Create Neon Data API",
     "description": "Creates a new instance of Neon Data API in the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3459,7 +3559,9 @@
               "type": "string"
             },
             "db_max_rows": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             "db_schemas": {
               "type": "array",
@@ -3471,7 +3573,9 @@
               "type": "string"
             },
             "jwt_cache_max_lifetime": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             "openapi_mode": {
               "type": "string"
@@ -3506,6 +3610,7 @@
     "title": "Update Neon Data API",
     "description": "Updates the Neon Data API configuration for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3529,7 +3634,9 @@
           "type": "string"
         },
         "db_max_rows": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
         },
         "db_schemas": {
           "type": "array",
@@ -3541,7 +3648,9 @@
           "type": "string"
         },
         "jwt_cache_max_lifetime": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
         },
         "openapi_mode": {
           "type": "string"
@@ -3573,6 +3682,7 @@
     "title": "Delete Neon Data API",
     "description": "Deletes the Neon Data API for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3607,6 +3717,7 @@
     "title": "Query branch logs",
     "description": "Returns logs for a branch. Pass `limit` to cap how many. There is no `cursor` argument. Filters combine with AND. Pass `logql` instead of structured filters, not with them. Give the window as `since` or `start_time`, not both; default is the previous hour, max seven days; `end_time` is exclusive. Private beta; a branch without logs access returns HTTP 404 with reason \"telemetry_not_enabled\".\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3623,11 +3734,13 @@
         },
         "start_time": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
         },
         "end_time": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
         },
         "limit": {
           "type": "integer",
@@ -3704,6 +3817,7 @@
     "title": "List branch log fields",
     "description": "Lists the low-cardinality log fields observed on this branch whose distinct values can be discovered with the log field-values endpoint.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3734,6 +3848,7 @@
     "title": "List branch log field values",
     "description": "Lists distinct values for a low-cardinality log field. Call `list_log_fields` first for `field_name`; a field the branch has never emitted returns `unknown_field`. Pass `since` or `start_time`, not both; default is the previous six hours, max seven days. Private beta.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3754,11 +3869,13 @@
         },
         "start_time": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
         },
         "end_time": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
         },
         "source": {
           "type": "string",
@@ -3794,6 +3911,7 @@
     "title": "Get branch AI Gateway endpoint",
     "description": "Returns the AI Gateway endpoint host for the specified branch, used to render code-snippet base URLs.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3824,6 +3942,7 @@
     "title": "List functions on the branch",
     "description": "Lists functions on the specified branch. Returns every page. Pass limit to cap how many.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3859,6 +3978,7 @@
     "title": "Get function details",
     "description": "Returns the function identified by its slug.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3894,6 +4014,7 @@
     "title": "Update a function",
     "description": "Updates the function's mutable metadata — currently only the display `name`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3942,6 +4063,7 @@
     "title": "Delete a function on the branch",
     "description": "Deletes the function identified by its slug.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -3977,6 +4099,7 @@
     "title": "Deploy code to a function",
     "description": "Creates a deployment for the function. Supply at least one of `zip`, `environment`, or `runtime`; omitted fields inherit the latest version. The first deployment must include `zip`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -4028,6 +4151,7 @@
     "title": "Get branch object storage state",
     "description": "Returns whether branchable object storage is usable for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -4058,6 +4182,7 @@
     "title": "List buckets on the branch",
     "description": "Lists branchable object storage buckets visible on the specified branch, including those inherited from ancestor branches.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -4088,6 +4213,7 @@
     "title": "Create a bucket on the branch",
     "description": "Creates a new branchable object storage bucket on the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -4131,6 +4257,7 @@
     "title": "Delete a bucket on the branch",
     "description": "Deletes the named bucket from the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -4167,6 +4294,7 @@
     "title": "List objects in a bucket",
     "description": "Lists objects visible in the named bucket on the specified branch, including those inherited from ancestor branches. Returns every page. Pass limit to cap how many.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -4214,6 +4342,7 @@
     "title": "Delete an object in a bucket",
     "description": "Deletes the named object from the bucket on the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -4256,6 +4385,7 @@
     "title": "Delete every object under a key prefix (folder) in a bucket",
     "description": "Soft-deletes every object on the specified branch whose key starts with `prefix`, in a single call.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
@@ -4298,6 +4428,7 @@
     "title": "Presign an upload or download for an object in a bucket",
     "description": "Returns a presigned URL that transfers bytes directly to or from the object's bucket on the specified branch, without the caller ever handling S3 credentials.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {

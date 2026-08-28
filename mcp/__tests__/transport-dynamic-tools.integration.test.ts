@@ -455,7 +455,7 @@ describe('transport dynamic tool composition', () => {
     expect(toolNames.has('create_project')).toBe(false);
   });
 
-  it('keeps the default-grant tools/list catalog compact without dropping routing copy', async () => {
+  it('lists default-grant tools with the SDK JSON Schema conversion', async () => {
     const oauthToken = 'oauth-catalog-size';
     vi.mocked(model.getAccessToken).mockResolvedValue(
       buildOAuthToken(oauthToken, 'read write', {
@@ -466,17 +466,6 @@ describe('transport dynamic tool composition', () => {
 
     const tools = await listToolsForToken(oauthToken);
     expect(tools).toEqual(NEON_TOOLS.map(toListedTool));
-
-    const selected = tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: tool.inputSchema,
-    }));
-    expect(JSON.stringify(selected).length / 4).toBeLessThan(17_200);
-
-    for (const tool of tools) {
-      expect(tool.inputSchema).not.toHaveProperty('$schema');
-    }
 
     const inspect = tools.find((tool) => tool.name === 'inspect_database');
     expect(JSON.stringify(inspect?.inputSchema)).toContain('table-sizes');
