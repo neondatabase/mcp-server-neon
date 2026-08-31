@@ -2,12 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { config as loadEnv } from 'dotenv';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { neon } from '@neondatabase/serverless';
 import { z } from 'zod';
-
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { NeonApiClient } from '../../neon-client';
 import {
   INSPECT_CHECKS,

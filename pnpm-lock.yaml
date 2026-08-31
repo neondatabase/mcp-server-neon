@@ -14,6 +14,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.25.3
         version: 1.25.3(hono@4.12.11)(zod@4.4.3)
+      '@modelcontextprotocol/server':
+        specifier: 2.0.0
+        version: 2.0.0
       '@neon/sdk':
         specifier: 3.0.0
         version: 3.0.0
@@ -39,8 +42,8 @@ importers:
         specifier: 5.3.2
         version: 5.3.2
       mcp-handler:
-        specifier: 1.0.6
-        version: 1.0.6(@modelcontextprotocol/sdk@1.25.3(hono@4.12.11)(zod@4.4.3))(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
+        specifier: 2.1.0
+        version: 2.1.0(@modelcontextprotocol/server@2.0.0)(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
       next:
         specifier: 16.1.1
         version: 16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -69,6 +72,9 @@ importers:
         specifier: 3.25.2
         version: 3.25.2(zod@4.4.3)
     devDependencies:
+      '@modelcontextprotocol/client':
+        specifier: 2.0.0
+        version: 2.0.0
       '@playwright/test':
         specifier: 1.58.2
         version: 1.58.2
@@ -781,6 +787,14 @@ packages:
     resolution: {integrity: sha512-qC72D4+CDdjGqJvkFMMEAtancHUQ7/d/tAiHf64z8MopFDmcrtbcJuerDtFceuAfQJ2pDSfCKCtbqoGBNnwg0w==}
     engines: {node: '>=8'}
 
+  '@modelcontextprotocol/client@2.0.0':
+    resolution: {integrity: sha512-8f1OghQ2rjzIOfqgUCP+8GiUWqRs89njoWLNqAe8kWmDePv3s1fZXseej+QXemssEuuOvLLmLO/kqM3IQHtISw==}
+    engines: {node: '>=20'}
+
+  '@modelcontextprotocol/core@2.0.0':
+    resolution: {integrity: sha512-pJCEwGG7Lfr/+PQp9ZTwKXNeO5wzbfKL7H3MYpCorM4oFBoQrdjnBgEoqG+RjhsvS1FKrDbKux+M1HhlnGWqcA==}
+    engines: {node: '>=20'}
+
   '@modelcontextprotocol/sdk@1.25.3':
     resolution: {integrity: sha512-vsAMBMERybvYgKbg/l4L1rhS7VXV1c0CtyJg72vwxONVX0l4ZfKVAnZEWTQixJGTzKnELjQ59e4NbdFDALRiAQ==}
     engines: {node: '>=18'}
@@ -790,6 +804,10 @@ packages:
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
+
+  '@modelcontextprotocol/server@2.0.0':
+    resolution: {integrity: sha512-YhHWdHfpFMQfd0prsEnxKeS3Qz3ytIGmsS0sth4KDjnacIT7hxk6hXHkJ9KysxlkvTM+WZAtQbbcUhdoP4Hvtw==}
+    engines: {node: '>=20'}
 
   '@napi-rs/wasm-runtime@0.2.12':
     resolution: {integrity: sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==}
@@ -2881,11 +2899,12 @@ packages:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
 
-  mcp-handler@1.0.6:
-    resolution: {integrity: sha512-cPT0ct6TO6aSdlg1rVALIR5sMUDuVLdb7CVKW0VjUW+Z67gUkGbaCzfzu9iF5TLeymiLJLBDR5vtlEOLFlheQA==}
+  mcp-handler@2.1.0:
+    resolution: {integrity: sha512-mhnUpkgWrXMwwhdbJ5Uq43uUV23Emxfq3fRfsFwt8Kjc35cGUiKuYeX9wjwnvsdTiKsmjXnQ4tO4awWa3ZM4LQ==}
+    engines: {node: '>=20'}
     hasBin: true
     peerDependencies:
-      '@modelcontextprotocol/sdk': ^1.25.1
+      '@modelcontextprotocol/server': ^2.0.0
       next: '>=13.0.0'
     peerDependenciesMeta:
       next:
@@ -4279,6 +4298,20 @@ snapshots:
     dependencies:
       '@lukeed/csprng': 1.1.0
 
+  '@modelcontextprotocol/client@2.0.0':
+    dependencies:
+      '@modelcontextprotocol/core': 2.0.0
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.0.6
+      jose: 6.2.2
+      pkce-challenge: 5.0.1
+      zod: 4.4.3
+
+  '@modelcontextprotocol/core@2.0.0':
+    dependencies:
+      zod: 4.4.3
+
   '@modelcontextprotocol/sdk@1.25.3(hono@4.12.11)(zod@4.4.3)':
     dependencies:
       '@hono/node-server': 1.19.12(hono@4.12.11)
@@ -4300,6 +4333,11 @@ snapshots:
     transitivePeerDependencies:
       - hono
       - supports-color
+
+  '@modelcontextprotocol/server@2.0.0':
+    dependencies:
+      '@modelcontextprotocol/core': 2.0.0
+      zod: 4.4.3
 
   '@napi-rs/wasm-runtime@0.2.12':
     dependencies:
@@ -6546,12 +6584,11 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mcp-handler@1.0.6(@modelcontextprotocol/sdk@1.25.3(hono@4.12.11)(zod@4.4.3))(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)):
+  mcp-handler@2.1.0(@modelcontextprotocol/server@2.0.0)(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)):
     dependencies:
-      '@modelcontextprotocol/sdk': 1.25.3(hono@4.12.11)(zod@4.4.3)
+      '@modelcontextprotocol/server': 2.0.0
       chalk: 5.6.2
       commander: 11.1.0
-      redis: 4.6.0
     optionalDependencies:
       next: 16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
 

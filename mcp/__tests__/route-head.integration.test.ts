@@ -1,15 +1,15 @@
 /**
  * Integration coverage for HEAD requests to the MCP transport route.
  *
- * Production regression: `HEAD /mcp` returned 504 after burning the full 800s
- * Fluid Compute ceiling, once per uptime probe. The cause is a gap between two
+ * Production regression: `HEAD /mcp` returned 504 after burning the full
+ * function runtime ceiling, once per uptime probe. The cause was a gap between two
  * layers — Next.js answers HEAD with the GET export, and mcp-handler's
  * streamable-HTTP branch writes a response only for GET, DELETE, and POST. A HEAD
  * matched the `/api/mcp` pathname, fell through every method branch, and returned
  * without ever writing a response, so the promise never settled:
  *
  *   HEAD /mcp  →  verifyToken called (API key cache hit, auth OK)
- *              →  Vercel Runtime Timeout Error: Task timed out after 800 seconds
+ *              →  Vercel Runtime Timeout Error
  *
  * mcp-handler is deliberately NOT mocked here: the whole bug lives in how that
  * library dispatches by method, so a test that stubs it would prove nothing. Only
@@ -72,7 +72,7 @@ async function withinBudget(
         reject(
           new Error(
             `No response within ${RESPONSE_BUDGET_MS}ms. On Vercel this request ` +
-              'runs to the 800s maxDuration and returns 504.',
+              'runs to the function timeout and returns 504.',
           ),
         ),
       RESPONSE_BUDGET_MS,
@@ -102,7 +102,7 @@ describe('HEAD on the MCP transport route', () => {
   });
 
   it('answers an authenticated HEAD instead of hanging until the function times out', async () => {
-    // The exact production request: a valid credential, then 800s of silence.
+    // The exact production request: a valid credential, then no response.
     vi.mocked(model.getAccessToken).mockResolvedValue(
       buildOAuthToken() as never,
     );
@@ -132,7 +132,7 @@ describe('HEAD on the MCP transport route', () => {
 
   it('answers an anonymous docs-only HEAD, which bypasses auth entirely', async () => {
     // ?category=docs skips the auth wrapper, so without a HEAD branch an
-    // unauthenticated probe could burn 800s of compute with no credential at all.
+    // unauthenticated probe could burn the full function runtime.
     const response = await sendHead(
       'https://mcp.neon.tech/api/mcp?category=docs',
     );
@@ -152,23 +152,6 @@ describe('HEAD on the MCP transport route', () => {
       'resource_metadata=',
     );
     await expect(response.text()).resolves.toBe('');
-  });
-
-  it('advertises the SSE endpoint without opening a stream', async () => {
-    // A HEAD cannot carry the stream, and opening one would hold the invocation
-    // open for the full SSE duration.
-    vi.mocked(model.getAccessToken).mockResolvedValue(
-      buildOAuthToken() as never,
-    );
-
-    const response = await sendHead(
-      'https://mcp.neon.tech/api/sse',
-      authorized(),
-    );
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get('Content-Type')).toBe('text/event-stream');
-    expect(response.body).toBeNull();
   });
 
   it('leaves GET dispatch to mcp-handler', async () => {

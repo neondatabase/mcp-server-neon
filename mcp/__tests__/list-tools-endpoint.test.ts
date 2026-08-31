@@ -136,6 +136,7 @@ describe('/api/list-tools endpoint', () => {
         expect(tool.inputSchema).not.toBeNull();
         // JSON Schema draft 7 marker.
         expect(tool.inputSchema['$schema']).toMatch(/json-schema\.org/);
+        expect(tool.inputSchema.additionalProperties).toBe(false);
       }
     });
 

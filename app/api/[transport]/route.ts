@@ -1,14 +1,17 @@
 // Initialize Sentry (must be first import)
 import '../../../mcp/sentry/instrument';
-
-import { AsyncLocalStorage } from 'node:async_hooks';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-import { createMcpHandler, withMcpAuth } from 'mcp-handler';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
-  ListToolsRequestSchema,
-  type RequestInfo,
-} from '@modelcontextprotocol/sdk/types.js';
+  CLIENT_INFO_META_KEY,
+  fromJsonSchema,
+  localhostAllowedOrigins,
+  McpServer,
+  originValidationResponse,
+} from '@modelcontextprotocol/server';
+import type {
+  AuthInfo,
+  ServerContext as McpServerContext,
+} from '@modelcontextprotocol/server';
+import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { captureException, startSpan } from '@sentry/node';
 import { NeonApiError } from '@neon/sdk';
 
@@ -46,163 +49,88 @@ import {
   formatAccessControlInstructions,
 } from '../../../mcp/tools/grant-filter';
 import { invokeTool, toolRegistration } from '../../../mcp/tools/registration';
-import { toListedTool } from '../../../mcp/tools/listed-schema';
+import { toListedInputSchema } from '../../../mcp/tools/listed-schema';
 import { NEON_TOOLS } from '../../../mcp/tools/definitions';
+import type { NeonTool } from '../../../mcp/tools/tool-definition';
 import { assert } from '../../../lib/assert';
+import { SERVER_HOST } from '../../../lib/config';
 import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
-import {
-  bindSession,
-  deriveIdentity,
-  emitSseBindOutcome,
-  evaluateMessageOwnership,
-  releaseSession,
-  shouldRejectEnvelope,
-} from '../../../mcp/server/session-binding';
-
-class SessionIdentityMismatchError extends Error {
-  constructor() {
-    super('Session identity mismatch; request dropped');
-    this.name = 'SessionIdentityMismatchError';
-  }
-}
-
-type Deferred<T> = {
-  promise: Promise<T>;
-  resolve: (value: T | PromiseLike<T>) => void;
-  reject: (reason?: unknown) => void;
-};
-
-type SessionBindingContext = {
-  identity: string;
-  binding: Deferred<void>;
-  sessionId?: string;
-  sessionStarted: boolean;
-};
-
-type JsonErrorDefinition = {
-  status: number;
-  error: string;
-  code: string;
-};
-
-function createDeferred<T>(): Deferred<T> {
-  let resolve!: Deferred<T>['resolve'];
-  let reject!: Deferred<T>['reject'];
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
-// Carries the authenticated caller's identity fingerprint from post-auth into
-// the mcp-handler onEvent callback (where `SESSION_STARTED` fires with the
-// newly-generated sessionId). ALS propagates through the library's awaits. For
-// SSE, the outer route waits on the same context before returning the stream, so
-// clients never receive a usable sessionId before Redis has the owner binding.
-const sessionBindingContext = new AsyncLocalStorage<SessionBindingContext>();
-
-// SSE streams live up to this many seconds on Vercel Fluid Compute. Used both
-// as mcp-handler's `maxDuration` and (plus a buffer) as the TTL for session
-// bindings in Redis.
-const SSE_MAX_DURATION_SEC = 800;
-const SESSION_BINDING_TTL_SEC = SSE_MAX_DURATION_SEC + 70;
 
 const ROUTE_PATHS = {
-  apiBase: '/api',
   canonicalMcp: '/api/mcp',
   canonicalSse: '/api/sse',
+  canonicalMessage: '/api/message',
   legacyMcp: '/mcp',
   legacySse: '/sse',
+  legacyMessage: '/message',
 } as const;
 
-const SSE_CONNECTION_PATHS = new Set<string>([
+const RETIRED_TRANSPORT_PATHS = new Set<string>([
   ROUTE_PATHS.canonicalSse,
+  ROUTE_PATHS.canonicalMessage,
   ROUTE_PATHS.legacySse,
+  ROUTE_PATHS.legacyMessage,
+]);
+
+const ACTIVE_TRANSPORT_PATHS = new Set<string>([
+  ROUTE_PATHS.canonicalMcp,
+  ROUTE_PATHS.legacyMcp,
 ]);
 
 const JSON_RESPONSE_HEADERS = { 'Content-Type': 'application/json' } as const;
 
 const HTTP_STATUS = {
   unauthorized: 401,
-  forbidden: 403,
-  serviceUnavailable: 503,
 } as const;
+
+function v2ToolConfig(tool: NeonTool) {
+  const registration = toolRegistration(tool);
+  return {
+    ...registration,
+    inputSchema: fromJsonSchema(toListedInputSchema(registration.inputSchema)),
+  };
+}
 
 const PROTECTED_RESOURCE_METADATA_PATH =
   '/.well-known/oauth-protected-resource';
 
-const SESSION_ERROR_CODES = {
-  callerIdentityUnavailable: 'caller_identity_unavailable',
-  sessionBindingUnavailable: 'session_binding_unavailable',
-  sessionNotOwned: 'session_not_owned',
-  sessionVerificationUnavailable: 'session_verification_unavailable',
-} as const;
+const MCP_ALLOWED_ORIGIN_HOSTNAMES = [
+  new URL(SERVER_HOST).hostname,
+  ...(process.env.NODE_ENV === 'production' ? [] : localhostAllowedOrigins()),
+].filter((hostname, index, hostnames) => hostnames.indexOf(hostname) === index);
 
-const CALLER_IDENTITY_UNAVAILABLE_RESPONSE: JsonErrorDefinition = {
-  status: HTTP_STATUS.unauthorized,
-  error: 'Caller identity unavailable',
-  code: SESSION_ERROR_CODES.callerIdentityUnavailable,
-};
+function getRequestClientName(ctx: McpServerContext): string | undefined {
+  const envelope: unknown = ctx.mcpReq.envelope;
+  if (!envelope || typeof envelope !== 'object') return undefined;
+  if (!(CLIENT_INFO_META_KEY in envelope)) return undefined;
 
-const SESSION_BINDING_UNAVAILABLE_RESPONSE: JsonErrorDefinition = {
-  status: HTTP_STATUS.serviceUnavailable,
-  error: 'Session binding unavailable',
-  code: SESSION_ERROR_CODES.sessionBindingUnavailable,
-};
+  const clientInfo = envelope[CLIENT_INFO_META_KEY];
+  if (!clientInfo || typeof clientInfo !== 'object') return undefined;
+  if (!('name' in clientInfo) || typeof clientInfo.name !== 'string') {
+    return undefined;
+  }
+  return clientInfo.name;
+}
 
-type AuthenticatedExtra = {
-  authInfo?: AuthInfo & {
-    extra?: {
-      apiKey?: string;
-      authMethod?: AuthContext['extra']['authMethod'];
-      account?: AuthContext['extra']['account'];
-      readOnly?: boolean;
-      grant?: GrantContext;
-      client?: AuthContext['extra']['client'];
-      transport?: AppContext['transport'];
-      userAgent?: string;
-    };
+type AuthenticatedAuthInfo = AuthInfo & {
+  extra?: {
+    apiKey?: string;
+    authMethod?: AuthContext['extra']['authMethod'];
+    account?: AuthContext['extra']['account'];
+    readOnly?: boolean;
+    grant?: GrantContext;
+    client?: AuthContext['extra']['client'];
+    transport?: AppContext['transport'];
+    userAgent?: string;
   };
-  signal?: AbortSignal;
-  sessionId?: string;
 };
 
 type StaticToolContext = {
   grant: GrantContext;
   readOnly: boolean;
-  // Identity fingerprint of the SSE connection owner, captured at handler
-  // construction. Each tool call compares `extra.authInfo`'s identity against
-  // this. Mismatches indicate a Redis envelope was routed into a stream it
-  // does not belong to — defense in depth on top of the POST-side check.
-  sseOwnerIdentity: string | null;
 };
 
 function createContextualMcpHandler(staticToolContext: StaticToolContext) {
-  const { sseOwnerIdentity } = staticToolContext;
-
-  // Verifies that the caller baked into an incoming MCP envelope (tool or
-  // prompt call) matches the identity captured when the SSE stream was
-  // established. See StaticToolContext.sseOwnerIdentity for rationale.
-  // Returns true on mismatch so the registered handler can short-circuit
-  // with a no-op result rather than emitting a JSON-RPC error onto the SSE
-  // owner's channel (which is the victim, not the attacker).
-  const checkEnvelopeMatches = (
-    extra: AuthenticatedExtra,
-    invocationName: string,
-  ): boolean => {
-    if (!shouldRejectEnvelope(sseOwnerIdentity, extra.authInfo)) return false;
-    emitSseBindOutcome('envelope_mismatch', { invocation: invocationName });
-    logger.error('envelope identity mismatch — dropping invocation', {
-      invocation: invocationName,
-      hasCallerIdentity: deriveIdentity(extra.authInfo) !== null,
-    });
-    captureException(new SessionIdentityMismatchError(), {
-      tags: { invocation: invocationName },
-    });
-    return true;
-  };
-
   return createMcpHandler(
     (server: McpServer) => {
       // Request-scoped mutable state (isolated per server instance)
@@ -214,7 +142,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
       // Default app context for analytics/Sentry (used in onerror fallback)
       const defaultAppContext: AppContext = {
         name: 'mcp-server-neon',
-        transport: 'sse',
+        transport: 'stream',
         environment: (process.env.NODE_ENV ??
           'production') as AppContext['environment'],
         version: pkg.version,
@@ -253,8 +181,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
       }
 
       // Helper function to get Neon client and context from auth info
-      async function getAuthContext(extra: AuthenticatedExtra) {
-        const authInfo = extra.authInfo;
+      async function getAuthContext(ctx: McpServerContext) {
+        const authInfo = ctx.http?.authInfo as
+          | AuthenticatedAuthInfo
+          | undefined;
         if (
           !authInfo?.extra?.apiKey ||
           !authInfo?.extra?.authMethod ||
@@ -266,16 +196,18 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         const apiKey = authInfo.extra.apiKey;
         const authMethod = authInfo.extra.authMethod;
         const account = authInfo.extra.account;
-        // SSE message POSTs omit the connection query string, so reuse the
-        // read-only mode and grant captured when the stream opened.
-        const readOnly = staticToolContext.readOnly;
-        const grant = { ...staticToolContext.grant };
+        const readOnly = authInfo.extra.readOnly ?? false;
+        const grant = { ...(authInfo.extra.grant ?? DEFAULT_GRANT) };
         const client = authInfo.extra.client;
-        const transport = authInfo.extra.transport ?? 'sse';
+        const transport = authInfo.extra.transport ?? 'stream';
         const neonClient = createNeonClient(apiKey);
 
-        // Use User-Agent as clientName fallback if MCP handshake hasn't provided it yet
-        if (clientName === 'unknown' && authInfo.extra.userAgent) {
+        const requestClientName = getRequestClientName(ctx);
+        if (requestClientName) {
+          clientName = requestClientName;
+          clientApplication = detectClientApplication(clientName);
+        } else if (clientName === 'unknown' && authInfo.extra.userAgent) {
+          // Legacy stateless requests have no per-request client metadata.
           clientName = authInfo.extra.userAgent;
           clientApplication = detectClientApplication(clientName);
         }
@@ -384,16 +316,8 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
         server.registerTool(
           tool.name,
-          toolRegistration(tool),
-          async (args: any, extra: any) => {
-            const typedExtra = extra as AuthenticatedExtra;
-            if (checkEnvelopeMatches(typedExtra, tool.name)) {
-              // Silently drop the misrouted invocation. Returning a non-error
-              // empty result avoids leaking a JSON-RPC error onto the SSE
-              // owner's (victim's) channel.
-              return { content: [], isError: false };
-            }
-
+          v2ToolConfig(tool),
+          async (args: unknown, ctx: McpServerContext) => {
             const traceId = generateTraceId();
             return await startSpan(
               {
@@ -405,7 +329,6 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
               },
               async (span) => {
                 const {
-                  apiKey,
                   account,
                   authMethod,
                   readOnly,
@@ -415,7 +338,8 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   clientName: cName,
                   client,
                   context,
-                } = await getAuthContext(typedExtra);
+                  apiKey,
+                } = await getAuthContext(ctx);
 
                 // Track server_init on first authenticated request (after client detection)
                 trackServerInit(context);
@@ -447,12 +371,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                 waitUntil(flushAnalytics());
 
                 const extraArgs: ToolHandlerExtraParams = {
-                  ...extra,
                   account,
                   readOnly,
                   clientApplication: clientApp,
                   apiKey,
-                  signal: extra.signal,
                 };
 
                 try {
@@ -507,17 +429,6 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
           },
         );
       });
-
-      // Override tools/list to return the same context-scoped surface that was
-      // registered for this handler instance.
-      server.server.setRequestHandler(ListToolsRequestSchema, async () => {
-        // Avoid relying on MCP SDK private fields (`_registeredTools`), which can
-        // change across SDK versions and break request handling. Build the list from
-        // our canonical tool definitions and convert schemas explicitly.
-        const tools = composedTools.map(toListedTool);
-
-        return { tools };
-      });
     },
     {
       serverInfo: {
@@ -532,83 +443,12 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         staticToolContext.grant,
         staticToolContext.readOnly,
       ),
-    },
-    {
-      redisUrl: process.env.KV_URL || process.env.REDIS_URL,
-      basePath: ROUTE_PATHS.apiBase,
-      maxDuration: SSE_MAX_DURATION_SEC, // Fluid Compute ceiling for SSE connections
       verboseLogs: process.env.NODE_ENV !== 'production',
       onEvent: (event) => {
         switch (event.type) {
-          case 'SESSION_STARTED': {
-            logger.info('MCP session started', {
-              sessionId: event.sessionId,
-              transport: event.transport,
-              clientInfo: event.clientInfo,
-            });
-            const bindingContext = sessionBindingContext.getStore();
-            const identity = bindingContext?.identity;
-            if (event.sessionId && identity && bindingContext) {
-              const sessionId = event.sessionId;
-              bindingContext.sessionId = sessionId;
-              bindingContext.sessionStarted = true;
-              void bindSession(sessionId, identity, SESSION_BINDING_TTL_SEC)
-                .then(() => {
-                  bindingContext.binding.resolve();
-                })
-                .catch((err) => {
-                  logger.error('session-binding bind failed', {
-                    sessionId,
-                    err,
-                  });
-                  captureException(err, {
-                    tags: { operation: 'bindSession' },
-                    extra: { sessionId },
-                  });
-                  bindingContext.binding.reject(err);
-                });
-            } else if (bindingContext) {
-              const err = new Error('SESSION_STARTED missing sessionId');
-              logger.error('session-binding cannot bind SSE session', {
-                hasSessionId: !!event.sessionId,
-                hasIdentity: !!identity,
-              });
-              captureException(err, {
-                tags: { operation: 'bindSession' },
-              });
-              bindingContext.binding.reject(err);
-            }
-            break;
-          }
-
-          case 'SESSION_ENDED': {
-            logger.info('MCP session ended', {
-              sessionId: event.sessionId,
-              transport: event.transport,
-            });
-            if (event.sessionId) {
-              const sessionId = event.sessionId;
-              waitUntil(
-                releaseSession(sessionId).catch((err) => {
-                  logger.error('session-binding release failed', {
-                    sessionId,
-                    err,
-                  });
-                  captureException(err, {
-                    tags: { operation: 'releaseSession' },
-                    extra: { sessionId },
-                  });
-                }),
-              );
-            }
-            break;
-          }
-
           case 'REQUEST_COMPLETED':
             if (event.status === 'error') {
               logger.warn('MCP request failed', {
-                sessionId: event.sessionId,
-                requestId: event.requestId,
                 method: event.method,
                 duration: event.duration,
               });
@@ -623,14 +463,12 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
             if (isConnectionError) {
               logger.warn('MCP connection lost', {
-                sessionId: event.sessionId,
                 source: event.source,
                 severity: event.severity,
                 context: event.context,
               });
             } else if (event.severity === 'fatal') {
               logger.error('MCP fatal error', {
-                sessionId: event.sessionId,
                 error: event.error,
                 source: event.source,
                 context: event.context,
@@ -655,9 +493,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 // "always available" search/fetch tools (which require Neon API auth) are
 // not surfaced anonymously.
 const DOCS_ONLY_TOOLS = NEON_TOOLS.filter((tool) => tool.scope === 'docs');
-function getDocsOnlyToolDefinition(
-  name: 'list_docs_resources' | 'get_doc_resource',
-) {
+function getDocsOnlyToolDefinition(name: string) {
   const tool = DOCS_ONLY_TOOLS.find((tool) => tool.name === name);
   assert(tool, `${name} tool definition not found`);
   return tool;
@@ -668,16 +504,6 @@ const getDocResourceTool = getDocsOnlyToolDefinition('get_doc_resource');
 
 const ANONYMOUS_DOCS_USER_ID = 'anonymous-docs';
 
-// The docs-only path bypasses OAuth, so there is no `verifyToken` to hang the
-// User-Agent off the auth context the way the authenticated path does. The
-// header on the request that carries the tool call is the only client signal.
-function readUserAgent(extra: {
-  requestInfo?: RequestInfo;
-}): string | undefined {
-  const header = extra.requestInfo?.headers['user-agent'];
-  return Array.isArray(header) ? header[0] : header;
-}
-
 const docsOnlyAppContext: AppContext = {
   name: 'mcp-server-neon',
   transport: 'stream',
@@ -686,7 +512,7 @@ const docsOnlyAppContext: AppContext = {
   version: pkg.version,
 };
 
-function createDocsOnlyMcpHandler() {
+function createDocsOnlyMcpHandler(userAgent: string | undefined) {
   return createMcpHandler(
     (server: McpServer) => {
       async function runDocsTool(
@@ -707,7 +533,7 @@ function createDocsOnlyMcpHandler() {
           async (span) => {
             const properties = {
               authMethod: 'anonymous',
-              toolName,
+              toolName: toolName,
               tool_name: toolName,
               readOnly: 'true',
               projectScoped: 'false',
@@ -754,27 +580,30 @@ function createDocsOnlyMcpHandler() {
 
       server.registerTool(
         listDocsResourcesTool.name,
-        toolRegistration(listDocsResourcesTool),
-        async (_args: unknown, extra: { requestInfo?: RequestInfo }) =>
-          runDocsTool(listDocsResourcesTool.name, readUserAgent(extra), () =>
+        v2ToolConfig(listDocsResourcesTool),
+        async () =>
+          runDocsTool(listDocsResourcesTool.name, userAgent, () =>
             listDocsResources(),
           ),
       );
 
       server.registerTool(
         getDocResourceTool.name,
-        toolRegistration(getDocResourceTool),
-        async (args: { slug: string }, extra: { requestInfo?: RequestInfo }) =>
-          runDocsTool(getDocResourceTool.name, readUserAgent(extra), () =>
-            getDocResource({ slug: args.slug }),
-          ),
+        v2ToolConfig(getDocResourceTool),
+        async (args: unknown) => {
+          assert(
+            !!args &&
+              typeof args === 'object' &&
+              'slug' in args &&
+              typeof args.slug === 'string',
+            'get_doc_resource arguments were not validated',
+          );
+          const { slug } = args;
+          return runDocsTool(getDocResourceTool.name, userAgent, () =>
+            getDocResource({ slug }),
+          );
+        },
       );
-
-      server.server.setRequestHandler(ListToolsRequestSchema, async () => {
-        const tools = DOCS_ONLY_TOOLS.map(toListedTool);
-
-        return { tools };
-      });
     },
     {
       serverInfo: {
@@ -784,32 +613,12 @@ function createDocsOnlyMcpHandler() {
       capabilities: {
         tools: {},
       },
-    },
-    {
-      redisUrl: process.env.KV_URL || process.env.REDIS_URL,
-      basePath: '/api',
-      maxDuration: 800,
       verboseLogs: process.env.NODE_ENV !== 'production',
       onEvent: (event) => {
         switch (event.type) {
-          case 'SESSION_STARTED':
-            logger.info('MCP docs-only session started', {
-              sessionId: event.sessionId,
-              transport: event.transport,
-              clientInfo: event.clientInfo,
-            });
-            break;
-          case 'SESSION_ENDED':
-            logger.info('MCP docs-only session ended', {
-              sessionId: event.sessionId,
-              transport: event.transport,
-            });
-            break;
           case 'REQUEST_COMPLETED':
             if (event.status === 'error') {
               logger.warn('MCP docs-only request failed', {
-                sessionId: event.sessionId,
-                requestId: event.requestId,
                 method: event.method,
                 duration: event.duration,
               });
@@ -818,7 +627,6 @@ function createDocsOnlyMcpHandler() {
           case 'ERROR':
             if (event.severity === 'fatal') {
               logger.error('MCP docs-only fatal error', {
-                sessionId: event.sessionId,
                 error: event.error,
                 source: event.source,
                 context: event.context,
@@ -913,14 +721,8 @@ const verifyToken = async (
     return undefined;
   }
 
-  // Detect transport from URL pathname and parse query params
+  // Parse request-level grant and read-only controls.
   const url = new URL(req.url);
-  const transport: AppContext['transport'] =
-    url.pathname === ROUTE_PATHS.canonicalMcp ||
-    url.pathname === ROUTE_PATHS.legacyMcp
-      ? 'stream'
-      : 'sse';
-
   const searchParams = url.searchParams;
   const readOnlyQueryParam = searchParams.get('readonly');
 
@@ -969,7 +771,7 @@ const verifyToken = async (
             id: token.client.id,
             name: token.client.client_name,
           },
-          transport,
+          transport: 'stream',
           userAgent,
         },
       };
@@ -1007,7 +809,7 @@ const verifyToken = async (
       apiKey: bearerToken,
       readOnly,
       grant: urlGrant,
-      transport,
+      transport: 'stream',
       userAgent,
     },
   };
@@ -1028,61 +830,13 @@ function getStaticToolContext(req: Request): StaticToolContext {
       ? {
           projectId: grantFromAuth.projectId ?? null,
           scopes: grantFromAuth.scopes ?? null,
-          ...(grantFromAuth.unknownCategories?.length
-            ? { unknownCategories: grantFromAuth.unknownCategories }
-            : {}),
         }
       : DEFAULT_GRANT;
 
   return {
     grant,
     readOnly: authExtra?.readOnly === true,
-    sseOwnerIdentity: deriveIdentity(authInfo),
   };
-}
-
-// Session-binding check for POSTs to the SSE message endpoint. Verifies that
-// the caller owns the sessionId they're posting to before the library routes
-// the message into the SSE owner's stream. The decision logic lives in
-// `evaluateMessageOwnership` so it can be unit-tested in isolation; this
-// function is just the Request → Response adapter.
-async function checkSessionOwnership(
-  req: Request,
-  identity: string | null,
-): Promise<Response | null> {
-  const url = new URL(req.url);
-  const sessionId = url.searchParams.get('sessionId');
-  const result = await evaluateMessageOwnership(
-    req.method,
-    url.pathname,
-    sessionId,
-    identity,
-  );
-  if (result.kind !== 'reject') return null;
-  if (result.status === HTTP_STATUS.forbidden) {
-    logger.warn('session-binding mismatch on POST /message', {
-      sessionId,
-      reason: result.reason,
-    });
-  } else if (result.status === HTTP_STATUS.serviceUnavailable) {
-    logger.error('session-binding verify failed; denying', { sessionId });
-  }
-  const code =
-    result.status === HTTP_STATUS.forbidden
-      ? SESSION_ERROR_CODES.sessionNotOwned
-      : result.status === HTTP_STATUS.serviceUnavailable
-        ? SESSION_ERROR_CODES.sessionVerificationUnavailable
-        : SESSION_ERROR_CODES.callerIdentityUnavailable;
-  return jsonErrorResponse({
-    status: result.status,
-    error: result.reason,
-    code,
-  });
-}
-
-function isSseConnectionRequest(req: Request): boolean {
-  const url = new URL(req.url);
-  return req.method === 'GET' && SSE_CONNECTION_PATHS.has(url.pathname);
 }
 
 /**
@@ -1097,15 +851,7 @@ function isSseConnectionRequest(req: Request): boolean {
  * Mirroring GET keeps HEAD useful: probes learn the endpoint is alive, and the
  * status matches what a GET would have returned.
  */
-function headMirrorResponse(pathname: string): Response {
-  if (SSE_CONNECTION_PATHS.has(pathname)) {
-    // GET opens an SSE stream here. Advertise the stream without starting one,
-    // since a HEAD response cannot carry it.
-    return new Response(null, {
-      status: 200,
-      headers: { 'Content-Type': 'text/event-stream' },
-    });
-  }
+function headMirrorResponse(): Response {
   // The streamable-HTTP transport is POST-only; GET is 405 (mcp-handler).
   return new Response(null, {
     status: 405,
@@ -1122,115 +868,10 @@ function stripBody(response: Response): Response {
   });
 }
 
-function jsonErrorResponse({
-  status,
-  error,
-  code,
-}: JsonErrorDefinition): Response {
-  return new Response(JSON.stringify({ error, code }), {
-    status,
-    headers: JSON_RESPONSE_HEADERS,
-  });
-}
-
-function cloneRequestWithSignal(req: Request, signal: AbortSignal): Request {
-  const cloned = new Request(req, { signal });
-  cloned.auth = req.auth;
-  return cloned;
-}
-
-async function runSseAfterSessionBinding(
-  req: Request,
-  identity: string,
-): Promise<Response> {
-  const abortController = new AbortController();
-  const abortFromClient = () => abortController.abort();
-  if (req.signal.aborted) {
-    abortController.abort();
-  } else {
-    req.signal.addEventListener('abort', abortFromClient, { once: true });
-  }
-
-  const bindingContext: SessionBindingContext = {
-    identity,
-    binding: createDeferred<void>(),
-    sessionStarted: false,
-  };
-  const sseReq = cloneRequestWithSignal(req, abortController.signal);
-  const responsePromise = sessionBindingContext.run(bindingContext, () =>
-    createContextualMcpHandler(getStaticToolContext(sseReq))(sseReq),
-  );
-
-  try {
-    const firstResult = await Promise.race([
-      responsePromise.then(
-        (response) => ({ type: 'response' as const, response }),
-        (error) => ({ type: 'response-error' as const, error }),
-      ),
-      bindingContext.binding.promise.then(
-        () => ({ type: 'bound' as const }),
-        (error) => ({ type: 'bind-error' as const, error }),
-      ),
-    ]);
-
-    if (firstResult.type === 'response-error') {
-      throw firstResult.error;
-    }
-    if (firstResult.type === 'bind-error') {
-      abortController.abort();
-      void responsePromise.catch(() => undefined);
-      return jsonErrorResponse(SESSION_BINDING_UNAVAILABLE_RESPONSE);
-    }
-
-    const response =
-      firstResult.type === 'response'
-        ? firstResult.response
-        : await responsePromise;
-
-    if (bindingContext.sessionStarted) {
-      try {
-        await bindingContext.binding.promise;
-      } catch {
-        abortController.abort();
-        void responsePromise.catch(() => undefined);
-        return jsonErrorResponse(SESSION_BINDING_UNAVAILABLE_RESPONSE);
-      }
-      return response;
-    }
-
-    if (response.ok) {
-      const err = new Error('SSE response opened without session binding');
-      logger.error('session-binding missing SESSION_STARTED event; denying', {
-        status: response.status,
-      });
-      captureException(err, {
-        tags: { operation: 'bindSession' },
-      });
-      abortController.abort();
-      return jsonErrorResponse(SESSION_BINDING_UNAVAILABLE_RESPONSE);
-    }
-
-    return response;
-  } finally {
-    req.signal.removeEventListener('abort', abortFromClient);
-  }
-}
-
 // Wrap with authentication. After auth is resolved, route to a context-scoped
 // MCP handler whose registered tools match the token grant/read-only context.
 const authHandler = withMcpAuth(
-  async (req) => {
-    const identity = deriveIdentity(req.auth);
-    const rejection = await checkSessionOwnership(req, identity);
-    if (rejection) return rejection;
-    if (isSseConnectionRequest(req)) {
-      if (!identity) {
-        return jsonErrorResponse(CALLER_IDENTITY_UNAVAILABLE_RESPONSE);
-      }
-      return runSseAfterSessionBinding(req, identity);
-    }
-    return createContextualMcpHandler(getStaticToolContext(req))(req);
-  },
+  async (req) => createContextualMcpHandler(getStaticToolContext(req))(req),
   verifyToken,
   {
     required: true,
@@ -1243,7 +884,7 @@ const authHandler = withMcpAuth(
 // discovery. Only the handler differs: it answers directly instead of handing the
 // request to mcp-handler, which would never respond to a HEAD.
 const headAuthHandler = withMcpAuth(
-  async (req) => headMirrorResponse(new URL(req.url).pathname),
+  async () => headMirrorResponse(),
   verifyToken,
   {
     required: true,
@@ -1288,30 +929,48 @@ function rewriteResourceMetadataHeader(
   });
 }
 
-// Lazily-initialized docs-only handler. Built on first docs-only request
-// so module load doesn't pay the cost when the endpoint is never used.
-let docsOnlyHandler: ReturnType<typeof createDocsOnlyMcpHandler> | null = null;
-function getDocsOnlyHandler() {
-  if (!docsOnlyHandler) {
-    docsOnlyHandler = createDocsOnlyMcpHandler();
-  }
-  return docsOnlyHandler;
+function retiredTransportMessage(): string {
+  const mcpUrl = new URL('/mcp', SERVER_HOST).href;
+  return `HTTP+SSE was removed. Connect to ${mcpUrl} using Streamable HTTP. Stdio-only clients can bridge it with \`npx -y mcp-remote ${mcpUrl}\`. See https://neon.com/docs/ai/neon-mcp-server#retired-sse.`;
 }
 
-// Normalize legacy paths (/mcp, /sse) to canonical /api/* paths
-// for mcp-handler's exact pathname matching.
-//
-// Next.js rewrites preserve the original client URL in request.url,
-// but mcp-handler expects /api/mcp or /api/sse. Without this normalization,
-// requests to /mcp would get 404 after OAuth (before auth, withMcpAuth
-// returns 401 before pathname matching happens).
+function retiredTransportResponse(method: string): Response {
+  const body =
+    method === 'HEAD'
+      ? null
+      : JSON.stringify({
+          error: 'transport_gone',
+          message: retiredTransportMessage(),
+        });
+  return new Response(body, {
+    status: 410,
+    headers: JSON_RESPONSE_HEADERS,
+  });
+}
+
+// Normalize the public /mcp rewrite to its internal App Router path so OAuth
+// resource metadata and transport handling use one canonical URL.
 const handleRequest = (req: Request) => {
   const url = new URL(req.url);
 
+  if (RETIRED_TRANSPORT_PATHS.has(url.pathname)) {
+    return retiredTransportResponse(req.method);
+  }
+
+  if (!ACTIVE_TRANSPORT_PATHS.has(url.pathname)) {
+    return new Response(null, { status: 404 });
+  }
+
+  const originRejection = originValidationResponse(
+    req,
+    MCP_ALLOWED_ORIGIN_HOSTNAMES,
+  );
+  if (originRejection) {
+    return originRejection;
+  }
+
   if (url.pathname === ROUTE_PATHS.legacyMcp) {
     url.pathname = ROUTE_PATHS.canonicalMcp;
-  } else if (url.pathname === ROUTE_PATHS.legacySse) {
-    url.pathname = ROUTE_PATHS.canonicalSse;
   }
 
   const normalizedReq = new Request(url.toString(), {
@@ -1328,7 +987,7 @@ const handleRequest = (req: Request) => {
   // anonymous HEAD probe hang.
   if (normalizedReq.method === 'HEAD') {
     if (isDocsOnlyRequest(url.searchParams)) {
-      return headMirrorResponse(url.pathname);
+      return headMirrorResponse();
     }
     return Promise.resolve(headAuthHandler(normalizedReq)).then((resolved) =>
       stripBody(rewriteResourceMetadataHeader(resolved, req)),
@@ -1339,7 +998,9 @@ const handleRequest = (req: Request) => {
   // without an account. Only triggers when the request is exactly
   // ?category=docs (no other categories, no projectId).
   if (isDocsOnlyRequest(url.searchParams)) {
-    return getDocsOnlyHandler()(normalizedReq);
+    return createDocsOnlyMcpHandler(req.headers.get('user-agent') ?? undefined)(
+      normalizedReq,
+    );
   }
 
   const response = authHandler(normalizedReq);
