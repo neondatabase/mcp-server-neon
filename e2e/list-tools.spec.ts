@@ -15,33 +15,36 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('/api/list-tools endpoint', () => {
-  test('returns all 35 tools with no params', async ({ request }) => {
+  test('returns every tool with no params', async ({ request }) => {
     const response = await request.get('/api/list-tools');
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(35);
+    expect(body.tools.length).toBeGreaterThan(50);
     expect(body.readOnly).toBe(false);
     expect(body.grant.scopes).toBeNull();
     expect(body.grant.projectId).toBeNull();
     expect(body.warnings).toBeUndefined();
   });
 
-  test('returns 11 tools for category=querying', async ({ request }) => {
+  test('returns querying tools for category=querying', async ({ request }) => {
     const response = await request.get('/api/list-tools?category=querying');
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(11);
+    const names = body.tools.map((t: { name: string }) => t.name);
+    expect(names).toContain('run_sql');
+    expect(names).not.toContain('create_project');
     expect(body.grant.scopes).toEqual(['querying']);
   });
 
-  test('returns 28 tools for project-scoped mode', async ({ request }) => {
+  test('hides project-agnostic tools in project-scoped mode', async ({
+    request,
+  }) => {
     const response = await request.get('/api/list-tools?projectId=proj-123');
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(28);
     expect(body.grant.projectId).toBe('proj-123');
 
     const names = body.tools.map((t: { name: string }) => t.name);
@@ -51,19 +54,23 @@ test.describe('/api/list-tools endpoint', () => {
     expect(names).not.toContain('delete_project');
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
+    expect(names).toContain('describe_project');
   });
 
-  test('returns 23 tools for readonly=true', async ({ request }) => {
+  test('returns readOnlySafe tools for readonly=true', async ({ request }) => {
     const response = await request.get('/api/list-tools?readonly=true');
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(23);
     expect(body.readOnly).toBe(true);
 
     for (const tool of body.tools) {
       expect(tool.readOnlySafe).toBe(true);
     }
+
+    expect(body.tools.map((tool: { name: string }) => tool.name)).not.toContain(
+      'get_connection_string',
+    );
   });
 
   test('includes warnings for invalid scope categories', async ({

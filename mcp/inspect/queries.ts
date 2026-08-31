@@ -5,7 +5,7 @@
  *
  * Every query is copied verbatim from the `neon` CLI, where the same catalog
  * powers `neon inspect db <check>`:
- * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ d0c84e3.
+ * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ df56774.
  * The CLI does not publish this module, so the SQL is duplicated rather than
  * imported. Keep the SQL a verbatim copy — port fixes in both directions instead
  * of letting the two catalogs diverge.
@@ -22,6 +22,8 @@
  * is not.
  */
 
+import type { InspectQueryScope } from './targets';
+
 /**
  * Every available check, in the order they are offered to the model. Declared as
  * a tuple so it can back a Zod enum directly, which keeps the tool's input
@@ -33,6 +35,7 @@ export const INSPECT_CHECKS = [
   'unused-indexes',
   'seq-scans',
   'long-running-queries',
+  'stalled-queries',
   'locks',
   'outliers',
   'calls',
@@ -46,7 +49,7 @@ export const INSPECT_CHECKS = [
 
 export type InspectCheck = (typeof INSPECT_CHECKS)[number];
 
-type InspectQuery = {
+export type InspectQuery = {
   /** One-line description of what the check reports. */
   describe: string;
   /** The read-only SQL to execute. */
@@ -55,6 +58,7 @@ type InspectQuery = {
   fields: readonly string[];
   /** Explanation to return instead of an empty row set. */
   emptyMessage: string;
+  emptyMessageAll?: string;
   /**
    * Row ceiling the SQL itself imposes, for the checks that carry a `LIMIT`.
    * Without it a capped result is indistinguishable from a complete one, and the
@@ -66,6 +70,11 @@ type InspectQuery = {
    * the handler verifies the extension is installed before running the query.
    */
   requiresExtension?: string;
+  /**
+   * Database catalogs differ, while compute-wide views return the same rows
+   * from every database.
+   */
+  scope: InspectQueryScope;
 };
 
 /**
@@ -76,6 +85,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   'table-sizes': {
     describe:
       'Size of each table (including TOAST), largest first (pg_table_size)',
+    scope: 'database',
     fields: ['schema', 'name', 'size'],
     emptyMessage: 'No user tables found.',
     sql: /* sql */ `
@@ -93,6 +103,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   },
   'index-sizes': {
     describe: 'Size of each index, largest first (pg_relation_size)',
+    scope: 'database',
     fields: ['schema', 'name', 'size'],
     emptyMessage: 'No indexes found.',
     sql: /* sql */ `
@@ -111,6 +122,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   'unused-indexes': {
     describe:
       'Non-unique indexes with fewer than 50 scans — candidates for removal (pg_stat_user_indexes)',
+    scope: 'database',
     fields: ['table', 'index', 'index_size', 'index_scans'],
     emptyMessage: 'No unused indexes detected.',
     sql: /* sql */ `
@@ -130,6 +142,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   'seq-scans': {
     describe:
       'Number of sequential scans recorded against each table (pg_stat_user_tables)',
+    scope: 'database',
     fields: ['schema', 'name', 'count'],
     emptyMessage: 'No user tables found.',
     sql: /* sql */ `
@@ -143,8 +156,10 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   },
   'long-running-queries': {
     describe: 'Queries running longer than 5 minutes (pg_stat_activity)',
+    scope: 'database',
     fields: ['pid', 'duration', 'state', 'query'],
     emptyMessage: 'No long-running queries in this database.',
+    emptyMessageAll: 'No long-running queries in any database.',
     // `pg_stat_activity` spans every database on the compute, so without the
     // `datname` filter this reports queries the caller did not ask about and
     // cannot act on.
@@ -162,11 +177,79 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
       ORDER BY now() - query_start DESC;
     `,
   },
+  'stalled-queries': {
+    describe:
+      'Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers, oldest query group first (compute-wide)',
+    scope: 'compute',
+    fields: [
+      'observed_at',
+      'query_start',
+      'query_group',
+      'pid',
+      'leader_pid',
+      'role',
+      'backend_type',
+      'database',
+      'application_name',
+      'query_id',
+      'state',
+      'wait_event_type',
+      'wait_event',
+      'blocking_pids',
+      'duration',
+      'query',
+    ],
+    emptyMessage:
+      'No active queries running longer than 30 seconds on this compute.',
+    sql: /* sql */ `
+      WITH activity AS MATERIALIZED (
+        SELECT *
+        FROM pg_stat_activity
+        WHERE state = 'active'
+          AND backend_type IN ('client backend', 'parallel worker')
+          AND pid <> pg_backend_pid()
+      ),
+      stalled_groups AS (
+        SELECT
+          COALESCE(leader_pid, pid) AS query_group,
+          min(query_start) AS group_start
+        FROM activity
+        WHERE query_start <= statement_timestamp() - interval '30 seconds'
+        GROUP BY COALESCE(leader_pid, pid)
+      )
+      SELECT
+        statement_timestamp() AS observed_at,
+        a.query_start,
+        g.query_group,
+        a.pid,
+        a.leader_pid,
+        CASE
+          WHEN a.leader_pid IS NULL THEN 'leader'
+          ELSE 'worker'
+        END AS role,
+        a.backend_type,
+        a.datname AS database,
+        a.application_name,
+        a.query_id::text AS query_id,
+        a.state,
+        a.wait_event_type,
+        a.wait_event,
+        array_to_string(pg_blocking_pids(a.pid), ',') AS blocking_pids,
+        (statement_timestamp() - a.query_start)::text AS duration,
+        a.query
+      FROM activity a
+      JOIN stalled_groups g
+        ON g.query_group = COALESCE(a.leader_pid, a.pid)
+      ORDER BY g.group_start, g.query_group, a.leader_pid NULLS FIRST, a.pid;
+    `,
+  },
   locks: {
     describe:
       'Locks held with the acquiring query and its age (pg_locks + pg_stat_activity)',
+    scope: 'database',
     fields: ['pid', 'relname', 'mode', 'locktype', 'granted', 'age', 'query'],
     emptyMessage: 'No locks held in this database.',
+    emptyMessageAll: 'No locks held in any database.',
     // Restricting to backends connected to this database does two things.
     // `pg_locks` covers the whole compute, so it otherwise reports locks the
     // caller did not ask about; and `l.relation` is an OID that only means
@@ -197,6 +280,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   outliers: {
     describe:
       'The 25 queries with the highest cumulative execution time since statistics were last reset (needs pg_stat_statements)',
+    scope: 'database',
     fields: ['total_exec_time', 'prop_exec_time', 'ncalls', 'query'],
     emptyMessage: 'No statements recorded yet.',
     sqlLimit: 25,
@@ -220,6 +304,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   calls: {
     describe:
       'The 25 most frequently executed queries since statistics were last reset (needs pg_stat_statements)',
+    scope: 'database',
     fields: ['ncalls', 'total_exec_time', 'prop_exec_time', 'query'],
     emptyMessage: 'No statements recorded yet.',
     sqlLimit: 25,
@@ -241,7 +326,8 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
     `,
   },
   'lfc-hit-rate': {
-    describe: 'Local File Cache hit rate (needs neon extension)',
+    describe: 'Local File Cache hit rate (compute-wide, needs neon extension)',
+    scope: 'compute',
     fields: ['name', 'ratio'],
     emptyMessage: 'No LFC stats available.',
     requiresExtension: 'neon',
@@ -266,7 +352,9 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
     `,
   },
   'working-set': {
-    describe: 'Estimated working set vs LFC size (needs neon extension)',
+    describe:
+      'Estimated working set vs LFC size (compute-wide, needs neon extension)',
+    scope: 'compute',
     fields: ['window', 'working_set', 'lfc_size', 'exceeds_lfc'],
     emptyMessage: 'No working-set estimate available.',
     requiresExtension: 'neon',
@@ -294,6 +382,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   'vacuum-stats': {
     describe:
       'Autovacuum status per table: last (auto)vacuum, dead tuples, threshold',
+    scope: 'database',
     fields: [
       'schema',
       'table',
@@ -329,6 +418,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   bloat: {
     describe:
       'Estimated bloat for the 25 most bloated tables (statistical estimate, no extension needed)',
+    scope: 'database',
     fields: ['type', 'schema', 'object_name', 'bloat', 'waste'],
     emptyMessage: 'No bloat estimate available.',
     sqlLimit: 25,
@@ -385,7 +475,8 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   },
   'replication-slots': {
     describe:
-      'Replication slots: kind, status, client, restart/confirmed-flush LSNs, and lag (pg_replication_slots + pg_stat_replication)',
+      'Replication slots (compute-wide): kind, status, client, restart/confirmed-flush LSNs, and lag (pg_replication_slots + pg_stat_replication)',
+    scope: 'compute',
     fields: [
       'slot_name',
       'slot_type',
@@ -432,8 +523,10 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   subscriptions: {
     describe:
       'Per-table logical replication progress on this subscriber (pg_subscription_rel)',
+    scope: 'database',
     fields: ['subscription', 'table_name', 'status', 'lsn'],
     emptyMessage: 'No subscriptions found on this database.',
+    emptyMessageAll: 'No subscriptions found on any database.',
     sql: /* sql */ `
       SELECT
         sub.subname AS subscription,

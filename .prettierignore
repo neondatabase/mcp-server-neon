@@ -8,6 +8,7 @@ coverage/
 .vercel/
 patches/
 test-results/
+mcp/__tests__/__snapshots__/
 
 # Not part of the app source (docs, notes, vendored agent skills, CI config)
 .agents/

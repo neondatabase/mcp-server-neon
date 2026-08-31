@@ -10,7 +10,7 @@ import { NeonAuthEmailVerificationMethod } from '../../neon-client';
  * Override individual methods at the call site when a test needs to assert
  * a specific snapshot shape.
  */
-export const EMAIL_PASSWORD_DEFAULTS = {
+const EMAIL_PASSWORD_DEFAULTS = {
   enabled: true,
   email_verification_method: NeonAuthEmailVerificationMethod.Link,
   require_email_verification: false,

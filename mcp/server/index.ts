@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import { McpServer } from '@modelcontextprotocol/server';
+import { fromJsonSchema, McpServer } from '@modelcontextprotocol/server';
 import { invokeTool, toolRegistration } from '../tools/registration';
+import { toListedInputSchema } from '../tools/listed-schema';
 import { logger } from '../utils/logger';
 import { generateTraceId } from '../utils/trace';
 import { createNeonClient } from './api';
@@ -16,10 +17,13 @@ import { DEFAULT_GRANT } from '../utils/grant-context';
 import {
   getAvailableTools,
   getAccessControlWarnings,
+  formatAccessControlInstructions,
 } from '../tools/grant-filter';
 import pkg from '../../package.json';
 
 export const createMcpServer = async (context: NeonServerContext) => {
+  const grant = { ...(context.grant ?? DEFAULT_GRANT) };
+  const readOnly = context.readOnly ?? false;
   const server = new McpServer(
     {
       name: 'mcp-server-neon',
@@ -29,6 +33,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
       capabilities: {
         tools: {},
       },
+      instructions: formatAccessControlInstructions(grant, readOnly),
     },
   );
 
@@ -37,8 +42,6 @@ export const createMcpServer = async (context: NeonServerContext) => {
   // Compute client info once at server instantiation
   let clientName = context.userAgent ?? 'unknown';
   let clientApplication = detectClientApplication(clientName);
-
-  const grant = { ...(context.grant ?? DEFAULT_GRANT) };
 
   // Track server initialization
   const trackServerInit = () => {
@@ -81,7 +84,6 @@ export const createMcpServer = async (context: NeonServerContext) => {
 
   // Filter tools based on grant context (presets, scopes, project scoping)
   // and read-only mode (readonly query param / x-read-only header / OAuth scopes)
-  const readOnly = context.readOnly ?? false;
   const availableTools = getAvailableTools(grant, readOnly);
 
   // Compute access control warnings once (appended to every tool response)
@@ -91,9 +93,15 @@ export const createMcpServer = async (context: NeonServerContext) => {
   // module, so a tool call here takes the same arguments as one against the
   // deployed route.
   availableTools.forEach((tool) => {
+    const registration = toolRegistration(tool);
     server.registerTool(
       tool.name,
-      toolRegistration(tool),
+      {
+        ...registration,
+        inputSchema: fromJsonSchema(
+          toListedInputSchema(registration.inputSchema),
+        ),
+      },
       async (args: unknown) => {
         const traceId = generateTraceId();
         return await startSpan(
@@ -107,6 +115,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
           async (span) => {
             const properties = {
               authMethod: context.authMethod,
+              toolName: tool.name,
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
               projectScoped: String(!!grant.projectId),
@@ -131,6 +140,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
               account: context.account,
               readOnly: context.readOnly,
               clientApplication,
+              apiKey: context.apiKey,
             };
             try {
               const result = await invokeTool(

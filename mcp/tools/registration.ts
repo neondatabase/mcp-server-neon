@@ -14,90 +14,55 @@
  * and in what they log. Those differences are theirs to keep. This module owns
  * only the contract a client sees.
  */
-import type {
-  StandardSchemaWithJSON,
-  ToolAnnotations,
-} from '@modelcontextprotocol/server';
+
+import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import type { Api } from '../neon-client';
 import type { GrantContext } from '../utils/grant-context';
 import { NEON_HANDLERS } from './tools';
 import { injectProjectId } from './grant-filter';
-import type { NEON_TOOLS } from './definitions';
-import type { ToolHandlerExtended, ToolHandlerExtraParams } from './types';
+import { NEON_TOOLS } from './definitions';
+import type { NeonTool } from './tool-definition';
+import type { ToolHandlerExtraParams } from './types';
 
-type NeonTool = (typeof NEON_TOOLS)[number];
-
-function withClosedJsonSchema(
-  schema: NeonTool['inputSchema'],
-): StandardSchemaWithJSON {
-  const standard = schema['~standard'];
-  return {
-    '~standard': {
-      ...standard,
-      jsonSchema: {
-        ...standard.jsonSchema,
-        input: (options) => ({
-          ...standard.jsonSchema.input(options),
-          additionalProperties: false,
-        }),
-      },
-    },
-  };
-}
-
-/**
- * What `registerTool` is given. Flat, because that is what a client sends:
- * `{"name":"run_sql","arguments":{"sql":"…","projectId":"…"}}`.
- */
 export function toolRegistration(tool: NeonTool): {
   title?: string;
   description: string;
-  inputSchema: StandardSchemaWithJSON;
+  inputSchema: NeonTool['inputSchema'];
   annotations: ToolAnnotations;
 } {
   return {
     title: tool.annotations?.title,
     description: tool.description,
-    // Keep the published contract closed while retaining Zod's existing
-    // runtime behavior of stripping unspecified arguments.
-    inputSchema: withClosedJsonSchema(tool.inputSchema),
+    inputSchema: tool.inputSchema,
     annotations: tool.annotations,
   };
 }
 
+function toolByName(toolName: string): NeonTool | undefined {
+  return NEON_TOOLS.find((tool) => tool.name === toolName);
+}
+
 /**
- * Run a tool the way the wire delivers it.
- *
- * `projectId` is injected before the handler sees the arguments because a
- * project-scoped grant has it stripped out of the published schema, so the
- * client cannot send it and this is its only source.
+ * Project-scoped grants strip `project_id` from the published schema, so the
+ * client can supply it only through the grant.
  */
 export async function invokeTool(
-  toolName: NeonTool['name'],
-  // The SDK validates against the tool's zod schema before it calls us, so this
-  // is an object by the time it arrives. It is typed loosely only because the
-  // callback signature is shared across every tool.
+  toolName: string,
   args: unknown,
   grant: GrantContext,
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
 ) {
-  const handler = NEON_HANDLERS[toolName] as ToolHandlerExtended<
-    typeof toolName
-  >;
+  const handler = NEON_HANDLERS[toolName];
   if (!handler) {
     throw new Error(`Handler for tool ${toolName} not found`);
   }
+  const tool = toolByName(toolName);
   const effectiveArgs = injectProjectId(
     (args ?? {}) as Record<string, unknown>,
     grant,
+    tool,
   );
 
-  // Handlers read `params`; the wire is flat. This is the only place that
-  // translates between the two.
-  return handler(
-    { params: effectiveArgs } as Parameters<typeof handler>[0],
-    neonClient,
-    extra,
-  );
+  return handler({ params: effectiveArgs }, neonClient, extra);
 }

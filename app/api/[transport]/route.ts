@@ -2,6 +2,7 @@
 import '../../../mcp/sentry/instrument';
 import {
   CLIENT_INFO_META_KEY,
+  fromJsonSchema,
   localhostAllowedOrigins,
   McpServer,
   originValidationResponse,
@@ -45,9 +46,12 @@ import {
 import {
   getAvailableTools,
   getAccessControlWarnings,
+  formatAccessControlInstructions,
 } from '../../../mcp/tools/grant-filter';
 import { invokeTool, toolRegistration } from '../../../mcp/tools/registration';
+import { toListedInputSchema } from '../../../mcp/tools/listed-schema';
 import { NEON_TOOLS } from '../../../mcp/tools/definitions';
+import type { NeonTool } from '../../../mcp/tools/tool-definition';
 import { assert } from '../../../lib/assert';
 import { SERVER_HOST } from '../../../lib/config';
 import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
@@ -78,6 +82,14 @@ const JSON_RESPONSE_HEADERS = { 'Content-Type': 'application/json' } as const;
 const HTTP_STATUS = {
   unauthorized: 401,
 } as const;
+
+function v2ToolConfig(tool: NeonTool) {
+  const registration = toolRegistration(tool);
+  return {
+    ...registration,
+    inputSchema: fromJsonSchema(toListedInputSchema(registration.inputSchema)),
+  };
+}
 
 const PROTECTED_RESOURCE_METADATA_PATH =
   '/.well-known/oauth-protected-resource';
@@ -304,7 +316,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
         server.registerTool(
           tool.name,
-          toolRegistration(tool),
+          v2ToolConfig(tool),
           async (args: unknown, ctx: McpServerContext) => {
             const traceId = generateTraceId();
             return await startSpan(
@@ -326,6 +338,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   clientName: cName,
                   client,
                   context,
+                  apiKey,
                 } = await getAuthContext(ctx);
 
                 // Track server_init on first authenticated request (after client detection)
@@ -333,6 +346,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
                 const properties = {
                   authMethod,
+                  toolName: tool.name,
                   tool_name: tool.name,
                   readOnly: String(readOnly),
                   projectScoped: String(!!grant.projectId),
@@ -360,6 +374,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   account,
                   readOnly,
                   clientApplication: clientApp,
+                  apiKey,
                 };
 
                 try {
@@ -424,6 +439,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         tools: {},
         resources: {},
       },
+      instructions: formatAccessControlInstructions(
+        staticToolContext.grant,
+        staticToolContext.readOnly,
+      ),
       verboseLogs: process.env.NODE_ENV !== 'production',
       onEvent: (event) => {
         switch (event.type) {
@@ -474,9 +493,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 // "always available" search/fetch tools (which require Neon API auth) are
 // not surfaced anonymously.
 const DOCS_ONLY_TOOLS = NEON_TOOLS.filter((tool) => tool.scope === 'docs');
-function getDocsOnlyToolDefinition(
-  name: 'list_docs_resources' | 'get_doc_resource',
-) {
+function getDocsOnlyToolDefinition(name: string) {
   const tool = DOCS_ONLY_TOOLS.find((tool) => tool.name === name);
   assert(tool, `${name} tool definition not found`);
   return tool;
@@ -499,7 +516,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
   return createMcpHandler(
     (server: McpServer) => {
       async function runDocsTool(
-        toolName: 'list_docs_resources' | 'get_doc_resource',
+        toolName: string,
         userAgent: string | undefined,
         call: () => Promise<string>,
       ) {
@@ -516,6 +533,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
           async (span) => {
             const properties = {
               authMethod: 'anonymous',
+              toolName: toolName,
               tool_name: toolName,
               readOnly: 'true',
               projectScoped: 'false',
@@ -562,7 +580,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
 
       server.registerTool(
         listDocsResourcesTool.name,
-        toolRegistration(listDocsResourcesTool),
+        v2ToolConfig(listDocsResourcesTool),
         async () =>
           runDocsTool(listDocsResourcesTool.name, userAgent, () =>
             listDocsResources(),
@@ -571,7 +589,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
 
       server.registerTool(
         getDocResourceTool.name,
-        toolRegistration(getDocResourceTool),
+        v2ToolConfig(getDocResourceTool),
         async (args: unknown) => {
           assert(
             !!args &&

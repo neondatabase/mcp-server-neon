@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { assembleInspectReport } from '../inspect/report';
 import {
   INSPECT_CHECK_LIST,
   INSPECT_CHECKS,
@@ -6,7 +7,27 @@ import {
   INSPECT_MAX_LIMIT,
   INSPECT_QUERIES,
 } from '../inspect/queries';
+import { selectInspectTargets } from '../inspect/targets';
 import { inspectDatabaseInputSchema } from '../tools/toolsSchema';
+
+const STALLED_QUERY_ROW = {
+  observed_at: '2026-08-24 10:00:00+00',
+  query_start: '2026-08-24 09:59:00+00',
+  query_group: 42,
+  pid: 42,
+  leader_pid: null,
+  role: 'leader',
+  backend_type: 'client backend',
+  database: 'neondb',
+  application_name: 'psql',
+  query_id: '1234567890',
+  state: 'active',
+  wait_event_type: 'Lock',
+  wait_event: 'transactionid',
+  blocking_pids: '99',
+  duration: '00:01:00',
+  query: 'SELECT pg_sleep(60)',
+};
 
 describe('inspect query catalog', () => {
   it('offers a query for every check and no orphans', () => {
@@ -61,22 +82,128 @@ describe('inspect query catalog', () => {
       'long-running-queries',
       'datname = current_database()',
       'No long-running queries in this database.',
+      'No long-running queries in any database.',
     ],
     [
       'locks',
       'a.datname = current_database()',
       'No locks held in this database.',
+      'No locks held in any database.',
     ],
   ] as const)(
     '%s is scoped to the inspected database',
-    (check, filter, note) => {
+    (check, filter, note, noteAll) => {
       expect(INSPECT_QUERIES[check].sql).toContain(filter);
       expect(INSPECT_QUERIES[check].emptyMessage).toBe(note);
+      expect(INSPECT_QUERIES[check].emptyMessageAll).toBe(noteAll);
     },
   );
 
   it('scopes locks by the holding session, not the lock database', () => {
     expect(INSPECT_QUERIES.locks.sql).not.toMatch(/\bl\.database\s*=/);
+  });
+
+  it.each([
+    'table-sizes',
+    'index-sizes',
+    'unused-indexes',
+    'seq-scans',
+    'long-running-queries',
+    'locks',
+    'outliers',
+    'calls',
+    'vacuum-stats',
+    'bloat',
+    'subscriptions',
+  ] as const)('%s is database-scoped', (check) => {
+    expect(INSPECT_QUERIES[check].scope).toBe('database');
+  });
+
+  it.each([
+    'stalled-queries',
+    'lfc-hit-rate',
+    'working-set',
+    'replication-slots',
+  ] as const)('%s is compute-scoped and says so', (check) => {
+    expect(INSPECT_QUERIES[check].scope).toBe('compute');
+    expect(INSPECT_QUERIES[check].describe).toContain('compute-wide');
+  });
+
+  it('stalled-queries preserves its diagnostic SQL filter and fields', () => {
+    expect(INSPECT_QUERIES['stalled-queries']).toMatchObject({
+      scope: 'compute',
+      describe:
+        'Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers, oldest query group first (compute-wide)',
+      emptyMessage:
+        'No active queries running longer than 30 seconds on this compute.',
+      sql: expect.stringContaining(
+        "backend_type IN ('client backend', 'parallel worker')",
+      ),
+      fields: [
+        'observed_at',
+        'query_start',
+        'query_group',
+        'pid',
+        'leader_pid',
+        'role',
+        'backend_type',
+        'database',
+        'application_name',
+        'query_id',
+        'state',
+        'wait_event_type',
+        'wait_event',
+        'blocking_pids',
+        'duration',
+        'query',
+      ],
+    });
+    expect(INSPECT_QUERIES['stalled-queries'].sql).toContain(
+      "interval '30 seconds'",
+    );
+    expect(INSPECT_QUERIES['stalled-queries'].sql).toContain(
+      "array_to_string(pg_blocking_pids(a.pid), ',')",
+    );
+    expect(INSPECT_QUERIES['stalled-queries'].sql).toContain(
+      'min(query_start) AS group_start',
+    );
+    expect(INSPECT_QUERIES['stalled-queries'].sql).toContain(
+      'ORDER BY g.group_start, g.query_group, a.leader_pid NULLS FIRST, a.pid',
+    );
+    expect(INSPECT_QUERIES['stalled-queries'].sql).not.toContain(
+      'SELECT DISTINCT COALESCE(leader_pid, pid) AS query_group',
+    );
+  });
+
+  it('stalled-queries runs once when multiple databases exist', () => {
+    expect(
+      selectInspectTargets({
+        branchDatabases: ['analytics', 'neondb'],
+        scope: INSPECT_QUERIES['stalled-queries'].scope,
+      }),
+    ).toEqual({
+      databases: ['analytics'],
+      includeDatabaseColumn: false,
+    });
+  });
+
+  it('stalled-queries reports and retains every structured field', () => {
+    const report = assembleInspectReport({
+      check: 'stalled-queries',
+      query: INSPECT_QUERIES['stalled-queries'],
+      projectId: 'proj-1',
+      branchId: 'br-1',
+      batches: [{ database: 'analytics', rows: [STALLED_QUERY_ROW] }],
+      includeDatabaseColumn: false,
+      includeDatabaseName: false,
+      limit: 50,
+    });
+
+    expect(report.fields).toEqual(INSPECT_QUERIES['stalled-queries'].fields);
+    expect(report.rows).toEqual([STALLED_QUERY_ROW]);
+    expect(Object.keys(report.rows[0] ?? {}).sort()).toEqual(
+      [...report.fields].sort(),
+    );
   });
 });
 
@@ -85,7 +212,7 @@ describe('inspectDatabaseInputSchema', () => {
     for (const check of INSPECT_CHECKS) {
       const parsed = inspectDatabaseInputSchema.parse({
         check,
-        projectId: 'project-1',
+        project_id: 'project-1',
       });
       expect(parsed.check).toBe(check);
     }
@@ -94,7 +221,7 @@ describe('inspectDatabaseInputSchema', () => {
   it('rejects a check that is not in the catalog', () => {
     const result = inspectDatabaseInputSchema.safeParse({
       check: 'cache-hit',
-      projectId: 'project-1',
+      project_id: 'project-1',
     });
     expect(result.success).toBe(false);
   });
@@ -103,27 +230,27 @@ describe('inspectDatabaseInputSchema', () => {
     expect(
       inspectDatabaseInputSchema.parse({
         check: 'locks',
-        projectId: 'project-1',
+        project_id: 'project-1',
       }).limit,
     ).toBe(INSPECT_DEFAULT_LIMIT);
     expect(
       inspectDatabaseInputSchema.safeParse({
         check: 'locks',
-        projectId: 'project-1',
+        project_id: 'project-1',
         limit: 0,
       }).success,
     ).toBe(false);
     expect(
       inspectDatabaseInputSchema.safeParse({
         check: 'locks',
-        projectId: 'project-1',
+        project_id: 'project-1',
         limit: INSPECT_MAX_LIMIT,
       }).success,
     ).toBe(true);
     expect(
       inspectDatabaseInputSchema.safeParse({
         check: 'locks',
-        projectId: 'project-1',
+        project_id: 'project-1',
         limit: INSPECT_MAX_LIMIT + 1,
       }).success,
     ).toBe(false);
@@ -133,5 +260,20 @@ describe('inspectDatabaseInputSchema', () => {
     expect(
       inspectDatabaseInputSchema.safeParse({ check: 'locks' }).success,
     ).toBe(false);
+  });
+
+  it('rejects an empty database_name', () => {
+    const result = inspectDatabaseInputSchema.safeParse({
+      check: 'locks',
+      project_id: 'project-1',
+      database_name: '',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('describes database_name as a connection hop for compute-wide checks', () => {
+    expect(
+      inspectDatabaseInputSchema.shape.database_name.description,
+    ).toContain('the result does not include `databaseName`');
   });
 });

@@ -3,7 +3,7 @@ import { ToolHandlerExtraParams } from '../types';
 import { handleGetConnectionString } from './connection-string';
 import { neon } from '@neondatabase/serverless';
 import { DESCRIBE_DATABASE_STATEMENTS } from '../utils';
-import { CallToolResult } from '@modelcontextprotocol/server';
+import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { CONSOLE_URLS, generateConsoleUrl } from './urls';
 
 const branchInfo = (branch: Branch) => {

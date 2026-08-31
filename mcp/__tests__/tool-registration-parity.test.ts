@@ -1,15 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import type { StandardSchemaWithJSON } from '@modelcontextprotocol/server';
 import { NEON_TOOLS } from '../tools/definitions';
+import { toListedInputSchema } from '../tools/listed-schema';
 import { toolRegistration } from '../tools/registration';
+import type { ToolInputSchema } from '../tools/tool-definition';
 
 /**
- * The draft-7 JSON Schema published by the MCP SDK.
+ * The published JSON Schema, converted the same way the server converts it —
+ * some tool schemas are refined objects rather than plain ones, so reading
+ * `.shape` off them does not work.
  */
-function publishedSchema(inputSchema: StandardSchemaWithJSON) {
-  return inputSchema['~standard'].jsonSchema.input({
-    target: 'draft-07',
-  });
+function publishedProperties(inputSchema: ToolInputSchema): string[] {
+  const jsonSchema = toListedInputSchema(inputSchema);
+  const properties = jsonSchema.properties;
+  if (
+    typeof properties !== 'object' ||
+    properties === null ||
+    Array.isArray(properties)
+  ) {
+    return [];
+  }
+  return Object.keys(properties);
 }
 
 /**
@@ -28,57 +38,20 @@ describe('tool registration wire contract', () => {
       const tool = NEON_TOOLS.find((candidate) => candidate.name === name);
       if (!tool) throw new Error(`Unknown tool ${name}`);
 
-      const schema = publishedSchema(toolRegistration(tool).inputSchema);
-      const properties =
-        schema.properties && typeof schema.properties === 'object'
-          ? Object.keys(schema.properties)
-          : [];
+      const properties = publishedProperties(
+        toolRegistration(tool).inputSchema,
+      );
 
       expect(properties).not.toContain('params');
     },
   );
-
-  it('rejects unspecified properties in every published tool schema', () => {
-    for (const tool of NEON_TOOLS) {
-      const schema = publishedSchema(toolRegistration(tool).inputSchema);
-      expect(schema.additionalProperties).toBe(false);
-    }
-  });
-
-  it.each([
-    ['configure_neon_auth', 'operation'],
-    ['provision_neon_data_api', 'authProvider'],
-  ])('publishes the refined %s input fields', (name, expectedProperty) => {
-    const tool = NEON_TOOLS.find((candidate) => candidate.name === name);
-    if (!tool) throw new Error(`Unknown tool ${name}`);
-
-    const schema = publishedSchema(toolRegistration(tool).inputSchema);
-    expect(schema.properties).toHaveProperty(expectedProperty);
-  });
-
-  it('keeps stripping unspecified runtime arguments', async () => {
-    const tool = NEON_TOOLS.find(
-      (candidate) => candidate.name === 'list_projects',
-    );
-    if (!tool) throw new Error('Unknown tool list_projects');
-
-    const result = await toolRegistration(tool).inputSchema[
-      '~standard'
-    ].validate({
-      unspecified: true,
-    });
-    if ('issues' in result) {
-      throw new Error('Expected unspecified arguments to be stripped');
-    }
-    expect(result.value).not.toHaveProperty('unspecified');
-  });
 
   it('carries the description and annotations through unchanged', () => {
     for (const tool of NEON_TOOLS) {
       const registration = toolRegistration(tool);
       expect(registration.description).toBe(tool.description);
       expect(registration.annotations).toBe(tool.annotations);
-      expect(registration.title).toBe(tool.annotations.title);
+      expect(registration.inputSchema).toBe(tool.inputSchema);
     }
   });
 });

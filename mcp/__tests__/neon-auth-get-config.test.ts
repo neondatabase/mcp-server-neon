@@ -253,6 +253,78 @@ describe('handleGetNeonAuthConfig', () => {
     }
   });
 
+  it('treats an empty GET SMTP password as redacted, not unset', async () => {
+    const neonClient = {
+      ...defaultSnapshotMocks(),
+      listProjectBranches: vi.fn().mockResolvedValue({
+        data: { branches: [{ id: 'br-1', default: true }] },
+      }),
+      getNeonAuth: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          auth_provider: NeonAuthSupportedAuthProvider.BetterAuth,
+          auth_provider_project_id: 'ap1',
+          branch_id: 'br-1',
+          db_name: 'neondb',
+          created_at: '2025-01-01T00:00:00.000Z',
+          owned_by: NeonAuthProviderProjectOwnedBy.Neon,
+          jwks_url: 'https://jwks.example/',
+          base_url: 'https://auth.example/',
+        },
+      }),
+      getProjectBranch: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          branch: {
+            id: 'br-1',
+            name: 'main',
+            project_id: 'p1',
+            parent_id: 'br-root',
+            default: true,
+            protected: false,
+            created_at: '',
+            updated_at: '',
+            compute_time_seconds: 0,
+            written_data_bytes: 0,
+            data_transfer_bytes: 0,
+          },
+        },
+      }),
+      getNeonAuthEmailProvider: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          type: 'standard',
+          host: 'smtp.sendgrid.net',
+          port: 587,
+          username: 'apikey',
+          password: '',
+          sender_email: 'noreply@example.com',
+          sender_name: 'Acme',
+        },
+      }),
+    };
+
+    const result = await handleGetNeonAuthConfig(
+      { projectId: 'p1' },
+      neonClient as never,
+      extra,
+    );
+
+    expect(result.isError).toBeFalsy();
+    if (result.content[0].type === 'text') {
+      const body = parseSettingsJson(result.content[0].text);
+      expect(body.email_provider).toEqual({
+        type: 'standard',
+        host: 'smtp.sendgrid.net',
+        port: 587,
+        username: 'apikey',
+        password: REDACTED_SECRET,
+        sender_email: 'noreply@example.com',
+        sender_name: 'Acme',
+      });
+    }
+  });
+
   it('attaches a sanitized upstream error snippet when the email_provider fetch fails with non-404', async () => {
     // Long body (>200 chars) with a `message` field plus a control character
     // to confirm we (a) prefer `message` over the rest, (b) strip control
@@ -408,6 +480,7 @@ describe('handleGetNeonAuthConfig', () => {
     expect(result.isError).toBe(true);
     if (result.content[0].type === 'text') {
       expect(result.content[0].text).toContain('not provisioned');
+      expect(result.content[0].text).toContain('provision_neon_auth');
     }
   });
 });
