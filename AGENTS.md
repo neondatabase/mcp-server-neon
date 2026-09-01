@@ -410,13 +410,14 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 
 ### OAuth Scopes
 
-The server supports three top-level scopes: `read`, `write`, and `*`. These are exposed via the `/.well-known/oauth-authorization-server` endpoint's `scopes_supported` field.
+The advertised OAuth scopes are `read` and `write`, listed in `scopes_supported` on `/.well-known/oauth-authorization-server`.
 
 - **`read`**: Read-only access to Neon resources
 - **`write`**: Full access including create/delete operations
-- **`*`**: Wildcard, equivalent to full access
 
-During authorization, users can uncheck "Full access" to request only `read` scope, which enables read-only mode.
+`*` is a request-time alias for write, and the scope stored on API-key tokens. It is not listed in `scopes_supported`. If a client requests `*` and write is granted, the issued token includes `*`.
+
+During authorization, users can uncheck "Full access" to grant only `read`.
 
 In addition to the top-level scopes, the server exposes **scope categories** via the non-standard `x-neon-scope-categories` field on the same metadata document: `projects`, `branches`, `endpoints`, `snapshots`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`, `functions`, `storage`. These drive fine-grained tool filtering (see Grant Context above) and can also constrain a token to a single project. The `observability` category covers logs (`query_logs`, `list_log_fields`, `list_log_field_values`) plus the AI Gateway GET. See `mcp/utils/grant-context.ts` for grant resolution.
 

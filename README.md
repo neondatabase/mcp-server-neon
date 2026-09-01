@@ -147,7 +147,7 @@ Alternatively, you can add the following "Neon" entry to your client's MCP serve
 
 ### Scopes and Read-Only Mode
 
-Neon MCP supports OAuth scopes `read`, `write`, and `*` (`*` means both). Your MCP client can request these scopes directly, or you can make the selection in the OAuth permissions UI.
+Neon MCP advertises OAuth scopes `read` and `write`. Your MCP client can request these, or you can make the selection in the OAuth permissions UI. `*` is treated as write if a client still sends it.
 
 **Read-only mode** restricts which tools are available, disabling write operations like creating projects, branches, or running migrations. Read-only tools include listing projects, describing schemas, querying data, and viewing performance metrics.
 

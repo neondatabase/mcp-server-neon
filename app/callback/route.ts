@@ -582,8 +582,7 @@ export async function GET(request: NextRequest) {
       () => model.getClientAuthContext(clientId),
     );
 
-    // Source of truth is KV context written during /authorize.
-    // Keep state-derived values only as a fallback for backward compatibility.
+    // Scope comes from per-flow state because shared client IDs race on KV.
     let grant: GrantContext = storedContext?.grant ?? { ...DEFAULT_GRANT };
     if (!storedContext && requestParams.resource) {
       try {
@@ -602,10 +601,13 @@ export async function GET(request: NextRequest) {
         );
       }
     }
+    const stateScopes = requestParams.scope ?? [];
     const finalScopes =
-      storedContext?.scope && storedContext.scope.length > 0
-        ? storedContext.scope
-        : requestParams.scope;
+      stateScopes.length > 0
+        ? stateScopes
+        : storedContext?.scope && storedContext.scope.length > 0
+          ? storedContext.scope
+          : [];
 
     // Save the authorization code with associated data
     const authCodeData: AuthorizationCode = {

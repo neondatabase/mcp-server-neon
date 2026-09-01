@@ -72,6 +72,27 @@ const parseAuthRequest = (
   };
 };
 
+function resolveGrantedScopes({
+  requestedScopes,
+  grantWrite,
+}: {
+  requestedScopes: string[];
+  grantWrite: boolean;
+}): string[] {
+  const requested =
+    requestedScopes.length > 0 ? requestedScopes : ['read', 'write'];
+  const granted = ['read'];
+  if (!grantWrite) {
+    return granted;
+  }
+  granted.push('write');
+  // Legacy wildcard clients treat omission as a partial grant.
+  if (requested.includes('*')) {
+    granted.push('*');
+  }
+  return granted;
+}
+
 /**
  * Renders the scope selection UI.
  * Read access is always granted. Write access is always shown as an option.
@@ -488,11 +509,11 @@ export async function GET(request: NextRequest) {
     });
     const requestedScopes =
       requestParams.scope.length > 0 ? requestParams.scope : ['read', 'write'];
-    const effectiveScopes = defaultReadOnly
-      ? ['read']
-      : hasWriteScope(requestedScopes)
-        ? ['read', 'write']
-        : ['read'];
+    const grantWrite = !defaultReadOnly && hasWriteScope(requestedScopes);
+    const effectiveScopes = resolveGrantedScopes({
+      requestedScopes,
+      grantWrite,
+    });
 
     if (!client) {
       logger.warn('Client not found', { clientId });
@@ -595,16 +616,20 @@ export async function POST(request: NextRequest) {
     }
 
     const requestParams = JSON.parse(atob(state)) as DownstreamAuthRequest;
+    const grantWrite = hasWriteScope(validScopes);
+    const grantedScopes = resolveGrantedScopes({
+      requestedScopes: requestParams.scope,
+      grantWrite,
+    });
 
-    // Update scopes with user selection
-    requestParams.scope = validScopes;
+    requestParams.scope = grantedScopes;
     const grant = requestParams.resource
       ? resolveGrantFromResourceUri(requestParams.resource)
       : { ...DEFAULT_GRANT };
     await model.saveClientAuthContext(requestParams.clientId, {
       grant,
-      scope: validScopes,
-      readOnly: !hasWriteScope(validScopes),
+      scope: grantedScopes,
+      readOnly: !hasWriteScope(grantedScopes),
     });
 
     await updateApprovedClientsCookie(requestParams.clientId, COOKIE_SECRET);
