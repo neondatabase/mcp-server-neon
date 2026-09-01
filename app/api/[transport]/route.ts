@@ -710,6 +710,11 @@ const docsOnlyAppContext: AppContext = {
 };
 
 function createDocsOnlyMcpHandler() {
+  let docsAgent = {
+    clientName: 'anonymous-docs',
+    clientApplication: identifyClient().clientApplication,
+  };
+
   return createMcpHandler(
     (server: McpServer) => {
       async function runDocsTool(
@@ -728,7 +733,7 @@ function createDocsOnlyMcpHandler() {
             },
           },
           async (span) => {
-            const docsAgent = {
+            docsAgent = {
               clientName: 'anonymous-docs',
               clientApplication: identifyClient(userAgent).clientApplication,
             };
@@ -830,6 +835,11 @@ function createDocsOnlyMcpHandler() {
               transport: event.transport,
               clientInfo: event.clientInfo,
             });
+            docsAgent = {
+              clientName: 'anonymous-docs',
+              clientApplication: identifyClient(event.clientInfo?.userAgent)
+                .clientApplication,
+            };
             break;
           case 'SESSION_ENDED':
             logger.info('MCP docs-only session ended', {
@@ -860,7 +870,7 @@ function createDocsOnlyMcpHandler() {
                   ? event.error
                   : new Error(String(event.error)),
                 {
-                  tags: agentSentryTags(identifyClient()),
+                  tags: agentSentryTags(docsAgent),
                 },
               );
             }
