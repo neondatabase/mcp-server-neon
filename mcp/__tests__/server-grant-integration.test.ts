@@ -16,9 +16,13 @@ vi.mock('@sentry/node', () => ({
   ),
 }));
 
-vi.mock('../sentry/utils', () => ({
-  setSentryTags: vi.fn(),
-}));
+vi.mock('../sentry/utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../sentry/utils')>();
+  return {
+    ...actual,
+    setSentryTags: vi.fn(),
+  };
+});
 
 vi.mock('../utils/logger', () => ({
   logger: {
@@ -152,6 +156,37 @@ describe('createMcpServer grant + read-only integration', () => {
       for (const tool of listed.tools) {
         expect(tool.description ?? '').not.toContain('read-only permissions');
       }
+    } finally {
+      await Promise.allSettled([client.close(), mcpServer.close()]);
+    }
+  });
+
+  it('captures server errors with identified-agent tags from the handshake', async () => {
+    const { captureException } = await import('@sentry/node');
+    const mcpServer = await createMcpServer(
+      buildContext({ userAgent: 'Mozilla/5.0' }),
+    );
+    const client = new Client({ name: 'ChatGPT', version: '1.0.0' });
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+
+    try {
+      await mcpServer.connect(serverTransport);
+      await client.connect(clientTransport);
+      const onerror = mcpServer.server.onerror;
+      if (typeof onerror !== 'function') {
+        throw new Error('expected server.onerror');
+      }
+      onerror(new Error('boom'));
+      expect(captureException).toHaveBeenCalledWith(
+        expect.any(Error),
+        expect.objectContaining({
+          tags: {
+            'client.agent': 'ChatGPT',
+            'client.application': 'chatgpt',
+          },
+        }),
+      );
     } finally {
       await Promise.allSettled([client.close(), mcpServer.close()]);
     }
