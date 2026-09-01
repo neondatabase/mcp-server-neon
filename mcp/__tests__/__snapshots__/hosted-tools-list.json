@@ -4147,6 +4147,129 @@
     }
   },
   {
+    "name": "list_functions_custom_domains",
+    "title": "List the custom domains on a branch",
+    "description": "Lists all custom domains registered on the branch, across every target entity. Returns every page. Pass limit to cap how many.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List the custom domains on a branch",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "register_functions_custom_domains",
+    "title": "Register a custom domain on a branch",
+    "description": "Registers a customer-owned domain (for example `dashboard.acme.com`) on the branch and points it at a target entity, chosen by `entity_type` + `entity_id`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "domain": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "entity_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "entity_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "domain",
+        "entity_type",
+        "entity_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Register a custom domain on a branch",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_functions_custom_domains",
+    "title": "Delete a custom domain from a branch",
+    "description": "Removes a custom domain registered on the branch and stops routing it.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "domain": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 254,
+          "pattern": "^[A-Za-z0-9.-]+$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "domain"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete a custom domain from a branch",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "get_storage",
     "title": "Get branch object storage state",
     "description": "Returns whether branchable object storage is usable for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",

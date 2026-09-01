@@ -83,6 +83,9 @@ export const GENERATED_TOOL_SCOPES = {
   'functions.update': 'functions',
   'functions.delete': 'functions',
   'functions.deploy': 'functions',
+  'functions.customDomains.list': 'functions',
+  'functions.customDomains.register': 'functions',
+  'functions.customDomains.delete': 'functions',
 
   'storage.get': 'storage',
   'storage.buckets.list': 'storage',
