@@ -614,7 +614,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   captureException(err, {
                     tags: {
                       operation: 'releaseSession',
-                      ...agentTagsFromUserAgent(event.clientInfo?.userAgent),
+                      ...agentSentryTags({ clientName, clientApplication }),
                     },
                     extra: { sessionId },
                   });
