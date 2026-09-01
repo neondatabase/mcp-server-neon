@@ -6,6 +6,9 @@ const mocks = vi.hoisted(() => ({
   getSpy: vi.fn(),
   delSpy: vi.fn(),
   connectSpy: vi.fn(),
+  captureException: vi.fn(),
+  emitSessionStarted: true,
+  sessionUserAgent: undefined as string | undefined,
 }));
 
 vi.mock('redis', () => ({
@@ -29,16 +32,22 @@ vi.mock('mcp-handler', () => ({
           timestamp: number;
           sessionId: string;
           transport: 'SSE';
+          clientInfo?: { userAgent?: string };
         }) => void;
       },
     ) =>
       async () => {
-        config.onEvent?.({
-          type: 'SESSION_STARTED',
-          timestamp: Date.now(),
-          sessionId: 'sess-test',
-          transport: 'SSE',
-        });
+        if (mocks.emitSessionStarted) {
+          config.onEvent?.({
+            type: 'SESSION_STARTED',
+            timestamp: Date.now(),
+            sessionId: 'sess-test',
+            transport: 'SSE',
+            clientInfo: mocks.sessionUserAgent
+              ? { userAgent: mocks.sessionUserAgent }
+              : undefined,
+          });
+        }
         return new Response(new ReadableStream(), {
           status: 200,
           headers: { 'Content-Type': 'text/event-stream' },
@@ -77,6 +86,14 @@ vi.mock('../analytics/analytics', () => ({
   track: vi.fn(),
   flushAnalytics: vi.fn().mockResolvedValue(undefined),
 }));
+
+vi.mock('@sentry/node', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@sentry/node')>();
+  return {
+    ...actual,
+    captureException: mocks.captureException,
+  };
+});
 
 vi.mock('../utils/logger', () => ({
   logger: {
@@ -123,6 +140,7 @@ function createDeferred<T>() {
 async function openSse(
   token: string,
   path: string = ROUTE_PATHS.canonicalSse,
+  headers: Record<string, string> = {},
 ): Promise<Response> {
   return await GET(
     new Request(`http://localhost${path}`, {
@@ -130,6 +148,7 @@ async function openSse(
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'text/event-stream',
+        ...headers,
       },
     }),
   );
@@ -144,6 +163,8 @@ describe('route SSE session binding gate', () => {
     mocks.connectSpy.mockReset();
     mocks.connectSpy.mockResolvedValue(undefined);
     mocks.setSpy.mockResolvedValue('OK');
+    mocks.emitSessionStarted = true;
+    mocks.sessionUserAgent = undefined;
     process.env.KV_URL = 'redis://localhost:6379';
   });
 
@@ -188,6 +209,7 @@ describe('route SSE session binding gate', () => {
     vi.mocked(model.getAccessToken).mockResolvedValue(
       buildOAuthToken('token-A') as never,
     );
+    mocks.sessionUserAgent = 'ChatGPT';
     mocks.setSpy.mockRejectedValue(new Error('redis-down'));
 
     const response = await openSse('token-A');
@@ -195,6 +217,39 @@ describe('route SSE session binding gate', () => {
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual(
       SESSION_BINDING_UNAVAILABLE_RESPONSE,
+    );
+    expect(mocks.captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        tags: expect.objectContaining({
+          operation: 'bindSession',
+          'client.agent': 'ChatGPT',
+          'client.application': 'chatgpt',
+        }),
+      }),
+    );
+  });
+
+  it('tags the missing SESSION_STARTED capture from the request User-Agent', async () => {
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken('token-A') as never,
+    );
+    mocks.emitSessionStarted = false;
+
+    const response = await openSse('token-A', ROUTE_PATHS.canonicalSse, {
+      'User-Agent': 'ChatGPT',
+    });
+
+    expect(response.status).toBe(503);
+    expect(mocks.captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        tags: {
+          operation: 'bindSession',
+          'client.agent': 'ChatGPT',
+          'client.application': 'chatgpt',
+        },
+      }),
     );
   });
 });
