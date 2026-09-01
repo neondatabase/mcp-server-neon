@@ -184,6 +184,7 @@ type StaticToolContext = {
 
 function createContextualMcpHandler(staticToolContext: StaticToolContext) {
   const { sseOwnerIdentity } = staticToolContext;
+  let { clientName, clientApplication } = identifyClient();
 
   // Verifies that the caller baked into an incoming MCP envelope (tool or
   // prompt call) matches the identity captured when the SSE stream was
@@ -202,7 +203,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
       hasCallerIdentity: deriveIdentity(extra.authInfo) !== null,
     });
     captureException(new SessionIdentityMismatchError(), {
-      tags: { invocation: invocationName },
+      tags: {
+        invocation: invocationName,
+        ...agentSentryTags({ clientName, clientApplication }),
+      },
     });
     return true;
   };
@@ -210,7 +214,6 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
   return createMcpHandler(
     (server: McpServer) => {
       // Request-scoped mutable state (isolated per server instance)
-      let { clientName, clientApplication } = identifyClient();
       let hasTrackedServerInit = false;
       let lastKnownContext: ServerContext | undefined;
 
@@ -656,6 +659,9 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                 event.error instanceof Error
                   ? event.error
                   : new Error(String(event.error)),
+                {
+                  tags: agentSentryTags({ clientName, clientApplication }),
+                },
               );
             }
             break;
@@ -853,6 +859,9 @@ function createDocsOnlyMcpHandler() {
                 event.error instanceof Error
                   ? event.error
                   : new Error(String(event.error)),
+                {
+                  tags: agentSentryTags(identifyClient()),
+                },
               );
             }
             break;
@@ -1230,7 +1239,10 @@ async function runSseAfterSessionBinding(
         status: response.status,
       });
       captureException(err, {
-        tags: { operation: 'bindSession' },
+        tags: {
+          operation: 'bindSession',
+          ...agentTagsFromUserAgent(req.headers.get('user-agent') ?? undefined),
+        },
       });
       abortController.abort();
       return jsonErrorResponse(SESSION_BINDING_UNAVAILABLE_RESPONSE);
