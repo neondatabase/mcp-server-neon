@@ -87,4 +87,62 @@ describe('/api/token route integration', () => {
       }),
     );
   });
+
+  it('returns the authorization code scope including * on the token', async () => {
+    const client = {
+      id: 'client-123',
+      secret: '',
+      tokenEndpointAuthMethod: 'none',
+      redirect_uris: ['http://127.0.0.1:55667/callback'],
+      grants: ['authorization_code', 'refresh_token'],
+      client_name: 'Token Route Test Client',
+    };
+
+    vi.mocked(model.getClient).mockResolvedValue(client as never);
+    vi.mocked(model.getAuthorizationCode).mockResolvedValue({
+      authorizationCode: 'code-123',
+      client,
+      user: { id: 'user-1', name: 'User', email: 'user@example.com' },
+      expiresAt: new Date(Date.now() + 60_000),
+      token: {
+        access_token: 'upstream-access',
+        refresh_token: 'upstream-refresh',
+        access_token_expires_at: Date.now() + 3600_000,
+      },
+      scope: 'read write *',
+      grant: { projectId: null, scopes: null },
+    } as never);
+
+    vi.mocked(model.saveToken).mockResolvedValue({
+      accessToken: 'saved-access',
+      refreshToken: 'saved-refresh',
+      expires_at: Date.now() + 3600_000,
+      scope: 'read write *',
+      client,
+      user: { id: 'user-1' },
+    } as never);
+
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: client.id,
+      code: 'code-123',
+      redirect_uri: client.redirect_uris[0],
+    });
+    const request = new NextRequest('http://localhost/api/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        access_token: 'saved-access',
+        token_type: 'bearer',
+        refresh_token: 'saved-refresh',
+        scope: 'read write *',
+      }),
+    );
+  });
 });
