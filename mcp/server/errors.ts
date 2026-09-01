@@ -2,6 +2,8 @@ import { NeonApiError } from '@neon/sdk';
 import { NeonDbError } from '@neondatabase/serverless';
 import { logger } from '../utils/logger';
 import { captureException } from '@sentry/node';
+import { agentSentryTags } from '../sentry/utils';
+import type { IdentifiedClient } from '../utils/client-application';
 
 export class InvalidArgumentError extends Error {
   constructor(message: string) {
@@ -50,7 +52,8 @@ function apiErrorReason(body: unknown): string | undefined {
 export function handleToolError(
   error: unknown,
   properties: Record<string, string>,
-  traceId?: string,
+  traceId: string | undefined,
+  agent: IdentifiedClient,
 ) {
   if (error instanceof NeonDbError || isClientError(error)) {
     return errorResponse(error);
@@ -78,7 +81,10 @@ export function handleToolError(
           : 'Unknown error',
       ...errorContext,
     });
-    captureException(error, { extra: errorContext });
+    captureException(error, {
+      extra: errorContext,
+      tags: agentSentryTags(agent),
+    });
     return errorResponse(error);
   }
 }

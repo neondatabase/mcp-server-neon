@@ -2,10 +2,16 @@ type KnownClientApplication =
   | 'cursor'
   | 'claude-code'
   | 'claude-desktop'
+  | 'chatgpt'
   | 'v0'
   | 'vscode';
 
 export type ClientApplication = KnownClientApplication | 'unknown';
+
+export type IdentifiedClient = {
+  clientName: string;
+  clientApplication: ClientApplication;
+};
 
 /**
  * Detects the client application type from the MCP client name or User-Agent.
@@ -27,8 +33,17 @@ export function detectClientApplication(
     normalized.includes('claude desktop')
   )
     return 'claude-desktop';
+  if (normalized.includes('chatgpt')) return 'chatgpt';
   if (normalized.includes('v0bot')) return 'v0';
   if (normalized.includes('visual studio code')) return 'vscode';
 
   return 'unknown';
+}
+
+export function identifyClient(clientName?: string): IdentifiedClient {
+  const name = clientName ?? 'unknown';
+  return {
+    clientName: name,
+    clientApplication: detectClientApplication(name),
+  };
 }
