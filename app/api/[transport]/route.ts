@@ -21,7 +21,7 @@ import { createNeonClient } from '../../../mcp/server/api';
 import pkg from '../../../package.json';
 import { handleToolError } from '../../../mcp/server/errors';
 import type { ToolHandlerExtraParams } from '../../../mcp/tools/types';
-import { detectClientApplication } from '../../../mcp/utils/client-application';
+import { identifyClient } from '../../../mcp/utils/client-application';
 import { isReadOnly } from '../../../mcp/utils/read-only';
 import type { AuthContext } from '../../../mcp/types/auth';
 import { logger } from '../../../mcp/utils/logger';
@@ -31,7 +31,7 @@ import { track, flushAnalytics } from '../../../mcp/analytics/analytics';
 import { resolveAccountFromAuth } from '../../../mcp/server/account';
 import { model } from '../../../mcp/oauth/model';
 import { getApiKeys, type ApiKeyRecord } from '../../../mcp/oauth/kv-store';
-import { setSentryTags } from '../../../mcp/sentry/utils';
+import { agentSentryTags, setSentryTags } from '../../../mcp/sentry/utils';
 import type { ServerContext, AppContext } from '../../../mcp/types/context';
 import {
   isDocsOnlyRequest,
@@ -93,6 +93,10 @@ function createDeferred<T>(): Deferred<T> {
     reject = rej;
   });
   return { promise, resolve, reject };
+}
+
+function agentTagsFromUserAgent(userAgent?: string) {
+  return agentSentryTags(identifyClient(userAgent));
 }
 
 // Carries the authenticated caller's identity fingerprint from post-auth into
@@ -180,6 +184,7 @@ type StaticToolContext = {
 
 function createContextualMcpHandler(staticToolContext: StaticToolContext) {
   const { sseOwnerIdentity } = staticToolContext;
+  let { clientName, clientApplication } = identifyClient();
 
   // Verifies that the caller baked into an incoming MCP envelope (tool or
   // prompt call) matches the identity captured when the SSE stream was
@@ -198,7 +203,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
       hasCallerIdentity: deriveIdentity(extra.authInfo) !== null,
     });
     captureException(new SessionIdentityMismatchError(), {
-      tags: { invocation: invocationName },
+      tags: {
+        invocation: invocationName,
+        ...agentSentryTags({ clientName, clientApplication }),
+      },
     });
     return true;
   };
@@ -206,8 +214,6 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
   return createMcpHandler(
     (server: McpServer) => {
       // Request-scoped mutable state (isolated per server instance)
-      let clientName = 'unknown';
-      let clientApplication = detectClientApplication(clientName);
       let hasTrackedServerInit = false;
       let lastKnownContext: ServerContext | undefined;
 
@@ -276,8 +282,9 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
         // Use User-Agent as clientName fallback if MCP handshake hasn't provided it yet
         if (clientName === 'unknown' && authInfo.extra.userAgent) {
-          clientName = authInfo.extra.userAgent;
-          clientApplication = detectClientApplication(clientName);
+          ({ clientName, clientApplication } = identifyClient(
+            authInfo.extra.userAgent,
+          ));
         }
 
         // Create dynamic appContext with actual transport
@@ -327,8 +334,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         // This ensures we get the real client name even when using mcp-remote,
         // which forwards the original client name (e.g., "Cursor (via mcp-remote 0.1.31)")
         if (clientInfo?.name) {
-          clientName = clientInfo.name;
-          clientApplication = detectClientApplication(clientName);
+          ({ clientName, clientApplication } = identifyClient(clientInfo.name));
         }
         // Note: server_init is tracked on first authenticated request
         // because we don't have account info here yet
@@ -354,6 +360,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
             ? { id: lastKnownContext.account.id }
             : undefined,
           contexts,
+          tags: agentSentryTags({ clientName, clientApplication }),
         });
 
         track({
@@ -432,7 +439,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                 };
 
                 logger.info('tool call:', properties);
-                setSentryTags(context);
+                setSentryTags(context, {
+                  clientName: cName,
+                  clientApplication: clientApp,
+                });
 
                 track({
                   userId: account.id,
@@ -493,6 +503,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                     error,
                     properties,
                     traceId,
+                    { clientName: cName, clientApplication: clientApp },
                   );
                   logger.warn('tool error response:', {
                     ...properties,
@@ -562,7 +573,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                     err,
                   });
                   captureException(err, {
-                    tags: { operation: 'bindSession' },
+                    tags: {
+                      operation: 'bindSession',
+                      ...agentTagsFromUserAgent(event.clientInfo?.userAgent),
+                    },
                     extra: { sessionId },
                   });
                   bindingContext.binding.reject(err);
@@ -574,7 +588,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                 hasIdentity: !!identity,
               });
               captureException(err, {
-                tags: { operation: 'bindSession' },
+                tags: {
+                  operation: 'bindSession',
+                  ...agentTagsFromUserAgent(event.clientInfo?.userAgent),
+                },
               });
               bindingContext.binding.reject(err);
             }
@@ -595,7 +612,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                     err,
                   });
                   captureException(err, {
-                    tags: { operation: 'releaseSession' },
+                    tags: {
+                      operation: 'releaseSession',
+                      ...agentSentryTags({ clientName, clientApplication }),
+                    },
                     extra: { sessionId },
                   });
                 }),
@@ -639,6 +659,9 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                 event.error instanceof Error
                   ? event.error
                   : new Error(String(event.error)),
+                {
+                  tags: agentSentryTags({ clientName, clientApplication }),
+                },
               );
             }
             break;
@@ -687,6 +710,11 @@ const docsOnlyAppContext: AppContext = {
 };
 
 function createDocsOnlyMcpHandler() {
+  let docsAgent = {
+    clientName: 'anonymous-docs',
+    clientApplication: identifyClient().clientApplication,
+  };
+
   return createMcpHandler(
     (server: McpServer) => {
       async function runDocsTool(
@@ -705,14 +733,18 @@ function createDocsOnlyMcpHandler() {
             },
           },
           async (span) => {
+            docsAgent = {
+              clientName: 'anonymous-docs',
+              clientApplication: identifyClient(userAgent).clientApplication,
+            };
             const properties = {
               authMethod: 'anonymous',
               toolName,
               tool_name: toolName,
               readOnly: 'true',
               projectScoped: 'false',
-              clientName: 'anonymous-docs',
-              clientApplication: detectClientApplication(userAgent),
+              clientName: docsAgent.clientName,
+              clientApplication: docsAgent.clientApplication,
               traceId,
               docsOnly: 'true',
             };
@@ -739,7 +771,12 @@ function createDocsOnlyMcpHandler() {
               };
             } catch (error) {
               span.setStatus({ code: 2 });
-              const errorResult = handleToolError(error, properties, traceId);
+              const errorResult = handleToolError(
+                error,
+                properties,
+                traceId,
+                docsAgent,
+              );
               logger.warn('tool error response (docs-only):', {
                 ...properties,
                 isError: true,
@@ -798,6 +835,11 @@ function createDocsOnlyMcpHandler() {
               transport: event.transport,
               clientInfo: event.clientInfo,
             });
+            docsAgent = {
+              clientName: 'anonymous-docs',
+              clientApplication: identifyClient(event.clientInfo?.userAgent)
+                .clientApplication,
+            };
             break;
           case 'SESSION_ENDED':
             logger.info('MCP docs-only session ended', {
@@ -827,6 +869,9 @@ function createDocsOnlyMcpHandler() {
                 event.error instanceof Error
                   ? event.error
                   : new Error(String(event.error)),
+                {
+                  tags: agentSentryTags(docsAgent),
+                },
               );
             }
             break;
@@ -1204,7 +1249,10 @@ async function runSseAfterSessionBinding(
         status: response.status,
       });
       captureException(err, {
-        tags: { operation: 'bindSession' },
+        tags: {
+          operation: 'bindSession',
+          ...agentTagsFromUserAgent(req.headers.get('user-agent') ?? undefined),
+        },
       });
       abortController.abort();
       return jsonErrorResponse(SESSION_BINDING_UNAVAILABLE_RESPONSE);

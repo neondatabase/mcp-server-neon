@@ -84,7 +84,7 @@ describe('/callback route integration', () => {
     vi.mocked(model.deleteClientAuthContext).mockResolvedValue(true);
   });
 
-  it('uses persisted client auth context grant and scope from KV', async () => {
+  it('uses persisted grant from KV and scope from authorize state', async () => {
     const resource =
       'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying,schema';
     const state = buildState({ resource });
@@ -102,11 +102,51 @@ describe('/callback route integration', () => {
     expect(exchangeCode).toHaveBeenCalledWith(expect.any(URL), state);
     expect(model.saveAuthorizationCode).toHaveBeenCalledWith(
       expect.objectContaining({
-        scope: 'read',
+        scope: 'read write',
         grant: {
           projectId: 'proj-123',
           scopes: ['querying', 'schema'],
         },
+      }),
+    );
+  });
+
+  it('prefers authorize-state scope over a different client-keyed KV scope', async () => {
+    const state = buildState({ scope: ['read', 'write', '*'] });
+    vi.mocked(model.getClientAuthContext).mockResolvedValue({
+      grant: { projectId: null, scopes: null },
+      scope: ['read', 'write'],
+      readOnly: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as never);
+
+    const response = await GET(buildRequest(state));
+
+    expect(response.status).toBe(307);
+    expect(model.saveAuthorizationCode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: 'read write *',
+      }),
+    );
+  });
+
+  it('falls back to KV scope when authorize state has none', async () => {
+    const state = buildState({ scope: [] });
+    vi.mocked(model.getClientAuthContext).mockResolvedValue({
+      grant: { projectId: null, scopes: null },
+      scope: ['read'],
+      readOnly: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as never);
+
+    const response = await GET(buildRequest(state));
+
+    expect(response.status).toBe(307);
+    expect(model.saveAuthorizationCode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: 'read',
       }),
     );
   });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { GET } from '../../app/api/authorize/route';
+import { GET, POST } from '../../app/api/authorize/route';
 import { model } from '../oauth/model';
 import { isClientAlreadyApproved } from '../../lib/oauth/cookies';
 import { upstreamAuth } from '../../lib/oauth/client';
@@ -71,6 +71,38 @@ function extractEncodedState(html: string): string {
 
 function decodeState(html: string): Record<string, unknown> {
   return JSON.parse(atob(extractEncodedState(html)));
+}
+
+function decodeUpstreamAuthState(): Record<string, unknown> {
+  const encoded = vi.mocked(upstreamAuth).mock.calls.at(-1)?.[0];
+  if (typeof encoded !== 'string') {
+    throw new Error('expected upstreamAuth to be called with encoded state');
+  }
+  return JSON.parse(atob(encoded)) as Record<string, unknown>;
+}
+
+function buildApproveRequest(
+  requestedScopes: string[],
+  selectedScopes: string[],
+): NextRequest {
+  const state = btoa(
+    JSON.stringify({
+      responseType: 'code',
+      clientId: VALID_CLIENT.id,
+      redirectUri: VALID_CLIENT.redirect_uris[0],
+      scope: requestedScopes,
+      state: 'test-state',
+    }),
+  );
+  const form = new FormData();
+  form.set('state', state);
+  for (const scope of selectedScopes) {
+    form.append('scopes', scope);
+  }
+  return new NextRequest('http://localhost/api/authorize', {
+    method: 'POST',
+    body: form,
+  });
 }
 
 describe('/api/authorize route integration', () => {
@@ -234,5 +266,70 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(307);
     expect(upstreamAuth).toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it('keeps requested * on the granted scope when write is approved', async () => {
+    vi.mocked(isClientAlreadyApproved).mockResolvedValue(true);
+
+    const response = await GET(buildAuthorizeRequest({}, 'read write *'));
+
+    expect(response.status).toBe(307);
+    expect(model.saveClientAuthContext).toHaveBeenCalledWith(
+      VALID_CLIENT.id,
+      expect.objectContaining({
+        scope: ['read', 'write', '*'],
+        readOnly: false,
+      }),
+    );
+    expect(decodeUpstreamAuthState().scope).toEqual(['read', 'write', '*']);
+  });
+
+  it('drops * when the request is read-only', async () => {
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write *', {
+        readonly: 'true',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(model.saveClientAuthContext).toHaveBeenCalledWith(
+      VALID_CLIENT.id,
+      expect.objectContaining({
+        scope: ['read'],
+        readOnly: true,
+      }),
+    );
+  });
+
+  it('keeps requested * on POST when Full access stays checked', async () => {
+    const response = await POST(
+      buildApproveRequest(['read', 'write', '*'], ['read', 'write']),
+    );
+
+    expect(response.status).toBe(307);
+    expect(model.saveClientAuthContext).toHaveBeenCalledWith(
+      VALID_CLIENT.id,
+      expect.objectContaining({
+        scope: ['read', 'write', '*'],
+        readOnly: false,
+      }),
+    );
+    expect(decodeUpstreamAuthState().scope).toEqual(['read', 'write', '*']);
+  });
+
+  it('does not issue * on POST when Full access is unchecked', async () => {
+    const response = await POST(
+      buildApproveRequest(['read', 'write', '*'], ['read']),
+    );
+
+    expect(response.status).toBe(307);
+    expect(model.saveClientAuthContext).toHaveBeenCalledWith(
+      VALID_CLIENT.id,
+      expect.objectContaining({
+        scope: ['read'],
+        readOnly: true,
+      }),
+    );
+    expect(decodeUpstreamAuthState().scope).toEqual(['read']);
   });
 });

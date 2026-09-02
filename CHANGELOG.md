@@ -33,6 +33,7 @@ Refresh-token reliability:
 
 Auth correctness:
 
+- Issue `*` on OAuth tokens when the client requested it and write was granted. `scopes_supported` is `read` and `write`; `*` remains an alias, not an advertised scope. Callback uses the per-flow authorize state for token scope instead of the client-keyed KV row.
 - Stop embedding MCP-specific grant context (scope categories, read-only mode, project-id scoping) in the upstream OAuth `state` parameter; the Neon console OAuth backend doesn't understand those scopes and shouldn't see them. Grant context is now resolved from the saved client registration, OAuth resource URI, or MCP URL query params.
 - MCP-specific configuration moved from custom `X-Neon-*` headers to URL query parameters where appropriate, simplifying client wiring (the legacy `x-read-only` header still works).
 - Pass tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) through `registerTool` to the MCP response — they were defined but not actually surfaced to clients.

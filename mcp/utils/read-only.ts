@@ -1,4 +1,4 @@
-export const SUPPORTED_SCOPES = ['read', 'write', '*'] as const;
+export const SUPPORTED_SCOPES = ['read', 'write'] as const;
 
 export const SCOPE_DEFINITIONS = {
   read: {

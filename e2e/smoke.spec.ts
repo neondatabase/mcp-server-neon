@@ -23,9 +23,7 @@ test.describe('Smoke tests', () => {
     expect(body.authorization_endpoint).toContain('/api/authorize');
     expect(body.token_endpoint).toContain('/api/token');
     expect(body.registration_endpoint).toContain('/api/register');
-    expect(body.scopes_supported).toEqual(
-      expect.arrayContaining(['read', 'write']),
-    );
+    expect(body.scopes_supported).toEqual(['read', 'write']);
     expect(body.code_challenge_methods_supported).toContain('S256');
   });
 
