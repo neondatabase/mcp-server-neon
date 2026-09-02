@@ -84,8 +84,8 @@ export const PINNED_MCP_NAMES = {
   'functions.delete': 'delete_function',
   'functions.deploy': 'deploy_function',
   'functions.customDomains.list': 'list_functions_custom_domains',
-  'functions.customDomains.register': 'register_functions_custom_domains',
-  'functions.customDomains.delete': 'delete_functions_custom_domains',
+  'functions.customDomains.register': 'register_functions_custom_domain',
+  'functions.customDomains.delete': 'delete_functions_custom_domain',
 
   'storage.get': 'get_storage',
   'storage.buckets.list': 'list_storage_buckets',

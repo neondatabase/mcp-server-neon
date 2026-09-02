@@ -4183,9 +4183,9 @@
     }
   },
   {
-    "name": "register_functions_custom_domains",
+    "name": "register_functions_custom_domain",
     "title": "Register a custom domain on a branch",
-    "description": "Registers a customer-owned domain (for example `dashboard.acme.com`) on the branch and points it at a target entity, chosen by `entity_type` + `entity_id`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Registers a hostname on the branch and routes it to a function. Pass `entity_type: \"function\"` and `entity_id` as the slug from `list_functions`. Point a CNAME at the returned `cname_target`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4232,7 +4232,7 @@
     }
   },
   {
-    "name": "delete_functions_custom_domains",
+    "name": "delete_functions_custom_domain",
     "title": "Delete a custom domain from a branch",
     "description": "Removes a custom domain registered on the branch and stops routing it.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {

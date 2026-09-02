@@ -336,10 +336,10 @@ describe('generated tool interface', () => {
       'list_functions_custom_domains',
     );
     expect(PINNED_MCP_NAMES['functions.customDomains.register']).toBe(
-      'register_functions_custom_domains',
+      'register_functions_custom_domain',
     );
     expect(PINNED_MCP_NAMES['functions.customDomains.delete']).toBe(
-      'delete_functions_custom_domains',
+      'delete_functions_custom_domain',
     );
   });
 
@@ -398,10 +398,10 @@ describe('generated tool interface', () => {
       (tool) => tool.name === 'list_functions_custom_domains',
     );
     const register = NEON_TOOLS.find(
-      (tool) => tool.name === 'register_functions_custom_domains',
+      (tool) => tool.name === 'register_functions_custom_domain',
     );
     const remove = NEON_TOOLS.find(
-      (tool) => tool.name === 'delete_functions_custom_domains',
+      (tool) => tool.name === 'delete_functions_custom_domain',
     );
     expect(list?.scope).toBe('functions');
     expect(register?.scope).toBe('functions');
@@ -411,6 +411,15 @@ describe('generated tool interface', () => {
     expect(generatedShape(register!)).toHaveProperty('entity_id');
     expect(generatedShape(register!)).toHaveProperty('domain');
     expect(generatedShape(remove!)).toHaveProperty('domain');
+  });
+
+  it('tells the agent what to pass on register_functions_custom_domain', () => {
+    const tool = NEON_TOOLS.find(
+      (t) => t.name === 'register_functions_custom_domain',
+    );
+    expect(tool!.description).toContain('entity_type: "function"');
+    expect(tool!.description).toContain('list_functions');
+    expect(tool!.description).toContain('cname_target');
   });
 
   it('does not tell the agent to pass a cursor on list_operations', () => {
