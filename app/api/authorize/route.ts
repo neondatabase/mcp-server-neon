@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import he from 'he';
 import { model } from '../../../mcp/oauth/model';
 import { upstreamAuth } from '../../../lib/oauth/client';
-import {
-  isClientAlreadyApproved,
-  updateApprovedClientsCookie,
-} from '../../../lib/oauth/cookies';
-import { COOKIE_SECRET } from '../../../lib/config';
 import { handleOAuthError } from '../../../lib/errors';
 import {
   isReadOnly,
@@ -568,12 +563,6 @@ export async function GET(request: NextRequest) {
       readOnly: !hasWriteScope(effectiveScopes),
     });
 
-    if (await isClientAlreadyApproved(client.id, COOKIE_SECRET)) {
-      requestParams.scope = effectiveScopes;
-      const authUrl = await upstreamAuth(btoa(JSON.stringify(requestParams)));
-      return NextResponse.redirect(authUrl.href);
-    }
-
     return renderApprovalDialog(
       client,
       btoa(JSON.stringify(requestParams)),
@@ -631,8 +620,6 @@ export async function POST(request: NextRequest) {
       scope: grantedScopes,
       readOnly: !hasWriteScope(grantedScopes),
     });
-
-    await updateApprovedClientsCookie(requestParams.clientId, COOKIE_SECRET);
 
     // Re-encode state with updated scopes
     const updatedState = btoa(JSON.stringify(requestParams));

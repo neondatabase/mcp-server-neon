@@ -61,9 +61,7 @@ test.describe('OAuth register and authorize contract', () => {
       maxRedirects: 0,
     });
 
-    // For unapproved clients, authorize renders consent HTML (200).
-    // If a cookie somehow exists in local runs, it may redirect upstream (302).
-    expect([200, 302]).toContain(authorizeResponse.status());
+    expect(authorizeResponse.status()).toBe(200);
   });
 
   test('register with no read-only headers keeps Full access checked by default', async ({
