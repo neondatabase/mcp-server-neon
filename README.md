@@ -437,7 +437,6 @@ Required for remote server runtime:
 | `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL               |
 | `CLIENT_ID`           | OAuth client ID                       |
 | `CLIENT_SECRET`       | OAuth client secret                   |
-| `COOKIE_SECRET`       | Secret for signed cookies             |
 | `KV_URL`              | Vercel KV (Upstash Redis) URL         |
 | `OAUTH_DATABASE_URL`  | Postgres URL for token storage        |
 

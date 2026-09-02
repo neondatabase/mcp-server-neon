@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET, POST } from '../../app/api/authorize/route';
 import { model } from '../oauth/model';
-import { isClientAlreadyApproved } from '../../lib/oauth/cookies';
 import { upstreamAuth } from '../../lib/oauth/client';
 
 vi.mock('../oauth/model', () => ({
@@ -11,11 +10,6 @@ vi.mock('../oauth/model', () => ({
     getClientRegisterHeaders: vi.fn(),
     saveClientAuthContext: vi.fn(),
   },
-}));
-
-vi.mock('../../lib/oauth/cookies', () => ({
-  isClientAlreadyApproved: vi.fn(),
-  updateApprovedClientsCookie: vi.fn(),
 }));
 
 vi.mock('../../lib/oauth/client', () => ({
@@ -119,7 +113,6 @@ describe('/api/authorize route integration', () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     } as never);
-    vi.mocked(isClientAlreadyApproved).mockResolvedValue(false);
   });
 
   it('defaults Full access to checked when no read-only header is set', async () => {
@@ -255,25 +248,24 @@ describe('/api/authorize route integration', () => {
     });
   });
 
-  it('does not forward resource parameter to upstream OAuth when client is pre-approved', async () => {
+  it('renders consent HTML on GET and does not redirect to upstream OAuth', async () => {
     const resource =
       'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying';
-    vi.mocked(isClientAlreadyApproved).mockResolvedValue(true);
-
     const response = await GET(
       buildAuthorizeRequest({}, 'read write', { resource }),
     );
+    const html = await response.text();
 
-    expect(response.status).toBe(307);
-    expect(upstreamAuth).toHaveBeenCalledWith(expect.any(String));
+    expect(response.status).toBe(200);
+    expect(html).toContain('scope-checkbox');
+    expect(upstreamAuth).not.toHaveBeenCalled();
   });
 
   it('keeps requested * on the granted scope when write is approved', async () => {
-    vi.mocked(isClientAlreadyApproved).mockResolvedValue(true);
-
     const response = await GET(buildAuthorizeRequest({}, 'read write *'));
+    const state = decodeState(await response.text());
 
-    expect(response.status).toBe(307);
+    expect(response.status).toBe(200);
     expect(model.saveClientAuthContext).toHaveBeenCalledWith(
       VALID_CLIENT.id,
       expect.objectContaining({
@@ -281,7 +273,7 @@ describe('/api/authorize route integration', () => {
         readOnly: false,
       }),
     );
-    expect(decodeUpstreamAuthState().scope).toEqual(['read', 'write', '*']);
+    expect(state.scope).toEqual(['read', 'write', '*']);
   });
 
   it('drops * when the request is read-only', async () => {
