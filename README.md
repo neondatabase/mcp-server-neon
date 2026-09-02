@@ -384,6 +384,7 @@ Notes:
 **Functions** (`?category=functions`):
 
 - **`list_functions`**, **`get_function`**, **`update_function`**, **`delete_function`**, **`deploy_function`**
+- **`list_functions_custom_domains`**, **`register_functions_custom_domain`**, **`delete_functions_custom_domain`**
 
 **Storage** (`?category=storage`):
 

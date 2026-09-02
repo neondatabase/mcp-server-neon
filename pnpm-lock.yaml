@@ -15,11 +15,11 @@ importers:
         specifier: 1.25.3
         version: 1.25.3(hono@4.12.11)(zod@4.4.3)
       '@neon/sdk':
-        specifier: 3.0.0
-        version: 3.0.0
+        specifier: 3.1.0
+        version: 3.1.0
       '@neon/tools':
-        specifier: 1.1.1
-        version: 1.1.1
+        specifier: 1.2.0
+        version: 1.2.0
       '@neondatabase/serverless':
         specifier: 1.0.0
         version: 1.0.0
@@ -800,12 +800,12 @@ packages:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
 
-  '@neon/sdk@3.0.0':
-    resolution: {integrity: sha512-HoWXk7t6MqTo0s5tbFinYNcuojsLAperd8I6oouibBLie2pnucIfTP10FtQZPfZVABvnU2SGm+QT9pQDmVfGeA==}
+  '@neon/sdk@3.1.0':
+    resolution: {integrity: sha512-yBdxG+RKWuDsEdgjZNuQUV9YfzXktaUb5pZPrzNmsUJPgNkL/jgiMKoYQorsSXDja1CNg6OvCPsEYbxYTYohZQ==}
     engines: {node: '>=20.19.0'}
 
-  '@neon/tools@1.1.1':
-    resolution: {integrity: sha512-L3iFA7RA8Ilt6F/psHEfKXo1ORQgAhrCiWDx+tPJFsbryFc6TYK8NAp/rNKl6UDoSbbsYUn9NBqJ3+JyBLWiNA==}
+  '@neon/tools@1.2.0':
+    resolution: {integrity: sha512-9isVZA6yWnOo96MYSFtuw4cvDTLI3DzOY/dXuAsZOExq8dBwZlfndOISWhm6mc4Mr+gMrp+Bbnsds6TZPdCMWQ==}
     engines: {node: '>=20.19.0'}
 
   '@neondatabase/serverless@1.0.0':
@@ -4315,11 +4315,11 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@neon/sdk@3.0.0': {}
+  '@neon/sdk@3.1.0': {}
 
-  '@neon/tools@1.1.1':
+  '@neon/tools@1.2.0':
     dependencies:
-      '@neon/sdk': 3.0.0
+      '@neon/sdk': 3.1.0
       zod: 4.4.3
 
   '@neondatabase/serverless@1.0.0':
