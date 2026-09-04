@@ -6,13 +6,14 @@ type Account = AuthContext['extra']['account'];
 
 // Auto-initialize analytics at module load time (for serverless compatibility)
 // flushAt: 1 ensures events are sent immediately (required for serverless)
-const analytics: Analytics | undefined = ANALYTICS_WRITE_KEY
-  ? new Analytics({
-      writeKey: ANALYTICS_WRITE_KEY,
-      host: 'https://track.neon.tech',
-      flushAt: 1,
-    })
-  : undefined;
+const analytics: Analytics | undefined =
+  process.env.NEON_MCP_DISABLE_ANALYTICS !== '1' && ANALYTICS_WRITE_KEY
+    ? new Analytics({
+        writeKey: ANALYTICS_WRITE_KEY,
+        host: 'https://track.neon.tech',
+        flushAt: 1,
+      })
+    : undefined;
 
 /**
  * Flush all pending analytics events.
