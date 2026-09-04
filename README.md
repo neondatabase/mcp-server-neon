@@ -442,9 +442,10 @@ Required for remote server runtime:
 
 Optional:
 
-| Variable    | Description                                                                       |
-| ----------- | --------------------------------------------------------------------------------- |
-| `LOG_LEVEL` | Winston log level: `error`, `warn`, `info` (default), `debug`, `verbose`, `silly` |
+| Variable                     | Description                                                                       |
+| ---------------------------- | --------------------------------------------------------------------------------- |
+| `LOG_LEVEL`                  | Winston log level: `error`, `warn`, `info` (default), `debug`, `verbose`, `silly` |
+| `NEON_MCP_DISABLE_ANALYTICS` | Set to `1` to disable product analytics                                           |
 
 ### Testing Pyramid
 
@@ -480,3 +481,12 @@ Testing strategy:
 ### Deployment
 
 Vercel deploys the remote server automatically from the repository branch configuration. Preview environments are available for pull requests.
+
+## Telemetry
+
+The Neon MCP server collects product analytics and error reports to help us understand usage and improve reliability:
+
+- **Product analytics (Segment):** when you connect with an authenticated account, the server sends an `identify` event with your Neon account ID, name, and email address. It also tracks session start (`server_init`), each tool call (`tool_call`), and unexpected server errors (`server_error`). A tool-call event includes the tool name, auth method, and client, not the tool arguments or query results. Docs-only tool calls without an account are tracked anonymously. Events go to `track.neon.tech`, Neon's own analytics endpoint.
+- **Error reporting (Sentry):** unexpected server errors are reported with stack traces and request context.
+
+This collection is covered by the [Neon Privacy Policy](https://neon.com/privacy-policy). To disable analytics when running the server yourself, set `NEON_MCP_DISABLE_ANALYTICS=1`. That flag does not disable Sentry.
