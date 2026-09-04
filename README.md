@@ -486,7 +486,7 @@ Vercel deploys the remote server automatically from the repository branch config
 
 The Neon MCP server collects product analytics and error reports to help us understand usage and improve reliability:
 
-- **Product analytics (Segment):** when you connect with an authenticated account, the server sends an `identify` event with your Neon account ID, name, and email address, along with tool-call events (which tool ran). Events go to `track.neon.tech`, Neon's own analytics endpoint.
+- **Product analytics (Segment):** when you connect with an authenticated account, the server sends an `identify` event with your Neon account ID, name, and email address. It also tracks session start (`server_init`), each tool call (`tool_call`), and unexpected server errors (`server_error`). Docs-only tool calls without an account are tracked anonymously. Events go to `track.neon.tech`, Neon's own analytics endpoint.
 - **Error reporting (Sentry):** unexpected server errors are reported with stack traces and request context.
 
 This collection is covered by the [Neon Privacy Policy](https://neon.com/privacy-policy). To disable analytics when running the server yourself, set `NEON_MCP_DISABLE_ANALYTICS=1`.
