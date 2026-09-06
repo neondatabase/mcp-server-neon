@@ -1,3 +1,5 @@
+import { logger } from './logger';
+
 type KnownClientApplication =
   | 'cursor'
   | 'claude-code'
@@ -85,10 +87,15 @@ export function detectClientApplication(
     return 'antigravity';
   if (tokenAtStart(normalized, 'cline')) return 'cline';
   if (tokenAtStart(normalized, 'goose')) return 'goose';
-  if (tokenAtStart(normalized, 'grok')) return 'grok-build';
+  if (normalized.includes('grok-cli')) return 'grok-build';
   if (tokenAtStart(normalized, 'kilo')) return 'kilo-code';
-  if (tokenAtStart(normalized, 'kimi')) return 'kimi-code';
-  if (tokenAtStart(normalized, 'kiro')) return 'kiro-cli';
+  if (normalized.includes('kimi-code')) return 'kimi-code';
+  if (
+    normalized.includes('q-dev-cli') ||
+    normalized.includes('q dev cli') ||
+    normalized.includes('kiro cli')
+  )
+    return 'kiro-cli';
   if (normalized.includes('mcporter')) return 'mcporter';
   if (normalized.includes('opencode')) return 'opencode';
   if (tokenAtStart(normalized, 'fx')) return 'fx';
@@ -99,14 +106,26 @@ export function detectClientApplication(
 }
 
 export function identifyClient(clientName?: unknown): IdentifiedClient {
-  if (typeof clientName !== 'string' || clientName.length === 0) {
+  try {
+    if (typeof clientName !== 'string' || clientName.length === 0) {
+      return {
+        clientName: 'unknown',
+        clientApplication: 'unknown',
+      };
+    }
     return {
-      clientName: 'unknown',
+      clientName,
+      clientApplication: detectClientApplication(clientName),
+    };
+  } catch (error) {
+    // Attribution is telemetry-only. A throw here would 500 the MCP request.
+    logger.error('identifyClient failed', { err: error });
+    return {
+      clientName:
+        typeof clientName === 'string' && clientName.length > 0
+          ? clientName
+          : 'unknown',
       clientApplication: 'unknown',
     };
   }
-  return {
-    clientName,
-    clientApplication: detectClientApplication(clientName),
-  };
 }
