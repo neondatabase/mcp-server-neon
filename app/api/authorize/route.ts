@@ -12,6 +12,7 @@ import {
 import { logger } from '../../../mcp/utils/logger';
 import {
   matchesRedirectUri,
+  isAllowedDcrRedirectUri,
   isLoopbackHost,
 } from '../../../lib/oauth/redirect-uri';
 import { isAuthorizePostOriginAllowed } from '../../../lib/oauth/authorize-origin';
@@ -574,6 +575,7 @@ export async function GET(request: NextRequest) {
 
     if (
       requestParams.redirectUri === undefined ||
+      !isAllowedDcrRedirectUri(requestParams.redirectUri) ||
       !matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)
     ) {
       logger.warn('Invalid redirect URI', {
@@ -653,7 +655,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)) {
+    if (
+      !isAllowedDcrRedirectUri(requestParams.redirectUri) ||
+      !matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)
+    ) {
       logger.warn('Invalid redirect URI', {
         clientId: requestParams.clientId,
         providedRedirectUri: requestParams.redirectUri,

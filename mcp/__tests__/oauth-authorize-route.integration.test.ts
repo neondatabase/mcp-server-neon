@@ -381,4 +381,62 @@ describe('/api/authorize route integration', () => {
     expect(response.status).toBe(307);
     expect(decodeUpstreamAuthState().scope).toEqual(['read']);
   });
+
+  it('rejects GET authorize for a stored client with a non-allowlisted redirect', async () => {
+    vi.mocked(model.getClient).mockResolvedValue({
+      ...VALID_CLIENT,
+      redirect_uris: ['https://evil.example/callback'],
+    } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: VALID_CLIENT.id,
+      redirect_uri: 'https://evil.example/callback',
+      scope: 'read write',
+      state: 'test-state',
+    });
+    const response = await GET(
+      new NextRequest(`http://localhost/api/authorize?${params.toString()}`, {
+        method: 'GET',
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_request',
+      error_description: 'Invalid redirect URI',
+    });
+    expect(upstreamAuth).not.toHaveBeenCalled();
+  });
+
+  it('rejects POST authorize for a stored client with a non-allowlisted redirect', async () => {
+    vi.mocked(model.getClient).mockResolvedValue({
+      ...VALID_CLIENT,
+      redirect_uris: ['https://evil.example/callback'],
+    } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+
+    const state = signAuthorizeState({
+      payload: {
+        responseType: 'code',
+        clientId: VALID_CLIENT.id,
+        redirectUri: 'https://evil.example/callback',
+        scope: ['read', 'write'],
+        state: 'test-state',
+      },
+      maxScope: ['read', 'write'],
+    });
+    const form = new FormData();
+    form.set('state', state);
+    form.append('scopes', 'read');
+    const response = await POST(
+      new NextRequest('http://localhost/api/authorize', {
+        method: 'POST',
+        headers: { origin: 'http://localhost' },
+        body: form,
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(upstreamAuth).not.toHaveBeenCalled();
+  });
 });
