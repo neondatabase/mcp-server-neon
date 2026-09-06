@@ -10,11 +10,14 @@ describe('isAllowedDcrRedirectUri', () => {
     expect(isAllowedDcrRedirectUri('http://[::1]/callback')).toBe(true);
   });
 
-  it('allows ChatGPT and Postman HTTPS hosts', () => {
+  it('allows ChatGPT, Claude.ai, and Postman HTTPS hosts', () => {
     expect(
       isAllowedDcrRedirectUri(
         'https://chatgpt.com/connector/oauth/aF1iFlAFZjHP',
       ),
+    ).toBe(true);
+    expect(
+      isAllowedDcrRedirectUri('https://claude.ai/api/mcp/auth_callback'),
     ).toBe(true);
     expect(
       isAllowedDcrRedirectUri('https://oauth.pstmn.io/v1/browser-callback'),

@@ -14,7 +14,11 @@ export function isLoopbackHost(host: string): boolean {
  * HTTPS hosts that may register via anonymous DCR. Loopback http stays
  * unrestricted. Exact hostname, not a suffix match.
  */
-const PARTNER_DCR_REDIRECT_HOSTS = new Set(['chatgpt.com', 'oauth.pstmn.io']);
+const PARTNER_DCR_REDIRECT_HOSTS = new Set([
+  'chatgpt.com',
+  'claude.ai',
+  'oauth.pstmn.io',
+]);
 
 export function dcrRedirectHostname(uri: string): string | undefined {
   try {

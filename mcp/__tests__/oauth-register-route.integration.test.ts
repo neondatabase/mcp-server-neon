@@ -131,6 +131,18 @@ describe('/api/register route integration', () => {
     expect(vi.mocked(model.saveClient)).toHaveBeenCalledOnce();
   });
 
+  it('registers a Claude.ai HTTPS redirect host', async () => {
+    const response = await POST(
+      buildRequest({
+        ...VALID_PAYLOAD,
+        redirect_uris: ['https://claude.ai/api/mcp/auth_callback'],
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(model.saveClient)).toHaveBeenCalledOnce();
+  });
+
   it('returns 400 when grant_types contains unsupported values', async () => {
     const response = await POST(
       buildRequest({

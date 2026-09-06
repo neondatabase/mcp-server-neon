@@ -2,7 +2,7 @@
 
 # [NEXT]
 
-Anonymous OAuth client registration only accepts loopback `http` redirect URIs plus HTTPS redirects on `chatgpt.com` and `oauth.pstmn.io`. `/api/authorize` now HMAC-signs consent state with `COOKIE_SECRET` and rejects POST from a foreign Origin.
+Anonymous OAuth client registration only accepts loopback `http` redirect URIs plus HTTPS redirects on `chatgpt.com`, `claude.ai`, and `oauth.pstmn.io`. `/api/authorize` now HMAC-signs consent state with `COOKIE_SECRET` and rejects POST from a foreign Origin.
 
 List, register, and delete branch custom domains: `list_functions_custom_domains`, `register_functions_custom_domain`, `delete_functions_custom_domain` (`?category=functions`). Requires `@neon/tools` 1.2.0.
 
