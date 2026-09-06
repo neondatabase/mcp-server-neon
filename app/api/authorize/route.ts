@@ -12,7 +12,7 @@ import {
 import { logger } from '../../../mcp/utils/logger';
 import {
   matchesRedirectUri,
-  isAllowedDcrRedirectUri,
+  isDangerousRedirectUri,
   isLoopbackHost,
 } from '../../../lib/oauth/redirect-uri';
 import { isAuthorizePostOriginAllowed } from '../../../lib/oauth/authorize-origin';
@@ -476,7 +476,7 @@ function redirectUriRejection(
   clientId: string,
   providedRedirectUri: string,
   registeredRedirectUris: string[],
-  reason: 'host_not_allowed' | 'mismatch',
+  reason: 'dangerous_scheme' | 'mismatch',
 ): NextResponse {
   logger.warn('Invalid redirect URI', {
     clientId,
@@ -484,16 +484,6 @@ function redirectUriRejection(
     registeredRedirectUris,
     reason,
   });
-  if (reason === 'host_not_allowed') {
-    return NextResponse.json(
-      {
-        error: 'invalid_redirect_uri',
-        error_description:
-          'redirect_uri must be loopback http or an allowlisted HTTPS host',
-      },
-      { status: 400 },
-    );
-  }
   return NextResponse.json(
     {
       error: 'invalid_request',
@@ -612,12 +602,12 @@ export async function GET(request: NextRequest) {
         'mismatch',
       );
     }
-    if (!isAllowedDcrRedirectUri(requestParams.redirectUri)) {
+    if (isDangerousRedirectUri(requestParams.redirectUri)) {
       return redirectUriRejection(
         requestParams.clientId,
         requestParams.redirectUri,
         client.redirect_uris,
-        'host_not_allowed',
+        'dangerous_scheme',
       );
     }
     if (!matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)) {
@@ -692,12 +682,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isAllowedDcrRedirectUri(requestParams.redirectUri)) {
+    if (isDangerousRedirectUri(requestParams.redirectUri)) {
       return redirectUriRejection(
         requestParams.clientId,
         requestParams.redirectUri,
         client.redirect_uris,
-        'host_not_allowed',
+        'dangerous_scheme',
       );
     }
     if (!matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)) {

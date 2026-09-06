@@ -102,11 +102,11 @@ describe('/api/register route integration', () => {
     expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when redirect_uris is an attacker HTTPS origin', async () => {
+  it('returns 400 when every redirect_uri is a custom scheme', async () => {
     const response = await POST(
       buildRequest({
         ...VALID_PAYLOAD,
-        redirect_uris: ['https://evil.example/callback'],
+        redirect_uris: ['cursor://anysphere.cursor-mcp/oauth/callback'],
       }),
     );
     const body = (await response.json()) as {
@@ -116,8 +116,115 @@ describe('/api/register route integration', () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toBe('invalid_redirect_uri');
-    expect(body.error_description).toContain('rejected: evil.example');
+    expect(body.error_description).toContain(
+      'cursor://anysphere.cursor-mcp scheme_not_allowed',
+    );
     expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when the only redirect_uri is non-loopback http', async () => {
+    const response = await POST(
+      buildRequest({
+        ...VALID_PAYLOAD,
+        redirect_uris: ['http://evil.example/cb'],
+      }),
+    );
+    const body = (await response.json()) as {
+      error: string;
+      error_description: string;
+    };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('invalid_redirect_uri');
+    expect(body.error_description).toContain('http_not_loopback');
+    expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for javascript, fragment, and userinfo redirects', async () => {
+    for (const redirect_uris of [
+      ['javascript:alert(1)'],
+      ['https://a.example/cb#x'],
+      ['https://u:p@a.example/cb'],
+    ]) {
+      const response = await POST(
+        buildRequest({
+          ...VALID_PAYLOAD,
+          redirect_uris,
+        }),
+      );
+      const body = (await response.json()) as {
+        error: string;
+        error_description: string;
+      };
+
+      expect(response.status).toBe(400);
+      expect(body.error).toBe('invalid_redirect_uri');
+      expect(body.error_description).not.toContain('u:p');
+      expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
+    }
+  });
+
+  it('registers any HTTPS redirect host', async () => {
+    const response = await POST(
+      buildRequest({
+        ...VALID_PAYLOAD,
+        redirect_uris: ['https://evil.example/callback'],
+      }),
+    );
+    const body = (await response.json()) as { redirect_uris: string[] };
+
+    expect(response.status).toBe(200);
+    expect(body.redirect_uris).toEqual(['https://evil.example/callback']);
+    expect(vi.mocked(model.saveClient)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirect_uris: ['https://evil.example/callback'],
+      }),
+    );
+  });
+
+  it('registers Antigravity, Kiro, and Composio HTTPS redirects', async () => {
+    for (const redirect_uris of [
+      ['https://antigravity.google/oauth-callback'],
+      ['https://gamma.app.kiro.dev/agent/mcp/callback'],
+      ['https://backend.composio.dev/api/v1/auth-apps/add'],
+    ]) {
+      vi.mocked(model.saveClient).mockClear();
+      const response = await POST(
+        buildRequest({
+          ...VALID_PAYLOAD,
+          redirect_uris,
+        }),
+      );
+      const body = (await response.json()) as { redirect_uris: string[] };
+
+      expect(response.status).toBe(200);
+      expect(body.redirect_uris).toEqual(redirect_uris);
+      expect(vi.mocked(model.saveClient)).toHaveBeenCalledOnce();
+    }
+  });
+
+  it('drops cursor:// from a mixed Cursor payload and stores the rest', async () => {
+    const response = await POST(
+      buildRequest({
+        ...VALID_PAYLOAD,
+        redirect_uris: [
+          'http://localhost:51234/oauth/callback',
+          'https://www.cursor.com/agents/mcp/oauth/callback',
+          'cursor://anysphere.cursor-mcp/oauth/callback',
+        ],
+      }),
+    );
+    const body = (await response.json()) as { redirect_uris: string[] };
+    const stored = [
+      'http://localhost:51234/oauth/callback',
+      'https://www.cursor.com/agents/mcp/oauth/callback',
+    ];
+
+    expect(response.status).toBe(200);
+    expect(body.redirect_uris).toEqual(stored);
+    expect(vi.mocked(model.saveClient)).toHaveBeenCalledWith(
+      expect.objectContaining({ redirect_uris: stored }),
+    );
   });
 
   it('registers a ChatGPT HTTPS redirect host', async () => {
