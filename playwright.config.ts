@@ -55,6 +55,7 @@ export default defineConfig({
       // which runs before global setup, so anything global setup puts on
       // process.env arrives too late for this process.
       NEON_DOCS_INDEX_URL: DOCS_FIXTURE_INDEX_URL,
+      COOKIE_SECRET: 'e2e-cookie-secret',
     },
   },
 });

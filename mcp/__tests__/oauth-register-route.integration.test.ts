@@ -102,6 +102,35 @@ describe('/api/register route integration', () => {
     expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
   });
 
+  it('returns 400 when redirect_uris is an attacker HTTPS origin', async () => {
+    const response = await POST(
+      buildRequest({
+        ...VALID_PAYLOAD,
+        redirect_uris: ['https://evil.example/callback'],
+      }),
+    );
+    const body = (await response.json()) as {
+      error: string;
+      error_description: string;
+    };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('invalid_redirect_uri');
+    expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
+  });
+
+  it('registers a ChatGPT HTTPS redirect host', async () => {
+    const response = await POST(
+      buildRequest({
+        ...VALID_PAYLOAD,
+        redirect_uris: ['https://chatgpt.com/connector/oauth/abc'],
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(model.saveClient)).toHaveBeenCalledOnce();
+  });
+
   it('returns 400 when grant_types contains unsupported values', async () => {
     const response = await POST(
       buildRequest({

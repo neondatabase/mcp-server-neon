@@ -3,6 +3,10 @@ import { NextRequest } from 'next/server';
 import { GET, POST } from '../../app/api/authorize/route';
 import { model } from '../oauth/model';
 import { upstreamAuth } from '../../lib/oauth/client';
+import {
+  signAuthorizeState,
+  verifyAuthorizeState,
+} from '../../lib/oauth/authorize-state';
 
 vi.mock('../oauth/model', () => ({
   model: {
@@ -64,7 +68,7 @@ function extractEncodedState(html: string): string {
 }
 
 function decodeState(html: string): Record<string, unknown> {
-  return JSON.parse(atob(extractEncodedState(html)));
+  return verifyAuthorizeState(extractEncodedState(html)).payload;
 }
 
 function decodeUpstreamAuthState(): Record<string, unknown> {
@@ -72,22 +76,26 @@ function decodeUpstreamAuthState(): Record<string, unknown> {
   if (typeof encoded !== 'string') {
     throw new Error('expected upstreamAuth to be called with encoded state');
   }
-  return JSON.parse(atob(encoded)) as Record<string, unknown>;
+  return verifyAuthorizeState(encoded).payload;
 }
 
 function buildApproveRequest(
   requestedScopes: string[],
   selectedScopes: string[],
+  headers: Record<string, string> = { origin: 'http://localhost' },
+  extraPayload: Record<string, unknown> = {},
 ): NextRequest {
-  const state = btoa(
-    JSON.stringify({
+  const state = signAuthorizeState({
+    payload: {
       responseType: 'code',
       clientId: VALID_CLIENT.id,
       redirectUri: VALID_CLIENT.redirect_uris[0],
       scope: requestedScopes,
       state: 'test-state',
-    }),
-  );
+      ...extraPayload,
+    },
+    maxScope: requestedScopes,
+  });
   const form = new FormData();
   form.set('state', state);
   for (const scope of selectedScopes) {
@@ -95,6 +103,7 @@ function buildApproveRequest(
   }
   return new NextRequest('http://localhost/api/authorize', {
     method: 'POST',
+    headers,
     body: form,
   });
 }
@@ -102,6 +111,7 @@ function buildApproveRequest(
 describe('/api/authorize route integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.COOKIE_SECRET = 'test-secret';
     vi.mocked(model.getClient).mockResolvedValue(
       VALID_CLIENT as unknown as Awaited<ReturnType<typeof model.getClient>>,
     );
@@ -258,6 +268,8 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(200);
     expect(html).toContain('scope-checkbox');
+    expect(html).toContain('Authorize a local application');
+    expect(html).toContain('Claimed name:');
     expect(upstreamAuth).not.toHaveBeenCalled();
   });
 
@@ -322,6 +334,51 @@ describe('/api/authorize route integration', () => {
         readOnly: true,
       }),
     );
+    expect(decodeUpstreamAuthState().scope).toEqual(['read']);
+  });
+
+  it('rejects unsigned authorize state on POST', async () => {
+    const state = btoa(
+      JSON.stringify({
+        responseType: 'code',
+        clientId: VALID_CLIENT.id,
+        redirectUri: VALID_CLIENT.redirect_uris[0],
+        scope: ['read', 'write'],
+        state: 'test-state',
+      }),
+    );
+    const form = new FormData();
+    form.set('state', state);
+    form.append('scopes', 'read');
+    const response = await POST(
+      new NextRequest('http://localhost/api/authorize', {
+        method: 'POST',
+        headers: { origin: 'http://localhost' },
+        body: form,
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(upstreamAuth).not.toHaveBeenCalled();
+  });
+
+  it('rejects POST from a cross-site Origin', async () => {
+    const response = await POST(
+      buildApproveRequest(['read', 'write'], ['read', 'write'], {
+        origin: 'https://evil.example',
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(upstreamAuth).not.toHaveBeenCalled();
+  });
+
+  it('does not grant write on POST when GET maxScope was read-only', async () => {
+    const response = await POST(
+      buildApproveRequest(['read'], ['read', 'write']),
+    );
+
+    expect(response.status).toBe(307);
     expect(decodeUpstreamAuthState().scope).toEqual(['read']);
   });
 });

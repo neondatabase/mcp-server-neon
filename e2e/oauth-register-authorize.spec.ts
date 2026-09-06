@@ -129,4 +129,18 @@ test.describe('OAuth register and authorize contract', () => {
     expect(body.error).toBe('invalid_client');
     expect(body.error_description).toContain('Invalid client ID');
   });
+
+  test('non-allowlisted https redirect is rejected at register', async ({
+    request,
+  }) => {
+    const registerResponse = await request.post('/api/register', {
+      data: {
+        ...VALID_REGISTER_PAYLOAD,
+        redirect_uris: ['https://evil.example/callback'],
+      },
+    });
+    expect(registerResponse.status()).toBe(400);
+    const body = (await registerResponse.json()) as { error: string };
+    expect(body.error).toBe('invalid_redirect_uri');
+  });
 });

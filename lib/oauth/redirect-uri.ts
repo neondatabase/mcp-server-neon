@@ -6,8 +6,44 @@
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
-function isLoopbackHost(host: string): boolean {
-  return LOOPBACK_HOSTS.has(host.toLowerCase());
+export function isLoopbackHost(host: string): boolean {
+  return LOOPBACK_HOSTS.has(host.replace(/\.$/, '').toLowerCase());
+}
+
+/**
+ * HTTPS hosts that may register via anonymous DCR. Loopback http stays
+ * unrestricted. Exact hostname, not a suffix match.
+ */
+const PARTNER_DCR_REDIRECT_HOSTS = new Set(['chatgpt.com', 'oauth.pstmn.io']);
+
+export function dcrRedirectHostname(uri: string): string | undefined {
+  try {
+    return new URL(uri).hostname.replace(/\.$/, '').toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+export function isAllowedDcrRedirectUri(uri: string): boolean {
+  try {
+    const parsed = new URL(uri);
+    if (parsed.username !== '' || parsed.password !== '') {
+      return false;
+    }
+    if (parsed.hash !== '') {
+      return false;
+    }
+    const host = parsed.hostname.replace(/\.$/, '').toLowerCase();
+    if (parsed.protocol === 'http:' && isLoopbackHost(host)) {
+      return true;
+    }
+    if (parsed.protocol === 'https:' && PARTNER_DCR_REDIRECT_HOSTS.has(host)) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 function parseUri(uri: string) {

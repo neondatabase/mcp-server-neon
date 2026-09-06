@@ -427,6 +427,7 @@ In addition to the top-level scopes, the server exposes **scope categories** via
 | `SERVER_HOST`                 | Server URL (falls back to `VERCEL_URL`) |
 | `UPSTREAM_OAUTH_HOST`         | Neon OAuth provider URL                 |
 | `CLIENT_ID` / `CLIENT_SECRET` | OAuth client credentials                |
+| `COOKIE_SECRET`               | HMAC secret for `/api/authorize` state  |
 | `KV_URL`                      | Vercel KV (Upstash Redis) URL           |
 | `OAUTH_DATABASE_URL`          | Postgres URL for token storage          |
 | `SENTRY_DSN`                  | Sentry error tracking DSN               |

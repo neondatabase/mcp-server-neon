@@ -13,25 +13,18 @@ import { handleOAuthError } from '../../lib/errors';
 import { logger } from '../../mcp/utils/logger';
 import type { AuthorizationCode } from 'oauth2-server';
 import {
+  AuthorizeStateConfigError,
+  verifyAuthorizeState,
+  type DownstreamAuthRequest,
+} from '../../lib/oauth/authorize-state';
+import {
   DEFAULT_GRANT,
   resolveGrantFromResourceUri,
   type GrantContext,
 } from '../../mcp/utils/grant-context';
 
-type DownstreamAuthRequest = {
-  responseType: string;
-  clientId: string;
-  redirectUri: string;
-  scope: string[];
-  state: string;
-  resource?: string;
-  codeChallenge?: string;
-  codeChallengeMethod?: string;
-};
-
 const decodeAuthParams = (state: string): DownstreamAuthRequest => {
-  const decoded = atob(state);
-  return JSON.parse(decoded);
+  return verifyAuthorizeState(state).payload;
 };
 
 const toMilliseconds = (seconds: number): number => seconds * 1000;
@@ -94,8 +87,8 @@ const toMilliseconds = (seconds: number): number => seconds * 1000;
  *                                characterized — when a new fingerprint
  *                                shows up here often enough, promote it to
  *                                its own bucket (good or bad as appropriate).
- *  - `state_decode_failed`       Our own base64/JSON state could not be
- *                                parsed — our encoding broke or caller tampered.
+ *  - `state_decode_failed`       Signed authorize state could not be
+ *                                verified — missing, expired, or tampered.
  *  - `internal_error`            Everything else (KV failures, neon API
  *                                errors, unexpected throws).
  *
@@ -400,6 +393,9 @@ export async function GET(request: NextRequest) {
           });
           return NextResponse.redirect(redirectUrl.href);
         } catch (decodeErr) {
+          if (decodeErr instanceof AuthorizeStateConfigError) {
+            throw decodeErr;
+          }
           // State decode failed — fall through to JSON 400 below.
           logger.warn('Failed to decode state while relaying upstream error', {
             upstreamError,
@@ -468,6 +464,9 @@ export async function GET(request: NextRequest) {
       requestParams = decodeAuthParams(state);
       clientIdForSlo = requestParams.clientId;
     } catch (decodeErr) {
+      if (decodeErr instanceof AuthorizeStateConfigError) {
+        throw decodeErr;
+      }
       logger.error('Failed to decode state at /callback', {
         decodeErr:
           decodeErr instanceof Error ? decodeErr.message : String(decodeErr),
@@ -646,6 +645,19 @@ export async function GET(request: NextRequest) {
     emitAuthCallbackSlo('success', sloStartMs, { clientId });
     return NextResponse.redirect(redirectUrl.href);
   } catch (error: unknown) {
+    if (error instanceof AuthorizeStateConfigError) {
+      emitAuthCallbackSlo('internal_error', sloStartMs, {
+        clientId: clientIdForSlo,
+        reason: 'cookie_secret_unset',
+      });
+      return NextResponse.json(
+        {
+          error: 'server_error',
+          error_description: 'COOKIE_SECRET is not set',
+        },
+        { status: 500 },
+      );
+    }
     // Catch-all for anything not classified above (KV failures, neon API
     // errors, unexpected shapes from openid-client). Counts as bad. We
     // tag the reason field with a coarse fingerprint so dashboards can

@@ -10,23 +10,23 @@ import {
   SUPPORTED_SCOPES,
 } from '../../../mcp/utils/read-only';
 import { logger } from '../../../mcp/utils/logger';
-import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
+import {
+  matchesRedirectUri,
+  isLoopbackHost,
+} from '../../../lib/oauth/redirect-uri';
+import { isAuthorizePostOriginAllowed } from '../../../lib/oauth/authorize-origin';
+import {
+  AuthorizeStateConfigError,
+  AuthorizeStateError,
+  signAuthorizeState,
+  verifyAuthorizeState,
+  type DownstreamAuthRequest,
+} from '../../../lib/oauth/authorize-state';
 import {
   DEFAULT_GRANT,
   resolveGrantFromResourceUri,
   type GrantContext,
 } from '../../../mcp/utils/grant-context';
-
-export type DownstreamAuthRequest = {
-  responseType: string;
-  clientId: string;
-  redirectUri: string;
-  scope: string[];
-  state: string;
-  resource?: string;
-  codeChallenge?: string;
-  codeChallengeMethod?: string;
-};
 
 const resolveQueryParamReadOnly = (
   searchParams: URLSearchParams,
@@ -143,8 +143,18 @@ const renderApprovalDialog = (
   state: string,
   requestedScopes: string[],
   defaultReadOnly: boolean,
+  redirectUri: string,
 ) => {
-  const clientName = he.escape(client.client_name || 'A new MCP Client');
+  const claimedName = he.escape(client.client_name || 'A new MCP Client');
+  let headline = 'Authorize a local application';
+  try {
+    const parsed = new URL(redirectUri);
+    if (!isLoopbackHost(parsed.hostname)) {
+      headline = `Authorize ${he.escape(parsed.hostname)}`;
+    }
+  } catch {
+    headline = 'Authorization Request';
+  }
   const website = client.client_uri ? he.escape(client.client_uri) : undefined;
   const redirectUris = client.redirect_uris;
 
@@ -175,7 +185,7 @@ const renderApprovalDialog = (
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${clientName} | Authorization Request</title>
+  <title>${headline} | Neon MCP</title>
   <style>
     :root {
       --primary-color: #0070f3;
@@ -412,11 +422,11 @@ const renderApprovalDialog = (
       </a>
     </div>
     <div class="card">
-      <h2 class="alert"><strong>MCP Client Authorization Request</strong></h2>
+      <h2 class="alert"><strong>${headline}</strong></h2>
       <div class="client-info">
         <div class="client-detail">
-          <div class="detail-label">Name:</div>
-          <div class="detail-value">${clientName}</div>
+          <div class="detail-label">Claimed name:</div>
+          <div class="detail-value">${claimedName}</div>
         </div>${websiteHtml}${redirectUrisHtml}
       </div>
       <p class="description">
@@ -460,6 +470,29 @@ const renderApprovalDialog = (
     headers: { 'Content-Type': 'text/html' },
   });
 };
+
+function mapAuthorizeError(error: unknown, context: string): NextResponse {
+  if (error instanceof AuthorizeStateConfigError) {
+    logger.error(context, { error: error.message });
+    return NextResponse.json(
+      {
+        error: 'server_error',
+        error_description: 'COOKIE_SECRET is not set',
+      },
+      { status: 500 },
+    );
+  }
+  if (error instanceof AuthorizeStateError) {
+    return NextResponse.json(
+      {
+        error: 'invalid_request',
+        error_description: error.message,
+      },
+      { status: 400 },
+    );
+  }
+  return handleOAuthError(error, context);
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -565,22 +598,38 @@ export async function GET(request: NextRequest) {
 
     return renderApprovalDialog(
       client,
-      btoa(JSON.stringify(requestParams)),
+      signAuthorizeState({
+        payload: requestParams,
+        maxScope: effectiveScopes,
+      }),
       effectiveScopes,
       defaultReadOnly,
+      requestParams.redirectUri,
     );
   } catch (error: unknown) {
-    return handleOAuthError(error, 'Authorization error');
+    return mapAuthorizeError(error, 'Authorization error');
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const state = formData.get('state') as string;
-    const selectedScopes = formData.getAll('scopes') as string[];
+    if (!isAuthorizePostOriginAllowed(request)) {
+      return NextResponse.json(
+        {
+          error: 'invalid_request',
+          error_description: 'Invalid origin',
+        },
+        { status: 400 },
+      );
+    }
 
-    if (!state) {
+    const formData = await request.formData();
+    const stateValue = formData.get('state');
+    const selectedScopes = formData
+      .getAll('scopes')
+      .filter((value): value is string => typeof value === 'string');
+
+    if (typeof stateValue !== 'string' || stateValue.length === 0) {
       return NextResponse.json(
         {
           error: 'invalid_request',
@@ -590,9 +639,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Filter to only valid scopes (read is always included via hidden input)
-    const validScopes = selectedScopes.filter((s) =>
-      SUPPORTED_SCOPES.includes(s as (typeof SUPPORTED_SCOPES)[number]),
+    const { payload: requestParams, maxScope } =
+      verifyAuthorizeState(stateValue);
+
+    const client = await model.getClient(requestParams.clientId, '');
+    if (!client) {
+      return NextResponse.json(
+        {
+          error: 'invalid_client',
+          error_description: 'Invalid client ID',
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)) {
+      logger.warn('Invalid redirect URI', {
+        clientId: requestParams.clientId,
+        providedRedirectUri: requestParams.redirectUri,
+        registeredRedirectUris: client.redirect_uris,
+      });
+      return NextResponse.json(
+        {
+          error: 'invalid_request',
+          error_description: 'Invalid redirect URI',
+        },
+        { status: 400 },
+      );
+    }
+
+    const validScopes = selectedScopes.filter((scope) =>
+      SUPPORTED_SCOPES.some((supported) => supported === scope),
     );
     if (validScopes.length === 0) {
       return NextResponse.json(
@@ -604,12 +681,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const requestParams = JSON.parse(atob(state)) as DownstreamAuthRequest;
-    const grantWrite = hasWriteScope(validScopes);
+    const grantWrite =
+      validScopes.includes('write') && maxScope.includes('write');
     const grantedScopes = resolveGrantedScopes({
-      requestedScopes: requestParams.scope,
+      requestedScopes: maxScope,
       grantWrite,
     });
+    if (!grantedScopes.every((scope) => maxScope.includes(scope))) {
+      return NextResponse.json(
+        {
+          error: 'invalid_scope',
+          error_description: 'Requested scopes exceed the consent grant',
+        },
+        { status: 400 },
+      );
+    }
 
     requestParams.scope = grantedScopes;
     const grant = requestParams.resource
@@ -621,12 +707,14 @@ export async function POST(request: NextRequest) {
       readOnly: !hasWriteScope(grantedScopes),
     });
 
-    // Re-encode state with updated scopes
-    const updatedState = btoa(JSON.stringify(requestParams));
+    const updatedState = signAuthorizeState({
+      payload: requestParams,
+      maxScope: grantedScopes,
+    });
     const authUrl = await upstreamAuth(updatedState);
     return NextResponse.redirect(authUrl.href);
   } catch (error: unknown) {
-    return handleOAuthError(error, 'Authorization error');
+    return mapAuthorizeError(error, 'Authorization error');
   }
 }
 

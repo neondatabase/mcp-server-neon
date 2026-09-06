@@ -5,6 +5,10 @@ import { model } from '../oauth/model';
 import { exchangeCode } from '../../lib/oauth/client';
 import { resolveAccountFromAuth } from '../server/account';
 import { logger } from '../utils/logger';
+import {
+  signAuthorizeState,
+  type DownstreamAuthRequest,
+} from '../../lib/oauth/authorize-state';
 
 vi.mock('../oauth/model', () => ({
   model: {
@@ -33,17 +37,19 @@ vi.mock('../server/account', () => ({
   resolveAccountFromAuth: vi.fn(),
 }));
 
-function buildState(overrides: Partial<Record<string, unknown>> = {}): string {
-  return btoa(
-    JSON.stringify({
-      responseType: 'code',
-      clientId: 'client-123',
-      redirectUri: 'http://127.0.0.1:55667/callback',
-      scope: ['read', 'write'],
-      state: 'client-state',
-      ...overrides,
-    }),
-  );
+function buildState(overrides: Partial<DownstreamAuthRequest> = {}): string {
+  const payload: DownstreamAuthRequest = {
+    responseType: 'code',
+    clientId: 'client-123',
+    redirectUri: 'http://127.0.0.1:55667/callback',
+    scope: ['read', 'write'],
+    state: 'client-state',
+    ...overrides,
+  };
+  return signAuthorizeState({
+    payload,
+    maxScope: payload.scope,
+  });
 }
 
 function buildRequest(state: string): NextRequest {
@@ -54,6 +60,7 @@ function buildRequest(state: string): NextRequest {
 describe('/callback route integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.COOKIE_SECRET = 'test-secret';
 
     vi.mocked(model.getClient).mockResolvedValue({
       id: 'client-123',
@@ -237,6 +244,24 @@ describe('/callback route integration', () => {
     expect(url.searchParams.get('state')).toBe('client-state');
     // We must NOT call exchangeCode when an upstream error redirect arrives.
     expect(exchangeCode).not.toHaveBeenCalled();
+  });
+
+  it('does not relay an upstream error when state is unsigned', async () => {
+    const unsigned = btoa(
+      JSON.stringify({
+        responseType: 'code',
+        clientId: 'client-123',
+        redirectUri: 'https://evil.example/callback',
+        scope: ['read', 'write'],
+        state: 'client-state',
+      }),
+    );
+    const response = await GET(
+      buildErrorRequest(unsigned, 'error', 'The error is unrecognizable'),
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get('location')).toBeNull();
   });
 
   it('relays upstream `access_denied` to client redirect_uri (user clicked Cancel)', async () => {

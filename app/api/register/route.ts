@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { model } from '../../../mcp/oauth/model';
 import { generateRandomString } from '../../../mcp/oauth/utils';
 import { handleOAuthError } from '../../../lib/errors';
+import {
+  dcrRedirectHostname,
+  isAllowedDcrRedirectUri,
+} from '../../../lib/oauth/redirect-uri';
 import { logger } from '../../../mcp/utils/logger';
 import type { Client } from 'oauth2-server';
 
@@ -21,7 +25,10 @@ export async function POST(request: NextRequest) {
       client_uri: payload.client_uri,
     });
 
-    if (payload.client_name === undefined) {
+    if (
+      typeof payload.client_name !== 'string' ||
+      payload.client_name.trim() === ''
+    ) {
       logger.warn('Client registration validation failed', {
         reason: 'client_name_missing',
       });
@@ -34,7 +41,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (payload.redirect_uris === undefined) {
+    if (
+      !Array.isArray(payload.redirect_uris) ||
+      payload.redirect_uris.length === 0 ||
+      !payload.redirect_uris.every((uri: unknown) => typeof uri === 'string')
+    ) {
       logger.warn('Client registration validation failed', {
         reason: 'redirect_uris_missing',
       });
@@ -42,6 +53,27 @@ export async function POST(request: NextRequest) {
         {
           error: 'invalid_request',
           error_description: 'redirect_uris is required',
+        },
+        { status: 400 },
+      );
+    }
+
+    const rejectedRedirectUris = payload.redirect_uris.filter(
+      (uri: string) => !isAllowedDcrRedirectUri(uri),
+    );
+    if (rejectedRedirectUris.length > 0) {
+      const redirectHosts = rejectedRedirectUris.map(
+        (uri: string) => dcrRedirectHostname(uri) ?? 'unparseable',
+      );
+      logger.warn('Client registration validation failed', {
+        reason: 'redirect_uri_not_allowed',
+        redirectHosts,
+      });
+      return NextResponse.json(
+        {
+          error: 'invalid_redirect_uri',
+          error_description:
+            'redirect_uris must be loopback http or an allowlisted HTTPS host',
         },
         { status: 400 },
       );
