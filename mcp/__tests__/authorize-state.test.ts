@@ -37,10 +37,10 @@ describe('authorize state', () => {
       maxScope: ['read'],
     });
     const [body, signature] = encoded.split('.');
-    const flipped = signature.endsWith('a')
-      ? `${signature.slice(0, -1)}b`
-      : `${signature.slice(0, -1)}a`;
-    expect(() => verifyAuthorizeState(`${body}.${flipped}`)).toThrow(
+    const tamperedBody = body.startsWith('A')
+      ? `B${body.slice(1)}`
+      : `A${body.slice(1)}`;
+    expect(() => verifyAuthorizeState(`${tamperedBody}.${signature}`)).toThrow(
       AuthorizeStateError,
     );
   });
