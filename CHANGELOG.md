@@ -2,7 +2,7 @@
 
 # [NEXT]
 
-Anonymous OAuth client registration stores only `https` redirect URIs and `http` redirect URIs on a loopback host, and drops the rest from the registration; a registration with no acceptable redirect URI is rejected. `/api/authorize` HMAC-signs consent state with `COOKIE_SECRET`, rejects POST from a foreign Origin, and refuses `javascript:`, `data:`, `file:`, and `blob:` redirect targets.
+Anonymous OAuth client registration stores only `https` redirect URIs and `http` redirect URIs on a loopback host, and drops the rest from the registration; a registration with no acceptable redirect URI is rejected. `/api/authorize` HMAC-signs consent state with `COOKIE_SECRET`, rejects POST from a foreign Origin, and refuses `javascript:`, `data:`, `file:`, `blob:`, `vbscript:`, and `about:` redirect targets.
 
 List, register, and delete branch custom domains: `list_functions_custom_domains`, `register_functions_custom_domain`, `delete_functions_custom_domain` (`?category=functions`). Requires `@neon/tools` 1.2.0.
 

@@ -23,7 +23,9 @@ export class AuthorizeStateConfigError extends Error {
 
 export class AuthorizeStateError extends Error {
   readonly kind = 'invalid';
-  constructor(message = 'Invalid authorize state') {
+  constructor(
+    message = 'Invalid authorize state. Start the connection again from your MCP client.',
+  ) {
     super(message);
     this.name = 'AuthorizeStateError';
   }

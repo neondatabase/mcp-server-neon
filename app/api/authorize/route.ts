@@ -594,7 +594,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (requestParams.redirectUri === undefined) {
+    if (!requestParams.redirectUri) {
       return redirectUriRejection(
         requestParams.clientId,
         requestParams.redirectUri,

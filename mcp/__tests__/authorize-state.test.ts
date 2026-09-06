@@ -48,7 +48,7 @@ describe('authorize state', () => {
   it('rejects unsigned base64 json', () => {
     process.env.COOKIE_SECRET = 'test-secret';
     expect(() => verifyAuthorizeState(btoa(JSON.stringify(payload)))).toThrow(
-      AuthorizeStateError,
+      'Invalid authorize state. Start the connection again from your MCP client.',
     );
   });
 

@@ -359,6 +359,11 @@ describe('/api/authorize route integration', () => {
     );
 
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_request',
+      error_description:
+        'Invalid authorize state. Start the connection again from your MCP client.',
+    });
     expect(upstreamAuth).not.toHaveBeenCalled();
   });
 
