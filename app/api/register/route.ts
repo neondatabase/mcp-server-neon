@@ -73,7 +73,8 @@ export async function POST(request: NextRequest) {
         {
           error: 'invalid_redirect_uri',
           error_description:
-            'redirect_uris must be loopback http or an allowlisted HTTPS host',
+            'redirect_uris must be loopback http or an allowlisted HTTPS host' +
+            ` (rejected: ${redirectHosts.join(', ')})`,
         },
         { status: 400 },
       );

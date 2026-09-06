@@ -472,6 +472,37 @@ const renderApprovalDialog = (
   });
 };
 
+function redirectUriRejection(
+  clientId: string,
+  providedRedirectUri: string,
+  registeredRedirectUris: string[],
+  reason: 'host_not_allowed' | 'mismatch',
+): NextResponse {
+  logger.warn('Invalid redirect URI', {
+    clientId,
+    providedRedirectUri,
+    registeredRedirectUris,
+    reason,
+  });
+  if (reason === 'host_not_allowed') {
+    return NextResponse.json(
+      {
+        error: 'invalid_redirect_uri',
+        error_description:
+          'redirect_uri must be loopback http or an allowlisted HTTPS host',
+      },
+      { status: 400 },
+    );
+  }
+  return NextResponse.json(
+    {
+      error: 'invalid_request',
+      error_description: 'Invalid redirect URI',
+    },
+    { status: 400 },
+  );
+}
+
 function mapAuthorizeError(error: unknown, context: string): NextResponse {
   if (error instanceof AuthorizeStateConfigError) {
     logger.error(context, { error: error.message });
@@ -573,22 +604,28 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (
-      requestParams.redirectUri === undefined ||
-      !isAllowedDcrRedirectUri(requestParams.redirectUri) ||
-      !matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)
-    ) {
-      logger.warn('Invalid redirect URI', {
-        clientId: requestParams.clientId,
-        providedRedirectUri: requestParams.redirectUri,
-        registeredRedirectUris: client.redirect_uris,
-      });
-      return NextResponse.json(
-        {
-          error: 'invalid_request',
-          error_description: 'Invalid redirect URI',
-        },
-        { status: 400 },
+    if (requestParams.redirectUri === undefined) {
+      return redirectUriRejection(
+        requestParams.clientId,
+        requestParams.redirectUri,
+        client.redirect_uris,
+        'mismatch',
+      );
+    }
+    if (!isAllowedDcrRedirectUri(requestParams.redirectUri)) {
+      return redirectUriRejection(
+        requestParams.clientId,
+        requestParams.redirectUri,
+        client.redirect_uris,
+        'host_not_allowed',
+      );
+    }
+    if (!matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)) {
+      return redirectUriRejection(
+        requestParams.clientId,
+        requestParams.redirectUri,
+        client.redirect_uris,
+        'mismatch',
       );
     }
 
@@ -655,21 +692,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (
-      !isAllowedDcrRedirectUri(requestParams.redirectUri) ||
-      !matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)
-    ) {
-      logger.warn('Invalid redirect URI', {
-        clientId: requestParams.clientId,
-        providedRedirectUri: requestParams.redirectUri,
-        registeredRedirectUris: client.redirect_uris,
-      });
-      return NextResponse.json(
-        {
-          error: 'invalid_request',
-          error_description: 'Invalid redirect URI',
-        },
-        { status: 400 },
+    if (!isAllowedDcrRedirectUri(requestParams.redirectUri)) {
+      return redirectUriRejection(
+        requestParams.clientId,
+        requestParams.redirectUri,
+        client.redirect_uris,
+        'host_not_allowed',
+      );
+    }
+    if (!matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)) {
+      return redirectUriRejection(
+        requestParams.clientId,
+        requestParams.redirectUri,
+        client.redirect_uris,
+        'mismatch',
       );
     }
 

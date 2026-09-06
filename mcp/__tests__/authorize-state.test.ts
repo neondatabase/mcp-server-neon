@@ -61,7 +61,7 @@ describe('authorize state', () => {
       ttlSeconds: 10,
     });
     expect(() => verifyAuthorizeState(encoded, 1_011)).toThrow(
-      AuthorizeStateError,
+      'This authorization request has expired. Start the connection again from your MCP client.',
     );
   });
 

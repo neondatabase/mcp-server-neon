@@ -403,8 +403,9 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
-      error: 'invalid_request',
-      error_description: 'Invalid redirect URI',
+      error: 'invalid_redirect_uri',
+      error_description:
+        'redirect_uri must be loopback http or an allowlisted HTTPS host',
     });
     expect(upstreamAuth).not.toHaveBeenCalled();
   });
@@ -437,6 +438,11 @@ describe('/api/authorize route integration', () => {
     );
 
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_redirect_uri',
+      error_description:
+        'redirect_uri must be loopback http or an allowlisted HTTPS host',
+    });
     expect(upstreamAuth).not.toHaveBeenCalled();
   });
 });

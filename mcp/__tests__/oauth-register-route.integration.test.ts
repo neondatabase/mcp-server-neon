@@ -116,6 +116,7 @@ describe('/api/register route integration', () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toBe('invalid_redirect_uri');
+    expect(body.error_description).toContain('rejected: evil.example');
     expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
   });
 

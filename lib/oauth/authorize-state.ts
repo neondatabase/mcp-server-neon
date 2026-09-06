@@ -176,7 +176,9 @@ export function verifyAuthorizeState(
   }
   const envelope = parseEnvelope(parsed);
   if (envelope.exp <= nowSeconds) {
-    throw new AuthorizeStateError('Authorize state expired');
+    throw new AuthorizeStateError(
+      'This authorization request has expired. Start the connection again from your MCP client.',
+    );
   }
   return { payload: envelope.payload, maxScope: envelope.maxScope };
 }

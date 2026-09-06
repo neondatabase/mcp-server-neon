@@ -431,14 +431,15 @@ pnpm typecheck
 
 Required for remote server runtime:
 
-| Variable              | Description                           |
-| --------------------- | ------------------------------------- |
-| `SERVER_HOST`         | Server URL (defaults to `VERCEL_URL`) |
-| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL               |
-| `CLIENT_ID`           | OAuth client ID                       |
-| `CLIENT_SECRET`       | OAuth client secret                   |
-| `KV_URL`              | Vercel KV (Upstash Redis) URL         |
-| `OAUTH_DATABASE_URL`  | Postgres URL for token storage        |
+| Variable              | Description                            |
+| --------------------- | -------------------------------------- |
+| `SERVER_HOST`         | Server URL (defaults to `VERCEL_URL`)  |
+| `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL                |
+| `CLIENT_ID`           | OAuth client ID                        |
+| `CLIENT_SECRET`       | OAuth client secret                    |
+| `COOKIE_SECRET`       | HMAC secret for `/api/authorize` state |
+| `KV_URL`              | Vercel KV (Upstash Redis) URL          |
+| `OAUTH_DATABASE_URL`  | Postgres URL for token storage         |
 
 Optional:
 
