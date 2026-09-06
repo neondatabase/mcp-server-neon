@@ -40,9 +40,11 @@ function tokenAtStart(normalized: string, token: string): boolean {
 }
 
 export function detectClientApplication(
-  clientName?: string,
+  clientName?: unknown,
 ): ClientApplication {
-  if (!clientName) return 'unknown';
+  if (typeof clientName !== 'string' || clientName.length === 0) {
+    return 'unknown';
+  }
 
   const normalized = clientName.toLowerCase();
 
@@ -65,23 +67,28 @@ export function detectClientApplication(
     return 'github-copilot-cli';
   if (
     normalized.includes('visual studio code') ||
-    normalized.includes('visual-studio-code') ||
-    normalized.includes('github copilot')
+    normalized.includes('visual-studio-code')
   )
     return 'vscode';
-  if (normalized.includes('codex')) return 'codex';
+  if (
+    tokenAtStart(normalized, 'codex') ||
+    normalized.includes('codex-mcp') ||
+    normalized.includes('(codex)')
+  )
+    return 'codex';
   // ChatGPT's connector UA is openai-mcp; Codex adds "(Codex)" and matches above.
   if (normalized.includes('openai-mcp')) return 'chatgpt';
-  if (normalized.includes('gemini')) return 'gemini-cli';
+  if (normalized.includes('gemini-cli') || normalized.includes('gemini cli'))
+    return 'gemini-cli';
   if (normalized.includes('windsurf')) return 'windsurf';
   if (normalized.includes('antigravity') || tokenAtStart(normalized, 'agy'))
     return 'antigravity';
   if (tokenAtStart(normalized, 'cline')) return 'cline';
   if (tokenAtStart(normalized, 'goose')) return 'goose';
-  if (normalized.includes('grok')) return 'grok-build';
+  if (tokenAtStart(normalized, 'grok')) return 'grok-build';
   if (tokenAtStart(normalized, 'kilo')) return 'kilo-code';
-  if (normalized.includes('kimi')) return 'kimi-code';
-  if (normalized.includes('kiro')) return 'kiro-cli';
+  if (tokenAtStart(normalized, 'kimi')) return 'kimi-code';
+  if (tokenAtStart(normalized, 'kiro')) return 'kiro-cli';
   if (normalized.includes('mcporter')) return 'mcporter';
   if (normalized.includes('opencode')) return 'opencode';
   if (tokenAtStart(normalized, 'fx')) return 'fx';
@@ -91,10 +98,15 @@ export function detectClientApplication(
   return 'unknown';
 }
 
-export function identifyClient(clientName?: string): IdentifiedClient {
-  const name = clientName ?? 'unknown';
+export function identifyClient(clientName?: unknown): IdentifiedClient {
+  if (typeof clientName !== 'string' || clientName.length === 0) {
+    return {
+      clientName: 'unknown',
+      clientApplication: 'unknown',
+    };
+  }
   return {
-    clientName: name,
-    clientApplication: detectClientApplication(name),
+    clientName,
+    clientApplication: detectClientApplication(clientName),
   };
 }

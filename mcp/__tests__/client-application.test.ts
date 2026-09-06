@@ -23,7 +23,7 @@ describe('detectClientApplication', () => {
     ['Visual Studio Code/1.132.0', 'vscode'],
     ['Visual-Studio-Code', 'vscode'],
     ['Visual Studio Code - Insiders', 'vscode'],
-    ['GitHub Copilot', 'vscode'],
+    ['GitHub Copilot', 'unknown'],
     ['Codex', 'codex'],
     ['codex-mcp-client', 'codex'],
     ['codex-mcp-client/0.147.0', 'codex'],
@@ -67,6 +67,9 @@ describe('detectClientApplication', () => {
     ['mongoose', 'unknown'],
     ['postfix', 'unknown'],
     ['buzzed', 'unknown'],
+    ['grokking-mcp', 'unknown'],
+    ['Shikimori', 'unknown'],
+    ['Sekiro', 'unknown'],
     ['node', 'unknown'],
     ['python-httpx/0.28.1', 'unknown'],
     ['', 'unknown'],
@@ -88,6 +91,15 @@ describe('identifyClient', () => {
     expect(identifyClient('ChatGPT')).toEqual({
       clientName: 'ChatGPT',
       clientApplication: 'chatgpt',
+    });
+  });
+
+  it('does not throw on non-string runtime values', () => {
+    expect(detectClientApplication(1)).toBe('unknown');
+    expect(detectClientApplication({ name: 'Cursor' })).toBe('unknown');
+    expect(identifyClient(['Codex'])).toEqual({
+      clientName: 'unknown',
+      clientApplication: 'unknown',
     });
   });
 });
