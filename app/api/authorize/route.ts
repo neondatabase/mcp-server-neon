@@ -87,6 +87,26 @@ function resolveGrantedScopes({
   return granted;
 }
 
+function consentClientFields(client: object): {
+  client_name?: string;
+  client_uri?: string;
+  redirect_uris?: string[];
+} {
+  const record = Object.fromEntries(Object.entries(client));
+  const clientName = record.client_name;
+  const clientUri = record.client_uri;
+  const redirectUris = record.redirect_uris;
+  return {
+    client_name: typeof clientName === 'string' ? clientName : undefined,
+    client_uri: typeof clientUri === 'string' ? clientUri : undefined,
+    redirect_uris:
+      Array.isArray(redirectUris) &&
+      redirectUris.every((item) => typeof item === 'string')
+        ? redirectUris
+        : undefined,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -190,7 +210,7 @@ export async function GET(request: NextRequest) {
     });
 
     const html = renderConsentHtml({
-      client,
+      client: consentClientFields(client),
       state: btoa(JSON.stringify(requestParams)),
       requestedScopes: effectiveScopes,
       defaultReadOnly,

@@ -140,6 +140,73 @@ test.describe('OAuth register and authorize contract', () => {
     expect(writeCheckbox).not.toContain('checked');
   });
 
+  test('toggling Allow writes hides write tools and drops write from the form', async ({
+    page,
+    request,
+  }) => {
+    const registerBody = await registerClient(request);
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: registerBody.client_id,
+      redirect_uri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
+      scope: 'read write',
+      state: 'e2e-toggle',
+      resource:
+        'https://mcp.neon.tech/mcp?projectId=proj-e2e&category=querying,schema',
+    });
+
+    await page.goto(`/api/authorize?${params.toString()}`);
+
+    const checkbox = page.locator('.scope-checkbox');
+    await expect(checkbox).toBeChecked();
+    await expect(page.locator('[data-access-mode]')).toHaveText(
+      'Read and write',
+    );
+    await expect(page.locator('[data-tools-summary]')).toContainText(
+      'read and write',
+    );
+    await expect(page.locator('[data-write-tool]').first()).toBeVisible();
+
+    await checkbox.uncheck();
+    await expect(page.locator('[data-access-mode]')).toHaveText('Read-only');
+    await expect(page.locator('[data-tools-summary]')).toContainText(
+      'read-only',
+    );
+    await expect(page.locator('[data-write-tool]').first()).toBeHidden();
+
+    const scopesOff = await page
+      .locator('input[name="scopes"]')
+      .evaluateAll((inputs) =>
+        inputs.flatMap((input) => {
+          if (!(input instanceof HTMLInputElement)) {
+            return [];
+          }
+          if (input.type === 'hidden' || input.checked) {
+            return [input.value];
+          }
+          return [];
+        }),
+      );
+    expect(scopesOff).toEqual(['read']);
+
+    await checkbox.check();
+    await expect(page.locator('[data-write-tool]').first()).toBeVisible();
+    const scopesOn = await page
+      .locator('input[name="scopes"]')
+      .evaluateAll((inputs) =>
+        inputs.flatMap((input) => {
+          if (!(input instanceof HTMLInputElement)) {
+            return [];
+          }
+          if (input.type === 'hidden' || input.checked) {
+            return [input.value];
+          }
+          return [];
+        }),
+      );
+    expect(scopesOn).toEqual(['read', 'write']);
+  });
+
   test('unknown client is rejected by authorize route', async ({ request }) => {
     const authorizeResponse = await request.get('/api/authorize', {
       params: {

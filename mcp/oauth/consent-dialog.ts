@@ -56,44 +56,13 @@ type ConsentClient = {
 };
 
 type ConsentDialogProps = {
-  client: object;
+  client: ConsentClient;
   state: string;
   requestedScopes: string[];
   defaultReadOnly: boolean;
   readOnlyRequestedByConnection: boolean;
   grant: GrantContext;
 };
-
-function pickString(
-  record: Record<string, unknown>,
-  key: string,
-): string | undefined {
-  const value = record[key];
-  return typeof value === 'string' ? value : undefined;
-}
-
-function pickStringArray(
-  record: Record<string, unknown>,
-  key: string,
-): string[] | undefined {
-  const value = record[key];
-  if (
-    !Array.isArray(value) ||
-    !value.every((item) => typeof item === 'string')
-  ) {
-    return undefined;
-  }
-  return value;
-}
-
-function consentClientFields(client: object): ConsentClient {
-  const record = Object.fromEntries(Object.entries(client));
-  return {
-    client_name: pickString(record, 'client_name'),
-    client_uri: pickString(record, 'client_uri'),
-    redirect_uris: pickStringArray(record, 'redirect_uris'),
-  };
-}
 
 export function isWriteChecked({
   requestedScopes,
@@ -357,7 +326,7 @@ function renderScopeSection(view: ConsentView): string {
 
 export function renderConsentHtml(props: ConsentDialogProps): string {
   const view = buildConsentView(props);
-  const client = consentClientFields(props.client);
+  const client = props.client;
   const clientName = he.escape(client.client_name || 'A new MCP Client');
   const website = client.client_uri ? he.escape(client.client_uri) : undefined;
   const redirectUris = client.redirect_uris;
