@@ -295,11 +295,11 @@ describe('MCP server e2e tool calls', () => {
           arguments: {},
         });
       },
-      'Devin-MCP-Client/0.1.0',
+      'UnclassifiedClient/0.1.0',
     );
 
     const attribution = {
-      clientName: 'Devin-MCP-Client/0.1.0',
+      clientName: 'UnclassifiedClient/0.1.0',
       clientApplication: 'unknown',
     };
     expect(trackSpy).toHaveBeenNthCalledWith(
@@ -308,7 +308,7 @@ describe('MCP server e2e tool calls', () => {
         event: 'server_init',
         properties: expect.objectContaining(attribution),
         context: expect.objectContaining({
-          clientName: 'Devin-MCP-Client/0.1.0',
+          clientName: 'UnclassifiedClient/0.1.0',
         }),
       }),
     );
