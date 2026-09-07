@@ -320,7 +320,7 @@ describe('transport dynamic tool composition', () => {
         oauthToken,
         'read write',
         { projectId: 'proj_analytics', scopes: null },
-        'Hermes Agent',
+        'Claude',
       ),
     );
 
@@ -343,7 +343,7 @@ describe('transport dynamic tool composition', () => {
         }),
         context: expect.objectContaining({
           clientName: 'node',
-          client: expect.objectContaining({ name: 'Hermes Agent' }),
+          client: expect.objectContaining({ name: 'Claude' }),
         }),
       }),
     );
