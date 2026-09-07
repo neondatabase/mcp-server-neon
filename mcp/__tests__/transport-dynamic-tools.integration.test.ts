@@ -349,6 +349,50 @@ describe('transport dynamic tool composition', () => {
     );
   });
 
+  it('attributes Hermes Agent from the OAuth client name when the User-Agent is generic', async () => {
+    const oauthToken = 'oauth-hermes-agent';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(
+        oauthToken,
+        'read write',
+        { projectId: 'proj_analytics', scopes: null },
+        'Hermes Agent',
+      ),
+    );
+
+    await mcpCall(
+      oauthToken,
+      'tools/call',
+      1,
+      { name: 'run_sql', arguments: { sql: 'select 1' } },
+      '',
+      'python-httpx',
+    );
+
+    const attribution = {
+      clientName: 'python-httpx',
+      clientApplication: 'hermes-agent',
+    };
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event: 'server_init',
+        properties: expect.objectContaining(attribution),
+        context: expect.objectContaining({
+          clientName: 'python-httpx',
+          client: expect.objectContaining({ name: 'Hermes Agent' }),
+        }),
+      }),
+    );
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        event: 'tool_call',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
+  });
+
   it('keeps a recognized User-Agent over the OAuth client name', async () => {
     const oauthToken = 'oauth-handshake-wins';
     vi.mocked(model.getAccessToken).mockResolvedValue(

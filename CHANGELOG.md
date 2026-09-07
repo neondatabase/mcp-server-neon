@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+`clientApplication` on analytics events now classifies Devin, Perplexity, Hermes Agent, and Grok connector sessions. `grok-cli` stays `grok-build`.
+
 When the MCP handshake or User-Agent does not name a product (`node`, `undici`), `clientApplication` on analytics events falls back to the OAuth client's registered name.
 
 List, register, and delete branch custom domains: `list_functions_custom_domains`, `register_functions_custom_domain`, `delete_functions_custom_domain` (`?category=functions`). Requires `@neon/tools` 1.2.0.

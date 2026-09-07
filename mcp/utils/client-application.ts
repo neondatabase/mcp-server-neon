@@ -23,7 +23,11 @@ type KnownClientApplication =
   | 'opencode'
   | 'fx'
   | 'zed'
-  | 'postman';
+  | 'postman'
+  | 'devin'
+  | 'perplexity'
+  | 'hermes-agent'
+  | 'grok';
 
 export type ClientApplication = KnownClientApplication | 'unknown';
 
@@ -101,6 +105,14 @@ export function detectClientApplication(
   if (tokenAtStart(normalized, 'fx')) return 'fx';
   if (tokenAtStart(normalized, 'zed')) return 'zed';
   if (normalized.includes('postman')) return 'postman';
+  if (tokenAtStart(normalized, 'devin')) return 'devin';
+  if (tokenAtStart(normalized, 'perplexity')) return 'perplexity';
+  if (
+    normalized.includes('hermes agent') ||
+    tokenAtStart(normalized, 'hermes-agent')
+  )
+    return 'hermes-agent';
+  if (tokenAtStart(normalized, 'grok')) return 'grok';
 
   return 'unknown';
 }
