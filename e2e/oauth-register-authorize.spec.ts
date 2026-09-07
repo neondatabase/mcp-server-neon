@@ -110,6 +110,34 @@ test.describe('OAuth register and authorize contract', () => {
     expect(writeCheckbox).not.toContain('checked');
   });
 
+  test('authorize HTML includes the resource project and categories', async ({
+    request,
+  }) => {
+    const registerBody = await registerClient(request);
+    const resource =
+      'https://mcp.neon.tech/mcp?projectId=proj-e2e&category=querying&readonly=true';
+
+    const authorizeResponse = await request.get('/api/authorize', {
+      params: {
+        response_type: 'code',
+        client_id: registerBody.client_id,
+        redirect_uri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
+        scope: 'read write',
+        state: 'e2e-state',
+        resource,
+      },
+      maxRedirects: 0,
+    });
+
+    expect(authorizeResponse.status()).toBe(200);
+    const body = await authorizeResponse.text();
+    expect(body).toContain('proj-e2e');
+    expect(body).toContain('Querying');
+    expect(body).toContain('The connection URL requested read-only');
+    const writeCheckbox = extractWriteCheckbox(body);
+    expect(writeCheckbox).not.toContain('checked');
+  });
+
   test('unknown client is rejected by authorize route', async ({ request }) => {
     const authorizeResponse = await request.get('/api/authorize', {
       params: {

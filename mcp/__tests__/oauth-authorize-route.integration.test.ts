@@ -324,4 +324,132 @@ describe('/api/authorize route integration', () => {
     );
     expect(decodeUpstreamAuthState().scope).toEqual(['read']);
   });
+
+  it('shows the resource project and categories on the consent page', async () => {
+    const resource =
+      'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying,schema';
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('proj-123');
+    expect(html).toContain('Querying');
+    expect(html).toContain('Schema');
+    expect(html).toContain('Access this connection is requesting');
+    expect(html).not.toContain('Search and Fetch stay available');
+  });
+
+  it('shows unrestricted project and categories when resource has no query', async () => {
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', {
+        resource: 'https://mcp.neon.tech/mcp',
+      }),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('All projects in the Neon account you sign in with');
+    expect(html).toContain('Projects, Branches, Endpoints');
+  });
+
+  it('keeps a mixed valid/unknown category list on the page and in KV', async () => {
+    const resource =
+      'https://mcp.neon.tech/mcp?category=querying,not-a-category';
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('Querying');
+    expect(html).toContain('Ignored category values: not-a-category');
+    expect(vi.mocked(model.saveClientAuthContext)).toHaveBeenCalledWith(
+      VALID_CLIENT.id,
+      expect.objectContaining({
+        grant: {
+          projectId: null,
+          scopes: ['querying'],
+          unknownCategories: ['not-a-category'],
+        },
+      }),
+    );
+  });
+
+  it('POST from the rendered form keeps the resource grant and redirects upstream', async () => {
+    const resource =
+      'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying';
+    const getResponse = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+    const html = await getResponse.text();
+    const state = extractEncodedState(html);
+
+    const form = new FormData();
+    form.set('state', state);
+    form.append('scopes', 'read');
+    form.append('scopes', 'write');
+    const postResponse = await POST(
+      new NextRequest('http://localhost/api/authorize', {
+        method: 'POST',
+        body: form,
+      }),
+    );
+
+    expect(getResponse.status).toBe(200);
+    expect(postResponse.status).toBe(307);
+    expect(vi.mocked(model.saveClientAuthContext)).toHaveBeenLastCalledWith(
+      VALID_CLIENT.id,
+      expect.objectContaining({
+        grant: {
+          projectId: 'proj-123',
+          scopes: ['querying'],
+        },
+        scope: ['read', 'write'],
+        readOnly: false,
+      }),
+    );
+    expect(decodeUpstreamAuthState()).toMatchObject({
+      resource,
+      scope: ['read', 'write'],
+      redirectUri: VALID_CLIENT.redirect_uris[0],
+    });
+  });
+
+  it('POST from the rendered form can approve read-only without dropping the resource', async () => {
+    const resource =
+      'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying';
+    const getResponse = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+    const state = extractEncodedState(await getResponse.text());
+
+    const form = new FormData();
+    form.set('state', state);
+    form.append('scopes', 'read');
+    const postResponse = await POST(
+      new NextRequest('http://localhost/api/authorize', {
+        method: 'POST',
+        body: form,
+      }),
+    );
+
+    expect(postResponse.status).toBe(307);
+    expect(vi.mocked(model.saveClientAuthContext)).toHaveBeenLastCalledWith(
+      VALID_CLIENT.id,
+      expect.objectContaining({
+        grant: {
+          projectId: 'proj-123',
+          scopes: ['querying'],
+        },
+        scope: ['read'],
+        readOnly: true,
+      }),
+    );
+    expect(decodeUpstreamAuthState()).toMatchObject({
+      resource,
+      scope: ['read'],
+    });
+  });
 });
