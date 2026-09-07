@@ -135,6 +135,7 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(200);
     expect(writeCheckbox).not.toContain('checked');
+    expect(html).not.toContain('The connection URL requested read-only');
   });
 
   it('defaults Full access to unchecked when readonly query param is true', async () => {
@@ -148,6 +149,7 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(200);
     expect(writeCheckbox).not.toContain('checked');
+    expect(html).toContain('The connection URL requested read-only');
   });
 
   it('defaults Full access to unchecked when readonly=true is passed via resource query', async () => {
@@ -161,6 +163,7 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(200);
     expect(writeCheckbox).not.toContain('checked');
+    expect(html).toContain('The connection URL requested read-only');
   });
 
   it('defaults Full access to unchecked from saved register x-read-only header', async () => {
@@ -177,6 +180,7 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(200);
     expect(writeCheckbox).not.toContain('checked');
+    expect(html).not.toContain('The connection URL requested read-only');
   });
 
   it('does not embed grant context in the upstream OAuth state parameter', async () => {

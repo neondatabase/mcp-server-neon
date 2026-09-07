@@ -180,6 +180,24 @@ describe('renderConsentHtml', () => {
     expect(writeInput).not.toContain('checked');
   });
 
+  it('does not claim the connection URL requested read-only when only defaultReadOnly is set', () => {
+    const html = renderConsentHtml({
+      client,
+      state: 'abc',
+      requestedScopes: ['read', 'write'],
+      defaultReadOnly: true,
+      readOnlyRequestedByConnection: false,
+      grant: DEFAULT_GRANT,
+    });
+
+    expect(html).not.toContain('The connection URL requested read-only');
+    const writeInput = html.match(
+      /<input[\s\S]*?name="scopes"[\s\S]*?value="write"[\s\S]*?class="scope-checkbox"[\s\S]*?\/>/,
+    )?.[0];
+    expect(writeInput).toBeTruthy();
+    expect(writeInput).not.toContain('checked');
+  });
+
   it('marks write-only tools as pending when Full access starts unchecked', () => {
     const html = renderConsentHtml({
       client,

@@ -194,7 +194,9 @@ export async function GET(request: NextRequest) {
       state: btoa(JSON.stringify(requestParams)),
       requestedScopes: effectiveScopes,
       defaultReadOnly,
-      readOnlyRequestedByConnection: defaultReadOnly,
+      readOnlyRequestedByConnection: isReadOnly({
+        queryParamValue: resourceReadOnlyQueryParam,
+      }),
       grant: resourceGrant,
     });
     return new NextResponse(html, {
