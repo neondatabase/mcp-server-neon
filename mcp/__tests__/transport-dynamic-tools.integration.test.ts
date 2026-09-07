@@ -259,6 +259,7 @@ describe('transport dynamic tool composition', () => {
       expect.objectContaining({
         event: 'server_init',
         properties: expect.objectContaining(attribution),
+        context: expect.objectContaining({ clientName: 'v0bot' }),
       }),
     );
     expect(trackSpy).toHaveBeenNthCalledWith(
@@ -266,6 +267,7 @@ describe('transport dynamic tool composition', () => {
       expect.objectContaining({
         event: 'tool_call',
         properties: expect.objectContaining(attribution),
+        context: expect.objectContaining({ clientName: 'v0bot' }),
       }),
     );
   });
@@ -296,6 +298,10 @@ describe('transport dynamic tool composition', () => {
       expect.objectContaining({
         event: 'server_init',
         properties: expect.objectContaining(attribution),
+        context: expect.objectContaining({
+          clientName: 'node',
+          client: expect.objectContaining({ name: 'Cline' }),
+        }),
       }),
     );
     expect(trackSpy).toHaveBeenNthCalledWith(
@@ -303,6 +309,42 @@ describe('transport dynamic tool composition', () => {
       expect.objectContaining({
         event: 'tool_call',
         properties: expect.objectContaining(attribution),
+      }),
+    );
+  });
+
+  it('keeps an unclassified OAuth name on client and the User-Agent on clientName', async () => {
+    const oauthToken = 'oauth-unclassified-dcr';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(
+        oauthToken,
+        'read write',
+        { projectId: 'proj_analytics', scopes: null },
+        'Hermes Agent',
+      ),
+    );
+
+    await mcpCall(
+      oauthToken,
+      'tools/call',
+      1,
+      { name: 'run_sql', arguments: { sql: 'select 1' } },
+      '',
+      'node',
+    );
+
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event: 'server_init',
+        properties: expect.objectContaining({
+          clientName: 'node',
+          clientApplication: 'unknown',
+        }),
+        context: expect.objectContaining({
+          clientName: 'node',
+          client: expect.objectContaining({ name: 'Hermes Agent' }),
+        }),
       }),
     );
   });

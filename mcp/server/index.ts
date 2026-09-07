@@ -65,6 +65,7 @@ export const createMcpServer = async (context: ServerContext) => {
       context: {
         client: context.client,
         app: context.app,
+        clientName,
       },
     });
     logger.info('Server initialized:', {

@@ -248,6 +248,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
           context: {
             client: context.client,
             app: context.app,
+            clientName,
           },
         });
         logger.info('Server initialized:', {

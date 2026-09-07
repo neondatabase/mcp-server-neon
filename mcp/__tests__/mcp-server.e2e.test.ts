@@ -269,6 +269,7 @@ describe('MCP server e2e tool calls', () => {
       expect.objectContaining({
         event: 'server_init',
         properties: expect.objectContaining(attribution),
+        context: expect.objectContaining({ clientName: 'v0bot' }),
       }),
     );
     expect(trackSpy).toHaveBeenNthCalledWith(
@@ -276,6 +277,39 @@ describe('MCP server e2e tool calls', () => {
       expect.objectContaining({
         event: 'tool_call',
         properties: expect.objectContaining(attribution),
+        context: expect.objectContaining({ clientName: 'v0bot' }),
+      }),
+    );
+  });
+
+  it('puts an unclassified handshake on server_init context', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response('# Neon Docs', { status: 200 }),
+    );
+
+    await withConnectedClient(
+      createTestContext(),
+      async (client) => {
+        await client.callTool({
+          name: 'list_docs_resources',
+          arguments: {},
+        });
+      },
+      'Devin-MCP-Client/0.1.0',
+    );
+
+    const attribution = {
+      clientName: 'Devin-MCP-Client/0.1.0',
+      clientApplication: 'unknown',
+    };
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event: 'server_init',
+        properties: expect.objectContaining(attribution),
+        context: expect.objectContaining({
+          clientName: 'Devin-MCP-Client/0.1.0',
+        }),
       }),
     );
   });
