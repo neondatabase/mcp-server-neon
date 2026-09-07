@@ -133,7 +133,9 @@ test.describe('OAuth register and authorize contract', () => {
     const body = await authorizeResponse.text();
     expect(body).toContain('proj-e2e');
     expect(body).toContain('Querying');
-    expect(body).toContain('The connection URL requested read-only');
+    expect(body).toContain(
+      'This connection requested read-only access. You can allow writes for this authorization.',
+    );
     const writeCheckbox = extractWriteCheckbox(body);
     expect(writeCheckbox).not.toContain('checked');
   });

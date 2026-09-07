@@ -23,9 +23,13 @@ const SCOPE_CATEGORY_LABELS: Record<ScopeCategory, string> = {
   storage: 'Storage',
 };
 
+const DISCOVERY_LABEL = 'Discovery';
+const COLLAPSE_ABOVE = 12;
+
 type ConsentTool = {
   name: string;
   title: string;
+  scope: ScopeCategory | null;
 };
 
 type ConsentProject = { kind: 'all' } | { kind: 'one'; projectId: string };
@@ -109,6 +113,7 @@ function toolLabel(tool: NeonTool): ConsentTool {
   return {
     name: tool.name,
     title: typeof title === 'string' && title.length > 0 ? title : tool.name,
+    scope: tool.scope,
   };
 }
 
@@ -160,25 +165,120 @@ export function buildConsentView({
   };
 }
 
-function renderChips(tools: ConsentTool[]): string {
+function categoryLabelForTool(tool: ConsentTool): string {
+  return tool.scope ? SCOPE_CATEGORY_LABELS[tool.scope] : DISCOVERY_LABEL;
+}
+
+function groupToolsByCategory<T extends ConsentTool>(
+  tools: T[],
+): { label: string; tools: T[] }[] {
+  const buckets = new Map<string, T[]>();
+  for (const tool of tools) {
+    const label = categoryLabelForTool(tool);
+    const existing = buckets.get(label);
+    if (existing) {
+      existing.push(tool);
+    } else {
+      buckets.set(label, [tool]);
+    }
+  }
+
+  const order = [
+    DISCOVERY_LABEL,
+    ...SCOPE_CATEGORIES.map((id) => SCOPE_CATEGORY_LABELS[id]),
+  ];
+  return order.flatMap((label) => {
+    const grouped = buckets.get(label);
+    return grouped ? [{ label, tools: grouped }] : [];
+  });
+}
+
+function renderToolGroupList(
+  tools: Array<ConsentTool & { writeOnly: boolean }>,
+  writeChecked: boolean,
+): string {
   if (tools.length === 0) {
     return `<p class="empty-tools">None.</p>`;
   }
-  return `<div class="tool-chips">${tools
-    .map((tool) => `<span class="tool-chip">${he.escape(tool.title)}</span>`)
-    .join('')}</div>`;
+  return groupToolsByCategory(tools)
+    .map((group) => {
+      const groupHidden =
+        !writeChecked && group.tools.every((tool) => tool.writeOnly)
+          ? ' hidden'
+          : '';
+      return `
+        <div class="tool-group"${groupHidden}>
+          <div class="tool-group-label">${he.escape(group.label)}</div>
+          <ul class="tool-list">${group.tools
+            .map((tool) => {
+              const writeAttr = tool.writeOnly ? ' data-write-tool' : '';
+              const hiddenAttr =
+                tool.writeOnly && !writeChecked ? ' hidden' : '';
+              const badge = tool.writeOnly
+                ? ' <span class="write-badge">write</span>'
+                : '';
+              return `<li${writeAttr}${hiddenAttr}>${he.escape(tool.title)}${badge}</li>`;
+            })
+            .join('')}</ul>
+        </div>`;
+    })
+    .join('');
+}
+
+function toolsSummary(view: ConsentView): string {
+  const count = view.writeChecked
+    ? view.readTools.length + view.writeOnlyTools.length
+    : view.readTools.length;
+  const listed = view.writeChecked
+    ? [...view.readTools, ...view.writeOnlyTools]
+    : view.readTools;
+  const categories = new Set(listed.map(categoryLabelForTool)).size;
+  const categoryWord = categories === 1 ? 'category' : 'categories';
+  const mode = view.writeChecked ? 'read and write' : 'read-only';
+  return `Tools · ${String(count)} in ${String(categories)} ${categoryWord} · ${mode}`;
+}
+
+function renderToolSections(view: ConsentView): string {
+  const tools: Array<ConsentTool & { writeOnly: boolean }> = [
+    ...view.readTools.map((tool) => ({ ...tool, writeOnly: false })),
+    ...view.writeOnlyTools.map((tool) => ({ ...tool, writeOnly: true })),
+  ];
+  if (tools.length === 0) {
+    return '';
+  }
+  const collapse = tools.length > COLLAPSE_ABOVE;
+  const body = renderToolGroupList(tools, view.writeChecked);
+  const summary = toolsSummary(view);
+  if (!collapse) {
+    return `
+      <section class="panel">
+        <h2>Available tools</h2>
+        <div class="tool-block" data-tools>
+          <div class="tool-block-title" data-tools-summary>${he.escape(summary)}</div>
+          ${body}
+        </div>
+      </section>`;
+  }
+  return `
+    <section class="panel">
+      <h2>Available tools</h2>
+      <details class="tool-block" data-tools>
+        <summary class="tool-block-title" data-tools-summary>${he.escape(summary)}</summary>
+        ${body}
+      </details>
+    </section>`;
 }
 
 function renderProject(project: ConsentProject): string {
   if (project.kind === 'all') {
-    return 'All projects in the Neon account you sign in with';
+    return 'All projects you can access';
   }
   return he.escape(project.projectId);
 }
 
 function renderCategories(categories: ConsentCategories): string {
   if (categories.kind === 'all') {
-    return SCOPE_CATEGORIES.map((id) => SCOPE_CATEGORY_LABELS[id]).join(', ');
+    return 'All categories';
   }
   if (categories.kind === 'none') {
     return 'None';
@@ -189,93 +289,70 @@ function renderCategories(categories: ConsentCategories): string {
 function renderGrantSummary(view: ConsentView): string {
   const projectValue =
     view.project.kind === 'one'
-      ? `<span class="detail-value">${renderProject(view.project)}</span>`
-      : `<span>${renderProject(view.project)}</span>`;
+      ? `<span class="mono">${renderProject(view.project)}</span>`
+      : renderProject(view.project);
 
   const unknownHtml =
     view.unknownCategoryValues.length > 0
-      ? `<p class="grant-note">Ignored category values: ${he.escape(
+      ? `<p class="note">Ignored category values: ${he.escape(
           view.unknownCategoryValues.join(', '),
         )}.</p>`
       : '';
 
-  const discoveryHtml =
-    view.project.kind === 'all'
-      ? `<p class="grant-note">Search and Fetch stay available for every category selection unless the connection is limited to one project.</p>`
-      : '';
-
   const emptyGrantHtml =
     view.categories.kind === 'none' && view.project.kind === 'one'
-      ? `<p class="grant-note">No tools are available for this connection.</p>`
+      ? `<p class="note">No tools are available for this connection.</p>`
       : view.categories.kind === 'none'
-        ? `<p class="grant-note">No tool categories. Search and Fetch stay available.</p>`
+        ? `<p class="note">No tool categories. Search and Fetch stay available.</p>`
         : '';
 
-  const writeSection =
-    view.writeOnlyTools.length === 0
-      ? ''
-      : `
-        <div class="grant-subsection${view.writeChecked ? '' : ' is-pending'}" data-write-tools>
-          <div class="grant-subtitle">Included if you grant Full access</div>
-          <p class="grant-note">These stay limited to the project and categories above.</p>
-          ${renderChips(view.writeOnlyTools)}
-        </div>`;
-
   return `
-    <div class="scope-section">
-      <div class="scope-section-title">Access this connection is requesting</div>
-      <div class="grant-rows">
-        <div class="grant-row">
-          <div class="detail-label">Project</div>
-          <div>${projectValue}</div>
+    <section class="panel">
+      <h2>Connection access</h2>
+      <dl class="facts">
+        <div>
+          <dt>Project</dt>
+          <dd>${projectValue}</dd>
         </div>
-        <div class="grant-row">
-          <div class="detail-label">Tool categories</div>
-          <div>${he.escape(renderCategories(view.categories))}</div>
+        <div>
+          <dt>Tool categories</dt>
+          <dd>${he.escape(renderCategories(view.categories))}</dd>
         </div>
-      </div>
+      </dl>
       ${unknownHtml}
-      ${discoveryHtml}
       ${emptyGrantHtml}
-      <div class="grant-subsection">
-        <div class="grant-subtitle">Included now</div>
-        ${renderChips(view.readTools)}
-      </div>
-      ${writeSection}
-    </div>`;
+    </section>`;
 }
 
 function renderScopeSection(view: ConsentView): string {
   const writeCheckedAttr = view.writeChecked ? 'checked' : '';
+  const mode = view.writeChecked
+    ? 'Read and write'
+    : SCOPE_DEFINITIONS.read.label;
   const connectionNote = view.readOnlyRequestedByConnection
-    ? `<p class="grant-note">The connection URL requested read-only. Checking Full access grants writes for this authorization.</p>`
+    ? `<p class="note">This connection requested read-only access. You can allow writes for this authorization.</p>`
     : '';
 
   return `
-    <input type="hidden" name="scopes" value="read" />
-    <div class="scope-item scope-granted">
-      <span class="scope-check">✓</span>
-      <div class="scope-info">
-        <span class="scope-label">${he.escape(SCOPE_DEFINITIONS.read.label)}</span>
-        <span class="scope-description">${he.escape(SCOPE_DEFINITIONS.read.description)}</span>
-      </div>
-    </div>
-    <label class="scope-item scope-option">
-      <input
-        type="checkbox"
-        name="scopes"
-        value="write"
-        ${writeCheckedAttr}
-        class="scope-checkbox"
-      />
-      <div class="scope-info">
-        <span class="scope-label">${he.escape(SCOPE_DEFINITIONS.write.label)}</span>
-        <span class="scope-description">${he.escape(
-          'Create, update, and delete Neon resources and run write SQL. Still limited to the project and tool categories listed above.',
-        )}</span>
-      </div>
-    </label>
-    ${connectionNote}`;
+    <section class="panel">
+      <h2>Permissions</h2>
+      <p class="access-mode" data-access-mode>${mode}</p>
+      <input type="hidden" name="scopes" value="read" />
+      <label class="write-option">
+        <input
+          type="checkbox"
+          name="scopes"
+          value="write"
+          ${writeCheckedAttr}
+          class="scope-checkbox"
+        />
+        <span>
+          <span class="write-label">${he.escape(SCOPE_DEFINITIONS.write.label)}</span>
+          <span class="write-help">${he.escape(SCOPE_DEFINITIONS.write.description)}</span>
+        </span>
+      </label>
+      ${connectionNote}
+    </section>`;
 }
 
 export function renderConsentHtml(props: ConsentDialogProps): string {
@@ -286,309 +363,295 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
   const redirectUris = client.redirect_uris;
 
   const websiteHtml = website
-    ? `
-          <div class="client-detail">
-            <div class="detail-label">Website:</div>
-            <div class="detail-value small">
-              <a href="${website}" target="_blank" rel="noopener noreferrer">${website}</a>
-            </div>
-          </div>`
+    ? `<a href="${website}" target="_blank" rel="noopener noreferrer">${website}</a>`
     : '';
 
   const redirectUrisHtml =
     redirectUris && redirectUris.length > 0
-      ? `
-          <div class="client-detail">
-            <div class="detail-label">Redirect URIs:</div>
-            <div class="detail-value small">
-              ${redirectUris.map((uri) => `<div>${he.escape(uri)}</div>`).join('')}
-            </div>
-          </div>`
+      ? redirectUris
+          .map(
+            (uri) => `<span class="mono">Redirects to ${he.escape(uri)}</span>`,
+          )
+          .join('')
       : '';
+
+  const clientMeta = [websiteHtml, redirectUrisHtml].filter(Boolean).join('');
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${clientName} | Authorization Request</title>
+  <title>Connect ${clientName} to Neon</title>
   <style>
     :root {
-      --primary-color: #0070f3;
-      --error-color: #f44336;
-      --text-color: #dedede;
-      --text-color-secondary: #949494;
-      --background-color: #1c1c1c;
-      --border-color: #2a2929;
-      --card-shadow: 0 0px 12px 0px rgb(0 230 153 / 0.3);
-      --link-color: rgb(0 230 153 / 1);
+      --text: #e8e8e8;
+      --muted: #8b8b8b;
+      --bg: #111111;
+      --card: #181818;
+      --line: #2a2a2a;
+      --green: #00e599;
     }
+
+    * { box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
-        Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
-      line-height: 1.6;
-      color: var(--text-color);
-      background-color: var(--background-color);
       margin: 0;
-      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+        Arial, sans-serif;
+      line-height: 1.45;
+      color: var(--text);
+      background: var(--bg);
     }
 
-    .container {
-      max-width: 640px;
-      margin: 2rem auto;
-      padding: 1rem;
+    .page {
+      max-width: 36rem;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 3rem;
     }
 
-    .precard {
-      padding: 2rem;
-      text-align: center;
+    .brand {
+      display: block;
+      width: 2rem;
+      height: 2rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.35rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    h2 {
+      margin: 0 0 0.75rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .client-name {
+      font-size: 0.95rem;
+      color: var(--muted);
+      margin-bottom: 1.5rem;
+    }
+
+    .client-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      margin-top: 0.35rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .client-meta a {
+      color: var(--muted);
     }
 
     .card {
-      background-color: #0a0c09e6;
-      border-radius: 8px;
-      box-shadow: var(--card-shadow);
-      padding: 2rem;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1.25rem 1.25rem 0.25rem;
     }
 
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 1.5rem;
-      color: var(--text-color);
-      text-decoration: none;
+    .panel {
+      padding: 1.1rem 0;
+      border-top: 1px solid var(--line);
     }
 
-    .logo {
-      width: 48px;
-      height: 48px;
-      margin-right: 1rem;
-      border-radius: 8px;
-      object-fit: contain;
+    .panel:first-of-type {
+      border-top: 0;
+      padding-top: 0.25rem;
     }
 
-    .alert {
+    .facts {
       margin: 0;
-      font-size: 1.5rem;
-      font-weight: 400;
-      margin: 1rem 0;
-      text-align: center;
+      display: grid;
+      gap: 0.65rem;
     }
 
-    .description {
-      color: var(--text-color-secondary);
-    }
-
-    .client-info {
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 1rem 1rem 0.5rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .client-detail {
-      display: flex;
-      margin-bottom: 0.5rem;
+    .facts > div {
+      display: grid;
+      grid-template-columns: 8.5rem 1fr;
+      gap: 0.75rem;
       align-items: baseline;
     }
 
-    .detail-label {
-      font-weight: 500;
-      min-width: 120px;
+    dt {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.85rem;
     }
 
-    .detail-value {
-      font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
-        'Courier New', monospace;
+    dd {
+      margin: 0;
+      font-size: 0.95rem;
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85rem;
       word-break: break-all;
     }
 
-    .detail-value a {
-      color: inherit;
-      text-decoration: underline;
+    .note {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin: 0.75rem 0 0;
     }
 
-    .detail-value.small {
-      font-size: 0.8em;
+    .access-mode {
+      margin: 0 0 0.75rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+
+    .write-option {
+      display: flex;
+      gap: 0.7rem;
+      align-items: flex-start;
+      padding: 0.75rem 0.85rem;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .write-option:hover {
+      border-color: rgba(0, 229, 153, 0.45);
+    }
+
+    .scope-checkbox {
+      width: 1.05rem;
+      height: 1.05rem;
+      margin: 0.15rem 0 0;
+      accent-color: var(--green);
+      flex-shrink: 0;
+    }
+
+    .write-label {
+      display: block;
+      font-weight: 600;
+    }
+
+    .write-help {
+      display: block;
+      margin-top: 0.2rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .tool-block {
+      margin-top: 1rem;
+    }
+
+    .tool-block-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 0.45rem;
+    }
+
+    .write-badge {
+      margin-left: 0.35rem;
+      color: var(--muted);
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    details.tool-block > summary {
+      cursor: pointer;
+      list-style: none;
+    }
+
+    details.tool-block > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    details.tool-block > summary::after {
+      content: 'Show';
+      float: right;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    details.tool-block[open] > summary::after {
+      content: 'Hide';
+    }
+
+    .tool-group {
+      margin: 0.55rem 0 0;
+    }
+
+    .tool-group-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 0.2rem;
+    }
+
+    .tool-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 0.85rem;
+    }
+
+    .tool-list li {
+      padding: 0.12rem 0;
+    }
+
+    .empty-tools {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin: 0.4rem 0 0;
+    }
+
+    .next-step {
+      margin: 1.25rem 0 0;
+      color: var(--muted);
+      font-size: 0.8rem;
     }
 
     .actions {
       display: flex;
       justify-content: flex-end;
-      gap: 1rem;
-      margin-top: 2rem;
+      gap: 0.6rem;
+      margin: 1.1rem 0 1rem;
     }
 
     .button {
-      padding: 0.65rem 1rem;
-      border-radius: 6px;
-      font-weight: 500;
+      padding: 0.55rem 0.9rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
       cursor: pointer;
-      border: none;
-      font-size: 1rem;
     }
 
     .button-primary {
-      background-color: rgb(0 229 153 / 1);
-      color: rgb(26 26 26 / 1);
+      background: var(--green);
+      color: #111;
+      border: none;
     }
 
     .button-secondary {
-      background-color: transparent;
-      border: 1px solid rgb(73 75 80 / 1);
-      color: var(--text-color);
-    }
-
-    .scope-section {
-      margin: 1.5rem 0;
-      padding-top: 1rem;
-      border-top: 1px solid var(--border-color);
-    }
-
-    .scope-section-title {
-      font-weight: 500;
-      margin-bottom: 1rem;
-      color: var(--text-color);
-    }
-
-    .grant-rows {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-
-    .grant-row {
-      display: flex;
-      gap: 1rem;
-      align-items: baseline;
-    }
-
-    .grant-note {
-      color: var(--text-color-secondary);
-      font-size: 0.875rem;
-      margin: 0.5rem 0 0;
-    }
-
-    .grant-subsection {
-      margin-top: 1rem;
-    }
-
-    .grant-subsection.is-pending {
-      opacity: 0.55;
-    }
-
-    .grant-subtitle {
-      font-weight: 500;
-      font-size: 0.875rem;
-      margin-bottom: 0.5rem;
-    }
-
-    .tool-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.4rem;
-    }
-
-    .tool-chip {
-      display: inline-flex;
-      align-items: center;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 0.2rem 0.5rem;
-      font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
-        'Courier New', monospace;
-      font-size: 0.75rem;
-    }
-
-    .empty-tools {
-      color: var(--text-color-secondary);
-      font-size: 0.875rem;
-      margin: 0;
-    }
-
-    .scope-item {
-      display: flex;
-      align-items: flex-start;
-      padding: 0.75rem;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      margin-bottom: 0.5rem;
-    }
-
-    .scope-option {
-      cursor: pointer;
-      transition: border-color 0.2s, background-color 0.2s;
-    }
-
-    .scope-option:hover {
-      border-color: rgba(0, 230, 153, 0.5);
-      background-color: rgba(0, 230, 153, 0.05);
-    }
-
-    .scope-granted {
-      background-color: rgba(0, 230, 153, 0.05);
-      border-color: rgba(0, 230, 153, 0.3);
-    }
-
-    .scope-check {
-      color: rgb(0, 229, 153);
-      font-size: 1rem;
-      margin-right: 0.75rem;
-      margin-top: 2px;
-      flex-shrink: 0;
-    }
-
-    .scope-checkbox {
-      width: 18px;
-      height: 18px;
-      margin-right: 0.75rem;
-      margin-top: 2px;
-      accent-color: rgb(0, 229, 153);
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .scope-info {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .scope-label {
-      font-weight: 500;
-      color: var(--text-color);
-    }
-
-    .scope-description {
-      font-size: 0.875rem;
-      color: var(--text-color-secondary);
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--text);
     }
 
     @media (max-width: 640px) {
-      .container {
-        margin: 1rem auto;
-        padding: 0.5rem;
-      }
-
-      .card {
-        padding: 1.5rem;
-      }
-
-      .client-detail,
-      .grant-row {
-        flex-direction: column;
-      }
-
-      .detail-label {
-        min-width: unset;
-        margin-bottom: 0.25rem;
+      .facts > div {
+        grid-template-columns: 1fr;
+        gap: 0.15rem;
       }
 
       .actions {
-        flex-direction: column;
+        flex-direction: column-reverse;
       }
 
       .button {
@@ -598,74 +661,74 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="precard">
-      <a class="header" href="/" target="_blank">
-        <img src="https://neon.com/brand/neon-logomark-dark-color.svg" alt="Neon MCP" class="logo">
-      </a>
+  <div class="page">
+    <a href="/" target="_blank">
+      <img class="brand" src="https://neon.com/brand/neon-logomark-dark-color.svg" alt="Neon">
+    </a>
+    <h1>Connect ${clientName} to Neon</h1>
+    <div class="client-name">
+      ${clientName}
+      <div class="client-meta">${clientMeta}</div>
     </div>
-    <div class="card">
-      <h2 class="alert"><strong>MCP Client Authorization Request</strong></h2>
-      <div class="client-info">
-        <div class="client-detail">
-          <div class="detail-label">Name:</div>
-          <div class="detail-value">${clientName}</div>
-        </div>${websiteHtml}${redirectUrisHtml}
-      </div>
-      <p class="description">
-        This is the access this authorization is requesting for
-        <strong>${clientName}</strong>.
+    <form method="POST" action="/api/authorize" id="authorize-form" class="card">
+      <input type="hidden" name="state" value="${he.escape(props.state)}" />
+      ${renderGrantSummary(view)}
+      ${renderScopeSection(view)}
+      ${renderToolSections(view)}
+      <p class="next-step">
+        Next, you will sign in to Neon. That step does not use the project,
+        category, or write limits above.
       </p>
-      <form method="POST" action="/api/authorize" id="authorize-form">
-        <input type="hidden" name="state" value="${he.escape(props.state)}" />
-        ${renderGrantSummary(view)}
-        <div class="scope-section">
-          <div class="scope-section-title">Permissions:</div>
-          ${renderScopeSection(view)}
-        </div>
-        <p class="grant-note">
-          After you approve, you will sign in to Neon. That step asks for org
-          and project management on your Neon account. It does not use the MCP
-          project, category, or read-only choices on this page.
-        </p>
-        <div class="actions">
-          <button type="button" class="button button-secondary" onclick="window.history.back()">Cancel</button>
-          <button type="submit" class="button button-primary">Approve</button>
-        </div>
-      </form>
-    </div>
+      <div class="actions">
+        <button type="button" class="button button-secondary" onclick="window.history.back()">Cancel</button>
+        <button type="submit" class="button button-primary">Approve and continue to Neon</button>
+      </div>
+    </form>
   </div>
   <script>
-    function updateUrlScope() {
-      var writeCheckbox = document.querySelector('.scope-checkbox');
-      var scopes = ['read'];
-      if (writeCheckbox && writeCheckbox.checked) {
-        scopes.push('write');
-      }
-      var url = new URL(window.location.href);
-      url.searchParams.set('scope', scopes.join(' '));
-      window.history.replaceState({}, '', url.toString());
+    function toolsSummaryFromDom(checked) {
+      var visible = 0;
+      var categories = 0;
+      document.querySelectorAll('.tool-group').forEach(function (group) {
+        var groupVisible = false;
+        group.querySelectorAll('li').forEach(function (item) {
+          var isWrite = item.hasAttribute('data-write-tool');
+          var show = checked || !isWrite;
+          item.hidden = !show;
+          if (show) {
+            visible += 1;
+            groupVisible = true;
+          }
+        });
+        group.hidden = !groupVisible;
+        if (groupVisible) {
+          categories += 1;
+        }
+      });
+      var categoryWord = categories === 1 ? 'category' : 'categories';
+      var mode = checked ? 'read and write' : 'read-only';
+      return 'Tools · ' + visible + ' in ' + categories + ' ' + categoryWord + ' · ' + mode;
     }
 
-    function syncWriteTools() {
+    function syncConsentUi() {
       var writeCheckbox = document.querySelector('.scope-checkbox');
-      var writeTools = document.querySelector('[data-write-tools]');
-      if (!writeTools) {
-        return;
+      var checked = !!(writeCheckbox && writeCheckbox.checked);
+      var mode = document.querySelector('[data-access-mode]');
+      if (mode) {
+        mode.textContent = checked ? 'Read and write' : 'Read-only';
       }
-      if (!writeCheckbox || writeCheckbox.checked) {
-        writeTools.classList.remove('is-pending');
-      } else {
-        writeTools.classList.add('is-pending');
+      var summary = document.querySelector('[data-tools-summary]');
+      if (summary) {
+        summary.textContent = toolsSummaryFromDom(checked);
       }
+      var url = new URL(window.location.href);
+      url.searchParams.set('scope', checked ? 'read write' : 'read');
+      window.history.replaceState({}, '', url.toString());
     }
 
     var writeCheckbox = document.querySelector('.scope-checkbox');
     if (writeCheckbox) {
-      writeCheckbox.addEventListener('change', function () {
-        updateUrlScope();
-        syncWriteTools();
-      });
+      writeCheckbox.addEventListener('change', syncConsentUi);
     }
   </script>
 </body>

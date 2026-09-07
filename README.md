@@ -153,7 +153,7 @@ Neon MCP advertises OAuth scopes `read` and `write`. Your MCP client can request
 
 You can set read-only mode in two ways:
 
-1. **OAuth scope selection (recommended):** In OAuth, select read-only by unchecking **Full access** in the authorization UI.
+1. **OAuth scope selection (recommended):** In OAuth, select read-only by unchecking **Allow writes** in the authorization UI.
 2. **`readonly` query param:** Add `?readonly=true` to your MCP server URL:
 
 ```json

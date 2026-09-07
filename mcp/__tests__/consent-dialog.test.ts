@@ -141,7 +141,7 @@ describe('renderConsentHtml', () => {
     expect(html).not.toContain('<script>alert(1)</script>');
   });
 
-  it('states that Full access stays limited to the listed project and categories', () => {
+  it('states that writes stay limited to the listed project and categories', () => {
     const html = renderConsentHtml({
       client,
       state: 'abc',
@@ -157,7 +157,7 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('proj-123');
     expect(html).toContain('Querying');
     expect(html).toContain(
-      'Still limited to the project and tool categories listed above',
+      'Allow changes through tools in the project and categories shown above.',
     );
     expect(html).toContain('sign in to Neon');
   });
@@ -172,7 +172,9 @@ describe('renderConsentHtml', () => {
       grant: DEFAULT_GRANT,
     });
 
-    expect(html).toContain('The connection URL requested read-only');
+    expect(html).toContain(
+      'This connection requested read-only access. You can allow writes for this authorization.',
+    );
     const writeInput = html.match(
       /<input[\s\S]*?name="scopes"[\s\S]*?value="write"[\s\S]*?class="scope-checkbox"[\s\S]*?\/>/,
     )?.[0];
@@ -190,7 +192,9 @@ describe('renderConsentHtml', () => {
       grant: DEFAULT_GRANT,
     });
 
-    expect(html).not.toContain('The connection URL requested read-only');
+    expect(html).not.toContain(
+      'This connection requested read-only access. You can allow writes for this authorization.',
+    );
     const writeInput = html.match(
       /<input[\s\S]*?name="scopes"[\s\S]*?value="write"[\s\S]*?class="scope-checkbox"[\s\S]*?\/>/,
     )?.[0];
@@ -198,7 +202,7 @@ describe('renderConsentHtml', () => {
     expect(writeInput).not.toContain('checked');
   });
 
-  it('marks write-only tools as pending when Full access starts unchecked', () => {
+  it('hides write-only tools when Allow writes starts unchecked', () => {
     const html = renderConsentHtml({
       client,
       state: 'abc',
@@ -208,9 +212,26 @@ describe('renderConsentHtml', () => {
       grant: DEFAULT_GRANT,
     });
 
-    expect(html).toContain('data-write-tools');
-    expect(html).toContain('is-pending');
+    expect(html).toContain('data-write-tool');
     expect(html).toContain('Prepare Database Migration');
     expect(html).toContain('Search');
+    expect(html).toMatch(/<li[^>]*data-write-tool[^>]*hidden/);
+  });
+
+  it('summarizes unrestricted categories and collapses the long tool list', () => {
+    const html = renderConsentHtml({
+      client,
+      state: 'abc',
+      requestedScopes: ['read', 'write'],
+      defaultReadOnly: false,
+      readOnlyRequestedByConnection: false,
+      grant: DEFAULT_GRANT,
+    });
+
+    expect(html).toContain('Connect Cursor to Neon');
+    expect(html).toContain('All categories');
+    expect(html).toContain('Allow writes');
+    expect(html).toContain('<details');
+    expect(html).toContain('Tools ·');
   });
 });

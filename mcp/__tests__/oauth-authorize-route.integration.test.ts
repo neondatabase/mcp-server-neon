@@ -135,7 +135,9 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(200);
     expect(writeCheckbox).not.toContain('checked');
-    expect(html).not.toContain('The connection URL requested read-only');
+    expect(html).not.toContain(
+      'This connection requested read-only access. You can allow writes for this authorization.',
+    );
   });
 
   it('defaults Full access to unchecked when readonly query param is true', async () => {
@@ -149,7 +151,9 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(200);
     expect(writeCheckbox).not.toContain('checked');
-    expect(html).toContain('The connection URL requested read-only');
+    expect(html).toContain(
+      'This connection requested read-only access. You can allow writes for this authorization.',
+    );
   });
 
   it('defaults Full access to unchecked when readonly=true is passed via resource query', async () => {
@@ -163,7 +167,9 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(200);
     expect(writeCheckbox).not.toContain('checked');
-    expect(html).toContain('The connection URL requested read-only');
+    expect(html).toContain(
+      'This connection requested read-only access. You can allow writes for this authorization.',
+    );
   });
 
   it('defaults Full access to unchecked from saved register x-read-only header', async () => {
@@ -180,7 +186,9 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(200);
     expect(writeCheckbox).not.toContain('checked');
-    expect(html).not.toContain('The connection URL requested read-only');
+    expect(html).not.toContain(
+      'This connection requested read-only access. You can allow writes for this authorization.',
+    );
   });
 
   it('does not embed grant context in the upstream OAuth state parameter', async () => {
@@ -341,7 +349,7 @@ describe('/api/authorize route integration', () => {
     expect(html).toContain('proj-123');
     expect(html).toContain('Querying');
     expect(html).toContain('Schema');
-    expect(html).toContain('Access this connection is requesting');
+    expect(html).toContain('Connection access');
     expect(html).not.toContain('Search and Fetch stay available');
   });
 
@@ -354,8 +362,8 @@ describe('/api/authorize route integration', () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain('All projects in the Neon account you sign in with');
-    expect(html).toContain('Projects, Branches, Endpoints');
+    expect(html).toContain('All projects you can access');
+    expect(html).toContain('All categories');
   });
 
   it('keeps a mixed valid/unknown category list on the page and in KV', async () => {

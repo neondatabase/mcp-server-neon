@@ -6,9 +6,9 @@ export const SCOPE_DEFINITIONS = {
     description: 'View Neon resources and run read-only queries',
   },
   write: {
-    label: 'Full access',
+    label: 'Allow writes',
     description:
-      'Allow full management of your Neon resources and databases, including running any INSERT, UPDATE, or DELETE statements',
+      'Allow changes through tools in the project and categories shown above.',
   },
 } as const;
 
