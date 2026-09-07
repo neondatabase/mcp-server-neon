@@ -105,26 +105,32 @@ export function detectClientApplication(
   return 'unknown';
 }
 
-export function identifyClient(clientName?: unknown): IdentifiedClient {
+/**
+ * Classify from the handshake or User-Agent first. OAuth DCR `client_name` is
+ * the fallback when that string is a generic runtime (`node`, `undici`) that
+ * does not name a product.
+ */
+export function identifyClient(
+  primary?: unknown,
+  dcrClientName?: unknown,
+): IdentifiedClient {
   try {
-    if (typeof clientName !== 'string' || clientName.length === 0) {
-      return {
-        clientName: 'unknown',
-        clientApplication: 'unknown',
-      };
+    const clientName =
+      typeof primary === 'string' && primary.length > 0 ? primary : 'unknown';
+    const fromPrimary = detectClientApplication(clientName);
+    if (fromPrimary !== 'unknown') {
+      return { clientName, clientApplication: fromPrimary };
     }
     return {
       clientName,
-      clientApplication: detectClientApplication(clientName),
+      clientApplication: detectClientApplication(dcrClientName),
     };
   } catch (error) {
     // Attribution is telemetry-only. A throw here would 500 the MCP request.
     logger.error('identifyClient failed', { err: error });
     return {
       clientName:
-        typeof clientName === 'string' && clientName.length > 0
-          ? clientName
-          : 'unknown',
+        typeof primary === 'string' && primary.length > 0 ? primary : 'unknown',
       clientApplication: 'unknown',
     };
   }

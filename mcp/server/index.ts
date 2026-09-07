@@ -44,8 +44,10 @@ export const createMcpServer = async (context: ServerContext) => {
 
   const neonClient = createNeonClient(context.apiKey);
 
-  // Compute client info once at server instantiation
-  let { clientName, clientApplication } = identifyClient(context.userAgent);
+  let { clientName, clientApplication } = identifyClient(
+    context.userAgent,
+    context.client?.name,
+  );
 
   // Track server initialization
   const trackServerInit = () => {
@@ -80,7 +82,15 @@ export const createMcpServer = async (context: ServerContext) => {
     const clientInfo = server.server.getClientVersion();
     // Prefer MCP clientInfo over HTTP User-Agent
     if (clientInfo?.name) {
-      ({ clientName, clientApplication } = identifyClient(clientInfo.name));
+      ({ clientName, clientApplication } = identifyClient(
+        clientInfo.name,
+        context.client?.name,
+      ));
+    } else {
+      ({ clientName, clientApplication } = identifyClient(
+        context.userAgent,
+        context.client?.name,
+      ));
     }
     trackServerInit();
   };

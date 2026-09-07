@@ -61,11 +61,12 @@ function buildOAuthToken(
   accessToken: string,
   scope: string,
   grant?: GrantContext,
+  clientName = 'Cursor',
 ): TokenShape {
   return {
     accessToken,
     scope,
-    client: { id: 'client-1', client_name: 'Cursor', grants: ['*'] },
+    client: { id: 'client-1', client_name: clientName, grants: ['*'] },
     user: { id: 'user-1', name: 'User', email: 'user@example.com' },
     grant,
   };
@@ -253,6 +254,80 @@ describe('transport dynamic tool composition', () => {
     );
 
     const attribution = { clientName: 'v0bot', clientApplication: 'v0' };
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event: 'server_init',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        event: 'tool_call',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
+  });
+
+  it('attributes a generic User-Agent from the OAuth client name', async () => {
+    const oauthToken = 'oauth-dcr-fallback';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(
+        oauthToken,
+        'read write',
+        { projectId: 'proj_analytics', scopes: null },
+        'Cline',
+      ),
+    );
+
+    await mcpCall(
+      oauthToken,
+      'tools/call',
+      1,
+      { name: 'run_sql', arguments: { sql: 'select 1' } },
+      '',
+      'node',
+    );
+
+    const attribution = { clientName: 'node', clientApplication: 'cline' };
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event: 'server_init',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        event: 'tool_call',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
+  });
+
+  it('keeps a recognized User-Agent over the OAuth client name', async () => {
+    const oauthToken = 'oauth-handshake-wins';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(
+        oauthToken,
+        'read write',
+        { projectId: 'proj_analytics', scopes: null },
+        'Cline',
+      ),
+    );
+
+    await mcpCall(
+      oauthToken,
+      'tools/call',
+      1,
+      { name: 'run_sql', arguments: { sql: 'select 1' } },
+      '',
+      'Cursor',
+    );
+
+    const attribution = { clientName: 'Cursor', clientApplication: 'cursor' };
     expect(trackSpy).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({

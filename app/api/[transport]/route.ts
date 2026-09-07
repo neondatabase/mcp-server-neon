@@ -280,12 +280,14 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         const transport = authInfo.extra.transport ?? 'sse';
         const neonClient = createNeonClient(apiKey);
 
-        // Use User-Agent as clientName fallback if MCP handshake hasn't provided it yet
-        if (clientName === 'unknown' && authInfo.extra.userAgent) {
-          ({ clientName, clientApplication } = identifyClient(
-            authInfo.extra.userAgent,
-          ));
-        }
+        // Handshake name wins when it classifies. A generic runtime UA
+        // (`node`) still has to see the OAuth client name on this request.
+        const primary =
+          clientName !== 'unknown' ? clientName : authInfo.extra.userAgent;
+        ({ clientName, clientApplication } = identifyClient(
+          primary,
+          authInfo.extra.client?.name,
+        ));
 
         // Create dynamic appContext with actual transport
         const dynamicAppContext: AppContext = {
@@ -334,7 +336,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         // This ensures we get the real client name even when using mcp-remote,
         // which forwards the original client name (e.g., "Cursor (via mcp-remote 0.1.31)")
         if (clientInfo?.name) {
-          ({ clientName, clientApplication } = identifyClient(clientInfo.name));
+          ({ clientName, clientApplication } = identifyClient(
+            clientInfo.name,
+            lastKnownContext?.client?.name,
+          ));
         }
         // Note: server_init is tracked on first authenticated request
         // because we don't have account info here yet

@@ -108,4 +108,55 @@ describe('identifyClient', () => {
       clientApplication: 'unknown',
     });
   });
+
+  it('keeps a recognized handshake over a classified DCR name', () => {
+    expect(identifyClient('Cursor', 'Cline')).toEqual({
+      clientName: 'Cursor',
+      clientApplication: 'cursor',
+    });
+  });
+
+  it('attributes an unclassified handshake from a classified DCR name', () => {
+    expect(identifyClient('node', 'Cline')).toEqual({
+      clientName: 'node',
+      clientApplication: 'cline',
+    });
+    expect(identifyClient('node', 'OpenCode')).toEqual({
+      clientName: 'node',
+      clientApplication: 'opencode',
+    });
+    expect(identifyClient('unknown', 'Codex')).toEqual({
+      clientName: 'unknown',
+      clientApplication: 'codex',
+    });
+    expect(identifyClient('node', 'kimi-code (neon)')).toEqual({
+      clientName: 'node',
+      clientApplication: 'kimi-code',
+    });
+  });
+
+  it('does not copy an unclassified DCR name into clientName', () => {
+    expect(identifyClient('node', 'Kimi')).toEqual({
+      clientName: 'node',
+      clientApplication: 'unknown',
+    });
+    expect(identifyClient('node', 'kiro')).toEqual({
+      clientName: 'node',
+      clientApplication: 'unknown',
+    });
+  });
+
+  it('uses a classified DCR name when primary is empty', () => {
+    expect(identifyClient('', 'OpenCode')).toEqual({
+      clientName: 'unknown',
+      clientApplication: 'opencode',
+    });
+  });
+
+  it('ignores a non-string DCR name', () => {
+    expect(identifyClient('node', { name: 'Cline' })).toEqual({
+      clientName: 'node',
+      clientApplication: 'unknown',
+    });
+  });
 });
