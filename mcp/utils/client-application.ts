@@ -105,11 +105,6 @@ export function detectClientApplication(
   return 'unknown';
 }
 
-/**
- * Classify from the handshake or User-Agent first. OAuth DCR `client_name` is
- * the fallback when that string is a generic runtime (`node`, `undici`) that
- * does not name a product.
- */
 export function identifyClient(
   primary?: unknown,
   dcrClientName?: unknown,

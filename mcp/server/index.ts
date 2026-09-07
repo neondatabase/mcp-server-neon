@@ -86,11 +86,6 @@ export const createMcpServer = async (context: ServerContext) => {
         clientInfo.name,
         context.client?.name,
       ));
-    } else {
-      ({ clientName, clientApplication } = identifyClient(
-        context.userAgent,
-        context.client?.name,
-      ));
     }
     trackServerInit();
   };

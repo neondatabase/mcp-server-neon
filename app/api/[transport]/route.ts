@@ -280,8 +280,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         const transport = authInfo.extra.transport ?? 'sse';
         const neonClient = createNeonClient(apiKey);
 
-        // Handshake name wins when it classifies. A generic runtime UA
-        // (`node`) still has to see the OAuth client name on this request.
+        // OAuth client name is only on this authenticated invocation.
         const primary =
           clientName !== 'unknown' ? clientName : authInfo.extra.userAgent;
         ({ clientName, clientApplication } = identifyClient(
