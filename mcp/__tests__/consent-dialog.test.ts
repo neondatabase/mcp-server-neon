@@ -231,7 +231,9 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('Connect Cursor to Neon');
     expect(html).toContain('All categories');
     expect(html).toContain('Allow writes');
-    expect(html).toContain('<details');
+    expect(html).toContain('data-tool-toggle');
+    expect(html).toContain('is-collapsed');
     expect(html).toContain('Tools ·');
+    expect(html).toContain('tool-scroll');
   });
 });

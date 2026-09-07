@@ -216,25 +216,22 @@ function renderToolSections(view: ConsentView): string {
     return '';
   }
   const collapse = tools.length > COLLAPSE_ABOVE;
-  const body = renderToolGroupList(tools, view.writeChecked);
+  const body = `<div class="tool-scroll" data-tool-scroll>${renderToolGroupList(tools, view.writeChecked)}</div>`;
   const summary = toolsSummary(view);
-  if (!collapse) {
-    return `
-      <section class="panel">
-        <h2>Available tools</h2>
-        <div class="tool-block" data-tools>
-          <div class="tool-block-title" data-tools-summary>${he.escape(summary)}</div>
-          ${body}
-        </div>
-      </section>`;
-  }
+  const toggle = collapse
+    ? `<button type="button" class="tool-toggle" data-tool-toggle>Show</button>`
+    : '';
+  const collapsedAttr = collapse ? ' data-tools-collapsed' : '';
   return `
-    <section class="panel">
+    <section class="panel panel-tools">
       <h2>Available tools</h2>
-      <details class="tool-block" data-tools>
-        <summary class="tool-block-title" data-tools-summary>${he.escape(summary)}</summary>
+      <div class="tool-block${collapse ? ' is-collapsed' : ''}" data-tools${collapsedAttr}>
+        <div class="tool-block-head">
+          <div class="tool-block-title" data-tools-summary>${he.escape(summary)}</div>
+          ${toggle}
+        </div>
         ${body}
-      </details>
+      </div>
     </section>`;
 }
 
@@ -364,8 +361,13 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
 
     * { box-sizing: border-box; }
 
+    html, body {
+      height: 100%;
+    }
+
     body {
       margin: 0;
+      overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
         Arial, sans-serif;
       line-height: 1.45;
@@ -376,14 +378,19 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     .page {
       max-width: 36rem;
       margin: 0 auto;
-      padding: 2.5rem 1.25rem 3rem;
+      padding: 1.5rem 1.25rem 1rem;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
 
     .brand {
       display: block;
       width: 2rem;
       height: 2rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1rem;
+      flex-shrink: 0;
     }
 
     h1 {
@@ -391,6 +398,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       font-size: 1.35rem;
       font-weight: 600;
       letter-spacing: -0.02em;
+      flex-shrink: 0;
     }
 
     h2 {
@@ -405,7 +413,8 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     .client-name {
       font-size: 0.95rem;
       color: var(--muted);
-      margin-bottom: 1.5rem;
+      margin-bottom: 1rem;
+      flex-shrink: 0;
     }
 
     .client-meta {
@@ -426,6 +435,24 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       border: 1px solid var(--line);
       border-radius: 12px;
       padding: 1.25rem 1.25rem 0.25rem;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .card-main {
+      flex: 0 0 auto;
+    }
+
+    .card-foot {
+      flex: 0 0 auto;
+    }
+
+    .card:has(.tool-block.is-collapsed) .card-foot,
+    .card:not(:has(.panel-tools)) .card-foot {
+      margin-top: auto;
     }
 
     .panel {
@@ -433,9 +460,22 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       border-top: 1px solid var(--line);
     }
 
-    .panel:first-of-type {
+    .card-main .panel:first-of-type {
       border-top: 0;
       padding-top: 0.25rem;
+    }
+
+    .panel-tools {
+      flex: 0 0 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-tools:has(.tool-block:not(.is-collapsed)) {
+      flex: 1 1 0%;
+      min-height: 0;
+      overflow: hidden;
     }
 
     .facts {
@@ -515,13 +555,55 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     }
 
     .tool-block {
-      margin-top: 1rem;
+      margin-top: 0.5rem;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tool-block:not(.is-collapsed) {
+      flex: 1 1 0%;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .tool-block-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-shrink: 0;
+      margin-bottom: 0.45rem;
     }
 
     .tool-block-title {
       font-size: 0.85rem;
       font-weight: 600;
-      margin-bottom: 0.45rem;
+    }
+
+    .tool-toggle {
+      background: none;
+      border: 0;
+      padding: 0;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .tool-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 0.1rem 0.4rem 0.35rem 0;
+      scrollbar-width: thin;
+      scrollbar-color: var(--line) transparent;
+    }
+
+    .tool-block.is-collapsed .tool-scroll {
+      display: none;
     }
 
     .write-badge {
@@ -531,26 +613,6 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       font-weight: 600;
       letter-spacing: 0.04em;
       text-transform: uppercase;
-    }
-
-    details.tool-block > summary {
-      cursor: pointer;
-      list-style: none;
-    }
-
-    details.tool-block > summary::-webkit-details-marker {
-      display: none;
-    }
-
-    details.tool-block > summary::after {
-      content: 'Show';
-      float: right;
-      font-weight: 500;
-      color: var(--muted);
-    }
-
-    details.tool-block[open] > summary::after {
-      content: 'Hide';
     }
 
     .tool-group {
@@ -581,7 +643,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     }
 
     .next-step {
-      margin: 1.25rem 0 0;
+      margin: 1rem 0 0;
       color: var(--muted);
       font-size: 0.8rem;
     }
@@ -590,7 +652,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       display: flex;
       justify-content: flex-end;
       gap: 0.6rem;
-      margin: 1.1rem 0 1rem;
+      margin: 0.85rem 0 0.75rem;
     }
 
     .button {
@@ -641,9 +703,12 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     </div>
     <form method="POST" action="/api/authorize" id="authorize-form" class="card">
       <input type="hidden" name="state" value="${he.escape(props.state)}" />
+      <div class="card-main">
       ${renderGrantSummary(view)}
       ${renderScopeSection(view)}
+      </div>
       ${renderToolSections(view)}
+      <div class="card-foot">
       <p class="next-step">
         Next, you will sign in to Neon. That step does not use the project,
         category, or write limits above.
@@ -651,6 +716,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       <div class="actions">
         <button type="button" class="button button-secondary" onclick="window.history.back()">Cancel</button>
         <button type="submit" class="button button-primary">Approve and continue to Neon</button>
+      </div>
       </div>
     </form>
   </div>
@@ -698,6 +764,15 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     var writeCheckbox = document.querySelector('.scope-checkbox');
     if (writeCheckbox) {
       writeCheckbox.addEventListener('change', syncConsentUi);
+    }
+
+    var toolToggle = document.querySelector('[data-tool-toggle]');
+    var toolBlock = document.querySelector('[data-tools]');
+    if (toolToggle && toolBlock) {
+      toolToggle.addEventListener('click', function () {
+        var collapsed = toolBlock.classList.toggle('is-collapsed');
+        toolToggle.textContent = collapsed ? 'Show' : 'Hide';
+      });
     }
   </script>
 </body>

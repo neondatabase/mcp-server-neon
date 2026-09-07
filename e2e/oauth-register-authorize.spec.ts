@@ -207,6 +207,36 @@ test.describe('OAuth register and authorize contract', () => {
     expect(scopesOn).toEqual(['read', 'write']);
   });
 
+  test('expanded tool list scrolls without covering Approve', async ({
+    page,
+    request,
+  }) => {
+    const registerBody = await registerClient(request);
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: registerBody.client_id,
+      redirect_uri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
+      scope: 'read write',
+      state: 'e2e-scroll',
+    });
+
+    // Desktop Chrome is 720px tall; grant + footer leave almost no list.
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`/api/authorize?${params.toString()}`);
+    await page.getByRole('button', { name: 'Show' }).click();
+    await expect(page.locator('.tool-group').first()).toBeVisible();
+
+    await expect(
+      page.getByRole('button', { name: 'Approve and continue to Neon' }),
+    ).toBeInViewport();
+    const scrollBox = await page.locator('.tool-scroll').evaluate((el) => ({
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+    }));
+    expect(scrollBox.clientHeight).toBeGreaterThan(80);
+    expect(scrollBox.scrollHeight).toBeGreaterThan(scrollBox.clientHeight);
+  });
+
   test('unknown client is rejected by authorize route', async ({ request }) => {
     const authorizeResponse = await request.get('/api/authorize', {
       params: {
