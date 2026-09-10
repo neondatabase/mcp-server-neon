@@ -109,11 +109,11 @@ describe('buildConsentView', () => {
 
   it('does not collapse when hidden write tools alone cross the threshold', () => {
     const readView = buildConsentView({
-      grant: { projectId: null, scopes: ['branches'] },
+      grant: { projectId: null, scopes: ['snapshots'] },
       writeChecked: false,
     });
     const writeView = buildConsentView({
-      grant: { projectId: null, scopes: ['branches'] },
+      grant: { projectId: null, scopes: ['snapshots'] },
       writeChecked: true,
     });
     expect(visibleToolCount(readView)).toBeLessThanOrEqual(COLLAPSE_ABOVE);
@@ -142,7 +142,7 @@ describe('renderConsentHtml', () => {
     });
 
     expect(html).toContain(
-      '<summary><span>cursor.com → 127.0.0.1:1</span></summary>',
+      '<summary><span>App details · cursor.com → 127.0.0.1:1</span></summary>',
     );
     expect(html).toContain('<details class="client-verify">');
     expect(html).not.toContain('<details class="client-verify" open>');
@@ -169,7 +169,7 @@ describe('renderConsentHtml', () => {
     });
 
     expect(html).toContain(
-      '<summary><span>cursor.com → 127.0.0.1:1, cursor.com</span></summary>',
+      '<summary><span>App details · cursor.com → 127.0.0.1:1, cursor.com</span></summary>',
     );
     expect(html).toContain('http://127.0.0.1:1/callback');
     expect(html).toContain('https://cursor.com/oauth/callback');
@@ -204,7 +204,7 @@ describe('renderConsentHtml', () => {
     });
 
     expect(html).toContain(
-      '<summary><span>Redirects to 127.0.0.1:1</span></summary>',
+      '<summary><span>App details · Redirects to 127.0.0.1:1</span></summary>',
     );
   });
 
@@ -254,6 +254,7 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('proj-123');
     expect(html).toContain('Querying');
     expect(html).toContain('Read and write');
+    expect(html).toContain('<h2>Requested access</h2>');
     expect(html).not.toContain('class="scope-checkbox"');
     expect(html).not.toContain('name="projectMode"');
     expect(html).not.toContain('name="category"');
@@ -276,23 +277,24 @@ describe('renderConsentHtml', () => {
     });
 
     expect(html).toContain('name="projectMode"');
-    expect(html).toContain(
-      'Next, sign in to Neon to authorize this MCP server.',
-    );
-    expect(html).toMatch(
-      /The project,\s+category, and write limits above apply to this connection/,
-    );
+    expect(html).not.toContain('Next, sign in to Neon');
+    expect(html).toContain('<h2>Choose access</h2>');
     expect(html).toContain('class="project-id" hidden');
     expect(html).toContain('name="category"');
+    expect(html).toContain('data-category-select-all');
+    expect(html).toContain('data-category-clear-all');
     expect(html).toContain('Allow writes');
     expect(html).toContain('src="/favicon.svg"');
-    expect(html).toContain('data-tool-toggle');
+    expect(html).toContain('>View tools</button>');
     expect(html).toContain('is-collapsed');
-    expect(html).toContain('Tools ·');
+    expect(html).toContain('104 tools · 13 groups');
     expect(html).toContain('tool-scroll');
     expect(html).toContain('data-category-scroll');
     expect(html).toContain('choice-categories');
     expect(html).toMatch(/\.check-grid\s*\{[^}]*overflow-y:\s*auto/);
+    expect(html).toMatch(
+      /\.check-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2/,
+    );
     expect(html).not.toContain('history.replaceState');
   });
 

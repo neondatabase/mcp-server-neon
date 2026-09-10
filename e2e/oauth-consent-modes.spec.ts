@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import {
   authorizePath,
   capture,
@@ -6,6 +6,15 @@ import {
   registerClient,
   VALID_REGISTER_PAYLOAD,
 } from './oauth-helpers';
+
+async function clearScreenshotInteractionState(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  });
+  await page.mouse.move(0, 0);
+}
 
 test.describe('OAuth consent modes', () => {
   test('A1 fixed read-only confirmation when the client asked for writes', async ({
@@ -108,7 +117,9 @@ test.describe('OAuth consent modes', () => {
     await openAuthorize(page, request, {
       resource: 'https://mcp.neon.tech/mcp?category=querying,not-a-category',
     });
-    await expect(page.getByText('Ignored category values')).toBeVisible();
+    await expect(
+      page.getByText('Unsupported categories will not be granted'),
+    ).toBeVisible();
     await capture(page, 'A6-mixed-unknown');
     await openAuthorize(page, request, {
       resource: 'https://mcp.neon.tech/mcp?category=not-a-category',
@@ -146,7 +157,9 @@ test.describe('OAuth consent modes', () => {
     expect(logoLoaded).toBe(true);
     const clientDetails = page.locator('details.client-verify');
     const clientSummary = clientDetails.locator('summary');
-    await expect(clientSummary).toHaveText('example.com → 127.0.0.1:55667');
+    await expect(clientSummary).toHaveText(
+      'App details · example.com → 127.0.0.1:55667',
+    );
     await expect(clientDetails).not.toHaveAttribute('open', '');
     await clientSummary.focus();
     await page.keyboard.press('Enter');
@@ -163,7 +176,9 @@ test.describe('OAuth consent modes', () => {
     await expect(page.locator('.scope-checkbox')).toBeChecked();
     await expect(page.getByText('Allow writes')).toBeVisible();
     await expect(page.locator('[data-project-id-field]')).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Show' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'View tools' }),
+    ).toBeVisible();
     await expect(
       page.getByText('Tool categories', { exact: true }),
     ).toBeVisible();
@@ -176,6 +191,20 @@ test.describe('OAuth consent modes', () => {
       (el) => el.scrollHeight > el.clientHeight + 1 && el.clientHeight >= 80,
     );
     expect(categoryOverflows).toBe(true);
+    await page.getByRole('button', { name: 'Clear all' }).click();
+    expect(await page.locator('input[name="category"]:checked').count()).toBe(
+      0,
+    );
+    await page.getByRole('button', { name: 'Select all' }).click();
+    expect(await page.locator('input[name="category"]:checked').count()).toBe(
+      12,
+    );
+    expect(
+      await categoryScroll.evaluate(
+        (element) =>
+          getComputedStyle(element).gridTemplateColumns.split(' ').length,
+      ),
+    ).toBe(2);
     const lastCategory = page.locator('input[name="category"]').last();
     await lastCategory.focus();
     await expect(lastCategory).toBeFocused();
@@ -193,6 +222,7 @@ test.describe('OAuth consent modes', () => {
     if (bodyBox && footBox) {
       expect(bodyBox.y + bodyBox.height).toBeLessThanOrEqual(footBox.y + 1);
     }
+    await clearScreenshotInteractionState(page);
     await capture(page, 'B1-bare-editable');
   });
 
@@ -236,14 +266,14 @@ test.describe('OAuth consent modes', () => {
         await box.uncheck();
       }
     }
-    await expect(page.locator('[data-tools-summary]')).toContainText(
-      'read and write',
+    await expect(page.locator('[data-access-mode]')).toHaveText(
+      'Read and write',
     );
+    await clearScreenshotInteractionState(page);
     await capture(page, 'B4-subset-writes-on');
     await page.locator('.scope-checkbox').uncheck();
-    await expect(page.locator('[data-tools-summary]')).toContainText(
-      'read-only',
-    );
+    await expect(page.locator('[data-access-mode]')).toHaveText('Read-only');
+    await clearScreenshotInteractionState(page);
     await capture(page, 'B4-subset-writes-off');
   });
 
@@ -258,10 +288,12 @@ test.describe('OAuth consent modes', () => {
       await categories.nth(i).uncheck();
     }
     await expect(page.getByText('Search')).toBeVisible();
+    await clearScreenshotInteractionState(page);
     await capture(page, 'B5-no-categories-all-projects');
     await page.getByText('One project', { exact: true }).click();
     await page.locator('input[name="projectId"]').fill('proj-example');
     await expect(page.getByText('None.')).toBeVisible();
+    await clearScreenshotInteractionState(page);
     await capture(page, 'B5-no-categories-one-project');
   });
 
@@ -291,8 +323,11 @@ test.describe('OAuth consent modes', () => {
     await openAuthorize(page, request);
     await page.getByText('One project', { exact: true }).click();
     await page.locator('input[name="projectId"]').fill('proj-example');
-    await page.getByText('All projects', { exact: true }).click();
+    await page
+      .getByText('All projects you can access', { exact: true })
+      .click();
     await expect(page.locator('input[name="projectId"]')).toBeDisabled();
+    await clearScreenshotInteractionState(page);
     await capture(page, 'B7-switch-back-to-all-projects');
     const posted = await page.evaluate(() => {
       const form = document.querySelector('form');
@@ -315,26 +350,35 @@ test.describe('OAuth consent modes', () => {
     const count = await categories.count();
     for (let i = 0; i < count; i += 1) {
       const box = categories.nth(i);
-      if ((await box.getAttribute('value')) === 'branches') {
+      if ((await box.getAttribute('value')) === 'snapshots') {
         await box.check();
       } else {
         await box.uncheck();
       }
     }
     await page.locator('.scope-checkbox').uncheck();
-    await expect(page.getByRole('button', { name: 'Show' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'View tools' })).toBeHidden();
+    await clearScreenshotInteractionState(page);
     await capture(page, 'T1-visible-at-or-below-threshold');
     await page.locator('.scope-checkbox').check();
-    await expect(page.getByRole('button', { name: 'Show' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'View tools' }),
+    ).toBeVisible();
+    await clearScreenshotInteractionState(page);
     await capture(page, 'T1-above-threshold-after-writes');
   });
 
   test('T2 long list collapsed and expanded', async ({ page, request }) => {
     await openAuthorize(page, request);
-    await expect(page.getByRole('button', { name: 'Show' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'View tools' }),
+    ).toBeVisible();
     await capture(page, 'T2-collapsed');
-    await page.getByRole('button', { name: 'Show' }).click();
-    await expect(page.getByRole('button', { name: 'Hide' })).toBeVisible();
+    await page.getByRole('button', { name: 'View tools' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Hide tools' }),
+    ).toBeVisible();
+    await clearScreenshotInteractionState(page);
     await capture(page, 'T2-expanded');
     const toolScroll = page.locator('[data-tool-scroll]');
     await toolScroll.focus();
@@ -364,7 +408,7 @@ test.describe('OAuth consent modes', () => {
 
     await page.setViewportSize({ width: 1280, height: 720 });
     await openAuthorize(page, request);
-    await page.getByRole('button', { name: 'Show' }).click();
+    await page.getByRole('button', { name: 'View tools' }).click();
     const editableApprove = page.getByRole('button', {
       name: 'Approve and continue to Neon',
     });

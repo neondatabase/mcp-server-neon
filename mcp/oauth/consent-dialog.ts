@@ -28,7 +28,7 @@ const SCOPE_CATEGORY_LABELS: Record<ScopeCategory, string> = {
 };
 
 const DISCOVERY_LABEL = 'Discovery';
-export const COLLAPSE_ABOVE = 12;
+export const COLLAPSE_ABOVE = 4;
 
 type ConsentTool = {
   name: string;
@@ -116,7 +116,7 @@ function renderClientVerification(client: ConsentClient): string {
 
   return `
     <details class="client-verify">
-      <summary><span>${he.escape(summary)}</span></summary>
+      <summary><span>App details · ${he.escape(summary)}</span></summary>
       <dl class="client-meta">
         ${websiteHtml}
         ${redirectHtml}
@@ -259,10 +259,10 @@ export function visibleToolCount(view: ConsentView): number {
 
 function toolsSummary(view: ConsentView): string {
   const count = visibleToolCount(view);
-  const categories = new Set(view.tools.map(categoryLabelForTool)).size;
-  const categoryWord = categories === 1 ? 'category' : 'categories';
-  const mode = view.writeChecked ? 'read and write' : 'read-only';
-  return `Tools · ${String(count)} in ${String(categories)} ${categoryWord} · ${mode}`;
+  const toolWord = count === 1 ? 'tool' : 'tools';
+  const groups = new Set(view.tools.map(categoryLabelForTool)).size;
+  const groupWord = groups === 1 ? 'group' : 'groups';
+  return `${String(count)} ${toolWord} · ${String(groups)} ${groupWord}`;
 }
 
 function renderToolSections(view: ConsentView): string {
@@ -277,7 +277,7 @@ function renderToolSections(view: ConsentView): string {
   const body = `<div class="tool-scroll" data-tool-scroll tabindex="0" aria-label="Available tools">${renderToolGroupList(view.tools)}</div>`;
   const summary = toolsSummary(view);
   const toggle = collapse
-    ? `<button type="button" class="tool-toggle" data-tool-toggle aria-expanded="false">Show</button>`
+    ? `<button type="button" class="tool-toggle" data-tool-toggle aria-expanded="false">View tools</button>`
     : '';
   const collapsedAttr = collapse ? ' data-tools-collapsed' : '';
   return `
@@ -328,14 +328,14 @@ function renderGrantSummary(view: ConsentView): string {
 
   const unknownHtml =
     view.unknownCategoryValues.length > 0
-      ? `<p class="note">Ignored category values: ${he.escape(
+      ? `<p class="warning" role="status">Unsupported categories will not be granted: ${he.escape(
           view.unknownCategoryValues.join(', '),
         )}.</p>`
       : '';
 
   return `
     <section class="panel">
-      <h2>Connection access</h2>
+      <h2>Requested access</h2>
       <dl class="facts">
         <div>
           <dt>Project</dt>
@@ -381,12 +381,12 @@ function renderEditableGrant({
 
   return `
     <section class="panel panel-access">
-      <h2>Connection access</h2>
+      <h2>Choose access</h2>
       <fieldset class="choice">
         <legend>Project</legend>
         <label class="check-option">
           <input type="radio" name="projectMode" value="all"${allSelected ? ' checked' : ''} />
-          <span>All projects</span>
+          <span>All projects you can access</span>
         </label>
         <label class="check-option">
           <input type="radio" name="projectMode" value="one"${allSelected ? '' : ' checked'} />
@@ -410,12 +410,18 @@ function renderEditableGrant({
           This page cannot list projects before you sign in.
         </p>
       </fieldset>
-      <fieldset class="choice choice-categories">
-        <legend>Tool categories</legend>
+      <section class="choice choice-categories" role="group" aria-labelledby="tool-categories-title">
+        <div class="choice-head">
+          <h3 class="choice-title" id="tool-categories-title">Tool categories</h3>
+          <div class="choice-actions">
+            <button type="button" class="choice-action" data-category-select-all>Select all</button>
+            <button type="button" class="choice-action" data-category-clear-all>Clear all</button>
+          </div>
+        </div>
         <div class="check-grid" data-category-grid data-category-scroll>
           ${categoryBoxes}
         </div>
-      </fieldset>
+      </section>
     </section>`;
 }
 
@@ -429,6 +435,7 @@ function renderScopeSection({
   includeReadScope: boolean;
 }): string {
   const mode = writeChecked ? 'Read and write' : SCOPE_DEFINITIONS.read.label;
+  const writeEnabled = String(writeChecked);
   const hiddenRead = includeReadScope
     ? '<input type="hidden" name="scopes" value="read" />'
     : '';
@@ -436,7 +443,7 @@ function renderScopeSection({
     return `
     <section class="panel panel-permissions">
       <h2>Permissions</h2>
-      <p class="access-mode" data-access-mode>${mode}</p>
+      <p class="access-mode" data-access-mode data-write-enabled="${writeEnabled}">${mode}</p>
       ${hiddenRead}
     </section>`;
   }
@@ -445,7 +452,7 @@ function renderScopeSection({
   return `
     <section class="panel panel-permissions">
       <h2>Permissions</h2>
-      <p class="access-mode" data-access-mode>${mode}</p>
+      <p class="access-mode" data-access-mode data-write-enabled="${writeEnabled}">${mode}</p>
       ${hiddenRead}
       <label class="write-option">
         <input
@@ -471,7 +478,7 @@ function consentScript(mode: ConsentMode): string {
     if (toolToggle && toolBlock) {
       toolToggle.addEventListener('click', function () {
         var collapsed = toolBlock.classList.toggle('is-collapsed');
-        toolToggle.textContent = collapsed ? 'Show' : 'Hide';
+        toolToggle.textContent = collapsed ? 'View tools' : 'Hide tools';
         toolToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
       });
     }`;
@@ -564,13 +571,13 @@ function consentScript(mode: ConsentMode): string {
       }).join('');
     }
 
-    function toolsSummaryText(tools, checked) {
-      var categories = {};
-      tools.forEach(function (tool) { categories[categoryLabel(tool)] = true; });
-      var count = Object.keys(categories).length;
-      var categoryWord = count === 1 ? 'category' : 'categories';
-      var mode = checked ? 'read and write' : 'read-only';
-      return 'Tools · ' + tools.length + ' in ' + count + ' ' + categoryWord + ' · ' + mode;
+    function toolsSummaryText(tools) {
+      var groups = {};
+      tools.forEach(function (tool) { groups[categoryLabel(tool)] = true; });
+      var count = Object.keys(groups).length;
+      var groupWord = count === 1 ? 'group' : 'groups';
+      var toolWord = tools.length === 1 ? 'tool' : 'tools';
+      return tools.length + ' ' + toolWord + ' · ' + count + ' ' + groupWord;
     }
 
     function syncProjectField() {
@@ -592,9 +599,12 @@ function consentScript(mode: ConsentMode): string {
       var checked = writeChecked();
       var tools = filterCatalog(grant, checked);
       var mode = document.querySelector('[data-access-mode]');
-      if (mode) mode.textContent = checked ? 'Read and write' : 'Read-only';
+      if (mode) {
+        mode.textContent = checked ? 'Read and write' : 'Read-only';
+        mode.setAttribute('data-write-enabled', String(checked));
+      }
       var summary = document.querySelector('[data-tools-summary]');
-      if (summary) summary.textContent = toolsSummaryText(tools, checked);
+      if (summary) summary.textContent = toolsSummaryText(tools);
       renderTools(tools);
       var toolBlock = document.querySelector('[data-tools]');
       var toolToggle = document.querySelector('[data-tool-toggle]');
@@ -613,7 +623,7 @@ function consentScript(mode: ConsentMode): string {
         } else {
           toolToggle.hidden = false;
           var collapsed = toolBlock ? toolBlock.classList.contains('is-collapsed') : true;
-          toolToggle.textContent = collapsed ? 'Show' : 'Hide';
+          toolToggle.textContent = collapsed ? 'View tools' : 'Hide tools';
           toolToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         }
       }
@@ -629,8 +639,26 @@ function consentScript(mode: ConsentMode): string {
       toolToggle.addEventListener('click', function () {
         var collapsed = toolBlock.classList.toggle('is-collapsed');
         userExpanded = !collapsed;
-        toolToggle.textContent = collapsed ? 'Show' : 'Hide';
+        toolToggle.textContent = collapsed ? 'View tools' : 'Hide tools';
         toolToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      });
+    }
+    var selectAllCategories = document.querySelector('[data-category-select-all]');
+    var clearAllCategories = document.querySelector('[data-category-clear-all]');
+    if (selectAllCategories) {
+      selectAllCategories.addEventListener('click', function () {
+        document.querySelectorAll('input[name="category"]').forEach(function (input) {
+          if (input instanceof HTMLInputElement) input.checked = true;
+        });
+        syncConsentUi();
+      });
+    }
+    if (clearAllCategories) {
+      clearAllCategories.addEventListener('click', function () {
+        document.querySelectorAll('input[name="category"]').forEach(function (input) {
+          if (input instanceof HTMLInputElement) input.checked = false;
+        });
+        syncConsentUi();
       });
     }
     syncConsentUi();`;
@@ -750,7 +778,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       -webkit-line-clamp: 2;
     }
 
-    h2, legend {
+    h2, legend, .choice-title {
       margin: 0 0 0.75rem;
       font-size: 0.75rem;
       font-weight: 600;
@@ -876,6 +904,33 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       min-width: 0;
     }
 
+    .choice-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .choice-actions {
+      display: flex;
+      gap: 0.65rem;
+      flex-shrink: 0;
+    }
+
+    .choice-action {
+      padding: 0;
+      border: 0;
+      color: var(--muted);
+      background: transparent;
+      font: inherit;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+
+    .choice-action:hover {
+      color: var(--text);
+    }
+
     .card-body .panel:first-of-type,
     .card-body .choice:first-of-type {
       border-top: 0;
@@ -920,7 +975,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       overflow-wrap: anywhere;
     }
 
-    .note, .field-error {
+    .note, .field-error, .warning {
       color: var(--muted);
       font-size: 0.8rem;
       margin: 0.75rem 0 0;
@@ -930,10 +985,28 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       color: var(--danger);
     }
 
+    .warning {
+      padding: 0.55rem 0.65rem;
+      border: 1px solid rgba(255, 125, 135, 0.35);
+      border-radius: 8px;
+      color: var(--text);
+      background: rgba(255, 125, 135, 0.06);
+    }
+
     .access-mode {
+      display: inline-flex;
+      width: fit-content;
       margin: 0 0 0.75rem;
-      font-size: 1.05rem;
+      padding: 0.25rem 0.55rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 0.85rem;
       font-weight: 600;
+    }
+
+    .access-mode[data-write-enabled="true"] {
+      border-color: rgba(0, 229, 153, 0.4);
+      background: rgba(0, 229, 153, 0.06);
     }
 
     .write-option, .check-option {
@@ -952,14 +1025,25 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
 
     .check-grid {
       display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 0.45rem;
       min-height: 3.25rem;
       max-height: min(7.5rem, 20dvh);
       overflow-y: auto;
       overscroll-behavior: contain;
       padding-right: 0.25rem;
+      scrollbar-gutter: stable;
       scrollbar-width: thin;
       scrollbar-color: var(--line) transparent;
+    }
+
+    .choice-categories .check-option {
+      min-width: 0;
+      padding: 0.55rem 0.65rem;
+    }
+
+    .choice-categories .check-option span {
+      overflow-wrap: anywhere;
     }
 
     .scope-checkbox, .check-option input, .choice input[type="radio"] {
@@ -1013,14 +1097,34 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     }
 
     .tool-toggle {
-      background: none;
-      border: 0;
-      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.45rem;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: transparent;
       color: var(--muted);
       font: inherit;
       font-size: 0.85rem;
       font-weight: 500;
       cursor: pointer;
+    }
+
+    .tool-toggle::after {
+      content: '›';
+      font-size: 1rem;
+      line-height: 1;
+      transition: transform 120ms ease;
+    }
+
+    .tool-toggle[aria-expanded="true"]::after {
+      transform: rotate(90deg);
+    }
+
+    .tool-toggle:hover {
+      color: var(--text);
+      border-color: rgba(0, 229, 153, 0.35);
     }
 
     .tool-scroll {
@@ -1070,12 +1174,6 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       color: var(--muted);
       font-size: 0.85rem;
       margin: 0.4rem 0 0;
-    }
-
-    .next-step {
-      margin: 1rem 0 0;
-      color: var(--muted);
-      font-size: 0.8rem;
     }
 
     .card-foot {
@@ -1135,11 +1233,6 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
         gap: 0.15rem;
       }
 
-      .next-step {
-        margin: 0.5rem 0 0;
-        font-size: 0.75rem;
-      }
-
       .actions {
         flex-direction: column-reverse;
         margin: 0.55rem 0 0.5rem;
@@ -1147,6 +1240,12 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
 
       .button {
         width: 100%;
+      }
+    }
+
+    @media (max-width: 359px) {
+      .check-grid {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -1192,10 +1291,6 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       ${renderToolSections(view)}
       </div>
       <div class="card-foot">
-      <p class="next-step">
-        Next, sign in to Neon to authorize this MCP server. The project,
-        category, and write limits above apply to this connection.
-      </p>
       <div class="actions">
         <button type="submit" class="button button-secondary" name="action" value="cancel" formnovalidate>Cancel</button>
         <button type="submit" class="button button-primary" name="action" value="approve">Approve and continue to Neon</button>

@@ -56,7 +56,7 @@ describe('filterConsentCatalog', () => {
   });
 
   it('can stay at or below the collapse threshold while hidden write tools exceed it', () => {
-    const grant = { projectId: null, scopes: ['branches'] as const };
+    const grant = { projectId: null, scopes: ['snapshots'] as const };
     const context = { projectId: null, scopes: [...grant.scopes] };
     const visible = filterConsentCatalog(catalog, context, false);
     const withWrites = filterConsentCatalog(catalog, context, true);

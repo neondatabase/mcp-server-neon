@@ -154,7 +154,7 @@ test.describe('OAuth register and authorize contract', () => {
 
     const checkbox = page.locator('.scope-checkbox');
     await expect(checkbox).toBeChecked();
-    const show = page.getByRole('button', { name: 'Show' });
+    const show = page.getByRole('button', { name: 'View tools' });
     if (await show.isVisible()) {
       await show.click();
     }
@@ -185,7 +185,7 @@ test.describe('OAuth register and authorize contract', () => {
 
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto(`/api/authorize?${params.toString()}`);
-    await page.getByRole('button', { name: 'Show' }).click();
+    await page.getByRole('button', { name: 'View tools' }).click();
     const approve = page.getByRole('button', {
       name: 'Approve and continue to Neon',
     });
