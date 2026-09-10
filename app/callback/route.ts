@@ -521,8 +521,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const approved = await withPgConnectRetry('callback.consumeApproved', () =>
-      authTransactions.consumeApproved(state, browserSecret),
+    const approved = await authTransactions.consumeApproved(
+      state,
+      browserSecret,
     );
     if (!approved) {
       emitAuthCallbackSlo('state_decode_failed', sloStartMs, {

@@ -68,12 +68,9 @@ function transactionFromRow(row: unknown): AuthTransaction | undefined {
   });
 }
 
-let schemaReady = false;
+let schemaPromise: Promise<void> | undefined;
 
-async function ensureSchema(connectionString: string): Promise<void> {
-  if (schemaReady) {
-    return;
-  }
+async function runEnsureSchema(connectionString: string): Promise<void> {
   const sql = sqlFor(connectionString);
   await sql.transaction([
     sql`SELECT pg_advisory_xact_lock(872334901)`,
@@ -100,7 +97,24 @@ async function ensureSchema(connectionString: string): Promise<void> {
       ON mcpauth.auth_transactions (expires_at)
     `,
   ]);
-  schemaReady = true;
+}
+
+async function ensureSchema(connectionString: string): Promise<void> {
+  schemaPromise ??= runEnsureSchema(connectionString);
+  try {
+    await schemaPromise;
+  } catch (err) {
+    schemaPromise = undefined;
+    throw err;
+  }
+}
+
+export async function ensureAuthTransactionSchema(
+  connectionString: string,
+): Promise<void> {
+  await withPgConnectRetry('authTx.ensureSchema', () =>
+    ensureSchema(connectionString),
+  );
 }
 
 async function cleanupExpired(connectionString: string): Promise<void> {
