@@ -285,6 +285,7 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('class="project-id" hidden');
     expect(html).toContain('name="category"');
     expect(html).toContain('Allow writes');
+    expect(html).toContain('src="/favicon.svg"');
     expect(html).toContain('data-tool-toggle');
     expect(html).toContain('is-collapsed');
     expect(html).toContain('Tools ·');
@@ -370,5 +371,7 @@ describe('renderConsentHtml', () => {
 
     expect(html).toContain('Enter the project ID this connection should use.');
     expect(html).toContain('aria-invalid="true"');
+    expect(html).toContain('autofocus');
+    expect(html).toContain('role="alert"');
   });
 });

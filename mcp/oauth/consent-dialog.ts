@@ -95,7 +95,7 @@ function renderClientVerification(client: ConsentClient): string {
   const websiteHtml = website
     ? `
         <div>
-          <dt>Website</dt>
+          <dt>App website</dt>
           <dd>${
             isWebUrl(website)
               ? `<a href="${he.escape(website)}" target="_blank" rel="noopener noreferrer">${he.escape(website)}</a>`
@@ -274,7 +274,7 @@ function renderToolSections(view: ConsentView): string {
     </section>`;
   }
   const collapse = visibleToolCount(view) > COLLAPSE_ABOVE;
-  const body = `<div class="tool-scroll" data-tool-scroll>${renderToolGroupList(view.tools)}</div>`;
+  const body = `<div class="tool-scroll" data-tool-scroll tabindex="0" aria-label="Available tools">${renderToolGroupList(view.tools)}</div>`;
   const summary = toolsSummary(view);
   const toggle = collapse
     ? `<button type="button" class="tool-toggle" data-tool-toggle aria-expanded="false">Show</button>`
@@ -364,11 +364,11 @@ function renderEditableGrant({
   const allSelected = formState.projectMode === 'all';
   const projectError =
     fieldError?.field === 'projectId'
-      ? `<p class="field-error" id="project-id-error">${he.escape(fieldError.message)}</p>`
+      ? `<p class="field-error" id="project-id-error" role="alert">${he.escape(fieldError.message)}</p>`
       : '';
   const invalidAttr =
     fieldError?.field === 'projectId'
-      ? ' aria-invalid="true" aria-describedby="project-id-error"'
+      ? ' aria-invalid="true" aria-describedby="project-id-error" autofocus'
       : '';
   const categoryBoxes = SCOPE_CATEGORIES.map((category) => {
     const checked = formState.categories.includes(category) ? ' checked' : '';
@@ -1176,7 +1176,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
 <body>
   <div class="page">
     <a href="/" target="_blank">
-      <img class="brand" src="https://neon.com/brand/neon-logomark-dark-color.svg" alt="Neon">
+      <img class="brand" src="/favicon.svg" alt="Neon">
     </a>
     <h1 title="Connect ${clientName} to Neon">Connect ${clientName} to Neon</h1>
     ${clientVerification}

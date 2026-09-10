@@ -135,6 +135,15 @@ test.describe('OAuth consent modes', () => {
     await openAuthorize(page, request, {
       resource: 'https://mcp.neon.tech/mcp',
     });
+    const logoLoaded = await page
+      .getByRole('img', { name: 'Neon' })
+      .evaluate(
+        (image) =>
+          image instanceof HTMLImageElement &&
+          image.complete &&
+          image.naturalWidth > 0,
+      );
+    expect(logoLoaded).toBe(true);
     const clientDetails = page.locator('details.client-verify');
     const clientSummary = clientDetails.locator('summary');
     await expect(clientSummary).toHaveText('example.com → 127.0.0.1:55667');
@@ -167,6 +176,14 @@ test.describe('OAuth consent modes', () => {
       (el) => el.scrollHeight > el.clientHeight + 1 && el.clientHeight >= 80,
     );
     expect(categoryOverflows).toBe(true);
+    const lastCategory = page.locator('input[name="category"]').last();
+    await lastCategory.focus();
+    await expect(lastCategory).toBeFocused();
+    await expect(lastCategory).toBeInViewport();
+    await lastCategory.blur();
+    await categoryScroll.evaluate((element) => {
+      element.scrollTop = 0;
+    });
     await expect(
       page.getByRole('button', { name: 'Approve and continue to Neon' }),
     ).toBeInViewport();
@@ -260,6 +277,10 @@ test.describe('OAuth consent modes', () => {
     await expect(
       page.getByText('Enter the project ID this connection should use.'),
     ).toBeVisible();
+    await expect(page.locator('input[name="projectId"]')).toBeFocused();
+    await expect(page.locator('[role="alert"]')).toContainText(
+      'Enter the project ID this connection should use.',
+    );
     await capture(page, 'B6-missing-project-id');
   });
 
@@ -315,6 +336,11 @@ test.describe('OAuth consent modes', () => {
     await page.getByRole('button', { name: 'Show' }).click();
     await expect(page.getByRole('button', { name: 'Hide' })).toBeVisible();
     await capture(page, 'T2-expanded');
+    const toolScroll = page.locator('[data-tool-scroll]');
+    await toolScroll.focus();
+    await expect(toolScroll).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(toolScroll.locator('li').last()).toBeInViewport();
   });
 
   test('L1 both modes at short desktop heights', async ({ page, request }) => {
