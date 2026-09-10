@@ -134,6 +134,22 @@ test.describe('OAuth consent modes', () => {
     await openAuthorize(page, request, {
       resource: 'https://mcp.neon.tech/mcp',
     });
+    const clientDetails = page.locator('details.client-verify');
+    const clientSummary = clientDetails.locator('summary');
+    await expect(clientSummary).toHaveText('example.com → 127.0.0.1:55667');
+    await expect(clientDetails).not.toHaveAttribute('open', '');
+    await clientSummary.focus();
+    await page.keyboard.press('Enter');
+    await expect(clientDetails).toHaveAttribute('open', '');
+    await expect(
+      page.getByText('http://127.0.0.1:55667/callback'),
+    ).toBeVisible();
+    await page.keyboard.press('Space');
+    await expect(clientDetails).not.toHaveAttribute('open', '');
+    await clientSummary.blur();
+    await clientSummary.click();
+    await capture(page, 'B1-client-details-expanded');
+    await clientSummary.click();
     await expect(page.locator('.scope-checkbox')).toBeChecked();
     await expect(page.getByText('Allow writes')).toBeVisible();
     await expect(page.locator('[data-project-id-field]')).toBeHidden();

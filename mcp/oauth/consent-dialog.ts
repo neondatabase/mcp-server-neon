@@ -58,6 +58,58 @@ type ConsentClient = {
   redirect_uris?: string[];
 };
 
+function urlSummary(value: string): string {
+  try {
+    return new URL(value).host || value;
+  } catch {
+    return value;
+  }
+}
+
+function renderClientVerification(client: ConsentClient): string {
+  const website = client.client_uri;
+  const redirects = client.redirect_uris ?? [];
+  if (!website && redirects.length === 0) {
+    return '';
+  }
+
+  let summary = website ? urlSummary(website) : '';
+  if (redirects.length === 1) {
+    const redirect = urlSummary(redirects[0]);
+    summary = website ? `${summary} → ${redirect}` : `Redirects to ${redirect}`;
+  } else if (redirects.length > 1) {
+    summary = website
+      ? `${summary} → ${redirects.length} redirect URIs`
+      : `${redirects.length} redirect URIs`;
+  }
+  const websiteHtml = website
+    ? `
+        <div>
+          <dt>Website</dt>
+          <dd><a href="${he.escape(website)}" target="_blank" rel="noopener noreferrer">${he.escape(website)}</a></dd>
+        </div>`
+    : '';
+  const redirectHtml =
+    redirects.length > 0
+      ? `
+        <div>
+          <dt>${redirects.length === 1 ? 'Redirect URI' : 'Redirect URIs'}</dt>
+          <dd class="client-uris">${redirects
+            .map((uri) => `<span class="mono">${he.escape(uri)}</span>`)
+            .join('')}</dd>
+        </div>`
+      : '';
+
+  return `
+    <details class="client-verify">
+      <summary><span>${he.escape(summary)}</span></summary>
+      <dl class="client-meta">
+        ${websiteHtml}
+        ${redirectHtml}
+      </dl>
+    </details>`;
+}
+
 type ConsentFormState = {
   projectMode: 'all' | 'one';
   projectId: string;
@@ -599,23 +651,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
   });
   const client = props.client;
   const clientName = he.escape(client.client_name || 'A new MCP Client');
-  const website = client.client_uri ? he.escape(client.client_uri) : undefined;
-  const redirectUris = client.redirect_uris;
-
-  const websiteHtml = website
-    ? `<a href="${website}" target="_blank" rel="noopener noreferrer">${website}</a>`
-    : '';
-
-  const redirectUrisHtml =
-    redirectUris && redirectUris.length > 0
-      ? redirectUris
-          .map(
-            (uri) => `<span class="mono">Redirects to ${he.escape(uri)}</span>`,
-          )
-          .join('')
-      : '';
-
-  const clientMeta = [websiteHtml, redirectUrisHtml].filter(Boolean).join('');
+  const clientVerification = renderClientVerification(client);
   const grantHtml =
     props.mode === 'confirmation'
       ? renderGrantSummary(view)
@@ -704,22 +740,86 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       color: var(--muted);
     }
 
-    .client-name {
-      font-size: 0.95rem;
-      color: var(--muted);
+    .client-verify {
       margin-bottom: 1rem;
-      overflow-wrap: anywhere;
       flex-shrink: 0;
+      min-width: 0;
+    }
+
+    .client-verify summary {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .client-verify summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .client-verify summary::before {
+      content: '›';
+      flex-shrink: 0;
+      font-size: 1rem;
+      line-height: 1;
+      transition: transform 120ms ease;
+    }
+
+    .client-verify[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    .client-verify summary span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .client-verify summary:focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 3px;
+      border-radius: 2px;
+    }
+
+    .client-verify[open] summary {
+      margin-bottom: 0.5rem;
     }
 
     .client-meta {
-      display: flex;
-      flex-direction: column;
-      gap: 0.2rem;
-      margin-top: 0.35rem;
+      display: grid;
+      gap: 0.45rem;
+      max-height: min(7rem, 18dvh);
+      margin: 0;
+      padding: 0 0.25rem 0 1rem;
+      overflow-y: auto;
+      overscroll-behavior: contain;
       font-size: 0.8rem;
       color: var(--muted);
       overflow-wrap: anywhere;
+      scrollbar-width: thin;
+      scrollbar-color: var(--line) transparent;
+    }
+
+    .client-meta > div {
+      display: grid;
+      grid-template-columns: 5rem minmax(0, 1fr);
+      gap: 0.5rem;
+    }
+
+    .client-meta dt,
+    .client-meta dd {
+      margin: 0;
+      font-size: inherit;
+    }
+
+    .client-uris {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
     }
 
     .client-meta a {
@@ -1003,7 +1103,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
         margin-bottom: 0.6rem;
       }
 
-      .client-name {
+      .client-verify {
         margin-bottom: 0.6rem;
       }
 
@@ -1060,10 +1160,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       <img class="brand" src="https://neon.com/brand/neon-logomark-dark-color.svg" alt="Neon">
     </a>
     <h1>Connect ${clientName} to Neon</h1>
-    <div class="client-name">
-      ${clientName}
-      <div class="client-meta">${clientMeta}</div>
-    </div>
+    ${clientVerification}
     <form method="POST" action="/api/authorize" id="authorize-form" class="card">
       <input type="hidden" name="state" value="${he.escape(props.state)}" />
       <div class="card-body">

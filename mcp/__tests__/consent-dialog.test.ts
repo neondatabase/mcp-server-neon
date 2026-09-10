@@ -127,6 +127,82 @@ describe('renderConsentHtml', () => {
     redirect_uris: ['http://127.0.0.1:1/callback'],
   };
 
+  it('collapses exact client URLs behind a host summary', () => {
+    const html = renderConsentHtml({
+      client: {
+        client_name: 'Cursor',
+        client_uri: 'https://cursor.com/oauth',
+        redirect_uris: ['http://127.0.0.1:1/callback'],
+      },
+      state: 'abc',
+      mode: 'confirmation',
+      writeChecked: false,
+      showWriteControl: false,
+      grant: DEFAULT_GRANT,
+    });
+
+    expect(html).toContain(
+      '<summary><span>cursor.com → 127.0.0.1:1</span></summary>',
+    );
+    expect(html).toContain('<details class="client-verify">');
+    expect(html).not.toContain('<details class="client-verify" open>');
+    expect(html).toContain('https://cursor.com/oauth');
+    expect(html).toContain('http://127.0.0.1:1/callback');
+    expect(html.match(/Cursor/g)).toHaveLength(2);
+  });
+
+  it('summarizes multiple redirect URIs without dropping their exact values', () => {
+    const html = renderConsentHtml({
+      client: {
+        client_name: 'Cursor',
+        client_uri: 'https://cursor.com',
+        redirect_uris: [
+          'http://127.0.0.1:1/callback',
+          'https://cursor.com/oauth/callback',
+        ],
+      },
+      state: 'abc',
+      mode: 'confirmation',
+      writeChecked: false,
+      showWriteControl: false,
+      grant: DEFAULT_GRANT,
+    });
+
+    expect(html).toContain(
+      '<summary><span>cursor.com → 2 redirect URIs</span></summary>',
+    );
+    expect(html).toContain('http://127.0.0.1:1/callback');
+    expect(html).toContain('https://cursor.com/oauth/callback');
+  });
+
+  it('uses the redirect host when the client has no website', () => {
+    const html = renderConsentHtml({
+      client,
+      state: 'abc',
+      mode: 'confirmation',
+      writeChecked: false,
+      showWriteControl: false,
+      grant: DEFAULT_GRANT,
+    });
+
+    expect(html).toContain(
+      '<summary><span>Redirects to 127.0.0.1:1</span></summary>',
+    );
+  });
+
+  it('omits client details when no URLs are registered', () => {
+    const html = renderConsentHtml({
+      client: { client_name: 'Cursor' },
+      state: 'abc',
+      mode: 'confirmation',
+      writeChecked: false,
+      showWriteControl: false,
+      grant: DEFAULT_GRANT,
+    });
+
+    expect(html).not.toContain('class="client-verify"');
+  });
+
   it('escapes a project id that looks like HTML', () => {
     const html = renderConsentHtml({
       client,
