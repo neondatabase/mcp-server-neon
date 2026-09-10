@@ -191,7 +191,7 @@ test.describe('OAuth consent modes', () => {
       (el) => el.scrollHeight > el.clientHeight + 1 && el.clientHeight >= 80,
     );
     expect(categoryOverflows).toBe(true);
-    await page.getByRole('button', { name: 'Clear all' }).click();
+    await page.getByRole('button', { name: 'Clear categories' }).click();
     expect(await page.locator('input[name="category"]:checked').count()).toBe(
       0,
     );
@@ -287,12 +287,22 @@ test.describe('OAuth consent modes', () => {
     for (let i = 0; i < count; i += 1) {
       await categories.nth(i).uncheck();
     }
-    await expect(page.getByText('Search')).toBeVisible();
+    await expect(
+      page.getByText(
+        'With all projects selected, Search and Fetch remain available.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByText('Search', { exact: true })).toBeVisible();
     await clearScreenshotInteractionState(page);
     await capture(page, 'B5-no-categories-all-projects');
     await page.getByText('One project', { exact: true }).click();
     await page.locator('input[name="projectId"]').fill('proj-example');
     await expect(page.getByText('None.')).toBeVisible();
+    await expect(
+      page.getByText(
+        'With all projects selected, Search and Fetch remain available.',
+      ),
+    ).toBeHidden();
     await clearScreenshotInteractionState(page);
     await capture(page, 'B5-no-categories-one-project');
   });
@@ -425,13 +435,12 @@ test.describe('OAuth consent modes', () => {
     await capture(page, 'L2-mobile-portrait');
     await page.setViewportSize({ width: 667, height: 375 });
     await capture(page, 'L2-mobile-landscape');
-    await page.evaluate(() => {
-      document.documentElement.style.zoom = '2';
+    await page.setViewportSize({ width: 320, height: 568 });
+    const narrowApprove = page.getByRole('button', {
+      name: 'Approve and continue to Neon',
     });
-    await capture(page, 'L2-mobile-200-zoom');
-    await page.evaluate(() => {
-      document.documentElement.style.zoom = '1';
-    });
+    await expect(narrowApprove).toBeInViewport();
+    await capture(page, 'L2-mobile-320px');
     await page.setViewportSize({ width: 390, height: 667 });
     await openAuthorize(page, request);
     await expect(

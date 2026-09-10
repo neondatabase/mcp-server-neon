@@ -410,17 +410,20 @@ function renderEditableGrant({
           This page cannot list projects before you sign in.
         </p>
       </fieldset>
-      <section class="choice choice-categories" role="group" aria-labelledby="tool-categories-title">
+      <section class="choice choice-categories" role="group" aria-labelledby="tool-categories-title" aria-describedby="base-tools-note">
         <div class="choice-head">
           <h3 class="choice-title" id="tool-categories-title">Tool categories</h3>
           <div class="choice-actions">
             <button type="button" class="choice-action" data-category-select-all>Select all</button>
-            <button type="button" class="choice-action" data-category-clear-all>Clear all</button>
+            <button type="button" class="choice-action" data-category-clear-all>Clear categories</button>
           </div>
         </div>
         <div class="check-grid" data-category-grid data-category-scroll>
           ${categoryBoxes}
         </div>
+        <p class="category-note" id="base-tools-note" data-base-tools-note${allSelected ? '' : ' hidden'}>
+          With all projects selected, Search and Fetch remain available.
+        </p>
       </section>
     </section>`;
 }
@@ -584,10 +587,12 @@ function consentScript(mode: ConsentMode): string {
       var one = document.querySelector('input[name="projectMode"][value="one"]');
       var field = document.querySelector('[data-project-id-field]');
       var help = document.querySelector('[data-project-id-help]');
+      var baseToolsNote = document.querySelector('[data-base-tools-note]');
       var input = document.querySelector('input[name="projectId"]');
       if (!(one instanceof HTMLInputElement) || !field) return;
       field.hidden = !one.checked;
       if (help) help.hidden = !one.checked;
+      if (baseToolsNote) baseToolsNote.hidden = one.checked;
       if (input instanceof HTMLInputElement) {
         input.disabled = !one.checked;
       }
@@ -1028,7 +1033,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 0.45rem;
       min-height: 3.25rem;
-      max-height: min(7.5rem, 20dvh);
+      max-height: min(6.5rem, 17dvh);
       overflow-y: auto;
       overscroll-behavior: contain;
       padding-right: 0.25rem;
@@ -1044,6 +1049,12 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
 
     .choice-categories .check-option span {
       overflow-wrap: anywhere;
+    }
+
+    .category-note {
+      margin: 0.5rem 0 0;
+      color: var(--muted);
+      font-size: 0.75rem;
     }
 
     .scope-checkbox, .check-option input, .choice input[type="radio"] {
