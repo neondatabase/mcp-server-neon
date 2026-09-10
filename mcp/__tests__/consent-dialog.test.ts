@@ -182,6 +182,12 @@ describe('renderConsentHtml', () => {
     });
 
     expect(html).toContain('name="projectMode"');
+    expect(html).toContain(
+      'Next, sign in to Neon to authorize this MCP server.',
+    );
+    expect(html).toMatch(
+      /The project,\s+category, and write limits above apply to this connection/,
+    );
     expect(html).toContain('class="project-id" hidden');
     expect(html).toContain('name="category"');
     expect(html).toContain('Allow writes');

@@ -109,6 +109,33 @@ test.describe('OAuth register and authorize contract', () => {
     expect(body).not.toContain('name="projectMode"');
   });
 
+  test('resource readonly=false stays writable despite registration x-read-only', async ({
+    request,
+  }) => {
+    const registerBody = await registerClient(request, {
+      'x-read-only': 'true',
+    });
+    const resource = 'https://mcp.neon.tech/mcp?readonly=false';
+
+    const authorizeResponse = await request.get('/api/authorize', {
+      params: {
+        response_type: 'code',
+        client_id: registerBody.client_id,
+        redirect_uri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
+        scope: 'read write',
+        state: 'e2e-state',
+        resource,
+      },
+      maxRedirects: 0,
+    });
+
+    expect(authorizeResponse.status()).toBe(200);
+    const body = await authorizeResponse.text();
+    expect(body).toContain('Read and write');
+    expect(body).not.toContain('class="scope-checkbox"');
+    expect(body).not.toContain('name="projectMode"');
+  });
+
   test('toggling Allow writes hides write tools on the editable default grant', async ({
     page,
     request,

@@ -149,6 +149,57 @@ describe('/api/authorize route integration', () => {
     expect(writeInput).not.toContain('checked');
   });
 
+  it('keeps writes on a readonly=false resource despite registration x-read-only', async () => {
+    vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
+      headers: { 'x-read-only': 'true' },
+      createdAt: Date.now(),
+    });
+    const resource = 'https://mcp.neon.tech/mcp?readonly=false';
+    const getResponse = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+    const html = await getResponse.text();
+    expect(html).toContain('Read and write');
+    expect(html).not.toContain('class="scope-checkbox"');
+    const state = extractState(html);
+    const postResponse = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [['action', 'approve']],
+    });
+    const stored = await authTransactions.getById(state);
+    expect(postResponse.status).toBe(303);
+    if (stored?.status !== 'approved') {
+      throw new Error('expected approved transaction');
+    }
+    expect(stored.approvedScopes).toEqual(['read', 'write']);
+  });
+
+  it('does not let authorize ?readonly=true reduce a writable confirmation resource', async () => {
+    const resource = 'https://mcp.neon.tech/mcp?projectId=proj-123';
+    const getResponse = await GET(
+      buildAuthorizeRequest({}, 'read write', {
+        resource,
+        readonly: 'true',
+      }),
+    );
+    const html = await getResponse.text();
+    expect(html).toContain('Read and write');
+    expect(html).not.toContain('class="scope-checkbox"');
+    const state = extractState(html);
+    const postResponse = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [['action', 'approve']],
+    });
+    const stored = await authTransactions.getById(state);
+    expect(postResponse.status).toBe(303);
+    if (stored?.status !== 'approved') {
+      throw new Error('expected approved transaction');
+    }
+    expect(stored.approvedScopes).toEqual(['read', 'write']);
+  });
+
   it('renders confirmation without editors for a parameterized resource', async () => {
     const resource =
       'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying,schema&readonly=true';

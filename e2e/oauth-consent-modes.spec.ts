@@ -58,7 +58,28 @@ test.describe('OAuth consent modes', () => {
     await expect(page.getByText('All projects you can access')).toBeVisible();
     await expect(page.getByText('All categories')).toBeVisible();
     await expect(page.locator('input[name="projectMode"]')).toHaveCount(0);
+    await expect(page.locator('[data-access-mode]')).toHaveText(
+      'Read and write',
+    );
     await capture(page, 'A4-readonly-false-confirmation');
+  });
+
+  test('A4b resource readonly=false stays writable despite registration x-read-only', async ({
+    page,
+    request,
+  }) => {
+    await openAuthorize(
+      page,
+      request,
+      { resource: 'https://mcp.neon.tech/mcp?readonly=false' },
+      { 'x-read-only': 'true' },
+    );
+    await expect(page.locator('[data-access-mode]')).toHaveText(
+      'Read and write',
+    );
+    await expect(page.locator('.scope-checkbox')).toHaveCount(0);
+    await expect(page.locator('input[name="projectMode"]')).toHaveCount(0);
+    await capture(page, 'A4-readonly-false-vs-header');
   });
 
   test('A5 project-only, category-only, and empty grant params', async ({

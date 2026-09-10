@@ -41,17 +41,13 @@ export function confirmationApproval({
   resourceGrant,
   requestScopes,
   resourceReadOnlyHard,
-  preferenceReadOnly,
 }: {
   resourceGrant: GrantContext;
   requestScopes: string[];
   resourceReadOnlyHard: boolean;
-  preferenceReadOnly: boolean;
 }): ConfirmationApproval {
   const writeGranted =
-    oauthWriteAllowed(requestScopes) &&
-    !resourceReadOnlyHard &&
-    !preferenceReadOnly;
+    oauthWriteAllowed(requestScopes) && !resourceReadOnlyHard;
   return {
     grant: resourceGrant,
     scopes: issuedOauthScopes({

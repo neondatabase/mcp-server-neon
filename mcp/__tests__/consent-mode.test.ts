@@ -112,4 +112,16 @@ describe('preferenceReadOnly', () => {
       }),
     ).toBe(false);
   });
+
+  it('keeps resource readonly=false as confirmation without a hard ceiling even when a header prefers read-only', () => {
+    const resource = 'https://mcp.neon.tech/mcp?readonly=false';
+    expect(consentModeFromResource(resource)).toBe('confirmation');
+    expect(resourceReadOnlyHardCeiling(resource)).toBe(false);
+    expect(
+      preferenceReadOnly({
+        authorizeReadOnly: null,
+        headerValue: 'true',
+      }),
+    ).toBe(true);
+  });
 });

@@ -171,7 +171,7 @@ How the query param behaves:
 - **API key flow:** `readonly=true` is the way to enable read-only mode (there is no OAuth scope exchange in this flow). URL changes apply on the next request.
 - **OAuth flow:** `projectId`, `category`, and `readonly` on the MCP URL are a fixed grant confirmed at authorization. `readonly=true` cannot be widened to writes on that page. After a token is issued, changing the URL does not widen that token; authorize again.
 
-Legacy HTTP header `x-read-only` is also supported as a default on editable consent (lower priority than the query param).
+Legacy HTTP header `x-read-only` is an initial Allow-writes default on editable consent only. It does not lock confirmation, and it does not reduce a parameterized URL that includes `readonly=false`.
 
 > **Note:** Read-only mode restricts which _tools_ are available. Further, the `run_sql` tool remains available only for read-only queries.
 

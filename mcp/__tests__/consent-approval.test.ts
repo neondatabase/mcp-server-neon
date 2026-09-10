@@ -26,7 +26,6 @@ describe('confirmationApproval', () => {
       resourceGrant: { projectId: grant.projectId, scopes: [...grant.scopes] },
       requestScopes: ['read', 'write'],
       resourceReadOnlyHard: false,
-      preferenceReadOnly: false,
     });
     expect(approval.writeGranted).toBe(true);
     expect(approval.scopes).toEqual(['read', 'write']);
@@ -37,7 +36,6 @@ describe('confirmationApproval', () => {
       resourceGrant: { projectId: grant.projectId, scopes: [...grant.scopes] },
       requestScopes: ['read', 'write'],
       resourceReadOnlyHard: true,
-      preferenceReadOnly: false,
     });
     expect(approval.writeGranted).toBe(false);
     expect(approval.scopes).toEqual(['read']);
@@ -48,7 +46,6 @@ describe('confirmationApproval', () => {
       resourceGrant: { projectId: grant.projectId, scopes: [...grant.scopes] },
       requestScopes: ['read'],
       resourceReadOnlyHard: false,
-      preferenceReadOnly: false,
     });
     expect(approval.writeGranted).toBe(false);
     expect(approval.scopes).toEqual(['read']);
@@ -60,7 +57,6 @@ describe('confirmationApproval', () => {
         resourceGrant: DEFAULT_GRANT,
         requestScopes: ['read', 'write', '*'],
         resourceReadOnlyHard: false,
-        preferenceReadOnly: false,
       }).scopes,
     ).toEqual(['read', 'write', '*']);
     expect(
@@ -68,19 +64,18 @@ describe('confirmationApproval', () => {
         resourceGrant: DEFAULT_GRANT,
         requestScopes: ['read', 'write', '*'],
         resourceReadOnlyHard: true,
-        preferenceReadOnly: false,
       }).scopes,
     ).toEqual(['read']);
   });
 
-  it('lets a read-only preference reduce a writable URL', () => {
+  it('does not let a registration read-only preference reduce a writable confirmation URL', () => {
     const approval = confirmationApproval({
       resourceGrant: DEFAULT_GRANT,
       requestScopes: ['read', 'write'],
       resourceReadOnlyHard: false,
-      preferenceReadOnly: true,
     });
-    expect(approval.writeGranted).toBe(false);
+    expect(approval.writeGranted).toBe(true);
+    expect(approval.scopes).toEqual(['read', 'write']);
   });
 });
 

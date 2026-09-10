@@ -982,8 +982,8 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       ${renderToolSections(view)}
       <div class="card-foot">
       <p class="next-step">
-        Next, you will sign in to Neon. That step does not use the project,
-        category, or write limits above.
+        Next, sign in to Neon to authorize this MCP server. The project,
+        category, and write limits above apply to this connection.
       </p>
       <div class="actions">
         <button type="submit" class="button button-secondary" name="action" value="cancel" formnovalidate>Cancel</button>

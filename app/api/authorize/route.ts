@@ -272,7 +272,6 @@ export async function GET(request: NextRequest) {
             resourceGrant,
             requestScopes: requestParams.scope,
             resourceReadOnlyHard,
-            preferenceReadOnly: prefReadOnly,
           }).writeGranted
         : ceiling.writeAllowed && !prefReadOnly;
 
@@ -373,7 +372,6 @@ export async function POST(request: NextRequest) {
         resourceGrant: pending.resourceGrant,
         requestScopes: pending.request.scope,
         resourceReadOnlyHard: pending.resourceReadOnlyHard,
-        preferenceReadOnly: pending.defaultReadOnly,
       });
       approvedGrant = approval.grant;
       approvedScopes = approval.scopes;
