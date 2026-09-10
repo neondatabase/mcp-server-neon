@@ -189,8 +189,12 @@ test.describe('OAuth register and authorize contract', () => {
     const approve = page.getByRole('button', {
       name: 'Approve and continue to Neon',
     });
-    await approve.scrollIntoViewIfNeeded();
     await expect(approve).toBeInViewport();
+    const toolScroll = page.locator('[data-tool-scroll]');
+    const toolOverflows = await toolScroll.evaluate(
+      (el) => el.scrollHeight > el.clientHeight + 1,
+    );
+    expect(toolOverflows).toBe(true);
     await approve.focus();
     await expect(approve).toBeFocused();
   });

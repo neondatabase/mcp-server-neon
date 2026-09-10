@@ -130,12 +130,35 @@ test.describe('OAuth consent modes', () => {
     page,
     request,
   }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
     await openAuthorize(page, request, {
       resource: 'https://mcp.neon.tech/mcp',
     });
     await expect(page.locator('.scope-checkbox')).toBeChecked();
+    await expect(page.getByText('Allow writes')).toBeVisible();
     await expect(page.locator('[data-project-id-field]')).toBeHidden();
     await expect(page.getByRole('button', { name: 'Show' })).toBeVisible();
+    await expect(
+      page.getByText('Tool categories', { exact: true }),
+    ).toBeVisible();
+    const categoryScroll = page.locator('[data-category-scroll]');
+    await expect(
+      categoryScroll.locator('span').filter({ hasText: 'Projects' }),
+    ).toBeInViewport();
+    await expect(categoryScroll).toBeVisible();
+    const categoryOverflows = await categoryScroll.evaluate(
+      (el) => el.scrollHeight > el.clientHeight + 1 && el.clientHeight >= 80,
+    );
+    expect(categoryOverflows).toBe(true);
+    await expect(
+      page.getByRole('button', { name: 'Approve and continue to Neon' }),
+    ).toBeInViewport();
+    const bodyBox = await page.locator('.card-body').boundingBox();
+    const footBox = await page.locator('.card-foot').boundingBox();
+    expect(bodyBox && footBox).toBeTruthy();
+    if (bodyBox && footBox) {
+      expect(bodyBox.y + bodyBox.height).toBeLessThanOrEqual(footBox.y + 1);
+    }
     await capture(page, 'B1-bare-editable');
   });
 
@@ -283,11 +306,13 @@ test.describe('OAuth consent modes', () => {
       resource:
         'https://mcp.neon.tech/mcp?projectId=proj-example-with-a-very-long-identifier',
     });
+    await expect(
+      page.getByRole('button', { name: 'Approve and continue to Neon' }),
+    ).toBeInViewport();
     await capture(page, 'L1-confirmation-720');
     const approve = page.getByRole('button', {
       name: 'Approve and continue to Neon',
     });
-    await approve.scrollIntoViewIfNeeded();
     await capture(page, 'L1-confirmation-720-actions');
     await page.setViewportSize({ width: 1280, height: 480 });
     await approve.scrollIntoViewIfNeeded();
@@ -300,7 +325,7 @@ test.describe('OAuth consent modes', () => {
     const editableApprove = page.getByRole('button', {
       name: 'Approve and continue to Neon',
     });
-    await editableApprove.scrollIntoViewIfNeeded();
+    await expect(editableApprove).toBeInViewport();
     await capture(page, 'L1-editable-720-actions');
   });
 
@@ -322,6 +347,9 @@ test.describe('OAuth consent modes', () => {
     });
     await page.setViewportSize({ width: 390, height: 667 });
     await openAuthorize(page, request);
+    await expect(
+      page.getByRole('button', { name: 'Approve and continue to Neon' }),
+    ).toBeInViewport();
     await capture(page, 'L2-editable-mobile-portrait');
   });
 

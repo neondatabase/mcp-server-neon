@@ -314,7 +314,7 @@ function renderEditableGrant({
   }).join('');
 
   return `
-    <section class="panel">
+    <section class="panel panel-access">
       <h2>Connection access</h2>
       <fieldset class="choice">
         <legend>Project</legend>
@@ -339,14 +339,14 @@ function renderEditableGrant({
           />
         </label>
         ${projectError}
-        <p class="note">
+        <p class="note" data-project-id-help${allSelected ? ' hidden' : ''}>
           Enter a project ID the Neon account you sign in with can access.
           This page cannot list projects before you sign in.
         </p>
       </fieldset>
-      <fieldset class="choice">
+      <fieldset class="choice choice-categories">
         <legend>Tool categories</legend>
-        <div class="check-grid" data-category-grid>
+        <div class="check-grid" data-category-grid data-category-scroll>
           ${categoryBoxes}
         </div>
       </fieldset>
@@ -368,7 +368,7 @@ function renderScopeSection({
     : '';
   if (!showWriteControl) {
     return `
-    <section class="panel">
+    <section class="panel panel-permissions">
       <h2>Permissions</h2>
       <p class="access-mode" data-access-mode>${mode}</p>
       ${hiddenRead}
@@ -377,7 +377,7 @@ function renderScopeSection({
 
   const writeCheckedAttr = writeChecked ? 'checked' : '';
   return `
-    <section class="panel">
+    <section class="panel panel-permissions">
       <h2>Permissions</h2>
       <p class="access-mode" data-access-mode>${mode}</p>
       ${hiddenRead}
@@ -510,9 +510,11 @@ function consentScript(mode: ConsentMode): string {
     function syncProjectField() {
       var one = document.querySelector('input[name="projectMode"][value="one"]');
       var field = document.querySelector('[data-project-id-field]');
+      var help = document.querySelector('[data-project-id-help]');
       var input = document.querySelector('input[name="projectId"]');
       if (!(one instanceof HTMLInputElement) || !field) return;
       field.hidden = !one.checked;
+      if (help) help.hidden = !one.checked;
       if (input instanceof HTMLInputElement) {
         input.disabled = !one.checked;
       }
@@ -641,13 +643,13 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
 
     * { box-sizing: border-box; }
 
-    html {
-      min-height: 100%;
+    html, body {
+      height: 100%;
+      overflow: hidden;
     }
 
     body {
       margin: 0;
-      min-height: 100vh;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
         Arial, sans-serif;
       line-height: 1.45;
@@ -661,9 +663,19 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     }
 
     .page {
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
       max-width: 36rem;
+      height: 100%;
       margin: 0 auto;
       padding: 1.5rem 1.25rem 1.5rem;
+      overflow: hidden;
+    }
+
+    .page > a {
+      flex-shrink: 0;
     }
 
     .brand {
@@ -671,6 +683,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       width: 2rem;
       height: 2rem;
       margin-bottom: 1rem;
+      flex-shrink: 0;
     }
 
     h1 {
@@ -679,6 +692,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       font-weight: 600;
       letter-spacing: -0.02em;
       overflow-wrap: anywhere;
+      flex-shrink: 0;
     }
 
     h2, legend {
@@ -695,6 +709,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       color: var(--muted);
       margin-bottom: 1rem;
       overflow-wrap: anywhere;
+      flex-shrink: 0;
     }
 
     .client-meta {
@@ -712,10 +727,25 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     }
 
     .card {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 0%;
+      min-height: 0;
+      min-width: 0;
+      overflow: hidden;
       background: var(--card);
       border: 1px solid var(--line);
       border-radius: 12px;
       padding: 1.25rem 1.25rem 0.25rem;
+    }
+
+    .card-body {
+      flex: 1 1 0%;
+      min-height: 0;
+      min-width: 0;
+      overflow: auto;
+      overscroll-behavior: contain;
+      padding-bottom: 0.5rem;
     }
 
     .panel, .choice {
@@ -723,8 +753,12 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       border-top: 1px solid var(--line);
     }
 
-    .card-main .panel:first-of-type,
-    .card-main .choice:first-of-type {
+    .choice-categories {
+      min-width: 0;
+    }
+
+    .card-body .panel:first-of-type,
+    .card-body .choice:first-of-type {
       border-top: 0;
       padding-top: 0.25rem;
     }
@@ -732,6 +766,8 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     fieldset.choice {
       margin: 0;
       border: 0;
+      min-width: 0;
+      min-inline-size: 0;
     }
 
     .facts {
@@ -798,6 +834,13 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     .check-grid {
       display: grid;
       gap: 0.45rem;
+      min-height: 3.25rem;
+      max-height: min(7.5rem, 20dvh);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-right: 0.25rem;
+      scrollbar-width: thin;
+      scrollbar-color: var(--line) transparent;
     }
 
     .scope-checkbox, .check-option input, .choice input[type="radio"] {
@@ -862,7 +905,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     }
 
     .tool-scroll {
-      max-height: 16rem;
+      max-height: min(12rem, 22dvh);
       overflow-y: auto;
       overscroll-behavior: contain;
       padding: 0.1rem 0.4rem 0.35rem 0;
@@ -916,6 +959,14 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       font-size: 0.8rem;
     }
 
+    .card-foot {
+      flex: 0 0 auto;
+      position: relative;
+      z-index: 1;
+      background: var(--card);
+      border-top: 1px solid var(--line);
+    }
+
     .actions {
       display: flex;
       justify-content: flex-end;
@@ -944,17 +995,61 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     }
 
     @media (max-width: 640px) {
+      .page {
+        padding: 1rem;
+      }
+
+      .brand {
+        margin-bottom: 0.6rem;
+      }
+
+      .client-name {
+        margin-bottom: 0.6rem;
+      }
+
+      .card {
+        padding: 1rem 1rem 0.25rem;
+      }
+
       .facts > div {
         grid-template-columns: 1fr;
         gap: 0.15rem;
       }
 
+      .next-step {
+        margin: 0.5rem 0 0;
+        font-size: 0.75rem;
+      }
+
       .actions {
         flex-direction: column-reverse;
+        margin: 0.55rem 0 0.5rem;
       }
 
       .button {
         width: 100%;
+      }
+    }
+
+    @media (max-height: 520px) {
+      html, body {
+        height: auto;
+        min-height: 100%;
+        overflow: auto;
+      }
+
+      .page {
+        height: auto;
+        overflow: visible;
+      }
+
+      .card {
+        flex: 0 1 auto;
+        overflow: visible;
+      }
+
+      .card-body {
+        overflow: visible;
       }
     }
   </style>
@@ -971,15 +1066,15 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     </div>
     <form method="POST" action="/api/authorize" id="authorize-form" class="card">
       <input type="hidden" name="state" value="${he.escape(props.state)}" />
-      <div class="card-main">
+      <div class="card-body">
       ${grantHtml}
       ${renderScopeSection({
         writeChecked: formState.writeChecked,
         showWriteControl: props.showWriteControl,
         includeReadScope: props.mode === 'editable',
       })}
-      </div>
       ${renderToolSections(view)}
+      </div>
       <div class="card-foot">
       <p class="next-step">
         Next, sign in to Neon to authorize this MCP server. The project,

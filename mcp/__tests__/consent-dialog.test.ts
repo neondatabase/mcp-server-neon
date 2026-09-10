@@ -195,6 +195,9 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('is-collapsed');
     expect(html).toContain('Tools ·');
     expect(html).toContain('tool-scroll');
+    expect(html).toContain('data-category-scroll');
+    expect(html).toContain('choice-categories');
+    expect(html).toMatch(/\.check-grid\s*\{[^}]*overflow-y:\s*auto/);
     expect(html).not.toContain('history.replaceState');
   });
 
@@ -211,6 +214,7 @@ describe('renderConsentHtml', () => {
       /<input\b[^>]*name="projectId"[^>]*>|<input\b[\s\S]*?name="projectId"[\s\S]*?>/,
     );
     expect(input?.[0]).toContain('disabled');
+    expect(html).toMatch(/data-project-id-help[^>]*hidden/);
   });
 
   it('enables the project ID field for One project', () => {
