@@ -8,7 +8,7 @@ export const SCOPE_DEFINITIONS = {
   write: {
     label: 'Allow writes',
     description:
-      'Allow changes through tools in the project and categories shown above.',
+      'Allow changes through tools in the selected project scope and categories shown above.',
   },
 } as const;
 

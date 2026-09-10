@@ -288,6 +288,9 @@ describe('renderConsentHtml', () => {
       'With all projects selected, Search and Fetch remain available.',
     );
     expect(html).toContain('Allow writes');
+    expect(html).toContain(
+      'Allow changes through tools in the selected project scope and categories shown above.',
+    );
     expect(html).toContain('src="/favicon.svg"');
     expect(html).toContain('>View tools</button>');
     expect(html).toContain('is-collapsed');
