@@ -650,7 +650,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       background: var(--bg);
     }
 
-    /* Class `display` rules otherwise override the hidden attribute. */
+    /* Class display rules otherwise override the hidden attribute. */
     [hidden] {
       display: none !important;
     }
