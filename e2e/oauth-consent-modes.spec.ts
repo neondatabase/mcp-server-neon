@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
+  authorizePath,
   capture,
   openAuthorize,
   registerClient,
@@ -367,6 +368,28 @@ test.describe('OAuth consent modes', () => {
       page.getByRole('button', { name: 'Approve and continue to Neon' }),
     ).toBeInViewport();
     await capture(page, 'L2-editable-mobile-portrait');
+  });
+
+  test('L3 long client names keep consent actions reachable', async ({
+    page,
+    request,
+  }) => {
+    const longName = `Long OAuth client ${'name '.repeat(200)}`;
+    const client = await registerClient(
+      request,
+      {},
+      { ...VALID_REGISTER_PAYLOAD, client_name: longName },
+    );
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto(authorizePath(client));
+
+    await expect(page.locator('h1')).toContainText(longName);
+    await expect(
+      page.getByRole('button', { name: 'Approve and continue to Neon' }),
+    ).toBeInViewport();
+    const headingBox = await page.locator('h1').boundingBox();
+    expect(headingBox).toBeTruthy();
+    expect(headingBox?.height).toBeLessThan(80);
   });
 
   test('consent page refuses to render in an iframe', async ({

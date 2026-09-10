@@ -45,6 +45,27 @@ describe('auth transaction store', () => {
     ).toBe(true);
   });
 
+  it('returns the existing approval for an identical retry', async () => {
+    const url = process.env.OAUTH_DATABASE_URL;
+    if (!url) {
+      throw new Error('OAUTH_DATABASE_URL is required');
+    }
+    const pending = await seedPendingTransaction();
+    const store = createAuthTransactionStore(url);
+    const input = {
+      id: pending.transaction.id,
+      browserSecret: pending.browserSecret,
+      approvedGrant: { projectId: 'proj-a', scopes: ['querying'] },
+      approvedScopes: ['read'],
+    } satisfies Parameters<typeof store.approvePending>[0];
+
+    const first = await store.approvePending(input);
+    const retried = await store.approvePending(input);
+
+    expect(first?.status).toBe('approved');
+    expect(retried).toEqual(first);
+  });
+
   it('consumes an approval once across two repository instances', async () => {
     const url = process.env.OAUTH_DATABASE_URL;
     if (!url) {

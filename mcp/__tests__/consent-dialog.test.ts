@@ -148,7 +148,7 @@ describe('renderConsentHtml', () => {
     expect(html).not.toContain('<details class="client-verify" open>');
     expect(html).toContain('https://cursor.com/oauth');
     expect(html).toContain('http://127.0.0.1:1/callback');
-    expect(html.match(/Cursor/g)).toHaveLength(2);
+    expect(html).not.toContain('class="client-name"');
   });
 
   it('summarizes multiple redirect URIs without dropping their exact values', () => {
@@ -169,10 +169,28 @@ describe('renderConsentHtml', () => {
     });
 
     expect(html).toContain(
-      '<summary><span>cursor.com → 2 redirect URIs</span></summary>',
+      '<summary><span>cursor.com → 127.0.0.1:1, cursor.com</span></summary>',
     );
     expect(html).toContain('http://127.0.0.1:1/callback');
     expect(html).toContain('https://cursor.com/oauth/callback');
+  });
+
+  it('shows non-web client URIs as text instead of links', () => {
+    const html = renderConsentHtml({
+      client: {
+        client_name: 'Cursor',
+        client_uri: 'javascript:alert(1)',
+        redirect_uris: ['cursor://oauth/callback'],
+      },
+      state: 'abc',
+      mode: 'confirmation',
+      writeChecked: false,
+      showWriteControl: false,
+      grant: DEFAULT_GRANT,
+    });
+
+    expect(html).toContain('javascript:alert(1)');
+    expect(html).not.toContain('href="javascript:alert(1)"');
   });
 
   it('uses the redirect host when the client has no website', () => {

@@ -66,6 +66,15 @@ function urlSummary(value: string): string {
   }
 }
 
+function isWebUrl(value: string): boolean {
+  try {
+    const protocol = new URL(value).protocol;
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function renderClientVerification(client: ConsentClient): string {
   const website = client.client_uri;
   const redirects = client.redirect_uris ?? [];
@@ -78,15 +87,20 @@ function renderClientVerification(client: ConsentClient): string {
     const redirect = urlSummary(redirects[0]);
     summary = website ? `${summary} → ${redirect}` : `Redirects to ${redirect}`;
   } else if (redirects.length > 1) {
+    const redirectHosts = [...new Set(redirects.map(urlSummary))].join(', ');
     summary = website
-      ? `${summary} → ${redirects.length} redirect URIs`
-      : `${redirects.length} redirect URIs`;
+      ? `${summary} → ${redirectHosts}`
+      : `Redirects to ${redirectHosts}`;
   }
   const websiteHtml = website
     ? `
         <div>
           <dt>Website</dt>
-          <dd><a href="${he.escape(website)}" target="_blank" rel="noopener noreferrer">${he.escape(website)}</a></dd>
+          <dd>${
+            isWebUrl(website)
+              ? `<a href="${he.escape(website)}" target="_blank" rel="noopener noreferrer">${he.escape(website)}</a>`
+              : `<span class="mono">${he.escape(website)}</span>`
+          }</dd>
         </div>`
     : '';
   const redirectHtml =
@@ -723,12 +737,17 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     }
 
     h1 {
+      display: -webkit-box;
+      max-height: 2.9em;
       margin: 0 0 0.35rem;
+      overflow: hidden;
       font-size: 1.35rem;
       font-weight: 600;
       letter-spacing: -0.02em;
       overflow-wrap: anywhere;
       flex-shrink: 0;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
     }
 
     h2, legend {
@@ -1159,7 +1178,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     <a href="/" target="_blank">
       <img class="brand" src="https://neon.com/brand/neon-logomark-dark-color.svg" alt="Neon">
     </a>
-    <h1>Connect ${clientName} to Neon</h1>
+    <h1 title="Connect ${clientName} to Neon">Connect ${clientName} to Neon</h1>
     ${clientVerification}
     <form method="POST" action="/api/authorize" id="authorize-form" class="card">
       <input type="hidden" name="state" value="${he.escape(props.state)}" />

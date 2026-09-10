@@ -222,16 +222,29 @@ export function createAuthTransactionStore(connectionString: string) {
         const sql = sqlFor(connectionString);
         const hash = hashBrowserSecret(browserSecret);
         const rows = await sql`
-          UPDATE mcpauth.auth_transactions
-          SET
-            status = 'approved',
-            approved_grant = ${JSON.stringify(approvedGrant)},
-            approved_scopes = ${JSON.stringify(approvedScopes)}
-          WHERE id = ${id}
+          WITH updated AS (
+            UPDATE mcpauth.auth_transactions
+            SET
+              status = 'approved',
+              approved_grant = ${JSON.stringify(approvedGrant)},
+              approved_scopes = ${JSON.stringify(approvedScopes)}
+            WHERE id = ${id}
+              AND browser_secret_hash = ${hash}
+              AND status = 'pending'
+              AND expires_at > now()
+            RETURNING *
+          )
+          SELECT * FROM updated
+          UNION ALL
+          SELECT * FROM mcpauth.auth_transactions
+          WHERE NOT EXISTS (SELECT 1 FROM updated)
+            AND id = ${id}
             AND browser_secret_hash = ${hash}
-            AND status = 'pending'
+            AND status = 'approved'
             AND expires_at > now()
-          RETURNING *
+            AND approved_grant = ${JSON.stringify(approvedGrant)}::jsonb
+            AND approved_scopes = ${JSON.stringify(approvedScopes)}::jsonb
+          LIMIT 1
         `;
         const transaction = transactionFromRow(rows[0]);
         if (!transaction || transaction.status !== 'approved') {

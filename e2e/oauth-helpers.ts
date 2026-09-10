@@ -39,9 +39,10 @@ export function authorizePath(
 export async function registerClient(
   request: APIRequestContext,
   headers: Record<string, string> = {},
+  payload = VALID_REGISTER_PAYLOAD,
 ): Promise<RegisterResponse> {
   const registerResponse = await request.post('/api/register', {
-    data: VALID_REGISTER_PAYLOAD,
+    data: payload,
     headers,
   });
   expect(registerResponse.status()).toBe(200);
