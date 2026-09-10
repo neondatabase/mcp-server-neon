@@ -36,6 +36,7 @@ const HOST_READ_ONLY_TOOLS = [
 const SECRET_GENERATED_TOOLS = [
   'postgres_connection_string',
   'postgres_roles_password',
+  'reveal_credentials',
 ];
 
 const OMITTED_ACCESS_CONTROL_WRITES = [
@@ -88,9 +89,9 @@ describe('NEON_TOOLS definitions', () => {
   });
 
   it('marks private Neon operations closed-world and docs open-world', () => {
-    expect(NEON_TOOLS).toHaveLength(104);
+    expect(NEON_TOOLS).toHaveLength(113);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
-    expect(generated).toHaveLength(85);
+    expect(generated).toHaveLength(94);
     expect(
       generated.every((tool) => tool.annotations.openWorldHint === false),
     ).toBe(true);
@@ -341,6 +342,10 @@ describe('generated tool interface', () => {
     expect(PINNED_MCP_NAMES['functions.customDomains.delete']).toBe(
       'delete_functions_custom_domain',
     );
+    expect(PINNED_MCP_NAMES['triggers.list']).toBe('list_triggers');
+    expect(PINNED_MCP_NAMES['triggers.get']).toBe('get_trigger');
+    expect(PINNED_MCP_NAMES['credentials.list']).toBe('list_credentials');
+    expect(PINNED_MCP_NAMES['credentials.rotate']).toBe('rotate_credential');
   });
 
   it('overrides only names that differ from @neon/tools', () => {
@@ -411,6 +416,34 @@ describe('generated tool interface', () => {
     expect(generatedShape(register!)).toHaveProperty('entity_id');
     expect(generatedShape(register!)).toHaveProperty('domain');
     expect(generatedShape(remove!)).toHaveProperty('domain');
+  });
+
+  it('exposes trigger tools under the functions category', () => {
+    const list = NEON_TOOLS.find((tool) => tool.name === 'list_triggers');
+    const create = NEON_TOOLS.find((tool) => tool.name === 'create_trigger');
+    const update = NEON_TOOLS.find((tool) => tool.name === 'update_trigger');
+    const remove = NEON_TOOLS.find((tool) => tool.name === 'delete_trigger');
+    expect(list?.scope).toBe('functions');
+    expect(create?.scope).toBe('functions');
+    expect(update?.scope).toBe('functions');
+    expect(remove?.scope).toBe('functions');
+    expect(NEON_TOOLS.some((tool) => tool.name === 'reveal_credentials')).toBe(
+      false,
+    );
+  });
+
+  it('exposes credential tools under the branches category and hides reveal', () => {
+    const list = NEON_TOOLS.find((tool) => tool.name === 'list_credentials');
+    const create = NEON_TOOLS.find((tool) => tool.name === 'create_credential');
+    const revoke = NEON_TOOLS.find((tool) => tool.name === 'revoke_credential');
+    const rotate = NEON_TOOLS.find((tool) => tool.name === 'rotate_credential');
+    expect(list?.scope).toBe('branches');
+    expect(create?.scope).toBe('branches');
+    expect(revoke?.scope).toBe('branches');
+    expect(rotate?.scope).toBe('branches');
+    expect(rotate?.annotations.destructiveHint).toBe(true);
+    expect(rotate?.annotations.idempotentHint).toBe(false);
+    expect(rotate?.readOnlySafe).toBe(false);
   });
 
   it('tells the agent what to pass on register_functions_custom_domain', () => {
