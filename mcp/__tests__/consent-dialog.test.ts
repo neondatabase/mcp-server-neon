@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_GRANT } from '../utils/grant-context';
+import { isWriteChecked } from '../oauth/issued-scopes';
 import {
   buildConsentView,
-  isWriteChecked,
+  COLLAPSE_ABOVE,
   renderConsentHtml,
+  visibleToolCount,
 } from '../oauth/consent-dialog';
 
 describe('isWriteChecked', () => {
@@ -39,18 +41,16 @@ describe('buildConsentView', () => {
   it('shows all projects and all categories when the resource has no query', () => {
     const view = buildConsentView({
       grant: DEFAULT_GRANT,
-      requestedScopes: ['read', 'write'],
-      defaultReadOnly: false,
-      readOnlyRequestedByConnection: false,
+      writeChecked: true,
     });
 
     expect(view.project.kind).toBe('all');
     expect(view.categories.kind).toBe('all');
     expect(view.writeChecked).toBe(true);
-    expect(view.readTools.some((tool) => tool.title === 'Search')).toBe(true);
-    expect(
-      view.writeOnlyTools.some((tool) => tool.title === 'Create project'),
-    ).toBe(true);
+    expect(view.tools.some((tool) => tool.title === 'Search')).toBe(true);
+    expect(view.tools.some((tool) => tool.title === 'Create project')).toBe(
+      true,
+    );
   });
 
   it('lists the project and named categories from the grant', () => {
@@ -59,9 +59,7 @@ describe('buildConsentView', () => {
         projectId: 'proj-123',
         scopes: ['querying', 'schema'],
       },
-      requestedScopes: ['read', 'write'],
-      defaultReadOnly: false,
-      readOnlyRequestedByConnection: false,
+      writeChecked: true,
     });
 
     expect(view.project).toEqual({ kind: 'one', projectId: 'proj-123' });
@@ -69,52 +67,57 @@ describe('buildConsentView', () => {
       kind: 'subset',
       labels: ['Querying', 'Schema'],
     });
-    expect(view.readTools.some((tool) => tool.title === 'Search')).toBe(false);
+    expect(view.tools.some((tool) => tool.title === 'Search')).toBe(false);
     expect(
-      view.readTools.some((tool) => tool.title === 'Get Database Tables'),
+      view.tools.some((tool) => tool.title === 'Get Database Tables'),
     ).toBe(true);
   });
 
-  it('uses the checkbox state for write tools, not defaultReadOnly alone', () => {
+  it('keeps write-only tools in the catalog when writes are off', () => {
     const view = buildConsentView({
       grant: DEFAULT_GRANT,
-      requestedScopes: ['read'],
-      defaultReadOnly: false,
-      readOnlyRequestedByConnection: false,
+      writeChecked: false,
     });
 
     expect(view.writeChecked).toBe(false);
-    expect(
-      view.writeOnlyTools.some((tool) => tool.title === 'Create project'),
-    ).toBe(true);
+    expect(view.tools.some((tool) => tool.title === 'Create project')).toBe(
+      false,
+    );
   });
 
   it('describes an empty category list without a project as search and fetch only', () => {
     const view = buildConsentView({
       grant: { projectId: null, scopes: [] },
-      requestedScopes: ['read', 'write'],
-      defaultReadOnly: false,
-      readOnlyRequestedByConnection: false,
+      writeChecked: true,
     });
 
     expect(view.categories.kind).toBe('none');
-    expect(view.readTools.map((tool) => tool.name).sort()).toEqual([
+    expect(view.tools.map((tool) => tool.name).sort()).toEqual([
       'fetch',
       'search',
     ]);
-    expect(view.writeOnlyTools).toEqual([]);
   });
 
   it('describes an empty category list with a project as no tools', () => {
     const view = buildConsentView({
       grant: { projectId: 'proj-123', scopes: [] },
-      requestedScopes: ['read', 'write'],
-      defaultReadOnly: false,
-      readOnlyRequestedByConnection: false,
+      writeChecked: true,
     });
 
-    expect(view.readTools).toEqual([]);
-    expect(view.writeOnlyTools).toEqual([]);
+    expect(view.tools).toEqual([]);
+  });
+
+  it('does not collapse when hidden write tools alone cross the threshold', () => {
+    const readView = buildConsentView({
+      grant: { projectId: null, scopes: ['branches'] },
+      writeChecked: false,
+    });
+    const writeView = buildConsentView({
+      grant: { projectId: null, scopes: ['branches'] },
+      writeChecked: true,
+    });
+    expect(visibleToolCount(readView)).toBeLessThanOrEqual(COLLAPSE_ABOVE);
+    expect(visibleToolCount(writeView)).toBeGreaterThan(COLLAPSE_ABOVE);
   });
 });
 
@@ -128,9 +131,9 @@ describe('renderConsentHtml', () => {
     const html = renderConsentHtml({
       client,
       state: 'abc',
-      requestedScopes: ['read', 'write'],
-      defaultReadOnly: false,
-      readOnlyRequestedByConnection: false,
+      mode: 'confirmation',
+      writeChecked: false,
+      showWriteControl: false,
       grant: {
         projectId: '<script>alert(1)</script>',
         scopes: ['querying'],
@@ -141,13 +144,13 @@ describe('renderConsentHtml', () => {
     expect(html).not.toContain('<script>alert(1)</script>');
   });
 
-  it('states that writes stay limited to the listed project and categories', () => {
+  it('renders confirmation without editors, including for a writable URL', () => {
     const html = renderConsentHtml({
       client,
       state: 'abc',
-      requestedScopes: ['read', 'write'],
-      defaultReadOnly: false,
-      readOnlyRequestedByConnection: false,
+      mode: 'confirmation',
+      writeChecked: true,
+      showWriteControl: false,
       grant: {
         projectId: 'proj-123',
         scopes: ['querying'],
@@ -156,84 +159,75 @@ describe('renderConsentHtml', () => {
 
     expect(html).toContain('proj-123');
     expect(html).toContain('Querying');
+    expect(html).toContain('Read and write');
+    expect(html).not.toContain('class="scope-checkbox"');
+    expect(html).not.toContain('name="projectMode"');
+    expect(html).not.toContain('name="category"');
     expect(html).toContain(
-      'Allow changes through tools in the project and categories shown above.',
+      'To change these limits, update the connection URL and authorize again.',
     );
-    expect(html).toContain('sign in to Neon');
+    expect(html).toContain('name="action" value="cancel"');
+    expect(html).toContain('formnovalidate');
+    expect(html).not.toContain('history.replaceState');
   });
 
-  it('notes when the connection URL requested read-only', () => {
+  it('renders editable project, category, and write controls', () => {
     const html = renderConsentHtml({
       client,
       state: 'abc',
-      requestedScopes: ['read', 'write'],
-      defaultReadOnly: true,
-      readOnlyRequestedByConnection: true,
+      mode: 'editable',
+      writeChecked: true,
+      showWriteControl: true,
       grant: DEFAULT_GRANT,
     });
 
-    expect(html).toContain(
-      'This connection requested read-only access. You can allow writes for this authorization.',
-    );
-    const writeInput = html.match(
-      /<input[\s\S]*?name="scopes"[\s\S]*?value="write"[\s\S]*?class="scope-checkbox"[\s\S]*?\/>/,
-    )?.[0];
-    expect(writeInput).toBeTruthy();
-    expect(writeInput).not.toContain('checked');
-  });
-
-  it('does not claim the connection URL requested read-only when only defaultReadOnly is set', () => {
-    const html = renderConsentHtml({
-      client,
-      state: 'abc',
-      requestedScopes: ['read', 'write'],
-      defaultReadOnly: true,
-      readOnlyRequestedByConnection: false,
-      grant: DEFAULT_GRANT,
-    });
-
-    expect(html).not.toContain(
-      'This connection requested read-only access. You can allow writes for this authorization.',
-    );
-    const writeInput = html.match(
-      /<input[\s\S]*?name="scopes"[\s\S]*?value="write"[\s\S]*?class="scope-checkbox"[\s\S]*?\/>/,
-    )?.[0];
-    expect(writeInput).toBeTruthy();
-    expect(writeInput).not.toContain('checked');
-  });
-
-  it('hides write-only tools when Allow writes starts unchecked', () => {
-    const html = renderConsentHtml({
-      client,
-      state: 'abc',
-      requestedScopes: ['read'],
-      defaultReadOnly: false,
-      readOnlyRequestedByConnection: false,
-      grant: DEFAULT_GRANT,
-    });
-
-    expect(html).toContain('data-write-tool');
-    expect(html).toContain('Prepare Database Migration');
-    expect(html).toContain('Search');
-    expect(html).toMatch(/<li[^>]*data-write-tool[^>]*hidden/);
-  });
-
-  it('summarizes unrestricted categories and collapses the long tool list', () => {
-    const html = renderConsentHtml({
-      client,
-      state: 'abc',
-      requestedScopes: ['read', 'write'],
-      defaultReadOnly: false,
-      readOnlyRequestedByConnection: false,
-      grant: DEFAULT_GRANT,
-    });
-
-    expect(html).toContain('Connect Cursor to Neon');
-    expect(html).toContain('All categories');
+    expect(html).toContain('name="projectMode"');
+    expect(html).toContain('class="project-id" hidden');
+    expect(html).toContain('name="category"');
     expect(html).toContain('Allow writes');
     expect(html).toContain('data-tool-toggle');
     expect(html).toContain('is-collapsed');
     expect(html).toContain('Tools ·');
     expect(html).toContain('tool-scroll');
+    expect(html).not.toContain('history.replaceState');
+  });
+
+  it('omits Allow writes when the OAuth ceiling is read-only', () => {
+    const html = renderConsentHtml({
+      client,
+      state: 'abc',
+      mode: 'editable',
+      writeChecked: false,
+      showWriteControl: false,
+      grant: DEFAULT_GRANT,
+    });
+
+    expect(html).toContain('Read-only');
+    expect(html).not.toContain('class="scope-checkbox"');
+    expect(html).toContain('name="scopes" value="read"');
+  });
+
+  it('shows a project ID field error', () => {
+    const html = renderConsentHtml({
+      client,
+      state: 'abc',
+      mode: 'editable',
+      writeChecked: false,
+      showWriteControl: true,
+      grant: DEFAULT_GRANT,
+      fieldError: {
+        field: 'projectId',
+        message: 'Enter the project ID this connection should use.',
+      },
+      formState: {
+        projectMode: 'one',
+        projectId: '',
+        categories: [],
+        writeChecked: false,
+      },
+    });
+
+    expect(html).toContain('Enter the project ID this connection should use.');
+    expect(html).toContain('aria-invalid="true"');
   });
 });

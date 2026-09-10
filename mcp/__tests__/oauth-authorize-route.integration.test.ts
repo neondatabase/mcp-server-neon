@@ -1,19 +1,27 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET, POST } from '../../app/api/authorize/route';
 import { model } from '../oauth/model';
 import { upstreamAuth } from '../../lib/oauth/client';
+import { SERVER_HOST } from '../../lib/config';
+import { authTransactions } from '../oauth/auth-transaction-store';
+import { AUTH_RESTART_DESCRIPTION } from '../oauth/consent-html-headers';
+import { SCOPE_CATEGORIES } from '../utils/grant-context';
+import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
+import { neon } from '@neondatabase/serverless';
 
 vi.mock('../oauth/model', () => ({
   model: {
     getClient: vi.fn(),
     getClientRegisterHeaders: vi.fn(),
-    saveClientAuthContext: vi.fn(),
   },
 }));
 
 vi.mock('../../lib/oauth/client', () => ({
-  upstreamAuth: vi.fn(async () => new URL('https://oauth.example/authorize')),
+  upstreamAuth: vi.fn(
+    async (state: string) =>
+      new URL(`https://oauth.example/authorize?state=${state}`),
+  ),
 }));
 
 const VALID_CLIENT = {
@@ -40,195 +48,122 @@ function buildAuthorizeRequest(
     ...extraParams,
   });
 
-  return new NextRequest(
-    `http://localhost/api/authorize?${params.toString()}`,
-    {
-      method: 'GET',
-      headers,
-    },
-  );
+  return new NextRequest(`${SERVER_HOST}/api/authorize?${params.toString()}`, {
+    method: 'GET',
+    headers,
+  });
 }
 
-function extractWriteCheckbox(html: string): string {
-  const match = html.match(
-    /<input[\s\S]*?name="scopes"[\s\S]*?value="write"[\s\S]*?class="scope-checkbox"[\s\S]*?\/>/,
-  );
-  expect(match).toBeTruthy();
-  return match![0];
-}
-
-function extractEncodedState(html: string): string {
+function extractState(html: string): string {
   const match = html.match(/<input type="hidden" name="state" value="([^"]+)"/);
   expect(match).toBeTruthy();
   return match![1];
 }
 
-function decodeState(html: string): Record<string, unknown> {
-  return JSON.parse(atob(extractEncodedState(html)));
+function cookieHeader(response: Response): string {
+  return response.headers
+    .getSetCookie()
+    .map((cookie) => cookie.split(';')[0])
+    .join('; ');
 }
 
-function decodeUpstreamAuthState(): Record<string, unknown> {
-  const encoded = vi.mocked(upstreamAuth).mock.calls.at(-1)?.[0];
-  if (typeof encoded !== 'string') {
-    throw new Error('expected upstreamAuth to be called with encoded state');
+function appendAllCategories(form: FormData): void {
+  for (const category of SCOPE_CATEGORIES) {
+    form.append('category', category);
   }
-  return JSON.parse(atob(encoded)) as Record<string, unknown>;
 }
 
-function buildApproveRequest(
-  requestedScopes: string[],
-  selectedScopes: string[],
-): NextRequest {
-  const state = btoa(
-    JSON.stringify({
-      responseType: 'code',
-      clientId: VALID_CLIENT.id,
-      redirectUri: VALID_CLIENT.redirect_uris[0],
-      scope: requestedScopes,
-      state: 'test-state',
-    }),
-  );
+async function postAuthorize({
+  state,
+  cookie,
+  fields,
+}: {
+  state: string;
+  cookie: string;
+  fields: Array<[string, string]>;
+}): Promise<Response> {
   const form = new FormData();
   form.set('state', state);
-  for (const scope of selectedScopes) {
-    form.append('scopes', scope);
+  for (const [name, value] of fields) {
+    form.append(name, value);
   }
-  return new NextRequest('http://localhost/api/authorize', {
-    method: 'POST',
-    body: form,
-  });
+  return POST(
+    new NextRequest(`${SERVER_HOST}/api/authorize`, {
+      method: 'POST',
+      headers: { cookie },
+      body: form,
+    }),
+  );
 }
 
 describe('/api/authorize route integration', () => {
+  beforeAll(async () => {
+    await ensureTestOauthDatabase();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(model.getClient).mockResolvedValue(
       VALID_CLIENT as unknown as Awaited<ReturnType<typeof model.getClient>>,
     );
     vi.mocked(model.getClientRegisterHeaders).mockResolvedValue(undefined);
-    vi.mocked(model.saveClientAuthContext).mockResolvedValue({
-      grant: { projectId: null, scopes: null },
-      scope: ['read', 'write'],
-      readOnly: false,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    } as never);
   });
 
-  it('defaults Full access to checked when no read-only header is set', async () => {
+  it('sets consent security headers', async () => {
+    const response = await GET(buildAuthorizeRequest());
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-Frame-Options')).toBe('DENY');
+    expect(response.headers.get('Content-Security-Policy')).toBe(
+      "frame-ancestors 'none'",
+    );
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
+    expect(cookieHeader(response)).toContain('neon_mcp_at_');
+    const setCookie = response.headers.getSetCookie().join('; ');
+    const maxAge = setCookie.match(/Max-Age=(\d+)/i);
+    expect(maxAge).toBeTruthy();
+    expect(Number(maxAge![1])).toBeGreaterThan(1700);
+    expect(Number(maxAge![1])).toBeLessThanOrEqual(1800);
+  });
+
+  it('renders editable consent with Allow writes checked by default', async () => {
     const response = await GET(buildAuthorizeRequest());
     const html = await response.text();
-    const writeCheckbox = extractWriteCheckbox(html);
-
-    expect(response.status).toBe(200);
-    expect(writeCheckbox).toContain('checked');
+    expect(html).toContain('scope-checkbox');
+    expect(html).toMatch(/class="scope-checkbox"[\s\S]*?checked/);
+    expect(html).toContain('name="projectMode"');
+    expect(upstreamAuth).not.toHaveBeenCalled();
   });
 
-  it('defaults Full access to unchecked when x-read-only is true', async () => {
-    const response = await GET(
-      buildAuthorizeRequest({
-        'x-read-only': 'true',
-      }),
-    );
-    const html = await response.text();
-    const writeCheckbox = extractWriteCheckbox(html);
-
-    expect(response.status).toBe(200);
-    expect(writeCheckbox).not.toContain('checked');
-    expect(html).not.toContain(
-      'This connection requested read-only access. You can allow writes for this authorization.',
-    );
-  });
-
-  it('defaults Full access to unchecked when readonly query param is true', async () => {
-    const response = await GET(
-      buildAuthorizeRequest({}, 'read write', {
-        readonly: 'true',
-      }),
-    );
-    const html = await response.text();
-    const writeCheckbox = extractWriteCheckbox(html);
-
-    expect(response.status).toBe(200);
-    expect(writeCheckbox).not.toContain('checked');
-    expect(html).toContain(
-      'This connection requested read-only access. You can allow writes for this authorization.',
-    );
-  });
-
-  it('defaults Full access to unchecked when readonly=true is passed via resource query', async () => {
-    const response = await GET(
-      buildAuthorizeRequest({}, 'read write', {
-        resource: 'https://mcp.neon.tech/mcp?readonly=true',
-      }),
-    );
-    const html = await response.text();
-    const writeCheckbox = extractWriteCheckbox(html);
-
-    expect(response.status).toBe(200);
-    expect(writeCheckbox).not.toContain('checked');
-    expect(html).toContain(
-      'This connection requested read-only access. You can allow writes for this authorization.',
-    );
-  });
-
-  it('defaults Full access to unchecked from saved register x-read-only header', async () => {
+  it('defaults Allow writes to unchecked for registration x-read-only without locking it', async () => {
     vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
-      headers: {
-        'x-read-only': 'true',
-      },
+      headers: { 'x-read-only': 'true' },
       createdAt: Date.now(),
     });
-
     const response = await GET(buildAuthorizeRequest());
     const html = await response.text();
-    const writeCheckbox = extractWriteCheckbox(html);
-
-    expect(response.status).toBe(200);
-    expect(writeCheckbox).not.toContain('checked');
-    expect(html).not.toContain(
-      'This connection requested read-only access. You can allow writes for this authorization.',
-    );
+    const writeInput = html.match(
+      /<input\s+type="checkbox"\s+name="scopes"\s+value="write"[\s\S]*?\/>/,
+    )?.[0];
+    expect(writeInput).toBeTruthy();
+    expect(writeInput).not.toContain('checked');
   });
 
-  it('does not embed grant context in the upstream OAuth state parameter', async () => {
-    const response = await GET(buildAuthorizeRequest());
-    const html = await response.text();
-    const state = decodeState(html);
-
-    expect(response.status).toBe(200);
-    expect(state).not.toHaveProperty('grant');
-  });
-
-  it('preserves resource parameter in encoded state for callback grant resolution', async () => {
+  it('renders confirmation without editors for a parameterized resource', async () => {
     const resource =
-      'https://mcp.neon.tech/mcp?projectId=proj-123&category=schema';
+      'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying,schema&readonly=true';
     const response = await GET(
       buildAuthorizeRequest({}, 'read write', { resource }),
     );
     const html = await response.text();
-    const state = decodeState(html);
-
-    expect(response.status).toBe(200);
-    expect(state).toHaveProperty('resource', resource);
-  });
-
-  it('persists parsed resource grant context in client auth context KV', async () => {
-    const resource =
-      'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying,schema';
-    const response = await GET(
-      buildAuthorizeRequest({}, 'read write', { resource }),
-    );
-
-    expect(response.status).toBe(200);
-    expect(vi.mocked(model.saveClientAuthContext)).toHaveBeenCalledWith(
-      VALID_CLIENT.id,
-      expect.objectContaining({
-        grant: {
-          projectId: 'proj-123',
-          scopes: ['querying', 'schema'],
-        },
-      }),
+    expect(html).toContain('proj-123');
+    expect(html).toContain('Querying');
+    expect(html).toContain('Schema');
+    expect(html).toContain('Read-only');
+    expect(html).not.toContain('class="scope-checkbox"');
+    expect(html).not.toContain('name="projectMode"');
+    expect(html).toContain(
+      'To change these limits, update the connection URL and authorize again.',
     );
   });
 
@@ -238,7 +173,6 @@ describe('/api/authorize route integration', () => {
         resource: '/mcp?category=schema',
       }),
     );
-
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: 'invalid_target',
@@ -252,7 +186,6 @@ describe('/api/authorize route integration', () => {
         resource: 'http://mcp.neon.tech/mcp?category=schema',
       }),
     );
-
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: 'invalid_target',
@@ -260,208 +193,424 @@ describe('/api/authorize route integration', () => {
     });
   });
 
-  it('renders consent HTML on GET and does not redirect to upstream OAuth', async () => {
-    const resource =
-      'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying';
-    const response = await GET(
-      buildAuthorizeRequest({}, 'read write', { resource }),
-    );
-    const html = await response.text();
-
-    expect(response.status).toBe(200);
-    expect(html).toContain('scope-checkbox');
-    expect(upstreamAuth).not.toHaveBeenCalled();
-  });
-
-  it('keeps requested * on the granted scope when write is approved', async () => {
-    const response = await GET(buildAuthorizeRequest({}, 'read write *'));
-    const state = decodeState(await response.text());
-
-    expect(response.status).toBe(200);
-    expect(model.saveClientAuthContext).toHaveBeenCalledWith(
-      VALID_CLIENT.id,
-      expect.objectContaining({
-        scope: ['read', 'write', '*'],
-        readOnly: false,
-      }),
-    );
-    expect(state.scope).toEqual(['read', 'write', '*']);
-  });
-
-  it('drops * when the request is read-only', async () => {
-    const response = await GET(
-      buildAuthorizeRequest({}, 'read write *', {
-        readonly: 'true',
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    expect(model.saveClientAuthContext).toHaveBeenCalledWith(
-      VALID_CLIENT.id,
-      expect.objectContaining({
-        scope: ['read'],
-        readOnly: true,
-      }),
-    );
-  });
-
-  it('keeps requested * on POST when Full access stays checked', async () => {
-    const response = await POST(
-      buildApproveRequest(['read', 'write', '*'], ['read', 'write']),
-    );
-
-    expect(response.status).toBe(307);
-    expect(model.saveClientAuthContext).toHaveBeenCalledWith(
-      VALID_CLIENT.id,
-      expect.objectContaining({
-        scope: ['read', 'write', '*'],
-        readOnly: false,
-      }),
-    );
-    expect(decodeUpstreamAuthState().scope).toEqual(['read', 'write', '*']);
-  });
-
-  it('does not issue * on POST when Full access is unchecked', async () => {
-    const response = await POST(
-      buildApproveRequest(['read', 'write', '*'], ['read']),
-    );
-
-    expect(response.status).toBe(307);
-    expect(model.saveClientAuthContext).toHaveBeenCalledWith(
-      VALID_CLIENT.id,
-      expect.objectContaining({
-        scope: ['read'],
-        readOnly: true,
-      }),
-    );
-    expect(decodeUpstreamAuthState().scope).toEqual(['read']);
-  });
-
-  it('shows the resource project and categories on the consent page', async () => {
-    const resource =
-      'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying,schema';
-    const response = await GET(
-      buildAuthorizeRequest({}, 'read write', { resource }),
-    );
-    const html = await response.text();
-
-    expect(response.status).toBe(200);
-    expect(html).toContain('proj-123');
-    expect(html).toContain('Querying');
-    expect(html).toContain('Schema');
-    expect(html).toContain('Connection access');
-    expect(html).not.toContain('Search and Fetch stay available');
-  });
-
-  it('shows unrestricted project and categories when resource has no query', async () => {
-    const response = await GET(
-      buildAuthorizeRequest({}, 'read write', {
-        resource: 'https://mcp.neon.tech/mcp',
-      }),
-    );
-    const html = await response.text();
-
-    expect(response.status).toBe(200);
-    expect(html).toContain('All projects you can access');
-    expect(html).toContain('All categories');
-  });
-
-  it('keeps a mixed valid/unknown category list on the page and in KV', async () => {
-    const resource =
-      'https://mcp.neon.tech/mcp?category=querying,not-a-category';
-    const response = await GET(
-      buildAuthorizeRequest({}, 'read write', { resource }),
-    );
-    const html = await response.text();
-
-    expect(response.status).toBe(200);
-    expect(html).toContain('Querying');
-    expect(html).toContain('Ignored category values: not-a-category');
-    expect(vi.mocked(model.saveClientAuthContext)).toHaveBeenCalledWith(
-      VALID_CLIENT.id,
-      expect.objectContaining({
-        grant: {
-          projectId: null,
-          scopes: ['querying'],
-          unknownCategories: ['not-a-category'],
-        },
-      }),
-    );
-  });
-
-  it('POST from the rendered form keeps the resource grant and redirects upstream', async () => {
+  it('approves a fixed project/category writable grant', async () => {
     const resource =
       'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying';
     const getResponse = await GET(
       buildAuthorizeRequest({}, 'read write', { resource }),
     );
     const html = await getResponse.text();
-    const state = extractEncodedState(html);
-
-    const form = new FormData();
-    form.set('state', state);
-    form.append('scopes', 'read');
-    form.append('scopes', 'write');
-    const postResponse = await POST(
-      new NextRequest('http://localhost/api/authorize', {
-        method: 'POST',
-        body: form,
-      }),
-    );
-
-    expect(getResponse.status).toBe(200);
-    expect(postResponse.status).toBe(307);
-    expect(vi.mocked(model.saveClientAuthContext)).toHaveBeenLastCalledWith(
-      VALID_CLIENT.id,
-      expect.objectContaining({
-        grant: {
-          projectId: 'proj-123',
-          scopes: ['querying'],
-        },
-        scope: ['read', 'write'],
-        readOnly: false,
-      }),
-    );
-    expect(decodeUpstreamAuthState()).toMatchObject({
-      resource,
-      scope: ['read', 'write'],
-      redirectUri: VALID_CLIENT.redirect_uris[0],
+    const state = extractState(html);
+    const postResponse = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [['action', 'approve']],
     });
+    const stored = await authTransactions.getById(state);
+    expect(postResponse.status).toBe(303);
+    expect(stored?.status).toBe('approved');
+    if (stored?.status !== 'approved') {
+      throw new Error('expected approved transaction');
+    }
+    expect(stored.approvedGrant).toEqual({
+      projectId: 'proj-123',
+      scopes: ['querying'],
+    });
+    expect(stored.approvedScopes).toEqual(['read', 'write']);
+    expect(vi.mocked(upstreamAuth).mock.calls.at(-1)?.[0]).toBe(state);
   });
 
-  it('POST from the rendered form can approve read-only without dropping the resource', async () => {
+  it('approves a fixed read-only resource as read even when the client asked for write', async () => {
     const resource =
-      'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying';
+      'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying&readonly=true';
     const getResponse = await GET(
       buildAuthorizeRequest({}, 'read write', { resource }),
     );
-    const state = extractEncodedState(await getResponse.text());
+    const state = extractState(await getResponse.text());
+    const postResponse = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [['action', 'approve']],
+    });
+    const stored = await authTransactions.getById(state);
+    expect(postResponse.status).toBe(303);
+    if (stored?.status !== 'approved') {
+      throw new Error('expected approved transaction');
+    }
+    expect(stored.approvedScopes).toEqual(['read']);
+  });
 
+  it('rejects confirmation tampering that adds write', async () => {
+    const resource = 'https://mcp.neon.tech/mcp?readonly=true';
+    const getResponse = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+    const state = extractState(await getResponse.text());
+    const postResponse = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'approve'],
+        ['scopes', 'write'],
+      ],
+    });
+    expect(postResponse.status).toBe(400);
+    await expect(postResponse.json()).resolves.toMatchObject({
+      error: 'invalid_request',
+    });
+    const stored = await authTransactions.getById(state);
+    expect(stored?.status).toBe('pending');
+    expect(upstreamAuth).not.toHaveBeenCalled();
+  });
+
+  it('rejects a forged write when the OAuth request was read-only', async () => {
+    const getResponse = await GET(buildAuthorizeRequest({}, 'read'));
+    const state = extractState(await getResponse.text());
+    const postResponse = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'all'],
+        ['scopes', 'read'],
+        ['scopes', 'write'],
+      ],
+    });
+    expect(postResponse.status).toBe(400);
+    await expect(postResponse.json()).resolves.toEqual({
+      error: 'invalid_scope',
+      error_description: 'Write access was not requested',
+    });
+    expect(await authTransactions.getById(state)).toMatchObject({
+      status: 'pending',
+    });
+  });
+
+  it('persists an edited one-project subset with writes off', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const state = extractState(await getResponse.text());
+    const postResponse = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'one'],
+        ['projectId', 'proj-edited'],
+        ['category', 'querying'],
+        ['scopes', 'read'],
+      ],
+    });
+    const stored = await authTransactions.getById(state);
+    expect(postResponse.status).toBe(303);
+    if (stored?.status !== 'approved') {
+      throw new Error('expected approved transaction');
+    }
+    expect(stored.approvedGrant).toEqual({
+      projectId: 'proj-edited',
+      scopes: ['querying'],
+    });
+    expect(stored.approvedScopes).toEqual(['read']);
+  });
+
+  it('keeps requested * only when write is approved', async () => {
+    const getResponse = await GET(buildAuthorizeRequest({}, 'read write *'));
+    const state = extractState(await getResponse.text());
     const form = new FormData();
     form.set('state', state);
+    form.set('action', 'approve');
+    form.set('projectMode', 'all');
     form.append('scopes', 'read');
+    form.append('scopes', 'write');
+    appendAllCategories(form);
     const postResponse = await POST(
-      new NextRequest('http://localhost/api/authorize', {
+      new NextRequest(`${SERVER_HOST}/api/authorize`, {
         method: 'POST',
+        headers: { cookie: cookieHeader(getResponse) },
         body: form,
       }),
     );
+    const stored = await authTransactions.getById(state);
+    expect(postResponse.status).toBe(303);
+    if (stored?.status !== 'approved') {
+      throw new Error('expected approved transaction');
+    }
+    expect(stored.approvedScopes).toEqual(['read', 'write', '*']);
+  });
 
-    expect(postResponse.status).toBe(307);
-    expect(vi.mocked(model.saveClientAuthContext)).toHaveBeenLastCalledWith(
-      VALID_CLIENT.id,
-      expect.objectContaining({
-        grant: {
-          projectId: 'proj-123',
-          scopes: ['querying'],
-        },
-        scope: ['read'],
-        readOnly: true,
+  it('rejects unsigned JSON state', async () => {
+    const state = btoa(
+      JSON.stringify({
+        responseType: 'code',
+        clientId: VALID_CLIENT.id,
+        redirectUri: VALID_CLIENT.redirect_uris[0],
+        scope: ['read', 'write'],
+        state: 'test-state',
       }),
     );
-    expect(decodeUpstreamAuthState()).toMatchObject({
-      resource,
-      scope: ['read'],
+    const response = await postAuthorize({
+      state,
+      cookie: 'neon_mcp_at_deadbeef=secret',
+      fields: [['action', 'approve']],
     });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_request',
+      error_description: AUTH_RESTART_DESCRIPTION,
+    });
+  });
+
+  it('rejects a cookie from another transaction', async () => {
+    const first = await GET(buildAuthorizeRequest());
+    const second = await GET(buildAuthorizeRequest());
+    const secondState = extractState(await second.text());
+    const response = await postAuthorize({
+      state: secondState,
+      cookie: cookieHeader(first),
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'all'],
+        ['scopes', 'read'],
+      ],
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_request',
+      error_description: AUTH_RESTART_DESCRIPTION,
+    });
+  });
+
+  it('cancels to the registered redirect with the original downstream state', async () => {
+    const getResponse = await GET(
+      buildAuthorizeRequest({}, 'read write', { state: 'orig-state' }),
+    );
+    const state = extractState(await getResponse.text());
+    const response = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [['action', 'cancel']],
+    });
+    expect(response.status).toBe(303);
+    const location = new URL(response.headers.get('location') ?? '');
+    expect(location.origin + location.pathname).toBe(
+      VALID_CLIENT.redirect_uris[0],
+    );
+    expect(location.searchParams.get('error')).toBe('access_denied');
+    expect(location.searchParams.get('state')).toBe('orig-state');
+    expect(await authTransactions.getById(state)).toBeUndefined();
+    expect(upstreamAuth).not.toHaveBeenCalled();
+  });
+
+  it('lets only one of two concurrent approvals win', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const html = await getResponse.text();
+    const state = extractState(html);
+    const cookie = cookieHeader(getResponse);
+    const [first, second] = await Promise.all([
+      postAuthorize({
+        state,
+        cookie,
+        fields: [
+          ['action', 'approve'],
+          ['projectMode', 'all'],
+          ['scopes', 'read'],
+        ],
+      }),
+      postAuthorize({
+        state,
+        cookie,
+        fields: [
+          ['action', 'approve'],
+          ['projectMode', 'one'],
+          ['projectId', 'proj-race'],
+          ['scopes', 'read'],
+        ],
+      }),
+    ]);
+    const statuses = [first.status, second.status].sort();
+    expect(statuses).toEqual([303, 400]);
+    const stored = await authTransactions.getById(state);
+    expect(stored?.status).toBe('approved');
+  });
+
+  it('keeps two authorizations for one client independent', async () => {
+    const firstGet = await GET(
+      buildAuthorizeRequest({}, 'read write', {
+        state: 'one',
+        resource: 'https://mcp.neon.tech/mcp?projectId=proj-one',
+      }),
+    );
+    const secondGet = await GET(
+      buildAuthorizeRequest({}, 'read write', {
+        state: 'two',
+        resource: 'https://mcp.neon.tech/mcp?projectId=proj-two',
+      }),
+    );
+    const firstState = extractState(await firstGet.text());
+    const secondState = extractState(await secondGet.text());
+    await postAuthorize({
+      state: secondState,
+      cookie: cookieHeader(secondGet),
+      fields: [['action', 'approve']],
+    });
+    await postAuthorize({
+      state: firstState,
+      cookie: cookieHeader(firstGet),
+      fields: [['action', 'approve']],
+    });
+    const firstStored = await authTransactions.getById(firstState);
+    const secondStored = await authTransactions.getById(secondState);
+    if (
+      firstStored?.status !== 'approved' ||
+      secondStored?.status !== 'approved'
+    ) {
+      throw new Error('expected both approved');
+    }
+    expect(firstStored.request.state).toBe('one');
+    expect(secondStored.request.state).toBe('two');
+    expect(firstStored.approvedGrant.projectId).toBe('proj-one');
+    expect(secondStored.approvedGrant.projectId).toBe('proj-two');
+  });
+
+  it('re-renders a missing project ID with a field error', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const state = extractState(await getResponse.text());
+    const response = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'one'],
+        ['projectId', ''],
+        ['scopes', 'read'],
+      ],
+    });
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain('Enter the project ID this connection should use.');
+    expect(response.headers.get('X-Frame-Options')).toBe('DENY');
+    expect(await authTransactions.getById(state)).toMatchObject({
+      status: 'pending',
+    });
+    expect(response.headers.getSetCookie()).toEqual([]);
+  });
+
+  it('redirects an alternate host to SERVER_HOST before creating a transaction', async () => {
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: VALID_CLIENT.id,
+      redirect_uri: VALID_CLIENT.redirect_uris[0],
+      scope: 'read write',
+      state: 'test-state',
+    });
+    const response = await GET(
+      new NextRequest(
+        `https://preview.example/api/authorize?${params.toString()}`,
+        { method: 'GET' },
+      ),
+    );
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get('location') ?? '');
+    expect(location.origin).toBe(new URL(SERVER_HOST).origin);
+    expect(location.pathname).toBe('/api/authorize');
+    expect(location.searchParams.get('client_id')).toBe(VALID_CLIENT.id);
+    expect(location.searchParams.get('state')).toBe('test-state');
+    expect(cookieHeader(response)).not.toContain('neon_mcp_at_');
+    expect(model.getClient).not.toHaveBeenCalled();
+  });
+
+  it('cancels an empty one-project editor without validating the ID', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const state = extractState(await getResponse.text());
+    const response = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'cancel'],
+        ['projectMode', 'one'],
+        ['projectId', ''],
+        ['scopes', 'read'],
+      ],
+    });
+    expect(response.status).toBe(303);
+    const location = new URL(response.headers.get('location') ?? '');
+    expect(location.searchParams.get('error')).toBe('access_denied');
+    expect(await authTransactions.getById(state)).toBeUndefined();
+  });
+
+  it('cancels after a project ID field error', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const state = extractState(await getResponse.text());
+    const cookie = cookieHeader(getResponse);
+    await postAuthorize({
+      state,
+      cookie,
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'one'],
+        ['projectId', ''],
+        ['scopes', 'read'],
+      ],
+    });
+    const response = await postAuthorize({
+      state,
+      cookie,
+      fields: [
+        ['action', 'cancel'],
+        ['projectMode', 'one'],
+        ['projectId', ''],
+        ['scopes', 'read'],
+      ],
+    });
+    expect(response.status).toBe(303);
+    expect(
+      new URL(response.headers.get('location') ?? '').searchParams.get('error'),
+    ).toBe('access_denied');
+    expect(await authTransactions.getById(state)).toBeUndefined();
+  });
+
+  it('cancels a confirmation grant', async () => {
+    const getResponse = await GET(
+      buildAuthorizeRequest({}, 'read write', {
+        resource: 'https://mcp.neon.tech/mcp?projectId=proj-123',
+      }),
+    );
+    const state = extractState(await getResponse.text());
+    const response = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [['action', 'cancel']],
+    });
+    expect(response.status).toBe(303);
+    expect(await authTransactions.getById(state)).toBeUndefined();
+  });
+
+  it('rejects an expired pending transaction', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const state = extractState(await getResponse.text());
+    const url = process.env.OAUTH_DATABASE_URL;
+    if (!url) {
+      throw new Error('OAUTH_DATABASE_URL is required');
+    }
+    const sql = neon(url);
+    await sql`
+      UPDATE mcpauth.auth_transactions
+      SET expires_at = now() - interval '1 minute'
+      WHERE id = ${state}
+    `;
+    const response = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'all'],
+        ['scopes', 'read'],
+      ],
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_request',
+      error_description: AUTH_RESTART_DESCRIPTION,
+    });
+    expect(upstreamAuth).not.toHaveBeenCalled();
   });
 });

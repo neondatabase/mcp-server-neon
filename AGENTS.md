@@ -416,7 +416,7 @@ The advertised OAuth scopes are `read` and `write`, listed in `scopes_supported`
 
 `*` is a request-time alias for write, and the scope stored on API-key tokens. It is not listed in `scopes_supported`. If a client requests `*` and write is granted, the issued token includes `*`.
 
-During authorization, users can uncheck "Allow writes" to grant only `read`.
+During authorization, a parameterized MCP URL (`projectId`, `category`, and/or `readonly`) is a fixed confirmation. A bare or omitted resource URL lets the user choose project, categories, and (when the OAuth request allows write) **Allow writes**. Issued OAuth scope is `read` or `read write`; project and categories are stored on the token grant, not as extra OAuth scope strings.
 
 In addition to the top-level scopes, the server exposes **scope categories** via the non-standard `x-neon-scope-categories` field on the same metadata document: `projects`, `branches`, `endpoints`, `snapshots`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`, `functions`, `storage`. These drive fine-grained tool filtering (see Grant Context above) and can also constrain a token to a single project. The `observability` category covers logs (`query_logs`, `list_log_fields`, `list_log_field_values`) plus the AI Gateway GET. See `mcp/utils/grant-context.ts` for grant resolution.
 

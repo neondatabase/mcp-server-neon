@@ -1,49 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { SERVER_HOST } from '../../../lib/config';
 import { model } from '../../../mcp/oauth/model';
 import { upstreamAuth } from '../../../lib/oauth/client';
 import { handleOAuthError } from '../../../lib/errors';
-import {
-  isReadOnly,
-  hasWriteScope,
-  SUPPORTED_SCOPES,
-} from '../../../mcp/utils/read-only';
 import { logger } from '../../../mcp/utils/logger';
 import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
+import {
+  consentCanonicalLocation,
+  requestPublicOrigin,
+} from '../../../mcp/oauth/consent-canonical-url';
 import {
   DEFAULT_GRANT,
   resolveGrantFromResourceUri,
   type GrantContext,
 } from '../../../mcp/utils/grant-context';
 import { renderConsentHtml } from '../../../mcp/oauth/consent-dialog';
+import { authTransactions } from '../../../mcp/oauth/auth-transaction-store';
+import {
+  consentCookieClearOptions,
+  consentCookieName,
+  consentCookieSetOptions,
+  cookieSecureForRequest,
+  isAuthTransactionId,
+} from '../../../mcp/oauth/browser-binding';
+import {
+  confirmationApproval,
+  confirmationCeiling,
+  editableCeiling,
+  parseConsentPost,
+} from '../../../mcp/oauth/consent-approval';
+import {
+  consentModeFromResource,
+  preferenceReadOnly,
+  resourceReadOnlyHardCeiling,
+} from '../../../mcp/oauth/consent-mode';
+import {
+  AUTH_RESTART_DESCRIPTION,
+  CONSENT_HTML_HEADERS,
+} from '../../../mcp/oauth/consent-html-headers';
+import type { DownstreamAuthRequest } from '../../../mcp/oauth/downstream-auth-request';
+import { issuedOauthScopes } from '../../../mcp/oauth/issued-scopes';
 
-export type DownstreamAuthRequest = {
-  responseType: string;
-  clientId: string;
-  redirectUri: string;
-  scope: string[];
-  state: string;
-  resource?: string;
-  codeChallenge?: string;
-  codeChallengeMethod?: string;
-};
-
-const resolveQueryParamReadOnly = (
+function parseAuthRequest(
   searchParams: URLSearchParams,
-  resource: string | undefined,
-): string | null => {
-  const directReadOnly = searchParams.get('readonly');
-  if (directReadOnly !== null) {
-    return directReadOnly;
-  }
-  if (!resource) {
-    return null;
-  }
-  return new URL(resource).searchParams.get('readonly');
-};
-
-const parseAuthRequest = (
-  searchParams: URLSearchParams,
-): DownstreamAuthRequest => {
+): DownstreamAuthRequest {
   const responseType = searchParams.get('response_type') || '';
   const clientId = searchParams.get('client_id') || '';
   const redirectUri = searchParams.get('redirect_uri') || '';
@@ -64,27 +64,6 @@ const parseAuthRequest = (
     codeChallenge,
     codeChallengeMethod,
   };
-};
-
-function resolveGrantedScopes({
-  requestedScopes,
-  grantWrite,
-}: {
-  requestedScopes: string[];
-  grantWrite: boolean;
-}): string[] {
-  const requested =
-    requestedScopes.length > 0 ? requestedScopes : ['read', 'write'];
-  const granted = ['read'];
-  if (!grantWrite) {
-    return granted;
-  }
-  granted.push('write');
-  // Legacy wildcard clients treat omission as a partial grant.
-  if (requested.includes('*')) {
-    granted.push('*');
-  }
-  return granted;
 }
 
 function consentClientFields(client: object): {
@@ -107,29 +86,125 @@ function consentClientFields(client: object): {
   };
 }
 
+function jsonError(
+  error: string,
+  error_description: string,
+  status = 400,
+): NextResponse {
+  return NextResponse.json({ error, error_description }, { status });
+}
+
+function restartError(): NextResponse {
+  return jsonError('invalid_request', AUTH_RESTART_DESCRIPTION);
+}
+
+function readFormState(form: FormData): string | undefined {
+  const values = form.getAll('state');
+  if (values.length !== 1) {
+    return undefined;
+  }
+  const value = values[0];
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  return value;
+}
+
+function browserSecretFromRequest(
+  request: NextRequest,
+  transactionId: string,
+): string | undefined {
+  return request.cookies.get(consentCookieName(transactionId))?.value;
+}
+
+function cancelRedirect(
+  redirectUri: string,
+  downstreamState: string,
+): NextResponse {
+  const url = new URL(redirectUri);
+  url.searchParams.set('error', 'access_denied');
+  if (downstreamState) {
+    url.searchParams.set('state', downstreamState);
+  }
+  return NextResponse.redirect(url, 303);
+}
+
+function applyCookie(
+  response: NextResponse,
+  transactionId: string,
+  browserSecret: string,
+  request: NextRequest,
+  expiresAt: Date,
+): NextResponse {
+  response.cookies.set(
+    consentCookieName(transactionId),
+    browserSecret,
+    consentCookieSetOptions(cookieSecureForRequest(request), expiresAt),
+  );
+  return response;
+}
+
+function clearCookie(
+  response: NextResponse,
+  transactionId: string,
+  request: NextRequest,
+): NextResponse {
+  response.cookies.set(
+    consentCookieName(transactionId),
+    '',
+    consentCookieClearOptions(cookieSecureForRequest(request)),
+  );
+  return response;
+}
+
+function htmlConsent(
+  html: string,
+  extra?: {
+    transactionId: string;
+    browserSecret: string;
+    request: NextRequest;
+    expiresAt: Date;
+  },
+): NextResponse {
+  const response = new NextResponse(html, {
+    headers: CONSENT_HTML_HEADERS,
+  });
+  if (extra) {
+    applyCookie(
+      response,
+      extra.transactionId,
+      extra.browserSecret,
+      extra.request,
+      extra.expiresAt,
+    );
+  }
+  return response;
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const requestParams = parseAuthRequest(searchParams);
-    // Parse resource URI early so malformed values fail at authorize time.
-    let resourceGrant: GrantContext = { ...DEFAULT_GRANT };
-    let resourceReadOnlyQueryParam: string | null = null;
-    try {
-      resourceGrant = resolveGrantFromResourceUri(requestParams.resource);
-      resourceReadOnlyQueryParam = resolveQueryParamReadOnly(
-        searchParams,
-        requestParams.resource,
-      );
-    } catch {
-      return NextResponse.json(
-        {
-          error: 'invalid_target',
-          error_description: 'Invalid resource parameter',
-        },
-        { status: 400 },
-      );
+    const canonical = consentCanonicalLocation(
+      requestPublicOrigin(request),
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+      SERVER_HOST,
+    );
+    if (canonical) {
+      return NextResponse.redirect(canonical, 302);
     }
 
+    const searchParams = request.nextUrl.searchParams;
+    const requestParams = parseAuthRequest(searchParams);
+    let resourceGrant: GrantContext = { ...DEFAULT_GRANT };
+    try {
+      resourceGrant = resolveGrantFromResourceUri(requestParams.resource);
+    } catch {
+      return jsonError('invalid_target', 'Invalid resource parameter');
+    }
+
+    const mode = consentModeFromResource(requestParams.resource);
+    const resourceReadOnlyHard = resourceReadOnlyHardCeiling(
+      requestParams.resource,
+    );
     const clientId = requestParams.clientId;
     const client = await model.getClient(clientId, '');
 
@@ -142,85 +217,78 @@ export async function GET(request: NextRequest) {
 
     const savedRegisterHeaders = await model.getClientRegisterHeaders(clientId);
     const savedHeaders = savedRegisterHeaders?.headers ?? {};
-
-    const defaultReadOnly = isReadOnly({
-      queryParamValue: resourceReadOnlyQueryParam,
+    const prefReadOnly = preferenceReadOnly({
+      authorizeReadOnly: searchParams.get('readonly'),
       headerValue:
-        request.headers.get('x-read-only') ?? savedHeaders['x-read-only'],
-    });
-    const requestedScopes =
-      requestParams.scope.length > 0 ? requestParams.scope : ['read', 'write'];
-    const grantWrite = !defaultReadOnly && hasWriteScope(requestedScopes);
-    const effectiveScopes = resolveGrantedScopes({
-      requestedScopes,
-      grantWrite,
+        request.headers.get('x-read-only') ??
+        savedHeaders['x-read-only'] ??
+        null,
     });
 
     if (!client) {
       logger.warn('Client not found', { clientId });
-      return NextResponse.json(
-        {
-          error: 'invalid_client',
-          error_description: 'Invalid client ID',
-        },
-        { status: 400 },
-      );
+      return jsonError('invalid_client', 'Invalid client ID');
     }
 
-    if (
-      requestParams.responseType === undefined ||
-      !client.response_types.includes(requestParams.responseType)
-    ) {
+    if (!client.response_types.includes(requestParams.responseType)) {
       logger.warn('Invalid response type', {
         clientId,
         providedResponseType: requestParams.responseType,
         supportedResponseTypes: client.response_types,
       });
-      return NextResponse.json(
-        {
-          error: 'unsupported_response_type',
-          error_description: 'Invalid response type',
-        },
-        { status: 400 },
-      );
+      return jsonError('unsupported_response_type', 'Invalid response type');
     }
 
-    if (
-      requestParams.redirectUri === undefined ||
-      !matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)
-    ) {
+    if (!matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)) {
       logger.warn('Invalid redirect URI', {
         clientId: requestParams.clientId,
         providedRedirectUri: requestParams.redirectUri,
         registeredRedirectUris: client.redirect_uris,
       });
-      return NextResponse.json(
-        {
-          error: 'invalid_request',
-          error_description: 'Invalid redirect URI',
-        },
-        { status: 400 },
-      );
+      return jsonError('invalid_request', 'Invalid redirect URI');
     }
 
-    await model.saveClientAuthContext(clientId, {
-      grant: resourceGrant,
-      scope: effectiveScopes,
-      readOnly: !hasWriteScope(effectiveScopes),
+    const ceiling =
+      mode === 'confirmation'
+        ? confirmationCeiling({
+            resourceGrant,
+            requestScopes: requestParams.scope,
+            resourceReadOnlyHard,
+          })
+        : editableCeiling(requestParams.scope);
+
+    const created = await authTransactions.createPending({
+      request: requestParams,
+      mode,
+      ceiling,
+      defaultReadOnly: prefReadOnly,
+      resourceGrant,
+      resourceReadOnlyHard,
     });
+
+    const writeChecked =
+      mode === 'confirmation'
+        ? confirmationApproval({
+            resourceGrant,
+            requestScopes: requestParams.scope,
+            resourceReadOnlyHard,
+            preferenceReadOnly: prefReadOnly,
+          }).writeGranted
+        : ceiling.writeAllowed && !prefReadOnly;
 
     const html = renderConsentHtml({
       client: consentClientFields(client),
-      state: btoa(JSON.stringify(requestParams)),
-      requestedScopes: effectiveScopes,
-      defaultReadOnly,
-      readOnlyRequestedByConnection: isReadOnly({
-        queryParamValue: resourceReadOnlyQueryParam,
-      }),
+      state: created.transaction.id,
+      mode,
+      writeChecked,
+      showWriteControl: mode === 'editable' && ceiling.writeAllowed,
       grant: resourceGrant,
     });
-    return new NextResponse(html, {
-      headers: { 'Content-Type': 'text/html' },
+    return htmlConsent(html, {
+      transactionId: created.transaction.id,
+      browserSecret: created.browserSecret,
+      request,
+      expiresAt: created.transaction.expiresAt,
     });
   } catch (error: unknown) {
     return handleOAuthError(error, 'Authorization error');
@@ -230,54 +298,105 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const state = formData.get('state') as string;
-    const selectedScopes = formData.getAll('scopes') as string[];
-
-    if (!state) {
-      return NextResponse.json(
-        {
-          error: 'invalid_request',
-          error_description: 'Invalid state',
-        },
-        { status: 400 },
-      );
+    const transactionId = readFormState(formData);
+    if (!transactionId || !isAuthTransactionId(transactionId)) {
+      return restartError();
     }
 
-    // Filter to only valid scopes (read is always included via hidden input)
-    const validScopes = selectedScopes.filter((s) =>
-      SUPPORTED_SCOPES.includes(s as (typeof SUPPORTED_SCOPES)[number]),
+    const browserSecret = browserSecretFromRequest(request, transactionId);
+    if (!browserSecret) {
+      return restartError();
+    }
+
+    const pending = await authTransactions.getPending(
+      transactionId,
+      browserSecret,
     );
-    if (validScopes.length === 0) {
-      return NextResponse.json(
-        {
-          error: 'invalid_scope',
-          error_description: 'No valid scopes selected',
-        },
-        { status: 400 },
+    if (!pending) {
+      return restartError();
+    }
+
+    const parsed = parseConsentPost({
+      form: formData,
+      mode: pending.mode,
+      ceiling: pending.ceiling,
+    });
+
+    if (parsed.action === 'cancel') {
+      const consumed = await authTransactions.consumePending(
+        transactionId,
+        browserSecret,
+      );
+      if (!consumed) {
+        return restartError();
+      }
+      return clearCookie(
+        cancelRedirect(consumed.request.redirectUri, consumed.request.state),
+        transactionId,
+        request,
       );
     }
 
-    const requestParams = JSON.parse(atob(state)) as DownstreamAuthRequest;
-    const grantWrite = hasWriteScope(validScopes);
-    const grantedScopes = resolveGrantedScopes({
-      requestedScopes: requestParams.scope,
-      grantWrite,
-    });
+    if (parsed.action === 'invalid') {
+      if (parsed.error.kind === 'field') {
+        const client = await model.getClient(pending.request.clientId, '');
+        if (!client) {
+          return jsonError('invalid_client', 'Invalid client ID');
+        }
+        const html = renderConsentHtml({
+          client: consentClientFields(client),
+          state: pending.id,
+          mode: pending.mode,
+          writeChecked: parsed.error.selection.grantWrite,
+          showWriteControl: pending.ceiling.writeAllowed,
+          grant: pending.resourceGrant,
+          fieldError: {
+            field: parsed.error.field,
+            message: parsed.error.message,
+          },
+          formState: {
+            projectMode: parsed.error.selection.projectMode,
+            projectId: parsed.error.selection.projectId,
+            categories: parsed.error.selection.categories,
+            writeChecked: parsed.error.selection.grantWrite,
+          },
+        });
+        return htmlConsent(html);
+      }
+      return jsonError(parsed.error.kind, parsed.error.description);
+    }
 
-    requestParams.scope = grantedScopes;
-    const grant = requestParams.resource
-      ? resolveGrantFromResourceUri(requestParams.resource)
-      : { ...DEFAULT_GRANT };
-    await model.saveClientAuthContext(requestParams.clientId, {
-      grant,
-      scope: grantedScopes,
-      readOnly: !hasWriteScope(grantedScopes),
-    });
+    let approvedGrant: GrantContext;
+    let approvedScopes: string[];
+    if (parsed.confirmation) {
+      const approval = confirmationApproval({
+        resourceGrant: pending.resourceGrant,
+        requestScopes: pending.request.scope,
+        resourceReadOnlyHard: pending.resourceReadOnlyHard,
+        preferenceReadOnly: pending.defaultReadOnly,
+      });
+      approvedGrant = approval.grant;
+      approvedScopes = approval.scopes;
+    } else {
+      approvedGrant = parsed.selection.grant;
+      approvedScopes = issuedOauthScopes({
+        requestedScopes: pending.request.scope,
+        grantWrite: parsed.selection.grantWrite,
+      });
+    }
 
-    // Re-encode state with updated scopes
-    const updatedState = btoa(JSON.stringify(requestParams));
-    const authUrl = await upstreamAuth(updatedState);
-    return NextResponse.redirect(authUrl.href);
+    const approved = await authTransactions.approvePending({
+      id: transactionId,
+      browserSecret,
+      approvedGrant,
+      approvedScopes,
+    });
+    if (!approved) {
+      return restartError();
+    }
+
+    const authUrl = await upstreamAuth(approved.id);
+    return NextResponse.redirect(authUrl.href, 303);
   } catch (error: unknown) {
     return handleOAuthError(error, 'Authorization error');
   }
