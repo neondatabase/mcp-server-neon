@@ -303,15 +303,6 @@ export function parseConsentPost({
       },
     };
   }
-  if (projectModeField.value === 'all' && projectId.trim() !== '') {
-    return {
-      action: 'invalid',
-      error: {
-        kind: 'invalid_request',
-        description: 'Invalid project selection',
-      },
-    };
-  }
 
   const categoriesField = parseCategories(form);
   if (!categoriesField.ok) {

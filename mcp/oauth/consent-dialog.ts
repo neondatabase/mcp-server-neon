@@ -334,6 +334,7 @@ function renderEditableGrant({
             value="${he.escape(formState.projectId)}"
             autocomplete="off"
             spellcheck="false"
+            ${allSelected ? 'disabled' : ''}
             ${invalidAttr}
           />
         </label>
@@ -509,8 +510,12 @@ function consentScript(mode: ConsentMode): string {
     function syncProjectField() {
       var one = document.querySelector('input[name="projectMode"][value="one"]');
       var field = document.querySelector('[data-project-id-field]');
+      var input = document.querySelector('input[name="projectId"]');
       if (!(one instanceof HTMLInputElement) || !field) return;
       field.hidden = !one.checked;
+      if (input instanceof HTMLInputElement) {
+        input.disabled = !one.checked;
+      }
     }
 
     function syncConsentUi() {

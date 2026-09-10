@@ -244,6 +244,27 @@ describe('parseConsentPost', () => {
     expect(parsed.error.field).toBe('projectId');
   });
 
+  it('ignores a leftover project ID when All projects is selected', () => {
+    const parsed = parseConsentPost({
+      form: form([
+        ['action', 'approve'],
+        ['projectMode', 'all'],
+        ['projectId', 'proj-leftover'],
+        ['scopes', 'read'],
+      ]),
+      mode: 'editable',
+      ceiling: editableCeiling(['read', 'write']),
+    });
+    expect(parsed).toEqual({
+      action: 'approve',
+      confirmation: false,
+      selection: {
+        grant: { projectId: null, scopes: [] },
+        grantWrite: false,
+      },
+    });
+  });
+
   it('rejects a forged write when the OAuth ceiling is read-only', () => {
     const parsed = parseConsentPost({
       form: form([

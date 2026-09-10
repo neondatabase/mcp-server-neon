@@ -202,6 +202,31 @@ test.describe('OAuth consent modes', () => {
     await capture(page, 'B6-missing-project-id');
   });
 
+  test('B7 switching back to All projects keeps all-project access', async ({
+    page,
+    request,
+  }) => {
+    await openAuthorize(page, request);
+    await page.getByText('One project', { exact: true }).click();
+    await page.locator('input[name="projectId"]').fill('proj-example');
+    await page.getByText('All projects', { exact: true }).click();
+    await expect(page.locator('input[name="projectId"]')).toBeDisabled();
+    await capture(page, 'B7-switch-back-to-all-projects');
+    const posted = await page.evaluate(() => {
+      const form = document.querySelector('form');
+      if (!(form instanceof HTMLFormElement)) {
+        throw new Error('missing consent form');
+      }
+      return Array.from(new FormData(form).entries());
+    });
+    expect(posted).toContainEqual(['projectMode', 'all']);
+    expect(
+      posted.some(
+        ([name, value]) => name === 'projectId' && value === 'proj-example',
+      ),
+    ).toBe(false);
+  });
+
   test('T1 collapse uses visible tools only', async ({ page, request }) => {
     await openAuthorize(page, request);
     const categories = page.locator('input[name="category"]');

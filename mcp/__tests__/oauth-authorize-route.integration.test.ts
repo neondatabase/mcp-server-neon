@@ -312,6 +312,27 @@ describe('/api/authorize route integration', () => {
     expect(stored.approvedScopes).toEqual(['read']);
   });
 
+  it('ignores a leftover project ID when All projects is selected', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const state = extractState(await getResponse.text());
+    const postResponse = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'all'],
+        ['projectId', 'proj-leftover'],
+        ['scopes', 'read'],
+      ],
+    });
+    const stored = await authTransactions.getById(state);
+    expect(postResponse.status).toBe(303);
+    if (stored?.status !== 'approved') {
+      throw new Error('expected approved transaction');
+    }
+    expect(stored.approvedGrant.projectId).toBeNull();
+  });
+
   it('keeps requested * only when write is approved', async () => {
     const getResponse = await GET(buildAuthorizeRequest({}, 'read write *'));
     const state = extractState(await getResponse.text());

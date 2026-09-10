@@ -192,6 +192,43 @@ describe('renderConsentHtml', () => {
     expect(html).not.toContain('history.replaceState');
   });
 
+  it('disables the project ID field when All projects is selected', () => {
+    const html = renderConsentHtml({
+      client,
+      state: 'abc',
+      mode: 'editable',
+      writeChecked: true,
+      showWriteControl: true,
+      grant: DEFAULT_GRANT,
+    });
+    const input = html.match(
+      /<input\b[^>]*name="projectId"[^>]*>|<input\b[\s\S]*?name="projectId"[\s\S]*?>/,
+    );
+    expect(input?.[0]).toContain('disabled');
+  });
+
+  it('enables the project ID field for One project', () => {
+    const html = renderConsentHtml({
+      client,
+      state: 'abc',
+      mode: 'editable',
+      writeChecked: true,
+      showWriteControl: true,
+      grant: DEFAULT_GRANT,
+      formState: {
+        projectMode: 'one',
+        projectId: 'proj-123',
+        categories: [],
+        writeChecked: true,
+      },
+    });
+    const input = html.match(
+      /<input\b[^>]*name="projectId"[^>]*>|<input\b[\s\S]*?name="projectId"[\s\S]*?>/,
+    );
+    expect(input?.[0]).toBeDefined();
+    expect(input?.[0]).not.toContain('disabled');
+  });
+
   it('omits Allow writes when the OAuth ceiling is read-only', () => {
     const html = renderConsentHtml({
       client,
