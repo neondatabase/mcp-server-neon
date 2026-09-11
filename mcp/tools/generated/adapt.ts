@@ -23,9 +23,9 @@ const GENERATED_TOOLS_REQUIRING_ORG_ID = new Set<GeneratedToolId>([
   'projects.create',
 ]);
 
-const LIST_PROJECTS_DESCRIPTION = `List Neon projects you own. Returns every page. Pass limit to cap how many. There is no \`cursor\` argument. Pass \`org_id\` with a personal API key to list that org's projects.`;
+const LIST_PROJECTS_DESCRIPTION = `List Neon projects you own. Returns every page. Pass limit to cap how many. There is no \`cursor\` argument. \`org_id\` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from.`;
 
-const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project and waits until the default compute is ready. Pass \`org_id\` with a personal API key. Does not return a connection string; call \`get_connection_string\` with the project id.`;
+const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project and waits until the default compute is ready. \`org_id\` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from. Does not return a connection string; call \`get_connection_string\` with the project id.`;
 
 const DESCRIBE_PROJECT_DESCRIPTION = `Retrieves the project record (settings, compute, usage). Call \`list_branches\` for branches.`;
 
