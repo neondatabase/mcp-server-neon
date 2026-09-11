@@ -2,7 +2,7 @@
 
 # [NEXT]
 
-Anonymous OAuth client registration stores only `https` redirect URIs and `http` redirect URIs on a loopback host, and drops the rest from the registration; a registration with no acceptable redirect URI is rejected. `/api/authorize` HMAC-signs consent state with `COOKIE_SECRET`, rejects POST from a foreign Origin, and refuses `javascript:`, `data:`, `file:`, `blob:`, `vbscript:`, and `about:` redirect targets.
+Anonymous OAuth client registration stores only `https` redirect URIs and `http` redirect URIs on a loopback host, and drops the rest from the registration; a registration with no acceptable redirect URI is rejected. `/api/authorize` HMAC-signs consent state with `COOKIE_SECRET`, rejects POST from a foreign Origin, refuses `javascript:`, `data:`, `file:`, `blob:`, `vbscript:`, and `about:` redirect targets, shows the selected redirect destination, and warns when a known client name points to an unrelated remote host.
 
 Scheduled function triggers (`list_triggers`, `get_trigger`, `create_trigger`, `update_trigger`, `delete_trigger`) under `?category=functions`, and branch credentials (`list_credentials`, `create_credential`, `revoke_credential`, `rotate_credential`) under `?category=branches`. Requires `@neon/tools` 1.3.0. `credentials.reveal` is not a tool.
 

@@ -43,6 +43,56 @@ function extractWriteCheckbox(html: string): string {
 }
 
 test.describe('OAuth register and authorize contract', () => {
+  test('consent shows the selected redirect and warns on a trusted-name mismatch', async ({
+    page,
+    request,
+  }) => {
+    const redirectUri = 'https://evil.example/oauth/callback?source=cursor';
+    const registerResponse = await request.post('/api/register', {
+      data: {
+        ...VALID_REGISTER_PAYLOAD,
+        client_name: 'Cursor',
+        client_uri: 'https://cursor.com',
+        redirect_uris: [
+          'https://www.cursor.com/agents/mcp/oauth/callback',
+          redirectUri,
+        ],
+      },
+    });
+    expect(registerResponse.status()).toBe(200);
+    const registerBody = (await registerResponse.json()) as RegisterResponse;
+    const authorizeUrl = new URL('/api/authorize', 'http://localhost');
+    authorizeUrl.searchParams.set('response_type', 'code');
+    authorizeUrl.searchParams.set('client_id', registerBody.client_id);
+    authorizeUrl.searchParams.set('redirect_uri', redirectUri);
+    authorizeUrl.searchParams.set('scope', 'read write');
+    authorizeUrl.searchParams.set('state', 'e2e-state');
+
+    await page.goto(`${authorizeUrl.pathname}${authorizeUrl.search}`);
+
+    await expect(
+      page.getByRole('heading', { name: 'Authorize evil.example' }),
+    ).toBeVisible();
+    await expect(page.getByText('Claimed name:')).toBeVisible();
+    await expect(page.getByText('Cursor', { exact: true })).toBeVisible();
+    await expect(page.getByText('Redirect destination:')).toBeVisible();
+    const destination = page.getByText(redirectUri, { exact: true });
+    await expect(destination).toBeVisible();
+    await expect(destination).not.toHaveAttribute('href');
+    await expect(
+      page.getByText('Check this redirect before authorizing'),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        'This request uses the name Cursor, but after you authorize you will be redirected to evil.example, not Cursor.',
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText('https://www.cursor.com/agents/mcp/oauth/callback'),
+    ).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
   test('registered client is accepted by authorize route', async ({
     request,
   }) => {

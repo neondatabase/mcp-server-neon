@@ -15,6 +15,7 @@ import {
   isDangerousRedirectUri,
   isLoopbackHost,
 } from '../../../lib/oauth/redirect-uri';
+import { getOAuthImpersonationWarning } from '../../../lib/oauth/client-identity';
 import { isAuthorizePostOriginAllowed } from '../../../lib/oauth/authorize-origin';
 import {
   AuthorizeStateConfigError,
@@ -137,8 +138,6 @@ function renderScopeSection(
 const renderApprovalDialog = (
   client: {
     client_name?: string;
-    client_uri?: string;
-    redirect_uris?: string[];
     [key: string]: unknown;
   },
   state: string,
@@ -156,29 +155,21 @@ const renderApprovalDialog = (
   } catch {
     headline = 'Authorization Request';
   }
-  const website = client.client_uri ? he.escape(client.client_uri) : undefined;
-  const redirectUris = client.redirect_uris;
+  const escapedRedirectUri = he.escape(redirectUri);
+  const impersonationWarning = getOAuthImpersonationWarning({
+    clientName: client.client_name,
+    redirectUri,
+  });
 
-  const websiteHtml = website
+  const warningHtml = impersonationWarning
     ? `
-          <div class="client-detail">
-            <div class="detail-label">Website:</div>
-            <div class="detail-value small">
-              <a href="${website}" target="_blank" rel="noopener noreferrer">${website}</a>
-            </div>
-          </div>`
+      <div class="identity-warning" role="alert">
+        <div class="identity-warning-title">Check this redirect before authorizing</div>
+        <div>
+          This request uses the name ${he.escape(impersonationWarning.brandDisplayName)}, but after you authorize you will be redirected to ${he.escape(impersonationWarning.redirectHost)}, not ${he.escape(impersonationWarning.brandDisplayName)}.
+        </div>
+      </div>`
     : '';
-
-  const redirectUrisHtml =
-    redirectUris && redirectUris.length > 0
-      ? `
-          <div class="client-detail">
-            <div class="detail-label">Redirect URIs:</div>
-            <div class="detail-value small">
-              ${redirectUris.map((uri) => `<div>${he.escape(uri)}</div>`).join('')}
-            </div>
-          </div>`
-      : '';
 
   const html = `
 <!DOCTYPE html>
@@ -256,6 +247,21 @@ const renderApprovalDialog = (
       color: var(--text-color-secondary);
     }
 
+    .identity-warning {
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      border: 1px solid rgb(245 166 35 / 0.6);
+      border-radius: 6px;
+      color: var(--text-color);
+      background-color: rgb(245 166 35 / 0.08);
+    }
+
+    .identity-warning-title {
+      margin-bottom: 0.25rem;
+      font-weight: 600;
+      color: rgb(245 166 35);
+    }
+
     .client-info {
       border: 1px solid var(--border-color);
       border-radius: 6px;
@@ -265,6 +271,7 @@ const renderApprovalDialog = (
 
     .client-detail {
       display: flex;
+      gap: 0.75rem;
       margin-bottom: 0.5rem;
       align-items: baseline;
     }
@@ -428,8 +435,13 @@ const renderApprovalDialog = (
         <div class="client-detail">
           <div class="detail-label">Claimed name:</div>
           <div class="detail-value">${claimedName}</div>
-        </div>${websiteHtml}${redirectUrisHtml}
+        </div>
+        <div class="client-detail">
+          <div class="detail-label">Redirect destination:</div>
+          <div class="detail-value small">${escapedRedirectUri}</div>
+        </div>
       </div>
+      ${warningHtml}
       <p class="description">
         This MCP client is requesting to be authorized on Neon MCP Server.
         If you approve, you will be redirected to complete the authentication.

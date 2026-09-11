@@ -270,7 +270,154 @@ describe('/api/authorize route integration', () => {
     expect(html).toContain('scope-checkbox');
     expect(html).toContain('Authorize a local application');
     expect(html).toContain('Claimed name:');
+    expect(html).toContain('Redirect destination:');
+    expect(html).toContain('http://127.0.0.1:55667/callback');
     expect(upstreamAuth).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Neon Console', 'https://console.neon.tech/oauth/callback'],
+    ['Claude Desktop', 'https://claude.ai/api/mcp/auth_callback'],
+    ['Cursor', 'https://www.cursor.com/agents/mcp/oauth/callback'],
+    ['ChatGPT', 'https://chatgpt.com/connector/oauth/callback'],
+    ['OpenAI Connector', 'https://platform.openai.com/oauth/callback'],
+    ['Perplexity', 'https://www.perplexity.ai/oauth/callback'],
+  ])(
+    'does not warn when %s uses its recognized redirect host',
+    async (clientName, redirectUri) => {
+      vi.mocked(model.getClient).mockResolvedValue({
+        ...VALID_CLIENT,
+        client_name: clientName,
+        redirect_uris: [redirectUri],
+      } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+
+      const response = await GET(
+        buildAuthorizeRequest({}, 'read write', {
+          redirect_uri: redirectUri,
+        }),
+      );
+      const html = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(html).toContain('Redirect destination:');
+      expect(html).toContain(redirectUri);
+      expect(html).not.toContain('Check this redirect before authorizing');
+    },
+  );
+
+  it.each([
+    [
+      'Neon MCP Server',
+      'https://evil.example/callback',
+      'Neon',
+      'evil.example',
+    ],
+    ['Claude', 'https://evil.example/callback', 'Claude', 'evil.example'],
+    [
+      'Cursor',
+      'https://claude.ai/api/mcp/auth_callback',
+      'Cursor',
+      'claude.ai',
+    ],
+    [
+      'OpenAI Connector',
+      'https://openai.com.attacker.example/callback',
+      'ChatGPT',
+      'openai.com.attacker.example',
+    ],
+    ['Claude', 'cursor://claude.ai/callback', 'Claude', 'claude.ai'],
+  ])(
+    'warns when %s uses an unrecognized remote redirect',
+    async (clientName, redirectUri, displayName, redirectHost) => {
+      vi.mocked(model.getClient).mockResolvedValue({
+        ...VALID_CLIENT,
+        client_name: clientName,
+        redirect_uris: [redirectUri],
+      } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+
+      const response = await GET(
+        buildAuthorizeRequest({}, 'read write', {
+          redirect_uri: redirectUri,
+        }),
+      );
+      const html = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(html).toContain('Check this redirect before authorizing');
+      expect(html).toContain(
+        `This request uses the name ${displayName}, but after you authorize you will be redirected to ${redirectHost}, not ${displayName}.`,
+      );
+    },
+  );
+
+  it('classifies only the selected redirect from a mixed registration', async () => {
+    const selectedRedirect = 'https://evil.example/callback';
+    const otherRedirect = 'https://claude.ai/api/mcp/auth_callback';
+    vi.mocked(model.getClient).mockResolvedValue({
+      ...VALID_CLIENT,
+      client_name: 'Claude',
+      client_uri: 'https://claude.ai',
+      redirect_uris: [otherRedirect, selectedRedirect],
+    } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', {
+        redirect_uri: selectedRedirect,
+      }),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('Check this redirect before authorizing');
+    expect(html).toContain(selectedRedirect);
+    expect(html).not.toContain(otherRedirect);
+  });
+
+  it.each([
+    ['Acme Tools', 'https://evil.example/callback'],
+    ['Claude Desktop', 'http://localhost:8787/callback'],
+  ])(
+    'renders ordinary consent for %s at %s',
+    async (clientName, redirectUri) => {
+      vi.mocked(model.getClient).mockResolvedValue({
+        ...VALID_CLIENT,
+        client_name: clientName,
+        redirect_uris: [redirectUri],
+      } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+
+      const response = await GET(
+        buildAuthorizeRequest({}, 'read write', {
+          redirect_uri: redirectUri,
+        }),
+      );
+      const html = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(html).toContain(redirectUri);
+      expect(html).not.toContain('Check this redirect before authorizing');
+    },
+  );
+
+  it('escapes the selected redirect destination', async () => {
+    const redirectUri =
+      'https://evil.example/callback?next=<script>alert(1)</script>';
+    vi.mocked(model.getClient).mockResolvedValue({
+      ...VALID_CLIENT,
+      redirect_uris: [redirectUri],
+    } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', {
+        redirect_uri: redirectUri,
+      }),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain(
+      'https://evil.example/callback?next=&lt;script&gt;alert(1)&lt;/script&gt;',
+    );
+    expect(html).not.toContain('<script>alert(1)</script>');
   });
 
   it('keeps requested * on the granted scope when write is approved', async () => {
