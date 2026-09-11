@@ -312,6 +312,7 @@ Notes:
 **Branch Management:**
 
 - **`list_branches`**: Lists branches in a project. Use it to resolve a branch name to a `br-…` id.
+- **`list_credentials`**, **`create_credential`**, **`revoke_credential`**, **`rotate_credential`**: Branch-scoped credentials for Object Storage and the AI Gateway. `reveal` is not a tool; rotation replaces secrets in place and is not idempotent.
 - **`create_branch`**: Creates a branch with a read-write compute and waits until it is ready. Does not return a connection string. Arguments are `{ "project_id": "…", "name": "feature-x" }`. Pass `no_compute: true` to skip the endpoint. Call `get_connection_string` after it succeeds.
 - **`reset_from_parent`**: Resets a branch to its parent's current HEAD (`{ "project_id": "…", "branch_id": "br-…" }`). Discards writes since the branch diverged. `preserve_under_name` is required when the branch has children; those children move to the new branch. Parent HEAD only; point-in-time restore is `restore_snapshot`.
 - **`delete_branch`**: Deletes a branch (`{ "project_id": "…", "branch_id": "br-…" }`).
@@ -385,6 +386,7 @@ Notes:
 
 - **`list_functions`**, **`get_function`**, **`update_function`**, **`delete_function`**, **`deploy_function`**
 - **`list_functions_custom_domains`**, **`register_functions_custom_domain`**, **`delete_functions_custom_domain`**
+- **`list_triggers`**, **`get_trigger`**, **`create_trigger`**, **`update_trigger`**, **`delete_trigger`**: Scheduled function triggers (`type: "schedule"`, five-field UTC cron).
 
 **Storage** (`?category=storage`):
 

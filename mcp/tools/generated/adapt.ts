@@ -189,6 +189,7 @@ const DESTRUCTIVE_POST_TOOLS = new Set<GeneratedToolId>([
   'branches.setDefault',
   'functions.deploy',
   'storage.objects.presign',
+  'credentials.rotate',
 ]);
 
 function lastSegment(toolId: GeneratedToolId): string {
