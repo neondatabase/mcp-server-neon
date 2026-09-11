@@ -138,7 +138,7 @@ infrastructure.
 
 **E2E tests** use [Playwright](https://playwright.dev/) and live in `e2e/`. Configuration is in `playwright.config.ts`.
 
-- **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com) and generates a random `COOKIE_SECRET`. Both are written to `.env.e2e` (gitignored) and passed to the Next.js dev server. It also starts the docs fixture server (see below).
+- **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com). The connection string is written to `.env.e2e` (gitignored) and passed to the Next.js dev server. It also starts the docs fixture server (see below).
 - **Docs fixture** (`e2e/docs-fixture.ts`): The docs tools fetch their index server-side, so `request.route()` cannot intercept it and a test calling `list_docs_resources` would otherwise depend on neon.com being up — which merge-gating tests must not. Global setup serves `e2e/fixtures/docs-index.txt` on port `3101` (`E2E_DOCS_PORT` to change it, and it fails loudly if the port is taken), and `playwright.config.ts` points the dev server's `NEON_DOCS_INDEX_URL` at it. That URL must be set in `webServer.env`, not in global setup: Playwright starts the web server as a plugin task, which runs **before** global setup, so anything global setup adds to `process.env` reaches the dev server too late. Only the index is redirected — individual doc pages still come from `NEON_DOCS_BASE_URL`, and the fixture serves no page paths.
 - **No secrets needed**: The e2e infrastructure is fully self-contained. Instagres databases expire after 72 hours; no explicit teardown is required.
 - **Reuse across runs**: If `.env.e2e` already exists, global-setup reuses it instead of re-provisioning. Delete the file to force a fresh database.
@@ -282,10 +282,9 @@ normally provided through `.env.local`. Key variables:
 - `NEON_API_KEY`: Required only for opt-in live Neon E2E tests and local API-key smoke tests
 - `NEON_TEST_ORG_ID`: Dedicated disposable organization for live E2E tests; optional with an org-scoped key
 - `OAUTH_DATABASE_URL`: Required for remote MCP server with OAuth
-- `COOKIE_SECRET`: Required for remote MCP server OAuth flow
 - `CLIENT_ID` / `CLIENT_SECRET`: OAuth client credentials
 
-**E2E test environment**: The e2e tests do not require any manual environment configuration. `e2e/global-setup.ts` provisions an ephemeral database and generates secrets automatically, writing them to `.env.e2e` (gitignored).
+**E2E test environment**: The e2e tests do not require any manual environment configuration. `e2e/global-setup.ts` provisions an ephemeral database, writing the connection string to `.env.e2e` (gitignored).
 
 ## Project Structure
 
@@ -409,13 +408,14 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 
 ### OAuth Scopes
 
-The server supports three top-level scopes: `read`, `write`, and `*`. These are exposed via the `/.well-known/oauth-authorization-server` endpoint's `scopes_supported` field.
+The advertised OAuth scopes are `read` and `write`, listed in `scopes_supported` on `/.well-known/oauth-authorization-server`.
 
 - **`read`**: Read-only access to Neon resources
 - **`write`**: Full access including create/delete operations
-- **`*`**: Wildcard, equivalent to full access
 
-During authorization, users can uncheck "Full access" to request only `read` scope, which enables read-only mode.
+`*` is a request-time alias for write, and the scope stored on API-key tokens. It is not listed in `scopes_supported`. If a client requests `*` and write is granted, the issued token includes `*`.
+
+During authorization, a parameterized MCP URL (`projectId`, `category`, and/or `readonly`) is a fixed confirmation. A bare or omitted resource URL lets the user choose project, categories, and (when the OAuth request allows write) **Allow writes**. Issued OAuth scope is `read` or `read write`; project and categories are stored on the token grant, not as extra OAuth scope strings.
 
 In addition to the top-level scopes, the server exposes **scope categories** via the non-standard `x-neon-scope-categories` field on the same metadata document: `projects`, `branches`, `endpoints`, `snapshots`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`, `functions`, `storage`. These drive fine-grained tool filtering (see Grant Context above) and can also constrain a token to a single project. The `observability` category covers logs (`query_logs`, `list_log_fields`, `list_log_field_values`) plus the AI Gateway GET. See `mcp/utils/grant-context.ts` for grant resolution.
 
@@ -426,8 +426,7 @@ In addition to the top-level scopes, the server exposes **scope categories** via
 | `SERVER_HOST`                 | Server URL (falls back to `VERCEL_URL`) |
 | `UPSTREAM_OAUTH_HOST`         | Neon OAuth provider URL                 |
 | `CLIENT_ID` / `CLIENT_SECRET` | OAuth client credentials                |
-| `COOKIE_SECRET`               | Secret for signed cookies               |
-| `KV_URL`                      | Vercel KV URL for caches and locks      |
+| `KV_URL`                      | Vercel KV (Upstash Redis) URL           |
 | `OAUTH_DATABASE_URL`          | Postgres URL for token storage          |
 | `SENTRY_DSN`                  | Sentry error tracking DSN               |
 | `ANALYTICS_WRITE_KEY`         | Segment analytics write key             |

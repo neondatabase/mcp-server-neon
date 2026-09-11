@@ -88,9 +88,9 @@ describe('NEON_TOOLS definitions', () => {
   });
 
   it('marks private Neon operations closed-world and docs open-world', () => {
-    expect(NEON_TOOLS).toHaveLength(101);
+    expect(NEON_TOOLS).toHaveLength(104);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
-    expect(generated).toHaveLength(82);
+    expect(generated).toHaveLength(85);
     expect(
       generated.every((tool) => tool.annotations.openWorldHint === false),
     ).toBe(true);
@@ -332,6 +332,15 @@ describe('generated tool interface', () => {
     expect(PINNED_MCP_NAMES['logs.query']).toBe('query_logs');
     expect(PINNED_MCP_NAMES['logs.fields']).toBe('list_log_fields');
     expect(PINNED_MCP_NAMES['logs.fieldValues']).toBe('list_log_field_values');
+    expect(PINNED_MCP_NAMES['functions.customDomains.list']).toBe(
+      'list_functions_custom_domains',
+    );
+    expect(PINNED_MCP_NAMES['functions.customDomains.register']).toBe(
+      'register_functions_custom_domain',
+    );
+    expect(PINNED_MCP_NAMES['functions.customDomains.delete']).toBe(
+      'delete_functions_custom_domain',
+    );
   });
 
   it('overrides only names that differ from @neon/tools', () => {
@@ -382,6 +391,35 @@ describe('generated tool interface', () => {
     expect(tool!.description).toContain('zip');
     expect(tool!.description).toContain('at least one');
     expect(tool!.description).toContain('first deployment');
+  });
+
+  it('exposes functions custom-domain tools under the functions category', () => {
+    const list = NEON_TOOLS.find(
+      (tool) => tool.name === 'list_functions_custom_domains',
+    );
+    const register = NEON_TOOLS.find(
+      (tool) => tool.name === 'register_functions_custom_domain',
+    );
+    const remove = NEON_TOOLS.find(
+      (tool) => tool.name === 'delete_functions_custom_domain',
+    );
+    expect(list?.scope).toBe('functions');
+    expect(register?.scope).toBe('functions');
+    expect(remove?.scope).toBe('functions');
+    expect(generatedShape(list!)).not.toHaveProperty('cursor');
+    expect(generatedShape(register!)).toHaveProperty('entity_type');
+    expect(generatedShape(register!)).toHaveProperty('entity_id');
+    expect(generatedShape(register!)).toHaveProperty('domain');
+    expect(generatedShape(remove!)).toHaveProperty('domain');
+  });
+
+  it('tells the agent what to pass on register_functions_custom_domain', () => {
+    const tool = NEON_TOOLS.find(
+      (t) => t.name === 'register_functions_custom_domain',
+    );
+    expect(tool!.description).toContain('entity_type: "function"');
+    expect(tool!.description).toContain('list_functions');
+    expect(tool!.description).toContain('cname_target');
   });
 
   it('does not tell the agent to pass a cursor on list_operations', () => {

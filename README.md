@@ -147,14 +147,14 @@ Alternatively, you can add the following "Neon" entry to your client's MCP serve
 
 ### Scopes and Read-Only Mode
 
-Neon MCP supports OAuth scopes `read`, `write`, and `*` (`*` means both). Your MCP client can request these scopes directly, or you can make the selection in the OAuth permissions UI.
+Neon MCP advertises OAuth scopes `read` and `write`. Your MCP client can request these, or you can make the selection in the OAuth permissions UI. `*` is treated as write if a client still sends it.
 
 **Read-only mode** restricts which tools are available, disabling write operations like creating projects, branches, or running migrations. Read-only tools include listing projects, describing schemas, querying data, and viewing performance metrics.
 
 You can set read-only mode in two ways:
 
-1. **OAuth scope selection (recommended):** In OAuth, select read-only by unchecking **Full access** in the authorization UI.
-2. **`readonly` query param:** Add `?readonly=true` to your MCP server URL:
+1. **Default MCP URL (editable consent):** Connect with `https://mcp.neon.tech/mcp` and uncheck **Allow writes** on the authorization page. You can also choose one project and a subset of tool categories there.
+2. **Parameterized MCP URL (fixed consent):** Put `readonly`, `projectId`, and/or `category` on the MCP server URL. The authorization page confirms that grant and does not offer editors. Change the URL and authorize again to change the grant.
 
 ```json
 {
@@ -168,16 +168,16 @@ You can set read-only mode in two ways:
 
 How the query param behaves:
 
-- **API key flow:** `readonly=true` is the way to enable read-only mode (there is no OAuth scope exchange in this flow).
-- **OAuth flow:** `readonly=true` overrides the OAuth scope. Without it, read-only is determined by the scope selected in the OAuth consent UI.
+- **API key flow:** `readonly=true` is the way to enable read-only mode (there is no OAuth scope exchange in this flow). URL changes apply on the next request.
+- **OAuth flow:** `projectId`, `category`, and `readonly` on the MCP URL are a fixed grant confirmed at authorization. `readonly=true` cannot be widened to writes on that page. After a token is issued, changing the URL does not widen that token; authorize again.
 
-Legacy HTTP header `x-read-only` is also supported as a fallback (lower priority than the query param).
+For OAuth registration, `x-read-only` is an initial Allow-writes default on editable consent. It does not lock confirmation, and it does not reduce a parameterized URL that includes `readonly=false`. API-key requests still honor `x-read-only` per request, below the `readonly` query param.
 
 > **Note:** Read-only mode restricts which _tools_ are available. Further, the `run_sql` tool remains available only for read-only queries.
 
 ### URL Query Params for Access Control
 
-Grant context (scope categories, project scoping, read-only mode) is configured via URL query params on the MCP server URL. Config travels with every request and takes effect immediately — no re-auth needed.
+Grant context (scope categories, project scoping, read-only mode) is configured via URL query params on the MCP server URL. API-key requests apply those params on each request. OAuth tokens store the grant confirmed or edited at authorization.
 
 | Param       | Description                                            | Example                              |
 | ----------- | ------------------------------------------------------ | ------------------------------------ |
@@ -401,6 +401,7 @@ Notes:
 **Functions** (`?category=functions`):
 
 - **`list_functions`**, **`get_function`**, **`update_function`**, **`delete_function`**, **`deploy_function`**
+- **`list_functions_custom_domains`**, **`register_functions_custom_domain`**, **`delete_functions_custom_domain`**
 
 **Storage** (`?category=storage`):
 
@@ -453,15 +454,15 @@ Required for remote server runtime:
 | `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL               |
 | `CLIENT_ID`           | OAuth client ID                       |
 | `CLIENT_SECRET`       | OAuth client secret                   |
-| `COOKIE_SECRET`       | Secret for signed cookies             |
 | `KV_URL`              | Vercel KV (Upstash Redis) URL         |
 | `OAUTH_DATABASE_URL`  | Postgres URL for token storage        |
 
 Optional:
 
-| Variable    | Description                                                                       |
-| ----------- | --------------------------------------------------------------------------------- |
-| `LOG_LEVEL` | Winston log level: `error`, `warn`, `info` (default), `debug`, `verbose`, `silly` |
+| Variable                     | Description                                                                       |
+| ---------------------------- | --------------------------------------------------------------------------------- |
+| `LOG_LEVEL`                  | Winston log level: `error`, `warn`, `info` (default), `debug`, `verbose`, `silly` |
+| `NEON_MCP_DISABLE_ANALYTICS` | Set to `1` to disable product analytics                                           |
 
 ### Testing Pyramid
 
@@ -497,3 +498,12 @@ Testing strategy:
 ### Deployment
 
 Vercel deploys the remote server automatically from the repository branch configuration. Preview environments are available for pull requests.
+
+## Telemetry
+
+The Neon MCP server collects product analytics and error reports to help us understand usage and improve reliability:
+
+- **Product analytics (Segment):** when you connect with an authenticated account, the server sends an `identify` event with your Neon account ID, name, and email address. It also tracks session start (`server_init`), each tool call (`tool_call`), and unexpected server errors (`server_error`). A tool-call event includes the tool name, auth method, and client, not the tool arguments or query results. Docs-only tool calls without an account are tracked anonymously. Events go to `track.neon.tech`, Neon's own analytics endpoint.
+- **Error reporting (Sentry):** unexpected server errors are reported with stack traces and request context.
+
+This collection is covered by the [Neon Privacy Policy](https://neon.com/privacy-policy). To disable analytics when running the server yourself, set `NEON_MCP_DISABLE_ANALYTICS=1`. That flag does not disable Sentry.

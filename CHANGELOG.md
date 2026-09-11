@@ -8,6 +8,10 @@ MCP transport:
 - Retire HTTP+SSE. `GET/POST /sse`, `/message`, `/api/sse`, and `/api/message` return `410 Gone` pointing at Streamable HTTP `/mcp`. The Redis session-binding module is removed with the transport.
 - Validate `Origin` on Streamable HTTP requests: a present-and-invalid Origin is `403`; a missing Origin is allowed (CLI and server-side clients).
 
+When the MCP handshake or User-Agent does not name a product (`node`, `undici`), `clientApplication` on analytics events falls back to the OAuth client's registered name.
+
+List, register, and delete branch custom domains: `list_functions_custom_domains`, `register_functions_custom_domain`, `delete_functions_custom_domain` (`?category=functions`). Requires `@neon/tools` 1.2.0.
+
 Management API tools now come from `@neon/tools` 1.0.0. Hosts select SDK method paths (`projects.list`); the package default is already verb-first (`list_projects`). This server still overrides historical and singular names (`describe_project`, `create_project`, `create_branch`, `reset_from_parent`, `compare_database_schema`, `provision_neon_auth`, `provision_neon_data_api`, `list_branch_computes`). `create_project` and `create_branch` call `projects.create` / `branches.create` (compute on by default, no connection string). Operation-backed writes wait. Raw Management API operations, `operations.waitFor`, `createAndConnect` tools, JWKS, VPC, anonymization, masking, org-member reads, and project member/permission writes are not tools. Host tools stay for SQL, inspect, migrations, query tuning, docs, search, `list_organizations`, `get_connection_string`, and redacted `get_neon_auth_config`. Every tool argument is `snake_case` (`project_id`, `database_name`, `sql_statements`), including host tools. Unknown camelCase aliases fail schema validation. A project-scoped connection strips `project_id` from the published schema and injects it from the grant; sending `project_id` on that connection fails validation. URL grant query params stay camelCase (`?projectId=`, `?category=`, `?readonly=`). New `?category=` values: `functions`, `storage`, `endpoints`, `snapshots`. `?category=branches` includes role and database tools and no longer includes compute-endpoint tools (`?category=endpoints`). A token already issued for `branches` gains those role and database writes. Unknown `?category=` values are ignored and named on initialize notices. `limit` on a list tool caps how many items come back.
 
 A GET snapshot of a standard email provider reports `password` as `***redacted***` when the API returns an empty string.
@@ -37,6 +41,7 @@ Refresh-token reliability:
 
 Auth correctness:
 
+- Issue `*` on OAuth tokens when the client requested it and write was granted. `scopes_supported` is `read` and `write`; `*` remains an alias, not an advertised scope. Callback uses the per-flow authorize state for token scope instead of the client-keyed KV row.
 - Stop embedding MCP-specific grant context (scope categories, read-only mode, project-id scoping) in the upstream OAuth `state` parameter; the Neon console OAuth backend doesn't understand those scopes and shouldn't see them. Grant context is now resolved from the saved client registration, OAuth resource URI, or MCP URL query params.
 - MCP-specific configuration moved from custom `X-Neon-*` headers to URL query parameters where appropriate, simplifying client wiring (the legacy `x-read-only` header still works).
 - Pass tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) through `registerTool` to the MCP response — they were defined but not actually surfaced to clients.

@@ -1,4 +1,4 @@
-export const SUPPORTED_SCOPES = ['read', 'write', '*'] as const;
+export const SUPPORTED_SCOPES = ['read', 'write'] as const;
 
 export const SCOPE_DEFINITIONS = {
   read: {
@@ -6,9 +6,9 @@ export const SCOPE_DEFINITIONS = {
     description: 'View Neon resources and run read-only queries',
   },
   write: {
-    label: 'Full access',
+    label: 'Allow writes',
     description:
-      'Allow full management of your Neon resources and databases, including running any INSERT, UPDATE, or DELETE statements',
+      'Allow changes through tools in the selected project scope and categories shown above.',
   },
 } as const;
 

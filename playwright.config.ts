@@ -49,6 +49,7 @@ export default defineConfig({
     env: {
       // Load fresh values from .env.e2e for the webServer subprocess.
       ...loadE2eEnv(),
+      SERVER_HOST: BASE_URL,
       // Read the docs index from the fixture server that global setup starts, so
       // no merge-gating test depends on neon.com being reachable. Set here and
       // not in global setup: Playwright starts the web server as a plugin task,

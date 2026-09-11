@@ -9,10 +9,10 @@ import { createNeonClient } from './api';
 import { track } from '../analytics/analytics';
 import { captureException, startSpan } from '@sentry/node';
 import type { ServerContext as NeonServerContext } from '../types/context';
-import { setSentryTags } from '../sentry/utils';
+import { agentSentryTags, setSentryTags } from '../sentry/utils';
 import { ToolHandlerExtraParams } from '../tools/types';
 import { handleToolError } from './errors';
-import { detectClientApplication } from '../utils/client-application';
+import { identifyClient } from '../utils/client-application';
 import { DEFAULT_GRANT } from '../utils/grant-context';
 import {
   getAvailableTools,
@@ -39,9 +39,10 @@ export const createMcpServer = async (context: NeonServerContext) => {
 
   const neonClient = createNeonClient(context.apiKey);
 
-  // Compute client info once at server instantiation
-  let clientName = context.userAgent ?? 'unknown';
-  let clientApplication = detectClientApplication(clientName);
+  let { clientName, clientApplication } = identifyClient(
+    context.userAgent,
+    context.client?.name,
+  );
 
   // Track server initialization
   const trackServerInit = () => {
@@ -76,8 +77,10 @@ export const createMcpServer = async (context: NeonServerContext) => {
     const clientInfo = server.server.getClientVersion();
     // Prefer MCP clientInfo over HTTP User-Agent
     if (clientInfo?.name) {
-      clientName = clientInfo.name;
-      clientApplication = detectClientApplication(clientName);
+      ({ clientName, clientApplication } = identifyClient(
+        clientInfo.name,
+        context.client?.name,
+      ));
     }
     trackServerInit();
   };
@@ -124,7 +127,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
               traceId,
             };
             logger.info('tool call:', properties);
-            setSentryTags(context);
+            setSentryTags(context, { clientName, clientApplication });
             track({
               userId: context.account.id,
               event: 'tool_call',
@@ -166,7 +169,10 @@ export const createMcpServer = async (context: NeonServerContext) => {
               span.setStatus({
                 code: 2,
               });
-              return handleToolError(error, properties, traceId);
+              return handleToolError(error, properties, traceId, {
+                clientName,
+                clientApplication,
+              });
             }
           },
         );
@@ -184,6 +190,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
     const eventId = captureException(error, {
       user: { id: context.account.id },
       contexts: contexts,
+      tags: agentSentryTags({ clientName, clientApplication }),
     });
     track({
       userId: context.account.id,
