@@ -28,14 +28,23 @@ describe('admitDcrRedirectUris', () => {
     });
   });
 
-  it('rejects custom schemes, non-loopback http, userinfo, fragments, and garbage', () => {
+  it('admits the Cursor native callback used by current clients', () => {
     expect(
       admitDcrRedirectUris(['cursor://anysphere.cursor-mcp/oauth/callback']),
+    ).toEqual({
+      admitted: ['cursor://anysphere.cursor-mcp/oauth/callback'],
+      rejected: [],
+    });
+  });
+
+  it('rejects other custom schemes, non-loopback http, userinfo, fragments, and garbage', () => {
+    expect(
+      admitDcrRedirectUris(['cursor://attacker.example/oauth/callback']),
     ).toEqual({
       admitted: [],
       rejected: [
         {
-          label: 'cursor://anysphere.cursor-mcp',
+          label: 'cursor://attacker.example',
           reason: 'scheme_not_allowed',
         },
       ],
@@ -91,24 +100,15 @@ describe('admitDcrRedirectUris', () => {
     });
   });
 
-  it('drops cursor:// from a mixed Cursor payload and keeps input order', () => {
-    expect(
-      admitDcrRedirectUris([
-        'http://localhost:51234/oauth/callback',
-        'https://www.cursor.com/agents/mcp/oauth/callback',
-        'cursor://anysphere.cursor-mcp/oauth/callback',
-      ]),
-    ).toEqual({
-      admitted: [
-        'http://localhost:51234/oauth/callback',
-        'https://www.cursor.com/agents/mcp/oauth/callback',
-      ],
-      rejected: [
-        {
-          label: 'cursor://anysphere.cursor-mcp',
-          reason: 'scheme_not_allowed',
-        },
-      ],
+  it('keeps the complete mixed Cursor payload in input order', () => {
+    const uris = [
+      'http://localhost:51234/oauth/callback',
+      'https://www.cursor.com/agents/mcp/oauth/callback',
+      'cursor://anysphere.cursor-mcp/oauth/callback',
+    ];
+    expect(admitDcrRedirectUris(uris)).toEqual({
+      admitted: uris,
+      rejected: [],
     });
   });
 });

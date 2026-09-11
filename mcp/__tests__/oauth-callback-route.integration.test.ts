@@ -9,6 +9,7 @@ import {
   signAuthorizeState,
   type DownstreamAuthRequest,
 } from '../../lib/oauth/authorize-state';
+import { authorizeBrowserCookieName } from '../../lib/oauth/authorize-browser-binding';
 
 vi.mock('../oauth/model', () => ({
   model: {
@@ -37,6 +38,8 @@ vi.mock('../server/account', () => ({
   resolveAccountFromAuth: vi.fn(),
 }));
 
+const BROWSER_BINDING_ID = 'test-browser-binding';
+
 function buildState(overrides: Partial<DownstreamAuthRequest> = {}): string {
   const payload: DownstreamAuthRequest = {
     responseType: 'code',
@@ -49,12 +52,23 @@ function buildState(overrides: Partial<DownstreamAuthRequest> = {}): string {
   return signAuthorizeState({
     payload,
     maxScope: payload.scope,
+    browserBindingId: BROWSER_BINDING_ID,
   });
 }
 
-function buildRequest(state: string): NextRequest {
+function buildRequest(
+  state: string,
+  includeBrowserBinding = true,
+): NextRequest {
   const url = `http://localhost/callback?code=upstream-code&state=${encodeURIComponent(state)}`;
-  return new NextRequest(url, { method: 'GET' });
+  return new NextRequest(url, {
+    method: 'GET',
+    headers: includeBrowserBinding
+      ? {
+          cookie: `${authorizeBrowserCookieName(BROWSER_BINDING_ID)}=1`,
+        }
+      : undefined,
+  });
 }
 
 describe('/callback route integration', () => {
@@ -89,6 +103,19 @@ describe('/callback route integration', () => {
       updatedAt: Date.now(),
     } as never);
     vi.mocked(model.deleteClientAuthContext).mockResolvedValue(true);
+  });
+
+  it('rejects callback state completed in another browser', async () => {
+    const state = buildState();
+
+    const response = await GET(buildRequest(state, false));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_request',
+      error_description: 'Invalid state parameter',
+    });
+    expect(exchangeCode).not.toHaveBeenCalled();
   });
 
   it('uses persisted grant from KV and scope from authorize state', async () => {
@@ -224,6 +251,9 @@ describe('/callback route integration', () => {
     if (errorDescription) qs.set('error_description', errorDescription);
     return new NextRequest(`http://localhost/callback?${qs.toString()}`, {
       method: 'GET',
+      headers: {
+        cookie: `${authorizeBrowserCookieName(BROWSER_BINDING_ID)}=1`,
+      },
     });
   }
 

@@ -92,6 +92,7 @@ function parsePayload(value: unknown): DownstreamAuthRequest {
 function parseEnvelope(value: unknown): {
   exp: number;
   maxScope: string[];
+  browserBindingId: string;
   payload: DownstreamAuthRequest;
 } {
   if (typeof value !== 'object' || value === null) {
@@ -110,12 +111,20 @@ function parseEnvelope(value: unknown): {
   if (!('maxScope' in value) || !isStringArray(value.maxScope)) {
     throw new AuthorizeStateError();
   }
+  if (
+    !('browserBindingId' in value) ||
+    typeof value.browserBindingId !== 'string' ||
+    !/^[A-Za-z0-9_-]+$/.test(value.browserBindingId)
+  ) {
+    throw new AuthorizeStateError();
+  }
   if (!('payload' in value)) {
     throw new AuthorizeStateError();
   }
   return {
     exp: value.exp,
     maxScope: value.maxScope,
+    browserBindingId: value.browserBindingId,
     payload: parsePayload(value.payload),
   };
 }
@@ -127,11 +136,13 @@ function mac(body: string, secret: string): Buffer {
 export function signAuthorizeState({
   payload,
   maxScope,
+  browserBindingId,
   nowSeconds = Math.floor(Date.now() / 1000),
   ttlSeconds = AUTHORIZE_STATE_TTL_SECONDS,
 }: {
   payload: DownstreamAuthRequest;
   maxScope: string[];
+  browserBindingId: string;
   nowSeconds?: number;
   ttlSeconds?: number;
 }): string {
@@ -140,6 +151,7 @@ export function signAuthorizeState({
     v: 1 as const,
     exp: nowSeconds + ttlSeconds,
     maxScope,
+    browserBindingId,
     payload,
   };
   const body = Buffer.from(JSON.stringify(envelope), 'utf8').toString(
@@ -152,7 +164,11 @@ export function signAuthorizeState({
 export function verifyAuthorizeState(
   encoded: string,
   nowSeconds = Math.floor(Date.now() / 1000),
-): { payload: DownstreamAuthRequest; maxScope: string[] } {
+): {
+  payload: DownstreamAuthRequest;
+  maxScope: string[];
+  browserBindingId: string;
+} {
   const secret = cookieSecret();
   const separator = encoded.lastIndexOf('.');
   if (separator <= 0 || separator === encoded.length - 1) {
@@ -182,5 +198,9 @@ export function verifyAuthorizeState(
       'This authorization request has expired. Start the connection again from your MCP client.',
     );
   }
-  return { payload: envelope.payload, maxScope: envelope.maxScope };
+  return {
+    payload: envelope.payload,
+    maxScope: envelope.maxScope,
+    browserBindingId: envelope.browserBindingId,
+  };
 }

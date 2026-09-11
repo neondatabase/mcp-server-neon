@@ -235,7 +235,7 @@ test.describe('OAuth register and authorize contract', () => {
     }
   });
 
-  test('Cursor mixed payload keeps loopback and https, drops the custom scheme', async ({
+  test('Cursor mixed payload keeps every supported redirect', async ({
     request,
   }) => {
     const registerResponse = await request.post('/api/register', {
@@ -255,6 +255,7 @@ test.describe('OAuth register and authorize contract', () => {
     expect(registerBody.redirect_uris).toEqual([
       'http://localhost:8787/callback',
       'https://www.cursor.com/agents/mcp/oauth/callback',
+      'cursor://anysphere.cursor-mcp/oauth/callback',
     ]);
 
     const loopbackAuthorize = await request.get('/api/authorize', {
@@ -291,16 +292,19 @@ test.describe('OAuth register and authorize contract', () => {
       },
       maxRedirects: 0,
     });
-    expect(customAuthorize.status()).toBe(400);
-    const customBody = (await customAuthorize.json()) as { error: string };
-    expect(customBody.error).toBe('invalid_request');
+    expect(customAuthorize.status()).toBe(200);
+    expect(await customAuthorize.text()).not.toContain(
+      'Check this redirect before authorizing',
+    );
   });
 
-  test('custom scheme alone is rejected at register', async ({ request }) => {
+  test('unsupported custom scheme is rejected at register', async ({
+    request,
+  }) => {
     const registerResponse = await request.post('/api/register', {
       data: {
         ...VALID_REGISTER_PAYLOAD,
-        redirect_uris: ['cursor://anysphere.cursor-mcp/oauth/callback'],
+        redirect_uris: ['cursor://attacker.example/oauth/callback'],
       },
     });
     expect(registerResponse.status()).toBe(400);

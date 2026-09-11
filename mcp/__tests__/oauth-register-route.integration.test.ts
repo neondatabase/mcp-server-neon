@@ -102,23 +102,34 @@ describe('/api/register route integration', () => {
     expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when every redirect_uri is a custom scheme', async () => {
+  it('registers the Cursor native callback used by current clients', async () => {
+    const redirectUri = 'cursor://anysphere.cursor-mcp/oauth/callback';
     const response = await POST(
       buildRequest({
         ...VALID_PAYLOAD,
-        redirect_uris: ['cursor://anysphere.cursor-mcp/oauth/callback'],
+        redirect_uris: [redirectUri],
       }),
     );
-    const body = (await response.json()) as {
-      error: string;
-      error_description: string;
-    };
+    const body = (await response.json()) as { redirect_uris: string[] };
+
+    expect(response.status).toBe(200);
+    expect(body.redirect_uris).toEqual([redirectUri]);
+    expect(vi.mocked(model.saveClient)).toHaveBeenCalledWith(
+      expect.objectContaining({ redirect_uris: [redirectUri] }),
+    );
+  });
+
+  it('returns 400 for an unsupported custom-scheme callback', async () => {
+    const response = await POST(
+      buildRequest({
+        ...VALID_PAYLOAD,
+        redirect_uris: ['cursor://attacker.example/oauth/callback'],
+      }),
+    );
+    const body = (await response.json()) as { error: string };
 
     expect(response.status).toBe(400);
     expect(body.error).toBe('invalid_redirect_uri');
-    expect(body.error_description).toContain(
-      'cursor://anysphere.cursor-mcp scheme_not_allowed',
-    );
     expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
   });
 
@@ -203,27 +214,24 @@ describe('/api/register route integration', () => {
     }
   });
 
-  it('drops cursor:// from a mixed Cursor payload and stores the rest', async () => {
+  it('keeps the complete mixed Cursor payload', async () => {
+    const redirect_uris = [
+      'http://localhost:51234/oauth/callback',
+      'https://www.cursor.com/agents/mcp/oauth/callback',
+      'cursor://anysphere.cursor-mcp/oauth/callback',
+    ];
     const response = await POST(
       buildRequest({
         ...VALID_PAYLOAD,
-        redirect_uris: [
-          'http://localhost:51234/oauth/callback',
-          'https://www.cursor.com/agents/mcp/oauth/callback',
-          'cursor://anysphere.cursor-mcp/oauth/callback',
-        ],
+        redirect_uris,
       }),
     );
     const body = (await response.json()) as { redirect_uris: string[] };
-    const stored = [
-      'http://localhost:51234/oauth/callback',
-      'https://www.cursor.com/agents/mcp/oauth/callback',
-    ];
 
     expect(response.status).toBe(200);
-    expect(body.redirect_uris).toEqual(stored);
+    expect(body.redirect_uris).toEqual(redirect_uris);
     expect(vi.mocked(model.saveClient)).toHaveBeenCalledWith(
-      expect.objectContaining({ redirect_uris: stored }),
+      expect.objectContaining({ redirect_uris }),
     );
   });
 

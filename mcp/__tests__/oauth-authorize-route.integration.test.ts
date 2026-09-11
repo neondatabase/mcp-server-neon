@@ -7,6 +7,7 @@ import {
   signAuthorizeState,
   verifyAuthorizeState,
 } from '../../lib/oauth/authorize-state';
+import { authorizeBrowserCookieName } from '../../lib/oauth/authorize-browser-binding';
 
 vi.mock('../oauth/model', () => ({
   model: {
@@ -29,6 +30,7 @@ const VALID_CLIENT = {
   tokenEndpointAuthMethod: 'none',
   secret: '',
 };
+const BROWSER_BINDING_ID = 'test-browser-binding';
 
 function buildAuthorizeRequest(
   headers: Record<string, string> = {},
@@ -95,6 +97,7 @@ function buildApproveRequest(
       ...extraPayload,
     },
     maxScope: requestedScopes,
+    browserBindingId: BROWSER_BINDING_ID,
   });
   const form = new FormData();
   form.set('state', state);
@@ -103,7 +106,10 @@ function buildApproveRequest(
   }
   return new NextRequest('http://localhost/api/authorize', {
     method: 'POST',
-    headers,
+    headers: {
+      cookie: `${authorizeBrowserCookieName(BROWSER_BINDING_ID)}=1`,
+      ...headers,
+    },
     body: form,
   });
 }
@@ -145,6 +151,7 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(200);
     expect(writeCheckbox).not.toContain('checked');
+    expect(writeCheckbox).toContain('disabled');
   });
 
   it('defaults Full access to unchecked when readonly query param is true', async () => {
@@ -158,6 +165,7 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(200);
     expect(writeCheckbox).not.toContain('checked');
+    expect(writeCheckbox).toContain('disabled');
   });
 
   it('defaults Full access to unchecked when readonly=true is passed via resource query', async () => {
@@ -171,6 +179,7 @@ describe('/api/authorize route integration', () => {
 
     expect(response.status).toBe(200);
     expect(writeCheckbox).not.toContain('checked');
+    expect(writeCheckbox).toContain('disabled');
   });
 
   it('defaults Full access to unchecked from saved register x-read-only header', async () => {
@@ -272,6 +281,31 @@ describe('/api/authorize route integration', () => {
     expect(html).toContain('Claimed name:');
     expect(html).toContain('Redirect destination:');
     expect(html).toContain('http://127.0.0.1:55667/callback');
+    expect(response.headers.get('set-cookie')).toContain('neon_oauth_');
+    expect(upstreamAuth).not.toHaveBeenCalled();
+  });
+
+  it('rejects signed consent state from another browser', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const state = extractEncodedState(await getResponse.text());
+    const form = new FormData();
+    form.set('state', state);
+    form.append('scopes', 'read');
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/authorize', {
+        method: 'POST',
+        headers: { origin: 'http://localhost' },
+        body: form,
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_request',
+      error_description:
+        'Invalid authorize state. Start the connection again from your MCP client.',
+    });
     expect(upstreamAuth).not.toHaveBeenCalled();
   });
 

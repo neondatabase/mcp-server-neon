@@ -14,17 +14,26 @@ import { logger } from '../../mcp/utils/logger';
 import type { AuthorizationCode } from 'oauth2-server';
 import {
   AuthorizeStateConfigError,
+  AuthorizeStateError,
   verifyAuthorizeState,
   type DownstreamAuthRequest,
 } from '../../lib/oauth/authorize-state';
+import { hasAuthorizeBrowserBinding } from '../../lib/oauth/authorize-browser-binding';
 import {
   DEFAULT_GRANT,
   resolveGrantFromResourceUri,
   type GrantContext,
 } from '../../mcp/utils/grant-context';
 
-const decodeAuthParams = (state: string): DownstreamAuthRequest => {
-  return verifyAuthorizeState(state).payload;
+const decodeAuthParams = (
+  request: NextRequest,
+  state: string,
+): DownstreamAuthRequest => {
+  const verified = verifyAuthorizeState(state);
+  if (!hasAuthorizeBrowserBinding(request, verified.browserBindingId)) {
+    throw new AuthorizeStateError();
+  }
+  return verified.payload;
 };
 
 const toMilliseconds = (seconds: number): number => seconds * 1000;
@@ -354,7 +363,7 @@ export async function GET(request: NextRequest) {
 
       if (state) {
         try {
-          const requestParams = decodeAuthParams(state);
+          const requestParams = decodeAuthParams(request, state);
           const redirectUrl = buildClientErrorRedirect(
             requestParams,
             upstreamError,
@@ -461,7 +470,7 @@ export async function GET(request: NextRequest) {
 
     let requestParams: DownstreamAuthRequest;
     try {
-      requestParams = decodeAuthParams(state);
+      requestParams = decodeAuthParams(request, state);
       clientIdForSlo = requestParams.clientId;
     } catch (decodeErr) {
       if (decodeErr instanceof AuthorizeStateConfigError) {

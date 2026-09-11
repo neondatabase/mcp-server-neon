@@ -25,6 +25,11 @@ import {
   type DownstreamAuthRequest,
 } from '../../../lib/oauth/authorize-state';
 import {
+  createAuthorizeBrowserBindingId,
+  hasAuthorizeBrowserBinding,
+  setAuthorizeBrowserBinding,
+} from '../../../lib/oauth/authorize-browser-binding';
+import {
   DEFAULT_GRANT,
   resolveGrantFromResourceUri,
   type GrantContext,
@@ -98,9 +103,8 @@ function renderScopeSection(
   requestedScopes: string[],
   defaultReadOnly: boolean,
 ): string {
-  const writeChecked =
-    !defaultReadOnly &&
-    (requestedScopes.length === 0 || hasWriteScope(requestedScopes));
+  const writeAllowed = hasWriteScope(requestedScopes);
+  const writeChecked = !defaultReadOnly && writeAllowed;
 
   // Read access is always granted (hidden input ensures it's submitted)
   let html = `<input type="hidden" name="scopes" value="read" />`;
@@ -122,6 +126,7 @@ function renderScopeSection(
         name="scopes"
         value="write"
         ${writeChecked ? 'checked' : ''}
+        ${writeAllowed ? '' : 'disabled'}
         class="scope-checkbox"
       />
       <div class="scope-info">
@@ -637,16 +642,20 @@ export async function GET(request: NextRequest) {
       readOnly: !hasWriteScope(effectiveScopes),
     });
 
-    return renderApprovalDialog(
+    const browserBindingId = createAuthorizeBrowserBindingId();
+    const response = renderApprovalDialog(
       client,
       signAuthorizeState({
         payload: requestParams,
         maxScope: effectiveScopes,
+        browserBindingId,
       }),
       effectiveScopes,
       defaultReadOnly,
       requestParams.redirectUri,
     );
+    setAuthorizeBrowserBinding(response, request, browserBindingId);
+    return response;
   } catch (error: unknown) {
     return mapAuthorizeError(error, 'Authorization error');
   }
@@ -680,8 +689,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { payload: requestParams, maxScope } =
-      verifyAuthorizeState(stateValue);
+    const {
+      payload: requestParams,
+      maxScope,
+      browserBindingId,
+    } = verifyAuthorizeState(stateValue);
+    if (!hasAuthorizeBrowserBinding(request, browserBindingId)) {
+      throw new AuthorizeStateError();
+    }
 
     const client = await model.getClient(requestParams.clientId, '');
     if (!client) {
@@ -753,9 +768,12 @@ export async function POST(request: NextRequest) {
     const updatedState = signAuthorizeState({
       payload: requestParams,
       maxScope: grantedScopes,
+      browserBindingId,
     });
     const authUrl = await upstreamAuth(updatedState);
-    return NextResponse.redirect(authUrl.href);
+    const response = NextResponse.redirect(authUrl.href);
+    setAuthorizeBrowserBinding(response, request, browserBindingId);
+    return response;
   } catch (error: unknown) {
     return mapAuthorizeError(error, 'Authorization error');
   }

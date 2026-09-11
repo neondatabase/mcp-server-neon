@@ -13,6 +13,7 @@ const payload = {
   scope: ['read', 'write'],
   state: 'client-state',
 };
+const browserBindingId = 'test-browser-binding';
 
 describe('authorize state', () => {
   afterEach(() => {
@@ -24,10 +25,12 @@ describe('authorize state', () => {
     const encoded = signAuthorizeState({
       payload,
       maxScope: ['read', 'write'],
+      browserBindingId,
     });
     const verified = verifyAuthorizeState(encoded);
     expect(verified.payload).toEqual(payload);
     expect(verified.maxScope).toEqual(['read', 'write']);
+    expect(verified.browserBindingId).toBe(browserBindingId);
   });
 
   it('rejects a tampered mac', () => {
@@ -35,6 +38,7 @@ describe('authorize state', () => {
     const encoded = signAuthorizeState({
       payload,
       maxScope: ['read'],
+      browserBindingId,
     });
     const [body, signature] = encoded.split('.');
     const tamperedBody = body.startsWith('A')
@@ -57,6 +61,7 @@ describe('authorize state', () => {
     const encoded = signAuthorizeState({
       payload,
       maxScope: ['read'],
+      browserBindingId,
       nowSeconds: 1_000,
       ttlSeconds: 10,
     });
@@ -66,8 +71,12 @@ describe('authorize state', () => {
   });
 
   it('fails closed when COOKIE_SECRET is missing', () => {
-    expect(() => signAuthorizeState({ payload, maxScope: ['read'] })).toThrow(
-      AuthorizeStateConfigError,
-    );
+    expect(() =>
+      signAuthorizeState({
+        payload,
+        maxScope: ['read'],
+        browserBindingId,
+      }),
+    ).toThrow(AuthorizeStateConfigError);
   });
 });

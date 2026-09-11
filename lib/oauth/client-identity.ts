@@ -1,4 +1,4 @@
-import { isLoopbackHost } from './redirect-uri';
+import { isLoopbackHost, isSupportedNativeRedirectUri } from './redirect-uri';
 
 type TrustedOAuthPartner = {
   nameMatchers: readonly string[];
@@ -83,6 +83,12 @@ export function getOAuthImpersonationWarning({
   }
 
   if (isLoopbackHost(parsed.hostname)) {
+    return undefined;
+  }
+  if (
+    partner.displayName === 'Cursor' &&
+    isSupportedNativeRedirectUri(redirectUri)
+  ) {
     return undefined;
   }
   if (
