@@ -104,6 +104,43 @@ test.describe('OAuth register and authorize contract', () => {
     });
   });
 
+  test('long redirect hosts do not overflow a mobile consent page', async ({
+    page,
+    request,
+  }) => {
+    const redirectHost = `cursor.com.${'a'.repeat(63)}.example`;
+    const redirectUri = `https://${redirectHost}/oauth/callback`;
+    const registerResponse = await request.post('/api/register', {
+      data: {
+        ...VALID_REGISTER_PAYLOAD,
+        client_name: 'Cursor',
+        redirect_uris: [redirectUri],
+      },
+    });
+    expect(registerResponse.status()).toBe(200);
+    const registerBody = (await registerResponse.json()) as RegisterResponse;
+    const authorizeUrl = new URL('/api/authorize', 'http://localhost');
+    authorizeUrl.searchParams.set('response_type', 'code');
+    authorizeUrl.searchParams.set('client_id', registerBody.client_id);
+    authorizeUrl.searchParams.set('redirect_uri', redirectUri);
+    authorizeUrl.searchParams.set('scope', 'read write');
+    authorizeUrl.searchParams.set('state', 'e2e-state');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${authorizeUrl.pathname}${authorizeUrl.search}`);
+
+    await expect(
+      page.getByText('Check this redirect before authorizing'),
+    ).toBeVisible();
+    const dimensions = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+    }));
+    expect(dimensions.documentWidth).toBeLessThanOrEqual(
+      dimensions.viewportWidth,
+    );
+  });
+
   test('registered client is accepted by authorize route', async ({
     request,
   }) => {

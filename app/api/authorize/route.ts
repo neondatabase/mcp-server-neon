@@ -245,6 +245,7 @@ const renderApprovalDialog = (
       font-size: 1.5rem;
       font-weight: 400;
       margin: 1rem 0;
+      overflow-wrap: anywhere;
       text-align: center;
     }
 
@@ -259,6 +260,7 @@ const renderApprovalDialog = (
       border-radius: 6px;
       color: var(--text-color);
       background-color: rgb(245 166 35 / 0.08);
+      overflow-wrap: anywhere;
     }
 
     .identity-warning-title {
