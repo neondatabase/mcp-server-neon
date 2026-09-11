@@ -142,32 +142,22 @@ export async function getDefaultDatabase(
 }
 
 /**
- * Resolves the organization ID for API calls that require org_id parameter.
+ * Resolves the organization for API calls that require `org_id`.
  *
- * For new users (those without billing_account), this function fetches user's organizations and auto-selects only organization managed by console. If there are multiple organizations managed by console, it throws an error asking user to specify org_id.
- *
- * For existing users (with billing_account), returns undefined to use default behavior.
- *
- * @param params - The parameters object that may contain org_id
- * @param neonClient - The Neon API client
- * @returns The organization to use, or undefined for default behavior
+ * Personal keys used to omit `org_id` when the user had a billing account.
+ * The API now requires it, so billed keys use the same picker as new users.
  */
 export async function getOrgByOrgIdOrDefault(
   params: { org_id?: string },
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
-): Promise<Organization | undefined> {
+): Promise<Organization> {
   // 1. If org_id is provided use it
   // 2. If using Org API key, use the account id
   if (params.org_id || extra.account.isOrg) {
     const orgId = params.org_id || extra.account.id;
     const { data } = await neonClient.getOrganization(orgId);
     return data;
-  }
-
-  const { data: user } = await neonClient.getCurrentUserInfo();
-  if (user.billing_account) {
-    return undefined;
   }
 
   const { data: response } = await neonClient.getCurrentUserOrganizations();
