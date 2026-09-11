@@ -25,13 +25,9 @@ function extra(
 
 function billedUserClient(organizations = [consoleOrg]) {
   return {
-    getCurrentUserInfo: vi.fn().mockResolvedValue({
-      data: { billing_account: { state: 'active' } },
-    }),
     getCurrentUserOrganizations: vi.fn().mockResolvedValue({
       data: { organizations },
     }),
-    getOrganization: vi.fn(),
     listProjects: vi.fn().mockResolvedValue({
       status: 200,
       statusText: 'OK',
@@ -55,7 +51,7 @@ describe('getOrgByOrgIdOrDefault', () => {
     await expect(
       getOrgByOrgIdOrDefault({}, neonClient as never, extra()),
     ).resolves.toMatchObject({ id: 'org-console' });
-    expect(neonClient.getOrganization).not.toHaveBeenCalled();
+    expect(neonClient.getCurrentUserOrganizations).toHaveBeenCalledOnce();
   });
 
   it('lists orgs when a billed personal key has more than one', async () => {
@@ -72,11 +68,8 @@ describe('getOrgByOrgIdOrDefault', () => {
     ).rejects.toThrow(/org-console/);
   });
 
-  it('uses an explicit org_id without looking up the user', async () => {
+  it('uses an explicit org_id without looking up organizations', async () => {
     const neonClient = billedUserClient();
-    neonClient.getOrganization.mockResolvedValue({
-      data: { id: 'org-explicit', name: 'Explicit' },
-    });
 
     await expect(
       getOrgByOrgIdOrDefault(
@@ -84,8 +77,21 @@ describe('getOrgByOrgIdOrDefault', () => {
         neonClient as never,
         extra(),
       ),
-    ).resolves.toMatchObject({ id: 'org-explicit' });
-    expect(neonClient.getCurrentUserInfo).not.toHaveBeenCalled();
+    ).resolves.toEqual({ id: 'org-explicit' });
+    expect(neonClient.getCurrentUserOrganizations).not.toHaveBeenCalled();
+  });
+
+  it('uses the org API key account id without looking up organizations', async () => {
+    const neonClient = billedUserClient();
+
+    await expect(
+      getOrgByOrgIdOrDefault(
+        {},
+        neonClient as never,
+        extra({ id: 'org-from-key', name: 'Org Key', isOrg: true }),
+      ),
+    ).resolves.toEqual({ id: 'org-from-key' });
+    expect(neonClient.getCurrentUserOrganizations).not.toHaveBeenCalled();
   });
 });
 
@@ -124,5 +130,28 @@ describe('list_projects generated handler', () => {
 
     expect(fetchMock).toHaveBeenCalled();
     expect(requestUrl(fetchMock.mock.calls[0])).toContain('org_id=org-console');
+    expect(neonClient.getCurrentUserOrganizations).toHaveBeenCalledOnce();
+  });
+
+  it('sends an explicit org_id without looking up organizations', async () => {
+    const neonClient = billedUserClient();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ projects: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await NEON_HANDLERS.list_projects(
+      { params: { limit: 20, org_id: 'org-explicit' } },
+      neonClient as never,
+      extra(),
+    );
+
+    expect(neonClient.getCurrentUserOrganizations).not.toHaveBeenCalled();
+    expect(requestUrl(fetchMock.mock.calls[0])).toContain(
+      'org_id=org-explicit',
+    );
   });
 });
