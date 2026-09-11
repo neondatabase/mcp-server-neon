@@ -281,7 +281,13 @@ describe('/api/authorize route integration', () => {
     expect(html).toContain('Claimed name:');
     expect(html).toContain('Redirect destination:');
     expect(html).toContain('http://127.0.0.1:55667/callback');
-    expect(response.headers.get('set-cookie')).toContain('neon_oauth_');
+    const browserBindingCookie = response.headers.get('set-cookie');
+    expect(browserBindingCookie).toContain('__Host-neon_oauth_');
+    expect(browserBindingCookie).toContain('Path=/');
+    expect(browserBindingCookie).toContain('HttpOnly');
+    expect(browserBindingCookie).toContain('SameSite=lax');
+    expect(browserBindingCookie).toContain('Secure');
+    expect(browserBindingCookie).not.toContain('Domain=');
     expect(upstreamAuth).not.toHaveBeenCalled();
   });
 

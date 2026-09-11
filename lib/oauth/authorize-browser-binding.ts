@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
-const AUTHORIZE_BROWSER_COOKIE_PREFIX = 'neon_oauth_';
+const AUTHORIZE_BROWSER_COOKIE_PREFIX = '__Host-neon_oauth_';
 const AUTHORIZE_BROWSER_COOKIE_TTL_SECONDS = 30 * 60;
 
 export function createAuthorizeBrowserBindingId(): string {
@@ -21,7 +21,6 @@ export function hasAuthorizeBrowserBinding(
 
 export function setAuthorizeBrowserBinding(
   response: NextResponse,
-  request: NextRequest,
   browserBindingId: string,
 ): void {
   response.cookies.set(authorizeBrowserCookieName(browserBindingId), '1', {
@@ -29,6 +28,6 @@ export function setAuthorizeBrowserBinding(
     maxAge: AUTHORIZE_BROWSER_COOKIE_TTL_SECONDS,
     path: '/',
     sameSite: 'lax',
-    secure: request.nextUrl.protocol === 'https:',
+    secure: true,
   });
 }

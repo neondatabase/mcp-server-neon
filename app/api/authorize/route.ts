@@ -654,7 +654,7 @@ export async function GET(request: NextRequest) {
       defaultReadOnly,
       requestParams.redirectUri,
     );
-    setAuthorizeBrowserBinding(response, request, browserBindingId);
+    setAuthorizeBrowserBinding(response, browserBindingId);
     return response;
   } catch (error: unknown) {
     return mapAuthorizeError(error, 'Authorization error');
@@ -772,7 +772,7 @@ export async function POST(request: NextRequest) {
     });
     const authUrl = await upstreamAuth(updatedState);
     const response = NextResponse.redirect(authUrl.href);
-    setAuthorizeBrowserBinding(response, request, browserBindingId);
+    setAuthorizeBrowserBinding(response, browserBindingId);
     return response;
   } catch (error: unknown) {
     return mapAuthorizeError(error, 'Authorization error');

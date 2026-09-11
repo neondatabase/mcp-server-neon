@@ -91,6 +91,17 @@ test.describe('OAuth register and authorize contract', () => {
       page.getByText('https://www.cursor.com/agents/mcp/oauth/callback'),
     ).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    const browserBindingCookies = (await page.context().cookies()).filter(
+      (cookie) => cookie.name.startsWith('__Host-neon_oauth_'),
+    );
+    expect(browserBindingCookies).toHaveLength(1);
+    expect(browserBindingCookies[0]).toMatchObject({
+      domain: 'localhost',
+      httpOnly: true,
+      path: '/',
+      sameSite: 'Lax',
+      secure: true,
+    });
   });
 
   test('registered client is accepted by authorize route', async ({
