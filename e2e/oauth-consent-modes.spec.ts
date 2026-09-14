@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import {
   authorizePath,
   capture,
@@ -14,6 +14,21 @@ async function clearScreenshotInteractionState(page: Page): Promise<void> {
     }
   });
   await page.mouse.move(0, 0);
+}
+
+async function expectPersistentScrollbar(locator: Locator): Promise<void> {
+  const styles = await locator.evaluate((element) => ({
+    gutter: getComputedStyle(element).scrollbarGutter,
+    overflowY: getComputedStyle(element).overflowY,
+    scrollbarWidth: getComputedStyle(element).scrollbarWidth,
+    webkitWidth: getComputedStyle(element, '::-webkit-scrollbar').width,
+  }));
+  expect(styles).toEqual({
+    gutter: 'stable',
+    overflowY: 'scroll',
+    scrollbarWidth: 'thin',
+    webkitWidth: '10px',
+  });
 }
 
 test.describe('OAuth consent modes', () => {
@@ -291,18 +306,13 @@ test.describe('OAuth consent modes', () => {
       page.getByText(
         'With all projects selected, Search and Fetch remain available.',
       ),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(page.getByText('Search', { exact: true })).toBeVisible();
     await clearScreenshotInteractionState(page);
     await capture(page, 'B5-no-categories-all-projects');
     await page.getByText('One project', { exact: true }).click();
     await page.locator('input[name="projectId"]').fill('proj-example');
     await expect(page.getByText('None.')).toBeVisible();
-    await expect(
-      page.getByText(
-        'With all projects selected, Search and Fetch remain available.',
-      ),
-    ).toBeHidden();
     await clearScreenshotInteractionState(page);
     await capture(page, 'B5-no-categories-one-project');
   });
@@ -434,6 +444,7 @@ test.describe('OAuth consent modes', () => {
     await clearScreenshotInteractionState(page);
     await capture(page, 'T2-expanded');
     const toolScroll = page.locator('[data-tool-scroll]');
+    await expectPersistentScrollbar(toolScroll);
     await toolScroll.focus();
     await expect(toolScroll).toBeFocused();
     await page.keyboard.press('End');
@@ -461,6 +472,8 @@ test.describe('OAuth consent modes', () => {
 
     await page.setViewportSize({ width: 1280, height: 720 });
     await openAuthorize(page, request);
+    await expectPersistentScrollbar(page.locator('.card-body'));
+    await expectPersistentScrollbar(page.locator('[data-category-scroll]'));
     await page.getByRole('button', { name: 'View tools' }).click();
     const editableApprove = page.getByRole('button', {
       name: 'Approve and continue to Neon',
