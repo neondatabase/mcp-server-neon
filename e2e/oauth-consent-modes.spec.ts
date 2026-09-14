@@ -349,6 +349,26 @@ test.describe('OAuth consent modes', () => {
     await expect(page.locator('[data-tool-scroll]')).toBeVisible();
   });
 
+  test('B6 pressing Enter in Project ID approves instead of cancelling', async ({
+    page,
+    request,
+  }) => {
+    await openAuthorize(page, request);
+    await page.getByText('One project', { exact: true }).click();
+    const projectId = page.locator('input[name="projectId"]');
+    await projectId.fill('proj-example');
+
+    const submission = page.waitForRequest(
+      (candidate) =>
+        candidate.method() === 'POST' &&
+        new URL(candidate.url()).pathname === '/api/authorize',
+    );
+    await projectId.press('Enter');
+    const body = new URLSearchParams((await submission).postData() ?? '');
+
+    expect(body.get('action')).toBe('approve');
+  });
+
   test('B7 switching back to All projects keeps all-project access', async ({
     page,
     request,
