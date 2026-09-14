@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   consentCanonicalLocation,
+  InvalidRequestOriginError,
   requestPublicOrigin,
 } from '../oauth/consent-canonical-url';
 
@@ -33,6 +34,26 @@ describe('consentCanonicalLocation', () => {
         'http://localhost:3100',
       ),
     ).toBe('http://localhost:3100/api/authorize?x=1');
+  });
+
+  it('classifies a malformed request origin as invalid input', () => {
+    expect(() =>
+      consentCanonicalLocation(
+        'https://[',
+        '/api/authorize?client_id=abc',
+        'https://mcp.neon.tech',
+      ),
+    ).toThrow(InvalidRequestOriginError);
+  });
+
+  it('keeps malformed SERVER_HOST as a configuration error', () => {
+    expect(() =>
+      consentCanonicalLocation(
+        'https://mcp.neon.tech',
+        '/api/authorize?client_id=abc',
+        'https://[',
+      ),
+    ).toThrow(TypeError);
   });
 });
 

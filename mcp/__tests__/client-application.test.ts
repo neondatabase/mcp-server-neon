@@ -47,6 +47,18 @@ describe('detectClientApplication', () => {
     ['copilot/1.0.78 (win32 v24.18.1) term/vscode', 'github-copilot-cli'],
     ['grok-cli', 'grok-build'],
     ['grok-cli/1.2.3', 'grok-build'],
+    ['Grok', 'grok'],
+    ['grok-connectors-manager/0.1.0', 'grok'],
+    ['Devin', 'devin'],
+    ['Devin CLI', 'devin'],
+    ['Devin-MCP-Client/0.1.0', 'devin'],
+    ['Perplexity', 'perplexity'],
+    ['Perplexity-MCP/1.0', 'perplexity'],
+    ['Hermes Agent', 'hermes-agent'],
+    ['hermes-agent', 'hermes-agent'],
+    ['hermes-agent/0.1.0', 'hermes-agent'],
+    ['hermes', 'unknown'],
+    ['hermes-cli', 'unknown'],
     ['Kilo', 'kilo-code'],
     ['Kilo-Code', 'kilo-code'],
     ['kilo', 'kilo-code'],
@@ -55,7 +67,6 @@ describe('detectClientApplication', () => {
     ['Q-DEV-CLI', 'kiro-cli'],
     ['Q DEV CLI', 'kiro-cli'],
     ['Kiro CLI', 'kiro-cli'],
-    ['Grok', 'unknown'],
     ['Kimi', 'unknown'],
     ['kiro', 'unknown'],
     ['mcporter (neon)', 'mcporter'],
@@ -74,6 +85,8 @@ describe('detectClientApplication', () => {
     ['postfix', 'unknown'],
     ['buzzed', 'unknown'],
     ['grokking-mcp', 'unknown'],
+    ['grok-opencode', 'opencode'],
+    ['hermes-mcporter', 'mcporter'],
     ['Shikimori', 'unknown'],
     ['Sekiro', 'unknown'],
     ['node', 'unknown'],
@@ -97,6 +110,18 @@ describe('identifyClient', () => {
     expect(identifyClient('ChatGPT')).toEqual({
       clientName: 'ChatGPT',
       clientApplication: 'chatgpt',
+    });
+    expect(identifyClient('Devin-MCP-Client/0.1.0')).toEqual({
+      clientName: 'Devin-MCP-Client/0.1.0',
+      clientApplication: 'devin',
+    });
+    expect(identifyClient('grok-connectors-manager/0.1.0', 'Grok')).toEqual({
+      clientName: 'grok-connectors-manager/0.1.0',
+      clientApplication: 'grok',
+    });
+    expect(identifyClient('python-httpx')).toEqual({
+      clientName: 'python-httpx',
+      clientApplication: 'unknown',
     });
   });
 
@@ -132,6 +157,35 @@ describe('identifyClient', () => {
     expect(identifyClient('node', 'kimi-code (neon)')).toEqual({
       clientName: 'node',
       clientApplication: 'kimi-code',
+    });
+    expect(identifyClient('node', 'Devin')).toEqual({
+      clientName: 'node',
+      clientApplication: 'devin',
+    });
+    expect(identifyClient('python-httpx', 'Hermes Agent')).toEqual({
+      clientName: 'python-httpx',
+      clientApplication: 'hermes-agent',
+    });
+  });
+
+  it('keeps a recognized Grok CLI handshake over a Grok DCR name', () => {
+    expect(identifyClient('grok-cli', 'Grok')).toEqual({
+      clientName: 'grok-cli',
+      clientApplication: 'grok-build',
+    });
+  });
+
+  it('keeps a recognized Cursor handshake over a Grok DCR name', () => {
+    expect(identifyClient('Cursor', 'Grok')).toEqual({
+      clientName: 'Cursor',
+      clientApplication: 'cursor',
+    });
+  });
+
+  it('keeps a recognized Grok handshake over a Cursor DCR name', () => {
+    expect(identifyClient('Grok', 'Cursor')).toEqual({
+      clientName: 'Grok',
+      clientApplication: 'grok',
     });
   });
 

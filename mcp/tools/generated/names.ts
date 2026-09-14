@@ -87,6 +87,17 @@ export const PINNED_MCP_NAMES = {
   'functions.customDomains.register': 'register_functions_custom_domain',
   'functions.customDomains.delete': 'delete_functions_custom_domain',
 
+  'triggers.list': 'list_triggers',
+  'triggers.get': 'get_trigger',
+  'triggers.create': 'create_trigger',
+  'triggers.update': 'update_trigger',
+  'triggers.delete': 'delete_trigger',
+
+  'credentials.list': 'list_credentials',
+  'credentials.create': 'create_credential',
+  'credentials.revoke': 'revoke_credential',
+  'credentials.rotate': 'rotate_credential',
+
   'storage.get': 'get_storage',
   'storage.buckets.list': 'list_storage_buckets',
   'storage.buckets.create': 'create_storage_bucket',

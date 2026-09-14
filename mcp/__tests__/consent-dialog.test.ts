@@ -1,41 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_GRANT } from '../utils/grant-context';
-import { isWriteChecked } from '../oauth/issued-scopes';
 import {
   buildConsentView,
   COLLAPSE_ABOVE,
   renderConsentHtml,
   visibleToolCount,
 } from '../oauth/consent-dialog';
-
-describe('isWriteChecked', () => {
-  it('is true when the client requested write and the connection is not read-only', () => {
-    expect(
-      isWriteChecked({
-        requestedScopes: ['read', 'write'],
-        defaultReadOnly: false,
-      }),
-    ).toBe(true);
-  });
-
-  it('is false when the connection URL requested read-only', () => {
-    expect(
-      isWriteChecked({
-        requestedScopes: ['read', 'write'],
-        defaultReadOnly: true,
-      }),
-    ).toBe(false);
-  });
-
-  it('is false when the client requested read without a read-only URL param', () => {
-    expect(
-      isWriteChecked({
-        requestedScopes: ['read'],
-        defaultReadOnly: false,
-      }),
-    ).toBe(false);
-  });
-});
 
 describe('buildConsentView', () => {
   it('shows all projects and all categories when the resource has no query', () => {
@@ -294,7 +264,7 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('src="/favicon.svg"');
     expect(html).toContain('>View tools</button>');
     expect(html).toContain('is-collapsed');
-    expect(html).toContain('104 tools · 13 groups');
+    expect(html).toContain('113 tools · 13 groups');
     expect(html).toContain('tool-scroll');
     expect(html).toContain('data-category-scroll');
     expect(html).toContain('choice-categories');

@@ -60,6 +60,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
       context: {
         client: context.client,
         app: context.app,
+        clientName,
       },
     });
     logger.info('Server initialized:', {

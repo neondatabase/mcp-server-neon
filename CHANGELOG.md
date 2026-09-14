@@ -8,6 +8,10 @@ MCP transport:
 - Retire HTTP+SSE. `GET/POST /sse`, `/message`, `/api/sse`, and `/api/message` return `410 Gone` pointing at Streamable HTTP `/mcp`. The Redis session-binding module is removed with the transport.
 - Validate `Origin` on Streamable HTTP requests: a present-and-invalid Origin is `403`; a missing Origin is allowed (CLI and server-side clients).
 
+Scheduled function triggers (`list_triggers`, `get_trigger`, `create_trigger`, `update_trigger`, `delete_trigger`) under `?category=functions`, and branch credentials (`list_credentials`, `create_credential`, `revoke_credential`, `rotate_credential`) under `?category=branches`. Requires `@neon/tools` 1.3.0. `credentials.reveal` is not a tool.
+
+`clientApplication` on analytics events now classifies Devin, Perplexity, Hermes Agent, and Grok connector sessions. `grok-cli` stays `grok-build`.
+
 When the MCP handshake or User-Agent does not name a product (`node`, `undici`), `clientApplication` on analytics events falls back to the OAuth client's registered name.
 
 List, register, and delete branch custom domains: `list_functions_custom_domains`, `register_functions_custom_domain`, `delete_functions_custom_domain` (`?category=functions`). Requires `@neon/tools` 1.2.0.
