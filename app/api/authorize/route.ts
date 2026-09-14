@@ -7,6 +7,7 @@ import { logger } from '../../../mcp/utils/logger';
 import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
 import {
   consentCanonicalLocation,
+  InvalidRequestOriginError,
   requestPublicOrigin,
 } from '../../../mcp/oauth/consent-canonical-url';
 import {
@@ -290,6 +291,9 @@ export async function GET(request: NextRequest) {
       expiresAt: created.transaction.expiresAt,
     });
   } catch (error: unknown) {
+    if (error instanceof InvalidRequestOriginError) {
+      return jsonError('invalid_request', error.message);
+    }
     return handleOAuthError(error, 'Authorization error');
   }
 }

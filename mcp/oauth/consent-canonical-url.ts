@@ -22,13 +22,25 @@ export function requestPublicOrigin(request: {
   return `${proto}://${host}`;
 }
 
+export class InvalidRequestOriginError extends Error {
+  constructor() {
+    super('Invalid request origin');
+    this.name = 'InvalidRequestOriginError';
+  }
+}
+
 export function consentCanonicalLocation(
   requestOrigin: string,
   pathAndSearch: string,
   serverHost: string,
 ): string | undefined {
   const canonicalOrigin = new URL(serverHost).origin;
-  const incomingOrigin = new URL(requestOrigin).origin;
+  let incomingOrigin: string;
+  try {
+    incomingOrigin = new URL(requestOrigin).origin;
+  } catch {
+    throw new InvalidRequestOriginError();
+  }
   if (incomingOrigin === canonicalOrigin) {
     return undefined;
   }

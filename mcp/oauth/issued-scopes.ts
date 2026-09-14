@@ -8,16 +8,6 @@ export function oauthWriteAllowed(scope: string[]): boolean {
   return hasWriteScope(defaultRequestedScopes(scope));
 }
 
-export function isWriteChecked({
-  requestedScopes,
-  defaultReadOnly,
-}: {
-  requestedScopes: string[];
-  defaultReadOnly: boolean;
-}): boolean {
-  return !defaultReadOnly && oauthWriteAllowed(requestedScopes);
-}
-
 export function issuedOauthScopes({
   requestedScopes,
   grantWrite,

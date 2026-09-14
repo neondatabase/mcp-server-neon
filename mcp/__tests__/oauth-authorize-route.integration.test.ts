@@ -109,6 +109,20 @@ describe('/api/authorize route integration', () => {
     vi.mocked(model.getClientRegisterHeaders).mockResolvedValue(undefined);
   });
 
+  it.each(['host', 'x-forwarded-host'])(
+    'returns invalid_request for a malformed %s header',
+    async (header) => {
+      const response = await GET(buildAuthorizeRequest({ [header]: '[' }));
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: 'invalid_request',
+        error_description: 'Invalid request origin',
+      });
+      expect(model.getClient).not.toHaveBeenCalled();
+    },
+  );
+
   it('sets consent security headers', async () => {
     const response = await GET(buildAuthorizeRequest());
     expect(response.status).toBe(200);
