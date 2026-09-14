@@ -411,7 +411,7 @@ function renderEditableGrant({
           This page cannot list projects before you sign in.
         </p>
       </fieldset>
-      <section class="choice choice-categories" role="group" aria-labelledby="tool-categories-title" aria-describedby="base-tools-note">
+      <section class="choice choice-categories" role="group" aria-labelledby="tool-categories-title">
         <div class="choice-head">
           <h3 class="choice-title" id="tool-categories-title">Tool categories</h3>
           <div class="choice-actions">
@@ -422,9 +422,6 @@ function renderEditableGrant({
         <div class="check-grid" data-category-grid data-category-scroll>
           ${categoryBoxes}
         </div>
-        <p class="category-note" id="base-tools-note" data-base-tools-note${allSelected ? '' : ' hidden'}>
-          With all projects selected, Search and Fetch remain available.
-        </p>
       </section>
     </section>`;
 }
@@ -588,12 +585,10 @@ function consentScript(mode: ConsentMode): string {
       var one = document.querySelector('input[name="projectMode"][value="one"]');
       var field = document.querySelector('[data-project-id-field]');
       var help = document.querySelector('[data-project-id-help]');
-      var baseToolsNote = document.querySelector('[data-base-tools-note]');
       var input = document.querySelector('input[name="projectId"]');
       if (!(one instanceof HTMLInputElement) || !field) return;
       field.hidden = !one.checked;
       if (help) help.hidden = !one.checked;
-      if (baseToolsNote) baseToolsNote.hidden = one.checked;
       if (input instanceof HTMLInputElement) {
         input.disabled = !one.checked;
       }
@@ -737,6 +732,9 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       --line: #2a2a2a;
       --green: #00e599;
       --danger: #ff7d87;
+      --scrollbar-track: #242424;
+      --scrollbar-thumb: #737373;
+      --scrollbar-thumb-hover: #8a8a8a;
     }
 
     * { box-sizing: border-box; }
@@ -1066,12 +1064,6 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       overflow-wrap: anywhere;
     }
 
-    .category-note {
-      margin: 0.5rem 0 0;
-      color: var(--muted);
-      font-size: 0.75rem;
-    }
-
     .scope-checkbox, .check-option input, .choice input[type="radio"] {
       width: 1.05rem;
       height: 1.05rem;
@@ -1155,11 +1147,55 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
 
     .tool-scroll {
       max-height: min(12rem, 22dvh);
-      overflow-y: auto;
+      overflow-y: scroll;
       overscroll-behavior: contain;
       padding: 0.1rem 0.4rem 0.35rem 0;
+    }
+
+    .card-body, .client-meta, .check-grid, .tool-scroll {
+      scrollbar-gutter: stable;
       scrollbar-width: thin;
-      scrollbar-color: var(--line) transparent;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+
+    .card-body {
+      overflow-y: scroll;
+    }
+
+    .client-meta, .check-grid {
+      overflow-y: scroll;
+    }
+
+    .card-body::-webkit-scrollbar,
+    .client-meta::-webkit-scrollbar,
+    .check-grid::-webkit-scrollbar,
+    .tool-scroll::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .card-body::-webkit-scrollbar-track,
+    .client-meta::-webkit-scrollbar-track,
+    .check-grid::-webkit-scrollbar-track,
+    .tool-scroll::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+      border-radius: 999px;
+    }
+
+    .card-body::-webkit-scrollbar-thumb,
+    .client-meta::-webkit-scrollbar-thumb,
+    .check-grid::-webkit-scrollbar-thumb,
+    .tool-scroll::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      min-height: 2rem;
+      border: 2px solid var(--scrollbar-track);
+      border-radius: 999px;
+    }
+
+    .card-body::-webkit-scrollbar-thumb:hover,
+    .client-meta::-webkit-scrollbar-thumb:hover,
+    .check-grid::-webkit-scrollbar-thumb:hover,
+    .tool-scroll::-webkit-scrollbar-thumb:hover {
+      background: var(--scrollbar-thumb-hover);
     }
 
     .tool-block.is-collapsed .tool-scroll {

@@ -254,7 +254,7 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('data-category-select-all');
     expect(html).toContain('data-category-clear-all');
     expect(html).toContain('>Clear categories</button>');
-    expect(html).toContain(
+    expect(html).not.toContain(
       'With all projects selected, Search and Fetch remain available.',
     );
     expect(html).toContain('Allow writes');
