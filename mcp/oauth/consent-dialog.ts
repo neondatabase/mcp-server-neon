@@ -635,6 +635,20 @@ function consentScript(mode: ConsentMode): string {
       }
     }
 
+    var consentForm = document.getElementById('authorize-form');
+    var projectIdInput = document.querySelector('input[name="projectId"]');
+    var approveButton = document.querySelector('button[value="approve"]');
+    if (consentForm instanceof HTMLFormElement &&
+        projectIdInput instanceof HTMLInputElement &&
+        approveButton instanceof HTMLButtonElement) {
+      projectIdInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          consentForm.requestSubmit(approveButton);
+        }
+      });
+    }
+
     document.querySelectorAll('input[name="projectMode"], input[name="projectId"], input[name="category"], .scope-checkbox').forEach(function (input) {
       input.addEventListener('change', syncConsentUi);
       input.addEventListener('input', syncConsentUi);
