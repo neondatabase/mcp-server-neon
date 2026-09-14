@@ -265,8 +265,8 @@ function toolsSummary(view: ConsentView): string {
   return `${String(count)} ${toolWord} · ${String(groups)} ${groupWord}`;
 }
 
-function renderToolSections(view: ConsentView): string {
-  if (view.tools.length === 0) {
+function renderToolSections(view: ConsentView, interactive: boolean): string {
+  if (view.tools.length === 0 && !interactive) {
     return `
     <section class="panel panel-tools">
       <h2>Available tools</h2>
@@ -276,9 +276,10 @@ function renderToolSections(view: ConsentView): string {
   const collapse = visibleToolCount(view) > COLLAPSE_ABOVE;
   const body = `<div class="tool-scroll" data-tool-scroll tabindex="0" aria-label="Available tools">${renderToolGroupList(view.tools)}</div>`;
   const summary = toolsSummary(view);
-  const toggle = collapse
-    ? `<button type="button" class="tool-toggle" data-tool-toggle aria-expanded="false">View tools</button>`
-    : '';
+  const toggle =
+    collapse || interactive
+      ? `<button type="button" class="tool-toggle" data-tool-toggle aria-expanded="false"${collapse ? '' : ' hidden'}>View tools</button>`
+      : '';
   const collapsedAttr = collapse ? ' data-tools-collapsed' : '';
   return `
     <section class="panel panel-tools">
@@ -1299,7 +1300,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
         showWriteControl: props.showWriteControl,
         includeReadScope: props.mode === 'editable',
       })}
-      ${renderToolSections(view)}
+      ${renderToolSections(view, props.mode === 'editable')}
       </div>
       <div class="card-foot">
       <div class="actions">

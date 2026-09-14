@@ -326,6 +326,29 @@ test.describe('OAuth consent modes', () => {
     await capture(page, 'B6-missing-project-id');
   });
 
+  test('B6 recovering from a project error keeps a growing tool preview accessible', async ({
+    page,
+    request,
+  }) => {
+    await openAuthorize(page, request);
+    await page.getByText('One project', { exact: true }).click();
+    await page.getByRole('button', { name: 'Clear categories' }).click();
+    await page
+      .getByRole('button', { name: 'Approve and continue to Neon' })
+      .click();
+    await expect(
+      page.getByText('Enter the project ID this connection should use.'),
+    ).toBeVisible();
+
+    await page.locator('input[name="projectId"]').fill('proj-example');
+    await page.getByRole('button', { name: 'Select all' }).click();
+
+    const toggle = page.getByRole('button', { name: 'View tools' });
+    await expect(toggle).toBeVisible();
+    await toggle.click();
+    await expect(page.locator('[data-tool-scroll]')).toBeVisible();
+  });
+
   test('B7 switching back to All projects keeps all-project access', async ({
     page,
     request,
