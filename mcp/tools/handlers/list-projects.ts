@@ -12,7 +12,7 @@ export async function handleListProjects(
 
   const response = await neonClient.listProjects({
     ...params,
-    org_id: organization?.id,
+    org_id: organization.id,
   });
   if (response.status !== 200) {
     throw new Error(`Failed to list projects: ${response.statusText}`);
@@ -32,7 +32,7 @@ export async function handleListProjects(
     const allProjects = [];
     for (const org of organizations) {
       // Skip the default organization
-      if (organization?.id === org.id) {
+      if (organization.id === org.id) {
         continue;
       }
 
