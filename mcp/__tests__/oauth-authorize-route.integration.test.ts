@@ -123,6 +123,45 @@ describe('/api/authorize route integration', () => {
     },
   );
 
+  it.each([
+    ['application/json', '{}'],
+    ['text/plain', 'state=test'],
+  ])(
+    'returns invalid_request for consent submitted as %s',
+    async (contentType, body) => {
+      const response = await POST(
+        new NextRequest(`${SERVER_HOST}/api/authorize`, {
+          method: 'POST',
+          headers: { 'content-type': contentType },
+          body,
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: 'invalid_request',
+        error_description:
+          'Consent submission must use application/x-www-form-urlencoded or multipart/form-data',
+      });
+    },
+  );
+
+  it('returns invalid_request for malformed multipart consent data', async () => {
+    const response = await POST(
+      new NextRequest(`${SERVER_HOST}/api/authorize`, {
+        method: 'POST',
+        headers: { 'content-type': 'multipart/form-data' },
+        body: 'state=test',
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_request',
+      error_description: 'Invalid consent form data',
+    });
+  });
+
   it('sets consent security headers', async () => {
     const response = await GET(buildAuthorizeRequest());
     expect(response.status).toBe(200);

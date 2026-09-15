@@ -300,7 +300,24 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
+    const contentType =
+      request.headers.get('content-type')?.split(';', 1)[0].trim() ?? '';
+    if (
+      contentType !== 'application/x-www-form-urlencoded' &&
+      contentType !== 'multipart/form-data'
+    ) {
+      return jsonError(
+        'invalid_request',
+        'Consent submission must use application/x-www-form-urlencoded or multipart/form-data',
+      );
+    }
+
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      return jsonError('invalid_request', 'Invalid consent form data');
+    }
     const transactionId = readFormState(formData);
     if (!transactionId || !isAuthTransactionId(transactionId)) {
       return restartError();
