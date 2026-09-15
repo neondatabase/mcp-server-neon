@@ -102,6 +102,52 @@ describe('/api/register route integration', () => {
     expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
   });
 
+  it.each([
+    'https://client.example/callback',
+    'claude://claude.ai/oauth/callback',
+    'http://hermes.cobaltweb.dev/callback',
+  ])('normalizes scalar redirect URI %s', async (redirectUri) => {
+    const response = await POST(
+      buildRequest({ ...VALID_PAYLOAD, redirect_uris: redirectUri }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      redirect_uris: [redirectUri],
+    });
+    expect(vi.mocked(model.saveClient)).toHaveBeenCalledWith(
+      expect.objectContaining({ redirect_uris: [redirectUri] }),
+    );
+  });
+
+  it('keeps valid redirects from a mixed array', async () => {
+    const redirectUris = [
+      'https://client.example/callback',
+      42,
+      'custom://client/callback',
+    ];
+    const response = await POST(
+      buildRequest({ ...VALID_PAYLOAD, redirect_uris: redirectUris }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      redirect_uris: [
+        'https://client.example/callback',
+        'custom://client/callback',
+      ],
+    });
+  });
+
+  it('returns 400 when redirect_uris contains no strings', async () => {
+    const response = await POST(
+      buildRequest({ ...VALID_PAYLOAD, redirect_uris: [42, null] }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
+  });
+
   it('returns 400 when grant_types contains unsupported values', async () => {
     const response = await POST(
       buildRequest({

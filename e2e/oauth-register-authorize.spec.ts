@@ -31,6 +31,42 @@ test.describe('OAuth register and authorize contract', () => {
     );
   });
 
+  for (const redirectUri of [
+    'https://client.example/callback',
+    'claude://claude.ai/oauth/callback',
+    'http://hermes.cobaltweb.dev/callback',
+  ]) {
+    test(`scalar redirect ${redirectUri} registers and authorizes`, async ({
+      request,
+    }) => {
+      const registerResponse = await request.post('/api/register', {
+        data: {
+          ...VALID_REGISTER_PAYLOAD,
+          redirect_uris: redirectUri,
+        },
+      });
+      const registerBody: {
+        client_id: string;
+        redirect_uris: string[];
+      } = await registerResponse.json();
+
+      expect(registerResponse.status()).toBe(200);
+      expect(registerBody.redirect_uris).toEqual([redirectUri]);
+
+      const authorizeResponse = await request.get('/api/authorize', {
+        params: {
+          response_type: 'code',
+          client_id: registerBody.client_id,
+          redirect_uri: redirectUri,
+          scope: 'read write',
+          state: 'e2e-state',
+        },
+        maxRedirects: 0,
+      });
+      expect(authorizeResponse.status()).toBe(200);
+    });
+  }
+
   test('register with no read-only headers keeps Allow writes checked by default', async ({
     request,
   }) => {
