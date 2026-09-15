@@ -226,6 +226,7 @@ describe('getAccessControlNotices', () => {
     const notices = getAccessControlNotices(grant(), true);
     expect(notices).toHaveLength(1);
     expect(notices[0]).toContain('read-only permissions');
+    expect(notices[0]).toContain('authorizing again when using OAuth');
     expect(notices[0]).not.toContain('Write mode active');
   });
 

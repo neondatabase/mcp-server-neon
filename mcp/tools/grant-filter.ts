@@ -12,7 +12,7 @@ import type { NeonTool } from './tool-definition';
  * Tools that are always available regardless of scope categories.
  * These are discovery/navigation tools the LLM needs to function.
  */
-const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
+export const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
   'search',
   'fetch',
 ]);
@@ -125,7 +125,7 @@ export function getAccessControlNotices(
         'Connection strings are unavailable in this mode because they carry a privileged role password; ' +
         'if the user needs a DATABASE_URL, tell them to copy it from https://console.neon.tech. ' +
         'The user can remove read-only mode by removing the readonly query param from the MCP server URL, ' +
-        'or by logging out and back in with OAuth and selecting full access.',
+        'then authorizing again when using OAuth.',
     );
   } else {
     const hasExposedDestructive = getFilteredTools(grant, false).some(
