@@ -265,12 +265,17 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('>View tools</button>');
     expect(html).toContain('is-collapsed');
     expect(html).toContain('113 tools · 13 groups');
-    expect(html).toContain('tool-scroll');
-    expect(html).toContain('data-category-scroll');
+    expect(html).toContain('data-tool-content');
+    expect(html).toContain('data-category-disclosure');
+    expect(html).toContain('data-category-summary>All selected</span>');
     expect(html).toContain('choice-categories');
-    expect(html).toMatch(/\.check-grid\s*\{[^}]*overflow-y:\s*auto/);
+    expect(html).not.toMatch(/\.check-grid\s*\{[^}]*overflow-y/);
+    expect(html).toMatch(/\.card-body\s*\{[^}]*overflow-y:\s*auto/);
     expect(html).toMatch(
       /\.check-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2/,
+    );
+    expect(html).toMatch(
+      /<div class="card-body"[^>]*>\s*<header class="consent-header">/,
     );
     expect(html).not.toContain('history.replaceState');
   });
@@ -343,7 +348,7 @@ describe('renderConsentHtml', () => {
       formState: {
         projectMode: 'one',
         projectId: '',
-        categories: [],
+        categories: ['querying', 'schema'],
         writeChecked: false,
       },
     });
@@ -352,5 +357,6 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('aria-invalid="true"');
     expect(html).toContain('autofocus');
     expect(html).toContain('role="alert"');
+    expect(html).toContain('data-category-summary>2 of 12 selected</span>');
   });
 });
