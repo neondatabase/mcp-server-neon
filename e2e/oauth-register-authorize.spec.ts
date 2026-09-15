@@ -170,7 +170,7 @@ test.describe('OAuth register and authorize contract', () => {
     await expect(page.locator('[data-write-tool]').first()).toBeVisible();
   });
 
-  test('expanded tool list can scroll to Approve at 720px height', async ({
+  test('expanded tool list keeps Approve fixed at 720px height', async ({
     page,
     request,
   }) => {
@@ -190,11 +190,14 @@ test.describe('OAuth register and authorize contract', () => {
       name: 'Approve and continue to Neon',
     });
     await expect(approve).toBeInViewport();
-    const toolScroll = page.locator('[data-tool-scroll]');
-    const toolOverflows = await toolScroll.evaluate(
-      (el) => el.scrollHeight > el.clientHeight + 1,
+    await expect(page.locator('[data-tool-content]')).toHaveCSS(
+      'overflow-y',
+      'visible',
     );
-    expect(toolOverflows).toBe(true);
+    const bodyOverflows = await page
+      .locator('.card-body')
+      .evaluate((element) => element.scrollHeight > element.clientHeight + 1);
+    expect(bodyOverflows).toBe(true);
     await approve.focus();
     await expect(approve).toBeFocused();
   });
