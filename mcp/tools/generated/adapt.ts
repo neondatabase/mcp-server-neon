@@ -7,6 +7,7 @@ import { NEON_API_HOST } from '../../constants';
 import { fetchAsMcpServer } from '../../neon-client';
 import type { NeonTool } from '../tool-definition';
 import type { ToolHandlerExtended, ToolHandlers } from '../types';
+import { getOrgByOrgIdOrDefault } from '../utils';
 import { TOOL_NAMES } from './names';
 import {
   GENERATED_TOOL_IDS,
@@ -17,9 +18,14 @@ import {
 } from './operations';
 import { sanitizeGeneratedResult } from './sanitize';
 
-const LIST_PROJECTS_DESCRIPTION = `List Neon projects you own. Returns every page. Pass limit to cap how many. There is no \`cursor\` argument. Pass \`org_id\` with a personal API key to list that org's projects.`;
+const GENERATED_TOOLS_REQUIRING_ORG_ID = new Set<GeneratedToolId>([
+  'projects.list',
+  'projects.create',
+]);
 
-const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project and waits until the default compute is ready. Pass \`org_id\` with a personal API key. Does not return a connection string; call \`get_connection_string\` with the project id.`;
+const LIST_PROJECTS_DESCRIPTION = `List Neon projects you own. Returns every page. Pass limit to cap how many. There is no \`cursor\` argument. \`org_id\` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from.`;
+
+const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project and waits until the default compute is ready. \`org_id\` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from. Does not return a connection string; call \`get_connection_string\` with the project id.`;
 
 const DESCRIBE_PROJECT_DESCRIPTION = `Retrieves the project record (settings, compute, usage). Call \`list_branches\` for branches.`;
 
@@ -244,17 +250,43 @@ function jsonTextResult(data: unknown) {
   };
 }
 
+function orgIdArgs(parsed: unknown): { org_id?: string } {
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error('Generated tool input must be an object');
+  }
+  if (!('org_id' in parsed) || parsed.org_id === undefined) {
+    return {};
+  }
+  if (typeof parsed.org_id !== 'string') {
+    throw new Error('org_id must be a string');
+  }
+  return { org_id: parsed.org_id };
+}
+
 export function createGeneratedToolHandlers(): ToolHandlers {
   const tools = getGeneratedNeonTools();
   const handlers: ToolHandlers = {};
 
   for (const toolId of GENERATED_TOOL_IDS) {
     const tool = tools[toolId];
-    const handler: ToolHandlerExtended = async (args, _neonClient, extra) => {
+    const handler: ToolHandlerExtended = async (args, neonClient, extra) => {
       if (!extra?.apiKey) {
         throw new Error(`Tool ${tool.id} requires an API key`);
       }
-      const parsed = tool.inputSchema.parse(args?.params ?? {});
+      let parsed = tool.inputSchema.parse(args?.params ?? {});
+      if (GENERATED_TOOLS_REQUIRING_ORG_ID.has(toolId)) {
+        if (!neonClient) {
+          throw new Error(
+            `Tool ${tool.id} requires an authenticated Neon client`,
+          );
+        }
+        const organization = await getOrgByOrgIdOrDefault(
+          orgIdArgs(parsed),
+          neonClient,
+          extra,
+        );
+        parsed = { ...parsed, org_id: organization.id };
+      }
       const execute = tool.execute as (
         input: typeof parsed,
         context: { apiKey: string; signal?: AbortSignal },

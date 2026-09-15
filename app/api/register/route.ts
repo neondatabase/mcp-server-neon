@@ -89,9 +89,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (
-      payload.grant_types === undefined ||
-      !payload.grant_types.every((grant: string) =>
-        SUPPORTED_GRANT_TYPES.includes(grant),
+      !Array.isArray(payload.grant_types) ||
+      !payload.grant_types.every(
+        (grant: unknown) =>
+          typeof grant === 'string' && SUPPORTED_GRANT_TYPES.includes(grant),
       )
     ) {
       logger.warn('Client registration validation failed', {
@@ -108,9 +109,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (
-      payload.response_types === undefined ||
-      !payload.response_types.every((responseType: string) =>
-        SUPPORTED_RESPONSE_TYPES.includes(responseType),
+      !Array.isArray(payload.response_types) ||
+      !payload.response_types.every(
+        (responseType: unknown) =>
+          typeof responseType === 'string' &&
+          SUPPORTED_RESPONSE_TYPES.includes(responseType),
       )
     ) {
       logger.warn('Client registration validation failed', {

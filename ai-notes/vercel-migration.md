@@ -290,7 +290,7 @@ Required for Vercel deployment:
 | `UPSTREAM_OAUTH_HOST` | Neon OAuth provider URL                             |
 | `CLIENT_ID`           | OAuth client ID                                     |
 | `CLIENT_SECRET`       | OAuth client secret                                 |
-| `COOKIE_SECRET`       | HMAC secret for `/api/authorize` state              |
+| `COOKIE_SECRET`       | Secret for signed cookies                           |
 | `KV_URL`              | Redis URL for session storage (Vercel KV / Upstash) |
 | `REDIS_URL`           | Redis URL fallback for local development            |
 | `OAUTH_DATABASE_URL`  | Postgres URL for token storage                      |

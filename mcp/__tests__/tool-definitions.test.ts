@@ -467,7 +467,8 @@ describe('generated tool interface', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'list_projects');
     expect(tool!.description).toContain('Returns every page');
     expect(tool!.description).toContain('There is no `cursor` argument');
-    expect(tool!.description).toContain('org_id');
+    expect(tool!.description).toContain('`org_id` is optional');
+    expect(tool!.description).toContain('auto-select when unambiguous');
     expect(generatedShape(tool!)).not.toHaveProperty('cursor');
   });
 
@@ -508,6 +509,10 @@ describe('generated tool interface', () => {
     expect(generatedShape(createProject!)).toHaveProperty('name');
     expect(generatedShape(createProject!)).toHaveProperty('org_id');
     expect(generatedShape(createProject!)).not.toHaveProperty('pooled');
+    expect(createProject?.description).toContain('`org_id` is optional');
+    expect(createProject?.description).toContain(
+      'auto-select when unambiguous',
+    );
     expect(createProject?.description).toContain('get_connection_string');
     expect(createProject?.description).not.toContain(
       'returns a connection string',

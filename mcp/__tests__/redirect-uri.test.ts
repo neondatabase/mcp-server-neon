@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  admitDcrRedirectUris,
-  isDangerousRedirectUri,
-} from '../../lib/oauth/redirect-uri';
+import { admitDcrRedirectUris } from '../../lib/oauth/redirect-uri';
 
 describe('admitDcrRedirectUris', () => {
   it('admits loopback http and any https host', () => {
@@ -110,26 +107,5 @@ describe('admitDcrRedirectUris', () => {
       admitted: uris,
       rejected: [],
     });
-  });
-});
-
-describe('isDangerousRedirectUri', () => {
-  it('is true for schemes that must not be used as a browser redirect', () => {
-    expect(isDangerousRedirectUri('javascript:alert(1)')).toBe(true);
-    expect(isDangerousRedirectUri('data:text/html,x')).toBe(true);
-    expect(isDangerousRedirectUri('file:///etc/passwd')).toBe(true);
-    expect(isDangerousRedirectUri('blob:https://x/y')).toBe(true);
-    expect(isDangerousRedirectUri('vbscript:alert(1)')).toBe(true);
-    expect(isDangerousRedirectUri('about:blank')).toBe(true);
-    expect(isDangerousRedirectUri('not-a-url')).toBe(true);
-  });
-
-  it('is false for custom schemes, non-loopback http, https, and loopback', () => {
-    expect(
-      isDangerousRedirectUri('cursor://anysphere.cursor-mcp/oauth/callback'),
-    ).toBe(false);
-    expect(isDangerousRedirectUri('http://evil.example/cb')).toBe(false);
-    expect(isDangerousRedirectUri('https://a.b/c')).toBe(false);
-    expect(isDangerousRedirectUri('http://localhost:1/cb')).toBe(false);
   });
 });

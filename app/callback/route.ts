@@ -12,29 +12,16 @@ import { resolveAccountFromAuth } from '../../mcp/server/account';
 import { handleOAuthError } from '../../lib/errors';
 import { logger } from '../../mcp/utils/logger';
 import type { AuthorizationCode } from 'oauth2-server';
+import { authTransactions } from '../../mcp/oauth/auth-transaction-store';
 import {
-  AuthorizeStateConfigError,
-  AuthorizeStateError,
-  verifyAuthorizeState,
-  type DownstreamAuthRequest,
-} from '../../lib/oauth/authorize-state';
-import { hasAuthorizeBrowserBinding } from '../../lib/oauth/authorize-browser-binding';
-import {
-  DEFAULT_GRANT,
-  resolveGrantFromResourceUri,
-  type GrantContext,
-} from '../../mcp/utils/grant-context';
-
-const decodeAuthParams = (
-  request: NextRequest,
-  state: string,
-): DownstreamAuthRequest => {
-  const verified = verifyAuthorizeState(state);
-  if (!hasAuthorizeBrowserBinding(request, verified.browserBindingId)) {
-    throw new AuthorizeStateError();
-  }
-  return verified.payload;
-};
+  consentCookieClearOptions,
+  consentCookieName,
+  cookieSecureForRequest,
+  isAuthTransactionId,
+} from '../../mcp/oauth/browser-binding';
+import { AUTH_RESTART_DESCRIPTION } from '../../mcp/oauth/consent-html-headers';
+import type { DownstreamAuthRequest } from '../../mcp/oauth/downstream-auth-request';
+import type { AuthTransaction } from '../../mcp/oauth/auth-transaction';
 
 const toMilliseconds = (seconds: number): number => seconds * 1000;
 
@@ -96,8 +83,8 @@ const toMilliseconds = (seconds: number): number => seconds * 1000;
  *                                characterized — when a new fingerprint
  *                                shows up here often enough, promote it to
  *                                its own bucket (good or bad as appropriate).
- *  - `state_decode_failed`       Signed authorize state could not be
- *                                verified — missing, expired, or tampered.
+ *  - `state_decode_failed`       Our own base64/JSON state could not be
+ *                                parsed — our encoding broke or caller tampered.
  *  - `internal_error`            Everything else (KV failures, neon API
  *                                errors, unexpected throws).
  *
@@ -234,9 +221,8 @@ function emitAuthCallbackSlo(
  * we want enough fingerprint of what we forwarded to disambiguate the cause
  * without leaking the downstream state.
  *
- * NEVER logs the raw `state` value — only its length + a short prefix. State
- * is base64-encoded JSON containing the downstream client's params; leaking
- * even partial values could be replay-leverage if any of them are sensitive.
+ * NEVER logs the raw `state` value — only its length + a short prefix.
+ * State is an opaque authorization transaction id.
  */
 type DownstreamRequestSummary = {
   /** Length of the `state` query param we forwarded to Hydra. Hydra may
@@ -324,6 +310,40 @@ function buildClientErrorRedirect(
   return url;
 }
 
+function browserSecretFromRequest(
+  request: NextRequest,
+  transactionId: string,
+): string | undefined {
+  return request.cookies.get(consentCookieName(transactionId))?.value;
+}
+
+function clearTransactionCookie(
+  response: NextResponse,
+  transactionId: string,
+  request: NextRequest,
+): NextResponse {
+  response.cookies.set(
+    consentCookieName(transactionId),
+    '',
+    consentCookieClearOptions(cookieSecureForRequest(request)),
+  );
+  return response;
+}
+
+async function consumeBoundTransaction(
+  request: NextRequest,
+  state: string,
+): Promise<AuthTransaction | undefined> {
+  if (!isAuthTransactionId(state)) {
+    return undefined;
+  }
+  const browserSecret = browserSecretFromRequest(request, state);
+  if (!browserSecret) {
+    return undefined;
+  }
+  return authTransactions.consumeBound(state, browserSecret);
+}
+
 export async function GET(request: NextRequest) {
   const sloStartMs = Date.now();
   // Captured for the outer catch so an internal_error event carries a
@@ -363,7 +383,11 @@ export async function GET(request: NextRequest) {
 
       if (state) {
         try {
-          const requestParams = decodeAuthParams(request, state);
+          const bound = await consumeBoundTransaction(request, state);
+          if (!bound) {
+            throw new Error('invalid authorization transaction');
+          }
+          const requestParams = bound.request;
           const redirectUrl = buildClientErrorRedirect(
             requestParams,
             upstreamError,
@@ -400,11 +424,12 @@ export async function GET(request: NextRequest) {
             // all of them). See ai-notes/auth-callback-slo.md.
             downstreamRequest: summarizeDownstreamRequest(state, requestParams),
           });
-          return NextResponse.redirect(redirectUrl.href);
+          return clearTransactionCookie(
+            NextResponse.redirect(redirectUrl.href),
+            state,
+            request,
+          );
         } catch (decodeErr) {
-          if (decodeErr instanceof AuthorizeStateConfigError) {
-            throw decodeErr;
-          }
           // State decode failed — fall through to JSON 400 below.
           logger.warn('Failed to decode state while relaying upstream error', {
             upstreamError,
@@ -468,27 +493,53 @@ export async function GET(request: NextRequest) {
     const currentUrl = new URL(request.url);
     currentUrl.protocol = 'https:'; // Force HTTPS for production
 
-    let requestParams: DownstreamAuthRequest;
-    try {
-      requestParams = decodeAuthParams(request, state);
-      clientIdForSlo = requestParams.clientId;
-    } catch (decodeErr) {
-      if (decodeErr instanceof AuthorizeStateConfigError) {
-        throw decodeErr;
-      }
+    if (!isAuthTransactionId(state)) {
       logger.error('Failed to decode state at /callback', {
-        decodeErr:
-          decodeErr instanceof Error ? decodeErr.message : String(decodeErr),
+        reason: 'unsigned_or_malformed_state',
       });
       emitAuthCallbackSlo('state_decode_failed', sloStartMs);
       return NextResponse.json(
         {
           error: 'invalid_request',
-          error_description: 'Invalid state parameter',
+          error_description: AUTH_RESTART_DESCRIPTION,
         },
         { status: 400 },
       );
     }
+
+    const browserSecret = browserSecretFromRequest(request, state);
+    if (!browserSecret) {
+      emitAuthCallbackSlo('state_decode_failed', sloStartMs, {
+        reason: 'missing_browser_binding',
+      });
+      return NextResponse.json(
+        {
+          error: 'invalid_request',
+          error_description: AUTH_RESTART_DESCRIPTION,
+        },
+        { status: 400 },
+      );
+    }
+
+    const approved = await authTransactions.consumeApproved(
+      state,
+      browserSecret,
+    );
+    if (!approved) {
+      emitAuthCallbackSlo('state_decode_failed', sloStartMs, {
+        reason: 'transaction_not_approved',
+      });
+      return NextResponse.json(
+        {
+          error: 'invalid_request',
+          error_description: AUTH_RESTART_DESCRIPTION,
+        },
+        { status: 400 },
+      );
+    }
+
+    const requestParams = approved.request;
+    clientIdForSlo = requestParams.clientId;
 
     // Exchange the upstream authorization code for tokens. Wrapping the
     // call in its own try/catch lets us classify upstream failures into
@@ -585,37 +636,8 @@ export async function GET(request: NextRequest) {
     // Resolve account info (no identify here - happens in token exchange)
     const userInfo = await resolveAccountFromAuth(auth, neonClient);
 
-    const storedContext = await withPgConnectRetry(
-      'callback.getClientAuthContext',
-      () => model.getClientAuthContext(clientId),
-    );
-
-    // Scope comes from per-flow state because shared client IDs race on KV.
-    let grant: GrantContext = storedContext?.grant ?? { ...DEFAULT_GRANT };
-    if (!storedContext && requestParams.resource) {
-      try {
-        grant = resolveGrantFromResourceUri(requestParams.resource);
-      } catch {
-        emitAuthCallbackSlo('bad_request', sloStartMs, {
-          clientId,
-          reason: 'invalid_resource',
-        });
-        return NextResponse.json(
-          {
-            error: 'invalid_target',
-            error_description: 'Invalid resource parameter',
-          },
-          { status: 400 },
-        );
-      }
-    }
-    const stateScopes = requestParams.scope ?? [];
-    const finalScopes =
-      stateScopes.length > 0
-        ? stateScopes
-        : storedContext?.scope && storedContext.scope.length > 0
-          ? storedContext.scope
-          : [];
+    const grant = approved.approvedGrant;
+    const finalScopes = approved.approvedScopes;
 
     // Save the authorization code with associated data
     const authCodeData: AuthorizationCode = {
@@ -640,9 +662,6 @@ export async function GET(request: NextRequest) {
     await withPgConnectRetry('callback.saveAuthorizationCode', () =>
       model.saveAuthorizationCode(authCodeData),
     );
-    await withPgConnectRetry('callback.deleteClientAuthContext', () =>
-      model.deleteClientAuthContext(clientId),
-    );
 
     // Redirect back to client with auth code
     const redirectUrl = new URL(requestParams.redirectUri);
@@ -652,21 +671,12 @@ export async function GET(request: NextRequest) {
     }
 
     emitAuthCallbackSlo('success', sloStartMs, { clientId });
-    return NextResponse.redirect(redirectUrl.href);
+    return clearTransactionCookie(
+      NextResponse.redirect(redirectUrl.href),
+      state,
+      request,
+    );
   } catch (error: unknown) {
-    if (error instanceof AuthorizeStateConfigError) {
-      emitAuthCallbackSlo('internal_error', sloStartMs, {
-        clientId: clientIdForSlo,
-        reason: 'cookie_secret_unset',
-      });
-      return NextResponse.json(
-        {
-          error: 'server_error',
-          error_description: 'COOKIE_SECRET is not set',
-        },
-        { status: 500 },
-      );
-    }
     // Catch-all for anything not classified above (KV failures, neon API
     // errors, unexpected shapes from openid-client). Counts as bad. We
     // tag the reason field with a coarse fingerprint so dashboards can

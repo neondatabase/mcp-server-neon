@@ -102,6 +102,27 @@ describe('/api/register route integration', () => {
     expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
   });
 
+  it.each([
+    'http://127.0.0.1:55555/callback',
+    [],
+    [42],
+    { callback: 'http://127.0.0.1:55555/callback' },
+  ])(
+    'returns 400 when redirect_uris is not a nonempty string array',
+    async (redirect_uris) => {
+      const response = await POST(
+        buildRequest({ ...VALID_PAYLOAD, redirect_uris }),
+      );
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: 'invalid_request',
+        error_description: expect.stringContaining('redirect_uris'),
+      });
+      expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
+    },
+  );
+
   it('registers the Cursor native callback used by current clients', async () => {
     const redirectUri = 'cursor://anysphere.cursor-mcp/oauth/callback';
     const response = await POST(
@@ -274,6 +295,24 @@ describe('/api/register route integration', () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe('invalid_request');
     expect(body.error_description).toContain('grant_types');
+    expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['grant_types', 'authorization_code'],
+    ['grant_types', [42]],
+    ['response_types', 'code'],
+    ['response_types', [42]],
+  ])('returns 400 when %s is not a string array', async (field, value) => {
+    const response = await POST(
+      buildRequest({ ...VALID_PAYLOAD, [field]: value }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'invalid_request',
+      error_description: expect.stringContaining(field),
+    });
     expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
   });
 

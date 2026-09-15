@@ -9,15 +9,6 @@ const SUPPORTED_NATIVE_REDIRECT_URIS = new Set([
   'cursor://anysphere.cursor-mcp/oauth/callback',
 ]);
 
-const DANGEROUS_REDIRECT_PROTOCOLS = new Set([
-  'javascript:',
-  'data:',
-  'file:',
-  'blob:',
-  'vbscript:',
-  'about:',
-]);
-
 export function isLoopbackHost(host: string): boolean {
   return LOOPBACK_HOSTS.has(host.replace(/\.$/, '').toLowerCase());
 }
@@ -109,15 +100,6 @@ export function admitDcrRedirectUris(uris: string[]): DcrRedirectUriAdmission {
   }
 
   return { admitted, rejected };
-}
-
-/** Callback redirects with `new URL(redirectUri)`; javascript: or garbage 500s after Approve. */
-export function isDangerousRedirectUri(uri: string): boolean {
-  try {
-    return DANGEROUS_REDIRECT_PROTOCOLS.has(new URL(uri).protocol);
-  } catch {
-    return true;
-  }
 }
 
 function parseUri(uri: string) {

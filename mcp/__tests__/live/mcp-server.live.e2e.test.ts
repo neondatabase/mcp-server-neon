@@ -306,7 +306,6 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     async () => {
       const result = await callTool('create_project', {
         name: projectName,
-        org_id: testOrgId,
       });
       const text = assertToolSucceeded('create_project', result);
       const created = z.object({ id: z.string() }).parse(JSON.parse(text));

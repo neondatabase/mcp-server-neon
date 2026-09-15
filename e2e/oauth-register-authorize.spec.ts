@@ -1,146 +1,16 @@
 import { test, expect } from '@playwright/test';
+import {
+  authorizePath,
+  registerClient,
+  VALID_REGISTER_PAYLOAD,
+} from './oauth-helpers';
 
 type RegisterResponse = {
   client_id: string;
   client_secret: string;
 };
 
-const VALID_REGISTER_PAYLOAD = {
-  client_name: 'E2E OAuth Client',
-  client_uri: 'https://example.com',
-  redirect_uris: ['http://127.0.0.1:55667/callback'],
-  grant_types: ['authorization_code', 'refresh_token'],
-  response_types: ['code'],
-  token_endpoint_auth_method: 'none',
-};
-
-async function registerClient(
-  request: {
-    post: (
-      url: string,
-      options?: { data?: unknown; headers?: Record<string, string> },
-    ) => Promise<{
-      status: () => number;
-      json: () => Promise<unknown>;
-    }>;
-  },
-  headers: Record<string, string> = {},
-): Promise<RegisterResponse> {
-  const registerResponse = await request.post('/api/register', {
-    data: VALID_REGISTER_PAYLOAD,
-    headers,
-  });
-  expect(registerResponse.status()).toBe(200);
-  return (await registerResponse.json()) as RegisterResponse;
-}
-
-function extractWriteCheckbox(html: string): string {
-  const match = html.match(
-    /<input[\s\S]*?name="scopes"[\s\S]*?value="write"[\s\S]*?class="scope-checkbox"[\s\S]*?\/>/,
-  );
-  expect(match).toBeTruthy();
-  return match![0];
-}
-
 test.describe('OAuth register and authorize contract', () => {
-  test('consent shows the selected redirect and warns on a trusted-name mismatch', async ({
-    page,
-    request,
-  }) => {
-    const redirectUri = 'https://evil.example/oauth/callback?source=cursor';
-    const registerResponse = await request.post('/api/register', {
-      data: {
-        ...VALID_REGISTER_PAYLOAD,
-        client_name: 'Cursor',
-        client_uri: 'https://cursor.com',
-        redirect_uris: [
-          'https://www.cursor.com/agents/mcp/oauth/callback',
-          redirectUri,
-        ],
-      },
-    });
-    expect(registerResponse.status()).toBe(200);
-    const registerBody = (await registerResponse.json()) as RegisterResponse;
-    const authorizeUrl = new URL('/api/authorize', 'http://localhost');
-    authorizeUrl.searchParams.set('response_type', 'code');
-    authorizeUrl.searchParams.set('client_id', registerBody.client_id);
-    authorizeUrl.searchParams.set('redirect_uri', redirectUri);
-    authorizeUrl.searchParams.set('scope', 'read write');
-    authorizeUrl.searchParams.set('state', 'e2e-state');
-
-    await page.goto(`${authorizeUrl.pathname}${authorizeUrl.search}`);
-
-    await expect(
-      page.getByRole('heading', { name: 'Authorize evil.example' }),
-    ).toBeVisible();
-    await expect(page.getByText('Claimed name:')).toBeVisible();
-    await expect(page.getByText('Cursor', { exact: true })).toBeVisible();
-    await expect(page.getByText('Redirect destination:')).toBeVisible();
-    const destination = page.getByText(redirectUri, { exact: true });
-    await expect(destination).toBeVisible();
-    await expect(destination).not.toHaveAttribute('href');
-    await expect(
-      page.getByText('Check this redirect before authorizing'),
-    ).toBeVisible();
-    await expect(
-      page.getByText(
-        'This request uses the name Cursor, but after you authorize you will be redirected to evil.example, not Cursor.',
-      ),
-    ).toBeVisible();
-    await expect(
-      page.getByText('https://www.cursor.com/agents/mcp/oauth/callback'),
-    ).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Approve' })).toBeEnabled();
-    const browserBindingCookies = (await page.context().cookies()).filter(
-      (cookie) => cookie.name.startsWith('__Host-neon_oauth_'),
-    );
-    expect(browserBindingCookies).toHaveLength(1);
-    expect(browserBindingCookies[0]).toMatchObject({
-      domain: 'localhost',
-      httpOnly: true,
-      path: '/',
-      sameSite: 'Lax',
-      secure: true,
-    });
-  });
-
-  test('long redirect hosts do not overflow a mobile consent page', async ({
-    page,
-    request,
-  }) => {
-    const redirectHost = `cursor.com.${'a'.repeat(63)}.example`;
-    const redirectUri = `https://${redirectHost}/oauth/callback`;
-    const registerResponse = await request.post('/api/register', {
-      data: {
-        ...VALID_REGISTER_PAYLOAD,
-        client_name: 'Cursor',
-        redirect_uris: [redirectUri],
-      },
-    });
-    expect(registerResponse.status()).toBe(200);
-    const registerBody = (await registerResponse.json()) as RegisterResponse;
-    const authorizeUrl = new URL('/api/authorize', 'http://localhost');
-    authorizeUrl.searchParams.set('response_type', 'code');
-    authorizeUrl.searchParams.set('client_id', registerBody.client_id);
-    authorizeUrl.searchParams.set('redirect_uri', redirectUri);
-    authorizeUrl.searchParams.set('scope', 'read write');
-    authorizeUrl.searchParams.set('state', 'e2e-state');
-
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`${authorizeUrl.pathname}${authorizeUrl.search}`);
-
-    await expect(
-      page.getByText('Check this redirect before authorizing'),
-    ).toBeVisible();
-    const dimensions = await page.evaluate(() => ({
-      documentWidth: document.documentElement.scrollWidth,
-      viewportWidth: window.innerWidth,
-    }));
-    expect(dimensions.documentWidth).toBeLessThanOrEqual(
-      dimensions.viewportWidth,
-    );
-  });
-
   test('registered client is accepted by authorize route', async ({
     request,
   }) => {
@@ -160,9 +30,13 @@ test.describe('OAuth register and authorize contract', () => {
     });
 
     expect(authorizeResponse.status()).toBe(200);
+    expect(authorizeResponse.headers()['x-frame-options']).toBe('DENY');
+    expect(authorizeResponse.headers()['content-security-policy']).toBe(
+      "frame-ancestors 'none'",
+    );
   });
 
-  test('register with no read-only headers keeps Full access checked by default', async ({
+  test('register with no read-only headers keeps Allow writes checked by default', async ({
     request,
   }) => {
     const registerBody = await registerClient(request);
@@ -180,11 +54,10 @@ test.describe('OAuth register and authorize contract', () => {
 
     expect(authorizeResponse.status()).toBe(200);
     const body = await authorizeResponse.text();
-    const writeCheckbox = extractWriteCheckbox(body);
-    expect(writeCheckbox).toContain('checked');
+    expect(body).toMatch(/class="scope-checkbox"[\s\S]*?checked/);
   });
 
-  test('register x-read-only=true defaults Full access to unchecked on authorize', async ({
+  test('register x-read-only=true defaults Allow writes to unchecked on authorize', async ({
     request,
   }) => {
     const registerBody = await registerClient(request, {
@@ -204,8 +77,315 @@ test.describe('OAuth register and authorize contract', () => {
 
     expect(authorizeResponse.status()).toBe(200);
     const body = await authorizeResponse.text();
-    const writeCheckbox = extractWriteCheckbox(body);
+    const writeCheckbox = body.match(
+      /<input\s+type="checkbox"\s+name="scopes"\s+value="write"[\s\S]*?\/>/,
+    )?.[0];
+    expect(writeCheckbox).toBeTruthy();
     expect(writeCheckbox).not.toContain('checked');
+  });
+
+  test('parameterized resource is a fixed confirmation', async ({
+    request,
+  }) => {
+    const registerBody = await registerClient(request);
+    const resource =
+      'https://mcp.neon.tech/mcp?projectId=proj-e2e&category=querying&readonly=true';
+
+    const authorizeResponse = await request.get('/api/authorize', {
+      params: {
+        response_type: 'code',
+        client_id: registerBody.client_id,
+        redirect_uri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
+        scope: 'read write',
+        state: 'e2e-state',
+        resource,
+      },
+      maxRedirects: 0,
+    });
+
+    expect(authorizeResponse.status()).toBe(200);
+    const body = await authorizeResponse.text();
+    expect(body).toContain('proj-e2e');
+    expect(body).toContain('Querying');
+    expect(body).toContain(
+      'To change these limits, update the connection URL and authorize again.',
+    );
+    expect(body).not.toContain('class="scope-checkbox"');
+    expect(body).not.toContain('name="projectMode"');
+  });
+
+  test('resource readonly=false stays writable despite registration x-read-only', async ({
+    request,
+  }) => {
+    const registerBody = await registerClient(request, {
+      'x-read-only': 'true',
+    });
+    const resource = 'https://mcp.neon.tech/mcp?readonly=false';
+
+    const authorizeResponse = await request.get('/api/authorize', {
+      params: {
+        response_type: 'code',
+        client_id: registerBody.client_id,
+        redirect_uri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
+        scope: 'read write',
+        state: 'e2e-state',
+        resource,
+      },
+      maxRedirects: 0,
+    });
+
+    expect(authorizeResponse.status()).toBe(200);
+    const body = await authorizeResponse.text();
+    expect(body).toContain('Read and write');
+    expect(body).not.toContain('class="scope-checkbox"');
+    expect(body).not.toContain('name="projectMode"');
+  });
+
+  test('toggling Allow writes hides write tools on the editable default grant', async ({
+    page,
+    request,
+  }) => {
+    const registerBody = await registerClient(request);
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: registerBody.client_id,
+      redirect_uri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
+      scope: 'read write',
+      state: 'e2e-toggle',
+      resource: 'https://mcp.neon.tech/mcp',
+    });
+
+    await page.goto(`/api/authorize?${params.toString()}`);
+
+    const checkbox = page.locator('.scope-checkbox');
+    await expect(checkbox).toBeChecked();
+    const show = page.getByRole('button', { name: 'View tools' });
+    if (await show.isVisible()) {
+      await show.click();
+    }
+    await expect(page.locator('[data-access-mode]')).toHaveText(
+      'Read and write',
+    );
+
+    await checkbox.uncheck();
+    await expect(page.locator('[data-access-mode]')).toHaveText('Read-only');
+    await expect(page.locator('[data-write-tool]').first()).toBeHidden();
+
+    await checkbox.check();
+    await expect(page.locator('[data-write-tool]').first()).toBeVisible();
+  });
+
+  test('expanded tool list keeps Approve fixed at 720px height', async ({
+    page,
+    request,
+  }) => {
+    const registerBody = await registerClient(request);
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: registerBody.client_id,
+      redirect_uri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
+      scope: 'read write',
+      state: 'e2e-scroll',
+    });
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto(`/api/authorize?${params.toString()}`);
+    await page.getByRole('button', { name: 'View tools' }).click();
+    const approve = page.getByRole('button', {
+      name: 'Approve and continue to Neon',
+    });
+    await expect(approve).toBeInViewport();
+    await expect(page.locator('[data-tool-content]')).toHaveCSS(
+      'overflow-y',
+      'visible',
+    );
+    const bodyOverflows = await page
+      .locator('.card-body')
+      .evaluate((element) => element.scrollHeight > element.clientHeight + 1);
+    expect(bodyOverflows).toBe(true);
+    await approve.focus();
+    await expect(approve).toBeFocused();
+  });
+
+  test('Cancel sends access_denied to the client redirect', async ({
+    page,
+    request,
+  }) => {
+    const registerBody = await registerClient(request);
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: registerBody.client_id,
+      redirect_uri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
+      scope: 'read write',
+      state: 'e2e-cancel',
+    });
+    await page.goto(`/api/authorize?${params.toString()}`);
+    const responsePromise = page.waitForResponse(
+      (res) =>
+        res.request().method() === 'POST' &&
+        res.url().includes('/api/authorize'),
+    );
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    const response = await responsePromise;
+    expect(response.status()).toBe(303);
+    const location = response.headers()['location'] ?? '';
+    expect(location).toContain('error=access_denied');
+    expect(location).toContain('state=e2e-cancel');
+  });
+
+  test('Cancel from an empty one-project form still redirects', async ({
+    page,
+    request,
+  }) => {
+    const registerBody = await registerClient(request);
+    await page.goto(
+      authorizePath(registerBody, { state: 'e2e-cancel-empty-project' }),
+    );
+    await page.getByText('One project', { exact: true }).click();
+    const responsePromise = page.waitForResponse(
+      (res) =>
+        res.request().method() === 'POST' &&
+        res.url().includes('/api/authorize'),
+    );
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    const response = await responsePromise;
+    expect(response.status()).toBe(303);
+    expect(response.headers()['location'] ?? '').toContain(
+      'error=access_denied',
+    );
+  });
+
+  test('Cancel after a project ID validation error still redirects', async ({
+    page,
+    request,
+  }) => {
+    const registerBody = await registerClient(request);
+    await page.goto(
+      authorizePath(registerBody, { state: 'e2e-cancel-after-error' }),
+    );
+    await page.getByText('One project', { exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Approve and continue to Neon' })
+      .click();
+    await expect(
+      page.getByText('Enter the project ID this connection should use.'),
+    ).toBeVisible();
+    const responsePromise = page.waitForResponse(
+      (res) =>
+        res.request().method() === 'POST' &&
+        res.url().includes('/api/authorize'),
+    );
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    const response = await responsePromise;
+    expect(response.status()).toBe(303);
+    expect(response.headers()['location'] ?? '').toContain(
+      'error=access_denied',
+    );
+  });
+
+  test('two tabs for one client keep independent cookies', async ({
+    page,
+    context,
+    request,
+  }) => {
+    const client = await registerClient(request);
+    await page.goto(
+      authorizePath(client, {
+        state: 'tab-one',
+        resource: 'https://mcp.neon.tech/mcp?projectId=proj-one',
+      }),
+    );
+    const pageTwo = await context.newPage();
+    await pageTwo.goto(
+      authorizePath(client, {
+        state: 'tab-two',
+        resource: 'https://mcp.neon.tech/mcp?projectId=proj-two',
+      }),
+    );
+    await expect(page.getByText('proj-one')).toBeVisible();
+    await expect(pageTwo.getByText('proj-two')).toBeVisible();
+    const cookies = await context.cookies();
+    const txCookies = cookies.filter((cookie) =>
+      cookie.name.startsWith('neon_mcp_at_'),
+    );
+    expect(txCookies.length).toBeGreaterThanOrEqual(2);
+    await pageTwo.close();
+  });
+
+  test('forged write POST on a read-only request is rejected', async ({
+    page,
+    request,
+  }) => {
+    const client = await registerClient(request);
+    await page.goto(
+      authorizePath(client, { scope: 'read', state: 'e2e-forge' }),
+    );
+    const state = await page.locator('input[name="state"]').inputValue();
+    const cookie = (await page.context().cookies())
+      .map((item) => `${item.name}=${item.value}`)
+      .join('; ');
+    const body = new URLSearchParams();
+    body.append('state', state);
+    body.append('action', 'approve');
+    body.append('projectMode', 'all');
+    body.append('scopes', 'read');
+    body.append('scopes', 'write');
+    const response = await request.post('/api/authorize', {
+      headers: {
+        cookie,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      data: body.toString(),
+    });
+    expect(response.status()).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'invalid_scope',
+    });
+  });
+
+  test('unsigned consent state is rejected with a restart message', async ({
+    request,
+  }) => {
+    const state = Buffer.from(
+      JSON.stringify({
+        responseType: 'code',
+        clientId: 'client-123',
+        redirectUri: VALID_REGISTER_PAYLOAD.redirect_uris[0],
+        scope: ['read', 'write'],
+        state: 'old',
+      }),
+    ).toString('base64');
+    const response = await request.post('/api/authorize', {
+      form: {
+        state,
+        action: 'approve',
+      },
+    });
+    expect(response.status()).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'invalid_request',
+      error_description:
+        'This authorization request expired or is invalid. Start authorization again from your client.',
+    });
+  });
+
+  test('authorize on 127.0.0.1 redirects to the callback host', async ({
+    request,
+  }) => {
+    const client = await registerClient(request);
+    const path = authorizePath(client, { state: 'e2e-host' });
+    const port = process.env.E2E_PORT ?? '3100';
+    const response = await request.get(`http://127.0.0.1:${port}${path}`, {
+      maxRedirects: 0,
+    });
+    expect(response.status()).toBe(302);
+    const location = new URL(response.headers()['location'] ?? '');
+    expect(location.origin).toBe(`http://localhost:${port}`);
+    expect(location.pathname).toBe('/api/authorize');
+    expect(location.searchParams.get('state')).toBe('e2e-host');
+    expect(response.headers()['set-cookie'] ?? '').not.toContain(
+      'neon_mcp_at_',
+    );
   });
 
   test('unknown client is rejected by authorize route', async ({ request }) => {
@@ -260,8 +440,6 @@ test.describe('OAuth register and authorize contract', () => {
         maxRedirects: 0,
       });
       expect(authorizeResponse.status()).toBe(200);
-      const host = new URL(redirectUri).hostname;
-      expect(await authorizeResponse.text()).toContain(`Authorize ${host}`);
     });
   }
 

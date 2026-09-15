@@ -1,57 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
-import he from 'he';
+import { SERVER_HOST } from '../../../lib/config';
 import { model } from '../../../mcp/oauth/model';
 import { upstreamAuth } from '../../../lib/oauth/client';
 import { handleOAuthError } from '../../../lib/errors';
-import {
-  isReadOnly,
-  hasWriteScope,
-  SCOPE_DEFINITIONS,
-  SUPPORTED_SCOPES,
-} from '../../../mcp/utils/read-only';
 import { logger } from '../../../mcp/utils/logger';
+import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
 import {
-  matchesRedirectUri,
-  isDangerousRedirectUri,
-  isLoopbackHost,
-} from '../../../lib/oauth/redirect-uri';
-import { getOAuthImpersonationWarning } from '../../../lib/oauth/client-identity';
-import { isAuthorizePostOriginAllowed } from '../../../lib/oauth/authorize-origin';
-import {
-  AuthorizeStateConfigError,
-  AuthorizeStateError,
-  signAuthorizeState,
-  verifyAuthorizeState,
-  type DownstreamAuthRequest,
-} from '../../../lib/oauth/authorize-state';
-import {
-  createAuthorizeBrowserBindingId,
-  hasAuthorizeBrowserBinding,
-  setAuthorizeBrowserBinding,
-} from '../../../lib/oauth/authorize-browser-binding';
+  consentCanonicalLocation,
+  InvalidRequestOriginError,
+  requestPublicOrigin,
+} from '../../../mcp/oauth/consent-canonical-url';
 import {
   DEFAULT_GRANT,
   resolveGrantFromResourceUri,
   type GrantContext,
 } from '../../../mcp/utils/grant-context';
+import { renderConsentHtml } from '../../../mcp/oauth/consent-dialog';
+import { authTransactions } from '../../../mcp/oauth/auth-transaction-store';
+import {
+  consentCookieClearOptions,
+  consentCookieName,
+  consentCookieSetOptions,
+  cookieSecureForRequest,
+  isAuthTransactionId,
+} from '../../../mcp/oauth/browser-binding';
+import {
+  confirmationApproval,
+  confirmationCeiling,
+  editableCeiling,
+  parseConsentPost,
+} from '../../../mcp/oauth/consent-approval';
+import {
+  consentModeFromResource,
+  preferenceReadOnly,
+  resourceReadOnlyHardCeiling,
+} from '../../../mcp/oauth/consent-mode';
+import {
+  AUTH_RESTART_DESCRIPTION,
+  CONSENT_HTML_HEADERS,
+} from '../../../mcp/oauth/consent-html-headers';
+import type { DownstreamAuthRequest } from '../../../mcp/oauth/downstream-auth-request';
+import { issuedOauthScopes } from '../../../mcp/oauth/issued-scopes';
 
-const resolveQueryParamReadOnly = (
+function parseAuthRequest(
   searchParams: URLSearchParams,
-  resource: string | undefined,
-): string | null => {
-  const directReadOnly = searchParams.get('readonly');
-  if (directReadOnly !== null) {
-    return directReadOnly;
-  }
-  if (!resource) {
-    return null;
-  }
-  return new URL(resource).searchParams.get('readonly');
-};
-
-const parseAuthRequest = (
-  searchParams: URLSearchParams,
-): DownstreamAuthRequest => {
+): DownstreamAuthRequest {
   const responseType = searchParams.get('response_type') || '';
   const clientId = searchParams.get('client_id') || '';
   const redirectUri = searchParams.get('redirect_uri') || '';
@@ -72,492 +65,155 @@ const parseAuthRequest = (
     codeChallenge,
     codeChallengeMethod,
   };
-};
-
-function resolveGrantedScopes({
-  requestedScopes,
-  grantWrite,
-}: {
-  requestedScopes: string[];
-  grantWrite: boolean;
-}): string[] {
-  const requested =
-    requestedScopes.length > 0 ? requestedScopes : ['read', 'write'];
-  const granted = ['read'];
-  if (!grantWrite) {
-    return granted;
-  }
-  granted.push('write');
-  // Legacy wildcard clients treat omission as a partial grant.
-  if (requested.includes('*')) {
-    granted.push('*');
-  }
-  return granted;
 }
 
-/**
- * Renders the scope selection UI.
- * Read access is always granted. Write access is always shown as an option.
- */
-function renderScopeSection(
-  requestedScopes: string[],
-  defaultReadOnly: boolean,
-): string {
-  const writeAllowed = hasWriteScope(requestedScopes);
-  const writeChecked = !defaultReadOnly && writeAllowed;
-
-  // Read access is always granted (hidden input ensures it's submitted)
-  let html = `<input type="hidden" name="scopes" value="read" />`;
-
-  html += `
-    <div class="scope-item scope-granted">
-      <span class="scope-check">✓</span>
-      <div class="scope-info">
-        <span class="scope-label">${he.escape(SCOPE_DEFINITIONS.read.label)}</span>
-        <span class="scope-description">${he.escape(SCOPE_DEFINITIONS.read.description)}</span>
-      </div>
-    </div>
-  `;
-
-  html += `
-    <label class="scope-item scope-option">
-      <input
-        type="checkbox"
-        name="scopes"
-        value="write"
-        ${writeChecked ? 'checked' : ''}
-        ${writeAllowed ? '' : 'disabled'}
-        class="scope-checkbox"
-      />
-      <div class="scope-info">
-        <span class="scope-label">${he.escape(SCOPE_DEFINITIONS.write.label)}</span>
-        <span class="scope-description">${he.escape(SCOPE_DEFINITIONS.write.description)}</span>
-      </div>
-    </label>
-  `;
-
-  return html;
+function storedStringArray(
+  record: Record<string, unknown>,
+  field: string,
+): string[] | undefined {
+  const value = record[field];
+  return Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((item) => typeof item === 'string')
+    ? value
+    : undefined;
 }
 
-// Generate approval dialog HTML
-const renderApprovalDialog = (
-  client: {
-    client_name?: string;
-    [key: string]: unknown;
-  },
-  state: string,
-  requestedScopes: string[],
-  defaultReadOnly: boolean,
-  redirectUri: string,
-) => {
-  const claimedName = he.escape(client.client_name || 'A new MCP Client');
-  let headline = 'Authorize a local application';
-  try {
-    const parsed = new URL(redirectUri);
-    if (!isLoopbackHost(parsed.hostname)) {
-      headline = `Authorize ${he.escape(parsed.hostname)}`;
-    }
-  } catch {
-    headline = 'Authorization Request';
-  }
-  const escapedRedirectUri = he.escape(redirectUri);
-  const impersonationWarning = getOAuthImpersonationWarning({
-    clientName: client.client_name,
-    redirectUri,
-  });
+function consentClientFields(client: object): {
+  client_name?: string;
+  client_uri?: string;
+  redirect_uris?: string[];
+} {
+  const record = Object.fromEntries(Object.entries(client));
+  const clientName = record.client_name;
+  const clientUri = record.client_uri;
+  const redirectUris = storedStringArray(record, 'redirect_uris');
+  return {
+    client_name: typeof clientName === 'string' ? clientName : undefined,
+    client_uri: typeof clientUri === 'string' ? clientUri : undefined,
+    redirect_uris: redirectUris,
+  };
+}
 
-  const warningHtml = impersonationWarning
-    ? `
-      <div class="identity-warning" role="alert">
-        <div class="identity-warning-title">Check this redirect before authorizing</div>
-        <div>
-          This request uses the name ${he.escape(impersonationWarning.brandDisplayName)}, but after you authorize you will be redirected to ${he.escape(impersonationWarning.redirectHost)}, not ${he.escape(impersonationWarning.brandDisplayName)}.
-        </div>
-      </div>`
-    : '';
-
-  const html = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${headline} | Neon MCP</title>
-  <style>
-    :root {
-      --primary-color: #0070f3;
-      --error-color: #f44336;
-      --text-color: #dedede;
-      --text-color-secondary: #949494;
-      --background-color: #1c1c1c;
-      --border-color: #2a2929;
-      --card-shadow: 0 0px 12px 0px rgb(0 230 153 / 0.3);
-      --link-color: rgb(0 230 153 / 1);
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
-        Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
-      line-height: 1.6;
-      color: var(--text-color);
-      background-color: var(--background-color);
-      margin: 0;
-      padding: 0;
-    }
-
-    .container {
-      max-width: 600px;
-      margin: 2rem auto;
-      padding: 1rem;
-    }
-
-    .precard {
-      padding: 2rem;
-      text-align: center;
-    }
-
-    .card {
-      background-color: #0a0c09e6;
-      border-radius: 8px;
-      box-shadow: var(--card-shadow);
-      padding: 2rem;
-    }
-
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 1.5rem;
-      color: var(--text-color);
-      text-decoration: none;
-    }
-
-    .logo {
-      width: 48px;
-      height: 48px;
-      margin-right: 1rem;
-      border-radius: 8px;
-      object-fit: contain;
-    }
-
-    .alert {
-      margin: 0;
-      font-size: 1.5rem;
-      font-weight: 400;
-      margin: 1rem 0;
-      overflow-wrap: anywhere;
-      text-align: center;
-    }
-
-    .description {
-      color: var(--text-color-secondary);
-    }
-
-    .identity-warning {
-      padding: 1rem;
-      margin-bottom: 1.5rem;
-      border: 1px solid rgb(245 166 35 / 0.6);
-      border-radius: 6px;
-      color: var(--text-color);
-      background-color: rgb(245 166 35 / 0.08);
-      overflow-wrap: anywhere;
-    }
-
-    .identity-warning-title {
-      margin-bottom: 0.25rem;
-      font-weight: 600;
-      color: rgb(245 166 35);
-    }
-
-    .client-info {
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 1rem 1rem 0.5rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .client-detail {
-      display: flex;
-      gap: 0.75rem;
-      margin-bottom: 0.5rem;
-      align-items: baseline;
-    }
-
-    .detail-label {
-      font-weight: 500;
-      min-width: 120px;
-    }
-
-    .detail-value {
-      font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
-        'Courier New', monospace;
-      word-break: break-all;
-    }
-
-    .detail-value a {
-      color: inherit;
-      text-decoration: underline;
-    }
-
-    .detail-value.small {
-      font-size: 0.8em;
-    }
-
-    .actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 1rem;
-      margin-top: 2rem;
-    }
-
-    .button {
-      padding: 0.65rem 1rem;
-      border-radius: 6px;
-      font-weight: 500;
-      cursor: pointer;
-      border: none;
-      font-size: 1rem;
-    }
-
-    .button-primary {
-      background-color: rgb(0 229 153 / 1);
-      color: rgb(26 26 26 / 1);
-    }
-
-    .button-secondary {
-      background-color: transparent;
-      border: 1px solid rgb(73 75 80 / 1);
-      color: var(--text-color);
-    }
-
-    .scope-section {
-      margin: 1.5rem 0;
-      padding-top: 1rem;
-      border-top: 1px solid var(--border-color);
-    }
-
-    .scope-section-title {
-      font-weight: 500;
-      margin-bottom: 1rem;
-      color: var(--text-color);
-    }
-
-    .scope-item {
-      display: flex;
-      align-items: flex-start;
-      padding: 0.75rem;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      margin-bottom: 0.5rem;
-    }
-
-    .scope-option {
-      cursor: pointer;
-      transition: border-color 0.2s, background-color 0.2s;
-    }
-
-    .scope-option:hover {
-      border-color: rgba(0, 230, 153, 0.5);
-      background-color: rgba(0, 230, 153, 0.05);
-    }
-
-    .scope-granted {
-      background-color: rgba(0, 230, 153, 0.05);
-      border-color: rgba(0, 230, 153, 0.3);
-    }
-
-    .scope-check {
-      color: rgb(0, 229, 153);
-      font-size: 1rem;
-      margin-right: 0.75rem;
-      margin-top: 2px;
-      flex-shrink: 0;
-    }
-
-    .scope-checkbox {
-      width: 18px;
-      height: 18px;
-      margin-right: 0.75rem;
-      margin-top: 2px;
-      accent-color: rgb(0, 229, 153);
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .scope-info {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .scope-label {
-      font-weight: 500;
-      color: var(--text-color);
-    }
-
-    .scope-description {
-      font-size: 0.875rem;
-      color: var(--text-color-secondary);
-    }
-
-    @media (max-width: 640px) {
-      .container {
-        margin: 1rem auto;
-        padding: 0.5rem;
-      }
-
-      .card {
-        padding: 1.5rem;
-      }
-
-      .client-detail {
-        flex-direction: column;
-      }
-
-      .detail-label {
-        min-width: unset;
-        margin-bottom: 0.25rem;
-      }
-
-      .actions {
-        flex-direction: column;
-      }
-
-      .button {
-        width: 100%;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="precard">
-      <a class="header" href="/" target="_blank">
-        <img src="https://neon.com/brand/neon-logomark-dark-color.svg" alt="Neon MCP" class="logo">
-      </a>
-    </div>
-    <div class="card">
-      <h2 class="alert"><strong>${headline}</strong></h2>
-      <div class="client-info">
-        <div class="client-detail">
-          <div class="detail-label">Claimed name:</div>
-          <div class="detail-value">${claimedName}</div>
-        </div>
-        <div class="client-detail">
-          <div class="detail-label">Redirect destination:</div>
-          <div class="detail-value small">${escapedRedirectUri}</div>
-        </div>
-      </div>
-      ${warningHtml}
-      <p class="description">
-        This MCP client is requesting to be authorized on Neon MCP Server.
-        If you approve, you will be redirected to complete the authentication.
-      </p>
-      <form method="POST" action="/api/authorize" id="authorize-form">
-        <input type="hidden" name="state" value="${he.escape(state)}" />
-        <div class="scope-section">
-          <div class="scope-section-title">Permissions:</div>
-          ${renderScopeSection(requestedScopes, defaultReadOnly)}
-        </div>
-        <div class="actions">
-          <button type="button" class="button button-secondary" onclick="window.history.back()">Cancel</button>
-          <button type="submit" class="button button-primary">Approve</button>
-        </div>
-      </form>
-    </div>
-  </div>
-  <script>
-    function updateUrlScope() {
-      var writeCheckbox = document.querySelector('.scope-checkbox');
-      var scopes = ['read'];
-      if (writeCheckbox && writeCheckbox.checked) {
-        scopes.push('write');
-      }
-      var url = new URL(window.location.href);
-      url.searchParams.set('scope', scopes.join(' '));
-      window.history.replaceState({}, '', url.toString());
-    }
-
-    var writeCheckbox = document.querySelector('.scope-checkbox');
-    if (writeCheckbox) {
-      writeCheckbox.addEventListener('change', updateUrlScope);
-    }
-  </script>
-</body>
-</html>
-`;
-  return new NextResponse(html, {
-    headers: { 'Content-Type': 'text/html' },
-  });
-};
-
-function redirectUriRejection(
-  clientId: string,
-  providedRedirectUri: string,
-  registeredRedirectUris: string[],
-  reason: 'dangerous_scheme' | 'mismatch',
+function jsonError(
+  error: string,
+  error_description: string,
+  status = 400,
 ): NextResponse {
-  logger.warn('Invalid redirect URI', {
-    clientId,
-    providedRedirectUri,
-    registeredRedirectUris,
-    reason,
-  });
-  return NextResponse.json(
-    {
-      error: 'invalid_request',
-      error_description: 'Invalid redirect URI',
-    },
-    { status: 400 },
-  );
+  return NextResponse.json({ error, error_description }, { status });
 }
 
-function mapAuthorizeError(error: unknown, context: string): NextResponse {
-  if (error instanceof AuthorizeStateConfigError) {
-    logger.error(context, { error: error.message });
-    return NextResponse.json(
-      {
-        error: 'server_error',
-        error_description: 'COOKIE_SECRET is not set',
-      },
-      { status: 500 },
+function restartError(): NextResponse {
+  return jsonError('invalid_request', AUTH_RESTART_DESCRIPTION);
+}
+
+function readFormState(form: FormData): string | undefined {
+  const values = form.getAll('state');
+  if (values.length !== 1) {
+    return undefined;
+  }
+  const value = values[0];
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  return value;
+}
+
+function browserSecretFromRequest(
+  request: NextRequest,
+  transactionId: string,
+): string | undefined {
+  return request.cookies.get(consentCookieName(transactionId))?.value;
+}
+
+function cancelRedirect(
+  redirectUri: string,
+  downstreamState: string,
+): NextResponse {
+  const url = new URL(redirectUri);
+  url.searchParams.set('error', 'access_denied');
+  if (downstreamState) {
+    url.searchParams.set('state', downstreamState);
+  }
+  return NextResponse.redirect(url, 303);
+}
+
+function applyCookie(
+  response: NextResponse,
+  transactionId: string,
+  browserSecret: string,
+  request: NextRequest,
+  expiresAt: Date,
+): NextResponse {
+  response.cookies.set(
+    consentCookieName(transactionId),
+    browserSecret,
+    consentCookieSetOptions(cookieSecureForRequest(request), expiresAt),
+  );
+  return response;
+}
+
+function clearCookie(
+  response: NextResponse,
+  transactionId: string,
+  request: NextRequest,
+): NextResponse {
+  response.cookies.set(
+    consentCookieName(transactionId),
+    '',
+    consentCookieClearOptions(cookieSecureForRequest(request)),
+  );
+  return response;
+}
+
+function htmlConsent(
+  html: string,
+  extra?: {
+    transactionId: string;
+    browserSecret: string;
+    request: NextRequest;
+    expiresAt: Date;
+  },
+): NextResponse {
+  const response = new NextResponse(html, {
+    headers: CONSENT_HTML_HEADERS,
+  });
+  if (extra) {
+    applyCookie(
+      response,
+      extra.transactionId,
+      extra.browserSecret,
+      extra.request,
+      extra.expiresAt,
     );
   }
-  if (error instanceof AuthorizeStateError) {
-    return NextResponse.json(
-      {
-        error: 'invalid_request',
-        error_description: error.message,
-      },
-      { status: 400 },
-    );
-  }
-  return handleOAuthError(error, context);
+  return response;
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const requestParams = parseAuthRequest(searchParams);
-    // Parse resource URI early so malformed values fail at authorize time.
-    let resourceGrant: GrantContext = { ...DEFAULT_GRANT };
-    let resourceReadOnlyQueryParam: string | null = null;
-    try {
-      resourceGrant = resolveGrantFromResourceUri(requestParams.resource);
-      resourceReadOnlyQueryParam = resolveQueryParamReadOnly(
-        searchParams,
-        requestParams.resource,
-      );
-    } catch {
-      return NextResponse.json(
-        {
-          error: 'invalid_target',
-          error_description: 'Invalid resource parameter',
-        },
-        { status: 400 },
-      );
+    const canonical = consentCanonicalLocation(
+      requestPublicOrigin(request),
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+      SERVER_HOST,
+    );
+    if (canonical) {
+      return NextResponse.redirect(canonical, 302);
     }
 
+    const searchParams = request.nextUrl.searchParams;
+    const requestParams = parseAuthRequest(searchParams);
+    let resourceGrant: GrantContext = { ...DEFAULT_GRANT };
+    try {
+      resourceGrant = resolveGrantFromResourceUri(requestParams.resource);
+    } catch {
+      return jsonError('invalid_target', 'Invalid resource parameter');
+    }
+
+    const mode = consentModeFromResource(requestParams.resource);
+    const resourceReadOnlyHard = resourceReadOnlyHardCeiling(
+      requestParams.resource,
+    );
     const clientId = requestParams.clientId;
     const client = await model.getClient(clientId, '');
 
@@ -570,214 +226,200 @@ export async function GET(request: NextRequest) {
 
     const savedRegisterHeaders = await model.getClientRegisterHeaders(clientId);
     const savedHeaders = savedRegisterHeaders?.headers ?? {};
-
-    const defaultReadOnly = isReadOnly({
-      queryParamValue: resourceReadOnlyQueryParam,
+    const prefReadOnly = preferenceReadOnly({
+      authorizeReadOnly: searchParams.get('readonly'),
       headerValue:
-        request.headers.get('x-read-only') ?? savedHeaders['x-read-only'],
-    });
-    const requestedScopes =
-      requestParams.scope.length > 0 ? requestParams.scope : ['read', 'write'];
-    const grantWrite = !defaultReadOnly && hasWriteScope(requestedScopes);
-    const effectiveScopes = resolveGrantedScopes({
-      requestedScopes,
-      grantWrite,
+        request.headers.get('x-read-only') ??
+        savedHeaders['x-read-only'] ??
+        null,
     });
 
     if (!client) {
       logger.warn('Client not found', { clientId });
-      return NextResponse.json(
-        {
-          error: 'invalid_client',
-          error_description: 'Invalid client ID',
-        },
-        { status: 400 },
-      );
+      return jsonError('invalid_client', 'Invalid client ID');
     }
 
-    if (
-      requestParams.responseType === undefined ||
-      !client.response_types.includes(requestParams.responseType)
-    ) {
+    const clientRecord = Object.fromEntries(Object.entries(client));
+    const responseTypes = storedStringArray(clientRecord, 'response_types');
+    const registeredRedirectUris = storedStringArray(
+      clientRecord,
+      'redirect_uris',
+    );
+    if (!responseTypes || !registeredRedirectUris) {
+      logger.warn('Invalid stored client metadata', { clientId });
+      return jsonError('invalid_client', 'Invalid client metadata');
+    }
+
+    if (!responseTypes.includes(requestParams.responseType)) {
       logger.warn('Invalid response type', {
         clientId,
         providedResponseType: requestParams.responseType,
-        supportedResponseTypes: client.response_types,
+        supportedResponseTypes: responseTypes,
       });
-      return NextResponse.json(
-        {
-          error: 'unsupported_response_type',
-          error_description: 'Invalid response type',
-        },
-        { status: 400 },
-      );
+      return jsonError('unsupported_response_type', 'Invalid response type');
     }
 
-    if (!requestParams.redirectUri) {
-      return redirectUriRejection(
-        requestParams.clientId,
-        requestParams.redirectUri,
-        client.redirect_uris,
-        'mismatch',
-      );
-    }
-    if (isDangerousRedirectUri(requestParams.redirectUri)) {
-      return redirectUriRejection(
-        requestParams.clientId,
-        requestParams.redirectUri,
-        client.redirect_uris,
-        'dangerous_scheme',
-      );
-    }
-    if (!matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)) {
-      return redirectUriRejection(
-        requestParams.clientId,
-        requestParams.redirectUri,
-        client.redirect_uris,
-        'mismatch',
-      );
+    if (!matchesRedirectUri(requestParams.redirectUri, registeredRedirectUris)) {
+      logger.warn('Invalid redirect URI', {
+        clientId: requestParams.clientId,
+        providedRedirectUri: requestParams.redirectUri,
+        registeredRedirectUris,
+      });
+      return jsonError('invalid_request', 'Invalid redirect URI');
     }
 
-    await model.saveClientAuthContext(clientId, {
-      grant: resourceGrant,
-      scope: effectiveScopes,
-      readOnly: !hasWriteScope(effectiveScopes),
+    const ceiling =
+      mode === 'confirmation'
+        ? confirmationCeiling({
+            resourceGrant,
+            requestScopes: requestParams.scope,
+            resourceReadOnlyHard,
+          })
+        : editableCeiling(requestParams.scope);
+
+    const created = await authTransactions.createPending({
+      request: requestParams,
+      mode,
+      ceiling,
+      defaultReadOnly: prefReadOnly,
+      resourceGrant,
+      resourceReadOnlyHard,
     });
 
-    const browserBindingId = createAuthorizeBrowserBindingId();
-    const response = renderApprovalDialog(
-      client,
-      signAuthorizeState({
-        payload: requestParams,
-        maxScope: effectiveScopes,
-        browserBindingId,
-      }),
-      effectiveScopes,
-      defaultReadOnly,
-      requestParams.redirectUri,
-    );
-    setAuthorizeBrowserBinding(response, browserBindingId);
-    return response;
+    const writeChecked =
+      mode === 'confirmation'
+        ? confirmationApproval({
+            resourceGrant,
+            requestScopes: requestParams.scope,
+            resourceReadOnlyHard,
+          }).writeGranted
+        : ceiling.writeAllowed && !prefReadOnly;
+
+    const html = renderConsentHtml({
+      client: consentClientFields(client),
+      state: created.transaction.id,
+      mode,
+      writeChecked,
+      showWriteControl: mode === 'editable' && ceiling.writeAllowed,
+      grant: resourceGrant,
+    });
+    return htmlConsent(html, {
+      transactionId: created.transaction.id,
+      browserSecret: created.browserSecret,
+      request,
+      expiresAt: created.transaction.expiresAt,
+    });
   } catch (error: unknown) {
-    return mapAuthorizeError(error, 'Authorization error');
+    if (error instanceof InvalidRequestOriginError) {
+      return jsonError('invalid_request', error.message);
+    }
+    return handleOAuthError(error, 'Authorization error');
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    if (!isAuthorizePostOriginAllowed(request)) {
-      return NextResponse.json(
-        {
-          error: 'invalid_request',
-          error_description: 'Invalid origin',
-        },
-        { status: 400 },
-      );
-    }
-
     const formData = await request.formData();
-    const stateValue = formData.get('state');
-    const selectedScopes = formData
-      .getAll('scopes')
-      .filter((value): value is string => typeof value === 'string');
-
-    if (typeof stateValue !== 'string' || stateValue.length === 0) {
-      return NextResponse.json(
-        {
-          error: 'invalid_request',
-          error_description: 'Invalid state',
-        },
-        { status: 400 },
-      );
+    const transactionId = readFormState(formData);
+    if (!transactionId || !isAuthTransactionId(transactionId)) {
+      return restartError();
     }
 
-    const {
-      payload: requestParams,
-      maxScope,
-      browserBindingId,
-    } = verifyAuthorizeState(stateValue);
-    if (!hasAuthorizeBrowserBinding(request, browserBindingId)) {
-      throw new AuthorizeStateError();
+    const browserSecret = browserSecretFromRequest(request, transactionId);
+    if (!browserSecret) {
+      return restartError();
     }
 
-    const client = await model.getClient(requestParams.clientId, '');
-    if (!client) {
-      return NextResponse.json(
-        {
-          error: 'invalid_client',
-          error_description: 'Invalid client ID',
-        },
-        { status: 400 },
-      );
-    }
-
-    if (isDangerousRedirectUri(requestParams.redirectUri)) {
-      return redirectUriRejection(
-        requestParams.clientId,
-        requestParams.redirectUri,
-        client.redirect_uris,
-        'dangerous_scheme',
-      );
-    }
-    if (!matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)) {
-      return redirectUriRejection(
-        requestParams.clientId,
-        requestParams.redirectUri,
-        client.redirect_uris,
-        'mismatch',
-      );
-    }
-
-    const validScopes = selectedScopes.filter((scope) =>
-      SUPPORTED_SCOPES.some((supported) => supported === scope),
+    const pending = await authTransactions.getPending(
+      transactionId,
+      browserSecret,
     );
-    if (validScopes.length === 0) {
-      return NextResponse.json(
-        {
-          error: 'invalid_scope',
-          error_description: 'No valid scopes selected',
-        },
-        { status: 400 },
+    if (!pending) {
+      return restartError();
+    }
+
+    const parsed = parseConsentPost({
+      form: formData,
+      mode: pending.mode,
+      ceiling: pending.ceiling,
+    });
+
+    if (parsed.action === 'cancel') {
+      const consumed = await authTransactions.consumePending(
+        transactionId,
+        browserSecret,
+      );
+      if (!consumed) {
+        return restartError();
+      }
+      return clearCookie(
+        cancelRedirect(consumed.request.redirectUri, consumed.request.state),
+        transactionId,
+        request,
       );
     }
 
-    const grantWrite =
-      validScopes.includes('write') && maxScope.includes('write');
-    const grantedScopes = resolveGrantedScopes({
-      requestedScopes: maxScope,
-      grantWrite,
-    });
-    if (!grantedScopes.every((scope) => maxScope.includes(scope))) {
-      return NextResponse.json(
-        {
-          error: 'invalid_scope',
-          error_description: 'Requested scopes exceed the consent grant',
-        },
-        { status: 400 },
-      );
+    if (parsed.action === 'invalid') {
+      if (parsed.error.kind === 'field') {
+        const client = await model.getClient(pending.request.clientId, '');
+        if (!client) {
+          return jsonError('invalid_client', 'Invalid client ID');
+        }
+        const html = renderConsentHtml({
+          client: consentClientFields(client),
+          state: pending.id,
+          mode: pending.mode,
+          writeChecked: parsed.error.selection.grantWrite,
+          showWriteControl: pending.ceiling.writeAllowed,
+          grant: pending.resourceGrant,
+          fieldError: {
+            field: parsed.error.field,
+            message: parsed.error.message,
+          },
+          formState: {
+            projectMode: parsed.error.selection.projectMode,
+            projectId: parsed.error.selection.projectId,
+            categories: parsed.error.selection.categories,
+            writeChecked: parsed.error.selection.grantWrite,
+          },
+        });
+        return htmlConsent(html);
+      }
+      return jsonError(parsed.error.kind, parsed.error.description);
     }
 
-    requestParams.scope = grantedScopes;
-    const grant = requestParams.resource
-      ? resolveGrantFromResourceUri(requestParams.resource)
-      : { ...DEFAULT_GRANT };
-    await model.saveClientAuthContext(requestParams.clientId, {
-      grant,
-      scope: grantedScopes,
-      readOnly: !hasWriteScope(grantedScopes),
-    });
+    let approvedGrant: GrantContext;
+    let approvedScopes: string[];
+    if (parsed.confirmation) {
+      const approval = confirmationApproval({
+        resourceGrant: pending.resourceGrant,
+        requestScopes: pending.request.scope,
+        resourceReadOnlyHard: pending.resourceReadOnlyHard,
+      });
+      approvedGrant = approval.grant;
+      approvedScopes = approval.scopes;
+    } else {
+      approvedGrant = parsed.selection.grant;
+      approvedScopes = issuedOauthScopes({
+        requestedScopes: pending.request.scope,
+        grantWrite: parsed.selection.grantWrite,
+      });
+    }
 
-    const updatedState = signAuthorizeState({
-      payload: requestParams,
-      maxScope: grantedScopes,
-      browserBindingId,
+    const approved = await authTransactions.approvePending({
+      id: transactionId,
+      browserSecret,
+      approvedGrant,
+      approvedScopes,
     });
-    const authUrl = await upstreamAuth(updatedState);
-    const response = NextResponse.redirect(authUrl.href);
-    setAuthorizeBrowserBinding(response, browserBindingId);
-    return response;
+    if (!approved) {
+      return restartError();
+    }
+
+    const authUrl = await upstreamAuth(approved.id);
+    return NextResponse.redirect(authUrl.href, 303);
   } catch (error: unknown) {
-    return mapAuthorizeError(error, 'Authorization error');
+    return handleOAuthError(error, 'Authorization error');
   }
 }
 

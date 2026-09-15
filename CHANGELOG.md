@@ -2,7 +2,7 @@
 
 # [NEXT]
 
-Anonymous OAuth client registration stores only `https` redirects, `http` redirects on a loopback host, and Cursor's native callback, and drops the rest; a registration with no acceptable redirect is rejected. `/api/authorize` HMAC-signs consent state with `COOKIE_SECRET`, binds it to the browser that saw consent, rejects POST from a foreign Origin, refuses `javascript:`, `data:`, `file:`, `blob:`, `vbscript:`, and `about:` redirect targets, shows the selected redirect destination, and warns when a known client name points to an unrelated remote host.
+Anonymous OAuth client registration rejects malformed client metadata, stores only `https` redirects, `http` redirects on a loopback host, and Cursor's native callback, and drops the rest. A registration with no acceptable redirect is rejected.
 
 Scheduled function triggers (`list_triggers`, `get_trigger`, `create_trigger`, `update_trigger`, `delete_trigger`) under `?category=functions`, and branch credentials (`list_credentials`, `create_credential`, `revoke_credential`, `rotate_credential`) under `?category=branches`. Requires `@neon/tools` 1.3.0. `credentials.reveal` is not a tool.
 

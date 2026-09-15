@@ -742,7 +742,7 @@
   {
     "name": "list_projects",
     "title": "List projects",
-    "description": "List Neon projects you own. Returns every page. Pass limit to cap how many. There is no `cursor` argument. Pass `org_id` with a personal API key to list that org's projects.",
+    "description": "List Neon projects you own. Returns every page. Pass limit to cap how many. There is no `cursor` argument. `org_id` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -807,7 +807,7 @@
   {
     "name": "create_project",
     "title": "Create project",
-    "description": "Creates a Neon project and waits until the default compute is ready. Pass `org_id` with a personal API key. Does not return a connection string; call `get_connection_string` with the project id.",
+    "description": "Creates a Neon project and waits until the default compute is ready. `org_id` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from. Does not return a connection string; call `get_connection_string` with the project id.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
