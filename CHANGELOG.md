@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+Generated tool calls classify Neon API 4xx responses by their `kind` and HTTP status even when `@neon/tools` and the server load different `@neon/sdk` versions, returning the API error to the MCP client without reporting it as a server failure.
+
 Scheduled function triggers (`list_triggers`, `get_trigger`, `create_trigger`, `update_trigger`, `delete_trigger`) under `?category=functions`, and branch credentials (`list_credentials`, `create_credential`, `revoke_credential`, `rotate_credential`) under `?category=branches`. Requires `@neon/tools` 1.3.0. `credentials.reveal` is not a tool.
 
 `clientApplication` on analytics events now classifies Devin, Perplexity, Hermes Agent, and Grok connector sessions. `grok-cli` stays `grok-build`.
