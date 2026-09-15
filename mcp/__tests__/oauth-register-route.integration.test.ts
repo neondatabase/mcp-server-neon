@@ -300,8 +300,10 @@ describe('/api/register route integration', () => {
 
   it.each([
     ['grant_types', 'authorization_code'],
+    ['grant_types', []],
     ['grant_types', [42]],
     ['response_types', 'code'],
+    ['response_types', []],
     ['response_types', [42]],
   ])('returns 400 when %s is not a string array', async (field, value) => {
     const response = await POST(

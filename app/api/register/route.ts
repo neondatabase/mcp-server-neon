@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
 
     if (
       !Array.isArray(payload.grant_types) ||
+      payload.grant_types.length === 0 ||
       !payload.grant_types.every(
         (grant: unknown) =>
           typeof grant === 'string' && SUPPORTED_GRANT_TYPES.includes(grant),
@@ -110,6 +111,7 @@ export async function POST(request: NextRequest) {
 
     if (
       !Array.isArray(payload.response_types) ||
+      payload.response_types.length === 0 ||
       !payload.response_types.every(
         (responseType: unknown) =>
           typeof responseType === 'string' &&
