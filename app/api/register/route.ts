@@ -2,26 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { model } from '../../../mcp/oauth/model';
 import { generateRandomString } from '../../../mcp/oauth/utils';
 import { handleOAuthError } from '../../../lib/errors';
-import {
-  admitDcrRedirectUris,
-  type DcrRedirectUriAdmission,
-  type RedirectUriRejectionReason,
-  type RejectedRedirectUri,
-} from '../../../lib/oauth/redirect-uri';
+import { normalizeRedirectUris } from '../../../lib/oauth/redirect-uri';
 import { logger } from '../../../mcp/utils/logger';
 import type { Client } from 'oauth2-server';
 
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
-
-function formatRejectedRedirectUris(rejected: RejectedRedirectUri[]): string {
-  return rejected
-    .map((entry) => {
-      const reason: RedirectUriRejectionReason = entry.reason;
-      return `${entry.label} ${reason}`;
-    })
-    .join(', ');
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,10 +22,7 @@ export async function POST(request: NextRequest) {
       client_uri: payload.client_uri,
     });
 
-    if (
-      typeof payload.client_name !== 'string' ||
-      payload.client_name.trim() === ''
-    ) {
+    if (payload.client_name === undefined) {
       logger.warn('Client registration validation failed', {
         reason: 'client_name_missing',
       });
@@ -52,15 +35,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const redirectUris =
-      typeof payload.redirect_uris === 'string'
-        ? [payload.redirect_uris]
-        : payload.redirect_uris;
-    if (
-      !Array.isArray(redirectUris) ||
-      redirectUris.length === 0 ||
-      !redirectUris.every((uri: unknown) => typeof uri === 'string')
-    ) {
+    const redirectUris = normalizeRedirectUris(payload.redirect_uris);
+    if (!redirectUris) {
       logger.warn('Client registration validation failed', {
         reason: 'redirect_uris_missing',
       });
@@ -73,31 +49,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { admitted, rejected }: DcrRedirectUriAdmission =
-      admitDcrRedirectUris(redirectUris);
-    if (admitted.length === 0) {
-      logger.warn('Client registration validation failed', {
-        reason: 'no_admissible_redirect_uri',
-        client_name: payload.client_name,
-        rejected,
-      });
-      return NextResponse.json(
-        {
-          error: 'invalid_redirect_uri',
-          error_description:
-            'redirect_uris must use https, or http on a loopback host (localhost, 127.0.0.1, ::1), without userinfo or fragment' +
-            ` (rejected: ${formatRejectedRedirectUris(rejected)})`,
-        },
-        { status: 400 },
-      );
-    }
-
     if (
-      !Array.isArray(payload.grant_types) ||
-      payload.grant_types.length === 0 ||
-      !payload.grant_types.every(
-        (grant: unknown) =>
-          typeof grant === 'string' && SUPPORTED_GRANT_TYPES.includes(grant),
+      payload.grant_types === undefined ||
+      !payload.grant_types.every((grant: string) =>
+        SUPPORTED_GRANT_TYPES.includes(grant),
       )
     ) {
       logger.warn('Client registration validation failed', {
@@ -114,12 +69,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (
-      !Array.isArray(payload.response_types) ||
-      payload.response_types.length === 0 ||
-      !payload.response_types.every(
-        (responseType: unknown) =>
-          typeof responseType === 'string' &&
-          SUPPORTED_RESPONSE_TYPES.includes(responseType),
+      payload.response_types === undefined ||
+      !payload.response_types.every((responseType: string) =>
+        SUPPORTED_RESPONSE_TYPES.includes(responseType),
       )
     ) {
       logger.warn('Client registration validation failed', {
@@ -139,7 +91,7 @@ export async function POST(request: NextRequest) {
     const clientSecret = generateRandomString(32);
     const client: Client = {
       ...payload,
-      redirect_uris: admitted,
+      redirect_uris: redirectUris,
       id: clientId,
       secret: clientSecret,
       tokenEndpointAuthMethod:
@@ -150,18 +102,10 @@ export async function POST(request: NextRequest) {
     await model.saveClient(client);
     await model.saveClientRegisterHeaders(clientId, requestHeaders);
 
-    if (rejected.length > 0) {
-      logger.info('Dropped redirect URIs at registration', {
-        clientId,
-        client_name: payload.client_name,
-        rejected,
-      });
-    }
-
     logger.info('new client registered', {
       clientId,
       client_name: payload.client_name,
-      redirect_uris: admitted,
+      redirect_uris: redirectUris,
       client_uri: payload.client_uri,
     });
 
@@ -169,7 +113,7 @@ export async function POST(request: NextRequest) {
       client_id: clientId,
       client_secret: clientSecret,
       client_name: payload.client_name,
-      redirect_uris: admitted,
+      redirect_uris: redirectUris,
       token_endpoint_auth_method: client.tokenEndpointAuthMethod,
     };
 

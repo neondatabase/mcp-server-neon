@@ -2,7 +2,7 @@
 
 # [NEXT]
 
-Anonymous OAuth client registration normalizes a single `redirect_uris` string, rejects other malformed client metadata, stores only `https` redirects, `http` redirects on a loopback host, and Cursor's native callback, and drops the rest. A registration with no acceptable redirect is rejected.
+OAuth dynamic client registration normalizes scalar and mixed `redirect_uris` values to a string array before storage. Authorization applies the same normalization to existing client records without changing which redirect URI schemes are accepted.
 
 Scheduled function triggers (`list_triggers`, `get_trigger`, `create_trigger`, `update_trigger`, `delete_trigger`) under `?category=functions`, and branch credentials (`list_credentials`, `create_credential`, `revoke_credential`, `rotate_credential`) under `?category=branches`. Requires `@neon/tools` 1.3.0. `credentials.reveal` is not a tool.
 

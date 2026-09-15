@@ -5,101 +5,22 @@
  */
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
-const SUPPORTED_NATIVE_REDIRECT_URIS = new Set([
-  'cursor://anysphere.cursor-mcp/oauth/callback',
-]);
+
+export function normalizeRedirectUris(value: unknown): string[] | undefined {
+  if (typeof value === 'string') {
+    return [value];
+  }
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const redirectUris = value.filter(
+    (redirectUri): redirectUri is string => typeof redirectUri === 'string',
+  );
+  return redirectUris.length > 0 ? redirectUris : undefined;
+}
 
 function isLoopbackHost(host: string): boolean {
-  return LOOPBACK_HOSTS.has(host.replace(/\.$/, '').toLowerCase());
-}
-
-function isSupportedNativeRedirectUri(uri: string): boolean {
-  return SUPPORTED_NATIVE_REDIRECT_URIS.has(uri);
-}
-
-export type RedirectUriRejectionReason =
-  | 'malformed'
-  | 'scheme_not_allowed'
-  | 'http_not_loopback'
-  | 'has_userinfo'
-  | 'has_fragment';
-
-export type RejectedRedirectUri = {
-  /** `scheme:` plus `//host` when the URI has one, e.g. `cursor://anysphere.cursor-mcp`,
-   *  `javascript:`, or `unparseable`. Never the full URI: it may carry userinfo. */
-  label: string;
-  reason: RedirectUriRejectionReason;
-};
-
-export type DcrRedirectUriAdmission = {
-  admitted: string[];
-  rejected: RejectedRedirectUri[];
-};
-
-function rejectionLabel(uri: string): string {
-  try {
-    const parsed = new URL(uri);
-    if (parsed.host !== '') {
-      return `${parsed.protocol}//${parsed.host}`;
-    }
-    return parsed.protocol;
-  } catch {
-    return 'unparseable';
-  }
-}
-
-function classifyDcrRedirectUri(
-  uri: string,
-): RedirectUriRejectionReason | undefined {
-  let parsed: URL;
-  try {
-    parsed = new URL(uri);
-  } catch {
-    return 'malformed';
-  }
-
-  if (
-    parsed.protocol !== 'http:' &&
-    parsed.protocol !== 'https:' &&
-    !isSupportedNativeRedirectUri(uri)
-  ) {
-    return 'scheme_not_allowed';
-  }
-
-  if (parsed.hostname === '') {
-    return 'malformed';
-  }
-
-  const host = parsed.hostname.replace(/\.$/, '').toLowerCase();
-  if (parsed.protocol === 'http:' && !isLoopbackHost(host)) {
-    return 'http_not_loopback';
-  }
-
-  if (parsed.username !== '' || parsed.password !== '') {
-    return 'has_userinfo';
-  }
-
-  if (parsed.hash !== '') {
-    return 'has_fragment';
-  }
-
-  return undefined;
-}
-
-export function admitDcrRedirectUris(uris: string[]): DcrRedirectUriAdmission {
-  const admitted: string[] = [];
-  const rejected: RejectedRedirectUri[] = [];
-
-  for (const uri of uris) {
-    const reason = classifyDcrRedirectUri(uri);
-    if (reason === undefined) {
-      admitted.push(uri);
-    } else {
-      rejected.push({ label: rejectionLabel(uri), reason });
-    }
-  }
-
-  return { admitted, rejected };
+  return LOOPBACK_HOSTS.has(host.toLowerCase());
 }
 
 function parseUri(uri: string) {

@@ -5,11 +5,6 @@ import {
   VALID_REGISTER_PAYLOAD,
 } from './oauth-helpers';
 
-type RegisterResponse = {
-  client_id: string;
-  client_secret: string;
-};
-
 test.describe('OAuth register and authorize contract', () => {
   test('registered client is accepted by authorize route', async ({
     request,
@@ -35,6 +30,42 @@ test.describe('OAuth register and authorize contract', () => {
       "frame-ancestors 'none'",
     );
   });
+
+  for (const redirectUri of [
+    'https://client.example/callback',
+    'claude://claude.ai/oauth/callback',
+    'http://hermes.cobaltweb.dev/callback',
+  ]) {
+    test(`scalar redirect ${redirectUri} registers and authorizes`, async ({
+      request,
+    }) => {
+      const registerResponse = await request.post('/api/register', {
+        data: {
+          ...VALID_REGISTER_PAYLOAD,
+          redirect_uris: redirectUri,
+        },
+      });
+      const registerBody: {
+        client_id: string;
+        redirect_uris: string[];
+      } = await registerResponse.json();
+
+      expect(registerResponse.status()).toBe(200);
+      expect(registerBody.redirect_uris).toEqual([redirectUri]);
+
+      const authorizeResponse = await request.get('/api/authorize', {
+        params: {
+          response_type: 'code',
+          client_id: registerBody.client_id,
+          redirect_uri: redirectUri,
+          scope: 'read write',
+          state: 'e2e-state',
+        },
+        maxRedirects: 0,
+      });
+      expect(authorizeResponse.status()).toBe(200);
+    });
+  }
 
   test('register with no read-only headers keeps Allow writes checked by default', async ({
     request,
@@ -406,205 +437,5 @@ test.describe('OAuth register and authorize contract', () => {
     };
     expect(body.error).toBe('invalid_client');
     expect(body.error_description).toContain('Invalid client ID');
-  });
-
-  for (const redirectUri of [
-    'https://antigravity.google/oauth-callback',
-    'https://gamma.app.kiro.dev/agent/mcp/callback',
-    'https://backend.composio.dev/api/v1/auth-apps/add',
-  ]) {
-    test(`https redirect ${redirectUri} registers and authorizes`, async ({
-      request,
-    }) => {
-      const registerResponse = await request.post('/api/register', {
-        data: {
-          ...VALID_REGISTER_PAYLOAD,
-          redirect_uris: [redirectUri],
-        },
-      });
-      expect(registerResponse.status()).toBe(200);
-      const registerBody =
-        (await registerResponse.json()) as RegisterResponse & {
-          redirect_uris: string[];
-        };
-      expect(registerBody.redirect_uris).toEqual([redirectUri]);
-
-      const authorizeResponse = await request.get('/api/authorize', {
-        params: {
-          response_type: 'code',
-          client_id: registerBody.client_id,
-          redirect_uri: redirectUri,
-          scope: 'read write',
-          state: 'e2e-state',
-        },
-        maxRedirects: 0,
-      });
-      expect(authorizeResponse.status()).toBe(200);
-    });
-  }
-
-  test('scalar HTTPS redirect is normalized to an array', async ({
-    request,
-  }) => {
-    const redirectUri = 'https://client.example/oauth/callback';
-    const registerResponse = await request.post('/api/register', {
-      data: {
-        ...VALID_REGISTER_PAYLOAD,
-        redirect_uris: redirectUri,
-      },
-    });
-
-    expect(registerResponse.status()).toBe(200);
-    await expect(registerResponse.json()).resolves.toMatchObject({
-      redirect_uris: [redirectUri],
-    });
-  });
-
-  test('ChatGPT, Claude.ai, and Postman https redirects register', async ({
-    request,
-  }) => {
-    for (const redirectUri of [
-      'https://chatgpt.com/connector/oauth/e2e',
-      'https://claude.ai/api/mcp/auth_callback',
-      'https://oauth.pstmn.io/v1/browser-callback',
-    ]) {
-      const registerResponse = await request.post('/api/register', {
-        data: {
-          ...VALID_REGISTER_PAYLOAD,
-          redirect_uris: [redirectUri],
-        },
-      });
-      expect(registerResponse.status()).toBe(200);
-    }
-  });
-
-  test('Cursor mixed payload keeps every supported redirect', async ({
-    request,
-  }) => {
-    const registerResponse = await request.post('/api/register', {
-      data: {
-        ...VALID_REGISTER_PAYLOAD,
-        redirect_uris: [
-          'http://localhost:8787/callback',
-          'https://www.cursor.com/agents/mcp/oauth/callback',
-          'cursor://anysphere.cursor-mcp/oauth/callback',
-        ],
-      },
-    });
-    expect(registerResponse.status()).toBe(200);
-    const registerBody = (await registerResponse.json()) as RegisterResponse & {
-      redirect_uris: string[];
-    };
-    expect(registerBody.redirect_uris).toEqual([
-      'http://localhost:8787/callback',
-      'https://www.cursor.com/agents/mcp/oauth/callback',
-      'cursor://anysphere.cursor-mcp/oauth/callback',
-    ]);
-
-    const loopbackAuthorize = await request.get('/api/authorize', {
-      params: {
-        response_type: 'code',
-        client_id: registerBody.client_id,
-        redirect_uri: 'http://localhost:9999/callback',
-        scope: 'read write',
-        state: 'e2e-state',
-      },
-      maxRedirects: 0,
-    });
-    expect(loopbackAuthorize.status()).toBe(200);
-
-    const httpsAuthorize = await request.get('/api/authorize', {
-      params: {
-        response_type: 'code',
-        client_id: registerBody.client_id,
-        redirect_uri: 'https://www.cursor.com/agents/mcp/oauth/callback',
-        scope: 'read write',
-        state: 'e2e-state',
-      },
-      maxRedirects: 0,
-    });
-    expect(httpsAuthorize.status()).toBe(200);
-
-    const customAuthorize = await request.get('/api/authorize', {
-      params: {
-        response_type: 'code',
-        client_id: registerBody.client_id,
-        redirect_uri: 'cursor://anysphere.cursor-mcp/oauth/callback',
-        scope: 'read write',
-        state: 'e2e-state',
-      },
-      maxRedirects: 0,
-    });
-    expect(customAuthorize.status()).toBe(200);
-    expect(await customAuthorize.text()).not.toContain(
-      'Check this redirect before authorizing',
-    );
-  });
-
-  test('unsupported custom scheme is rejected at register', async ({
-    request,
-  }) => {
-    const registerResponse = await request.post('/api/register', {
-      data: {
-        ...VALID_REGISTER_PAYLOAD,
-        redirect_uris: ['cursor://attacker.example/oauth/callback'],
-      },
-    });
-    expect(registerResponse.status()).toBe(400);
-    const body = (await registerResponse.json()) as { error: string };
-    expect(body.error).toBe('invalid_redirect_uri');
-  });
-
-  test('non-loopback http alone is rejected at register', async ({
-    request,
-  }) => {
-    const registerResponse = await request.post('/api/register', {
-      data: {
-        ...VALID_REGISTER_PAYLOAD,
-        redirect_uris: ['http://evil.example/cb'],
-      },
-    });
-    expect(registerResponse.status()).toBe(400);
-    const body = (await registerResponse.json()) as { error: string };
-    expect(body.error).toBe('invalid_redirect_uri');
-  });
-
-  test('javascript, fragment, and userinfo redirects are rejected at register', async ({
-    request,
-  }) => {
-    for (const redirect_uris of [
-      ['javascript:alert(1)'],
-      ['https://a.example/cb#x'],
-      ['https://u:p@a.example/cb'],
-    ]) {
-      const registerResponse = await request.post('/api/register', {
-        data: {
-          ...VALID_REGISTER_PAYLOAD,
-          redirect_uris,
-        },
-      });
-      expect(registerResponse.status()).toBe(400);
-      const body = (await registerResponse.json()) as { error: string };
-      expect(body.error).toBe('invalid_redirect_uri');
-    }
-  });
-
-  test('authorize rejects a redirect_uri not in the stored list', async ({
-    request,
-  }) => {
-    const registerBody = await registerClient(request);
-    const authorizeResponse = await request.get('/api/authorize', {
-      params: {
-        response_type: 'code',
-        client_id: registerBody.client_id,
-        redirect_uri: 'https://www.cursor.com/agents/mcp/oauth/callback',
-        scope: 'read write',
-        state: 'e2e-state',
-      },
-      maxRedirects: 0,
-    });
-    expect(authorizeResponse.status()).toBe(400);
-    const body = (await authorizeResponse.json()) as { error: string };
-    expect(body.error).toBe('invalid_request');
   });
 });

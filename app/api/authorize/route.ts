@@ -5,8 +5,8 @@ import { upstreamAuth } from '../../../lib/oauth/client';
 import { handleOAuthError } from '../../../lib/errors';
 import { logger } from '../../../mcp/utils/logger';
 import {
-  admitDcrRedirectUris,
   matchesRedirectUri,
+  normalizeRedirectUris,
 } from '../../../lib/oauth/redirect-uri';
 import {
   consentCanonicalLocation,
@@ -70,31 +70,6 @@ function parseAuthRequest(
   };
 }
 
-function storedStringArray(
-  record: Record<string, unknown>,
-  field: string,
-): string[] | undefined {
-  const value = record[field];
-  return Array.isArray(value) &&
-    value.length > 0 &&
-    value.every((item) => typeof item === 'string')
-    ? value
-    : undefined;
-}
-
-function storedRedirectUris(
-  record: Record<string, unknown>,
-): string[] | undefined {
-  const value = record.redirect_uris;
-  const candidates =
-    typeof value === 'string'
-      ? [value]
-      : storedStringArray(record, 'redirect_uris');
-  if (!candidates) return undefined;
-  const { admitted } = admitDcrRedirectUris(candidates);
-  return admitted.length > 0 ? admitted : undefined;
-}
-
 function consentClientFields(client: object): {
   client_name?: string;
   client_uri?: string;
@@ -103,7 +78,7 @@ function consentClientFields(client: object): {
   const record = Object.fromEntries(Object.entries(client));
   const clientName = record.client_name;
   const clientUri = record.client_uri;
-  const redirectUris = storedRedirectUris(record);
+  const redirectUris = normalizeRedirectUris(record.redirect_uris);
   return {
     client_name: typeof clientName === 'string' ? clientName : undefined,
     client_uri: typeof clientUri === 'string' ? clientUri : undefined,
@@ -255,19 +230,17 @@ export async function GET(request: NextRequest) {
       return jsonError('invalid_client', 'Invalid client ID');
     }
 
-    const clientRecord = Object.fromEntries(Object.entries(client));
-    const responseTypes = storedStringArray(clientRecord, 'response_types');
-    const registeredRedirectUris = storedRedirectUris(clientRecord);
-    if (!responseTypes || !registeredRedirectUris) {
-      logger.warn('Invalid stored client metadata', { clientId });
-      return jsonError('invalid_client', 'Invalid client metadata');
+    const registeredRedirectUris = normalizeRedirectUris(client.redirect_uris);
+    if (!registeredRedirectUris) {
+      logger.warn('Invalid stored redirect URIs', { clientId });
+      return jsonError('invalid_client', 'Invalid redirect URI metadata');
     }
 
-    if (!responseTypes.includes(requestParams.responseType)) {
+    if (!client.response_types.includes(requestParams.responseType)) {
       logger.warn('Invalid response type', {
         clientId,
         providedResponseType: requestParams.responseType,
-        supportedResponseTypes: responseTypes,
+        supportedResponseTypes: client.response_types,
       });
       return jsonError('unsupported_response_type', 'Invalid response type');
     }

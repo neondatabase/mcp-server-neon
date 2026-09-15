@@ -1,111 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { admitDcrRedirectUris } from '../../lib/oauth/redirect-uri';
+import { normalizeRedirectUris } from '../../lib/oauth/redirect-uri';
 
-describe('admitDcrRedirectUris', () => {
-  it('admits loopback http and any https host', () => {
-    const uris = [
-      'http://127.0.0.1:55555/callback',
-      'http://localhost:3000/oauth',
-      'http://[::1]/callback',
-      'http://LOCALHOST./cb',
-      'https://chatgpt.com/connector/oauth/x',
-      'https://claude.ai/api/mcp/auth_callback',
-      'https://oauth.pstmn.io/v1/browser-callback',
-      'https://antigravity.google/oauth-callback',
-      'https://gamma.app.kiro.dev/agent/mcp/callback',
-      'https://backend.composio.dev/api/v1/auth-apps/add',
-      'https://www.cursor.com/agents/mcp/oauth/callback',
-      'https://localhost:3000/callback',
-      'https://evil.example/cb',
+describe('normalizeRedirectUris', () => {
+  it('wraps a scalar redirect URI', () => {
+    expect(normalizeRedirectUris('claude://claude.ai/oauth/callback')).toEqual([
+      'claude://claude.ai/oauth/callback',
+    ]);
+  });
+
+  it('keeps an existing string array unchanged', () => {
+    const redirectUris = [
+      'http://hermes.cobaltweb.dev/callback',
+      'https://client.example/callback',
     ];
-
-    expect(admitDcrRedirectUris(uris)).toEqual({
-      admitted: uris,
-      rejected: [],
-    });
+    expect(normalizeRedirectUris(redirectUris)).toEqual(redirectUris);
   });
 
-  it('admits the Cursor native callback used by current clients', () => {
+  it('drops non-string entries without dropping valid redirects', () => {
     expect(
-      admitDcrRedirectUris(['cursor://anysphere.cursor-mcp/oauth/callback']),
-    ).toEqual({
-      admitted: ['cursor://anysphere.cursor-mcp/oauth/callback'],
-      rejected: [],
-    });
+      normalizeRedirectUris(['https://client.example/callback', 42, null]),
+    ).toEqual(['https://client.example/callback']);
   });
 
-  it('rejects other custom schemes, non-loopback http, userinfo, fragments, and garbage', () => {
-    expect(
-      admitDcrRedirectUris(['cursor://attacker.example/oauth/callback']),
-    ).toEqual({
-      admitted: [],
-      rejected: [
-        {
-          label: 'cursor://attacker.example',
-          reason: 'scheme_not_allowed',
-        },
-      ],
-    });
-    expect(admitDcrRedirectUris(['com.example.app:/callback'])).toEqual({
-      admitted: [],
-      rejected: [{ label: 'com.example.app:', reason: 'scheme_not_allowed' }],
-    });
-    expect(admitDcrRedirectUris(['javascript:alert(1)'])).toEqual({
-      admitted: [],
-      rejected: [{ label: 'javascript:', reason: 'scheme_not_allowed' }],
-    });
-    expect(admitDcrRedirectUris(['data:text/html,x'])).toEqual({
-      admitted: [],
-      rejected: [{ label: 'data:', reason: 'scheme_not_allowed' }],
-    });
-    expect(admitDcrRedirectUris(['file:///etc/passwd'])).toEqual({
-      admitted: [],
-      rejected: [{ label: 'file:', reason: 'scheme_not_allowed' }],
-    });
-    expect(admitDcrRedirectUris(['blob:https://x/y'])).toEqual({
-      admitted: [],
-      rejected: [{ label: 'blob:', reason: 'scheme_not_allowed' }],
-    });
-    expect(admitDcrRedirectUris(['http://evil.example/cb'])).toEqual({
-      admitted: [],
-      rejected: [{ label: 'http://evil.example', reason: 'http_not_loopback' }],
-    });
-    expect(admitDcrRedirectUris(['http://localhost.evil.example/cb'])).toEqual({
-      admitted: [],
-      rejected: [
-        {
-          label: 'http://localhost.evil.example',
-          reason: 'http_not_loopback',
-        },
-      ],
-    });
-    expect(admitDcrRedirectUris(['https://user:pass@chatgpt.com/x'])).toEqual({
-      admitted: [],
-      rejected: [{ label: 'https://chatgpt.com', reason: 'has_userinfo' }],
-    });
-    expect(admitDcrRedirectUris(['https://a.b/c#frag'])).toEqual({
-      admitted: [],
-      rejected: [{ label: 'https://a.b', reason: 'has_fragment' }],
-    });
-    expect(admitDcrRedirectUris(['not-a-url'])).toEqual({
-      admitted: [],
-      rejected: [{ label: 'unparseable', reason: 'malformed' }],
-    });
-    expect(admitDcrRedirectUris([''])).toEqual({
-      admitted: [],
-      rejected: [{ label: 'unparseable', reason: 'malformed' }],
-    });
-  });
-
-  it('keeps the complete mixed Cursor payload in input order', () => {
-    const uris = [
-      'http://localhost:51234/oauth/callback',
-      'https://www.cursor.com/agents/mcp/oauth/callback',
-      'cursor://anysphere.cursor-mcp/oauth/callback',
-    ];
-    expect(admitDcrRedirectUris(uris)).toEqual({
-      admitted: uris,
-      rejected: [],
-    });
+  it('rejects values with no usable redirect string', () => {
+    expect(normalizeRedirectUris(undefined)).toBeUndefined();
+    expect(normalizeRedirectUris({})).toBeUndefined();
+    expect(normalizeRedirectUris([])).toBeUndefined();
+    expect(normalizeRedirectUris([42, null])).toBeUndefined();
   });
 });

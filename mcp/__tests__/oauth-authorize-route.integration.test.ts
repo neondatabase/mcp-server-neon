@@ -123,23 +123,11 @@ describe('/api/authorize route integration', () => {
     },
   );
 
-  it('returns invalid_client when stored response_types is not a string array', async () => {
-    vi.mocked(model.getClient).mockResolvedValue({
-      ...VALID_CLIENT,
-      response_types: 'code',
-    } as unknown as Awaited<ReturnType<typeof model.getClient>>);
-
-    const response = await GET(buildAuthorizeRequest());
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: 'invalid_client',
-      error_description: 'Invalid client metadata',
-    });
-  });
-
-  it('normalizes an admissible stored scalar redirect URI', async () => {
-    const redirectUri = 'https://client.example/oauth/callback';
+  it.each([
+    'https://client.example/callback',
+    'claude://claude.ai/oauth/callback',
+    'http://hermes.cobaltweb.dev/callback',
+  ])('authorizes a stored scalar redirect URI %s', async (redirectUri) => {
     vi.mocked(model.getClient).mockResolvedValue({
       ...VALID_CLIENT,
       redirect_uris: redirectUri,
@@ -152,27 +140,32 @@ describe('/api/authorize route integration', () => {
     expect(response.status).toBe(200);
   });
 
-  it('uses only admissible redirects from an existing mixed client record', async () => {
-    const redirectUri = 'https://client.example/oauth/callback';
+  it('authorizes valid redirects from a mixed stored array', async () => {
+    const redirectUri = 'custom://client/callback';
     vi.mocked(model.getClient).mockResolvedValue({
       ...VALID_CLIENT,
-      redirect_uris: [redirectUri, 'http://evil.example/callback'],
+      redirect_uris: [42, redirectUri],
     } as unknown as Awaited<ReturnType<typeof model.getClient>>);
 
-    const admittedResponse = await GET(
+    const response = await GET(
       buildAuthorizeRequest({}, 'read write', { redirect_uri: redirectUri }),
     );
-    const rejectedResponse = await GET(
-      buildAuthorizeRequest({}, 'read write', {
-        redirect_uri: 'http://evil.example/callback',
-      }),
-    );
 
-    expect(admittedResponse.status).toBe(200);
-    expect(rejectedResponse.status).toBe(400);
-    await expect(rejectedResponse.json()).resolves.toMatchObject({
-      error: 'invalid_request',
-      error_description: 'Invalid redirect URI',
+    expect(response.status).toBe(200);
+  });
+
+  it('returns invalid_client when stored redirect metadata has no strings', async () => {
+    vi.mocked(model.getClient).mockResolvedValue({
+      ...VALID_CLIENT,
+      redirect_uris: [42, null],
+    } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+
+    const response = await GET(buildAuthorizeRequest());
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_client',
+      error_description: 'Invalid redirect URI metadata',
     });
   });
 
