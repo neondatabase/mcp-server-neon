@@ -259,7 +259,9 @@ export async function GET(request: NextRequest) {
       return jsonError('unsupported_response_type', 'Invalid response type');
     }
 
-    if (!matchesRedirectUri(requestParams.redirectUri, registeredRedirectUris)) {
+    if (
+      !matchesRedirectUri(requestParams.redirectUri, registeredRedirectUris)
+    ) {
       logger.warn('Invalid redirect URI', {
         clientId: requestParams.clientId,
         providedRedirectUri: requestParams.redirectUri,

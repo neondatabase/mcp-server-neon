@@ -9,11 +9,11 @@ const SUPPORTED_NATIVE_REDIRECT_URIS = new Set([
   'cursor://anysphere.cursor-mcp/oauth/callback',
 ]);
 
-export function isLoopbackHost(host: string): boolean {
+function isLoopbackHost(host: string): boolean {
   return LOOPBACK_HOSTS.has(host.replace(/\.$/, '').toLowerCase());
 }
 
-export function isSupportedNativeRedirectUri(uri: string): boolean {
+function isSupportedNativeRedirectUri(uri: string): boolean {
   return SUPPORTED_NATIVE_REDIRECT_URIS.has(uri);
 }
 
