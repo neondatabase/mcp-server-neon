@@ -68,6 +68,27 @@ async function readJsonRpcMessages(
 }
 
 test.describe('Docs-only MCP endpoint (no OAuth)', () => {
+  test('malformed JSON returns a protocol error without hanging', async ({
+    request,
+  }) => {
+    test.setTimeout(5_000);
+    const response = await request.post('/mcp?category=docs', {
+      headers: MCP_HEADERS,
+      data: '{',
+    });
+
+    expect(response.status()).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      jsonrpc: '2.0',
+      error: {
+        code: -32600,
+        message:
+          'Bad Request: the request body is not a valid JSON-RPC message',
+      },
+      id: null,
+    });
+  });
+
   test('legacy initialize succeeds without Authorization header on ?category=docs', async ({
     request,
   }) => {
