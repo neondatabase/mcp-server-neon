@@ -102,12 +102,7 @@ describe('/api/register route integration', () => {
     expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
   });
 
-  it.each([
-    'http://127.0.0.1:55555/callback',
-    [],
-    [42],
-    { callback: 'http://127.0.0.1:55555/callback' },
-  ])(
+  it.each([[], [42], { callback: 'http://127.0.0.1:55555/callback' }])(
     'returns 400 when redirect_uris is not a nonempty string array',
     async (redirect_uris) => {
       const response = await POST(
@@ -122,6 +117,21 @@ describe('/api/register route integration', () => {
       expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
     },
   );
+
+  it('normalizes a scalar redirect URI before validation and storage', async () => {
+    const redirectUri = 'https://client.example/oauth/callback';
+    const response = await POST(
+      buildRequest({ ...VALID_PAYLOAD, redirect_uris: redirectUri }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      redirect_uris: [redirectUri],
+    });
+    expect(vi.mocked(model.saveClient)).toHaveBeenCalledWith(
+      expect.objectContaining({ redirect_uris: [redirectUri] }),
+    );
+  });
 
   it('registers the Cursor native callback used by current clients', async () => {
     const redirectUri = 'cursor://anysphere.cursor-mcp/oauth/callback';

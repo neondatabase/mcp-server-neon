@@ -443,6 +443,23 @@ test.describe('OAuth register and authorize contract', () => {
     });
   }
 
+  test('scalar HTTPS redirect is normalized to an array', async ({
+    request,
+  }) => {
+    const redirectUri = 'https://client.example/oauth/callback';
+    const registerResponse = await request.post('/api/register', {
+      data: {
+        ...VALID_REGISTER_PAYLOAD,
+        redirect_uris: redirectUri,
+      },
+    });
+
+    expect(registerResponse.status()).toBe(200);
+    await expect(registerResponse.json()).resolves.toMatchObject({
+      redirect_uris: [redirectUri],
+    });
+  });
+
   test('ChatGPT, Claude.ai, and Postman https redirects register', async ({
     request,
   }) => {

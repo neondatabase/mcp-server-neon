@@ -4,7 +4,10 @@ import { model } from '../../../mcp/oauth/model';
 import { upstreamAuth } from '../../../lib/oauth/client';
 import { handleOAuthError } from '../../../lib/errors';
 import { logger } from '../../../mcp/utils/logger';
-import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
+import {
+  admitDcrRedirectUris,
+  matchesRedirectUri,
+} from '../../../lib/oauth/redirect-uri';
 import {
   consentCanonicalLocation,
   InvalidRequestOriginError,
@@ -79,6 +82,19 @@ function storedStringArray(
     : undefined;
 }
 
+function storedRedirectUris(
+  record: Record<string, unknown>,
+): string[] | undefined {
+  const value = record.redirect_uris;
+  const candidates =
+    typeof value === 'string'
+      ? [value]
+      : storedStringArray(record, 'redirect_uris');
+  if (!candidates) return undefined;
+  const { admitted } = admitDcrRedirectUris(candidates);
+  return admitted.length > 0 ? admitted : undefined;
+}
+
 function consentClientFields(client: object): {
   client_name?: string;
   client_uri?: string;
@@ -87,7 +103,7 @@ function consentClientFields(client: object): {
   const record = Object.fromEntries(Object.entries(client));
   const clientName = record.client_name;
   const clientUri = record.client_uri;
-  const redirectUris = storedStringArray(record, 'redirect_uris');
+  const redirectUris = storedRedirectUris(record);
   return {
     client_name: typeof clientName === 'string' ? clientName : undefined,
     client_uri: typeof clientUri === 'string' ? clientUri : undefined,
@@ -241,10 +257,7 @@ export async function GET(request: NextRequest) {
 
     const clientRecord = Object.fromEntries(Object.entries(client));
     const responseTypes = storedStringArray(clientRecord, 'response_types');
-    const registeredRedirectUris = storedStringArray(
-      clientRecord,
-      'redirect_uris',
-    );
+    const registeredRedirectUris = storedRedirectUris(clientRecord);
     if (!responseTypes || !registeredRedirectUris) {
       logger.warn('Invalid stored client metadata', { clientId });
       return jsonError('invalid_client', 'Invalid client metadata');

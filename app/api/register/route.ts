@@ -52,10 +52,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const redirectUris =
+      typeof payload.redirect_uris === 'string'
+        ? [payload.redirect_uris]
+        : payload.redirect_uris;
     if (
-      !Array.isArray(payload.redirect_uris) ||
-      payload.redirect_uris.length === 0 ||
-      !payload.redirect_uris.every((uri: unknown) => typeof uri === 'string')
+      !Array.isArray(redirectUris) ||
+      redirectUris.length === 0 ||
+      !redirectUris.every((uri: unknown) => typeof uri === 'string')
     ) {
       logger.warn('Client registration validation failed', {
         reason: 'redirect_uris_missing',
@@ -70,7 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { admitted, rejected }: DcrRedirectUriAdmission =
-      admitDcrRedirectUris(payload.redirect_uris);
+      admitDcrRedirectUris(redirectUris);
     if (admitted.length === 0) {
       logger.warn('Client registration validation failed', {
         reason: 'no_admissible_redirect_uri',
