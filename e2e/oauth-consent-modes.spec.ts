@@ -1,4 +1,4 @@
-import { test, expect, type Locator, type Page } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import {
   authorizePath,
   capture,
@@ -16,19 +16,12 @@ async function clearScreenshotInteractionState(page: Page): Promise<void> {
   await page.mouse.move(0, 0);
 }
 
-async function expectPersistentScrollbar(locator: Locator): Promise<void> {
-  const styles = await locator.evaluate((element) => ({
-    gutter: getComputedStyle(element).scrollbarGutter,
-    overflowY: getComputedStyle(element).overflowY,
-    scrollbarWidth: getComputedStyle(element).scrollbarWidth,
-    webkitWidth: getComputedStyle(element, '::-webkit-scrollbar').width,
-  }));
-  expect(styles).toEqual({
-    gutter: 'stable',
-    overflowY: 'scroll',
-    scrollbarWidth: 'thin',
-    webkitWidth: '10px',
-  });
+async function openCategoryDisclosure(page: Page): Promise<void> {
+  const disclosure = page.locator('[data-category-disclosure]');
+  if ((await disclosure.getAttribute('open')) === null) {
+    await disclosure.locator('summary').click();
+  }
+  await expect(disclosure).toHaveAttribute('open', '');
 }
 
 test.describe('OAuth consent modes', () => {
@@ -197,25 +190,32 @@ test.describe('OAuth consent modes', () => {
     await expect(
       page.getByText('Tool categories', { exact: true }),
     ).toBeVisible();
-    const categoryScroll = page.locator('[data-category-scroll]');
+    const categoryDisclosure = page.locator('[data-category-disclosure]');
+    const categorySummary = categoryDisclosure.locator('summary');
+    await expect(categorySummary).toContainText('All selected');
+    await expect(categoryDisclosure).not.toHaveAttribute('open', '');
+    await categorySummary.focus();
+    await page.keyboard.press('Enter');
+    await expect(categoryDisclosure).toHaveAttribute('open', '');
+    await page.keyboard.press('Space');
+    await expect(categoryDisclosure).not.toHaveAttribute('open', '');
+    await openCategoryDisclosure(page);
+    const categoryGrid = page.locator('[data-category-grid]');
     await expect(
-      categoryScroll.locator('span').filter({ hasText: 'Projects' }),
+      categoryGrid.locator('span').filter({ hasText: 'Projects' }),
     ).toBeInViewport();
-    await expect(categoryScroll).toBeVisible();
-    const categoryOverflows = await categoryScroll.evaluate(
-      (el) => el.scrollHeight > el.clientHeight + 1 && el.clientHeight >= 80,
-    );
-    expect(categoryOverflows).toBe(true);
     await page.getByRole('button', { name: 'Clear categories' }).click();
     expect(await page.locator('input[name="category"]:checked').count()).toBe(
       0,
     );
+    await expect(categorySummary).toContainText('None selected');
     await page.getByRole('button', { name: 'Select all' }).click();
     expect(await page.locator('input[name="category"]:checked').count()).toBe(
       12,
     );
+    await expect(categorySummary).toContainText('All selected');
     expect(
-      await categoryScroll.evaluate(
+      await categoryGrid.evaluate(
         (element) =>
           getComputedStyle(element).gridTemplateColumns.split(' ').length,
       ),
@@ -225,9 +225,23 @@ test.describe('OAuth consent modes', () => {
     await expect(lastCategory).toBeFocused();
     await expect(lastCategory).toBeInViewport();
     await lastCategory.blur();
-    await categoryScroll.evaluate((element) => {
-      element.scrollTop = 0;
-    });
+    const categoriesBeforeClose = await page
+      .locator('input[name="category"]:checked')
+      .evaluateAll((inputs) =>
+        inputs.map((input) =>
+          input instanceof HTMLInputElement ? input.value : '',
+        ),
+      );
+    await categorySummary.click();
+    await expect(categoryDisclosure).not.toHaveAttribute('open', '');
+    const submittedCategories = await page
+      .locator('#authorize-form')
+      .evaluate((form) =>
+        form instanceof HTMLFormElement
+          ? new FormData(form).getAll('category')
+          : [],
+      );
+    expect(submittedCategories).toEqual(categoriesBeforeClose);
     await expect(
       page.getByRole('button', { name: 'Approve and continue to Neon' }),
     ).toBeInViewport();
@@ -237,6 +251,10 @@ test.describe('OAuth consent modes', () => {
     if (bodyBox && footBox) {
       expect(bodyBox.y + bodyBox.height).toBeLessThanOrEqual(footBox.y + 1);
     }
+    await page
+      .locator('.card-body')
+      .evaluate((element) => element.scrollTo({ top: 0 }));
+    await expect(page.locator('h1')).toBeInViewport();
     await clearScreenshotInteractionState(page);
     await capture(page, 'B1-bare-editable');
   });
@@ -269,6 +287,7 @@ test.describe('OAuth consent modes', () => {
     await openAuthorize(page, request);
     await page.getByText('One project', { exact: true }).click();
     await page.locator('input[name="projectId"]').fill('proj-example');
+    await openCategoryDisclosure(page);
     const categories = page.locator('input[name="category"]');
     const count = await categories.count();
     for (let i = 0; i < count; i += 1) {
@@ -281,6 +300,9 @@ test.describe('OAuth consent modes', () => {
         await box.uncheck();
       }
     }
+    await expect(page.locator('[data-category-summary]')).toHaveText(
+      '2 of 12 selected',
+    );
     await expect(page.locator('[data-access-mode]')).toHaveText(
       'Read and write',
     );
@@ -297,11 +319,15 @@ test.describe('OAuth consent modes', () => {
     request,
   }) => {
     await openAuthorize(page, request);
+    await openCategoryDisclosure(page);
     const categories = page.locator('input[name="category"]');
     const count = await categories.count();
     for (let i = 0; i < count; i += 1) {
       await categories.nth(i).uncheck();
     }
+    await expect(page.locator('[data-category-summary]')).toHaveText(
+      'None selected',
+    );
     await expect(
       page.getByText(
         'With all projects selected, Search and Fetch remain available.',
@@ -342,7 +368,11 @@ test.describe('OAuth consent modes', () => {
   }) => {
     await openAuthorize(page, request);
     await page.getByText('One project', { exact: true }).click();
+    await openCategoryDisclosure(page);
     await page.getByRole('button', { name: 'Clear categories' }).click();
+    await page.locator('input[name="category"][value="querying"]').check();
+    await page.locator('input[name="category"][value="schema"]').check();
+    await page.locator('.scope-checkbox').uncheck();
     await page
       .getByRole('button', { name: 'Approve and continue to Neon' })
       .click();
@@ -351,12 +381,17 @@ test.describe('OAuth consent modes', () => {
     ).toBeVisible();
 
     await page.locator('input[name="projectId"]').fill('proj-example');
-    await page.getByRole('button', { name: 'Select all' }).click();
+    await expect(page.locator('[data-category-summary]')).toHaveText(
+      '2 of 12 selected',
+    );
+    await expect(page.locator('.scope-checkbox')).not.toBeChecked();
+    await expect(page.locator('input[name="category"]:checked')).toHaveCount(2);
+    await openCategoryDisclosure(page);
 
     const toggle = page.getByRole('button', { name: 'View tools' });
     await expect(toggle).toBeVisible();
     await toggle.click();
-    await expect(page.locator('[data-tool-scroll]')).toBeVisible();
+    await expect(page.locator('[data-tool-content]')).toBeVisible();
   });
 
   test('B6 pressing Enter in Project ID approves instead of cancelling', async ({
@@ -407,8 +442,95 @@ test.describe('OAuth consent modes', () => {
     ).toBe(false);
   });
 
+  test('S1 card body is the only scroll owner and actions stay fixed', async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openAuthorize(page, request);
+    await page.locator('details.client-verify summary').click();
+    await openCategoryDisclosure(page);
+    await page.getByRole('button', { name: 'View tools' }).click();
+
+    const body = page.locator('.card-body');
+    const footer = page.locator('.card-foot');
+    const footerBefore = await footer.boundingBox();
+    expect(footerBefore).toBeTruthy();
+    await expect(body).toHaveAttribute('role', 'region');
+    await expect(body).toHaveAttribute(
+      'aria-label',
+      'Connection access details',
+    );
+    const scrollState = await page.evaluate(() => {
+      const body = document.querySelector('.card-body');
+      if (!(body instanceof HTMLElement)) {
+        throw new Error('missing card body');
+      }
+      const nested = [
+        document.querySelector('.client-meta'),
+        document.querySelector('.check-grid'),
+        document.querySelector('[data-tool-content]'),
+      ];
+      return {
+        bodyOverflow: getComputedStyle(body).overflowY,
+        bodyOverflows: body.scrollHeight > body.clientHeight,
+        documentScrollTop: document.documentElement.scrollTop,
+        nestedOverflow: nested.map((element) =>
+          element ? getComputedStyle(element).overflowY : 'missing',
+        ),
+      };
+    });
+    expect(scrollState).toEqual({
+      bodyOverflow: 'auto',
+      bodyOverflows: true,
+      documentScrollTop: 0,
+      nestedOverflow: ['visible', 'visible', 'visible'],
+    });
+
+    for (const target of [
+      page.locator('.client-meta'),
+      page.locator('[data-category-grid]'),
+      page.locator('[data-tool-content]').first(),
+    ]) {
+      await target.hover();
+      const beforeWheel = await body.evaluate((element) => element.scrollTop);
+      await page.mouse.wheel(0, 300);
+      await expect
+        .poll(() => body.evaluate((element) => element.scrollTop))
+        .toBeGreaterThan(beforeWheel);
+    }
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          [
+            document.querySelector('.client-meta'),
+            document.querySelector('.check-grid'),
+            document.querySelector('[data-tool-content]'),
+          ].map((element) =>
+            element instanceof HTMLElement ? element.scrollTop : -1,
+          ),
+        ),
+      )
+      .toEqual([0, 0, 0]);
+
+    await body.focus();
+    await page.keyboard.press('End');
+    await expect
+      .poll(() => body.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+    await expect(
+      page.locator('[data-tool-content] li').last(),
+    ).toBeInViewport();
+    const footerAfter = await footer.boundingBox();
+    expect(footerAfter?.y).toBe(footerBefore?.y);
+    expect(await page.evaluate(() => document.documentElement.scrollTop)).toBe(
+      0,
+    );
+  });
+
   test('T1 collapse uses visible tools only', async ({ page, request }) => {
     await openAuthorize(page, request);
+    await openCategoryDisclosure(page);
     const categories = page.locator('input[name="category"]');
     const count = await categories.count();
     for (let i = 0; i < count; i += 1) {
@@ -443,12 +565,13 @@ test.describe('OAuth consent modes', () => {
     ).toBeVisible();
     await clearScreenshotInteractionState(page);
     await capture(page, 'T2-expanded');
-    const toolScroll = page.locator('[data-tool-scroll]');
-    await expectPersistentScrollbar(toolScroll);
-    await toolScroll.focus();
-    await expect(toolScroll).toBeFocused();
+    const body = page.locator('.card-body');
+    await body.focus();
+    await expect(body).toBeFocused();
     await page.keyboard.press('End');
-    await expect(toolScroll.locator('li').last()).toBeInViewport();
+    await expect(
+      page.locator('[data-tool-content] li').last(),
+    ).toBeInViewport();
   });
 
   test('L1 both modes at short desktop heights', async ({ page, request }) => {
@@ -466,20 +589,21 @@ test.describe('OAuth consent modes', () => {
     });
     await capture(page, 'L1-confirmation-720-actions');
     await page.setViewportSize({ width: 1280, height: 480 });
-    await approve.scrollIntoViewIfNeeded();
+    await expect(approve).toBeInViewport();
     await capture(page, 'L1-confirmation-480-actions');
     await capture(page, 'L1-confirmation-480-full', true);
 
     await page.setViewportSize({ width: 1280, height: 720 });
     await openAuthorize(page, request);
-    await expectPersistentScrollbar(page.locator('.card-body'));
-    await expectPersistentScrollbar(page.locator('[data-category-scroll]'));
     await page.getByRole('button', { name: 'View tools' }).click();
     const editableApprove = page.getByRole('button', {
       name: 'Approve and continue to Neon',
     });
     await expect(editableApprove).toBeInViewport();
     await capture(page, 'L1-editable-720-actions');
+    await page.setViewportSize({ width: 1280, height: 480 });
+    await expect(editableApprove).toBeInViewport();
+    await capture(page, 'L1-editable-480-actions');
   });
 
   test('L2 mobile viewports', async ({ page, request }) => {
@@ -503,6 +627,16 @@ test.describe('OAuth consent modes', () => {
       page.getByRole('button', { name: 'Approve and continue to Neon' }),
     ).toBeInViewport();
     await capture(page, 'L2-editable-mobile-portrait');
+    await page.setViewportSize({ width: 667, height: 375 });
+    await expect(
+      page.getByRole('button', { name: 'Approve and continue to Neon' }),
+    ).toBeInViewport();
+    await capture(page, 'L2-editable-mobile-landscape');
+    await page.setViewportSize({ width: 320, height: 568 });
+    await expect(
+      page.getByRole('button', { name: 'Approve and continue to Neon' }),
+    ).toBeInViewport();
+    await capture(page, 'L2-editable-mobile-320px');
   });
 
   test('L3 long client names keep consent actions reachable', async ({

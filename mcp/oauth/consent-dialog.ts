@@ -274,11 +274,11 @@ function renderToolSections(view: ConsentView, interactive: boolean): string {
     </section>`;
   }
   const collapse = visibleToolCount(view) > COLLAPSE_ABOVE;
-  const body = `<div class="tool-scroll" data-tool-scroll tabindex="0" aria-label="Available tools">${renderToolGroupList(view.tools)}</div>`;
+  const body = `<div class="tool-content" id="available-tools-content" data-tool-content>${renderToolGroupList(view.tools)}</div>`;
   const summary = toolsSummary(view);
   const toggle =
     collapse || interactive
-      ? `<button type="button" class="tool-toggle" data-tool-toggle aria-expanded="false"${collapse ? '' : ' hidden'}>View tools</button>`
+      ? `<button type="button" class="tool-toggle" data-tool-toggle aria-controls="available-tools-content" aria-expanded="false"${collapse ? '' : ' hidden'}>View tools</button>`
       : '';
   const collapsedAttr = collapse ? ' data-tools-collapsed' : '';
   return `
@@ -355,6 +355,16 @@ function renderGrantSummary(view: ConsentView): string {
     </section>`;
 }
 
+function categorySelectionSummary(categories: ScopeCategory[]): string {
+  if (categories.length === 0) {
+    return 'None selected';
+  }
+  if (categories.length === SCOPE_CATEGORIES.length) {
+    return 'All selected';
+  }
+  return `${String(categories.length)} of ${String(SCOPE_CATEGORIES.length)} selected`;
+}
+
 function renderEditableGrant({
   formState,
   fieldError,
@@ -411,18 +421,21 @@ function renderEditableGrant({
           This page cannot list projects before you sign in.
         </p>
       </fieldset>
-      <section class="choice choice-categories" role="group" aria-labelledby="tool-categories-title">
-        <div class="choice-head">
-          <h3 class="choice-title" id="tool-categories-title">Tool categories</h3>
+      <details class="choice choice-categories" data-category-disclosure>
+        <summary class="category-disclosure-summary">
+          <span class="choice-title">Tool categories</span>
+          <span class="category-summary" data-category-summary>${categorySelectionSummary(formState.categories)}</span>
+        </summary>
+        <div class="category-disclosure-body">
           <div class="choice-actions">
             <button type="button" class="choice-action" data-category-select-all>Select all</button>
             <button type="button" class="choice-action" data-category-clear-all>Clear categories</button>
           </div>
+          <div class="check-grid" data-category-grid role="group" aria-label="Tool categories">
+            ${categoryBoxes}
+          </div>
         </div>
-        <div class="check-grid" data-category-grid data-category-scroll>
-          ${categoryBoxes}
-        </div>
-      </section>
+      </details>
     </section>`;
 }
 
@@ -547,10 +560,10 @@ function consentScript(mode: ConsentMode): string {
     }
 
     function renderTools(tools) {
-      var scroll = document.querySelector('[data-tool-scroll]');
-      if (!scroll) return;
+      var content = document.querySelector('[data-tool-content]');
+      if (!content) return;
       if (tools.length === 0) {
-        scroll.innerHTML = '<p class="empty-tools">None.</p>';
+        content.innerHTML = '<p class="empty-tools">None.</p>';
         return;
       }
       var order = [DISCOVERY_LABEL].concat(SCOPE_CATEGORIES.map(function (id) { return SCOPE_LABELS[id]; }));
@@ -560,7 +573,7 @@ function consentScript(mode: ConsentMode): string {
         if (!buckets[label]) buckets[label] = [];
         buckets[label].push(tool);
       });
-      scroll.innerHTML = order.map(function (label) {
+      content.innerHTML = order.map(function (label) {
         var group = buckets[label];
         if (!group) return '';
         return '<div class="tool-group"><div class="tool-group-label">' + label + '</div><ul class="tool-list">' +
@@ -581,6 +594,12 @@ function consentScript(mode: ConsentMode): string {
       return tools.length + ' ' + toolWord + ' · ' + count + ' ' + groupWord;
     }
 
+    function categorySummaryText(categories) {
+      if (categories.length === 0) return 'None selected';
+      if (categories.length === SCOPE_CATEGORIES.length) return 'All selected';
+      return categories.length + ' of ' + SCOPE_CATEGORIES.length + ' selected';
+    }
+
     function syncProjectField() {
       var one = document.querySelector('input[name="projectMode"][value="one"]');
       var field = document.querySelector('[data-project-id-field]');
@@ -599,6 +618,10 @@ function consentScript(mode: ConsentMode): string {
       var grant = currentGrant();
       var checked = writeChecked();
       var tools = filterCatalog(grant, checked);
+      var categorySummary = document.querySelector('[data-category-summary]');
+      if (categorySummary) {
+        categorySummary.textContent = categorySummaryText(selectedCategories());
+      }
       var mode = document.querySelector('[data-access-mode]');
       if (mode) {
         mode.textContent = checked ? 'Read and write' : 'Read-only';
@@ -764,14 +787,11 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       flex-direction: column;
       width: 100%;
       max-width: 36rem;
-      height: 100%;
+      height: 100vh;
+      height: 100dvh;
       margin: 0 auto;
       padding: 1.5rem 1.25rem 1.5rem;
       overflow: hidden;
-    }
-
-    .page > a {
-      flex-shrink: 0;
     }
 
     .brand {
@@ -779,7 +799,6 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       width: 2rem;
       height: 2rem;
       margin-bottom: 1rem;
-      flex-shrink: 0;
     }
 
     h1 {
@@ -791,7 +810,6 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       font-weight: 600;
       letter-spacing: -0.02em;
       overflow-wrap: anywhere;
-      flex-shrink: 0;
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
     }
@@ -807,7 +825,6 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
 
     .client-verify {
       margin-bottom: 1rem;
-      flex-shrink: 0;
       min-width: 0;
     }
 
@@ -857,16 +874,11 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     .client-meta {
       display: grid;
       gap: 0.45rem;
-      max-height: min(7rem, 18dvh);
       margin: 0;
-      padding: 0 0.25rem 0 1rem;
-      overflow-y: auto;
-      overscroll-behavior: contain;
+      padding: 0 0 0 1rem;
       font-size: 0.8rem;
       color: var(--muted);
       overflow-wrap: anywhere;
-      scrollbar-width: thin;
-      scrollbar-color: var(--line) transparent;
     }
 
     .client-meta > div {
@@ -908,9 +920,17 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       flex: 1 1 0%;
       min-height: 0;
       min-width: 0;
-      overflow: auto;
+      overflow-y: auto;
       overscroll-behavior: contain;
       padding-bottom: 0.5rem;
+      scrollbar-gutter: stable;
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+
+    .card-body:focus-visible {
+      outline: 1px solid rgba(0, 229, 153, 0.45);
+      outline-offset: -1px;
     }
 
     .panel, .choice {
@@ -922,17 +942,60 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       min-width: 0;
     }
 
-    .choice-head {
+    .category-disclosure-summary {
       display: flex;
-      align-items: baseline;
-      justify-content: space-between;
+      align-items: center;
       gap: 0.75rem;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .category-disclosure-summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .category-disclosure-summary::after {
+      content: '›';
+      flex-shrink: 0;
+      font-size: 1rem;
+      line-height: 1;
+      transition: transform 120ms ease;
+    }
+
+    .choice-categories[open] .category-disclosure-summary::after {
+      transform: rotate(90deg);
+    }
+
+    .category-disclosure-summary:focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 3px;
+      border-radius: 2px;
+    }
+
+    .category-disclosure-summary .choice-title {
+      margin: 0;
+    }
+
+    .category-summary {
+      min-width: 0;
+      margin-left: auto;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .category-disclosure-body {
+      margin-top: 0.75rem;
     }
 
     .choice-actions {
       display: flex;
+      justify-content: flex-end;
       gap: 0.65rem;
       flex-shrink: 0;
+      margin-bottom: 0.55rem;
     }
 
     .choice-action {
@@ -1045,14 +1108,6 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 0.45rem;
-      min-height: 3.25rem;
-      max-height: min(6.5rem, 17dvh);
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      padding-right: 0.25rem;
-      scrollbar-gutter: stable;
-      scrollbar-width: thin;
-      scrollbar-color: var(--line) transparent;
     }
 
     .choice-categories .check-option {
@@ -1145,60 +1200,31 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       border-color: rgba(0, 229, 153, 0.35);
     }
 
-    .tool-scroll {
-      max-height: min(12rem, 22dvh);
-      overflow-y: scroll;
-      overscroll-behavior: contain;
+    .tool-content {
       padding: 0.1rem 0.4rem 0.35rem 0;
     }
 
-    .card-body, .client-meta, .check-grid, .tool-scroll {
-      scrollbar-gutter: stable;
-      scrollbar-width: thin;
-      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
-    }
-
-    .card-body {
-      overflow-y: scroll;
-    }
-
-    .client-meta, .check-grid {
-      overflow-y: scroll;
-    }
-
-    .card-body::-webkit-scrollbar,
-    .client-meta::-webkit-scrollbar,
-    .check-grid::-webkit-scrollbar,
-    .tool-scroll::-webkit-scrollbar {
+    .card-body::-webkit-scrollbar {
       width: 10px;
     }
 
-    .card-body::-webkit-scrollbar-track,
-    .client-meta::-webkit-scrollbar-track,
-    .check-grid::-webkit-scrollbar-track,
-    .tool-scroll::-webkit-scrollbar-track {
+    .card-body::-webkit-scrollbar-track {
       background: var(--scrollbar-track);
       border-radius: 999px;
     }
 
-    .card-body::-webkit-scrollbar-thumb,
-    .client-meta::-webkit-scrollbar-thumb,
-    .check-grid::-webkit-scrollbar-thumb,
-    .tool-scroll::-webkit-scrollbar-thumb {
+    .card-body::-webkit-scrollbar-thumb {
       background: var(--scrollbar-thumb);
       min-height: 2rem;
       border: 2px solid var(--scrollbar-track);
       border-radius: 999px;
     }
 
-    .card-body::-webkit-scrollbar-thumb:hover,
-    .client-meta::-webkit-scrollbar-thumb:hover,
-    .check-grid::-webkit-scrollbar-thumb:hover,
-    .tool-scroll::-webkit-scrollbar-thumb:hover {
+    .card-body::-webkit-scrollbar-thumb:hover {
       background: var(--scrollbar-thumb-hover);
     }
 
-    .tool-block.is-collapsed .tool-scroll {
+    .tool-block.is-collapsed .tool-content {
       display: none;
     }
 
@@ -1312,38 +1338,38 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     }
 
     @media (max-height: 520px) {
-      html, body {
-        height: auto;
-        min-height: 100%;
-        overflow: auto;
-      }
-
       .page {
-        height: auto;
-        overflow: visible;
+        padding: 0.5rem;
       }
 
       .card {
-        flex: 0 1 auto;
-        overflow: visible;
+        padding: 0.75rem 0.75rem 0.25rem;
       }
 
-      .card-body {
-        overflow: visible;
+      .brand,
+      .client-verify {
+        margin-bottom: 0.5rem;
+      }
+
+      .panel,
+      .choice {
+        padding: 0.75rem 0;
       }
     }
   </style>
 </head>
 <body>
   <div class="page">
-    <a href="/" target="_blank">
-      <img class="brand" src="/favicon.svg" alt="Neon">
-    </a>
-    <h1 title="Connect ${clientName} to Neon">Connect ${clientName} to Neon</h1>
-    ${clientVerification}
     <form method="POST" action="/api/authorize" id="authorize-form" class="card">
       <input type="hidden" name="state" value="${he.escape(props.state)}" />
-      <div class="card-body">
+      <div class="card-body" tabindex="0" role="region" aria-label="Connection access details">
+      <header class="consent-header">
+        <a href="/" target="_blank">
+          <img class="brand" src="/favicon.svg" alt="Neon">
+        </a>
+        <h1 title="Connect ${clientName} to Neon">Connect ${clientName} to Neon</h1>
+        ${clientVerification}
+      </header>
       ${grantHtml}
       ${renderScopeSection({
         writeChecked: formState.writeChecked,
