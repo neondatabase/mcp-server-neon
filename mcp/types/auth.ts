@@ -1,4 +1,4 @@
-import { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import { AuthInfo } from '@modelcontextprotocol/server';
 import type { AuthDetailsResponse } from '../neon-client';
 
 export type AuthMethod = AuthDetailsResponse['auth_method'];

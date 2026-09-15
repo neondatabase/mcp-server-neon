@@ -231,15 +231,32 @@ Generated Management API tools that are GET and do not return secrets, plus `que
 
 </details>
 
-### Server-Sent Events (SSE) Transport (Deprecated)
+### Transport compatibility
 
-MCP supports two remote server transports: the deprecated Server-Sent Events (SSE) and the newer, recommended Streamable HTTP. If your LLM client doesn't support Streamable HTTP yet, you can switch the endpoint from `https://mcp.neon.tech/mcp` to `https://mcp.neon.tech/sse` to use SSE instead.
+`https://mcp.neon.tech/mcp` uses stateless Streamable HTTP. It supports the
+MCP 2026-07-28 protocol and a stateless fallback for 2025-era clients. The
+deprecated HTTP+SSE `/sse` and `/message` endpoints return `410 Gone`.
 
-Run the following command to add the Neon MCP Server for all detected agents and editors in your workspace using the SSE transport:
+Connect Streamable HTTP clients to `https://mcp.neon.tech/mcp`. For clients
+that only support local stdio servers, put this in the client config so
+[`mcp-remote`](https://www.npmjs.com/package/mcp-remote) bridges to Streamable
+HTTP:
 
-```bash
-npx add-mcp https://mcp.neon.tech/sse --type sse
+```json
+{
+  "mcpServers": {
+    "Neon": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.neon.tech/mcp"]
+    }
+  }
+}
 ```
+
+Requests that include an `Origin` header are accepted only when its hostname
+matches the server deployment; other origins receive `403 Forbidden` to prevent
+DNS rebinding against MCP HTTP endpoints. CLI and server-side clients that omit
+`Origin` are unaffected.
 
 ## Remote Server Architecture
 
@@ -250,7 +267,7 @@ The remote server runs as a Next.js App Router application on Vercel at `mcp.neo
 
 Core implementation areas:
 
-- `app/api/[transport]/route.ts`: MCP transport endpoint for Streamable HTTP (`/mcp`) and SSE (`/sse`)
+- `app/api/[transport]/route.ts`: stateless Streamable HTTP endpoint (`/mcp`)
 - `app/api/authorize/`, `app/callback/`, `app/api/token/`, `app/api/revoke/`: OAuth flow endpoints
 - `app/.well-known/`: OAuth discovery metadata endpoints
 - `mcp/`: MCP server, tools, handlers, analytics, and Sentry integration

@@ -1,21 +1,14 @@
-import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
-import type {
-  CallToolResult,
-  ServerNotification,
-  ServerRequest,
-} from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { Api } from '../neon-client';
 import type { AuthContext } from '../types/auth';
 import type { ClientApplication } from '../utils/client-application';
 
-export type ToolHandlerExtraParams = RequestHandlerExtra<
-  ServerRequest,
-  ServerNotification
-> & {
+export type ToolHandlerExtraParams = {
   account: AuthContext['extra']['account'];
   readOnly?: AuthContext['extra']['readOnly'];
   clientApplication: ClientApplication;
   apiKey?: string;
+  signal?: AbortSignal;
 };
 
 export type ToolHandlerExtended = (
