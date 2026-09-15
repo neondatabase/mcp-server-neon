@@ -6,6 +6,19 @@
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
+export function normalizeRedirectUris(value: unknown): string[] | undefined {
+  if (typeof value === 'string') {
+    return [value];
+  }
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const redirectUris = value.filter(
+    (redirectUri): redirectUri is string => typeof redirectUri === 'string',
+  );
+  return redirectUris.length > 0 ? redirectUris : undefined;
+}
+
 function isLoopbackHost(host: string): boolean {
   return LOOPBACK_HOSTS.has(host.toLowerCase());
 }

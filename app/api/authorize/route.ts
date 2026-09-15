@@ -4,7 +4,10 @@ import { model } from '../../../mcp/oauth/model';
 import { upstreamAuth } from '../../../lib/oauth/client';
 import { handleOAuthError } from '../../../lib/errors';
 import { logger } from '../../../mcp/utils/logger';
-import { matchesRedirectUri } from '../../../lib/oauth/redirect-uri';
+import {
+  matchesRedirectUri,
+  normalizeRedirectUris,
+} from '../../../lib/oauth/redirect-uri';
 import {
   consentCanonicalLocation,
   InvalidRequestOriginError,
@@ -75,15 +78,11 @@ function consentClientFields(client: object): {
   const record = Object.fromEntries(Object.entries(client));
   const clientName = record.client_name;
   const clientUri = record.client_uri;
-  const redirectUris = record.redirect_uris;
+  const redirectUris = normalizeRedirectUris(record.redirect_uris);
   return {
     client_name: typeof clientName === 'string' ? clientName : undefined,
     client_uri: typeof clientUri === 'string' ? clientUri : undefined,
-    redirect_uris:
-      Array.isArray(redirectUris) &&
-      redirectUris.every((item) => typeof item === 'string')
-        ? redirectUris
-        : undefined,
+    redirect_uris: redirectUris,
   };
 }
 
@@ -231,6 +230,12 @@ export async function GET(request: NextRequest) {
       return jsonError('invalid_client', 'Invalid client ID');
     }
 
+    const registeredRedirectUris = normalizeRedirectUris(client.redirect_uris);
+    if (!registeredRedirectUris) {
+      logger.warn('Invalid stored redirect URIs', { clientId });
+      return jsonError('invalid_client', 'Invalid redirect URI metadata');
+    }
+
     if (!client.response_types.includes(requestParams.responseType)) {
       logger.warn('Invalid response type', {
         clientId,
@@ -240,11 +245,13 @@ export async function GET(request: NextRequest) {
       return jsonError('unsupported_response_type', 'Invalid response type');
     }
 
-    if (!matchesRedirectUri(requestParams.redirectUri, client.redirect_uris)) {
+    if (
+      !matchesRedirectUri(requestParams.redirectUri, registeredRedirectUris)
+    ) {
       logger.warn('Invalid redirect URI', {
         clientId: requestParams.clientId,
         providedRedirectUri: requestParams.redirectUri,
-        registeredRedirectUris: client.redirect_uris,
+        registeredRedirectUris,
       });
       return jsonError('invalid_request', 'Invalid redirect URI');
     }
