@@ -85,4 +85,26 @@ describe('handleToolError', () => {
 
     expect(captureException).not.toHaveBeenCalled();
   });
+
+  it('does not capture 4xx API errors created by another SDK copy', () => {
+    const error = Object.assign(
+      new Error('role with that name already exists'),
+      {
+        name: 'NeonApiError',
+        kind: 'api',
+        status: 409,
+        body: { message: 'role with that name already exists' },
+      },
+    );
+
+    const result = handleToolError(error, properties, 'trace-1', agent);
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toContainEqual(
+      expect.objectContaining({
+        text: expect.stringContaining('[HTTP 409]'),
+      }),
+    );
+    expect(captureException).not.toHaveBeenCalled();
+  });
 });
