@@ -78,6 +78,8 @@ export function isRedisTransientFailure(err: unknown): boolean {
  * the reference.
  */
 function dropCachedRedis(expected: Promise<RedisClientType>): void {
+  // A failed operation may belong to a retired generation. Disconnecting the
+  // current promise here would turn one socket failure into another fanout.
   if (clientPromise !== expected) return;
   const cached = expected;
   clientPromise = null;
