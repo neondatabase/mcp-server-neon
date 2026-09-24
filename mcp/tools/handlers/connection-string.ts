@@ -3,6 +3,7 @@ import { ToolHandlerExtraParams } from '../types';
 import { startSpan } from '@sentry/node';
 import { getDefaultDatabase } from '../utils';
 import { getDefaultBranch, getOnlyProject } from './utils';
+import { InvalidArgumentError } from '../../server/errors';
 
 /**
  * Resolves a connection URI for internal callers such as `run_sql`,
@@ -15,6 +16,12 @@ import { getDefaultBranch, getOnlyProject } from './utils';
  * read-only server — not here, because these internal callers stay safe in
  * read-only mode through query-level protections (read-only transactions) and
  * never surface the URI to the client.
+ *
+ * A role pinned by the connection grant (`extra.pinnedRoleName`) is enforced
+ * here, so every caller gets it: the pinned role replaces an omitted
+ * `roleName`, a different `roleName` is rejected, and the database owner is
+ * never looked up. A pinned role that Neon cannot resolve, or that Postgres
+ * refuses to log in, fails the call; nothing retries as another role.
  */
 export async function handleGetConnectionString(
   {
@@ -38,6 +45,16 @@ export async function handleGetConnectionString(
       name: 'get_connection_string',
     },
     async () => {
+      const pinnedRoleName = extra.pinnedRoleName;
+      if (pinnedRoleName !== undefined) {
+        if (roleName !== undefined && roleName !== pinnedRoleName) {
+          throw new InvalidArgumentError(
+            `This connection is pinned to Postgres role "${pinnedRoleName}"; role_name "${roleName}" is not allowed.`,
+          );
+        }
+        roleName = pinnedRoleName;
+      }
+
       // If projectId is not provided, get the first project but only if there is only one project
       if (!projectId) {
         const project = await getOnlyProject(neonClient, extra);

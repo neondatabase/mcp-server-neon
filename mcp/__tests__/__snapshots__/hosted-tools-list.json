@@ -44,6 +44,14 @@
         "database_name": {
           "type": "string",
           "description": "The name of the database. If not provided, the default neondb or first available database is used."
+        },
+        "role_name": {
+          "type": "string",
+          "description": "An optional Postgres role to log in as. The server resolves its credentials internally and never returns them. If not provided, the database owner is used. On a connection pinned to a role, omit this or pass that role."
+        },
+        "compute_id": {
+          "type": "string",
+          "description": "An optional ID of the compute/endpoint to run on. If not provided, the read-write compute of the branch is used."
         }
       },
       "required": [
@@ -86,6 +94,14 @@
         "database_name": {
           "type": "string",
           "description": "The name of the database. If not provided, the default neondb or first available database is used."
+        },
+        "role_name": {
+          "type": "string",
+          "description": "An optional Postgres role to log in as. The server resolves its credentials internally and never returns them. If not provided, the database owner is used. On a connection pinned to a role, omit this or pass that role."
+        },
+        "compute_id": {
+          "type": "string",
+          "description": "An optional ID of the compute/endpoint to run on. If not provided, the read-write compute of the branch is used."
         }
       },
       "required": [

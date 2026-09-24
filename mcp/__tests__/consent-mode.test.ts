@@ -22,6 +22,14 @@ describe('consentModeFromResource', () => {
     );
   });
 
+  it('is confirmation when only roleName is present', () => {
+    expect(
+      consentModeFromResource(
+        'https://mcp.neon.tech/mcp?roleName=mcp_pinned_reader',
+      ),
+    ).toBe('confirmation');
+  });
+
   it('is confirmation when projectId is present', () => {
     expect(
       consentModeFromResource(

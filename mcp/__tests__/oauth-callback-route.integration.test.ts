@@ -121,6 +121,40 @@ describe('/callback route integration', () => {
     );
   });
 
+  it('carries a pinned roleName from the approved transaction onto the authorization code', async () => {
+    const seeded = await seedApprovedTransaction({
+      request: {
+        responseType: 'code',
+        clientId: 'client-123',
+        redirectUri: 'http://127.0.0.1:55667/callback',
+        scope: ['read'],
+        state: 'client-state',
+        resource:
+          'https://mcp.neon.tech/mcp?readonly=true&roleName=mcp_pinned_reader',
+      },
+      approvedGrant: {
+        projectId: null,
+        scopes: null,
+        roleName: 'mcp_pinned_reader',
+      },
+      approvedScopes: ['read'],
+    });
+
+    const response = await GET(buildRequest(seeded.id, seeded.cookie));
+
+    expect(response.status).toBe(307);
+    expect(model.saveAuthorizationCode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: 'read',
+        grant: {
+          projectId: null,
+          scopes: null,
+          roleName: 'mcp_pinned_reader',
+        },
+      }),
+    );
+  });
+
   it('preserves * on the issued scope when the approved transaction includes it', async () => {
     const seeded = await seedApprovedTransaction({
       approvedScopes: ['read', 'write', '*'],

@@ -50,6 +50,34 @@ describe('/api/list-tools endpoint', () => {
     });
   });
 
+  it('previews a pinned roleName: grant, notice, and no connection strings', async () => {
+    const body = await callListTools({
+      readonly: 'true',
+      roleName: 'mcp_pinned_reader',
+    });
+    expect(body.grant).toEqual({
+      projectId: null,
+      scopes: null,
+      roleName: 'mcp_pinned_reader',
+    });
+    expect(body.notices?.some((n) => n.includes('"mcp_pinned_reader"'))).toBe(
+      true,
+    );
+    const names = body.tools.map((tool) => tool.name);
+    expect(names).toContain('run_sql');
+    expect(names).not.toContain('get_connection_string');
+  });
+
+  it('rejects a malformed roleName with 400', async () => {
+    const res = await GET(
+      new Request('http://localhost/api/list-tools?roleName=a-b'),
+    );
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({ error: 'invalid_request' }),
+    );
+  });
+
   it('filters by scopes when category param is present', async () => {
     const body = await callListTools({ category: 'querying' });
     expect(body.grant.scopes).toEqual(['querying']);

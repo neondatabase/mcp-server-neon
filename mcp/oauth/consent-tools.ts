@@ -1,4 +1,7 @@
-import { ALWAYS_AVAILABLE_TOOLS } from '../tools/grant-filter';
+import {
+  ALWAYS_AVAILABLE_TOOLS,
+  PINNED_ROLE_WITHHELD_TOOLS,
+} from '../tools/grant-filter';
 import { NEON_TOOLS } from '../tools/definitions';
 import type { GrantContext, ScopeCategory } from '../utils/grant-context';
 
@@ -33,6 +36,12 @@ export function filterConsentCatalog(
       return false;
     }
     if (grant.projectId && !tool.projectScoped) {
+      return false;
+    }
+    if (
+      grant.roleName !== undefined &&
+      PINNED_ROLE_WITHHELD_TOOLS.has(tool.name)
+    ) {
       return false;
     }
     if (grant.scopes === null) {

@@ -1,7 +1,15 @@
 import { parseResourceIdentifier } from '../../lib/oauth/protected-resource-metadata';
 import { isReadOnly } from '../utils/read-only';
+import { ROLE_NAME_PARAM } from '../utils/grant-context';
 
-const GRANT_QUERY_KEYS = ['projectId', 'category', 'readonly'] as const;
+// The editable consent page has no role field, so a pinned role always
+// yields a fixed confirmation.
+const GRANT_QUERY_KEYS = [
+  'projectId',
+  'category',
+  'readonly',
+  ROLE_NAME_PARAM,
+] as const;
 
 export type ConsentMode = 'confirmation' | 'editable';
 

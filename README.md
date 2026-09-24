@@ -154,7 +154,7 @@ Neon MCP advertises OAuth scopes `read` and `write`. Your MCP client can request
 You can set read-only mode in two ways:
 
 1. **Default MCP URL (editable consent):** Connect with `https://mcp.neon.tech/mcp` and uncheck **Allow writes** on the authorization page. You can also choose one project and a subset of tool categories there.
-2. **Parameterized MCP URL (fixed consent):** Put `readonly`, `projectId`, and/or `category` on the MCP server URL. The authorization page confirms that grant and does not offer editors. Change the URL and authorize again to change the grant.
+2. **Parameterized MCP URL (fixed consent):** Put `readonly`, `projectId`, `category`, and/or `roleName` on the MCP server URL. The authorization page confirms that grant and does not offer editors. Change the URL and authorize again to change the grant.
 
 ```json
 {
@@ -169,7 +169,7 @@ You can set read-only mode in two ways:
 How the query param behaves:
 
 - **API key flow:** `readonly=true` is the way to enable read-only mode (there is no OAuth scope exchange in this flow). URL changes apply on the next request.
-- **OAuth flow:** `projectId`, `category`, and `readonly` on the MCP URL are a fixed grant confirmed at authorization. `readonly=true` cannot be widened to writes on that page. After a token is issued, changing the URL does not widen that token; authorize again.
+- **OAuth flow:** `projectId`, `category`, `readonly`, and `roleName` on the MCP URL are a fixed grant confirmed at authorization. `readonly=true` cannot be widened to writes on that page. After a token is issued, changing the URL does not widen that token; authorize again.
 
 For OAuth registration, `x-read-only` is an initial Allow-writes default on editable consent. It does not lock confirmation, and it does not reduce a parameterized URL that includes `readonly=false`. API-key requests still honor `x-read-only` per request, below the `readonly` query param.
 
@@ -177,13 +177,14 @@ For OAuth registration, `x-read-only` is an initial Allow-writes default on edit
 
 ### URL Query Params for Access Control
 
-Grant context (scope categories, project scoping, read-only mode) is configured via URL query params on the MCP server URL. API-key requests apply those params on each request. OAuth tokens store the grant confirmed or edited at authorization.
+Grant context (scope categories, project scoping, read-only mode, pinned Postgres role) is configured via URL query params on the MCP server URL. API-key requests apply those params on each request. OAuth tokens store the grant confirmed or edited at authorization.
 
 | Param       | Description                                            | Example                              |
 | ----------- | ------------------------------------------------------ | ------------------------------------ |
 | `readonly`  | Enable read-only mode (`true`/`false`)                 | `?readonly=true`                     |
 | `category`  | Restrict to specific tool categories (repeated or CSV) | `?category=querying&category=schema` |
 | `projectId` | Scope all operations to a single project               | `?projectId=proj-123`                |
+| `roleName`  | Run all SQL as this Postgres role instead of the owner | `?roleName=app_reader`               |
 
 **Read-only + project-scoped example:**
 
@@ -208,6 +209,29 @@ Grant context (scope categories, project scoping, read-only mode) is configured 
   }
 }
 ```
+
+**Pinned Postgres role example (read-only, one project, SQL as `app_reader`):**
+
+```json
+{
+  "mcpServers": {
+    "Neon": {
+      "url": "https://mcp.neon.tech/mcp?readonly=true&projectId=my-project-id&roleName=app_reader"
+    }
+  }
+}
+```
+
+`roleName` pins the Postgres login role for the whole connection. Every SQL the server runs for you (`run_sql`, `run_sql_transaction`, `explain_sql_statement`, `get_database_tables`, `describe_table_schema`, `describe_branch`, `list_slow_queries`, `inspect_database`, and the SQL inside migrations and query tuning) logs in as that role, so Postgres grants decide what the agent can read or change. Without it, SQL runs as the database owner. Read-only mode still wraps queries in a `READ ONLY` transaction; the pinned role adds a limit that Postgres enforces on the login itself, so SQL that gets out of the transaction still has only the role's privileges.
+
+- The server resolves the role's credentials internally and never returns them. `get_connection_string` is not available on a pinned connection.
+- A `role_name` tool argument that differs from the pinned role is rejected. Omitting it uses the pinned role, never the owner.
+- If the role does not exist or cannot log in (for example `ALTER ROLE … NOLOGIN`), the call fails before any SQL runs. It does not retry as another role.
+- The value must be one exact Postgres role name: letters, digits, `_` or `$`, starting with a letter or `_`, at most 63 characters. Anything else (empty, repeated, quoted, hyphenated) is rejected with `400`, not ignored.
+- The role must be able to log in (`LOGIN`) and must exist on each branch you query. Roles created in SQL (`CREATE ROLE app_reader LOGIN PASSWORD '…'`) work, as do roles created in the Neon Console or API. A role with the privileges it needs, and no more, is what makes the pin useful: for read-only agents, grant `SELECT` on the tables they should see and do not add it to `neon_superuser`.
+- **OAuth:** `roleName` on the MCP URL makes a fixed grant. The authorization page shows the role, and the issued token keeps it through refresh. Changing the URL later does not change the token; authorize again. Tokens issued before this option have no pinned role and behave as before.
+- **API key:** the role is read from the URL on each request. Anyone who can edit the connection URL and holds the API key can change or remove it, so keep the URL in configuration the agent does not control.
+- The pin applies to SQL connections only. Management API tools still act with the API key or OAuth token's own access; `compare_database_schema`, for example, is computed by the Neon API and is not limited by the role's grants. Combine `roleName` with `readonly=true` and `category` to limit those tools too.
 
 You can preview which tools are visible for any configuration using the `/api/list-tools` endpoint (no auth required):
 
@@ -336,8 +360,8 @@ Notes:
 **SQL Query Execution:**
 
 - **`get_connection_string`**: Returns your database connection string.
-- **`run_sql`**: Executes a single SQL query against a specified Neon database. Supports both read and write operations.
-- **`run_sql_transaction`**: Executes a series of SQL queries within a single transaction against a Neon database.
+- **`run_sql`**: Executes a single SQL query against a specified Neon database. Supports both read and write operations. Optional `role_name` logs in as that Postgres role instead of the database owner, and `compute_id` picks the compute; credentials stay on the server. On a connection with `?roleName=`, `role_name` must be omitted or match it.
+- **`run_sql_transaction`**: Executes a series of SQL queries within a single transaction against a Neon database. Takes the same optional `role_name` and `compute_id` as `run_sql`.
 - **`get_database_tables`**: Lists all tables within a specified Neon database.
 - **`describe_table_schema`**: Retrieves the schema definition of a specific table, detailing columns, data types, and constraints.
 

@@ -19,6 +19,12 @@ const DATABASE_NAME_DESCRIPTION = `The name of the database. If not provided, th
 const INSPECT_DATABASE_NAME_DESCRIPTION =
   'For a database-scoped check, the database to inspect. Omit to cover every database on the branch. Ranking and SQL row limits stay per database. One failing database fails the whole run. For a compute-wide check, the database to connect through; the check still runs once for the whole compute and the result does not include `databaseName`. The response `limit` applies to the combined rows after that.';
 
+const SQL_ROLE_NAME_DESCRIPTION =
+  'An optional Postgres role to log in as. The server resolves its credentials internally and never returns them. If not provided, the database owner is used. On a connection pinned to a role, omit this or pass that role.';
+
+const SQL_COMPUTE_ID_DESCRIPTION =
+  'An optional ID of the compute/endpoint to run on. If not provided, the read-write compute of the branch is used.';
+
 export const runSqlInputSchema = z
   .object({
     sql: z.string().describe('The SQL query to execute'),
@@ -32,6 +38,8 @@ export const runSqlInputSchema = z
         'An optional ID of the branch to execute the query against. If not provided the default branch is used.',
       ),
     database_name: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
+    role_name: z.string().optional().describe(SQL_ROLE_NAME_DESCRIPTION),
+    compute_id: z.string().optional().describe(SQL_COMPUTE_ID_DESCRIPTION),
   })
   .strict();
 
@@ -50,6 +58,8 @@ export const runSqlTransactionInputSchema = z
         'An optional ID of the branch to execute the query against. If not provided the default branch is used.',
       ),
     database_name: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
+    role_name: z.string().optional().describe(SQL_ROLE_NAME_DESCRIPTION),
+    compute_id: z.string().optional().describe(SQL_COMPUTE_ID_DESCRIPTION),
   })
   .strict();
 

@@ -26,12 +26,27 @@ function isZod4Object(schema: unknown): schema is z4.ZodObject<z4.ZodRawShape> {
   );
 }
 
+/**
+ * Tools withheld when the grant pins a Postgres role. A pin keeps that role's
+ * credentials inside the server; `get_connection_string` exists to hand them
+ * out, which would let the caller run SQL as the role outside the server's
+ * read-only transaction.
+ */
+export const PINNED_ROLE_WITHHELD_TOOLS: ReadonlySet<string> = new Set([
+  'get_connection_string',
+]);
+
 export function filterToolsForGrant(
   tools: readonly NeonTool[],
   grant: GrantContext,
 ): NeonTool[] {
   let filtered = applyScopeCategoryFilter(tools, grant.scopes);
   filtered = applyProjectScopeFilter(filtered, grant);
+  if (grant.roleName !== undefined) {
+    filtered = filtered.filter(
+      (tool) => !PINNED_ROLE_WITHHELD_TOOLS.has(tool.name),
+    );
+  }
   return filtered;
 }
 
@@ -146,6 +161,17 @@ export function getAccessControlNotices(
         'This is intentional. If the user requests changes to another project, inform them about the project-scoping configuration. ' +
         'The user can remove project scoping by removing the projectId query param from the MCP server URL, ' +
         'and by logging out and back in after removing the param when using OAuth.',
+    );
+  }
+  if (grant.roleName !== undefined) {
+    notices.push(
+      `Notice: SQL on this connection runs as the Postgres role "${grant.roleName}", ` +
+        'which is pinned by the connection. ' +
+        'Its grants decide what you can read and change; a permission error means the role lacks that privilege. ' +
+        'Do not pass a different `role_name`; it is rejected. ' +
+        'Connection strings are unavailable on a pinned connection. ' +
+        'The user can change the role by editing the roleName query param on the MCP server URL, ' +
+        'and by authorizing again when using OAuth.',
     );
   }
   if (grant.unknownCategories?.length) {

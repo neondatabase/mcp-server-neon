@@ -189,6 +189,38 @@ describe('Token refresh flow', () => {
     expect(mockModel.saveRefreshResult).toHaveBeenCalledTimes(1);
   });
 
+  it('carries a pinned roleName grant onto the refreshed token', async () => {
+    const grant = {
+      projectId: 'example-project-123',
+      scopes: null,
+      roleName: 'mcp_pinned_reader',
+    };
+    mockModel.getAccessToken.mockResolvedValue({
+      ...TEST_OLD_ACCESS_TOKEN,
+      grant,
+    } as any);
+    mockExchange.mockResolvedValue(makeUpstreamTokenResponse() as any);
+
+    const response = await POST(makeTokenRequest('old-refresh-token'));
+
+    expect(response.status).toBe(200);
+    expect(mockModel.saveToken).toHaveBeenCalledWith(
+      expect.objectContaining({ grant }),
+    );
+  });
+
+  it('keeps a legacy token without a grant unpinned on refresh', async () => {
+    mockExchange.mockResolvedValue(makeUpstreamTokenResponse() as any);
+
+    const response = await POST(makeTokenRequest('old-refresh-token'));
+
+    expect(response.status).toBe(200);
+    const saved = mockModel.saveToken.mock.calls[0]?.[0] as {
+      grant?: unknown;
+    };
+    expect(saved.grant).toBeUndefined();
+  });
+
   it('does not delete refresh token when upstream reuses the same token string', async () => {
     mockExchange.mockResolvedValue(
       makeUpstreamTokenResponse({ refresh_token: undefined }) as any,

@@ -49,6 +49,7 @@ type ConsentView = {
   project: ConsentProject;
   categories: ConsentCategories;
   unknownCategoryValues: string[];
+  roleName?: string;
   tools: ConsentTool[];
 };
 
@@ -198,6 +199,7 @@ export function buildConsentView({
     project,
     categories,
     unknownCategoryValues: grant.unknownCategories ?? [],
+    ...(grant.roleName !== undefined ? { roleName: grant.roleName } : {}),
     tools,
   };
 }
@@ -327,7 +329,15 @@ function renderGrantSummary(view: ConsentView): string {
         <div>
           <dt>Tool categories:</dt>
           <dd>${he.escape(renderCategories(view.categories))}</dd>
-        </div>
+        </div>${
+          view.roleName !== undefined
+            ? `
+        <div>
+          <dt>Postgres role:</dt>
+          <dd><span class="mono">${he.escape(view.roleName)}</span></dd>
+        </div>`
+            : ''
+        }
       </dl>
       ${unknownHtml}
       ${emptyGrantNote(view)}

@@ -370,6 +370,80 @@ describe('/api/authorize route integration', () => {
     expect(vi.mocked(upstreamAuth).mock.calls.at(-1)?.[0]).toBe(state);
   });
 
+  it('shows a pinned roleName on confirmation and stores it on the approved grant', async () => {
+    const resource =
+      'https://mcp.neon.tech/mcp?projectId=proj-123&readonly=true&roleName=mcp_pinned_reader';
+    const getResponse = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+    const html = await getResponse.text();
+    expect(html).toContain('<dt>Postgres role:</dt>');
+    expect(html).toContain('mcp_pinned_reader');
+    expect(html).not.toContain('name="projectMode"');
+
+    const state = extractState(html);
+    const postResponse = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [['action', 'approve']],
+    });
+    const stored = await authTransactions.getById(state);
+    expect(postResponse.status).toBe(303);
+    if (stored?.status !== 'approved') {
+      throw new Error('expected approved transaction');
+    }
+    expect(stored.approvedGrant).toEqual({
+      projectId: 'proj-123',
+      scopes: null,
+      roleName: 'mcp_pinned_reader',
+    });
+    expect(stored.approvedScopes).toEqual(['read']);
+  });
+
+  it('makes a roleName-only resource a fixed confirmation', async () => {
+    const resource = 'https://mcp.neon.tech/mcp?roleName=mcp_pinned_reader';
+    const getResponse = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+    const html = await getResponse.text();
+    expect(html).toContain('mcp_pinned_reader');
+    expect(html).not.toContain('name="projectMode"');
+
+    const state = extractState(html);
+    await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [['action', 'approve']],
+    });
+    const stored = await authTransactions.getById(state);
+    if (stored?.status !== 'approved') {
+      throw new Error('expected approved transaction');
+    }
+    expect(stored.approvedGrant.roleName).toBe('mcp_pinned_reader');
+  });
+
+  it.each([
+    'roleName=',
+    'roleName=bad%20role',
+    'roleName=x%3Bdrop',
+    'roleName=a&roleName=b',
+    `roleName=${'r'.repeat(64)}`,
+  ])(
+    'returns invalid_target for a malformed pinned role (%s)',
+    async (query) => {
+      const response = await GET(
+        buildAuthorizeRequest({}, 'read write', {
+          resource: `https://mcp.neon.tech/mcp?readonly=true&${query}`,
+        }),
+      );
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: 'invalid_target',
+        error_description: 'Invalid resource parameter',
+      });
+    },
+  );
+
   it('approves a fixed read-only resource as read even when the client asked for write', async () => {
     const resource =
       'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying&readonly=true';
