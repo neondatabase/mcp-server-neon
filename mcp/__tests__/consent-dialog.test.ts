@@ -208,6 +208,31 @@ describe('renderConsentHtml', () => {
     expect(html).not.toContain('<script>alert(1)</script>');
   });
 
+  it('shows a pinned Postgres role and withholds connection strings', () => {
+    const render = (roleName?: string) =>
+      renderConsentHtml({
+        client,
+        state: 'abc',
+        mode: 'confirmation',
+        writeChecked: true,
+        showWriteControl: false,
+        grant: {
+          projectId: null,
+          scopes: null,
+          ...(roleName ? { roleName } : {}),
+        },
+      });
+
+    const pinned = render('mcp_pinned_reader');
+    expect(pinned).toContain('<dt>Postgres role:</dt>');
+    expect(pinned).toContain('mcp_pinned_reader');
+    expect(pinned).not.toContain('Get Connection String');
+
+    const unpinned = render();
+    expect(unpinned).not.toContain('Postgres role:');
+    expect(unpinned).toContain('Get Connection String');
+  });
+
   it('renders confirmation without editors, including for a writable URL', () => {
     const html = renderConsentHtml({
       client,

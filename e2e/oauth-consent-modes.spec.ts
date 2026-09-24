@@ -157,6 +157,23 @@ test.describe('OAuth consent modes', () => {
     await capture(page, 'A6-unknown-only-project');
   });
 
+  test('A7 pinned Postgres role is a fixed confirmation that shows the role', async ({
+    page,
+    request,
+  }) => {
+    await openAuthorize(page, request, {
+      resource:
+        'https://mcp.neon.tech/mcp?projectId=proj-example&readonly=true&roleName=mcp_pinned_reader',
+    });
+    await expect(page.locator('.facts')).toContainText('Postgres role:');
+    await expect(page.locator('.facts')).toContainText('mcp_pinned_reader');
+    await expect(page.locator('[data-access-mode]')).toHaveText('Read only');
+    await expect(page.locator('.scope-checkbox')).toHaveCount(0);
+    await expect(page.locator('input[name="projectMode"]')).toHaveCount(0);
+    expect(await submittedScopes(page)).toEqual([]);
+    await capture(page, 'A7-pinned-role-confirmation');
+  });
+
   test('B1 bare resource initial all/all/write collapsed tools', async ({
     page,
     request,

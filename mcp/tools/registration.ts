@@ -42,7 +42,8 @@ function toolByName(toolName: string): NeonTool | undefined {
 
 /**
  * Project-scoped grants strip `project_id` from the published schema, so the
- * client can supply it only through the grant.
+ * client can supply it only through the grant. A pinned role reaches handlers
+ * the same way: from the grant, overriding anything already on `extra`.
  */
 export async function invokeTool(
   toolName: string,
@@ -62,5 +63,8 @@ export async function invokeTool(
     tool,
   );
 
-  return handler({ params: effectiveArgs }, neonClient, extra);
+  return handler({ params: effectiveArgs }, neonClient, {
+    ...extra,
+    pinnedRoleName: grant.roleName,
+  });
 }

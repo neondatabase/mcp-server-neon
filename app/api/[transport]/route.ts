@@ -35,9 +35,12 @@ import { agentSentryTags, setSentryTags } from '../../../mcp/sentry/utils';
 import type { ServerContext, AppContext } from '../../../mcp/types/context';
 import {
   isDocsOnlyRequest,
+  normalizeStoredGrant,
+  parseRoleNameParam,
   resolveGrantFromSearchParams,
   resolveGrantFromToken,
   DEFAULT_GRANT,
+  InvalidRoleNameError,
   type GrantContext,
 } from '../../../mcp/utils/grant-context';
 import {
@@ -978,54 +981,64 @@ const verifyToken = async (
   // PATH 1: Check OAuth tokens table FIRST
   // (For users who authenticated via OAuth flow)
   // ============================================
+  let token: Awaited<ReturnType<typeof model.getAccessToken>> | undefined;
   try {
-    const token = await model.getAccessToken(bearerToken);
-    if (token) {
-      // Expiration is checked by withMcpAuth using expiresAt field
-      // which returns proper RFC-compliant 401 with WWW-Authenticate header
-
-      logger.info('OAuth token found', { clientId: token.client.id });
-
-      const tokenGrant = resolveGrantFromToken(
-        token as { grant?: GrantContext },
-      );
-
-      const readOnly = isReadOnly({
-        scope: token.scope,
-      });
-
-      // Return auth from stored token (0 API calls!)
-      return {
-        token: token.accessToken,
-        scopes: Array.isArray(token.scope)
-          ? token.scope
-          : (token.scope?.split(' ') ?? ['read', 'write']),
-        clientId: token.client.id,
-        expiresAt: token.expires_at
-          ? Math.floor(token.expires_at / 1000)
-          : undefined,
-        extra: {
-          authMethod: 'oauth',
-          account: {
-            id: token.user.id,
-            name: token.user.name,
-            email: token.user.email,
-            isOrg: token.user.isOrg ?? false,
-          },
-          apiKey: bearerToken,
-          readOnly,
-          grant: tokenGrant,
-          client: {
-            id: token.client.id,
-            name: token.client.client_name,
-          },
-          transport,
-          userAgent,
-        },
-      };
-    }
+    token = await model.getAccessToken(bearerToken);
   } catch (error) {
     logger.warn('OAuth token lookup failed, trying API key path', { error });
+  }
+  if (token) {
+    // Expiration is checked by withMcpAuth using expiresAt field
+    // which returns proper RFC-compliant 401 with WWW-Authenticate header
+
+    logger.info('OAuth token found', { clientId: token.client.id });
+
+    let tokenGrant: GrantContext;
+    try {
+      tokenGrant = resolveGrantFromToken(token as { grant?: GrantContext });
+    } catch (error) {
+      // A stored grant we cannot read must not fall through to the API-key
+      // path, which would authenticate the same bearer without its grant.
+      logger.error('OAuth token grant is invalid', {
+        clientId: token.client.id,
+        errorName: error instanceof Error ? error.name : 'unknown',
+      });
+      return undefined;
+    }
+
+    const readOnly = isReadOnly({
+      scope: token.scope,
+    });
+
+    // Return auth from stored token (0 API calls!)
+    return {
+      token: token.accessToken,
+      scopes: Array.isArray(token.scope)
+        ? token.scope
+        : (token.scope?.split(' ') ?? ['read', 'write']),
+      clientId: token.client.id,
+      expiresAt: token.expires_at
+        ? Math.floor(token.expires_at / 1000)
+        : undefined,
+      extra: {
+        authMethod: 'oauth',
+        account: {
+          id: token.user.id,
+          name: token.user.name,
+          email: token.user.email,
+          isOrg: token.user.isOrg ?? false,
+        },
+        apiKey: bearerToken,
+        readOnly,
+        grant: tokenGrant,
+        client: {
+          id: token.client.id,
+          name: token.client.client_name,
+        },
+        transport,
+        userAgent,
+      },
+    };
   }
 
   // ============================================
@@ -1075,13 +1088,7 @@ function getStaticToolContext(req: Request): StaticToolContext {
     typeof grantFromAuth === 'object' &&
     'projectId' in grantFromAuth &&
     'scopes' in grantFromAuth
-      ? {
-          projectId: grantFromAuth.projectId ?? null,
-          scopes: grantFromAuth.scopes ?? null,
-          ...(grantFromAuth.unknownCategories?.length
-            ? { unknownCategories: grantFromAuth.unknownCategories }
-            : {}),
-        }
+      ? normalizeStoredGrant(grantFromAuth)
       : DEFAULT_GRANT;
 
   return {
@@ -1360,6 +1367,23 @@ function getDocsOnlyHandler() {
 // returns 401 before pathname matching happens).
 const handleRequest = (req: Request) => {
   const url = new URL(req.url);
+
+  // A malformed pinned role is rejected before auth rather than ignored, so a
+  // typo in the connection URL cannot silently fall back to the owner role.
+  try {
+    parseRoleNameParam(url.searchParams);
+  } catch (error) {
+    if (error instanceof InvalidRoleNameError) {
+      return new Response(
+        JSON.stringify({
+          error: 'invalid_request',
+          error_description: error.message,
+        }),
+        { status: 400, headers: JSON_RESPONSE_HEADERS },
+      );
+    }
+    throw error;
+  }
 
   if (url.pathname === ROUTE_PATHS.legacyMcp) {
     url.pathname = ROUTE_PATHS.canonicalMcp;

@@ -16,6 +16,11 @@ export type ToolHandlerExtraParams = RequestHandlerExtra<
   readOnly?: AuthContext['extra']['readOnly'];
   clientApplication: ClientApplication;
   apiKey?: string;
+  /**
+   * Postgres role pinned by the connection grant. Set only by `invokeTool`
+   * from the grant, never from tool arguments.
+   */
+  pinnedRoleName?: string;
 };
 
 export type ToolHandlerExtended = (

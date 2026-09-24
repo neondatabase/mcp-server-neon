@@ -2,6 +2,10 @@
 
 # [NEXT]
 
+`?roleName=` pins the Postgres role that every SQL connection logs in as, instead of the database owner (#347). It applies to `run_sql`, `run_sql_transaction`, `explain_sql_statement`, `get_database_tables`, `describe_table_schema`, `describe_branch`, `list_slow_queries`, `inspect_database`, and the SQL in migrations and query tuning. A `role_name` argument that differs from the pin is rejected, and a role that does not exist or cannot log in fails the call without falling back to the owner. `get_connection_string` is withheld on a pinned connection. Read-only mode keeps its `READ ONLY` transaction. For OAuth, `roleName` on the resource URL is a fixed grant shown on the authorization page and kept on the token through refresh; tokens without it are unchanged. For API keys it is read from the URL on each request. A malformed value (not one unquoted Postgres identifier of at most 63 characters, or repeated) returns `400` rather than being ignored. The pin covers SQL connections only; Management API tools keep the token's own access.
+
+`run_sql` and `run_sql_transaction` accept optional `role_name` and `compute_id`, passed to the internal connection resolver. The connection string stays on the server. Calls without them behave as before.
+
 Generated tool calls classify Neon API 4xx responses by their `kind` and HTTP status even when `@neon/tools` and the server load different `@neon/sdk` versions, returning the API error to the MCP client without reporting it as a server failure.
 
 OAuth dynamic client registration normalizes scalar and mixed `redirect_uris` values to a string array before storage. Authorization applies the same normalization to existing client records without changing which redirect URI schemes are accepted.
