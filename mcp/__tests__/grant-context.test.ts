@@ -6,6 +6,8 @@ import {
   resolveGrantFromToken,
   parseScopeCategories,
   DEFAULT_GRANT,
+  InvalidRoleNameError,
+  normalizeStoredGrant,
   type GrantContext,
 } from '../utils/grant-context';
 
@@ -244,5 +246,94 @@ describe('isDocsOnlyRequest', () => {
     expect(
       isDocsOnlyRequest(params({ category: 'docs', readonly: 'true' })),
     ).toBe(true);
+  });
+});
+
+describe('pinned roleName', () => {
+  it('is absent from the grant when the param is absent', () => {
+    const grant = resolveGrantFromSearchParams(
+      new URLSearchParams('projectId=example-project-123'),
+    );
+    expect(grant).not.toHaveProperty('roleName');
+  });
+
+  it.each(['mcp_pinned_reader', 'Reader', '_r', 'r$1', 'r'.repeat(63)])(
+    'accepts the Postgres identifier %s verbatim',
+    (roleName) => {
+      const params = new URLSearchParams({ roleName });
+      expect(resolveGrantFromSearchParams(params).roleName).toBe(roleName);
+    },
+  );
+
+  it.each([
+    ['empty', 'roleName='],
+    ['whitespace only', 'roleName=%20'],
+    ['padded', 'roleName=%20reader'],
+    ['a space', 'roleName=bad%20role'],
+    ['a quote', 'roleName=a%22b'],
+    ['a semicolon', 'roleName=x%3Bdrop'],
+    ['a hyphen', 'roleName=a-b'],
+    ['a leading digit', 'roleName=1abc'],
+    ['64 characters', `roleName=${'r'.repeat(64)}`],
+    ['non-ASCII', 'roleName=r%C3%B4le'],
+    ['repeated', 'roleName=a&roleName=b'],
+    ['repeated identically', 'roleName=a&roleName=a'],
+  ])('rejects %s instead of normalizing it', (_label, query) => {
+    expect(() =>
+      resolveGrantFromSearchParams(new URLSearchParams(query)),
+    ).toThrow(InvalidRoleNameError);
+  });
+
+  it('reads roleName from an OAuth resource URI', () => {
+    expect(
+      resolveGrantFromResourceUri(
+        'https://mcp.neon.tech/mcp?readonly=true&roleName=mcp_pinned_reader',
+      ),
+    ).toEqual({
+      projectId: null,
+      scopes: null,
+      roleName: 'mcp_pinned_reader',
+    });
+  });
+
+  it('rejects a malformed roleName on an OAuth resource URI', () => {
+    expect(() =>
+      resolveGrantFromResourceUri('https://mcp.neon.tech/mcp?roleName=a-b'),
+    ).toThrow(InvalidRoleNameError);
+  });
+
+  it('round-trips roleName through a stored token', () => {
+    const grant: GrantContext = {
+      projectId: 'example-project-123',
+      scopes: ['querying'],
+      roleName: 'mcp_pinned_reader',
+    };
+    const stored = JSON.parse(JSON.stringify({ grant })) as {
+      grant: GrantContext;
+    };
+    expect(resolveGrantFromToken(stored)).toEqual(grant);
+  });
+
+  it('reads a legacy token grant without roleName as unpinned', () => {
+    const legacy = {
+      grant: { projectId: 'example-project-123', scopes: null },
+    };
+    const resolved = resolveGrantFromToken(legacy);
+    expect(resolved).toEqual({
+      projectId: 'example-project-123',
+      scopes: null,
+    });
+    expect(resolved).not.toHaveProperty('roleName');
+    expect(resolveGrantFromToken({})).toEqual(DEFAULT_GRANT);
+  });
+
+  it('refuses a stored grant whose roleName is no longer valid', () => {
+    expect(() =>
+      normalizeStoredGrant({
+        projectId: null,
+        scopes: null,
+        roleName: 'bad role',
+      }),
+    ).toThrow(InvalidRoleNameError);
   });
 });

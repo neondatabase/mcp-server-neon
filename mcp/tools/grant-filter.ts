@@ -48,12 +48,27 @@ function isZod4Object(schema: unknown): schema is z4.ZodObject<z4.ZodRawShape> {
   );
 }
 
+/**
+ * Tools withheld when the grant pins a Postgres role. A pin keeps that role's
+ * credentials inside the server; `get_connection_string` exists to hand them
+ * out, which would let the caller run SQL as the role outside the server's
+ * read-only transaction.
+ */
+export const PINNED_ROLE_WITHHELD_TOOLS: ReadonlySet<string> = new Set([
+  'get_connection_string',
+]);
+
 export function filterToolsForGrant(
   tools: readonly NeonTool[],
   grant: GrantContext,
 ): NeonTool[] {
   let filtered = applyScopeCategoryFilter(tools, grant.scopes);
   filtered = applyProjectScopeFilter(filtered, grant);
+  if (grant.roleName !== undefined) {
+    filtered = filtered.filter(
+      (tool) => !PINNED_ROLE_WITHHELD_TOOLS.has(tool.name),
+    );
+  }
   // Hosts can review and cache one schema independently of a user's grant.
   // Keep project_id optional on the wire; the full handler schema still
   // requires it after a scoped grant has supplied its project.
@@ -183,6 +198,17 @@ export function getAccessControlNotices(
         'To change project scope, change or remove the projectId query param in the MCP server URL and reconnect. ' +
         'With OAuth, the project is fixed when the connection is authorized: log out and authorize again, ' +
         'and choose "All projects you can access" on the consent page to remove scoping.',
+    );
+  }
+  if (grant.roleName !== undefined) {
+    notices.push(
+      `Notice: SQL on this connection runs as the Postgres role "${grant.roleName}", ` +
+        'which is pinned by the connection. ' +
+        'Its grants decide what you can read and change; a permission error means the role lacks that privilege. ' +
+        'Do not pass a different `role_name`; it is rejected. ' +
+        'Connection strings are unavailable on a pinned connection. ' +
+        'The user can change the role by editing the roleName query param on the MCP server URL, ' +
+        'and by authorizing again when using OAuth.',
     );
   }
   if (grant.unknownCategories?.length) {

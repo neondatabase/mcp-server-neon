@@ -34,6 +34,11 @@ export type GrantContext = {
   /** Scope categories. null means all categories are allowed. */
   scopes: ScopeCategory[] | null;
   unknownCategories?: string[];
+  /**
+   * Postgres role every SQL connection authenticates as. Absent means the
+   * database owner, as before this field existed.
+   */
+  roleName?: string;
 };
 
 /**
@@ -44,6 +49,44 @@ export const DEFAULT_GRANT: GrantContext = {
   projectId: null,
   scopes: null,
 };
+
+/**
+ * Carried alongside `projectId`, `category` and `readonly`, so it is camelCase
+ * like them.
+ */
+export const ROLE_NAME_PARAM = 'roleName';
+
+// An unquoted Postgres identifier (NAMEDATALEN - 1 = 63 bytes). The value is
+// passed to the Neon API as an exact role name, never interpolated into SQL.
+const ROLE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_$]{0,62}$/;
+
+export class InvalidRoleNameError extends Error {
+  constructor() {
+    super(
+      `Invalid ${ROLE_NAME_PARAM}: expected one Postgres role name (letters, digits, "_" or "$", starting with a letter or "_", at most 63 characters)`,
+    );
+    this.name = 'InvalidRoleNameError';
+  }
+}
+
+export function isValidRoleName(value: unknown): value is string {
+  return typeof value === 'string' && ROLE_NAME_PATTERN.test(value);
+}
+
+/**
+ * A pinned role is a restriction, so a malformed one must not degrade to "no
+ * pin": an empty, repeated or invalid `roleName` throws instead.
+ */
+export function parseRoleNameParam(
+  params: URLSearchParams,
+): string | undefined {
+  const values = params.getAll(ROLE_NAME_PARAM);
+  if (values.length === 0) return undefined;
+  if (values.length > 1 || !isValidRoleName(values[0])) {
+    throw new InvalidRoleNameError();
+  }
+  return values[0];
+}
 
 function isValidScopeCategory(value: string): value is ScopeCategory {
   return SCOPE_CATEGORIES.includes(value as ScopeCategory);
@@ -95,10 +138,12 @@ export function resolveGrantFromSearchParams(
     (category) => !isValidScopeCategory(category),
   );
   const projectId = params.get('projectId')?.trim() || null;
+  const roleName = parseRoleNameParam(params);
   return {
     projectId,
     scopes,
     ...(unknownCategories.length > 0 ? { unknownCategories } : {}),
+    ...(roleName ? { roleName } : {}),
   };
 }
 
@@ -125,7 +170,8 @@ export function isDocsOnlyRequest(params: URLSearchParams): boolean {
  * Resolve grant context from an OAuth resource URI.
  *
  * RFC 8707 allows query params in resource URIs when they are used to scope
- * application access. We use `category` and `projectId` query params for this.
+ * application access. We use `category`, `projectId` and `roleName` query
+ * params for this. Throws `InvalidRoleNameError` for a malformed `roleName`.
  */
 export function resolveGrantFromResourceUri(
   resource: string | null | undefined,
@@ -147,13 +193,28 @@ export function resolveGrantFromToken(token: {
   grant?: GrantContext;
 }): GrantContext {
   if (token.grant) {
-    return {
-      projectId: token.grant.projectId ?? null,
-      scopes: token.grant.scopes ?? null,
-      ...(token.grant.unknownCategories?.length
-        ? { unknownCategories: token.grant.unknownCategories }
-        : {}),
-    };
+    return normalizeStoredGrant(token.grant);
   }
   return { ...DEFAULT_GRANT };
+}
+
+/**
+ * Copy the known fields of a grant read back from storage. A stored `roleName`
+ * that is present but no longer valid throws rather than being dropped, since
+ * dropping it would widen the connection to the database owner.
+ */
+export function normalizeStoredGrant(
+  grant: Partial<GrantContext>,
+): GrantContext {
+  if (grant.roleName !== undefined && !isValidRoleName(grant.roleName)) {
+    throw new InvalidRoleNameError();
+  }
+  return {
+    projectId: grant.projectId ?? null,
+    scopes: grant.scopes ?? null,
+    ...(grant.unknownCategories?.length
+      ? { unknownCategories: grant.unknownCategories }
+      : {}),
+    ...(grant.roleName !== undefined ? { roleName: grant.roleName } : {}),
+  };
 }
