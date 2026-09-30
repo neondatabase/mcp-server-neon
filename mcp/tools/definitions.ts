@@ -200,14 +200,14 @@ const HOST_TOOL_DRAFTS = [
     name: 'explain_sql_statement' as const,
     scope: 'querying',
     description:
-      'Analyze the query execution plan for a SQL statement using EXPLAIN ANALYZE. Do not use when you need to execute the query for results (use `run_sql` instead).',
+      'Generate the execution plan for a SQL statement. When `analyze` is true, PostgreSQL executes the statement and any side effects. Use `analyze: false` to inspect a statement without executing it. Never analyze potentially destructive SQL autonomously. Do not use when you need query results (use `run_sql` instead).',
     inputSchema: explainSqlStatementInputSchema,
     readOnlySafe: true,
     annotations: {
       title: 'Explain SQL Statement',
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },
