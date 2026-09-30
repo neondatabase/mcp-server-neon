@@ -14,6 +14,7 @@ import { generatedToolPathHas } from '../tools/generated/adapt';
 import { PINNED_MCP_NAMES, TOOL_NAMES } from '../tools/generated/names';
 import { GENERATED_TOOL_IDS } from '../tools/generated/operations';
 import { NEON_HANDLERS } from '../tools/tools';
+import { explainSqlStatementInputSchema } from '../tools/toolsSchema';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
 
 const HOST_READ_ONLY_TOOLS = [
@@ -187,6 +188,24 @@ describe('read-only tool surface', () => {
     expect(tool!.readOnlySafe).toBe(true);
     expect(tool!.annotations.readOnlyHint).toBe(true);
     expect(tool!.annotations.destructiveHint).toBe(false);
+  });
+
+  it('marks explain_sql_statement as potentially side-effecting', () => {
+    const tool = NEON_TOOLS.find(
+      (candidate) => candidate.name === 'explain_sql_statement',
+    );
+
+    expect(tool).toBeDefined();
+    expect(tool!.readOnlySafe).toBe(true);
+    expect(tool!.annotations.readOnlyHint).toBe(false);
+    expect(tool!.annotations.destructiveHint).toBe(true);
+    expect(tool!.annotations.idempotentHint).toBe(false);
+    expect(
+      explainSqlStatementInputSchema.parse({
+        sql: 'select 1',
+        project_id: 'proj-1',
+      }).analyze,
+    ).toBe(false);
   });
 
   it('publishes every tool argument in snake_case', () => {

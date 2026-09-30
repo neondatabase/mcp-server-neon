@@ -377,7 +377,7 @@
   {
     "name": "explain_sql_statement",
     "title": "Explain SQL Statement",
-    "description": "Analyze the query execution plan for a SQL statement using EXPLAIN ANALYZE. Do not use when you need to execute the query for results (use `run_sql` instead).",
+    "description": "Generate the execution plan for a SQL statement. When `analyze` is true, PostgreSQL executes the statement and any side effects. Use `analyze: false` to inspect a statement without executing it. Never analyze potentially destructive SQL autonomously. Do not use when you need query results (use `run_sql` instead).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -399,8 +399,8 @@
         },
         "analyze": {
           "type": "boolean",
-          "default": true,
-          "description": "Whether to include ANALYZE in the EXPLAIN command"
+          "default": false,
+          "description": "Whether to execute the statement with EXPLAIN ANALYZE. Defaults to false because execution may cause side effects."
         }
       },
       "required": [
@@ -412,9 +412,9 @@
     },
     "annotations": {
       "title": "Explain SQL Statement",
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true,
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": false
     }
   },

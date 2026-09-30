@@ -68,8 +68,10 @@ export const explainSqlStatementInputSchema = z
     database_name: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
     analyze: z
       .boolean()
-      .default(true)
-      .describe('Whether to include ANALYZE in the EXPLAIN command'),
+      .default(false)
+      .describe(
+        'Whether to execute the statement with EXPLAIN ANALYZE. Defaults to false because execution may cause side effects.',
+      ),
   })
   .strict();
 
