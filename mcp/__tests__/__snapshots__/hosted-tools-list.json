@@ -4355,53 +4355,108 @@
           "pattern": "^[a-z0-9-]{1,60}$"
         },
         "body": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "enum": [
-                "schedule"
-              ]
-            },
-            "function_slug": {
-              "type": "string",
-              "pattern": "^[a-z0-9]{1,20}$"
-            },
-            "name": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 256
-            },
-            "function_path": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 2048
-            },
-            "schedule": {
+          "oneOf": [
+            {
               "type": "object",
               "properties": {
-                "cron": {
+                "type": {
+                  "type": "string",
+                  "const": "schedule"
+                },
+                "function_slug": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]{1,20}$"
+                },
+                "name": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 1024
+                  "maxLength": 256
+                },
+                "function_path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "schedule": {
+                  "type": "object",
+                  "properties": {
+                    "cron": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    }
+                  },
+                  "required": [
+                    "cron"
+                  ],
+                  "additionalProperties": false
+                },
+                "enabled": {
+                  "type": "boolean"
                 }
               },
               "required": [
-                "cron"
+                "type",
+                "function_slug",
+                "name",
+                "schedule"
               ],
               "additionalProperties": false
             },
-            "enabled": {
-              "type": "boolean"
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "storage_object_created"
+                },
+                "function_slug": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]{1,20}$"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "function_path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "storage_object_created": {
+                  "type": "object",
+                  "properties": {
+                    "bucket_name": {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 63
+                    },
+                    "prefix": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024,
+                      "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
+                    }
+                  },
+                  "required": [
+                    "bucket_name"
+                  ],
+                  "additionalProperties": false
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "type",
+                "function_slug",
+                "name",
+                "storage_object_created"
+              ],
+              "additionalProperties": false
             }
-          },
-          "required": [
-            "type",
-            "function_slug",
-            "name",
-            "schedule"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -4442,50 +4497,102 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9_.\\-]{0,127}$"
         },
         "body": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "enum": [
-                "schedule"
-              ]
-            },
-            "function_slug": {
-              "type": "string",
-              "pattern": "^[a-z0-9]{1,20}$"
-            },
-            "name": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 256
-            },
-            "function_path": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 2048
-            },
-            "schedule": {
+          "oneOf": [
+            {
               "type": "object",
               "properties": {
-                "cron": {
+                "type": {
+                  "type": "string",
+                  "const": "schedule"
+                },
+                "function_slug": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]{1,20}$"
+                },
+                "name": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 1024
+                  "maxLength": 256
+                },
+                "function_path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "schedule": {
+                  "type": "object",
+                  "properties": {
+                    "cron": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    }
+                  },
+                  "required": [
+                    "cron"
+                  ],
+                  "additionalProperties": false
+                },
+                "enabled": {
+                  "type": "boolean"
                 }
               },
               "required": [
-                "cron"
+                "type"
               ],
               "additionalProperties": false
             },
-            "enabled": {
-              "type": "boolean"
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "storage_object_created"
+                },
+                "function_slug": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]{1,20}$"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "function_path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "storage_object_created": {
+                  "type": "object",
+                  "properties": {
+                    "bucket_name": {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 63
+                    },
+                    "prefix": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024,
+                      "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
+                    }
+                  },
+                  "required": [
+                    "bucket_name"
+                  ],
+                  "additionalProperties": false
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
             }
-          },
-          "required": [
-            "type"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -4803,7 +4910,7 @@
       "readOnlyHint": false,
       "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": true
     }
   },
   {

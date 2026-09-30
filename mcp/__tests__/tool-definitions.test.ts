@@ -89,18 +89,24 @@ describe('NEON_TOOLS definitions', () => {
     }
   });
 
-  it('marks private Neon operations closed-world and docs open-world', () => {
+  it('marks public-capable storage and docs tools open-world', () => {
     expect(NEON_TOOLS).toHaveLength(113);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
     expect(generated).toHaveLength(94);
     expect(
-      generated.every((tool) => tool.annotations.openWorldHint === false),
-    ).toBe(true);
+      generated
+        .filter((tool) => tool.annotations.openWorldHint)
+        .map((tool) => tool.name),
+    ).toEqual(['create_storage_bucket']);
     expect(
       NEON_TOOLS.filter((tool) => tool.annotations.openWorldHint)
         .map((tool) => tool.name)
         .sort(),
-    ).toEqual(['get_doc_resource', 'list_docs_resources']);
+    ).toEqual([
+      'create_storage_bucket',
+      'get_doc_resource',
+      'list_docs_resources',
+    ]);
   });
 
   it('every tool has a corresponding handler in NEON_HANDLERS', () => {
