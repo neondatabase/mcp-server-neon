@@ -82,7 +82,7 @@ test.describe('/api/list-tools endpoint', () => {
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(2);
+    expect(body.tools).toHaveLength(3);
     expect(body.readOnly).toBe(false);
     expect(body.warnings).toBeDefined();
     expect(body.warnings).toHaveLength(1);

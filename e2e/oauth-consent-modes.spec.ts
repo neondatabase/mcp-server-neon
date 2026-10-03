@@ -144,7 +144,7 @@ test.describe('OAuth consent modes', () => {
       resource: 'https://mcp.neon.tech/mcp?category=not-a-category',
     });
     await expect(
-      page.getByText('Search and Fetch stay available'),
+      page.getByText('Search, Fetch, and Send Feedback stay available'),
     ).toBeVisible();
     await capture(page, 'A6-unknown-only');
     await openAuthorize(page, request, {
@@ -152,7 +152,7 @@ test.describe('OAuth consent modes', () => {
         'https://mcp.neon.tech/mcp?projectId=proj-example&category=not-a-category',
     });
     await expect(
-      page.getByText('No tools are available for this connection.'),
+      page.getByText('No tool categories. Send Feedback stays available.'),
     ).toBeVisible();
     await capture(page, 'A6-unknown-only-project');
   });
@@ -360,7 +360,10 @@ test.describe('OAuth consent modes', () => {
     await capture(page, 'B5-no-categories-all-projects');
     await page.getByText('One project', { exact: true }).click();
     await page.locator('input[name="projectId"]').fill('proj-example');
-    await expect(page.getByText('None.')).toBeVisible();
+    await expect(
+      page.getByText('Send Feedback', { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Search', { exact: true })).toHaveCount(0);
     await clearScreenshotInteractionState(page);
     await capture(page, 'B5-no-categories-one-project');
   });
@@ -558,7 +561,7 @@ test.describe('OAuth consent modes', () => {
     const count = await categories.count();
     for (let i = 0; i < count; i += 1) {
       const box = categories.nth(i);
-      if ((await box.getAttribute('value')) === 'snapshots') {
+      if ((await box.getAttribute('value')) === 'data_api') {
         await box.check();
       } else {
         await box.uncheck();

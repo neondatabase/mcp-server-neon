@@ -740,6 +740,34 @@
     }
   },
   {
+    "name": "send_feedback",
+    "title": "Send Feedback",
+    "description": "Send anonymous feedback about Neon or this MCP server to the Neon team. Only call this when the user asks to give feedback. Sends only the feedback text, not account, project, or connection details.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "feedback": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000,
+          "description": "The feedback to send to Neon. Do not include passwords, API keys, connection strings, or other secrets."
+        }
+      },
+      "required": [
+        "feedback"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Send Feedback",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "list_projects",
     "title": "List projects",
     "description": "List Neon projects you own. Returns every page. Pass limit to cap how many. There is no `cursor` argument. `org_id` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from.",

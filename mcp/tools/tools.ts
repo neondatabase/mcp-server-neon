@@ -8,6 +8,7 @@ import { handleGetNeonAuthConfig } from './handlers/neon-auth-get-config';
 import { handleSearch } from './handlers/search';
 import { handleFetch } from './handlers/fetch';
 import { getDocResource, listDocsResources } from './handlers/docs';
+import { sendFeedback } from './handlers/feedback';
 
 import { getDefaultDatabase, splitSqlStatements } from './utils';
 import { startSpan } from '@sentry/node';
@@ -36,6 +37,7 @@ import {
   runSqlInputSchema,
   runSqlTransactionInputSchema,
   searchInputSchema,
+  sendFeedbackInputSchema,
 } from './toolsSchema';
 import { handleListOrganizations } from './handlers/list-orgs';
 import { handleGetConnectionString } from './handlers/connection-string';
@@ -1398,6 +1400,14 @@ You MUST follow these steps:
           text: content,
         },
       ],
+    };
+  },
+
+  send_feedback: async (args) => {
+    const params = parseHost(sendFeedbackInputSchema, args?.params);
+    await sendFeedback({ feedback: params.feedback });
+    return {
+      content: [{ type: 'text', text: 'Feedback received. Thank you!' }],
     };
   },
 };

@@ -55,7 +55,7 @@ describe('buildConsentView', () => {
     );
   });
 
-  it('describes an empty category list without a project as search and fetch only', () => {
+  it('describes an empty category list without a project as search, fetch, and send_feedback only', () => {
     const view = buildConsentView({
       grant: { projectId: null, scopes: [] },
       writeChecked: true,
@@ -65,25 +65,26 @@ describe('buildConsentView', () => {
     expect(view.tools.map((tool) => tool.name).sort()).toEqual([
       'fetch',
       'search',
+      'send_feedback',
     ]);
   });
 
-  it('describes an empty category list with a project as no tools', () => {
+  it('describes an empty category list with a project as send_feedback only', () => {
     const view = buildConsentView({
       grant: { projectId: 'proj-123', scopes: [] },
       writeChecked: true,
     });
 
-    expect(view.tools).toEqual([]);
+    expect(view.tools.map((tool) => tool.name)).toEqual(['send_feedback']);
   });
 
   it('does not collapse when hidden write tools alone cross the threshold', () => {
     const readView = buildConsentView({
-      grant: { projectId: null, scopes: ['snapshots'] },
+      grant: { projectId: null, scopes: ['data_api'] },
       writeChecked: false,
     });
     const writeView = buildConsentView({
-      grant: { projectId: null, scopes: ['snapshots'] },
+      grant: { projectId: null, scopes: ['data_api'] },
       writeChecked: true,
     });
     expect(visibleToolCount(readView)).toBeLessThanOrEqual(COLLAPSE_ABOVE);
@@ -247,6 +248,9 @@ describe('renderConsentHtml', () => {
       grant: DEFAULT_GRANT,
     });
 
+    expect(html).toContain(
+      'var ALWAYS = {"search":true,"fetch":true,"send_feedback":true};',
+    );
     expect(html).toContain('name="projectMode"');
     expect(html).not.toContain('Next, sign in to Neon');
     expect(html).toContain('<h2>Choose access</h2>');
@@ -268,11 +272,11 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('src="/images/consent/neon.svg"');
     expect(html).toContain('>Included tools</button>');
     expect(html).toContain('is-collapsed');
-    expect(html).toContain('113 tools available');
+    expect(html).toContain('114 tools available');
     expect(html).toContain('data-tool-content');
     expect(html).toContain('data-category-disclosure');
     expect(html).toContain(
-      'data-category-summary>12/12 selected · 113 tools available</span>',
+      'data-category-summary>12/12 selected · 114 tools available</span>',
     );
     expect(html).toContain('choice-categories');
     expect(html).not.toMatch(/\.check-grid\s*\{[^}]*overflow-y/);

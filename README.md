@@ -218,7 +218,7 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 <details>
 <summary><strong>Tools available in read-only mode</strong></summary>
 
-Host tools: `list_organizations`, `describe_branch`, `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`, `list_slow_queries`, `explain_sql_statement`, `inspect_database`, `get_neon_auth_config`, `search`, `fetch`, `list_docs_resources`, `get_doc_resource`.
+Host tools: `list_organizations`, `describe_branch`, `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`, `list_slow_queries`, `explain_sql_statement`, `inspect_database`, `get_neon_auth_config`, `search`, `fetch`, `list_docs_resources`, `get_doc_resource`, `send_feedback`.
 
 Generated Management API tools that are GET and do not return secrets, plus `query_logs` (POST, read-only). Preview the exact set with `/api/list-tools?readonly=true`.
 
@@ -290,7 +290,7 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 - `docs`
 - `functions`
 - `storage`
-- `null` (tools without a scope category)
+- `null` (tools without a scope category: `search`, `fetch`, `send_feedback`)
 
 Notes:
 
@@ -370,6 +370,10 @@ Notes:
 
 - **`search`**: Searches across organizations, projects, and branches matching a query. Returns IDs, titles, and direct links to the Neon Console.
 - **`fetch`**: Fetches detailed information about a specific organization, project, or branch using an ID (typically from the search tool).
+
+**Feedback** (always available, including the no-login `?category=docs` endpoint):
+
+- **`send_feedback`**: Sends anonymous feedback to the Neon team. Only the feedback text is sent, with no account, project, or connection details. Messages are limited to 10,000 characters.
 
 **Observability** (`?category=observability`): these tools require the Neon Platform Beta and are currently only available for projects in the `aws-us-east-2` region. A branch without logs access returns HTTP 404 with reason `telemetry_not_enabled`.
 

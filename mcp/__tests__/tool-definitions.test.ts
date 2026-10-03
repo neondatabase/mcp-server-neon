@@ -32,6 +32,7 @@ const HOST_READ_ONLY_TOOLS = [
   'run_sql',
   'run_sql_transaction',
   'search',
+  'send_feedback',
 ];
 
 const SECRET_GENERATED_TOOLS = [
@@ -90,7 +91,7 @@ describe('NEON_TOOLS definitions', () => {
   });
 
   it('marks private Neon operations closed-world and public-capable ones open-world', () => {
-    expect(NEON_TOOLS).toHaveLength(113);
+    expect(NEON_TOOLS).toHaveLength(114);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
     expect(generated).toHaveLength(94);
     expect(
@@ -101,6 +102,7 @@ describe('NEON_TOOLS definitions', () => {
       'create_storage_bucket',
       'get_doc_resource',
       'list_docs_resources',
+      'send_feedback',
     ]);
   });
 

@@ -3,7 +3,10 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { DOCS_FIXTURE_INDEX_URL } from './e2e/docs-fixture.js';
+import {
+  DOCS_FIXTURE_INDEX_URL,
+  FEEDBACK_FIXTURE_URL,
+} from './e2e/docs-fixture.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.E2E_PORT ?? '3100';
@@ -56,6 +59,8 @@ export default defineConfig({
       // which runs before global setup, so anything global setup puts on
       // process.env arrives too late for this process.
       NEON_DOCS_INDEX_URL: DOCS_FIXTURE_INDEX_URL,
+      // Same fixture server, so send_feedback never reaches the real service.
+      NEON_FEEDBACK_URL: FEEDBACK_FIXTURE_URL,
     },
   },
 });
