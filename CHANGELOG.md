@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+`send_feedback` sends anonymous feedback to the Neon feedback service (`source: "neon_mcp"`). It sends only the feedback text. It is available under every grant, in read-only mode, and on the no-login `?category=docs` endpoint. `NEON_FEEDBACK_URL` overrides the endpoint.
+
 Generated tool calls classify Neon API 4xx responses by their `kind` and HTTP status even when `@neon/tools` and the server load different `@neon/sdk` versions, returning the API error to the MCP client without reporting it as a server failure.
 
 OAuth dynamic client registration normalizes scalar and mixed `redirect_uris` values to a string array before storage. Authorization applies the same normalization to existing client records without changing which redirect URI schemes are accepted.

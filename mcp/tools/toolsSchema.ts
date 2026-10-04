@@ -368,6 +368,22 @@ export const fetchInputSchema = z
 
 export const listDocsResourcesInputSchema = z.object({}).strict();
 
+// The feedback service truncates longer messages, so reject them instead.
+export const MAX_FEEDBACK_LENGTH = 10_000;
+
+export const sendFeedbackInputSchema = z
+  .object({
+    feedback: z
+      .string()
+      .trim()
+      .min(1)
+      .max(MAX_FEEDBACK_LENGTH)
+      .describe(
+        'The feedback to send to Neon. Do not include passwords, API keys, connection strings, or other secrets.',
+      ),
+  })
+  .strict();
+
 export const getDocResourceInputSchema = z
   .object({
     slug: z

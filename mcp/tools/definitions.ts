@@ -23,6 +23,7 @@ import {
   fetchInputSchema,
   listDocsResourcesInputSchema,
   getDocResourceInputSchema,
+  sendFeedbackInputSchema,
 } from './toolsSchema';
 
 type HostToolDraft = {
@@ -326,6 +327,22 @@ const HOST_TOOL_DRAFTS = [
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
+      openWorldHint: true,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'send_feedback' as const,
+    scope: null,
+    description:
+      'Send anonymous feedback about Neon or this MCP server to the Neon team. Only call this when the user asks to give feedback. Sends only the feedback text, not account, project, or connection details.',
+    inputSchema: sendFeedbackInputSchema,
+    // Does not change any Neon resource, so it stays available in read-only mode.
+    readOnlySafe: true,
+    annotations: {
+      title: 'Send Feedback',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
       openWorldHint: true,
     } satisfies ToolAnnotations,
   },

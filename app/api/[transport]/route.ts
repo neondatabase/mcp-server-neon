@@ -17,6 +17,7 @@ import {
   getDocResource,
   listDocsResources,
 } from '../../../mcp/tools/handlers/docs';
+import { sendFeedback } from '../../../mcp/tools/handlers/feedback';
 import { createNeonClient } from '../../../mcp/server/api';
 import pkg from '../../../package.json';
 import { handleToolError } from '../../../mcp/server/errors';
@@ -44,6 +45,7 @@ import {
   getAvailableTools,
   getAccessControlWarnings,
   formatAccessControlInstructions,
+  isDocsOnlyTool,
 } from '../../../mcp/tools/grant-filter';
 import { invokeTool, toolRegistration } from '../../../mcp/tools/registration';
 import { toListedTool } from '../../../mcp/tools/listed-schema';
@@ -676,15 +678,15 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
   );
 }
 
-// The docs-only handler bypasses OAuth entirely. It only registers tools
-// scoped to the `docs` category, which currently fetch from neon.com via
-// global fetch and never touch the Neon API client. We deliberately avoid
-// going through `getAvailableTools` / `grant-filter` here so the
-// "always available" search/fetch tools (which require Neon API auth) are
-// not surfaced anonymously.
-const DOCS_ONLY_TOOLS = NEON_TOOLS.filter((tool) => tool.scope === 'docs');
+// The docs-only handler bypasses OAuth entirely. It only registers the
+// `docs` category tools plus send_feedback. None of them touch the Neon API
+// client: they call neon.com or the feedback service via global fetch. We
+// deliberately avoid going through `getAvailableTools` / `grant-filter` here
+// so the "always available" search/fetch tools (which require Neon API auth)
+// are not surfaced anonymously.
+const DOCS_ONLY_TOOLS = NEON_TOOLS.filter(isDocsOnlyTool);
 function getDocsOnlyToolDefinition(
-  name: 'list_docs_resources' | 'get_doc_resource',
+  name: 'list_docs_resources' | 'get_doc_resource' | 'send_feedback',
 ) {
   const tool = DOCS_ONLY_TOOLS.find((tool) => tool.name === name);
   assert(tool, `${name} tool definition not found`);
@@ -693,6 +695,7 @@ function getDocsOnlyToolDefinition(
 
 const listDocsResourcesTool = getDocsOnlyToolDefinition('list_docs_resources');
 const getDocResourceTool = getDocsOnlyToolDefinition('get_doc_resource');
+const sendFeedbackTool = getDocsOnlyToolDefinition('send_feedback');
 
 const ANONYMOUS_DOCS_USER_ID = 'anonymous-docs';
 
@@ -810,6 +813,19 @@ function createDocsOnlyMcpHandler() {
           runDocsTool(getDocResourceTool.name, readUserAgent(extra), () =>
             getDocResource({ slug: args.slug }),
           ),
+      );
+
+      server.registerTool(
+        sendFeedbackTool.name,
+        toolRegistration(sendFeedbackTool),
+        async (
+          args: { feedback: string },
+          extra: { requestInfo?: RequestInfo },
+        ) =>
+          runDocsTool(sendFeedbackTool.name, readUserAgent(extra), async () => {
+            await sendFeedback({ feedback: args.feedback });
+            return 'Feedback received. Thank you!';
+          }),
       );
 
       server.server.setRequestHandler(ListToolsRequestSchema, async () => {

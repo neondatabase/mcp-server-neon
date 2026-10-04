@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { NEON_TOOLS } from '../tools/definitions';
-import { getFilteredTools } from '../tools/grant-filter';
+import { getFilteredTools, isDocsOnlyTool } from '../tools/grant-filter';
 import { toListedTool } from '../tools/listed-schema';
 
 const ALWAYS_AVAILABLE_NAMES = new Set(
@@ -42,7 +42,7 @@ function catalogRows() {
       listed,
       kind: tool.kind,
       scope: tool.scope ?? 'global',
-      public: tool.scope === 'docs',
+      public: isDocsOnlyTool(tool),
       alwaysAvailable: ALWAYS_AVAILABLE_NAMES.has(tool.name),
       projectScoped: tool.projectScoped,
       readOnlySafe: tool.readOnlySafe,

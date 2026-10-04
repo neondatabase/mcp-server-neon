@@ -8,6 +8,7 @@ import {
   getAccessControlWarnings,
   formatAccessControlInstructions,
   injectProjectId,
+  ALWAYS_AVAILABLE_TOOLS,
 } from '../tools/grant-filter';
 import type { GrantContext } from '../utils/grant-context';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
@@ -44,7 +45,7 @@ describe('filterToolsForGrant', () => {
       grant({ scopes: ['querying'] }),
     );
     const names = tools.map((t) => t.name);
-    expect(tools).toHaveLength(11);
+    expect(tools).toHaveLength(12);
     expect(names).toContain('run_sql');
     expect(names).toContain('search');
     expect(names).toContain('fetch');
@@ -53,7 +54,11 @@ describe('filterToolsForGrant', () => {
 
   it('returns only always-available tools when scopes are empty', () => {
     const tools = filterToolsForGrant(NEON_TOOLS, grant({ scopes: [] }));
-    expect(tools.map((t) => t.name).sort()).toEqual(['fetch', 'search']);
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      'fetch',
+      'search',
+      'send_feedback',
+    ]);
   });
 
   it('hides project-agnostic tools in project-scoped mode', () => {
@@ -155,7 +160,7 @@ describe('filterToolsForGrant', () => {
       NEON_TOOLS,
       grant({ projectId: 'proj-123', scopes: ['querying'] }),
     );
-    expect(tools).toHaveLength(9);
+    expect(tools).toHaveLength(10);
     const names = tools.map((t) => t.name);
     expect(names).toContain('run_sql');
     expect(names).not.toContain('search');
@@ -166,7 +171,7 @@ describe('filterToolsForGrant', () => {
 describe('getAvailableTools', () => {
   it('applies read-only filter after grant filtering', () => {
     const tools = getAvailableTools(grant({ scopes: ['querying'] }), true);
-    expect(tools).toHaveLength(7);
+    expect(tools).toHaveLength(8);
     for (const tool of tools) {
       expect(tool.readOnlySafe).toBe(true);
     }
@@ -232,6 +237,8 @@ describe('getAccessControlNotices', () => {
     expect(notices).toHaveLength(2);
     expect(notices[0]).toContain('read-only permissions');
     expect(notices[0]).toContain('authorizing again when using OAuth');
+    expect(notices[0]).toContain('Neon resources stay read-only');
+    expect(notices[0]).toContain('send_feedback');
     expect(notices[0]).not.toContain('Write mode active');
   });
 
@@ -284,7 +291,9 @@ describe('getAccessControlNotices', () => {
       false,
     );
     expect(instructions).toContain('compute');
-    expect(instructions).toContain('No tools are available');
+    expect(instructions).toContain(
+      'Only the "send_feedback" tool is available',
+    );
   });
 });
 
@@ -295,13 +304,15 @@ describe('getAccessControlWarnings', () => {
     expect(warnings[0]).toContain('No valid scope categories');
   });
 
-  it('warns with no-tools message when project-scoped and scopes are invalid', () => {
+  it('warns that only send_feedback remains when project-scoped and scopes are invalid', () => {
     const warnings = getAccessControlWarnings(
       grant({ projectId: 'proj-123', scopes: [] }),
       false,
     );
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('No tools are available.');
+    expect(warnings[0]).toContain(
+      'Only the "send_feedback" tool is available.',
+    );
   });
 
   it('returns no warnings for null or valid scopes when no access restrictions are set', () => {
@@ -387,7 +398,7 @@ describe('scope coverage sanity', () => {
       grant({ scopes: ['endpoints'] }),
     )
       .map((tool) => tool.name)
-      .filter((name) => name !== 'search' && name !== 'fetch')
+      .filter((name) => !ALWAYS_AVAILABLE_TOOLS.has(name))
       .sort();
     expect(names).toEqual([
       'create_postgres_endpoint',
@@ -408,7 +419,7 @@ describe('scope coverage sanity', () => {
       grant({ scopes: ['snapshots'] }),
     )
       .map((tool) => tool.name)
-      .filter((name) => name !== 'search' && name !== 'fetch')
+      .filter((name) => !ALWAYS_AVAILABLE_TOOLS.has(name))
       .sort();
     expect(names).toEqual([
       'create_snapshot',

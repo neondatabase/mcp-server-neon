@@ -21,6 +21,12 @@ const DOCS_FIXTURE_PORT = process.env.E2E_DOCS_PORT ?? '3101';
 const DOCS_FIXTURE_PATH = '/docs/llms.txt';
 export const DOCS_FIXTURE_INDEX_URL = `http://127.0.0.1:${DOCS_FIXTURE_PORT}${DOCS_FIXTURE_PATH}`;
 
+// The same server stands in for the feedback service, so send_feedback can be
+// called end to end without sending real feedback. It accepts a POST like the
+// real service (204) and only for this path.
+const FEEDBACK_FIXTURE_PATH = '/feedback';
+export const FEEDBACK_FIXTURE_URL = `http://127.0.0.1:${DOCS_FIXTURE_PORT}${FEEDBACK_FIXTURE_PATH}`;
+
 /** Marker the e2e assertion matches on. Also present in the fixture file. */
 export const DOCS_FIXTURE_MARKER = 'E2E_DOCS_INDEX_FIXTURE_MARKER';
 
@@ -42,6 +48,11 @@ export async function startDocsFixtureServer(): Promise<Server> {
     if (request.url === DOCS_FIXTURE_PATH) {
       response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
       response.end(body);
+      return;
+    }
+    if (request.url === FEEDBACK_FIXTURE_PATH && request.method === 'POST') {
+      request.resume();
+      request.on('end', () => response.writeHead(204).end());
       return;
     }
     response.writeHead(404).end();

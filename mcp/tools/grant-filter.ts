@@ -11,12 +11,22 @@ import type { NeonTool } from './tool-definition';
 
 /**
  * Tools that are always available regardless of scope categories.
- * These are discovery/navigation tools the LLM needs to function.
+ * These are discovery/navigation tools the LLM needs to function, plus
+ * send_feedback so users can always reach the Neon team.
  */
 export const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
   'search',
   'fetch',
+  'send_feedback',
 ]);
+
+/**
+ * Tools served by the no-login `?category=docs` endpoint. None of them use
+ * the Neon API client, so they are safe to call anonymously.
+ */
+export function isDocsOnlyTool(tool: Pick<NeonTool, 'name' | 'scope'>) {
+  return tool.scope === 'docs' || tool.name === 'send_feedback';
+}
 
 // Hosts may cache this schema and its instructions independently of the grant.
 const PROJECT_ID_GUIDANCE =
@@ -142,8 +152,9 @@ export function getAccessControlNotices(
   if (readOnly) {
     notices.push(
       'Notice: The MCP server is currently configured with read-only permissions. ' +
-        'All write-access tools have been removed. All remaining tools are limited to read-only operations ' +
-        '(for example, read-only SQL queries). Do not try to work around this restriction; it is intentional. ' +
+        'All write-access tools have been removed. Neon resources stay read-only: the remaining tools only read them ' +
+        '(for example, read-only SQL queries). The user can still send feedback to Neon with send_feedback. ' +
+        'Do not try to work around this restriction; it is intentional. ' +
         'If the user requests changes to Neon resources, inform them about the read-only configuration. ' +
         'Connection strings are unavailable in this mode because they carry a privileged role password; ' +
         'if the user needs a DATABASE_URL, tell them to copy it from https://console.neon.tech. ' +
@@ -240,8 +251,8 @@ export function getAccessControlWarnings(
 
   if (grant.scopes !== null && grant.scopes.length === 0) {
     const discoveryToolsText = grant.projectId
-      ? 'No tools are available.'
-      : 'Only the "search" and "fetch" tools are available.';
+      ? 'Only the "send_feedback" tool is available.'
+      : 'Only the "search", "fetch", and "send_feedback" tools are available.';
     warnings.push(
       '⚠️ Warning: No valid scope categories are set. ' +
         `${discoveryToolsText} ` +

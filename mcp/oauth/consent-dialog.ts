@@ -6,6 +6,7 @@ import {
   type ScopeCategory,
 } from '../utils/grant-context';
 import type { ConsentMode } from './consent-mode';
+import { ALWAYS_AVAILABLE_TOOLS } from '../tools/grant-filter';
 import {
   filterConsentCatalog,
   getConsentToolCatalog,
@@ -298,9 +299,9 @@ function emptyGrantNote(view: ConsentView): string {
     return '';
   }
   if (view.project.kind === 'one') {
-    return `<p class="note">No tools are available for this connection.</p>`;
+    return `<p class="note">No tool categories. Send Feedback stays available.</p>`;
   }
-  return `<p class="note">No tool categories. Search and Fetch stay available.</p>`;
+  return `<p class="note">No tool categories. Search, Fetch, and Send Feedback stay available.</p>`;
 }
 
 function renderGrantSummary(view: ConsentView): string {
@@ -503,8 +504,12 @@ function consentScript(mode: ConsentMode): string {
   );
   const categories = JSON.stringify(SCOPE_CATEGORIES);
   const labels = JSON.stringify(SCOPE_CATEGORY_LABELS);
+  // Built from the server list so the live preview cannot drift from it.
+  const always = JSON.stringify(
+    Object.fromEntries([...ALWAYS_AVAILABLE_TOOLS].map((name) => [name, true])),
+  );
   return `
-    var ALWAYS = { search: true, fetch: true };
+    var ALWAYS = ${always};
     var CATALOG = ${catalog};
     var SCOPE_CATEGORIES = ${categories};
     var SCOPE_LABELS = ${labels};

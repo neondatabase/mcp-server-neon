@@ -27,6 +27,11 @@ export const NEON_API_HOST =
 export const NEON_DOCS_INDEX_URL =
   process.env.NEON_DOCS_INDEX_URL ?? 'https://neon.com/docs/llms.txt';
 
+// Where send_feedback posts to (the neondatabase/neon-feedback Function).
+// Overridable so tests and local runs never send real feedback.
+export const NEON_FEEDBACK_URL =
+  process.env.NEON_FEEDBACK_URL ?? 'https://feedback.neon.tech/';
+
 // Analytics and monitoring
 export const ANALYTICS_WRITE_KEY =
   process.env.ANALYTICS_WRITE_KEY ?? 'gFVzt8ozOp6AZRXoD0g0Lv6UQ6aaoS7O';
