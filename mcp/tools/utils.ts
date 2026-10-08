@@ -94,9 +94,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 `,
-  `     
+  `
 -- To use the function:
 SELECT * FROM show_db_tree();
+`,
+  `
+-- Clean up the helper function so it does not persist in the database
+DROP FUNCTION IF EXISTS public.show_db_tree();
 `,
 ];
 
