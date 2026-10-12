@@ -30,20 +30,24 @@ type InspectDatabaseParams = {
 };
 
 /**
- * A failed diagnostic is a bug in this catalog, not in a caller's SQL, so it must
- * not be classified as a client error the way a failed `run_sql` is.
+ * A diagnostic Postgres rejects is a bug in this catalog, not in a caller's SQL,
+ * so it must not be classified as a client error the way a failed `run_sql` is.
  * `handleToolError` returns `NeonDbError` straight to the caller without logging
  * it or reporting it to Sentry; rethrowing keeps the actionable message and gets
  * the failure recorded.
+ *
+ * Only an error Postgres raised carries a `severity`. One from the Neon proxy
+ * (IP allowlist, blocked network, quota) has an empty one, and the query never
+ * ran, so it stays a `NeonDbError`.
  */
-async function runDiagnostic<T>(
+export async function runDiagnostic<T>(
   check: InspectCheck,
   run: () => Promise<T>,
 ): Promise<T> {
   try {
     return await run();
   } catch (error) {
-    if (error instanceof NeonDbError) {
+    if (error instanceof NeonDbError && error.severity) {
       throw new Error(
         `The "${check}" diagnostic failed against Postgres: ${error.message}`,
         { cause: error },
@@ -80,7 +84,7 @@ async function runInspectOnDatabase(
   return rows;
 }
 
-function rethrowInspectError(
+export function rethrowInspectError(
   error: unknown,
   wrapped: string | undefined,
 ): never {
@@ -89,6 +93,9 @@ function rethrowInspectError(
   }
   if (error instanceof NotFoundError) {
     throw new NotFoundError(wrapped);
+  }
+  if (error instanceof NeonDbError) {
+    throw Object.assign(new NeonDbError(wrapped), { cause: error });
   }
   throw new Error(wrapped, {
     cause: error instanceof Error ? error : undefined,

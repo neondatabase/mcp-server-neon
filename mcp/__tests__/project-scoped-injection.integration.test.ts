@@ -164,6 +164,25 @@ describe('project-scoped grants', () => {
   });
 });
 
+describe('a grant scoped to a value that is not a project id', () => {
+  it('returns a validation error without calling the Neon API', async () => {
+    const { client, close } = await connect('My Project');
+
+    try {
+      const result = await client.callTool({
+        name: 'describe_project',
+        arguments: {},
+      });
+      expect(result.isError).toBe(true);
+      expect(errorText(result)).toContain('ZodError');
+      expect(errorText(result)).toContain('project_id');
+      expect(requestedPaths).toEqual([]);
+    } finally {
+      await close();
+    }
+  });
+});
+
 const CONNECTION_ARGS = {
   branch_id: 'br-loopback',
   database_name: 'neondb',
