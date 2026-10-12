@@ -1,4 +1,5 @@
 import { NeonDbError } from '@neondatabase/serverless';
+import { ZodError } from 'zod';
 import { logger } from '../utils/logger';
 import { captureException } from '@sentry/node';
 import { agentSentryTags } from '../sentry/utils';
@@ -18,12 +19,22 @@ export class NotFoundError extends Error {
   }
 }
 
-function isClientError(
-  error: unknown,
-): error is InvalidArgumentError | NotFoundError {
+function isClientError(error: unknown): boolean {
   return (
-    error instanceof InvalidArgumentError || error instanceof NotFoundError
+    error instanceof InvalidArgumentError ||
+    error instanceof NotFoundError ||
+    error instanceof ZodError ||
+    isNeonSdkClientError(error)
   );
+}
+
+/**
+ * `@neon/sdk` 3 throws `NeonError` with `kind: 'client'`; `@neon/sdk` 7, which
+ * `@neon/tools` depends on, throws `NeonClientError`. Two copies of the SDK are
+ * installed, so neither class can be matched with `instanceof`.
+ */
+function isNeonSdkClientError(error: unknown): boolean {
+  return error instanceof Error && 'kind' in error && error.kind === 'client';
 }
 
 type NeonApiErrorLike = Error & {
