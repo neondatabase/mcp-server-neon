@@ -18,8 +18,12 @@ const rejectedConnection = () =>
     ),
     { severity: '', code: '' },
   );
-const httpStatusError = () =>
+const quotaError = () =>
   new NeonDbError('Server error (HTTP status 402): {"message":"quota"}');
+const serverError = () =>
+  new NeonDbError('Server error (HTTP status 503): upstream unavailable');
+const transportError = () =>
+  new NeonDbError('Error connecting to database: TypeError: fetch failed');
 
 const thrownBy = async (run: () => Promise<unknown>) =>
   run().then(
@@ -43,8 +47,21 @@ describe('runDiagnostic', () => {
   });
 
   it.each([
+    ['an HTTP 5xx', serverError],
+    ['a transport failure', transportError],
+  ])('reports %s as a diagnostic failure', async (_label, make) => {
+    const cause = make();
+    const error = await thrownBy(() =>
+      runDiagnostic('table-sizes', () => Promise.reject(cause)),
+    );
+
+    expect(error).not.toBeInstanceOf(NeonDbError);
+    expect(error).toHaveProperty('cause', cause);
+  });
+
+  it.each([
     ['a rejected connection', rejectedConnection],
-    ['an HTTP status error', httpStatusError],
+    ['an HTTP 4xx such as quota', quotaError],
   ])('passes %s through as a database error', async (_label, make) => {
     const cause = make();
     const error = await thrownBy(() =>
