@@ -376,30 +376,38 @@ function renderRoleField({
     fieldError?.field === 'roleName'
       ? ' aria-invalid="true" aria-describedby="role-name-error role-name-help" autofocus'
       : ' aria-describedby="role-name-help"';
+  const open = fieldError?.field === 'roleName' ? ' open' : '';
   return `
-      <div class="choice-role">
-      <fieldset class="choice">
-        <legend>Postgres role</legend>
-        <label class="project-id role-name">
-          <span>Role name (optional)</span>
-          <input
-            type="text"
-            name="roleName"
-            value="${he.escape(formState.roleName)}"
-            placeholder="Database owner"
-            autocomplete="off"
-            spellcheck="false"
-            ${invalidAttr}
-          />
-        </label>
-        ${roleError}
-        <p class="note" id="role-name-help">
-          SQL tools log in as this role instead of the database owner, so its
-          Postgres grants decide what they can read and change. The role must
-          exist and be able to log in on each branch you query.
-        </p>
-      </fieldset>
-      </div>`;
+      <details class="choice choice-role" data-role-disclosure${open}>
+        <summary class="category-disclosure-summary">
+          <span class="choice-title">Postgres role</span>
+          <span class="category-summary" data-role-summary>${he.escape(roleSummary(formState.roleName))}</span>
+        </summary>
+        <div class="category-disclosure-body">
+          <label class="project-id role-name">
+            <span>Role name (optional)</span>
+            <input
+              type="text"
+              name="roleName"
+              value="${he.escape(formState.roleName)}"
+              placeholder="Database owner"
+              autocomplete="off"
+              spellcheck="false"
+              ${invalidAttr}
+            />
+          </label>
+          ${roleError}
+          <p class="note" id="role-name-help">
+            SQL tools log in as this role instead of the database owner, so its
+            Postgres grants decide what they can read and change. The role must
+            exist and be able to log in on each branch you query.
+          </p>
+        </div>
+      </details>`;
+}
+
+function roleSummary(roleName: string): string {
+  return roleName.trim() || 'Database owner';
 }
 
 function renderEditableGrant({
@@ -682,6 +690,8 @@ function consentScript(mode: ConsentMode): string {
     function syncConsentUi() {
       syncProjectField();
       var grant = currentGrant();
+      var roleSummary = document.querySelector('[data-role-summary]');
+      if (roleSummary) roleSummary.textContent = grant.roleName || 'Database owner';
       var checked = writeChecked();
       var writeControl = document.querySelector('.scope-checkbox');
       var hiddenRead = document.querySelector('input[type="hidden"][name="scopes"][value="read"]');
@@ -938,7 +948,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     .category-disclosure-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .category-disclosure-summary .choice-title { display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0; margin: 0; }
     .choice-title::after, .tool-toggle::after { content: ''; display: block; width: 20px; height: 20px; background: url('/images/consent/chevron.svg') center / contain no-repeat; }
-    .choice-categories[open] .choice-title::after, .tool-toggle[aria-expanded="true"]::after { transform: rotate(180deg); }
+    .choice-categories[open] .choice-title::after, .choice-role[open] .choice-title::after, .tool-toggle[aria-expanded="true"]::after { transform: rotate(180deg); }
     .category-summary, .tool-block-title { color: var(--muted); font-size: 15px; text-align: right; }
     .category-disclosure-body { padding-top: 20px; }
     .choice-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }

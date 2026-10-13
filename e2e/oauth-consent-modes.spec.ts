@@ -487,13 +487,24 @@ test.describe('OAuth consent modes', () => {
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await openAuthorize(page, request);
+    const roleDisclosure = page.locator('[data-role-disclosure]');
+    const roleSummary = page.locator('[data-role-summary]');
     const roleInput = page.locator('input[name="roleName"]');
+    await expect(roleDisclosure).not.toHaveAttribute('open', '');
+    await expect(roleSummary).toHaveText('Database owner');
+    await expect(roleInput).toBeHidden();
+    await clearScreenshotInteractionState(page);
+    await capture(page, 'B8-editable-role-collapsed');
+
+    await roleDisclosure.locator('summary').click();
+    await expect(roleDisclosure).toHaveAttribute('open', '');
     await expect(roleInput).toHaveValue('');
     await expect(roleInput).toHaveAttribute('placeholder', 'Database owner');
     const tools = page.locator('[data-tool-content]');
     await expect(tools).toContainText('Get Connection String');
 
     await roleInput.fill('app_reader');
+    await expect(roleSummary).toHaveText('app_reader');
     await expect(tools).not.toContainText('Get Connection String');
     await expect(tools).toContainText('Run SQL');
     await page.getByRole('radio', { name: 'Read only', exact: true }).check();
@@ -525,8 +536,13 @@ test.describe('OAuth consent modes', () => {
     await openAuthorize(page, request);
     await page.getByText('One project', { exact: true }).click();
     await page.locator('input[name="projectId"]').fill('proj-example');
+    await page.locator('[data-role-disclosure] summary').click();
     await page.locator('input[name="roleName"]').fill('app-reader');
     await page.getByRole('button', { name: 'Approve' }).click();
+    await expect(page.locator('[data-role-disclosure]')).toHaveAttribute(
+      'open',
+      '',
+    );
     await expect(page.locator('#role-name-error')).toContainText(
       'Enter one Postgres role name',
     );

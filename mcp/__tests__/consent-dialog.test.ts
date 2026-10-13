@@ -414,6 +414,10 @@ describe('renderConsentHtml', () => {
     expect(input?.[0]).toContain('value=""');
     expect(input?.[0]).not.toContain('disabled');
     expect(html).toContain('Role name (optional)');
+    expect(html).toMatch(
+      /<details class="choice choice-role" data-role-disclosure>/,
+    );
+    expect(html).toContain('data-role-summary>Database owner<');
     expect(html).toContain('Get Connection String');
   });
 
@@ -456,6 +460,7 @@ describe('renderConsentHtml', () => {
     );
     expect(input?.[0]).toContain('aria-invalid="true"');
     expect(html).toContain('id="role-name-error" role="alert"');
+    expect(html).toContain('data-role-disclosure open>');
     expect(html).not.toContain('<script>x</script>');
   });
 
