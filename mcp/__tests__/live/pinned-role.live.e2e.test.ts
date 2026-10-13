@@ -32,7 +32,6 @@ const PINNED_ROLE = 'mcp_pinned_reader';
 const MISSING_ROLE = 'mcp_missing_role';
 const GRANTED_TABLE = 'mcp_pinned_granted';
 const PROTECTED_TABLE = 'mcp_pinned_protected';
-// Never logged: only its absence from tool output is asserted.
 const PINNED_PASSWORD = `P${randomBytes(18).toString('hex')}`;
 
 const toolResultSchema = z.object({

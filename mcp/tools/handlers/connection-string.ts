@@ -18,10 +18,7 @@ import { InvalidArgumentError } from '../../server/errors';
  * never surface the URI to the client.
  *
  * A role pinned by the connection grant (`extra.pinnedRoleName`) is enforced
- * here, so every caller gets it: the pinned role replaces an omitted
- * `roleName`, a different `roleName` is rejected, and the database owner is
- * never looked up. A pinned role that Neon cannot resolve, or that Postgres
- * refuses to log in, fails the call; nothing retries as another role.
+ * here because every SQL tool resolves its connection through this function.
  */
 export async function handleGetConnectionString(
   {
