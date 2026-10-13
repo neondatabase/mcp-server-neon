@@ -2,14 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GrantContext } from '../utils/grant-context';
 import type { ApiKeyRecord } from '../oauth/kv-store';
 
-const { apiKeyCache, apiKeyCacheGet, getAuthDetails } = vi.hoisted(() => {
-  const apiKeyCache = new Map<string, unknown>();
-  return {
-    apiKeyCache,
-    apiKeyCacheGet: vi.fn(async (key: string) => apiKeyCache.get(key)),
-    getAuthDetails: vi.fn(),
-  };
-});
+const { apiKeyCache, apiKeyCacheGet, getAuthDetails, getCurrentUserInfo } =
+  vi.hoisted(() => {
+    const apiKeyCache = new Map<string, unknown>();
+    return {
+      apiKeyCache,
+      apiKeyCacheGet: vi.fn(async (key: string) => apiKeyCache.get(key)),
+      getAuthDetails: vi.fn(),
+      getCurrentUserInfo: vi.fn(),
+    };
+  });
 
 vi.mock('../oauth/model', () => ({
   model: { getAccessToken: vi.fn() },
@@ -34,9 +36,7 @@ vi.mock('../oauth/kv-store', async () => {
 vi.mock('../server/api', () => ({
   createNeonClient: () => ({
     getAuthDetails,
-    getCurrentUserInfo: async () => ({
-      data: { id: 'user-1', name: 'User', last_name: '', email: 'u@x.dev' },
-    }),
+    getCurrentUserInfo,
     getOrganization: async () => ({ data: { name: 'Org' } }),
   }),
 }));
@@ -139,6 +139,9 @@ describe('OAuth bearer on the API-key path', () => {
     apiKeyCacheGet.mockImplementation(async (key: string) =>
       apiKeyCache.get(key),
     );
+    getCurrentUserInfo.mockResolvedValue({
+      data: { id: 'user-1', name: 'User', last_name: '', email: 'u@x.dev' },
+    });
   });
 
   it('keeps the stored read-only grant when the token store answers', async () => {
@@ -165,6 +168,18 @@ describe('OAuth bearer on the API-key path', () => {
       error: 'Token store unavailable',
       code: 'token_store_unavailable',
     });
+  });
+
+  it('answers 503 even when resolving the account would fail', async () => {
+    storeLookupFails();
+    neonSays('oauth');
+    getCurrentUserInfo.mockRejectedValue(new Error('Neon API 500'));
+
+    const { res } = await listTools(OAUTH_BEARER);
+
+    expectTokenStoreUnavailable(res);
+    expect(getCurrentUserInfo).not.toHaveBeenCalled();
+    expect(apiKeyCache.has(OAUTH_BEARER)).toBe(false);
   });
 
   it('answers 503 for a cached OAuth record without asking Neon again', async () => {

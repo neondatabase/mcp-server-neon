@@ -927,15 +927,17 @@ function createDocsOnlyMcpHandler() {
 const API_KEY_CACHE_TTL_MS = 5 * 60 * 1000;
 
 // Helper: Fetch and cache API key details
+// Resolves an API key's account, or reports `'oauth'` as soon as Neon says
+// the bearer is an OAuth token, before account resolution can fail it.
 const fetchAccountDetails = async (
   accessToken: string,
-): Promise<ApiKeyRecord | null> => {
+): Promise<ApiKeyRecord | 'oauth' | null> => {
   // 1. Check cache first
   try {
     const cached = await getApiKeys().get(accessToken);
     if (cached) {
       logger.info('API key cache hit', { accountId: cached.account.id });
-      return cached;
+      return cached.authMethod === 'oauth' ? 'oauth' : cached;
     }
   } catch (error) {
     logger.warn('API key cache read failed', { error });
@@ -945,6 +947,9 @@ const fetchAccountDetails = async (
   try {
     const neonClient = createNeonClient(accessToken);
     const { data: auth } = await neonClient.getAuthDetails();
+    if (auth.auth_method === 'oauth') {
+      return 'oauth';
+    }
 
     // Use shared account resolution with identify on cache miss
     const account = await resolveAccountFromAuth(auth, neonClient, {
@@ -1082,7 +1087,7 @@ const verifyToken = async (
   // Our access tokens are Neon OAuth tokens, so they also pass the API-key
   // check. Their grant and scope live only in the token store; building them
   // from the URL here would drop what the user chose at consent.
-  if (apiKeyRecord.authMethod === 'oauth') {
+  if (apiKeyRecord === 'oauth') {
     logger.warn('OAuth bearer reached the API key path; refusing URL grant', {
       tokenLookupFailed,
     });
