@@ -8,9 +8,9 @@
 
 `send_feedback` sends anonymous feedback to the Neon feedback service (`source: "neon_mcp"`). It sends only the feedback text. It is available under every grant, in read-only mode, and on the no-login `?category=docs` endpoint. `NEON_FEEDBACK_URL` overrides the endpoint.
 
-`?roleName=` pins the Postgres role that every SQL connection logs in as, instead of the database owner (#347). It applies to `run_sql`, `run_sql_transaction`, `explain_sql_statement`, `get_database_tables`, `describe_table_schema`, `describe_branch`, `list_slow_queries`, `inspect_database`, and the SQL in migrations and query tuning. A `role_name` argument that differs from the pin is rejected, and a role that does not exist or cannot log in fails the call without falling back to the owner. `get_connection_string` is withheld on a pinned connection. Read-only mode keeps its `READ ONLY` transaction. For OAuth, `roleName` on the resource URL is a fixed grant shown on the authorization page and kept on the token through refresh; tokens without it are unchanged. For API keys it is read from the URL on each request. A malformed value (not one unquoted Postgres identifier of at most 63 characters, or repeated) returns `400` rather than being ignored. The pin covers SQL connections only; Management API tools keep the token's own access.
+`?roleName=` makes every SQL tool log in as that Postgres role instead of the database owner, so the role's grants decide what an agent can read and change. With OAuth, set it on the MCP URL (a fixed grant on the authorization page) or in the optional **Postgres role** field on the default authorization page; `get_connection_string` is withheld on a pinned connection, and a role that cannot log in fails the call without falling back to the owner.
 
-`run_sql` and `run_sql_transaction` accept optional `role_name` and `compute_id`, passed to the internal connection resolver. The connection string stays on the server. Calls without them behave as before.
+`run_sql` and `run_sql_transaction` accept optional `role_name` and `compute_id`. On a pinned connection, `role_name` must match the pin.
 
 Generated tool calls classify Neon API 4xx responses by their `kind` and HTTP status even when `@neon/tools` and the server load different `@neon/sdk` versions, returning the API error to the MCP client without reporting it as a server failure.
 

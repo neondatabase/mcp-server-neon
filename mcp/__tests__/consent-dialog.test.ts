@@ -342,6 +342,7 @@ describe('renderConsentHtml', () => {
       formState: {
         projectMode: 'one',
         projectId: 'proj-123',
+        roleName: '',
         categories: [],
         writeChecked: true,
       },
@@ -383,6 +384,7 @@ describe('renderConsentHtml', () => {
       formState: {
         projectMode: 'one',
         projectId: '',
+        roleName: '',
         categories: ['querying', 'schema'],
         writeChecked: false,
       },
@@ -396,5 +398,89 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('autofocus');
     expect(html).toContain('role="alert"');
     expect(html).toContain('data-category-summary>2/12 selected · ');
+  });
+
+  it('renders an empty optional Postgres role field on editable consent', () => {
+    const html = renderConsentHtml({
+      client,
+      state: 'abc',
+      mode: 'editable',
+      writeChecked: false,
+      showWriteControl: true,
+      grant: DEFAULT_GRANT,
+    });
+    const input = html.match(/<input\b[^>]*name="roleName"[^>]*>/);
+
+    expect(input?.[0]).toContain('value=""');
+    expect(input?.[0]).not.toContain('disabled');
+    expect(html).toContain('Role name (optional)');
+    expect(html).toContain('Get Connection String');
+  });
+
+  it('omits the Postgres role field on a confirmation', () => {
+    const html = renderConsentHtml({
+      client,
+      state: 'abc',
+      mode: 'confirmation',
+      writeChecked: false,
+      showWriteControl: false,
+      grant: { ...DEFAULT_GRANT, roleName: 'app_reader' },
+    });
+
+    expect(html).not.toContain('name="roleName"');
+    expect(html).toContain('Postgres role:');
+    expect(html).toContain('app_reader');
+  });
+
+  it('keeps an escaped role value and its error after a rejected submission', () => {
+    const html = renderConsentHtml({
+      client,
+      state: 'abc',
+      mode: 'editable',
+      writeChecked: false,
+      showWriteControl: true,
+      grant: DEFAULT_GRANT,
+      fieldError: { field: 'roleName', message: 'Enter one Postgres role.' },
+      formState: {
+        projectMode: 'all',
+        projectId: '',
+        roleName: '"><script>x</script>',
+        categories: ['querying'],
+        writeChecked: false,
+      },
+    });
+    const input = html.match(/<input\b[^>]*name="roleName"[^>]*>/);
+
+    expect(input?.[0]).toContain(
+      'value="&quot;&gt;&lt;script&gt;x&lt;/script&gt;"',
+    );
+    expect(input?.[0]).toContain('aria-invalid="true"');
+    expect(html).toContain('id="role-name-error" role="alert"');
+    expect(html).not.toContain('<script>x</script>');
+  });
+
+  it('drops Get Connection String from the preview when a role is entered', () => {
+    const render = (roleName: string) =>
+      renderConsentHtml({
+        client,
+        state: 'abc',
+        mode: 'editable',
+        writeChecked: true,
+        showWriteControl: true,
+        grant: DEFAULT_GRANT,
+        formState: {
+          projectMode: 'all',
+          projectId: '',
+          roleName,
+          categories: ['querying', 'branches'],
+          writeChecked: true,
+        },
+      });
+    const tools = (html: string) =>
+      html.match(/data-tool-content>([\s\S]*?)<\/section>/)?.[1] ?? '';
+
+    expect(tools(render(''))).toContain('Get Connection String');
+    expect(tools(render('app_reader'))).not.toContain('Get Connection String');
+    expect(tools(render('app_reader'))).toContain('Run SQL');
   });
 });

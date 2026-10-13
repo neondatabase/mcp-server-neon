@@ -2,8 +2,6 @@ import { parseResourceIdentifier } from '../../lib/oauth/protected-resource-meta
 import { isReadOnly } from '../utils/read-only';
 import { ROLE_NAME_PARAM } from '../utils/grant-context';
 
-// The editable consent page has no role field, so a pinned role always
-// yields a fixed confirmation.
 const GRANT_QUERY_KEYS = [
   'projectId',
   'category',

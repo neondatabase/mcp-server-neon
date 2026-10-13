@@ -346,6 +346,32 @@ describe.sequential('pinned Postgres role on live Neon', () => {
   );
 
   it(
+    'says why describe_branch has no structure for a role without CREATE on public',
+    async () => {
+      if (!neonClient || !projectId) throw new Error('Project not ready.');
+      const branchId = (
+        await neonClient.listProjectBranches({ projectId })
+      ).data.branches.find((branch) => branch.default)?.id;
+      if (!branchId) throw new Error('Default branch not found.');
+
+      const described = await succeeds(pinned, 'describe_branch', {
+        branch_id: branchId,
+      });
+      expect(described).toContain('Branch Details:');
+      expect(described).toContain(
+        `Database structure unavailable as Postgres role "${PINNED_ROLE}"`,
+      );
+      expect(described).toMatch(/permission denied for schema public/);
+
+      const asOwner = await succeeds(owner, 'describe_branch', {
+        branch_id: branchId,
+      });
+      expect(asOwner).toContain('Database Structure:');
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'keeps the read-only transaction around pinned queries',
     async () => {
       const setting = await succeeds(pinnedReadOnly, 'run_sql', {

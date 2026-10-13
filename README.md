@@ -153,7 +153,7 @@ Neon MCP advertises OAuth scopes `read` and `write`. Your MCP client can request
 
 You can set read-only mode in two ways:
 
-1. **Default MCP URL (editable consent):** Connect with `https://mcp.neon.tech/mcp` and uncheck **Allow writes** on the authorization page. You can also choose one project and a subset of tool categories there.
+1. **Default MCP URL (editable consent):** Connect with `https://mcp.neon.tech/mcp` and uncheck **Allow writes** on the authorization page. You can also choose one project, a Postgres role for SQL, and a subset of tool categories there.
 2. **Parameterized MCP URL (fixed consent):** Put `readonly`, `projectId`, `category`, and/or `roleName` on the MCP server URL. The authorization page confirms that grant and does not offer editors. Change the URL and authorize again to change the grant.
 
 ```json
@@ -229,7 +229,7 @@ Grant context (scope categories, project scoping, read-only mode, pinned Postgre
 - If the role does not exist or cannot log in (for example `ALTER ROLE … NOLOGIN`), the call fails before any SQL runs. It does not retry as another role.
 - The value must be one exact Postgres role name: letters, digits, `_` or `$`, starting with a letter or `_`, at most 63 characters. Anything else (empty, repeated, quoted, hyphenated) is rejected with `400`, not ignored.
 - The role must be able to log in (`LOGIN`) and must exist on each branch you query. Roles created in SQL (`CREATE ROLE app_reader LOGIN PASSWORD '…'`) work, as do roles created in the Neon Console or API. A role with the privileges it needs, and no more, is what makes the pin useful: for read-only agents, grant `SELECT` on the tables they should see and do not add it to `neon_superuser`.
-- **OAuth:** `roleName` on the MCP URL makes a fixed grant. The authorization page shows the role, and the issued token keeps it through refresh. Changing the URL later does not change the token; authorize again. Tokens issued before this option have no pinned role and behave as before.
+- **OAuth:** `roleName` on the MCP URL makes a fixed grant. The authorization page shows the role, and the issued token keeps it through refresh. Changing the URL later does not change the token; authorize again. With the default URL (editable consent), enter the role in the optional **Postgres role** field instead; leave it empty to keep the database owner. Tokens issued before this option have no pinned role and behave as before.
 - **API key:** the role is read from the URL on each request. Anyone who can edit the connection URL and holds the API key can change or remove it, so keep the URL in configuration the agent does not control.
 - The pin applies to SQL connections only. Management API tools still act with the API key or OAuth token's own access; `compare_database_schema`, for example, is computed by the Neon API and is not limited by the role's grants. Combine `roleName` with `readonly=true` and `category` to limit those tools too.
 

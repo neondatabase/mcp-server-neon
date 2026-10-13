@@ -84,8 +84,21 @@ export async function handleDescribeBranch(
         },
       ],
     };
-  } catch {
-    // Ignore database connection errors
+  } catch (error) {
+    // A pinned role is the likeliest cause of a failure here (the structure
+    // query creates a function in `public`), so say why it is missing rather
+    // than returning metadata alone.
+    if (extra.pinnedRoleName !== undefined) {
+      return {
+        content: [
+          { type: 'text', text: branchInfo(branch) },
+          {
+            type: 'text',
+            text: `Database structure unavailable as Postgres role "${extra.pinnedRoleName}": ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
   }
 
   return {

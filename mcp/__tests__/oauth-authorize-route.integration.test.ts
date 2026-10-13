@@ -536,6 +536,80 @@ describe('/api/authorize route integration', () => {
     expect(stored.approvedScopes).toEqual(['read']);
   });
 
+  it('stores a Postgres role entered on editable consent', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const getHtml = await getResponse.text();
+    expect(getHtml).toContain('name="roleName"');
+    const state = extractState(getHtml);
+    const postResponse = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'one'],
+        ['projectId', 'proj-edited'],
+        ['roleName', 'app_reader'],
+        ['category', 'querying'],
+        ['scopes', 'read'],
+      ],
+    });
+    const stored = await authTransactions.getById(state);
+    expect(postResponse.status).toBe(303);
+    if (stored?.status !== 'approved') {
+      throw new Error('expected approved transaction');
+    }
+    expect(stored.approvedGrant).toEqual({
+      projectId: 'proj-edited',
+      scopes: ['querying'],
+      roleName: 'app_reader',
+    });
+    expect(stored.approvedScopes).toEqual(['read']);
+  });
+
+  it('re-renders an invalid Postgres role with its error and keeps the transaction pending', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const state = extractState(await getResponse.text());
+    const response = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'one'],
+        ['projectId', 'proj-kept'],
+        ['roleName', 'app-reader'],
+        ['scopes', 'read'],
+      ],
+    });
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain('Enter one Postgres role name');
+    expect(html).toContain('value="app-reader"');
+    expect(html).toContain('value="proj-kept"');
+    expect(await authTransactions.getById(state)).toMatchObject({
+      status: 'pending',
+    });
+  });
+
+  it('keeps the entered role when the project ID is missing', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const state = extractState(await getResponse.text());
+    const response = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'one'],
+        ['projectId', ''],
+        ['roleName', 'app_reader'],
+        ['scopes', 'read'],
+      ],
+    });
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain('Enter the project ID this connection should use.');
+    expect(html).toContain('value="app_reader"');
+  });
+
   it('ignores a leftover project ID when All projects is selected', async () => {
     const getResponse = await GET(buildAuthorizeRequest());
     const state = extractState(await getResponse.text());

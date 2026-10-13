@@ -208,7 +208,7 @@ export function getAccessControlNotices(
         'Do not pass a different `role_name`; it is rejected. ' +
         'Connection strings are unavailable on a pinned connection. ' +
         'The user can change the role by editing the roleName query param on the MCP server URL, ' +
-        'and by authorizing again when using OAuth.',
+        'or, with OAuth, by authorizing again and changing the Postgres role on the consent page.',
     );
   }
   if (grant.unknownCategories?.length) {
