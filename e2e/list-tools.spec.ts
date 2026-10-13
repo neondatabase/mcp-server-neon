@@ -68,9 +68,10 @@ test.describe('/api/list-tools endpoint', () => {
       expect(tool.readOnlySafe).toBe(true);
     }
 
-    expect(body.tools.map((tool: { name: string }) => tool.name)).not.toContain(
-      'get_connection_string',
-    );
+    const names = body.tools.map((tool: { name: string }) => tool.name);
+    expect(names).not.toContain('get_connection_string');
+    expect(names).toContain('run_sql');
+    expect(names).not.toContain('run_sql_transaction');
   });
 
   test('includes warnings for invalid scope categories', async ({

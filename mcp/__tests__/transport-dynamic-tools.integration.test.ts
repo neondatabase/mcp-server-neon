@@ -561,6 +561,52 @@ describe('transport dynamic tool composition', () => {
     expect(readOnlyNames.has('list_projects')).toBe(true);
   });
 
+  it('withholds run_sql_transaction from an OAuth read token', async () => {
+    const fullAccessToken = 'oauth-full-tx';
+    const readOnlyToken = 'oauth-read-only-tx';
+
+    vi.mocked(model.getAccessToken).mockImplementation(async (token) => {
+      if (token === fullAccessToken) {
+        return buildOAuthToken(fullAccessToken, 'read write');
+      }
+      if (token === readOnlyToken) {
+        return buildOAuthToken(readOnlyToken, 'read');
+      }
+      return undefined;
+    });
+
+    const fullNames = new Set(
+      (await listToolsForToken(fullAccessToken)).map((t) => t.name),
+    );
+    const readOnlyNames = new Set(
+      (await listToolsForToken(readOnlyToken)).map((t) => t.name),
+    );
+
+    expect(fullNames.has('run_sql_transaction')).toBe(true);
+    expect(readOnlyNames.has('run_sql')).toBe(true);
+    expect(readOnlyNames.has('run_sql_transaction')).toBe(false);
+
+    const call = await mcpCall(readOnlyToken, 'tools/call', 3, {
+      name: 'run_sql_transaction',
+      arguments: {
+        project_id: 'proj_123',
+        sql_statements: ['COMMIT', 'DROP TABLE t'],
+      },
+    });
+    expect(call.status).toBe(200);
+    expect(call.body).toMatchObject({
+      result: {
+        content: [
+          {
+            type: 'text',
+            text: 'MCP error -32602: Tool run_sql_transaction not found',
+          },
+        ],
+        isError: true,
+      },
+    });
+  });
+
   it('ignores runtime URL grant params for OAuth tokens', async () => {
     const oauthToken = 'oauth-unscoped-with-query';
 

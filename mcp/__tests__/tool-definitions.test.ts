@@ -30,7 +30,6 @@ const HOST_READ_ONLY_TOOLS = [
   'list_organizations',
   'list_slow_queries',
   'run_sql',
-  'run_sql_transaction',
   'search',
   'send_feedback',
 ];
@@ -181,6 +180,12 @@ describe('read-only tool surface', () => {
 
   it('withholds get_connection_string, which returns a privileged password', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'get_connection_string');
+
+    expect(tool!.readOnlySafe).toBe(false);
+  });
+
+  it('withholds run_sql_transaction, whose statements can end the read-only transaction', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'run_sql_transaction');
 
     expect(tool!.readOnlySafe).toBe(false);
   });

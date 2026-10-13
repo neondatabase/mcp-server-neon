@@ -171,7 +171,8 @@ describe('filterToolsForGrant', () => {
 describe('getAvailableTools', () => {
   it('applies read-only filter after grant filtering', () => {
     const tools = getAvailableTools(grant({ scopes: ['querying'] }), true);
-    expect(tools).toHaveLength(8);
+    expect(tools).toHaveLength(7);
+    expect(tools.map((tool) => tool.name)).not.toContain('run_sql_transaction');
     for (const tool of tools) {
       expect(tool.readOnlySafe).toBe(true);
     }
