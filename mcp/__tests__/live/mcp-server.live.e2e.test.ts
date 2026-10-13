@@ -416,6 +416,56 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    'describes a branch without leaving show_db_tree in the database',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!neonClient) throw new Error('Neon SDK client is not initialized.');
+
+      const branches = await neonClient.listProjectBranches({ projectId });
+      const defaultBranch = branches.data.branches.find(
+        (branch) => branch.default,
+      );
+      if (!defaultBranch) throw new Error('Default branch was not found.');
+
+      const result = toolResultSchema.parse(
+        await callTool('describe_branch', {
+          project_id: projectId,
+          branch_id: defaultBranch.id,
+          database_name: 'neondb',
+        }),
+      );
+      expect(result.isError).toBeFalsy();
+      const structureText = result.content
+        .map((item) => textContentSchema.safeParse(item))
+        .flatMap((parsed) => (parsed.success ? [parsed.data.text] : []))
+        .find((text) => text.startsWith('Database Structure:'));
+      if (!structureText) {
+        throw new Error('describe_branch returned no database structure.');
+      }
+      const structure = z
+        .tuple([
+          z.array(z.unknown()),
+          z.array(z.object({ tree_structure: z.string() })),
+        ])
+        .parse(JSON.parse(structureText.slice('Database Structure:'.length)));
+      expect(
+        structure[1].some((row) =>
+          row.tree_structure.includes('property_options'),
+        ),
+      ).toBe(true);
+
+      const remaining = await callTool('run_sql', {
+        project_id: projectId,
+        sql: "SELECT count(*)::int AS n FROM pg_proc WHERE proname = 'show_db_tree'",
+      });
+      expect(JSON.parse(assertToolSucceeded('run_sql', remaining))).toEqual([
+        { n: 0 },
+      ]);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'compares a child branch schema, then resets it from parent',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
