@@ -36,8 +36,8 @@ jobs:
           github.event.issue.author_association == 'COLLABORATOR'))
       )
     runs-on:
-      group: neondatabase-protected-runner-group
-      labels: linux-ubuntu-latest
+      group: databricks-ghec-public-repos-runner-group-small
+      labels: linux-ubuntu-latest-public-2core-8gb
     permissions:
       contents: read
       pull-requests: read

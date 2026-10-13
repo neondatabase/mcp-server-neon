@@ -11,8 +11,8 @@ jobs:
       (github.event.action == 'labeled' && github.event.label.name == 'deploy-preview') ||
       (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'deploy-preview'))
     runs-on:
-      group: neondatabase-protected-runner-group
-      labels: linux-ubuntu-latest
+      group: databricks-ghec-public-repos-runner-group-small
+      labels: linux-ubuntu-latest-public-2core-8gb
     permissions:
       contents: write
       pull-requests: write
@@ -108,8 +108,8 @@ jobs:
   cleanup:
     if: github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
     runs-on:
-      group: neondatabase-protected-runner-group
-      labels: linux-ubuntu-latest
+      group: databricks-ghec-public-repos-runner-group-small
+      labels: linux-ubuntu-latest-public-2core-8gb
     permissions:
       pull-requests: write
     steps:
