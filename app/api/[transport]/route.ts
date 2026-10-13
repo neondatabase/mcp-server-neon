@@ -157,6 +157,26 @@ const SESSION_BINDING_UNAVAILABLE_RESPONSE: JsonErrorDefinition = {
   code: SESSION_ERROR_CODES.sessionBindingUnavailable,
 };
 
+const TOKEN_STORE_UNAVAILABLE_RESPONSE: JsonErrorDefinition = {
+  status: HTTP_STATUS.serviceUnavailable,
+  error: 'Token store unavailable',
+  code: 'token_store_unavailable',
+};
+
+const TOKEN_STORE_RETRY_AFTER_SECONDS = '5';
+
+// verifyToken can only return auth info or nothing, and mcp-handler turns
+// nothing into a 401 that sends OAuth clients back through refresh. Requests
+// that failed because the token store was down are marked here so
+// handleRequest can answer 503 instead.
+const tokenStoreUnavailableRequests = new WeakSet<Request>();
+
+function tokenStoreUnavailableResponse(): Response {
+  const response = jsonErrorResponse(TOKEN_STORE_UNAVAILABLE_RESPONSE);
+  response.headers.set('Retry-After', TOKEN_STORE_RETRY_AFTER_SECONDS);
+  return response;
+}
+
 type AuthenticatedExtra = {
   authInfo?: AuthInfo & {
     extra?: {
@@ -907,15 +927,17 @@ function createDocsOnlyMcpHandler() {
 const API_KEY_CACHE_TTL_MS = 5 * 60 * 1000;
 
 // Helper: Fetch and cache API key details
+// Resolves an API key's account, or reports `'oauth'` as soon as Neon says
+// the bearer is an OAuth token, before account resolution can fail it.
 const fetchAccountDetails = async (
   accessToken: string,
-): Promise<ApiKeyRecord | null> => {
+): Promise<ApiKeyRecord | 'oauth' | null> => {
   // 1. Check cache first
   try {
     const cached = await getApiKeys().get(accessToken);
     if (cached) {
       logger.info('API key cache hit', { accountId: cached.account.id });
-      return cached;
+      return cached.authMethod === 'oauth' ? 'oauth' : cached;
     }
   } catch (error) {
     logger.warn('API key cache read failed', { error });
@@ -925,6 +947,9 @@ const fetchAccountDetails = async (
   try {
     const neonClient = createNeonClient(accessToken);
     const { data: auth } = await neonClient.getAuthDetails();
+    if (auth.auth_method === 'oauth') {
+      return 'oauth';
+    }
 
     // Use shared account resolution with identify on cache miss
     const account = await resolveAccountFromAuth(auth, neonClient, {
@@ -994,6 +1019,7 @@ const verifyToken = async (
   // PATH 1: Check OAuth tokens table FIRST
   // (For users who authenticated via OAuth flow)
   // ============================================
+  let tokenLookupFailed = false;
   try {
     const token = await model.getAccessToken(bearerToken);
     if (token) {
@@ -1041,6 +1067,7 @@ const verifyToken = async (
       };
     }
   } catch (error) {
+    tokenLookupFailed = true;
     logger.warn('OAuth token lookup failed, trying API key path', { error });
   }
 
@@ -1054,6 +1081,19 @@ const verifyToken = async (
 
   const apiKeyRecord = await fetchAccountDetails(bearerToken);
   if (!apiKeyRecord) {
+    return undefined;
+  }
+
+  // Our access tokens are Neon OAuth tokens, so they also pass the API-key
+  // check. Their grant and scope live only in the token store; building them
+  // from the URL here would drop what the user chose at consent.
+  if (apiKeyRecord === 'oauth') {
+    logger.warn('OAuth bearer reached the API key path; refusing URL grant', {
+      tokenLookupFailed,
+    });
+    if (tokenLookupFailed) {
+      tokenStoreUnavailableRequests.add(req);
+    }
     return undefined;
   }
 
@@ -1400,7 +1440,11 @@ const handleRequest = (req: Request) => {
       return headMirrorResponse(url.pathname);
     }
     return Promise.resolve(headAuthHandler(normalizedReq)).then((resolved) =>
-      stripBody(rewriteResourceMetadataHeader(resolved, req)),
+      stripBody(
+        tokenStoreUnavailableRequests.has(normalizedReq)
+          ? tokenStoreUnavailableResponse()
+          : rewriteResourceMetadataHeader(resolved, req),
+      ),
     );
   }
 
@@ -1411,13 +1455,11 @@ const handleRequest = (req: Request) => {
     return getDocsOnlyHandler()(normalizedReq);
   }
 
-  const response = authHandler(normalizedReq);
-  if (response instanceof Promise) {
-    return response.then((resolved) =>
-      rewriteResourceMetadataHeader(resolved, req),
-    );
-  }
-  return rewriteResourceMetadataHeader(response, req);
+  return Promise.resolve(authHandler(normalizedReq)).then((resolved) =>
+    tokenStoreUnavailableRequests.has(normalizedReq)
+      ? tokenStoreUnavailableResponse()
+      : rewriteResourceMetadataHeader(resolved, req),
+  );
 };
 
 // HEAD is exported explicitly. Next.js would otherwise route it to the GET export,
