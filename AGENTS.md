@@ -194,6 +194,10 @@ infrastructure.
 
 - **Read-Only Mode** (`mcp/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. Read-only mode is determined by priority: `X-Neon-Read-Only` header > `x-read-only` header (legacy) > OAuth scope (only `read` scope = read-only) > default (false). The module also exports `SCOPE_DEFINITIONS` for human-readable scope labels and `hasWriteScope()` to check for write permissions.
 
+  A `readOnlySafe` tool that runs caller-supplied SQL must run it as one statement per prepared query inside a `READ ONLY` transaction, as `run_sql` does. `run_sql_transaction` is not `readOnlySafe` because its statements share one session, so a `COMMIT` or `SET TRANSACTION READ WRITE` statement ends the read-only transaction.
+
+  Known exception: `describe_branch` is `readOnlySafe` and runs `CREATE OR REPLACE FUNCTION public.show_db_tree()` outside a `READ ONLY` transaction (`DESCRIBE_DATABASE_STATEMENTS` in `mcp/tools/utils.ts`). The SQL is fixed, the function body only reads `pg_database`, `pg_namespace`, `pg_class`, and `pg_proc`, and the tool then calls it to return the tree. Treat this as safe; do not add it to a new tool.
+
 - **MCP Tool Annotations**: All tools include MCP-standard annotations for client hints:
   - `title`: Human-readable tool name
   - `readOnlyHint`: Whether the tool only reads data
