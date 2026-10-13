@@ -77,7 +77,10 @@ const HOST_TOOL_DRAFTS = [
     description:
       'Execute multiple SQL statements as one transaction. If a prior step created a temporary branch, pass that branch_id. NEVER run destructive SQL autonomously; always ask the user first.',
     inputSchema: runSqlTransactionInputSchema,
-    readOnlySafe: true,
+    // Not `readOnlySafe`: each statement runs in the same session, so a
+    // leading `COMMIT` or `SET TRANSACTION READ WRITE` leaves the read-only
+    // transaction and later statements can write.
+    readOnlySafe: false,
     annotations: {
       title: 'Run SQL Transaction',
       readOnlyHint: false,

@@ -173,7 +173,7 @@ How the query param behaves:
 
 For OAuth registration, `x-read-only` is an initial Allow-writes default on editable consent. It does not lock confirmation, and it does not reduce a parameterized URL that includes `readonly=false`. API-key requests still honor `x-read-only` per request, below the `readonly` query param.
 
-> **Note:** Read-only mode restricts which _tools_ are available. Further, the `run_sql` tool remains available only for read-only queries.
+> **Note:** Read-only mode restricts which _tools_ are available. `run_sql` stays available and runs each query in a `READ ONLY` transaction. `run_sql_transaction` is not available; run each statement with `run_sql`. Those calls run separately and do not share a transaction. For transaction semantics, use a connection with writes allowed.
 
 ### URL Query Params for Access Control
 
@@ -218,7 +218,7 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 <details>
 <summary><strong>Tools available in read-only mode</strong></summary>
 
-Host tools: `list_organizations`, `describe_branch`, `run_sql`, `run_sql_transaction`, `get_database_tables`, `describe_table_schema`, `list_slow_queries`, `explain_sql_statement`, `inspect_database`, `get_neon_auth_config`, `search`, `fetch`, `list_docs_resources`, `get_doc_resource`, `send_feedback`.
+Host tools: `list_organizations`, `describe_branch`, `run_sql`, `get_database_tables`, `describe_table_schema`, `list_slow_queries`, `explain_sql_statement`, `inspect_database`, `get_neon_auth_config`, `search`, `fetch`, `list_docs_resources`, `get_doc_resource`, `send_feedback`.
 
 Generated Management API tools that are GET and do not return secrets, plus `query_logs` (POST, read-only). Preview the exact set with `/api/list-tools?readonly=true`.
 
@@ -226,6 +226,7 @@ Generated Management API tools that are GET and do not return secrets, plus `que
 
 - Generated Management API writes (`create_project`, `create_branch`, `delete_project`, …)
 - `get_connection_string` (the connection string carries a privileged role password, so it is withheld in read-only mode; copy it from the [Neon Console](https://console.neon.tech) instead)
+- `run_sql_transaction` (its statements run in one session, so a `COMMIT` or `SET TRANSACTION READ WRITE` statement would end the read-only transaction)
 - `prepare_database_migration`, `complete_database_migration`
 - `prepare_query_tuning`, `complete_query_tuning`
 
