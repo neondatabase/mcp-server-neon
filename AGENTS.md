@@ -196,7 +196,7 @@ infrastructure.
 
   A `readOnlySafe` tool that runs caller-supplied SQL must run exactly one caller-supplied statement, as a prepared query, in its own `READ ONLY` transaction, as `run_sql` does. `run_sql_transaction` is not `readOnlySafe` because its statements share one transaction, so a `COMMIT` or `SET TRANSACTION READ WRITE` statement can end the transaction or switch it to read-write.
 
-  Known exception: `describe_branch` is `readOnlySafe` and runs `CREATE OR REPLACE FUNCTION public.show_db_tree()` outside a `READ ONLY` transaction (`DESCRIBE_DATABASE_STATEMENTS` in `mcp/tools/utils.ts`). The SQL is fixed, the function body only reads `pg_database`, `pg_namespace`, `pg_class`, and `pg_proc`, and the tool then calls it to return the tree. Treat this as safe; do not add it to a new tool.
+  Known exception: `describe_branch` is `readOnlySafe` and runs `CREATE OR REPLACE FUNCTION public.show_db_tree()` outside a `READ ONLY` transaction (`DESCRIBE_DATABASE_STATEMENTS` in `mcp/tools/utils.ts`). The SQL is fixed, the function body only reads `pg_database`, `pg_namespace`, `pg_class`, and `pg_proc`, and the tool then calls it to return the tree and drops it (`DROP_DB_TREE_FUNCTION_STATEMENT`) in the same transaction. Treat this as safe; do not add it to a new tool.
 
 - **MCP Tool Annotations**: All tools include MCP-standard annotations for client hints:
   - `title`: Human-readable tool name

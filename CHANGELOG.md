@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+`describe_branch` drops its `public.show_db_tree()` helper function in the same transaction that reads the tree, so the function no longer stays in the described database. The tool output is unchanged.
+
 `run_sql_transaction` is no longer available in read-only mode, because a `COMMIT` or `SET TRANSACTION READ WRITE` statement in the batch could end the read-only transaction. Read-only connections use `run_sql`, one statement per call.
 
 `send_feedback` sends anonymous feedback to the Neon feedback service (`source: "neon_mcp"`). It sends only the feedback text. It is available under every grant, in read-only mode, and on the no-login `?category=docs` endpoint. `NEON_FEEDBACK_URL` overrides the endpoint.
