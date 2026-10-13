@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { toJSONSchema } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { resolveGrantFromSearchParams } from '../../../mcp/utils/grant-context';
+import {
+  InvalidRoleNameError,
+  resolveGrantFromSearchParams,
+} from '../../../mcp/utils/grant-context';
 import { isReadOnly } from '../../../mcp/utils/read-only';
 import {
   getFilteredTools,
@@ -120,6 +123,12 @@ export function GET(req: Request) {
 
     return NextResponse.json(body, { headers: CORS_HEADERS });
   } catch (error) {
+    if (error instanceof InvalidRoleNameError) {
+      return NextResponse.json(
+        { error: 'invalid_request', message: error.message },
+        { status: 400, headers: CORS_HEADERS },
+      );
+    }
     const durationMs = Date.now() - startedAt;
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error('list_tools_request_failed', {

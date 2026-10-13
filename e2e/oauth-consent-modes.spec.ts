@@ -157,6 +157,23 @@ test.describe('OAuth consent modes', () => {
     await capture(page, 'A6-unknown-only-project');
   });
 
+  test('A7 pinned Postgres role is a fixed confirmation that shows the role', async ({
+    page,
+    request,
+  }) => {
+    await openAuthorize(page, request, {
+      resource:
+        'https://mcp.neon.tech/mcp?projectId=proj-example&readonly=true&roleName=mcp_pinned_reader',
+    });
+    await expect(page.locator('.facts')).toContainText('Postgres role:');
+    await expect(page.locator('.facts')).toContainText('mcp_pinned_reader');
+    await expect(page.locator('[data-access-mode]')).toHaveText('Read only');
+    await expect(page.locator('.scope-checkbox')).toHaveCount(0);
+    await expect(page.locator('input[name="projectMode"]')).toHaveCount(0);
+    expect(await submittedScopes(page)).toEqual([]);
+    await capture(page, 'A7-pinned-role-confirmation');
+  });
+
   test('B1 bare resource initial all/all/write collapsed tools', async ({
     page,
     request,
@@ -462,6 +479,82 @@ test.describe('OAuth consent modes', () => {
         ([name, value]) => name === 'projectId' && value === 'proj-example',
       ),
     ).toBe(false);
+  });
+
+  test('B8 Postgres role field pins the role and updates the tool preview', async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openAuthorize(page, request);
+    const roleDisclosure = page.locator('[data-role-disclosure]');
+    const roleSummary = page.locator('[data-role-summary]');
+    const roleInput = page.locator('input[name="roleName"]');
+    await expect(roleDisclosure).not.toHaveAttribute('open', '');
+    await expect(roleSummary).toHaveText('Database owner');
+    await expect(roleInput).toBeHidden();
+    await clearScreenshotInteractionState(page);
+    await capture(page, 'B8-editable-role-collapsed');
+
+    await roleDisclosure.locator('summary').click();
+    await expect(roleDisclosure).toHaveAttribute('open', '');
+    await expect(roleInput).toHaveValue('');
+    await expect(roleInput).toHaveAttribute('placeholder', 'Database owner');
+    const tools = page.locator('[data-tool-content]');
+    await expect(tools).toContainText('Get Connection String');
+
+    await roleInput.fill('app_reader');
+    await expect(roleSummary).toHaveText('app_reader');
+    await expect(tools).not.toContainText('Get Connection String');
+    await expect(tools).toContainText('Run SQL');
+    await page.getByRole('radio', { name: 'Read only', exact: true }).check();
+    await clearScreenshotInteractionState(page);
+    await capture(page, 'B8-editable-role-read-only');
+    await page
+      .getByRole('radio', { name: 'Read and write', exact: true })
+      .check();
+    await clearScreenshotInteractionState(page);
+    await capture(page, 'B8-editable-role-read-write');
+
+    await roleInput.fill('');
+    await expect(tools).toContainText('Get Connection String');
+    await roleInput.fill('app_reader');
+    const posted = await page.locator('#authorize-form').evaluate((form) => {
+      if (!(form instanceof HTMLFormElement)) {
+        throw new Error('missing consent form');
+      }
+      return new FormData(form).getAll('roleName').map(String);
+    });
+    expect(posted).toEqual(['app_reader']);
+  });
+
+  test('B9 invalid Postgres role shows a field error and keeps the selection', async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openAuthorize(page, request);
+    await page.getByText('One project', { exact: true }).click();
+    await page.locator('input[name="projectId"]').fill('proj-example');
+    await page.locator('[data-role-disclosure] summary').click();
+    await page.locator('input[name="roleName"]').fill('app-reader');
+    await page.getByRole('button', { name: 'Approve' }).click();
+    await expect(page.locator('[data-role-disclosure]')).toHaveAttribute(
+      'open',
+      '',
+    );
+    await expect(page.locator('#role-name-error')).toContainText(
+      'Enter one Postgres role name',
+    );
+    await expect(page.locator('input[name="roleName"]')).toHaveValue(
+      'app-reader',
+    );
+    await expect(page.locator('input[name="projectId"]')).toHaveValue(
+      'proj-example',
+    );
+    await clearScreenshotInteractionState(page);
+    await page.locator('#role-name-error').scrollIntoViewIfNeeded();
+    await capture(page, 'B9-invalid-role');
   });
 
   test('S1 card body is the only scroll owner and actions stay fixed', async ({

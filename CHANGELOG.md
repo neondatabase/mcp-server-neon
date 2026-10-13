@@ -8,6 +8,10 @@
 
 `send_feedback` sends anonymous feedback to the Neon feedback service (`source: "neon_mcp"`). It sends only the feedback text. It is available under every grant, in read-only mode, and on the no-login `?category=docs` endpoint. `NEON_FEEDBACK_URL` overrides the endpoint.
 
+`?roleName=` makes every SQL tool log in as that Postgres role instead of the database owner, so the role's grants decide what an agent can read and change. With OAuth, set it on the MCP URL (a fixed grant on the authorization page) or in the optional **Postgres role** field on the default authorization page; `get_connection_string` is withheld on a pinned connection, and a role that cannot log in fails the call without falling back to the owner.
+
+`run_sql` and `run_sql_transaction` accept optional `role_name` and `compute_id`. On a pinned connection, `role_name` must match the pin.
+
 Generated tool calls classify Neon API 4xx responses by their `kind` and HTTP status even when `@neon/tools` and the server load different `@neon/sdk` versions, returning the API error to the MCP client without reporting it as a server failure.
 
 OAuth dynamic client registration normalizes scalar and mixed `redirect_uris` values to a string array before storage. Authorization applies the same normalization to existing client records without changing which redirect URI schemes are accepted.

@@ -6,7 +6,11 @@ import {
   type ScopeCategory,
 } from '../utils/grant-context';
 import type { ConsentMode } from './consent-mode';
-import { ALWAYS_AVAILABLE_TOOLS } from '../tools/grant-filter';
+import type { ConsentField } from './consent-approval';
+import {
+  ALWAYS_AVAILABLE_TOOLS,
+  PINNED_ROLE_WITHHELD_TOOLS,
+} from '../tools/grant-filter';
 import {
   filterConsentCatalog,
   getConsentToolCatalog,
@@ -50,6 +54,7 @@ type ConsentView = {
   project: ConsentProject;
   categories: ConsentCategories;
   unknownCategoryValues: string[];
+  roleName?: string;
   tools: ConsentTool[];
 };
 
@@ -128,9 +133,12 @@ function renderClientVerification(client: ConsentClient): string {
 type ConsentFormState = {
   projectMode: 'all' | 'one';
   projectId: string;
+  roleName: string;
   categories: ScopeCategory[];
   writeChecked: boolean;
 };
+
+type ConsentFieldError = { field: ConsentField; message: string };
 
 type ConsentDialogProps = {
   client: ConsentClient;
@@ -139,7 +147,7 @@ type ConsentDialogProps = {
   writeChecked: boolean;
   showWriteControl: boolean;
   grant: GrantContext;
-  fieldError?: { field: 'projectId'; message: string };
+  fieldError?: ConsentFieldError;
   formState?: ConsentFormState;
 };
 
@@ -153,6 +161,7 @@ function formStateFromGrant({
   return {
     projectMode: grant.projectId ? 'one' : 'all',
     projectId: grant.projectId ?? '',
+    roleName: grant.roleName ?? '',
     categories:
       grant.scopes === null ? [...SCOPE_CATEGORIES] : [...grant.scopes],
     writeChecked,
@@ -199,6 +208,7 @@ export function buildConsentView({
     project,
     categories,
     unknownCategoryValues: grant.unknownCategories ?? [],
+    ...(grant.roleName !== undefined ? { roleName: grant.roleName } : {}),
     tools,
   };
 }
@@ -328,7 +338,15 @@ function renderGrantSummary(view: ConsentView): string {
         <div>
           <dt>Tool categories:</dt>
           <dd>${he.escape(renderCategories(view.categories))}</dd>
-        </div>
+        </div>${
+          view.roleName !== undefined
+            ? `
+        <div>
+          <dt>Postgres role:</dt>
+          <dd><span class="mono">${he.escape(view.roleName)}</span></dd>
+        </div>`
+            : ''
+        }
       </dl>
       ${unknownHtml}
       ${emptyGrantNote(view)}
@@ -343,6 +361,55 @@ function categorySelectionSummary(categories: ScopeCategory[]): string {
   return `${String(categories.length)}/${String(SCOPE_CATEGORIES.length)} selected`;
 }
 
+function renderRoleField({
+  formState,
+  fieldError,
+}: {
+  formState: ConsentFormState;
+  fieldError?: ConsentFieldError;
+}): string {
+  const roleError =
+    fieldError?.field === 'roleName'
+      ? `<p class="field-error" id="role-name-error" role="alert">${he.escape(fieldError.message)}</p>`
+      : '';
+  const invalidAttr =
+    fieldError?.field === 'roleName'
+      ? ' aria-invalid="true" aria-describedby="role-name-error role-name-help" autofocus'
+      : ' aria-describedby="role-name-help"';
+  const open = fieldError?.field === 'roleName' ? ' open' : '';
+  return `
+      <details class="choice choice-role" data-role-disclosure${open}>
+        <summary class="category-disclosure-summary">
+          <span class="choice-title">Postgres role</span>
+          <span class="category-summary" data-role-summary>${he.escape(roleSummary(formState.roleName))}</span>
+        </summary>
+        <div class="category-disclosure-body">
+          <label class="project-id role-name">
+            <span>Role name (optional)</span>
+            <input
+              type="text"
+              name="roleName"
+              value="${he.escape(formState.roleName)}"
+              placeholder="Database owner"
+              autocomplete="off"
+              spellcheck="false"
+              ${invalidAttr}
+            />
+          </label>
+          ${roleError}
+          <p class="note" id="role-name-help">
+            SQL tools log in as this role instead of the database owner, so its
+            Postgres grants decide what they can read and change. The role must
+            exist and be able to log in on each branch you query.
+          </p>
+        </div>
+      </details>`;
+}
+
+function roleSummary(roleName: string): string {
+  return roleName.trim() || 'Database owner';
+}
+
 function renderEditableGrant({
   formState,
   fieldError,
@@ -350,7 +417,7 @@ function renderEditableGrant({
 }: {
   view: ConsentView;
   formState: ConsentFormState;
-  fieldError?: { field: 'projectId'; message: string };
+  fieldError?: ConsentFieldError;
 }): string {
   const allSelected = formState.projectMode === 'all';
   const projectError =
@@ -417,6 +484,7 @@ function renderEditableGrant({
           This page cannot list projects before you sign in.
         </p>
       </fieldset>
+      ${renderRoleField({ formState, fieldError })}
       <details class="choice choice-categories" data-category-disclosure>
         <summary class="category-disclosure-summary">
           <span class="choice-title">Tool categories</span>
@@ -508,8 +576,14 @@ function consentScript(mode: ConsentMode): string {
   const always = JSON.stringify(
     Object.fromEntries([...ALWAYS_AVAILABLE_TOOLS].map((name) => [name, true])),
   );
+  const pinnedRoleWithheld = JSON.stringify(
+    Object.fromEntries(
+      [...PINNED_ROLE_WITHHELD_TOOLS].map((name) => [name, true]),
+    ),
+  );
   return `
     var ALWAYS = ${always};
+    var PINNED_ROLE_WITHHELD = ${pinnedRoleWithheld};
     var CATALOG = ${catalog};
     var SCOPE_CATEGORIES = ${categories};
     var SCOPE_LABELS = ${labels};
@@ -539,7 +613,9 @@ function consentScript(mode: ConsentMode): string {
       var scopes = null;
       if (categories.length === 0) scopes = [];
       else if (categories.length !== SCOPE_CATEGORIES.length) scopes = categories;
-      return { projectId: projectId, scopes: scopes };
+      var roleInput = document.querySelector('input[name="roleName"]');
+      var roleName = roleInput instanceof HTMLInputElement && roleInput.value.trim() ? roleInput.value.trim() : null;
+      return { projectId: projectId, scopes: scopes, roleName: roleName };
     }
 
     function writeChecked() {
@@ -551,6 +627,7 @@ function consentScript(mode: ConsentMode): string {
       return CATALOG.filter(function (tool) {
         if (!checked && tool.writeOnly) return false;
         if (grant.projectId && !tool.projectScoped) return false;
+        if (grant.roleName && PINNED_ROLE_WITHHELD[tool.name]) return false;
         if (grant.scopes === null) return true;
         if (grant.scopes.length === 0) return !!ALWAYS[tool.name];
         if (ALWAYS[tool.name]) return true;
@@ -613,6 +690,8 @@ function consentScript(mode: ConsentMode): string {
     function syncConsentUi() {
       syncProjectField();
       var grant = currentGrant();
+      var roleSummary = document.querySelector('[data-role-summary]');
+      if (roleSummary) roleSummary.textContent = grant.roleName || 'Database owner';
       var checked = writeChecked();
       var writeControl = document.querySelector('.scope-checkbox');
       var hiddenRead = document.querySelector('input[type="hidden"][name="scopes"][value="read"]');
@@ -653,20 +732,21 @@ function consentScript(mode: ConsentMode): string {
     }
 
     var consentForm = document.getElementById('authorize-form');
-    var projectIdInput = document.querySelector('input[name="projectId"]');
     var approveButton = document.querySelector('button[value="approve"]');
-    if (consentForm instanceof HTMLFormElement &&
-        projectIdInput instanceof HTMLInputElement &&
-        approveButton instanceof HTMLButtonElement) {
-      projectIdInput.addEventListener('keydown', function (event) {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          consentForm.requestSubmit(approveButton);
-        }
-      });
-    }
+    document.querySelectorAll('input[name="projectId"], input[name="roleName"]').forEach(function (textInput) {
+      if (consentForm instanceof HTMLFormElement &&
+          textInput instanceof HTMLInputElement &&
+          approveButton instanceof HTMLButtonElement) {
+        textInput.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            consentForm.requestSubmit(approveButton);
+          }
+        });
+      }
+    });
 
-    document.querySelectorAll('input[name="projectMode"], input[name="projectId"], input[name="category"], input[type="radio"][name="scopes"]').forEach(function (input) {
+    document.querySelectorAll('input[name="projectMode"], input[name="projectId"], input[name="roleName"], input[name="category"], input[type="radio"][name="scopes"]').forEach(function (input) {
       input.addEventListener('change', syncConsentUi);
       input.addEventListener('input', syncConsentUi);
     });
@@ -732,6 +812,9 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
                 ? null
                 : formState.categories,
           unknownCategories: props.grant.unknownCategories,
+          ...(formState.roleName.trim()
+            ? { roleName: formState.roleName.trim() }
+            : {}),
         }
       : props.grant;
   const view = buildConsentView({
@@ -859,11 +942,13 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     .note[data-project-id-help] { font-size: 14px; }
     .field-error { color: var(--danger); }
     .warning { padding: 12px; border: 1px solid var(--danger); }
-    .choice-categories { margin-top: 20px; padding-top: 20px; border-top: 1px dashed var(--line); }
+    .choice-categories, .choice-role { margin-top: 20px; padding-top: 20px; border-top: 1px dashed var(--line); }
+    .choice-role .role-name { margin-top: 0; }
+    .choice-role .note { margin-top: 8px; font-size: 14px; }
     .category-disclosure-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .category-disclosure-summary .choice-title { display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0; margin: 0; }
     .choice-title::after, .tool-toggle::after { content: ''; display: block; width: 20px; height: 20px; background: url('/images/consent/chevron.svg') center / contain no-repeat; }
-    .choice-categories[open] .choice-title::after, .tool-toggle[aria-expanded="true"]::after { transform: rotate(180deg); }
+    .choice-categories[open] .choice-title::after, .choice-role[open] .choice-title::after, .tool-toggle[aria-expanded="true"]::after { transform: rotate(180deg); }
     .category-summary, .tool-block-title { color: var(--muted); font-size: 15px; text-align: right; }
     .category-disclosure-body { padding-top: 20px; }
     .choice-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }

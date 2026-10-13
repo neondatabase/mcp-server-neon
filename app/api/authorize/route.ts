@@ -384,6 +384,7 @@ export async function POST(request: NextRequest) {
           formState: {
             projectMode: parsed.error.selection.projectMode,
             projectId: parsed.error.selection.projectId,
+            roleName: parsed.error.selection.roleName,
             categories: parsed.error.selection.categories,
             writeChecked: parsed.error.selection.grantWrite,
           },

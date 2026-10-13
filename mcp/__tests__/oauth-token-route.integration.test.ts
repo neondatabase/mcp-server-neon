@@ -39,6 +39,7 @@ describe('/api/token route integration', () => {
     const grant = {
       projectId: 'proj_123',
       scopes: ['querying', 'schema'],
+      roleName: 'mcp_pinned_reader',
     };
 
     vi.mocked(model.getClient).mockResolvedValue(client as never);

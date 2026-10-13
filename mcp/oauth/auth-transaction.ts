@@ -1,5 +1,6 @@
 import {
   SCOPE_CATEGORIES,
+  isValidRoleName,
   type GrantContext,
   type ScopeCategory,
 } from '../utils/grant-context';
@@ -71,12 +72,17 @@ function parseGrantContext(value: unknown): GrantContext | undefined {
   ) {
     return undefined;
   }
+  const roleName = value.roleName;
+  if (roleName !== undefined && !isValidRoleName(roleName)) {
+    return undefined;
+  }
   return {
     projectId: value.projectId,
     scopes: value.scopes,
     ...(unknownCategories && unknownCategories.length > 0
       ? { unknownCategories }
       : {}),
+    ...(roleName !== undefined ? { roleName } : {}),
   };
 }
 

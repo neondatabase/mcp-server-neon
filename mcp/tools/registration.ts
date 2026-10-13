@@ -40,6 +40,10 @@ function toolByName(toolName: string): NeonTool | undefined {
   return NEON_TOOLS.find((tool) => tool.name === toolName);
 }
 
+/**
+ * A pinned role reaches handlers from the grant, overriding anything already
+ * on `extra`, so a tool argument can never replace it.
+ */
 export async function invokeTool(
   toolName: string,
   args: unknown,
@@ -58,5 +62,8 @@ export async function invokeTool(
     tool,
   );
 
-  return handler({ params: effectiveArgs }, neonClient, extra);
+  return handler({ params: effectiveArgs }, neonClient, {
+    ...extra,
+    pinnedRoleName: grant.roleName,
+  });
 }
