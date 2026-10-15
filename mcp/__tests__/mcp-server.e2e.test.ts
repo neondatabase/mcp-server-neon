@@ -328,7 +328,39 @@ describe('MCP server e2e tool calls', () => {
         // Withheld even though it mutates nothing: the URI carries the branch
         // owner role's password, which works against the read-write compute.
         expect(toolNames).not.toContain('get_connection_string');
+        expect(toolNames).toContain('run_sql');
+        expect(toolNames).not.toContain('run_sql_transaction');
       },
     );
+  });
+
+  it('rejects run_sql_transaction as an unknown tool in read-only mode', async () => {
+    await withConnectedClient(
+      createTestContext({ readOnly: true }),
+      async (client) => {
+        await expect(
+          client.callTool({
+            name: 'run_sql_transaction',
+            arguments: {
+              project_id: 'proj_123',
+              sql_statements: ['COMMIT', 'DROP TABLE t'],
+            },
+          }),
+        ).rejects.toMatchObject({
+          code: -32602,
+          message: 'Tool run_sql_transaction not found',
+        });
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  it('keeps run_sql_transaction in write mode', async () => {
+    await withConnectedClient(createTestContext(), async (client) => {
+      const result = await client.listTools();
+      const toolNames = result.tools.map((tool) => tool.name);
+
+      expect(toolNames).toContain('run_sql_transaction');
+    });
   });
 });

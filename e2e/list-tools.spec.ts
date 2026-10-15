@@ -68,9 +68,10 @@ test.describe('/api/list-tools endpoint', () => {
       expect(tool.readOnlySafe).toBe(true);
     }
 
-    expect(body.tools.map((tool: { name: string }) => tool.name)).not.toContain(
-      'get_connection_string',
-    );
+    const names = body.tools.map((tool: { name: string }) => tool.name);
+    expect(names).not.toContain('get_connection_string');
+    expect(names).toContain('run_sql');
+    expect(names).not.toContain('run_sql_transaction');
   });
 
   test('includes warnings for invalid scope categories', async ({
@@ -82,7 +83,7 @@ test.describe('/api/list-tools endpoint', () => {
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
-    expect(body.tools).toHaveLength(2);
+    expect(body.tools).toHaveLength(3);
     expect(body.readOnly).toBe(false);
     expect(body.warnings).toBeDefined();
     expect(body.warnings).toHaveLength(1);

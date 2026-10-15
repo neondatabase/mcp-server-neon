@@ -7,7 +7,8 @@
  * and assert that:
  *  - No WWW-Authenticate header is returned
  *  - The MCP initialize handshake succeeds without an Authorization header
- *  - tools/list returns only the docs tools
+ *  - tools/list returns the docs tools and send_feedback
+ *  - tools/call send_feedback works without auth
  *  - Any other category combination still requires auth (401)
  */
 
@@ -155,12 +156,14 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
       expect(result.tools.map((tool) => tool.name).sort()).toEqual([
         'get_doc_resource',
         'list_docs_resources',
+        'send_feedback',
       ]);
       expect(
         Object.fromEntries(result.tools.map((tool) => [tool.name, tool.title])),
       ).toEqual({
         get_doc_resource: 'Get Documentation Resource',
         list_docs_resources: 'List Documentation Resources',
+        send_feedback: 'Send Feedback',
       });
       for (const tool of result.tools) {
         expect(tool.inputSchema).toMatchObject({
@@ -172,7 +175,9 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     }
   });
 
-  test('tools/list returns only the docs tools', async ({ request }) => {
+  test('tools/list returns the docs tools and send_feedback', async ({
+    request,
+  }) => {
     const response = await request.post('/mcp?category=docs', {
       headers: MCP_HEADERS,
       data: {
@@ -192,7 +197,11 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     expect(listResult?.result?.tools).toBeDefined();
 
     const toolNames = listResult!.result!.tools!.map((t) => t.name).sort();
-    expect(toolNames).toEqual(['get_doc_resource', 'list_docs_resources']);
+    expect(toolNames).toEqual([
+      'get_doc_resource',
+      'list_docs_resources',
+      'send_feedback',
+    ]);
   });
 
   // Reads the docs index from the fixture server that `playwright.config.ts`
@@ -228,6 +237,40 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     // rather than the tool answering with an error string or an empty body.
     expect(callResult!.result!.content?.[0]?.text).toContain(
       DOCS_FIXTURE_MARKER,
+    );
+  });
+
+  // Posts to the feedback stand-in that `playwright.config.ts` points
+  // NEON_FEEDBACK_URL at, so no real feedback is sent.
+  test('tools/call send_feedback works without auth', async ({ request }) => {
+    const response = await request.post('/mcp?category=docs', {
+      headers: MCP_HEADERS,
+      data: {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: {
+          name: 'send_feedback',
+          arguments: { feedback: 'e2e docs-only feedback' },
+        },
+      },
+    });
+    expect(response.status()).toBeLessThan(300);
+    expect(response.headers()['www-authenticate']).toBeUndefined();
+
+    const messages = await readJsonRpcMessages(response);
+    const callResult = messages.find((m) => m.id === 4) as
+      | {
+          result?: {
+            content?: Array<{ type: string; text?: string }>;
+            isError?: boolean;
+          };
+        }
+      | undefined;
+    expect(callResult?.result).toBeDefined();
+    expect(callResult!.result!.isError).not.toBe(true);
+    expect(callResult!.result!.content?.[0]?.text).toBe(
+      'Feedback received. Thank you!',
     );
   });
 

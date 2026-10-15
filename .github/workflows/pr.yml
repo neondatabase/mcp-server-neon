@@ -13,8 +13,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    # Forks cannot mint OIDC.
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('{"group":"neondatabase-protected-runner-group","labels":"linux-ubuntu-latest"}') }}
+    runs-on:
+      group: databricks-ghec-untrusted-runner-group
+      labels: linux-ubuntu-latest-untrusted-2core-8gb
     steps:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

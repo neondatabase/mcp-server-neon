@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NeonApiError } from '@neon/sdk';
+import { NeonApiError, NeonError } from '@neon/sdk';
+import { createNeonTools } from '@neon/tools';
 import { NeonDbError } from '@neondatabase/serverless';
 import { InvalidArgumentError } from '../server/errors';
 
@@ -83,6 +84,72 @@ describe('handleToolError', () => {
       agent,
     );
 
+    expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it('does not capture tool input that fails schema validation', () => {
+    const { error } = createNeonTools({
+      tools: ['projects.get'],
+    })['projects.get'].inputSchema.safeParse({ project_id: 'My Project' });
+
+    expect(error).toHaveProperty('name', 'ZodError');
+    const result = handleToolError(error, properties, 'trace-1', agent);
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toContainEqual(
+      expect.objectContaining({
+        text: expect.stringContaining('project_id'),
+      }),
+    );
+    expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it('does not capture Neon SDK client errors from either SDK copy', () => {
+    handleToolError(
+      new NeonError('Branch has no parent and cannot be reset.', 'client'),
+      properties,
+      'trace-1',
+      agent,
+    );
+    handleToolError(
+      Object.assign(new Error('Branch has no parent and cannot be reset.'), {
+        name: 'NeonClientError',
+        kind: 'client',
+      }),
+      properties,
+      'trace-1',
+      agent,
+    );
+
+    expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it('captures Neon SDK errors of other kinds', () => {
+    const error = new NeonError('operation failed', 'operation');
+    handleToolError(error, properties, 'trace-1', agent);
+
+    expect(captureException).toHaveBeenCalledWith(error, expect.anything());
+  });
+
+  it('does not capture 4xx API errors created by another SDK copy', () => {
+    const error = Object.assign(
+      new Error('role with that name already exists'),
+      {
+        name: 'NeonApiError',
+        kind: 'api',
+        status: 409,
+        body: { message: 'role with that name already exists' },
+      },
+    );
+
+    const result = handleToolError(error, properties, 'trace-1', agent);
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toContainEqual(
+      expect.objectContaining({
+        text: expect.stringContaining('[HTTP 409]'),
+      }),
+    );
     expect(captureException).not.toHaveBeenCalled();
   });
 });

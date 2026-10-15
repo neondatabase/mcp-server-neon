@@ -55,7 +55,7 @@ describe('buildConsentView', () => {
     );
   });
 
-  it('describes an empty category list without a project as search and fetch only', () => {
+  it('describes an empty category list without a project as search, fetch, and send_feedback only', () => {
     const view = buildConsentView({
       grant: { projectId: null, scopes: [] },
       writeChecked: true,
@@ -65,25 +65,26 @@ describe('buildConsentView', () => {
     expect(view.tools.map((tool) => tool.name).sort()).toEqual([
       'fetch',
       'search',
+      'send_feedback',
     ]);
   });
 
-  it('describes an empty category list with a project as no tools', () => {
+  it('describes an empty category list with a project as send_feedback only', () => {
     const view = buildConsentView({
       grant: { projectId: 'proj-123', scopes: [] },
       writeChecked: true,
     });
 
-    expect(view.tools).toEqual([]);
+    expect(view.tools.map((tool) => tool.name)).toEqual(['send_feedback']);
   });
 
   it('does not collapse when hidden write tools alone cross the threshold', () => {
     const readView = buildConsentView({
-      grant: { projectId: null, scopes: ['snapshots'] },
+      grant: { projectId: null, scopes: ['data_api'] },
       writeChecked: false,
     });
     const writeView = buildConsentView({
-      grant: { projectId: null, scopes: ['snapshots'] },
+      grant: { projectId: null, scopes: ['data_api'] },
       writeChecked: true,
     });
     expect(visibleToolCount(readView)).toBeLessThanOrEqual(COLLAPSE_ABOVE);
@@ -112,7 +113,7 @@ describe('renderConsentHtml', () => {
     });
 
     expect(html).toContain(
-      '<summary><span>App details · cursor.com → 127.0.0.1:1</span></summary>',
+      '<summary><span class="app-details-title">App details</span><span class="client-summary">cursor.com → 127.0.0.1:1</span></summary>',
     );
     expect(html).toContain('<details class="client-verify">');
     expect(html).not.toContain('<details class="client-verify" open>');
@@ -139,7 +140,7 @@ describe('renderConsentHtml', () => {
     });
 
     expect(html).toContain(
-      '<summary><span>App details · cursor.com → 127.0.0.1:1, cursor.com</span></summary>',
+      '<summary><span class="app-details-title">App details</span><span class="client-summary">cursor.com → 127.0.0.1:1, cursor.com</span></summary>',
     );
     expect(html).toContain('http://127.0.0.1:1/callback');
     expect(html).toContain('https://cursor.com/oauth/callback');
@@ -174,7 +175,7 @@ describe('renderConsentHtml', () => {
     });
 
     expect(html).toContain(
-      '<summary><span>App details · Redirects to 127.0.0.1:1</span></summary>',
+      '<summary><span class="app-details-title">App details</span><span class="client-summary">Redirects to 127.0.0.1:1</span></summary>',
     );
   });
 
@@ -208,6 +209,31 @@ describe('renderConsentHtml', () => {
     expect(html).not.toContain('<script>alert(1)</script>');
   });
 
+  it('shows a pinned Postgres role and withholds connection strings', () => {
+    const render = (roleName?: string) =>
+      renderConsentHtml({
+        client,
+        state: 'abc',
+        mode: 'confirmation',
+        writeChecked: true,
+        showWriteControl: false,
+        grant: {
+          projectId: null,
+          scopes: null,
+          ...(roleName ? { roleName } : {}),
+        },
+      });
+
+    const pinned = render('mcp_pinned_reader');
+    expect(pinned).toContain('<dt>Postgres role:</dt>');
+    expect(pinned).toContain('mcp_pinned_reader');
+    expect(pinned).not.toContain('Get Connection String');
+
+    const unpinned = render();
+    expect(unpinned).not.toContain('Postgres role:');
+    expect(unpinned).toContain('Get Connection String');
+  });
+
   it('renders confirmation without editors, including for a writable URL', () => {
     const html = renderConsentHtml({
       client,
@@ -225,11 +251,12 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('Querying');
     expect(html).toContain('Read and write');
     expect(html).toContain('<h2>Requested access</h2>');
+    expect(html).not.toContain('<h3>Project</h3>');
     expect(html).not.toContain('class="scope-checkbox"');
     expect(html).not.toContain('name="projectMode"');
     expect(html).not.toContain('name="category"');
     expect(html).toContain(
-      'To change these limits, update the connection URL and authorize again.',
+      'To change this access, update the connection URL and authorize again.',
     );
     expect(html).toContain('name="action" value="cancel"');
     expect(html).toContain('formnovalidate');
@@ -246,6 +273,9 @@ describe('renderConsentHtml', () => {
       grant: DEFAULT_GRANT,
     });
 
+    expect(html).toContain(
+      'var ALWAYS = {"search":true,"fetch":true,"send_feedback":true};',
+    );
     expect(html).toContain('name="projectMode"');
     expect(html).not.toContain('Next, sign in to Neon');
     expect(html).toContain('<h2>Choose access</h2>');
@@ -253,21 +283,26 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('name="category"');
     expect(html).toContain('data-category-select-all');
     expect(html).toContain('data-category-clear-all');
-    expect(html).toContain('>Clear categories</button>');
+    expect(html).toContain('>Clear all</button>');
     expect(html).not.toContain(
       'With all projects selected, Search and Fetch remain available.',
     );
-    expect(html).toContain('Allow writes');
+    expect(html).toContain('Read and write');
+    expect(html).toContain(
+      '<input type="hidden" name="scopes" value="read" />',
+    );
     expect(html).toContain(
       'Allow changes through tools in the selected project scope and categories shown above.',
     );
-    expect(html).toContain('src="/favicon.svg"');
-    expect(html).toContain('>View tools</button>');
+    expect(html).toContain('src="/images/consent/neon.svg"');
+    expect(html).toContain('>Included tools</button>');
     expect(html).toContain('is-collapsed');
-    expect(html).toContain('113 tools · 13 groups');
+    expect(html).toContain('114 tools available');
     expect(html).toContain('data-tool-content');
     expect(html).toContain('data-category-disclosure');
-    expect(html).toContain('data-category-summary>All selected</span>');
+    expect(html).toContain(
+      'data-category-summary>12/12 selected · 114 tools available</span>',
+    );
     expect(html).toContain('choice-categories');
     expect(html).not.toMatch(/\.check-grid\s*\{[^}]*overflow-y/);
     expect(html).toMatch(/\.card-body\s*\{[^}]*overflow-y:\s*auto/);
@@ -275,7 +310,7 @@ describe('renderConsentHtml', () => {
       /\.check-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2/,
     );
     expect(html).toMatch(
-      /<div class="card-body"[^>]*>\s*<header class="consent-header">/,
+      /<header class="consent-header">[\s\S]*?<div class="card-body"/,
     );
     expect(html).not.toContain('history.replaceState');
   });
@@ -307,6 +342,7 @@ describe('renderConsentHtml', () => {
       formState: {
         projectMode: 'one',
         projectId: 'proj-123',
+        roleName: '',
         categories: [],
         writeChecked: true,
       },
@@ -318,7 +354,7 @@ describe('renderConsentHtml', () => {
     expect(input?.[0]).not.toContain('disabled');
   });
 
-  it('omits Allow writes when the OAuth ceiling is read-only', () => {
+  it('omits Read and write when the OAuth ceiling is read-only', () => {
     const html = renderConsentHtml({
       client,
       state: 'abc',
@@ -328,7 +364,7 @@ describe('renderConsentHtml', () => {
       grant: DEFAULT_GRANT,
     });
 
-    expect(html).toContain('Read-only');
+    expect(html).toContain('Read only');
     expect(html).not.toContain('class="scope-checkbox"');
     expect(html).toContain('name="scopes" value="read"');
   });
@@ -348,15 +384,108 @@ describe('renderConsentHtml', () => {
       formState: {
         projectMode: 'one',
         projectId: '',
+        roleName: '',
         categories: ['querying', 'schema'],
         writeChecked: false,
       },
     });
 
     expect(html).toContain('Enter the project ID this connection should use.');
+    expect(html).toContain(
+      '<input type="hidden" name="scopes" value="read" disabled />',
+    );
     expect(html).toContain('aria-invalid="true"');
     expect(html).toContain('autofocus');
     expect(html).toContain('role="alert"');
-    expect(html).toContain('data-category-summary>2 of 12 selected</span>');
+    expect(html).toContain('data-category-summary>2/12 selected · ');
+  });
+
+  it('renders an empty optional Postgres role field on editable consent', () => {
+    const html = renderConsentHtml({
+      client,
+      state: 'abc',
+      mode: 'editable',
+      writeChecked: false,
+      showWriteControl: true,
+      grant: DEFAULT_GRANT,
+    });
+    const input = html.match(/<input\b[^>]*name="roleName"[^>]*>/);
+
+    expect(input?.[0]).toContain('value=""');
+    expect(input?.[0]).not.toContain('disabled');
+    expect(html).toContain('Role name (optional)');
+    expect(html).toMatch(
+      /<details class="choice choice-role" data-role-disclosure>/,
+    );
+    expect(html).toContain('data-role-summary>Database owner<');
+    expect(html).toContain('Get Connection String');
+  });
+
+  it('omits the Postgres role field on a confirmation', () => {
+    const html = renderConsentHtml({
+      client,
+      state: 'abc',
+      mode: 'confirmation',
+      writeChecked: false,
+      showWriteControl: false,
+      grant: { ...DEFAULT_GRANT, roleName: 'app_reader' },
+    });
+
+    expect(html).not.toContain('name="roleName"');
+    expect(html).toContain('Postgres role:');
+    expect(html).toContain('app_reader');
+  });
+
+  it('keeps an escaped role value and its error after a rejected submission', () => {
+    const html = renderConsentHtml({
+      client,
+      state: 'abc',
+      mode: 'editable',
+      writeChecked: false,
+      showWriteControl: true,
+      grant: DEFAULT_GRANT,
+      fieldError: { field: 'roleName', message: 'Enter one Postgres role.' },
+      formState: {
+        projectMode: 'all',
+        projectId: '',
+        roleName: '"><script>x</script>',
+        categories: ['querying'],
+        writeChecked: false,
+      },
+    });
+    const input = html.match(/<input\b[^>]*name="roleName"[^>]*>/);
+
+    expect(input?.[0]).toContain(
+      'value="&quot;&gt;&lt;script&gt;x&lt;/script&gt;"',
+    );
+    expect(input?.[0]).toContain('aria-invalid="true"');
+    expect(html).toContain('id="role-name-error" role="alert"');
+    expect(html).toContain('data-role-disclosure open>');
+    expect(html).not.toContain('<script>x</script>');
+  });
+
+  it('drops Get Connection String from the preview when a role is entered', () => {
+    const render = (roleName: string) =>
+      renderConsentHtml({
+        client,
+        state: 'abc',
+        mode: 'editable',
+        writeChecked: true,
+        showWriteControl: true,
+        grant: DEFAULT_GRANT,
+        formState: {
+          projectMode: 'all',
+          projectId: '',
+          roleName,
+          categories: ['querying', 'branches'],
+          writeChecked: true,
+        },
+      });
+    const tools = (html: string) =>
+      html.match(/data-tool-content>([\s\S]*?)<\/section>/)?.[1] ?? '';
+
+    expect(tools(render(''))).toContain('Get Connection String');
+    expect(tools(render('app_reader'))).not.toContain('Get Connection String');
+    expect(tools(render('app_reader'))).toContain('Run SQL');
   });
 });

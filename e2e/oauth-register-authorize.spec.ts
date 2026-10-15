@@ -31,7 +31,43 @@ test.describe('OAuth register and authorize contract', () => {
     );
   });
 
-  test('register with no read-only headers keeps Allow writes checked by default', async ({
+  for (const redirectUri of [
+    'https://client.example/callback',
+    'claude://claude.ai/oauth/callback',
+    'http://hermes.cobaltweb.dev/callback',
+  ]) {
+    test(`scalar redirect ${redirectUri} registers and authorizes`, async ({
+      request,
+    }) => {
+      const registerResponse = await request.post('/api/register', {
+        data: {
+          ...VALID_REGISTER_PAYLOAD,
+          redirect_uris: redirectUri,
+        },
+      });
+      const registerBody: {
+        client_id: string;
+        redirect_uris: string[];
+      } = await registerResponse.json();
+
+      expect(registerResponse.status()).toBe(200);
+      expect(registerBody.redirect_uris).toEqual([redirectUri]);
+
+      const authorizeResponse = await request.get('/api/authorize', {
+        params: {
+          response_type: 'code',
+          client_id: registerBody.client_id,
+          redirect_uri: redirectUri,
+          scope: 'read write',
+          state: 'e2e-state',
+        },
+        maxRedirects: 0,
+      });
+      expect(authorizeResponse.status()).toBe(200);
+    });
+  }
+
+  test('register with no read-only headers keeps Read and write checked by default', async ({
     request,
   }) => {
     const registerBody = await registerClient(request);
@@ -52,7 +88,7 @@ test.describe('OAuth register and authorize contract', () => {
     expect(body).toMatch(/class="scope-checkbox"[\s\S]*?checked/);
   });
 
-  test('register x-read-only=true defaults Allow writes to unchecked on authorize', async ({
+  test('register x-read-only=true defaults Read and write to unchecked on authorize', async ({
     request,
   }) => {
     const registerBody = await registerClient(request, {
@@ -73,7 +109,7 @@ test.describe('OAuth register and authorize contract', () => {
     expect(authorizeResponse.status()).toBe(200);
     const body = await authorizeResponse.text();
     const writeCheckbox = body.match(
-      /<input\s+type="checkbox"\s+name="scopes"\s+value="write"[\s\S]*?\/>/,
+      /<input\s+type="radio"\s+name="scopes"\s+value="write"[\s\S]*?\/>/,
     )?.[0];
     expect(writeCheckbox).toBeTruthy();
     expect(writeCheckbox).not.toContain('checked');
@@ -103,7 +139,7 @@ test.describe('OAuth register and authorize contract', () => {
     expect(body).toContain('proj-e2e');
     expect(body).toContain('Querying');
     expect(body).toContain(
-      'To change these limits, update the connection URL and authorize again.',
+      'To change this access, update the connection URL and authorize again.',
     );
     expect(body).not.toContain('class="scope-checkbox"');
     expect(body).not.toContain('name="projectMode"');
@@ -136,7 +172,7 @@ test.describe('OAuth register and authorize contract', () => {
     expect(body).not.toContain('name="projectMode"');
   });
 
-  test('toggling Allow writes hides write tools on the editable default grant', async ({
+  test('toggling Read and write hides write tools on the editable default grant', async ({
     page,
     request,
   }) => {
@@ -154,7 +190,8 @@ test.describe('OAuth register and authorize contract', () => {
 
     const checkbox = page.locator('.scope-checkbox');
     await expect(checkbox).toBeChecked();
-    const show = page.getByRole('button', { name: 'View tools' });
+    await page.locator('[data-category-disclosure] summary').click();
+    const show = page.getByRole('button', { name: 'Included tools' });
     if (await show.isVisible()) {
       await show.click();
     }
@@ -162,8 +199,8 @@ test.describe('OAuth register and authorize contract', () => {
       'Read and write',
     );
 
-    await checkbox.uncheck();
-    await expect(page.locator('[data-access-mode]')).toHaveText('Read-only');
+    await page.getByRole('radio', { name: 'Read only', exact: true }).check();
+    await expect(page.locator('[data-access-mode]')).toHaveText('Read only');
     await expect(page.locator('[data-write-tool]').first()).toBeHidden();
 
     await checkbox.check();
@@ -185,9 +222,10 @@ test.describe('OAuth register and authorize contract', () => {
 
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto(`/api/authorize?${params.toString()}`);
-    await page.getByRole('button', { name: 'View tools' }).click();
+    await page.locator('[data-category-disclosure] summary').click();
+    await page.getByRole('button', { name: 'Included tools' }).click();
     const approve = page.getByRole('button', {
-      name: 'Approve and continue to Neon',
+      name: 'Approve',
     });
     await expect(approve).toBeInViewport();
     await expect(page.locator('[data-tool-content]')).toHaveCSS(
@@ -259,9 +297,7 @@ test.describe('OAuth register and authorize contract', () => {
       authorizePath(registerBody, { state: 'e2e-cancel-after-error' }),
     );
     await page.getByText('One project', { exact: true }).click();
-    await page
-      .getByRole('button', { name: 'Approve and continue to Neon' })
-      .click();
+    await page.getByRole('button', { name: 'Approve' }).click();
     await expect(
       page.getByText('Enter the project ID this connection should use.'),
     ).toBeVisible();

@@ -9,6 +9,11 @@ export type ToolHandlerExtraParams = {
   clientApplication: ClientApplication;
   apiKey?: string;
   signal?: AbortSignal;
+  /**
+   * Postgres role pinned by the connection grant. Set only by `invokeTool`
+   * from the grant, never from tool arguments.
+   */
+  pinnedRoleName?: string;
 };
 
 export type ToolHandlerExtended = (

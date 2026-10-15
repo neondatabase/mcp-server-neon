@@ -24,6 +24,15 @@ async function openCategoryDisclosure(page: Page): Promise<void> {
   await expect(disclosure).toHaveAttribute('open', '');
 }
 
+async function submittedScopes(page: Page): Promise<string[]> {
+  return page.locator('#authorize-form').evaluate((form) => {
+    if (!(form instanceof HTMLFormElement)) {
+      throw new Error('missing consent form');
+    }
+    return new FormData(form).getAll('scopes').map(String);
+  });
+}
+
 test.describe('OAuth consent modes', () => {
   test('A1 fixed read-only confirmation when the client asked for writes', async ({
     page,
@@ -36,7 +45,8 @@ test.describe('OAuth consent modes', () => {
     await expect(page.getByText('proj-example')).toBeVisible();
     await expect(page.locator('.facts')).toContainText('Querying');
     await expect(page.locator('.scope-checkbox')).toHaveCount(0);
-    await expect(page.locator('[data-access-mode]')).toHaveText('Read-only');
+    await expect(page.locator('[data-access-mode]')).toHaveText('Read only');
+    expect(await submittedScopes(page)).toEqual([]);
     await capture(page, 'A1-readonly-confirmation');
   });
 
@@ -49,6 +59,7 @@ test.describe('OAuth consent modes', () => {
       'Read and write',
     );
     await expect(page.locator('.scope-checkbox')).toHaveCount(0);
+    expect(await submittedScopes(page)).toEqual([]);
     await capture(page, 'A2-writable-confirmation');
   });
 
@@ -61,7 +72,7 @@ test.describe('OAuth consent modes', () => {
       resource:
         'https://mcp.neon.tech/mcp?projectId=proj-example&category=querying,schema',
     });
-    await expect(page.locator('[data-access-mode]')).toHaveText('Read-only');
+    await expect(page.locator('[data-access-mode]')).toHaveText('Read only');
     await expect(page.locator('.scope-checkbox')).toHaveCount(0);
     await capture(page, 'A3-client-read-confirmation');
   });
@@ -133,7 +144,7 @@ test.describe('OAuth consent modes', () => {
       resource: 'https://mcp.neon.tech/mcp?category=not-a-category',
     });
     await expect(
-      page.getByText('Search and Fetch stay available'),
+      page.getByText('Search, Fetch, and Send Feedback stay available'),
     ).toBeVisible();
     await capture(page, 'A6-unknown-only');
     await openAuthorize(page, request, {
@@ -141,9 +152,26 @@ test.describe('OAuth consent modes', () => {
         'https://mcp.neon.tech/mcp?projectId=proj-example&category=not-a-category',
     });
     await expect(
-      page.getByText('No tools are available for this connection.'),
+      page.getByText('No tool categories. Send Feedback stays available.'),
     ).toBeVisible();
     await capture(page, 'A6-unknown-only-project');
+  });
+
+  test('A7 pinned Postgres role is a fixed confirmation that shows the role', async ({
+    page,
+    request,
+  }) => {
+    await openAuthorize(page, request, {
+      resource:
+        'https://mcp.neon.tech/mcp?projectId=proj-example&readonly=true&roleName=mcp_pinned_reader',
+    });
+    await expect(page.locator('.facts')).toContainText('Postgres role:');
+    await expect(page.locator('.facts')).toContainText('mcp_pinned_reader');
+    await expect(page.locator('[data-access-mode]')).toHaveText('Read only');
+    await expect(page.locator('.scope-checkbox')).toHaveCount(0);
+    await expect(page.locator('input[name="projectMode"]')).toHaveCount(0);
+    expect(await submittedScopes(page)).toEqual([]);
+    await capture(page, 'A7-pinned-role-confirmation');
   });
 
   test('B1 bare resource initial all/all/write collapsed tools', async ({
@@ -155,7 +183,7 @@ test.describe('OAuth consent modes', () => {
       resource: 'https://mcp.neon.tech/mcp',
     });
     const logoLoaded = await page
-      .getByRole('img', { name: 'Neon' })
+      .locator('img.brand')
       .evaluate(
         (image) =>
           image instanceof HTMLImageElement &&
@@ -166,7 +194,7 @@ test.describe('OAuth consent modes', () => {
     const clientDetails = page.locator('details.client-verify');
     const clientSummary = clientDetails.locator('summary');
     await expect(clientSummary).toHaveText(
-      'App details · example.com → 127.0.0.1:55667',
+      'App detailsexample.com → 127.0.0.1:55667',
     );
     await expect(clientDetails).not.toHaveAttribute('open', '');
     await clientSummary.focus();
@@ -182,17 +210,17 @@ test.describe('OAuth consent modes', () => {
     await capture(page, 'B1-client-details-expanded');
     await clientSummary.click();
     await expect(page.locator('.scope-checkbox')).toBeChecked();
-    await expect(page.getByText('Allow writes')).toBeVisible();
-    await expect(page.locator('[data-project-id-field]')).toBeHidden();
     await expect(
-      page.getByRole('button', { name: 'View tools' }),
+      page.getByRole('radio', { name: 'Read and write', exact: true }),
     ).toBeVisible();
+    await expect(page.locator('[data-project-id-field]')).toBeHidden();
+    await expect(page.locator('[data-tool-toggle]')).toBeHidden();
     await expect(
       page.getByText('Tool categories', { exact: true }),
     ).toBeVisible();
     const categoryDisclosure = page.locator('[data-category-disclosure]');
     const categorySummary = categoryDisclosure.locator('summary');
-    await expect(categorySummary).toContainText('All selected');
+    await expect(categorySummary).toContainText('12/12 selected');
     await expect(categoryDisclosure).not.toHaveAttribute('open', '');
     await categorySummary.focus();
     await page.keyboard.press('Enter');
@@ -204,22 +232,22 @@ test.describe('OAuth consent modes', () => {
     await expect(
       categoryGrid.locator('span').filter({ hasText: 'Projects' }),
     ).toBeInViewport();
-    await page.getByRole('button', { name: 'Clear categories' }).click();
+    await page.getByRole('button', { name: 'Clear all' }).click();
     expect(await page.locator('input[name="category"]:checked').count()).toBe(
       0,
     );
-    await expect(categorySummary).toContainText('None selected');
+    await expect(categorySummary).toContainText('0/12 selected');
     await page.getByRole('button', { name: 'Select all' }).click();
     expect(await page.locator('input[name="category"]:checked').count()).toBe(
       12,
     );
-    await expect(categorySummary).toContainText('All selected');
+    await expect(categorySummary).toContainText('12/12 selected');
     expect(
       await categoryGrid.evaluate(
         (element) =>
           getComputedStyle(element).gridTemplateColumns.split(' ').length,
       ),
-    ).toBe(2);
+    ).toBe(3);
     const lastCategory = page.locator('input[name="category"]').last();
     await lastCategory.focus();
     await expect(lastCategory).toBeFocused();
@@ -243,7 +271,7 @@ test.describe('OAuth consent modes', () => {
       );
     expect(submittedCategories).toEqual(categoriesBeforeClose);
     await expect(
-      page.getByRole('button', { name: 'Approve and continue to Neon' }),
+      page.getByRole('button', { name: 'Approve' }),
     ).toBeInViewport();
     const bodyBox = await page.locator('.card-body').boundingBox();
     const footBox = await page.locator('.card-foot').boundingBox();
@@ -264,9 +292,11 @@ test.describe('OAuth consent modes', () => {
     request,
   }) => {
     await openAuthorize(page, request);
+    expect(await submittedScopes(page)).toEqual(['read', 'write']);
     await capture(page, 'B2-omitted-resource');
     await openAuthorize(page, request, {}, { 'x-read-only': 'true' });
     await expect(page.locator('.scope-checkbox')).not.toBeChecked();
+    expect(await submittedScopes(page)).toEqual(['read']);
     await capture(page, 'B2-legacy-readonly-header');
   });
 
@@ -276,7 +306,8 @@ test.describe('OAuth consent modes', () => {
   }) => {
     await openAuthorize(page, request, { scope: 'read' });
     await expect(page.locator('.scope-checkbox')).toHaveCount(0);
-    await expect(page.locator('[data-access-mode]')).toHaveText('Read-only');
+    await expect(page.locator('[data-access-mode]')).toHaveText('Read only');
+    expect(await submittedScopes(page)).toEqual(['read']);
     await capture(page, 'B3-editable-read-scope');
   });
 
@@ -300,16 +331,24 @@ test.describe('OAuth consent modes', () => {
         await box.uncheck();
       }
     }
-    await expect(page.locator('[data-category-summary]')).toHaveText(
-      '2 of 12 selected',
+    await expect(page.locator('[data-category-summary]')).toContainText(
+      '2/12 selected',
     );
     await expect(page.locator('[data-access-mode]')).toHaveText(
       'Read and write',
     );
+    expect(await submittedScopes(page)).toEqual(['read', 'write']);
     await clearScreenshotInteractionState(page);
     await capture(page, 'B4-subset-writes-on');
-    await page.locator('.scope-checkbox').uncheck();
-    await expect(page.locator('[data-access-mode]')).toHaveText('Read-only');
+    await page.getByRole('radio', { name: 'Read only', exact: true }).check();
+    await expect(page.locator('[data-access-mode]')).toHaveText('Read only');
+    expect(await submittedScopes(page)).toEqual(['read']);
+    await page
+      .getByRole('radio', { name: 'Read and write', exact: true })
+      .check();
+    expect(await submittedScopes(page)).toEqual(['read', 'write']);
+    await page.getByRole('radio', { name: 'Read only', exact: true }).check();
+    expect(await submittedScopes(page)).toEqual(['read']);
     await clearScreenshotInteractionState(page);
     await capture(page, 'B4-subset-writes-off');
   });
@@ -325,8 +364,8 @@ test.describe('OAuth consent modes', () => {
     for (let i = 0; i < count; i += 1) {
       await categories.nth(i).uncheck();
     }
-    await expect(page.locator('[data-category-summary]')).toHaveText(
-      'None selected',
+    await expect(page.locator('[data-category-summary]')).toContainText(
+      '0/12 selected',
     );
     await expect(
       page.getByText(
@@ -338,7 +377,10 @@ test.describe('OAuth consent modes', () => {
     await capture(page, 'B5-no-categories-all-projects');
     await page.getByText('One project', { exact: true }).click();
     await page.locator('input[name="projectId"]').fill('proj-example');
-    await expect(page.getByText('None.')).toBeVisible();
+    await expect(
+      page.getByText('Send Feedback', { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Search', { exact: true })).toHaveCount(0);
     await clearScreenshotInteractionState(page);
     await capture(page, 'B5-no-categories-one-project');
   });
@@ -349,9 +391,7 @@ test.describe('OAuth consent modes', () => {
   }) => {
     await openAuthorize(page, request);
     await page.getByText('One project', { exact: true }).click();
-    await page
-      .getByRole('button', { name: 'Approve and continue to Neon' })
-      .click();
+    await page.getByRole('button', { name: 'Approve' }).click();
     await expect(
       page.getByText('Enter the project ID this connection should use.'),
     ).toBeVisible();
@@ -369,26 +409,25 @@ test.describe('OAuth consent modes', () => {
     await openAuthorize(page, request);
     await page.getByText('One project', { exact: true }).click();
     await openCategoryDisclosure(page);
-    await page.getByRole('button', { name: 'Clear categories' }).click();
+    await page.getByRole('button', { name: 'Clear all' }).click();
     await page.locator('input[name="category"][value="querying"]').check();
     await page.locator('input[name="category"][value="schema"]').check();
-    await page.locator('.scope-checkbox').uncheck();
-    await page
-      .getByRole('button', { name: 'Approve and continue to Neon' })
-      .click();
+    await page.getByRole('radio', { name: 'Read only', exact: true }).check();
+    await page.getByRole('button', { name: 'Approve' }).click();
     await expect(
       page.getByText('Enter the project ID this connection should use.'),
     ).toBeVisible();
 
     await page.locator('input[name="projectId"]').fill('proj-example');
-    await expect(page.locator('[data-category-summary]')).toHaveText(
-      '2 of 12 selected',
+    await expect(page.locator('[data-category-summary]')).toContainText(
+      '2/12 selected',
     );
     await expect(page.locator('.scope-checkbox')).not.toBeChecked();
     await expect(page.locator('input[name="category"]:checked')).toHaveCount(2);
+    expect(await submittedScopes(page)).toEqual(['read']);
     await openCategoryDisclosure(page);
 
-    const toggle = page.getByRole('button', { name: 'View tools' });
+    const toggle = page.getByRole('button', { name: 'Included tools' });
     await expect(toggle).toBeVisible();
     await toggle.click();
     await expect(page.locator('[data-tool-content]')).toBeVisible();
@@ -442,6 +481,82 @@ test.describe('OAuth consent modes', () => {
     ).toBe(false);
   });
 
+  test('B8 Postgres role field pins the role and updates the tool preview', async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openAuthorize(page, request);
+    const roleDisclosure = page.locator('[data-role-disclosure]');
+    const roleSummary = page.locator('[data-role-summary]');
+    const roleInput = page.locator('input[name="roleName"]');
+    await expect(roleDisclosure).not.toHaveAttribute('open', '');
+    await expect(roleSummary).toHaveText('Database owner');
+    await expect(roleInput).toBeHidden();
+    await clearScreenshotInteractionState(page);
+    await capture(page, 'B8-editable-role-collapsed');
+
+    await roleDisclosure.locator('summary').click();
+    await expect(roleDisclosure).toHaveAttribute('open', '');
+    await expect(roleInput).toHaveValue('');
+    await expect(roleInput).toHaveAttribute('placeholder', 'Database owner');
+    const tools = page.locator('[data-tool-content]');
+    await expect(tools).toContainText('Get Connection String');
+
+    await roleInput.fill('app_reader');
+    await expect(roleSummary).toHaveText('app_reader');
+    await expect(tools).not.toContainText('Get Connection String');
+    await expect(tools).toContainText('Run SQL');
+    await page.getByRole('radio', { name: 'Read only', exact: true }).check();
+    await clearScreenshotInteractionState(page);
+    await capture(page, 'B8-editable-role-read-only');
+    await page
+      .getByRole('radio', { name: 'Read and write', exact: true })
+      .check();
+    await clearScreenshotInteractionState(page);
+    await capture(page, 'B8-editable-role-read-write');
+
+    await roleInput.fill('');
+    await expect(tools).toContainText('Get Connection String');
+    await roleInput.fill('app_reader');
+    const posted = await page.locator('#authorize-form').evaluate((form) => {
+      if (!(form instanceof HTMLFormElement)) {
+        throw new Error('missing consent form');
+      }
+      return new FormData(form).getAll('roleName').map(String);
+    });
+    expect(posted).toEqual(['app_reader']);
+  });
+
+  test('B9 invalid Postgres role shows a field error and keeps the selection', async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openAuthorize(page, request);
+    await page.getByText('One project', { exact: true }).click();
+    await page.locator('input[name="projectId"]').fill('proj-example');
+    await page.locator('[data-role-disclosure] summary').click();
+    await page.locator('input[name="roleName"]').fill('app-reader');
+    await page.getByRole('button', { name: 'Approve' }).click();
+    await expect(page.locator('[data-role-disclosure]')).toHaveAttribute(
+      'open',
+      '',
+    );
+    await expect(page.locator('#role-name-error')).toContainText(
+      'Enter one Postgres role name',
+    );
+    await expect(page.locator('input[name="roleName"]')).toHaveValue(
+      'app-reader',
+    );
+    await expect(page.locator('input[name="projectId"]')).toHaveValue(
+      'proj-example',
+    );
+    await clearScreenshotInteractionState(page);
+    await page.locator('#role-name-error').scrollIntoViewIfNeeded();
+    await capture(page, 'B9-invalid-role');
+  });
+
   test('S1 card body is the only scroll owner and actions stay fixed', async ({
     page,
     request,
@@ -450,7 +565,7 @@ test.describe('OAuth consent modes', () => {
     await openAuthorize(page, request);
     await page.locator('details.client-verify summary').click();
     await openCategoryDisclosure(page);
-    await page.getByRole('button', { name: 'View tools' }).click();
+    await page.getByRole('button', { name: 'Included tools' }).click();
 
     const body = page.locator('.card-body');
     const footer = page.locator('.card-foot');
@@ -518,6 +633,10 @@ test.describe('OAuth consent modes', () => {
     await expect
       .poll(() => body.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(0);
+    await page
+      .locator('[data-tool-content] li')
+      .last()
+      .scrollIntoViewIfNeeded();
     await expect(
       page.locator('[data-tool-content] li').last(),
     ).toBeInViewport();
@@ -535,19 +654,22 @@ test.describe('OAuth consent modes', () => {
     const count = await categories.count();
     for (let i = 0; i < count; i += 1) {
       const box = categories.nth(i);
-      if ((await box.getAttribute('value')) === 'snapshots') {
+      if ((await box.getAttribute('value')) === 'data_api') {
         await box.check();
       } else {
         await box.uncheck();
       }
     }
-    await page.locator('.scope-checkbox').uncheck();
-    await expect(page.getByRole('button', { name: 'View tools' })).toBeHidden();
+    await page.getByRole('radio', { name: 'Read only', exact: true }).check();
+    await expect(page.locator('[data-tool-toggle]')).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     await clearScreenshotInteractionState(page);
     await capture(page, 'T1-visible-at-or-below-threshold');
     await page.locator('.scope-checkbox').check();
     await expect(
-      page.getByRole('button', { name: 'View tools' }),
+      page.getByRole('button', { name: 'Included tools' }),
     ).toBeVisible();
     await clearScreenshotInteractionState(page);
     await capture(page, 'T1-above-threshold-after-writes');
@@ -555,20 +677,26 @@ test.describe('OAuth consent modes', () => {
 
   test('T2 long list collapsed and expanded', async ({ page, request }) => {
     await openAuthorize(page, request);
+    await openCategoryDisclosure(page);
     await expect(
-      page.getByRole('button', { name: 'View tools' }),
+      page.getByRole('button', { name: 'Included tools' }),
     ).toBeVisible();
     await capture(page, 'T2-collapsed');
-    await page.getByRole('button', { name: 'View tools' }).click();
-    await expect(
-      page.getByRole('button', { name: 'Hide tools' }),
-    ).toBeVisible();
+    await page.getByRole('button', { name: 'Included tools' }).click();
+    await expect(page.locator('[data-tool-toggle]')).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     await clearScreenshotInteractionState(page);
     await capture(page, 'T2-expanded');
     const body = page.locator('.card-body');
     await body.focus();
     await expect(body).toBeFocused();
     await page.keyboard.press('End');
+    await page
+      .locator('[data-tool-content] li')
+      .last()
+      .scrollIntoViewIfNeeded();
     await expect(
       page.locator('[data-tool-content] li').last(),
     ).toBeInViewport();
@@ -581,27 +709,30 @@ test.describe('OAuth consent modes', () => {
         'https://mcp.neon.tech/mcp?projectId=proj-example-with-a-very-long-identifier',
     });
     await expect(
-      page.getByRole('button', { name: 'Approve and continue to Neon' }),
+      page.getByRole('button', { name: 'Approve' }),
     ).toBeInViewport();
     await capture(page, 'L1-confirmation-720');
     const approve = page.getByRole('button', {
-      name: 'Approve and continue to Neon',
+      name: 'Approve',
     });
     await capture(page, 'L1-confirmation-720-actions');
     await page.setViewportSize({ width: 1280, height: 480 });
+    await approve.scrollIntoViewIfNeeded();
     await expect(approve).toBeInViewport();
     await capture(page, 'L1-confirmation-480-actions');
     await capture(page, 'L1-confirmation-480-full', true);
 
     await page.setViewportSize({ width: 1280, height: 720 });
     await openAuthorize(page, request);
-    await page.getByRole('button', { name: 'View tools' }).click();
+    await openCategoryDisclosure(page);
+    await page.getByRole('button', { name: 'Included tools' }).click();
     const editableApprove = page.getByRole('button', {
-      name: 'Approve and continue to Neon',
+      name: 'Approve',
     });
     await expect(editableApprove).toBeInViewport();
     await capture(page, 'L1-editable-720-actions');
     await page.setViewportSize({ width: 1280, height: 480 });
+    await editableApprove.scrollIntoViewIfNeeded();
     await expect(editableApprove).toBeInViewport();
     await capture(page, 'L1-editable-480-actions');
   });
@@ -617,24 +748,32 @@ test.describe('OAuth consent modes', () => {
     await capture(page, 'L2-mobile-landscape');
     await page.setViewportSize({ width: 320, height: 568 });
     const narrowApprove = page.getByRole('button', {
-      name: 'Approve and continue to Neon',
+      name: 'Approve',
     });
     await expect(narrowApprove).toBeInViewport();
     await capture(page, 'L2-mobile-320px');
     await page.setViewportSize({ width: 390, height: 667 });
     await openAuthorize(page, request);
     await expect(
-      page.getByRole('button', { name: 'Approve and continue to Neon' }),
+      page.getByRole('button', { name: 'Approve' }),
     ).toBeInViewport();
     await capture(page, 'L2-editable-mobile-portrait');
-    await page.setViewportSize({ width: 667, height: 375 });
+    await page.setViewportSize({ width: 667, height: 320 });
+    expect(
+      await page
+        .locator('.card-body')
+        .evaluate((element) => element.clientHeight),
+    ).toBeGreaterThan(100);
+    await page
+      .getByRole('button', { name: 'Approve' })
+      .scrollIntoViewIfNeeded();
     await expect(
-      page.getByRole('button', { name: 'Approve and continue to Neon' }),
+      page.getByRole('button', { name: 'Approve' }),
     ).toBeInViewport();
     await capture(page, 'L2-editable-mobile-landscape');
     await page.setViewportSize({ width: 320, height: 568 });
     await expect(
-      page.getByRole('button', { name: 'Approve and continue to Neon' }),
+      page.getByRole('button', { name: 'Approve' }),
     ).toBeInViewport();
     await capture(page, 'L2-editable-mobile-320px');
   });
@@ -654,7 +793,7 @@ test.describe('OAuth consent modes', () => {
 
     await expect(page.locator('h1')).toContainText(longName);
     await expect(
-      page.getByRole('button', { name: 'Approve and continue to Neon' }),
+      page.getByRole('button', { name: 'Approve' }),
     ).toBeInViewport();
     const headingBox = await page.locator('h1').boundingBox();
     expect(headingBox).toBeTruthy();

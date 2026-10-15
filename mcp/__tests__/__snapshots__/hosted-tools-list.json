@@ -44,6 +44,14 @@
         "database_name": {
           "type": "string",
           "description": "The name of the database. If not provided, the default neondb or first available database is used."
+        },
+        "role_name": {
+          "type": "string",
+          "description": "An optional Postgres role to log in as. The server resolves its credentials internally and never returns them. If not provided, the database owner is used. On a connection pinned to a role, omit this or pass that role."
+        },
+        "compute_id": {
+          "type": "string",
+          "description": "An optional ID of the compute/endpoint to run on. If not provided, the read-write compute of the branch is used."
         }
       },
       "required": [
@@ -86,6 +94,14 @@
         "database_name": {
           "type": "string",
           "description": "The name of the database. If not provided, the default neondb or first available database is used."
+        },
+        "role_name": {
+          "type": "string",
+          "description": "An optional Postgres role to log in as. The server resolves its credentials internally and never returns them. If not provided, the database owner is used. On a connection pinned to a role, omit this or pass that role."
+        },
+        "compute_id": {
+          "type": "string",
+          "description": "An optional ID of the compute/endpoint to run on. If not provided, the read-write compute of the branch is used."
         }
       },
       "required": [
@@ -305,13 +321,13 @@
   {
     "name": "get_connection_string",
     "title": "Get Connection String",
-    "description": "Get a PostgreSQL connection string for a Neon database. The branch must have a compute endpoint. `create_project` and `create_branch` do not return one; call this after they succeed. All parameters are optional; the tool resolves the project, branch, and database automatically if not specified. Requires write access: the connection string carries a privileged role password, so it is unavailable in read-only mode. A read-only caller who needs a DATABASE_URL must copy it from https://console.neon.tech manually.",
+    "description": "Get a PostgreSQL connection string for a Neon database. The branch must have a compute endpoint. `create_project` and `create_branch` do not return one; call this after they succeed. Branch, compute, and database are optional and resolved automatically if not specified; `project_id` follows the connection scope. Requires write access: the connection string carries a privileged role password, so it is unavailable in read-only mode. A read-only caller who needs a DATABASE_URL must copy it from https://console.neon.tech manually.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "project_id": {
           "type": "string",
-          "description": "The ID of the project. If not provided, the only available project will be used."
+          "description": "The ID of the project."
         },
         "branch_id": {
           "type": "string",
@@ -377,7 +393,7 @@
   {
     "name": "explain_sql_statement",
     "title": "Explain SQL Statement",
-    "description": "Analyze the query execution plan for a SQL statement using EXPLAIN ANALYZE. Do not use when you need to execute the query for results (use `run_sql` instead).",
+    "description": "Generate the execution plan for a SQL statement. When `analyze` is true, PostgreSQL executes the statement and any side effects. Use `analyze: false` to inspect a statement without executing it. Never analyze potentially destructive SQL autonomously. Do not use when you need query results (use `run_sql` instead).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -399,8 +415,8 @@
         },
         "analyze": {
           "type": "boolean",
-          "default": true,
-          "description": "Whether to include ANALYZE in the EXPLAIN command"
+          "default": false,
+          "description": "Whether to execute the statement with EXPLAIN ANALYZE. Defaults to false because execution may cause side effects."
         }
       },
       "required": [
@@ -412,9 +428,9 @@
     },
     "annotations": {
       "title": "Explain SQL Statement",
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true,
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": false
     }
   },
@@ -736,6 +752,34 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "send_feedback",
+    "title": "Send Feedback",
+    "description": "Send anonymous feedback about Neon or this MCP server to the Neon team. Only call this when the user asks to give feedback. Sends only the feedback text, not account, project, or connection details.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "feedback": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000,
+          "description": "The feedback to send to Neon. Do not include passwords, API keys, connection strings, or other secrets."
+        }
+      },
+      "required": [
+        "feedback"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Send Feedback",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
       "openWorldHint": true
     }
   },
@@ -4355,53 +4399,108 @@
           "pattern": "^[a-z0-9-]{1,60}$"
         },
         "body": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "enum": [
-                "schedule"
-              ]
-            },
-            "function_slug": {
-              "type": "string",
-              "pattern": "^[a-z0-9]{1,20}$"
-            },
-            "name": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 256
-            },
-            "function_path": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 2048
-            },
-            "schedule": {
+          "oneOf": [
+            {
               "type": "object",
               "properties": {
-                "cron": {
+                "type": {
+                  "type": "string",
+                  "const": "schedule"
+                },
+                "function_slug": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]{1,20}$"
+                },
+                "name": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 1024
+                  "maxLength": 256
+                },
+                "function_path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "schedule": {
+                  "type": "object",
+                  "properties": {
+                    "cron": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    }
+                  },
+                  "required": [
+                    "cron"
+                  ],
+                  "additionalProperties": false
+                },
+                "enabled": {
+                  "type": "boolean"
                 }
               },
               "required": [
-                "cron"
+                "type",
+                "function_slug",
+                "name",
+                "schedule"
               ],
               "additionalProperties": false
             },
-            "enabled": {
-              "type": "boolean"
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "storage_object_created"
+                },
+                "function_slug": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]{1,20}$"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "function_path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "storage_object_created": {
+                  "type": "object",
+                  "properties": {
+                    "bucket_name": {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 63
+                    },
+                    "prefix": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024,
+                      "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
+                    }
+                  },
+                  "required": [
+                    "bucket_name"
+                  ],
+                  "additionalProperties": false
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "type",
+                "function_slug",
+                "name",
+                "storage_object_created"
+              ],
+              "additionalProperties": false
             }
-          },
-          "required": [
-            "type",
-            "function_slug",
-            "name",
-            "schedule"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -4442,50 +4541,102 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9_.\\-]{0,127}$"
         },
         "body": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "enum": [
-                "schedule"
-              ]
-            },
-            "function_slug": {
-              "type": "string",
-              "pattern": "^[a-z0-9]{1,20}$"
-            },
-            "name": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 256
-            },
-            "function_path": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 2048
-            },
-            "schedule": {
+          "oneOf": [
+            {
               "type": "object",
               "properties": {
-                "cron": {
+                "type": {
+                  "type": "string",
+                  "const": "schedule"
+                },
+                "function_slug": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]{1,20}$"
+                },
+                "name": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 1024
+                  "maxLength": 256
+                },
+                "function_path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "schedule": {
+                  "type": "object",
+                  "properties": {
+                    "cron": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    }
+                  },
+                  "required": [
+                    "cron"
+                  ],
+                  "additionalProperties": false
+                },
+                "enabled": {
+                  "type": "boolean"
                 }
               },
               "required": [
-                "cron"
+                "type"
               ],
               "additionalProperties": false
             },
-            "enabled": {
-              "type": "boolean"
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "storage_object_created"
+                },
+                "function_slug": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]{1,20}$"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "function_path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "storage_object_created": {
+                  "type": "object",
+                  "properties": {
+                    "bucket_name": {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 63
+                    },
+                    "prefix": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024,
+                      "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
+                    }
+                  },
+                  "required": [
+                    "bucket_name"
+                  ],
+                  "additionalProperties": false
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
             }
-          },
-          "required": [
-            "type"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -4803,7 +4954,7 @@
       "readOnlyHint": false,
       "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": true
     }
   },
   {

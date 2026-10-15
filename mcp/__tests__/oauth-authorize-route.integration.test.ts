@@ -123,6 +123,91 @@ describe('/api/authorize route integration', () => {
     },
   );
 
+  it.each([
+    'https://client.example/callback',
+    'claude://claude.ai/oauth/callback',
+    'http://hermes.cobaltweb.dev/callback',
+  ])('authorizes a stored scalar redirect URI %s', async (redirectUri) => {
+    vi.mocked(model.getClient).mockResolvedValue({
+      ...VALID_CLIENT,
+      redirect_uris: redirectUri,
+    } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', { redirect_uri: redirectUri }),
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it('authorizes valid redirects from a mixed stored array', async () => {
+    const redirectUri = 'custom://client/callback';
+    vi.mocked(model.getClient).mockResolvedValue({
+      ...VALID_CLIENT,
+      redirect_uris: [42, redirectUri],
+    } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+
+    const response = await GET(
+      buildAuthorizeRequest({}, 'read write', { redirect_uri: redirectUri }),
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it('returns invalid_client when stored redirect metadata has no strings', async () => {
+    vi.mocked(model.getClient).mockResolvedValue({
+      ...VALID_CLIENT,
+      redirect_uris: [42, null],
+    } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+
+    const response = await GET(buildAuthorizeRequest());
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_client',
+      error_description: 'Invalid redirect URI metadata',
+    });
+  });
+
+  it.each([
+    ['application/json', '{}'],
+    ['text/plain', 'state=test'],
+  ])(
+    'returns invalid_request for consent submitted as %s',
+    async (contentType, body) => {
+      const response = await POST(
+        new NextRequest(`${SERVER_HOST}/api/authorize`, {
+          method: 'POST',
+          headers: { 'content-type': contentType },
+          body,
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: 'invalid_request',
+        error_description:
+          'Consent submission must use application/x-www-form-urlencoded or multipart/form-data',
+      });
+    },
+  );
+
+  it('returns invalid_request for malformed multipart consent data', async () => {
+    const response = await POST(
+      new NextRequest(`${SERVER_HOST}/api/authorize`, {
+        method: 'POST',
+        headers: { 'content-type': 'multipart/form-data' },
+        body: 'state=test',
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_request',
+      error_description: 'Invalid consent form data',
+    });
+  });
+
   it('sets consent security headers', async () => {
     const response = await GET(buildAuthorizeRequest());
     expect(response.status).toBe(200);
@@ -140,7 +225,7 @@ describe('/api/authorize route integration', () => {
     expect(Number(maxAge![1])).toBeLessThanOrEqual(1800);
   });
 
-  it('renders editable consent with Allow writes checked by default', async () => {
+  it('renders editable consent with Read and write checked by default', async () => {
     const response = await GET(buildAuthorizeRequest());
     const html = await response.text();
     expect(html).toContain('scope-checkbox');
@@ -149,7 +234,7 @@ describe('/api/authorize route integration', () => {
     expect(upstreamAuth).not.toHaveBeenCalled();
   });
 
-  it('defaults Allow writes to unchecked for registration x-read-only without locking it', async () => {
+  it('defaults Read and write to unchecked for registration x-read-only without locking it', async () => {
     vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
       headers: { 'x-read-only': 'true' },
       createdAt: Date.now(),
@@ -157,7 +242,7 @@ describe('/api/authorize route integration', () => {
     const response = await GET(buildAuthorizeRequest());
     const html = await response.text();
     const writeInput = html.match(
-      /<input\s+type="checkbox"\s+name="scopes"\s+value="write"[\s\S]*?\/>/,
+      /<input\s+type="radio"\s+name="scopes"\s+value="write"[\s\S]*?\/>/,
     )?.[0];
     expect(writeInput).toBeTruthy();
     expect(writeInput).not.toContain('checked');
@@ -224,11 +309,11 @@ describe('/api/authorize route integration', () => {
     expect(html).toContain('proj-123');
     expect(html).toContain('Querying');
     expect(html).toContain('Schema');
-    expect(html).toContain('Read-only');
+    expect(html).toContain('Read only');
     expect(html).not.toContain('class="scope-checkbox"');
     expect(html).not.toContain('name="projectMode"');
     expect(html).toContain(
-      'To change these limits, update the connection URL and authorize again.',
+      'To change this access, update the connection URL and authorize again.',
     );
   });
 
@@ -284,6 +369,80 @@ describe('/api/authorize route integration', () => {
     expect(stored.approvedScopes).toEqual(['read', 'write']);
     expect(vi.mocked(upstreamAuth).mock.calls.at(-1)?.[0]).toBe(state);
   });
+
+  it('shows a pinned roleName on confirmation and stores it on the approved grant', async () => {
+    const resource =
+      'https://mcp.neon.tech/mcp?projectId=proj-123&readonly=true&roleName=mcp_pinned_reader';
+    const getResponse = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+    const html = await getResponse.text();
+    expect(html).toContain('<dt>Postgres role:</dt>');
+    expect(html).toContain('mcp_pinned_reader');
+    expect(html).not.toContain('name="projectMode"');
+
+    const state = extractState(html);
+    const postResponse = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [['action', 'approve']],
+    });
+    const stored = await authTransactions.getById(state);
+    expect(postResponse.status).toBe(303);
+    if (stored?.status !== 'approved') {
+      throw new Error('expected approved transaction');
+    }
+    expect(stored.approvedGrant).toEqual({
+      projectId: 'proj-123',
+      scopes: null,
+      roleName: 'mcp_pinned_reader',
+    });
+    expect(stored.approvedScopes).toEqual(['read']);
+  });
+
+  it('makes a roleName-only resource a fixed confirmation', async () => {
+    const resource = 'https://mcp.neon.tech/mcp?roleName=mcp_pinned_reader';
+    const getResponse = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+    const html = await getResponse.text();
+    expect(html).toContain('mcp_pinned_reader');
+    expect(html).not.toContain('name="projectMode"');
+
+    const state = extractState(html);
+    await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [['action', 'approve']],
+    });
+    const stored = await authTransactions.getById(state);
+    if (stored?.status !== 'approved') {
+      throw new Error('expected approved transaction');
+    }
+    expect(stored.approvedGrant.roleName).toBe('mcp_pinned_reader');
+  });
+
+  it.each([
+    'roleName=',
+    'roleName=bad%20role',
+    'roleName=x%3Bdrop',
+    'roleName=a&roleName=b',
+    `roleName=${'r'.repeat(64)}`,
+  ])(
+    'returns invalid_target for a malformed pinned role (%s)',
+    async (query) => {
+      const response = await GET(
+        buildAuthorizeRequest({}, 'read write', {
+          resource: `https://mcp.neon.tech/mcp?readonly=true&${query}`,
+        }),
+      );
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: 'invalid_target',
+        error_description: 'Invalid resource parameter',
+      });
+    },
+  );
 
   it('approves a fixed read-only resource as read even when the client asked for write', async () => {
     const resource =
@@ -375,6 +534,80 @@ describe('/api/authorize route integration', () => {
       scopes: ['querying'],
     });
     expect(stored.approvedScopes).toEqual(['read']);
+  });
+
+  it('stores a Postgres role entered on editable consent', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const getHtml = await getResponse.text();
+    expect(getHtml).toContain('name="roleName"');
+    const state = extractState(getHtml);
+    const postResponse = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'one'],
+        ['projectId', 'proj-edited'],
+        ['roleName', 'app_reader'],
+        ['category', 'querying'],
+        ['scopes', 'read'],
+      ],
+    });
+    const stored = await authTransactions.getById(state);
+    expect(postResponse.status).toBe(303);
+    if (stored?.status !== 'approved') {
+      throw new Error('expected approved transaction');
+    }
+    expect(stored.approvedGrant).toEqual({
+      projectId: 'proj-edited',
+      scopes: ['querying'],
+      roleName: 'app_reader',
+    });
+    expect(stored.approvedScopes).toEqual(['read']);
+  });
+
+  it('re-renders an invalid Postgres role with its error and keeps the transaction pending', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const state = extractState(await getResponse.text());
+    const response = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'one'],
+        ['projectId', 'proj-kept'],
+        ['roleName', 'app-reader'],
+        ['scopes', 'read'],
+      ],
+    });
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain('Enter one Postgres role name');
+    expect(html).toContain('value="app-reader"');
+    expect(html).toContain('value="proj-kept"');
+    expect(await authTransactions.getById(state)).toMatchObject({
+      status: 'pending',
+    });
+  });
+
+  it('keeps the entered role when the project ID is missing', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const state = extractState(await getResponse.text());
+    const response = await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'one'],
+        ['projectId', ''],
+        ['roleName', 'app_reader'],
+        ['scopes', 'read'],
+      ],
+    });
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain('Enter the project ID this connection should use.');
+    expect(html).toContain('value="app_reader"');
   });
 
   it('ignores a leftover project ID when All projects is selected', async () => {

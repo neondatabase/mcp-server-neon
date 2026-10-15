@@ -239,6 +239,123 @@ describe('parseConsentPost', () => {
     expect(parsed.error.field).toBe('projectId');
   });
 
+  it('pins a trimmed Postgres role from the editable form', () => {
+    const parsed = parseConsentPost({
+      form: form([
+        ['action', 'approve'],
+        ['projectMode', 'all'],
+        ['roleName', ' app_reader '],
+        ['category', 'querying'],
+        ['scopes', 'read'],
+      ]),
+      mode: 'editable',
+      ceiling: editableCeiling(['read', 'write']),
+    });
+    expect(parsed).toEqual({
+      action: 'approve',
+      confirmation: false,
+      selection: {
+        grant: {
+          projectId: null,
+          scopes: ['querying'],
+          roleName: 'app_reader',
+        },
+        grantWrite: false,
+      },
+    });
+  });
+
+  it('pins no role when the role field is empty or absent', () => {
+    for (const entries of [[['roleName', '   ']], []] satisfies Array<
+      Array<[string, string]>
+    >) {
+      const parsed = parseConsentPost({
+        form: form([
+          ['action', 'approve'],
+          ['projectMode', 'all'],
+          ['scopes', 'read'],
+          ...entries,
+        ]),
+        mode: 'editable',
+        ceiling: editableCeiling(['read', 'write']),
+      });
+      if (parsed.action !== 'approve' || parsed.confirmation) {
+        throw new Error('expected editable approval');
+      }
+      expect(parsed.selection.grant).not.toHaveProperty('roleName');
+    }
+  });
+
+  it('re-renders an invalid Postgres role as a field error with the selection kept', () => {
+    const parsed = parseConsentPost({
+      form: form([
+        ['action', 'approve'],
+        ['projectMode', 'one'],
+        ['projectId', 'proj-example'],
+        ['roleName', 'app-reader'],
+        ['category', 'querying'],
+        ['scopes', 'read'],
+        ['scopes', 'write'],
+      ]),
+      mode: 'editable',
+      ceiling: editableCeiling(['read', 'write']),
+    });
+    expect(parsed).toMatchObject({
+      action: 'invalid',
+      error: {
+        kind: 'field',
+        field: 'roleName',
+        selection: {
+          projectMode: 'one',
+          projectId: 'proj-example',
+          roleName: 'app-reader',
+          categories: ['querying'],
+          grantWrite: true,
+        },
+      },
+    });
+  });
+
+  it('rejects a duplicated role field', () => {
+    const parsed = parseConsentPost({
+      form: form([
+        ['action', 'approve'],
+        ['projectMode', 'all'],
+        ['roleName', 'app_reader'],
+        ['roleName', 'neondb_owner'],
+        ['scopes', 'read'],
+      ]),
+      mode: 'editable',
+      ceiling: editableCeiling(['read', 'write']),
+    });
+    expect(parsed).toEqual({
+      action: 'invalid',
+      error: { kind: 'invalid_request', description: 'Invalid Postgres role' },
+    });
+  });
+
+  it('rejects a role field on a confirmation post', () => {
+    const parsed = parseConsentPost({
+      form: form([
+        ['action', 'approve'],
+        ['roleName', 'neondb_owner'],
+      ]),
+      mode: 'confirmation',
+      ceiling: confirmationCeiling({
+        resourceGrant: { ...DEFAULT_GRANT, roleName: 'app_reader' },
+        requestScopes: ['read'],
+        resourceReadOnlyHard: true,
+      }),
+    });
+    expect(parsed).toEqual({
+      action: 'invalid',
+      error: {
+        kind: 'invalid_request',
+        description: 'This connection grant cannot be edited on this page',
+      },
+    });
+  });
+
   it('ignores a leftover project ID when All projects is selected', () => {
     const parsed = parseConsentPost({
       form: form([

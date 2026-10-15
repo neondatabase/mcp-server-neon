@@ -50,16 +50,48 @@ describe('/api/list-tools endpoint', () => {
     });
   });
 
+  it('previews a pinned roleName: grant, notice, and no connection strings', async () => {
+    const body = await callListTools({
+      readonly: 'true',
+      roleName: 'mcp_pinned_reader',
+    });
+    expect(body.grant).toEqual({
+      projectId: null,
+      scopes: null,
+      roleName: 'mcp_pinned_reader',
+    });
+    expect(body.notices?.some((n) => n.includes('"mcp_pinned_reader"'))).toBe(
+      true,
+    );
+    const names = body.tools.map((tool) => tool.name);
+    expect(names).toContain('run_sql');
+    expect(names).not.toContain('get_connection_string');
+  });
+
+  it('rejects a malformed roleName with 400', async () => {
+    const res = await GET(
+      new Request('http://localhost/api/list-tools?roleName=a-b'),
+    );
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({ error: 'invalid_request' }),
+    );
+  });
+
   it('filters by scopes when category param is present', async () => {
     const body = await callListTools({ category: 'querying' });
     expect(body.grant.scopes).toEqual(['querying']);
-    expect(body.tools).toHaveLength(11);
+    expect(body.tools).toHaveLength(12);
   });
 
   it('returns only always-available tools when scopes are all invalid', async () => {
     const body = await callListTools({ category: 'foo,bar' });
     expect(body.grant.scopes).toEqual([]);
-    expect(body.tools.map((t) => t.name).sort()).toEqual(['fetch', 'search']);
+    expect(body.tools.map((t) => t.name).sort()).toEqual([
+      'fetch',
+      'search',
+      'send_feedback',
+    ]);
     expect(body.notices?.some((n) => n.includes('foo, bar'))).toBe(true);
     expect(
       body.warnings?.some((w) => w.includes('No valid scope categories')),
@@ -165,7 +197,7 @@ describe('/api/list-tools endpoint', () => {
     it('surfaces the write-mode notice in the default response', async () => {
       const body = await callListTools();
       expect(body.notices).toBeDefined();
-      expect(body.notices).toHaveLength(1);
+      expect(body.notices).toHaveLength(2);
       expect(body.notices?.[0]).toContain('Write mode active');
       // Per-tool descriptions must NOT carry the notice suffix on this
       // endpoint (issue #257).
@@ -177,7 +209,7 @@ describe('/api/list-tools endpoint', () => {
     it('surfaces the read-only notice at top level (not in each description) when readonly=true', async () => {
       const body = await callListTools({ readonly: 'true' });
       expect(body.notices).toBeDefined();
-      expect(body.notices).toHaveLength(1);
+      expect(body.notices).toHaveLength(2);
       expect(body.notices?.[0]).toContain('read-only permissions');
       // Per-tool descriptions must NOT carry the <notice> suffix anymore —
       // that was the duplication the issue called out.
@@ -189,7 +221,12 @@ describe('/api/list-tools endpoint', () => {
 
     it('surfaces the project-scope notice at top level (not in each description)', async () => {
       const body = await callListTools({ projectId: 'proj-123' });
-      expect(body.notices?.some((n) => n.includes('proj-123'))).toBe(true);
+      expect(
+        body.notices?.some((n) =>
+          n.includes('always pass it on an unscoped connection'),
+        ),
+      ).toBe(true);
+      expect(body.notices?.join(' ')).not.toContain('proj-123');
       for (const tool of body.tools) {
         expect(tool.description).not.toContain('<notice>');
       }
@@ -202,7 +239,7 @@ describe('/api/list-tools endpoint', () => {
       });
       expect(body.notices).toHaveLength(2);
       expect(body.notices?.[0]).toContain('read-only');
-      expect(body.notices?.[1]).toContain('proj-123');
+      expect(body.notices?.[1]).toContain('an explicit value must match');
     });
   });
 

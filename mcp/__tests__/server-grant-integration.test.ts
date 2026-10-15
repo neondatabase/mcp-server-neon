@@ -151,7 +151,10 @@ describe('createMcpServer grant + read-only integration', () => {
       await client.connect(clientTransport);
       const instructions = client.getInstructions() ?? '';
       expect(instructions).toContain('read-only permissions');
-      expect(instructions).toContain('scoped to one project only (proj-123)');
+      expect(instructions).toContain(
+        'always pass it on an unscoped connection',
+      );
+      expect(instructions).not.toContain('proj-123');
       const listed = await client.listTools();
       for (const tool of listed.tools) {
         expect(tool.description ?? '').not.toContain('read-only permissions');

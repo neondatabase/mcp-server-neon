@@ -1,7 +1,13 @@
 import { parseResourceIdentifier } from '../../lib/oauth/protected-resource-metadata';
 import { isReadOnly } from '../utils/read-only';
+import { ROLE_NAME_PARAM } from '../utils/grant-context';
 
-const GRANT_QUERY_KEYS = ['projectId', 'category', 'readonly'] as const;
+const GRANT_QUERY_KEYS = [
+  'projectId',
+  'category',
+  'readonly',
+  ROLE_NAME_PARAM,
+] as const;
 
 export type ConsentMode = 'confirmation' | 'editable';
 

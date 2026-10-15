@@ -2,8 +2,6 @@
 
 This file provides guidance to AI agents when working with code in this repository.
 
-> `CLAUDE.md` is a symlink to this file, so Claude Code and other tooling read the same content.
-
 ## Project Overview
 
 This is the **Neon MCP Server** - a Model Context Protocol server that bridges natural language requests to the Neon API, enabling LLMs to manage Lakebase Postgres databases on Neon through conversational commands. The project implements a stateless Streamable HTTP transport with OAuth authentication support.
@@ -183,7 +181,7 @@ infrastructure.
 6. **Grant Context & Tool Filtering (`mcp/utils/grant-context.ts`, `mcp/tools/grant-filter.ts`)**
    - Fine-grained access control beyond plain read/write: per-category scopes (`projects`, `branches`, `endpoints`, `snapshots`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`, `functions`, `storage`) and optional project-scoping to a single `projectId`
    - Grant resolved from OAuth resource URI query params (authorize-time), OAuth token grant field (runtime), or direct MCP URL query params for API-key auth. Those URL params stay camelCase (`projectId`, `category`, `readonly`).
-   - `grant-filter.ts` filters `NEON_TOOLS` by scope category, hides project-agnostic tools in project-scoped mode, and strips `project_id` from input schemas when scoped
+   - `grant-filter.ts` filters `NEON_TOOLS` by scope category and hides project-agnostic tools in project-scoped mode. Project-aware published schemas keep `project_id` optional across grants; unscoped calls must supply it, while scoped calls can omit it or provide the matching grant ID. Injection precedes the original full handler schema validation.
    - Exposed publicly via `GET /api/list-tools` (stateless preview of tool visibility for a given grant)
 
 ### Key Architectural Patterns
@@ -195,6 +193,10 @@ infrastructure.
 - **Stateless Design**: The server is designed for serverless deployment. Tools like migrations and query tuning create temporary branches but do NOT store state in memory. Instead, all context (branch IDs, migration SQL, etc.) is returned to the LLM, which passes it back to subsequent tool calls. This enables horizontal scaling on Vercel.
 
 - **Read-Only Mode** (`mcp/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. Read-only mode is determined by priority: `X-Neon-Read-Only` header > `x-read-only` header (legacy) > OAuth scope (only `read` scope = read-only) > default (false). The module also exports `SCOPE_DEFINITIONS` for human-readable scope labels and `hasWriteScope()` to check for write permissions.
+
+  A `readOnlySafe` tool that runs caller-supplied SQL must run exactly one caller-supplied statement, as a prepared query, in its own `READ ONLY` transaction, as `run_sql` does. `run_sql_transaction` is not `readOnlySafe` because its statements share one transaction, so a `COMMIT` or `SET TRANSACTION READ WRITE` statement can end the transaction or switch it to read-write.
+
+  Known exception: `describe_branch` is `readOnlySafe` and runs `CREATE OR REPLACE FUNCTION public.show_db_tree()` outside a `READ ONLY` transaction (`DESCRIBE_DATABASE_STATEMENTS` in `mcp/tools/utils.ts`). The SQL is fixed, the function body only reads `pg_database`, `pg_namespace`, `pg_class`, and `pg_proc`, and the tool then calls it to return the tree and drops it (`DROP_DB_TREE_FUNCTION_STATEMENT`) in the same transaction. Treat this as safe; do not add it to a new tool.
 
 - **MCP Tool Annotations**: All tools include MCP-standard annotations for client hints:
   - `title`: Human-readable tool name

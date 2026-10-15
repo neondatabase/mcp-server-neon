@@ -8,6 +8,7 @@ import { handleGetNeonAuthConfig } from './handlers/neon-auth-get-config';
 import { handleSearch } from './handlers/search';
 import { handleFetch } from './handlers/fetch';
 import { getDocResource, listDocsResources } from './handlers/docs';
+import { sendFeedback } from './handlers/feedback';
 
 import { getDefaultDatabase, splitSqlStatements } from './utils';
 import { startSpan } from '@sentry/node';
@@ -36,6 +37,7 @@ import {
   runSqlInputSchema,
   runSqlTransactionInputSchema,
   searchInputSchema,
+  sendFeedbackInputSchema,
 } from './toolsSchema';
 import { handleListOrganizations } from './handlers/list-orgs';
 import { handleGetConnectionString } from './handlers/connection-string';
@@ -59,11 +61,15 @@ async function handleRunSql(
     databaseName,
     projectId,
     branchId,
+    roleName,
+    computeId,
   }: {
     sql: string;
     databaseName?: string;
     projectId: string;
     branchId?: string;
+    roleName?: string;
+    computeId?: string;
   },
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
@@ -74,6 +80,8 @@ async function handleRunSql(
         projectId,
         branchId,
         databaseName,
+        roleName,
+        computeId,
       },
       neonClient,
       extra,
@@ -101,11 +109,15 @@ async function handleRunSqlTransaction(
     databaseName,
     projectId,
     branchId,
+    roleName,
+    computeId,
   }: {
     sqlStatements: string[];
     databaseName?: string;
     projectId: string;
     branchId?: string;
+    roleName?: string;
+    computeId?: string;
   },
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
@@ -115,6 +127,8 @@ async function handleRunSqlTransaction(
       projectId,
       branchId,
       databaseName,
+      roleName,
+      computeId,
     },
     neonClient,
     extra,
@@ -983,6 +997,8 @@ const HOST_HANDLERS: ToolHandlers = {
         databaseName: params.database_name,
         projectId: params.project_id,
         branchId: params.branch_id,
+        roleName: params.role_name,
+        computeId: params.compute_id,
       },
       neonClient,
       extra,
@@ -1001,6 +1017,8 @@ const HOST_HANDLERS: ToolHandlers = {
           databaseName: params.database_name,
           projectId: params.project_id,
           branchId: params.branch_id,
+          roleName: params.role_name,
+          computeId: params.compute_id,
         },
         neonClient,
         extra,
@@ -1398,6 +1416,14 @@ You MUST follow these steps:
           text: content,
         },
       ],
+    };
+  },
+
+  send_feedback: async (args) => {
+    const params = parseHost(sendFeedbackInputSchema, args?.params);
+    await sendFeedback({ feedback: params.feedback });
+    return {
+      content: [{ type: 'text', text: 'Feedback received. Thank you!' }],
     };
   },
 };

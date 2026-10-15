@@ -8,6 +8,7 @@ import {
   getAccessControlWarnings,
   formatAccessControlInstructions,
   injectProjectId,
+  ALWAYS_AVAILABLE_TOOLS,
 } from '../tools/grant-filter';
 import type { GrantContext } from '../utils/grant-context';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
@@ -44,7 +45,7 @@ describe('filterToolsForGrant', () => {
       grant({ scopes: ['querying'] }),
     );
     const names = tools.map((t) => t.name);
-    expect(tools).toHaveLength(11);
+    expect(tools).toHaveLength(12);
     expect(names).toContain('run_sql');
     expect(names).toContain('search');
     expect(names).toContain('fetch');
@@ -53,7 +54,11 @@ describe('filterToolsForGrant', () => {
 
   it('returns only always-available tools when scopes are empty', () => {
     const tools = filterToolsForGrant(NEON_TOOLS, grant({ scopes: [] }));
-    expect(tools.map((t) => t.name).sort()).toEqual(['fetch', 'search']);
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      'fetch',
+      'search',
+      'send_feedback',
+    ]);
   });
 
   it('hides project-agnostic tools in project-scoped mode', () => {
@@ -76,7 +81,7 @@ describe('filterToolsForGrant', () => {
     expect(names).toContain('list_project_members');
   });
 
-  it('strips host and generated project_id from published schemas', () => {
+  it('keeps optional host and generated project_id in published schemas', () => {
     const tools = filterToolsForGrant(
       NEON_TOOLS,
       grant({ projectId: 'proj-123' }),
@@ -88,7 +93,11 @@ describe('filterToolsForGrant', () => {
     if (!(runSql?.inputSchema instanceof z.ZodObject)) {
       throw new Error('run_sql must keep a Zod 3 object schema');
     }
-    expect('project_id' in runSql.inputSchema.shape).toBe(false);
+    expect('project_id' in runSql.inputSchema.shape).toBe(true);
+    expect(runSql.inputSchema.shape.project_id.description).toBe(
+      'The ID of the project to execute the query against. Required for an unscoped connection. ' +
+        'May be omitted when the connection is scoped to one project; if provided, it must match that project.',
+    );
     expect('sql' in runSql.inputSchema.shape).toBe(true);
     expect(runSql.inputSchema.safeParse({ sql: 'select 1' }).success).toBe(
       true,
@@ -99,21 +108,22 @@ describe('filterToolsForGrant', () => {
     expect(
       runSql.inputSchema.safeParse({ sql: 'select 1', project_id: 'p' })
         .success,
-    ).toBe(false);
+    ).toBe(true);
 
     const getProject = tools.find((tool) => tool.name === 'describe_project');
     expect(getProject && isZod4Object(getProject.inputSchema)).toBe(true);
     if (!getProject || !isZod4Object(getProject.inputSchema)) {
       throw new Error('describe_project must keep a Zod 4 object schema');
     }
-    expect('project_id' in getProject.inputSchema.shape).toBe(false);
+    expect('project_id' in getProject.inputSchema.shape).toBe(true);
+    expect(getProject.inputSchema.safeParse({}).success).toBe(true);
 
     const queryLogs = tools.find((tool) => tool.name === 'query_logs');
     expect(queryLogs && isZod4Object(queryLogs.inputSchema)).toBe(true);
     if (!queryLogs || !isZod4Object(queryLogs.inputSchema)) {
       throw new Error('query_logs must keep a Zod 4 object schema');
     }
-    expect('project_id' in queryLogs.inputSchema.shape).toBe(false);
+    expect('project_id' in queryLogs.inputSchema.shape).toBe(true);
     expect('branch_id' in queryLogs.inputSchema.shape).toBe(true);
     expect(
       queryLogs.inputSchema.safeParse({
@@ -136,7 +146,7 @@ describe('filterToolsForGrant', () => {
     if (!restoreSnapshot || !isZod4Object(restoreSnapshot.inputSchema)) {
       throw new Error('restore_snapshot must keep a Zod 4 object schema');
     }
-    expect('project_id' in restoreSnapshot.inputSchema.shape).toBe(false);
+    expect('project_id' in restoreSnapshot.inputSchema.shape).toBe(true);
     expect(
       restoreSnapshot.inputSchema.safeParse({
         snapshot_id: 'ss-1',
@@ -150,7 +160,7 @@ describe('filterToolsForGrant', () => {
       NEON_TOOLS,
       grant({ projectId: 'proj-123', scopes: ['querying'] }),
     );
-    expect(tools).toHaveLength(9);
+    expect(tools).toHaveLength(10);
     const names = tools.map((t) => t.name);
     expect(names).toContain('run_sql');
     expect(names).not.toContain('search');
@@ -162,6 +172,7 @@ describe('getAvailableTools', () => {
   it('applies read-only filter after grant filtering', () => {
     const tools = getAvailableTools(grant({ scopes: ['querying'] }), true);
     expect(tools).toHaveLength(7);
+    expect(tools.map((tool) => tool.name)).not.toContain('run_sql_transaction');
     for (const tool of tools) {
       expect(tool.readOnlySafe).toBe(true);
     }
@@ -212,7 +223,7 @@ describe('getFilteredTools (no notice suffix)', () => {
 describe('getAccessControlNotices', () => {
   it('emits the write-mode destructive-tools notice by default', () => {
     const notices = getAccessControlNotices(grant(), false);
-    expect(notices).toHaveLength(1);
+    expect(notices).toHaveLength(2);
     expect(notices[0]).toContain('Write mode active');
     expect(notices[0]).toContain('destructiveHint');
   });
@@ -224,20 +235,23 @@ describe('getAccessControlNotices', () => {
 
   it('suppresses the write-mode notice in read-only mode', () => {
     const notices = getAccessControlNotices(grant(), true);
-    expect(notices).toHaveLength(1);
+    expect(notices).toHaveLength(2);
     expect(notices[0]).toContain('read-only permissions');
     expect(notices[0]).toContain('authorizing again when using OAuth');
+    expect(notices[0]).toContain('Neon resources stay read-only');
+    expect(notices[0]).toContain('send_feedback');
     expect(notices[0]).not.toContain('Write mode active');
   });
 
-  it('returns the project-scope notice when projectId is set', () => {
-    const notices = getAccessControlNotices(grant({ projectId: 'p-1' }), false);
-    expect(
-      notices.some((n) => n.includes('scoped to one project only (p-1)')),
-    ).toBe(true);
-    expect(notices.some((n) => n.includes('Do not send `project_id`'))).toBe(
-      true,
+  it('keeps project-ID instructions independent of the project grant', () => {
+    const scoped = getAccessControlNotices(grant({ projectId: 'p-1' }), true);
+    const unscoped = getAccessControlNotices(grant(), true);
+    expect(scoped).toEqual(unscoped);
+    expect(scoped.join(' ')).toContain(
+      'always pass it on an unscoped connection',
     );
+    expect(scoped.join(' ')).toContain('an explicit value must match');
+    expect(scoped.join(' ')).not.toContain('p-1');
   });
 
   it('returns both notices when both modes are active', () => {
@@ -278,7 +292,9 @@ describe('getAccessControlNotices', () => {
       false,
     );
     expect(instructions).toContain('compute');
-    expect(instructions).toContain('No tools are available');
+    expect(instructions).toContain(
+      'Only the "send_feedback" tool is available',
+    );
   });
 });
 
@@ -289,13 +305,15 @@ describe('getAccessControlWarnings', () => {
     expect(warnings[0]).toContain('No valid scope categories');
   });
 
-  it('warns with no-tools message when project-scoped and scopes are invalid', () => {
+  it('warns that only send_feedback remains when project-scoped and scopes are invalid', () => {
     const warnings = getAccessControlWarnings(
       grant({ projectId: 'proj-123', scopes: [] }),
       false,
     );
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('No tools are available.');
+    expect(warnings[0]).toContain(
+      'Only the "send_feedback" tool is available.',
+    );
   });
 
   it('returns no warnings for null or valid scopes when no access restrictions are set', () => {
@@ -309,6 +327,16 @@ describe('getAccessControlWarnings', () => {
 });
 
 describe('injectProjectId', () => {
+  it('accepts a matching explicit ID and rejects a conflicting ID', () => {
+    const scoped = grant({ projectId: 'proj-123' });
+    expect(injectProjectId({ project_id: 'proj-123' }, scoped)).toEqual({
+      project_id: 'proj-123',
+    });
+    expect(() =>
+      injectProjectId({ project_id: 'other-project' }, scoped),
+    ).toThrow(`does not match this connection's project "proj-123"`);
+  });
+
   it('injects project_id for host and generated tools when grant is project-scoped', () => {
     const args = { branch_id: 'br-1' };
     const scoped = grant({ projectId: 'proj-123' });
@@ -371,7 +399,7 @@ describe('scope coverage sanity', () => {
       grant({ scopes: ['endpoints'] }),
     )
       .map((tool) => tool.name)
-      .filter((name) => name !== 'search' && name !== 'fetch')
+      .filter((name) => !ALWAYS_AVAILABLE_TOOLS.has(name))
       .sort();
     expect(names).toEqual([
       'create_postgres_endpoint',
@@ -392,7 +420,7 @@ describe('scope coverage sanity', () => {
       grant({ scopes: ['snapshots'] }),
     )
       .map((tool) => tool.name)
-      .filter((name) => name !== 'search' && name !== 'fetch')
+      .filter((name) => !ALWAYS_AVAILABLE_TOOLS.has(name))
       .sort();
     expect(names).toEqual([
       'create_snapshot',

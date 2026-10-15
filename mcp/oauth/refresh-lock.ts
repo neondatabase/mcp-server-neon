@@ -328,31 +328,25 @@ export async function withRefreshLock<T>(
     }
 
     if (acquired === 'OK') {
-      // A peer may have just released after writing the cache and before our
-      // SET landed. Cheap to check; saves an upstream call when it hits.
-      const fast = await peekResult();
-      if (fast !== undefined) {
-        // Best-effort release; we own a fresh lock no one is waiting on.
-        try {
-          await withTimeout(
-            redis.eval(RELEASE_LUA, { keys: [key], arguments: [owner] }),
-            'release',
-          );
-        } catch {
-          /* TTLs out fast */
-        }
-        return fast;
-      }
-      if (takeoverAttempted) {
-        // Useful in log aggregation: how often does the vanished-holder
-        // pattern actually fire?
-        logger.info('refresh-lock waiter took over after holder vanished');
-      }
       const hint: ReleaseHint = {};
-      // runWithHeartbeat keeps the short LOCK_TTL alive while execute runs,
-      // and on completion releases via the appropriate Lua based on hint.
-      return await runWithHeartbeat(redis, refreshToken, owner, hint, () =>
-        execute(hint),
+      return await runWithHeartbeat(
+        redis,
+        refreshToken,
+        owner,
+        hint,
+        async () => {
+          // A peer may have just released after writing the cache and before our
+          // SET landed. This check runs inside the release-protected path because
+          // a cached transient failure is reported by throwing.
+          const fast = await peekResult();
+          if (fast !== undefined) {
+            return fast;
+          }
+          if (takeoverAttempted) {
+            logger.info('refresh-lock waiter took over after holder vanished');
+          }
+          return execute(hint);
+        },
       );
     }
 

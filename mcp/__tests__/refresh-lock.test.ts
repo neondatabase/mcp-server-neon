@@ -110,6 +110,25 @@ describe('withRefreshLock', () => {
     expect(evalSpy).toHaveBeenCalledTimes(1); // still releases
   });
 
+  it('releases the acquired lock when the post-acquisition peek throws', async () => {
+    setSpy.mockResolvedValue('OK');
+    const { withRefreshLock } = await loadModule();
+    const execute = vi.fn();
+    const peekError = new Error('transient marker');
+
+    await expect(
+      withRefreshLock('rt', execute, async () => {
+        throw peekError;
+      }),
+    ).rejects.toBe(peekError);
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(evalSpy).toHaveBeenCalledTimes(1);
+    const setOwner = setSpy.mock.calls[0][1];
+    const evalArgs = evalSpy.mock.calls[0][1];
+    expect(evalArgs.arguments).toContain(setOwner);
+  });
+
   it('releases the lock with owner-token comparison even when execute throws', async () => {
     setSpy.mockResolvedValue('OK');
     const { withRefreshLock } = await loadModule();

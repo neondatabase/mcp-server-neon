@@ -23,6 +23,7 @@ import {
   fetchInputSchema,
   listDocsResourcesInputSchema,
   getDocResourceInputSchema,
+  sendFeedbackInputSchema,
 } from './toolsSchema';
 
 type HostToolDraft = {
@@ -76,7 +77,10 @@ const HOST_TOOL_DRAFTS = [
     description:
       'Execute multiple SQL statements as one transaction. If a prior step created a temporary branch, pass that branch_id. NEVER run destructive SQL autonomously; always ask the user first.',
     inputSchema: runSqlTransactionInputSchema,
-    readOnlySafe: true,
+    // Not `readOnlySafe`: each statement runs in the same session, so a
+    // leading `COMMIT` or `SET TRANSACTION READ WRITE` leaves the read-only
+    // transaction and later statements can write.
+    readOnlySafe: false,
     annotations: {
       title: 'Run SQL Transaction',
       readOnlyHint: false,
@@ -164,7 +168,7 @@ const HOST_TOOL_DRAFTS = [
     name: 'get_connection_string' as const,
     scope: 'branches',
     description:
-      'Get a PostgreSQL connection string for a Neon database. The branch must have a compute endpoint. `create_project` and `create_branch` do not return one; call this after they succeed. All parameters are optional; the tool resolves the project, branch, and database automatically if not specified. Requires write access: the connection string carries a privileged role password, so it is unavailable in read-only mode. A read-only caller who needs a DATABASE_URL must copy it from https://console.neon.tech manually.',
+      'Get a PostgreSQL connection string for a Neon database. The branch must have a compute endpoint. `create_project` and `create_branch` do not return one; call this after they succeed. Branch, compute, and database are optional and resolved automatically if not specified; `project_id` follows the connection scope. Requires write access: the connection string carries a privileged role password, so it is unavailable in read-only mode. A read-only caller who needs a DATABASE_URL must copy it from https://console.neon.tech manually.',
     inputSchema: getConnectionStringInputSchema,
     // Not `readOnlySafe` despite `readOnlyHint: true`: the call mutates nothing,
     // but the URI it returns embeds the branch owner role's password. That role
@@ -200,14 +204,14 @@ const HOST_TOOL_DRAFTS = [
     name: 'explain_sql_statement' as const,
     scope: 'querying',
     description:
-      'Analyze the query execution plan for a SQL statement using EXPLAIN ANALYZE. Do not use when you need to execute the query for results (use `run_sql` instead).',
+      'Generate the execution plan for a SQL statement. When `analyze` is true, PostgreSQL executes the statement and any side effects. Use `analyze: false` to inspect a statement without executing it. Never analyze potentially destructive SQL autonomously. Do not use when you need query results (use `run_sql` instead).',
     inputSchema: explainSqlStatementInputSchema,
     readOnlySafe: true,
     annotations: {
       title: 'Explain SQL Statement',
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },
@@ -326,6 +330,22 @@ const HOST_TOOL_DRAFTS = [
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
+      openWorldHint: true,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'send_feedback' as const,
+    scope: null,
+    description:
+      'Send anonymous feedback about Neon or this MCP server to the Neon team. Only call this when the user asks to give feedback. Sends only the feedback text, not account, project, or connection details.',
+    inputSchema: sendFeedbackInputSchema,
+    // Does not change any Neon resource, so it stays available in read-only mode.
+    readOnlySafe: true,
+    annotations: {
+      title: 'Send Feedback',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
       openWorldHint: true,
     } satisfies ToolAnnotations,
   },

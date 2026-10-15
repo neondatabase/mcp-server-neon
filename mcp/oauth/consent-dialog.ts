@@ -1,11 +1,16 @@
 import he from 'he';
+import { SCOPE_DEFINITIONS } from '../utils/read-only';
 import {
   SCOPE_CATEGORIES,
   type GrantContext,
   type ScopeCategory,
 } from '../utils/grant-context';
-import { SCOPE_DEFINITIONS } from '../utils/read-only';
 import type { ConsentMode } from './consent-mode';
+import type { ConsentField } from './consent-approval';
+import {
+  ALWAYS_AVAILABLE_TOOLS,
+  PINNED_ROLE_WITHHELD_TOOLS,
+} from '../tools/grant-filter';
 import {
   filterConsentCatalog,
   getConsentToolCatalog,
@@ -49,6 +54,7 @@ type ConsentView = {
   project: ConsentProject;
   categories: ConsentCategories;
   unknownCategoryValues: string[];
+  roleName?: string;
   tools: ConsentTool[];
 };
 
@@ -116,7 +122,7 @@ function renderClientVerification(client: ConsentClient): string {
 
   return `
     <details class="client-verify">
-      <summary><span>App details · ${he.escape(summary)}</span></summary>
+      <summary><span class="app-details-title">App details</span><span class="client-summary">${he.escape(summary)}</span></summary>
       <dl class="client-meta">
         ${websiteHtml}
         ${redirectHtml}
@@ -127,9 +133,12 @@ function renderClientVerification(client: ConsentClient): string {
 type ConsentFormState = {
   projectMode: 'all' | 'one';
   projectId: string;
+  roleName: string;
   categories: ScopeCategory[];
   writeChecked: boolean;
 };
+
+type ConsentFieldError = { field: ConsentField; message: string };
 
 type ConsentDialogProps = {
   client: ConsentClient;
@@ -138,7 +147,7 @@ type ConsentDialogProps = {
   writeChecked: boolean;
   showWriteControl: boolean;
   grant: GrantContext;
-  fieldError?: { field: 'projectId'; message: string };
+  fieldError?: ConsentFieldError;
   formState?: ConsentFormState;
 };
 
@@ -152,6 +161,7 @@ function formStateFromGrant({
   return {
     projectMode: grant.projectId ? 'one' : 'all',
     projectId: grant.projectId ?? '',
+    roleName: grant.roleName ?? '',
     categories:
       grant.scopes === null ? [...SCOPE_CATEGORIES] : [...grant.scopes],
     writeChecked,
@@ -198,6 +208,7 @@ export function buildConsentView({
     project,
     categories,
     unknownCategoryValues: grant.unknownCategories ?? [],
+    ...(grant.roleName !== undefined ? { roleName: grant.roleName } : {}),
     tools,
   };
 }
@@ -259,37 +270,19 @@ export function visibleToolCount(view: ConsentView): number {
 
 function toolsSummary(view: ConsentView): string {
   const count = visibleToolCount(view);
-  const toolWord = count === 1 ? 'tool' : 'tools';
-  const groups = new Set(view.tools.map(categoryLabelForTool)).size;
-  const groupWord = groups === 1 ? 'group' : 'groups';
-  return `${String(count)} ${toolWord} · ${String(groups)} ${groupWord}`;
+  return `${String(count)} ${count === 1 ? 'tool' : 'tools'} available`;
 }
 
 function renderToolSections(view: ConsentView, interactive: boolean): string {
-  if (view.tools.length === 0 && !interactive) {
-    return `
-    <section class="panel panel-tools">
-      <h2>Available tools</h2>
-      <p class="empty-tools">None.</p>
-    </section>`;
-  }
   const collapse = visibleToolCount(view) > COLLAPSE_ABOVE;
-  const body = `<div class="tool-content" id="available-tools-content" data-tool-content>${renderToolGroupList(view.tools)}</div>`;
-  const summary = toolsSummary(view);
-  const toggle =
-    collapse || interactive
-      ? `<button type="button" class="tool-toggle" data-tool-toggle aria-controls="available-tools-content" aria-expanded="false"${collapse ? '' : ' hidden'}>View tools</button>`
-      : '';
-  const collapsedAttr = collapse ? ' data-tools-collapsed' : '';
   return `
-    <section class="panel panel-tools">
-      <h2>Available tools</h2>
-      <div class="tool-block${collapse ? ' is-collapsed' : ''}" data-tools${collapsedAttr}>
+    <section class="panel panel-tools" aria-label="Included tools">
+      <div class="tool-block${collapse ? ' is-collapsed' : ''}" data-tools>
         <div class="tool-block-head">
-          <div class="tool-block-title" data-tools-summary>${he.escape(summary)}</div>
-          ${toggle}
+          <button type="button" class="tool-toggle" data-tool-toggle aria-controls="available-tools-content" aria-expanded="${!collapse}">Included tools</button>
+          ${interactive ? '' : `<span class="tool-block-title" data-tools-summary>${toolsSummary(view)}</span>`}
         </div>
-        ${body}
+        <div class="tool-content" id="available-tools-content" data-tool-content>${renderToolGroupList(view.tools)}</div>
       </div>
     </section>`;
 }
@@ -316,9 +309,9 @@ function emptyGrantNote(view: ConsentView): string {
     return '';
   }
   if (view.project.kind === 'one') {
-    return `<p class="note">No tools are available for this connection.</p>`;
+    return `<p class="note">No tool categories. Send Feedback stays available.</p>`;
   }
-  return `<p class="note">No tool categories. Search and Fetch stay available.</p>`;
+  return `<p class="note">No tool categories. Search, Fetch, and Send Feedback stay available.</p>`;
 }
 
 function renderGrantSummary(view: ConsentView): string {
@@ -335,42 +328,96 @@ function renderGrantSummary(view: ConsentView): string {
       : '';
 
   return `
-    <section class="panel">
+    <section class="panel panel-requested">
       <h2>Requested access</h2>
       <dl class="facts">
         <div>
-          <dt>Project</dt>
+          <dt>Project:</dt>
           <dd>${projectValue}</dd>
         </div>
         <div>
-          <dt>Tool categories</dt>
+          <dt>Tool categories:</dt>
           <dd>${he.escape(renderCategories(view.categories))}</dd>
-        </div>
+        </div>${
+          view.roleName !== undefined
+            ? `
+        <div>
+          <dt>Postgres role:</dt>
+          <dd><span class="mono">${he.escape(view.roleName)}</span></dd>
+        </div>`
+            : ''
+        }
       </dl>
       ${unknownHtml}
       ${emptyGrantNote(view)}
-      <p class="note">
-        To change these limits, update the connection URL and authorize again.
+      <p class="note connection-note">
+        <img src="/images/consent/info-outline.svg" alt="" width="18" height="18">
+        To change this access, update the connection URL and authorize again.
       </p>
     </section>`;
 }
 
 function categorySelectionSummary(categories: ScopeCategory[]): string {
-  if (categories.length === 0) {
-    return 'None selected';
-  }
-  if (categories.length === SCOPE_CATEGORIES.length) {
-    return 'All selected';
-  }
-  return `${String(categories.length)} of ${String(SCOPE_CATEGORIES.length)} selected`;
+  return `${String(categories.length)}/${String(SCOPE_CATEGORIES.length)} selected`;
+}
+
+function renderRoleField({
+  formState,
+  fieldError,
+}: {
+  formState: ConsentFormState;
+  fieldError?: ConsentFieldError;
+}): string {
+  const roleError =
+    fieldError?.field === 'roleName'
+      ? `<p class="field-error" id="role-name-error" role="alert">${he.escape(fieldError.message)}</p>`
+      : '';
+  const invalidAttr =
+    fieldError?.field === 'roleName'
+      ? ' aria-invalid="true" aria-describedby="role-name-error role-name-help" autofocus'
+      : ' aria-describedby="role-name-help"';
+  const open = fieldError?.field === 'roleName' ? ' open' : '';
+  return `
+      <details class="choice choice-role" data-role-disclosure${open}>
+        <summary class="category-disclosure-summary">
+          <span class="choice-title">Postgres role</span>
+          <span class="category-summary" data-role-summary>${he.escape(roleSummary(formState.roleName))}</span>
+        </summary>
+        <div class="category-disclosure-body">
+          <label class="project-id role-name">
+            <span>Role name (optional)</span>
+            <input
+              type="text"
+              name="roleName"
+              value="${he.escape(formState.roleName)}"
+              placeholder="Database owner"
+              autocomplete="off"
+              spellcheck="false"
+              ${invalidAttr}
+            />
+          </label>
+          ${roleError}
+          <p class="note" id="role-name-help">
+            SQL tools log in as this role instead of the database owner, so its
+            Postgres grants decide what they can read and change. The role must
+            exist and be able to log in on each branch you query.
+          </p>
+        </div>
+      </details>`;
+}
+
+function roleSummary(roleName: string): string {
+  return roleName.trim() || 'Database owner';
 }
 
 function renderEditableGrant({
   formState,
   fieldError,
+  view,
 }: {
+  view: ConsentView;
   formState: ConsentFormState;
-  fieldError?: { field: 'projectId'; message: string };
+  fieldError?: ConsentFieldError;
 }): string {
   const allSelected = formState.projectMode === 'all';
   const projectError =
@@ -381,14 +428,30 @@ function renderEditableGrant({
     fieldError?.field === 'projectId'
       ? ' aria-invalid="true" aria-describedby="project-id-error" autofocus'
       : '';
-  const categoryBoxes = SCOPE_CATEGORIES.map((category) => {
-    const checked = formState.categories.includes(category) ? ' checked' : '';
-    return `
+  const displayCategories = [
+    'projects',
+    'endpoints',
+    'schema',
+    'neon_auth',
+    'observability',
+    'functions',
+    'branches',
+    'snapshots',
+    'querying',
+    'data_api',
+    'docs',
+    'storage',
+  ] satisfies ScopeCategory[];
+  const categoryBoxes = displayCategories
+    .map((category) => {
+      const checked = formState.categories.includes(category) ? ' checked' : '';
+      return `
       <label class="check-option">
         <input type="checkbox" name="category" value="${category}"${checked} />
         <span>${he.escape(SCOPE_CATEGORY_LABELS[category])}</span>
       </label>`;
-  }).join('');
+    })
+    .join('');
 
   return `
     <section class="panel panel-access">
@@ -421,19 +484,21 @@ function renderEditableGrant({
           This page cannot list projects before you sign in.
         </p>
       </fieldset>
+      ${renderRoleField({ formState, fieldError })}
       <details class="choice choice-categories" data-category-disclosure>
         <summary class="category-disclosure-summary">
           <span class="choice-title">Tool categories</span>
-          <span class="category-summary" data-category-summary>${categorySelectionSummary(formState.categories)}</span>
+          <span class="category-summary" data-category-summary>${categorySelectionSummary(formState.categories)} · ${toolsSummary(view)}</span>
         </summary>
         <div class="category-disclosure-body">
           <div class="choice-actions">
             <button type="button" class="choice-action" data-category-select-all>Select all</button>
-            <button type="button" class="choice-action" data-category-clear-all>Clear categories</button>
+            <button type="button" class="choice-action" data-category-clear-all>Clear all</button>
           </div>
           <div class="check-grid" data-category-grid role="group" aria-label="Tool categories">
             ${categoryBoxes}
           </div>
+          ${renderToolSections(view, true)}
         </div>
       </details>
     </section>`;
@@ -448,39 +513,42 @@ function renderScopeSection({
   showWriteControl: boolean;
   includeReadScope: boolean;
 }): string {
-  const mode = writeChecked ? 'Read and write' : SCOPE_DEFINITIONS.read.label;
-  const writeEnabled = String(writeChecked);
+  const mode = writeChecked ? 'Read and write' : 'Read only';
+  const hiddenReadDisabled =
+    showWriteControl && !writeChecked ? ' disabled' : '';
   const hiddenRead = includeReadScope
-    ? '<input type="hidden" name="scopes" value="read" />'
+    ? `<input type="hidden" name="scopes" value="read"${hiddenReadDisabled} />`
     : '';
   if (!showWriteControl) {
     return `
     <section class="panel panel-permissions">
       <h2>Permissions</h2>
-      <p class="access-mode" data-access-mode data-write-enabled="${writeEnabled}">${mode}</p>
+      <p class="access-mode" data-access-mode data-write-enabled="${writeChecked}">${mode}</p>
       ${hiddenRead}
     </section>`;
   }
 
-  const writeCheckedAttr = writeChecked ? 'checked' : '';
   return `
     <section class="panel panel-permissions">
-      <h2>Permissions</h2>
-      <p class="access-mode" data-access-mode data-write-enabled="${writeEnabled}">${mode}</p>
-      ${hiddenRead}
-      <label class="write-option">
-        <input
-          type="checkbox"
-          name="scopes"
-          value="write"
-          ${writeCheckedAttr}
-          class="scope-checkbox"
-        />
-        <span>
-          <span class="write-label">${he.escape(SCOPE_DEFINITIONS.write.label)}</span>
-          <span class="write-help">${he.escape(SCOPE_DEFINITIONS.write.description)}</span>
-        </span>
-      </label>
+      <fieldset class="permission-options">
+        <legend>Permissions</legend>
+        <p class="sr-only" data-access-mode data-write-enabled="${writeChecked}" aria-live="polite">${mode}</p>
+        ${hiddenRead}
+        <label class="check-option">
+          <input type="radio" name="scopes" value="read" ${writeChecked ? '' : 'checked'} />
+          <span>Read only</span>
+        </label>
+        <div class="write-row">
+          <label class="check-option">
+            <input type="radio" name="scopes" value="write" class="scope-checkbox" ${writeChecked ? 'checked' : ''} aria-describedby="write-help" />
+            <span>Read and write</span>
+          </label>
+          <span class="write-info">
+            <button type="button" class="info-button" aria-label="About write permissions" aria-describedby="write-help"><img src="/images/consent/info-outline.svg" alt="" width="18" height="18"></button>
+            <span class="write-help" id="write-help" role="tooltip">${he.escape(SCOPE_DEFINITIONS.write.description)}</span>
+          </span>
+        </div>
+      </fieldset>
     </section>`;
 }
 
@@ -492,7 +560,7 @@ function consentScript(mode: ConsentMode): string {
     if (toolToggle && toolBlock) {
       toolToggle.addEventListener('click', function () {
         var collapsed = toolBlock.classList.toggle('is-collapsed');
-        toolToggle.textContent = collapsed ? 'View tools' : 'Hide tools';
+
         toolToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
       });
     }`;
@@ -504,8 +572,18 @@ function consentScript(mode: ConsentMode): string {
   );
   const categories = JSON.stringify(SCOPE_CATEGORIES);
   const labels = JSON.stringify(SCOPE_CATEGORY_LABELS);
+  // Built from the server list so the live preview cannot drift from it.
+  const always = JSON.stringify(
+    Object.fromEntries([...ALWAYS_AVAILABLE_TOOLS].map((name) => [name, true])),
+  );
+  const pinnedRoleWithheld = JSON.stringify(
+    Object.fromEntries(
+      [...PINNED_ROLE_WITHHELD_TOOLS].map((name) => [name, true]),
+    ),
+  );
   return `
-    var ALWAYS = { search: true, fetch: true };
+    var ALWAYS = ${always};
+    var PINNED_ROLE_WITHHELD = ${pinnedRoleWithheld};
     var CATALOG = ${catalog};
     var SCOPE_CATEGORIES = ${categories};
     var SCOPE_LABELS = ${labels};
@@ -535,7 +613,9 @@ function consentScript(mode: ConsentMode): string {
       var scopes = null;
       if (categories.length === 0) scopes = [];
       else if (categories.length !== SCOPE_CATEGORIES.length) scopes = categories;
-      return { projectId: projectId, scopes: scopes };
+      var roleInput = document.querySelector('input[name="roleName"]');
+      var roleName = roleInput instanceof HTMLInputElement && roleInput.value.trim() ? roleInput.value.trim() : null;
+      return { projectId: projectId, scopes: scopes, roleName: roleName };
     }
 
     function writeChecked() {
@@ -547,6 +627,7 @@ function consentScript(mode: ConsentMode): string {
       return CATALOG.filter(function (tool) {
         if (!checked && tool.writeOnly) return false;
         if (grant.projectId && !tool.projectScoped) return false;
+        if (grant.roleName && PINNED_ROLE_WITHHELD[tool.name]) return false;
         if (grant.scopes === null) return true;
         if (grant.scopes.length === 0) return !!ALWAYS[tool.name];
         if (ALWAYS[tool.name]) return true;
@@ -586,18 +667,11 @@ function consentScript(mode: ConsentMode): string {
     }
 
     function toolsSummaryText(tools) {
-      var groups = {};
-      tools.forEach(function (tool) { groups[categoryLabel(tool)] = true; });
-      var count = Object.keys(groups).length;
-      var groupWord = count === 1 ? 'group' : 'groups';
-      var toolWord = tools.length === 1 ? 'tool' : 'tools';
-      return tools.length + ' ' + toolWord + ' · ' + count + ' ' + groupWord;
+      return tools.length + ' ' + (tools.length === 1 ? 'tool' : 'tools') + ' available';
     }
 
     function categorySummaryText(categories) {
-      if (categories.length === 0) return 'None selected';
-      if (categories.length === SCOPE_CATEGORIES.length) return 'All selected';
-      return categories.length + ' of ' + SCOPE_CATEGORIES.length + ' selected';
+      return categories.length + '/' + SCOPE_CATEGORIES.length + ' selected';
     }
 
     function syncProjectField() {
@@ -616,15 +690,25 @@ function consentScript(mode: ConsentMode): string {
     function syncConsentUi() {
       syncProjectField();
       var grant = currentGrant();
+      var roleSummary = document.querySelector('[data-role-summary]');
+      if (roleSummary) roleSummary.textContent = grant.roleName || 'Database owner';
       var checked = writeChecked();
+      var writeControl = document.querySelector('.scope-checkbox');
+      var hiddenRead = document.querySelector('input[type="hidden"][name="scopes"][value="read"]');
+      if (
+        writeControl instanceof HTMLInputElement &&
+        hiddenRead instanceof HTMLInputElement
+      ) {
+        hiddenRead.disabled = !checked;
+      }
       var tools = filterCatalog(grant, checked);
       var categorySummary = document.querySelector('[data-category-summary]');
       if (categorySummary) {
-        categorySummary.textContent = categorySummaryText(selectedCategories());
+        categorySummary.textContent = categorySummaryText(selectedCategories()) + ' · ' + toolsSummaryText(tools);
       }
       var mode = document.querySelector('[data-access-mode]');
       if (mode) {
-        mode.textContent = checked ? 'Read and write' : 'Read-only';
+        mode.textContent = checked ? 'Read and write' : 'Read only';
         mode.setAttribute('data-write-enabled', String(checked));
       }
       var summary = document.querySelector('[data-tools-summary]');
@@ -642,42 +726,47 @@ function consentScript(mode: ConsentMode): string {
         }
       }
       if (toolToggle) {
-        if (!collapse) {
-          toolToggle.hidden = true;
-        } else {
-          toolToggle.hidden = false;
-          var collapsed = toolBlock ? toolBlock.classList.contains('is-collapsed') : true;
-          toolToggle.textContent = collapsed ? 'View tools' : 'Hide tools';
-          toolToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-        }
+        var collapsed = toolBlock ? toolBlock.classList.contains('is-collapsed') : true;
+        toolToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
       }
     }
 
     var consentForm = document.getElementById('authorize-form');
-    var projectIdInput = document.querySelector('input[name="projectId"]');
     var approveButton = document.querySelector('button[value="approve"]');
-    if (consentForm instanceof HTMLFormElement &&
-        projectIdInput instanceof HTMLInputElement &&
-        approveButton instanceof HTMLButtonElement) {
-      projectIdInput.addEventListener('keydown', function (event) {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          consentForm.requestSubmit(approveButton);
-        }
-      });
-    }
+    document.querySelectorAll('input[name="projectId"], input[name="roleName"]').forEach(function (textInput) {
+      if (consentForm instanceof HTMLFormElement &&
+          textInput instanceof HTMLInputElement &&
+          approveButton instanceof HTMLButtonElement) {
+        textInput.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            consentForm.requestSubmit(approveButton);
+          }
+        });
+      }
+    });
 
-    document.querySelectorAll('input[name="projectMode"], input[name="projectId"], input[name="category"], .scope-checkbox').forEach(function (input) {
+    document.querySelectorAll('input[name="projectMode"], input[name="projectId"], input[name="roleName"], input[name="category"], input[type="radio"][name="scopes"]').forEach(function (input) {
       input.addEventListener('change', syncConsentUi);
       input.addEventListener('input', syncConsentUi);
     });
+    var categoryDisclosure = document.querySelector('[data-category-disclosure]');
+    if (categoryDisclosure instanceof HTMLDetailsElement) {
+      categoryDisclosure.addEventListener('toggle', function () {
+        if (!categoryDisclosure.open) return;
+        var firstCategory = categoryDisclosure.querySelector('input[name="category"]');
+        if (firstCategory instanceof HTMLInputElement) {
+          firstCategory.scrollIntoView({ block: 'nearest' });
+        }
+      });
+    }
     var toolToggle = document.querySelector('[data-tool-toggle]');
     var toolBlock = document.querySelector('[data-tools]');
     if (toolToggle && toolBlock) {
       toolToggle.addEventListener('click', function () {
         var collapsed = toolBlock.classList.toggle('is-collapsed');
         userExpanded = !collapsed;
-        toolToggle.textContent = collapsed ? 'View tools' : 'Hide tools';
+
         toolToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
       });
     }
@@ -723,6 +812,9 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
                 ? null
                 : formState.categories,
           unknownCategories: props.grant.unknownCategories,
+          ...(formState.roleName.trim()
+            ? { roleName: formState.roleName.trim() }
+            : {}),
         }
       : props.grant;
   const view = buildConsentView({
@@ -738,6 +830,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       : renderEditableGrant({
           formState,
           fieldError: props.fieldError,
+          view,
         });
 
   return `<!DOCTYPE html>
@@ -746,615 +839,192 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Connect ${clientName} to Neon</title>
+  <link rel="preload" href="/fonts/inter/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/fonts/inter/inter.css">
   <style>
     :root {
-      --text: #e8e8e8;
-      --muted: #8b8b8b;
-      --bg: #111111;
-      --card: #181818;
-      --line: #2a2a2a;
-      --green: #00e599;
+      color-scheme: dark;
+      --text: #e4e5e7;
+      --muted: #94979e;
+      --bg: #000;
+      --card: #0c0d0d;
+      --line: #303236;
+      --green: #34d59a;
       --danger: #ff7d87;
-      --scrollbar-track: #242424;
-      --scrollbar-thumb: #737373;
-      --scrollbar-thumb-hover: #8a8a8a;
     }
-
     * { box-sizing: border-box; }
-
-    html, body {
-      height: 100%;
-      overflow: hidden;
-    }
-
+    html, body { height: 100%; overflow: hidden; }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
-        Arial, sans-serif;
-      line-height: 1.45;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 15px;
+      line-height: 1.375;
+      letter-spacing: -0.02em;
       color: var(--text);
       background: var(--bg);
     }
-
-    /* Class display rules otherwise override the hidden attribute. */
-    [hidden] {
-      display: none !important;
+    [hidden] { display: none !important; }
+    button, input { font: inherit; letter-spacing: inherit; }
+    button, summary, label { -webkit-tap-highlight-color: transparent; }
+    button { cursor: pointer; }
+    :is(button, input, summary, a):focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 4px;
     }
-
     .page {
-      box-sizing: border-box;
       display: flex;
-      flex-direction: column;
-      width: 100%;
-      max-width: 36rem;
+      align-items: flex-start;
+      justify-content: center;
       height: 100vh;
       height: 100dvh;
-      margin: 0 auto;
-      padding: 1.5rem 1.25rem 1.5rem;
-      overflow: hidden;
+      padding: 80px 24px;
+      overflow: clip;
     }
-
-    .brand {
-      display: block;
-      width: 2rem;
-      height: 2rem;
-      margin-bottom: 1rem;
-    }
-
-    h1 {
-      display: -webkit-box;
-      max-height: 2.9em;
-      margin: 0 0 0.35rem;
-      overflow: hidden;
-      font-size: 1.35rem;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-      overflow-wrap: anywhere;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-    }
-
-    h2, legend, .choice-title {
-      margin: 0 0 0.75rem;
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    .client-verify {
-      margin-bottom: 1rem;
-      min-width: 0;
-    }
-
-    .client-verify summary {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-      color: var(--muted);
-      font-size: 0.8rem;
-      cursor: pointer;
-      list-style: none;
-    }
-
-    .client-verify summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .client-verify summary::before {
-      content: '›';
-      flex-shrink: 0;
-      font-size: 1rem;
-      line-height: 1;
-      transition: transform 120ms ease;
-    }
-
-    .client-verify[open] summary::before {
-      transform: rotate(90deg);
-    }
-
-    .client-verify summary span {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .client-verify summary:focus-visible {
-      outline: 2px solid var(--green);
-      outline-offset: 3px;
-      border-radius: 2px;
-    }
-
-    .client-verify[open] summary {
-      margin-bottom: 0.5rem;
-    }
-
-    .client-meta {
-      display: grid;
-      gap: 0.45rem;
-      margin: 0;
-      padding: 0 0 0 1rem;
-      font-size: 0.8rem;
-      color: var(--muted);
-      overflow-wrap: anywhere;
-    }
-
-    .client-meta > div {
-      display: grid;
-      grid-template-columns: 5rem minmax(0, 1fr);
-      gap: 0.5rem;
-    }
-
-    .client-meta dt,
-    .client-meta dd {
-      margin: 0;
-      font-size: inherit;
-    }
-
-    .client-uris {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .client-meta a {
-      color: var(--muted);
-    }
-
     .card {
       display: flex;
       flex-direction: column;
-      flex: 1 1 0%;
+      width: 651px;
+      max-width: 100%;
+      max-height: 100%;
       min-height: 0;
-      min-width: 0;
       overflow: hidden;
       background: var(--card);
       border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 1.25rem 1.25rem 0.25rem;
     }
-
+    .consent-header {
+      flex: 0 0 auto;
+      padding: 32px 28px 28px;
+      border-bottom: 1px solid var(--line);
+    }
+    .connection-icons { display: flex; align-items: center; gap: 2.44px; height: 40px; margin-bottom: 16px; }
+    .client-icon { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid #61646b; border-radius: 50%; }
+    .connection-line { display: block; width: 22px; height: 2px; }
+    .brand { width: 40px; height: 40px; }
+    h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 0; font-size: 24px; line-height: 1.375; font-weight: 400; letter-spacing: -0.02em; color: #fff; overflow-wrap: anywhere; }
+    h2, .app-details-title, .permission-options legend { display: block; margin: 0 0 16px; padding: 0; font-size: 20px; font-weight: 400; }
+    h3, .choice legend, .choice-title { margin: 0 0 16px; padding: 0; font-size: 18px; font-weight: 400; }
+    .panel-requested h3 { margin-bottom: 20px; }
+    .panel-permissions h2 { margin-bottom: 10px; }
     .card-body {
-      flex: 1 1 0%;
       min-height: 0;
       min-width: 0;
       overflow-y: auto;
       overscroll-behavior: contain;
-      padding-bottom: 0.5rem;
-      scrollbar-gutter: stable;
+      padding: 0 28px;
       scrollbar-width: thin;
-      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+      scrollbar-color: #494b50 transparent;
     }
-
-    .card-body:focus-visible {
-      outline: 1px solid rgba(0, 229, 153, 0.45);
-      outline-offset: -1px;
+    .card-body:focus-visible { outline: 1px solid var(--green); outline-offset: -1px; }
+    .client-verify { padding: 24px 0 20px; border-bottom: 1px solid var(--line); }
+    summary { cursor: pointer; list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    .app-details-title { margin-bottom: 6px; }
+    .client-summary { display: block; color: var(--muted); overflow-wrap: anywhere; }
+    .client-meta { display: grid; gap: 12px; margin: 20px 0 0; font-size: 15px; }
+    .client-meta > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; }
+    .client-uris { display: flex; flex-direction: column; gap: 8px; }
+    .client-meta a { color: var(--text); text-underline-offset: 3px; }
+    .panel { padding: 20px 0; border-bottom: 1px solid var(--line); }
+    .panel-permissions { border-bottom: 0; padding-bottom: 28px; }
+    .panel-requested { border-bottom-style: dashed; }
+    .choice, .permission-options { min-width: 0; margin: 0; padding: 0; border: 0; }
+    .check-option { display: flex; align-items: center; gap: 10px; width: fit-content; min-height: 21px; cursor: pointer; }
+    .choice > .check-option + .check-option, .write-row { margin-top: 12px; }
+    .check-option input { appearance: none; flex-shrink: 0; width: 16px; height: 16px; margin: 0; border: 1px solid #494b50; background: #000; cursor: pointer; }
+    .check-option input[type="radio"] { border-radius: 50%; }
+    .check-option input[type="radio"]:checked { border: 4px solid #39a57d; background: var(--card); }
+    .check-option input[type="checkbox"]:checked { border-color: #39a57d; background: #39a57d url('/images/consent/check.svg') center / 12px 12px no-repeat; }
+    .check-option:hover { color: #fff; }
+    .project-id { display: grid; gap: 8px; margin-top: 16px; }
+    .project-id input { min-width: 0; width: 100%; height: 44px; padding: 11px 16px; border: 1px solid var(--line); border-radius: 0; background: var(--card); color: #fff; font-size: 16px; }
+    .project-id input[aria-invalid="true"] { border-color: var(--danger); }
+    .note, .field-error, .warning { color: var(--muted); font-size: 15px; margin: 8px 0 0; }
+    .note[data-project-id-help] { font-size: 14px; }
+    .field-error { color: var(--danger); }
+    .warning { padding: 12px; border: 1px solid var(--danger); }
+    .choice-categories, .choice-role { margin-top: 20px; padding-top: 20px; border-top: 1px dashed var(--line); }
+    .choice-role .role-name { margin-top: 0; }
+    .choice-role .note { margin-top: 8px; font-size: 14px; }
+    .category-disclosure-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .category-disclosure-summary .choice-title { display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0; margin: 0; }
+    .choice-title::after, .tool-toggle::after { content: ''; display: block; width: 20px; height: 20px; background: url('/images/consent/chevron.svg') center / contain no-repeat; }
+    .choice-categories[open] .choice-title::after, .choice-role[open] .choice-title::after, .tool-toggle[aria-expanded="true"]::after { transform: rotate(180deg); }
+    .category-summary, .tool-block-title { color: var(--muted); font-size: 15px; text-align: right; }
+    .category-disclosure-body { padding-top: 20px; }
+    .choice-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .choice-action { border: 0; padding: 0; background: transparent; color: var(--green); font-size: 15px; }
+    .choice-action + .choice-action { padding-left: 12px; border-left: 1px solid var(--line); }
+    .choice-action:hover { color: #fff; }
+    .check-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(4, auto); grid-auto-flow: column; gap: 12px 32px; }
+    .check-grid .check-option { min-width: 0; }
+    .facts { display: grid; gap: 12px; margin: 0; }
+    .facts > div { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; }
+    dt, dd { margin: 0; overflow-wrap: anywhere; }
+    dt { color: var(--muted); }
+    .mono { overflow-wrap: anywhere; }
+    .connection-note { display: flex; align-items: flex-start; gap: 8px; padding: 12px 40px 12px 12px; margin-top: 28px; border: 1px solid var(--line); background: #18191b; }
+    .connection-note img { flex-shrink: 0; margin-top: 1px; }
+    .panel-tools { padding: 20px 0; border-bottom: 1px solid var(--line); }
+    .choice-categories .panel-tools { padding: 20px 0 0; border: 0; }
+    .tool-block-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .tool-toggle { display: inline-flex; align-items: center; gap: 10px; padding: 0; border: 0; background: transparent; color: var(--text); font-size: 18px; }
+    .choice-categories .tool-toggle { font-size: 16px; }
+    .tool-block.is-collapsed .tool-content { display: none; }
+    .tool-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 28px; margin-top: 28px; }
+    .choice-categories .tool-content { margin-top: 20px; column-gap: 24px; }
+    .tool-group { min-width: 0; overflow-wrap: anywhere; }
+    .choice-categories .tool-list { gap: 10px; }
+    .tool-group-label { color: var(--muted); margin-bottom: 12px; }
+    .tool-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+    .write-badge { margin-left: 6px; color: var(--muted); font-size: 12px; }
+    .empty-tools { margin: 16px 0 0; color: var(--muted); }
+    .access-mode { margin: 0; color: var(--muted); }
+    .write-row { display: flex; align-items: center; gap: 6px; }
+    .write-info { position: relative; display: flex; }
+    .info-button { display: flex; padding: 0; border: 0; background: none; }
+    .write-help { position: absolute; z-index: 2; left: -24px; bottom: 28px; width: 309px; max-width: 52vw; padding: 16px; border: 1px solid var(--line); background: #18191b; color: var(--muted); visibility: hidden; }
+    .write-info:hover .write-help, .write-info:focus-within .write-help { visibility: visible; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .card-foot { flex: 0 0 auto; padding: 19px 28px; border-top: 1px solid var(--line); background: var(--card); }
+    .actions { display: flex; justify-content: flex-end; gap: 12px; }
+    .button { width: 152px; height: 40px; padding: 0 20px; border-radius: 33px; font-size: 16px; line-height: 1; font-weight: 500; }
+    .button-primary { border: 1px solid #fff; background: #fff; color: #000; }
+    .button-primary:hover { background: #e4e5e7; border-color: #e4e5e7; }
+    .button-secondary { border: 1px solid #61646b; background: rgba(255,255,255,0.02); color: #fff; }
+    .button-secondary:hover { border-color: var(--text); }
+    @media (max-width: 600px) {
+      .page { padding: 56px 16px; }
+      .consent-header { padding: 24px 20px; }
+      h1 { font-size: 24px; }
+      .card-body { padding: 0 20px; }
+      h2, .app-details-title, .permission-options legend { font-size: 20px; }
+      h3, .choice legend, .choice-title, .tool-toggle { font-size: 18px; }
+      .category-disclosure-summary { flex-wrap: wrap; gap: 8px; }
+      .category-summary { font-size: 13px; text-align: left; }
+      .card-foot { padding: 16px 20px; }
+      .button { flex: 1; max-width: 152px; width: auto; }
+      .check-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(6, auto); gap: 12px 16px; }
+      .facts > div { grid-template-columns: 38% minmax(0, 1fr); gap: 12px; }
+      .tool-content { grid-template-columns: 1fr; }
+      .client-meta > div { grid-template-columns: 1fr; gap: 4px; }
+      .write-help { left: -140px; max-width: 240px; }
     }
-
-    .panel, .choice {
-      padding: 1.1rem 0;
-      border-top: 1px solid var(--line);
+    @media (max-width: 380px) {
+      .check-grid { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-flow: row; }
     }
-
-    .choice-categories {
-      min-width: 0;
-    }
-
-    .category-disclosure-summary {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      cursor: pointer;
-      list-style: none;
-    }
-
-    .category-disclosure-summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .category-disclosure-summary::after {
-      content: '›';
-      flex-shrink: 0;
-      font-size: 1rem;
-      line-height: 1;
-      transition: transform 120ms ease;
-    }
-
-    .choice-categories[open] .category-disclosure-summary::after {
-      transform: rotate(90deg);
-    }
-
-    .category-disclosure-summary:focus-visible {
-      outline: 2px solid var(--green);
-      outline-offset: 3px;
-      border-radius: 2px;
-    }
-
-    .category-disclosure-summary .choice-title {
-      margin: 0;
-    }
-
-    .category-summary {
-      min-width: 0;
-      margin-left: auto;
-      overflow: hidden;
-      color: var(--muted);
-      font-size: 0.8rem;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .category-disclosure-body {
-      margin-top: 0.75rem;
-    }
-
-    .choice-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 0.65rem;
-      flex-shrink: 0;
-      margin-bottom: 0.55rem;
-    }
-
-    .choice-action {
-      padding: 0;
-      border: 0;
-      color: var(--muted);
-      background: transparent;
-      font: inherit;
-      font-size: 0.75rem;
-      cursor: pointer;
-    }
-
-    .choice-action:hover {
-      color: var(--text);
-    }
-
-    .card-body .panel:first-of-type,
-    .card-body .choice:first-of-type {
-      border-top: 0;
-      padding-top: 0.25rem;
-    }
-
-    fieldset.choice {
-      margin: 0;
-      border: 0;
-      min-width: 0;
-      min-inline-size: 0;
-    }
-
-    .facts {
-      margin: 0;
-      display: grid;
-      gap: 0.65rem;
-    }
-
-    .facts > div {
-      display: grid;
-      grid-template-columns: 8.5rem 1fr;
-      gap: 0.75rem;
-      align-items: baseline;
-    }
-
-    dt {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.85rem;
-    }
-
-    dd {
-      margin: 0;
-      font-size: 0.95rem;
-      overflow-wrap: anywhere;
-    }
-
-    .mono {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 0.85rem;
-      overflow-wrap: anywhere;
-    }
-
-    .note, .field-error, .warning {
-      color: var(--muted);
-      font-size: 0.8rem;
-      margin: 0.75rem 0 0;
-    }
-
-    .field-error {
-      color: var(--danger);
-    }
-
-    .warning {
-      padding: 0.55rem 0.65rem;
-      border: 1px solid rgba(255, 125, 135, 0.35);
-      border-radius: 8px;
-      color: var(--text);
-      background: rgba(255, 125, 135, 0.06);
-    }
-
-    .access-mode {
-      display: inline-flex;
-      width: fit-content;
-      margin: 0 0 0.75rem;
-      padding: 0.25rem 0.55rem;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      font-size: 0.85rem;
-      font-weight: 600;
-    }
-
-    .access-mode[data-write-enabled="true"] {
-      border-color: rgba(0, 229, 153, 0.4);
-      background: rgba(0, 229, 153, 0.06);
-    }
-
-    .write-option, .check-option {
-      display: flex;
-      gap: 0.7rem;
-      align-items: flex-start;
-      padding: 0.75rem 0.85rem;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      cursor: pointer;
-    }
-
-    .write-option:hover, .check-option:hover {
-      border-color: rgba(0, 229, 153, 0.45);
-    }
-
-    .check-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.45rem;
-    }
-
-    .choice-categories .check-option {
-      min-width: 0;
-      padding: 0.55rem 0.65rem;
-    }
-
-    .choice-categories .check-option span {
-      overflow-wrap: anywhere;
-    }
-
-    .scope-checkbox, .check-option input, .choice input[type="radio"] {
-      width: 1.05rem;
-      height: 1.05rem;
-      margin: 0.15rem 0 0;
-      accent-color: var(--green);
-      flex-shrink: 0;
-    }
-
-    .write-label {
-      display: block;
-      font-weight: 600;
-    }
-
-    .write-help {
-      display: block;
-      margin-top: 0.2rem;
-      color: var(--muted);
-      font-size: 0.8rem;
-    }
-
-    .project-id {
-      display: grid;
-      gap: 0.35rem;
-      margin-top: 0.75rem;
-      font-size: 0.85rem;
-    }
-
-    .project-id input {
-      width: 100%;
-      padding: 0.55rem 0.65rem;
-      border-radius: 8px;
-      border: 1px solid var(--line);
-      background: var(--bg);
-      color: var(--text);
-      font: inherit;
-    }
-
-    .tool-block-head {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 0.75rem;
-      margin-bottom: 0.45rem;
-    }
-
-    .tool-block-title {
-      font-size: 0.85rem;
-      font-weight: 600;
-    }
-
-    .tool-toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      padding: 0.25rem 0.45rem;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: transparent;
-      color: var(--muted);
-      font: inherit;
-      font-size: 0.85rem;
-      font-weight: 500;
-      cursor: pointer;
-    }
-
-    .tool-toggle::after {
-      content: '›';
-      font-size: 1rem;
-      line-height: 1;
-      transition: transform 120ms ease;
-    }
-
-    .tool-toggle[aria-expanded="true"]::after {
-      transform: rotate(90deg);
-    }
-
-    .tool-toggle:hover {
-      color: var(--text);
-      border-color: rgba(0, 229, 153, 0.35);
-    }
-
-    .tool-content {
-      padding: 0.1rem 0.4rem 0.35rem 0;
-    }
-
-    .card-body::-webkit-scrollbar {
-      width: 10px;
-    }
-
-    .card-body::-webkit-scrollbar-track {
-      background: var(--scrollbar-track);
-      border-radius: 999px;
-    }
-
-    .card-body::-webkit-scrollbar-thumb {
-      background: var(--scrollbar-thumb);
-      min-height: 2rem;
-      border: 2px solid var(--scrollbar-track);
-      border-radius: 999px;
-    }
-
-    .card-body::-webkit-scrollbar-thumb:hover {
-      background: var(--scrollbar-thumb-hover);
-    }
-
-    .tool-block.is-collapsed .tool-content {
-      display: none;
-    }
-
-    .write-badge {
-      margin-left: 0.35rem;
-      color: var(--muted);
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-
-    .tool-group {
-      margin: 0.55rem 0 0;
-    }
-
-    .tool-group-label {
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin-bottom: 0.2rem;
-    }
-
-    .tool-list {
-      margin: 0;
-      padding: 0;
-      list-style: none;
-      font-size: 0.85rem;
-    }
-
-    .tool-list li {
-      padding: 0.12rem 0;
-    }
-
-    .empty-tools {
-      color: var(--muted);
-      font-size: 0.85rem;
-      margin: 0.4rem 0 0;
-    }
-
-    .card-foot {
-      flex: 0 0 auto;
-      position: relative;
-      z-index: 1;
-      background: var(--card);
-      border-top: 1px solid var(--line);
-    }
-
-    .actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 0.6rem;
-      margin: 0.85rem 0 0.75rem;
-    }
-
-    .button {
-      padding: 0.55rem 0.9rem;
-      border-radius: 8px;
-      font-weight: 600;
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-
-    .button-primary {
-      background: var(--green);
-      color: #111;
-      border: none;
-    }
-
-    .button-secondary {
-      background: transparent;
-      border: 1px solid var(--line);
-      color: var(--text);
-    }
-
-    @media (max-width: 640px) {
-      .page {
-        padding: 1rem;
-      }
-
-      .brand {
-        margin-bottom: 0.6rem;
-      }
-
-      .client-verify {
-        margin-bottom: 0.6rem;
-      }
-
-      .card {
-        padding: 1rem 1rem 0.25rem;
-      }
-
-      .facts > div {
-        grid-template-columns: 1fr;
-        gap: 0.15rem;
-      }
-
-      .actions {
-        flex-direction: column-reverse;
-        margin: 0.55rem 0 0.5rem;
-      }
-
-      .button {
-        width: 100%;
-      }
-    }
-
-    @media (max-width: 359px) {
-      .check-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
     @media (max-height: 520px) {
-      .page {
-        padding: 0.5rem;
-      }
-
-      .card {
-        padding: 0.75rem 0.75rem 0.25rem;
-      }
-
-      .brand,
-      .client-verify {
-        margin-bottom: 0.5rem;
-      }
-
-      .panel,
-      .choice {
-        padding: 0.75rem 0;
-      }
+      .page { overflow-y: auto; padding-right: 8px; padding-left: 8px; }
+      .card { max-height: none; }
+      .card-body { flex-shrink: 0; overflow: visible; }
+      .consent-header { padding: 16px 20px; }
+      .connection-icons { height: 32px; margin-bottom: 12px; }
+      .client-icon { width: 32px; height: 32px; }
+      .brand { width: 28px; height: 28px; }
+      h1 { font-size: 22px; }
+      .card-foot { padding: 12px 20px; }
+    }
+    @media (forced-colors: active) {
+      .check-option input { appearance: auto; }
     }
   </style>
 </head>
@@ -1362,26 +1032,28 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
   <div class="page">
     <form method="POST" action="/api/authorize" id="authorize-form" class="card">
       <input type="hidden" name="state" value="${he.escape(props.state)}" />
-      <div class="card-body" tabindex="0" role="region" aria-label="Connection access details">
       <header class="consent-header">
-        <a href="/" target="_blank">
-          <img class="brand" src="/favicon.svg" alt="Neon">
-        </a>
+        <div class="connection-icons" aria-hidden="true">
+          <span class="client-icon"><img src="/images/consent/key.svg" alt="" width="18" height="18"></span>
+          <img class="connection-line" src="/images/consent/dash.svg" alt="" width="22" height="2">
+          <img class="brand" src="/images/consent/neon.svg" alt="" width="40" height="40">
+        </div>
         <h1 title="Connect ${clientName} to Neon">Connect ${clientName} to Neon</h1>
-        ${clientVerification}
       </header>
+      <div class="card-body" tabindex="0" role="region" aria-label="Connection access details">
+      ${clientVerification}
       ${grantHtml}
+      ${props.mode === 'confirmation' ? renderToolSections(view, false) : ''}
       ${renderScopeSection({
         writeChecked: formState.writeChecked,
         showWriteControl: props.showWriteControl,
         includeReadScope: props.mode === 'editable',
       })}
-      ${renderToolSections(view, props.mode === 'editable')}
       </div>
       <div class="card-foot">
       <div class="actions">
         <button type="submit" class="button button-secondary" name="action" value="cancel" formnovalidate>Cancel</button>
-        <button type="submit" class="button button-primary" name="action" value="approve">Approve and continue to Neon</button>
+        <button type="submit" class="button button-primary" name="action" value="approve">Approve</button>
       </div>
       </div>
     </form>

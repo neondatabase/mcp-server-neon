@@ -1,0 +1,12 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="info-circle">
+<mask id="mask0_0_4" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="1" y="1" width="16" height="16">
+<path id="Vector" d="M8.99687 8.64078V12.2408M8.99687 5.76798L9.00407 5.75998M8.99687 16.2008C12.9733 16.2008 16.1969 12.9772 16.1969 9.00078C16.1969 5.02433 12.9733 1.80078 8.99687 1.80078C5.02042 1.80078 1.79688 5.02433 1.79688 9.00078C1.79688 12.9772 5.02042 16.2008 8.99687 16.2008Z" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+</mask>
+<g mask="url(#mask0_0_4)">
+<g id="icon-color">
+<rect width="18" height="18" fill="#61646B"/>
+</g>
+</g>
+</g>
+</svg>

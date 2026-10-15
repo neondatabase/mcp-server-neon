@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { model } from '../../../mcp/oauth/model';
 import { generateRandomString } from '../../../mcp/oauth/utils';
 import { handleOAuthError } from '../../../lib/errors';
+import { normalizeRedirectUris } from '../../../lib/oauth/redirect-uri';
 import { logger } from '../../../mcp/utils/logger';
 import type { Client } from 'oauth2-server';
 
@@ -34,7 +35,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (payload.redirect_uris === undefined) {
+    const redirectUris = normalizeRedirectUris(payload.redirect_uris);
+    if (!redirectUris) {
       logger.warn('Client registration validation failed', {
         reason: 'redirect_uris_missing',
       });
@@ -89,6 +91,7 @@ export async function POST(request: NextRequest) {
     const clientSecret = generateRandomString(32);
     const client: Client = {
       ...payload,
+      redirect_uris: redirectUris,
       id: clientId,
       secret: clientSecret,
       tokenEndpointAuthMethod:
@@ -102,7 +105,7 @@ export async function POST(request: NextRequest) {
     logger.info('new client registered', {
       clientId,
       client_name: payload.client_name,
-      redirect_uris: payload.redirect_uris,
+      redirect_uris: redirectUris,
       client_uri: payload.client_uri,
     });
 
@@ -110,7 +113,7 @@ export async function POST(request: NextRequest) {
       client_id: clientId,
       client_secret: clientSecret,
       client_name: payload.client_name,
-      redirect_uris: payload.redirect_uris,
+      redirect_uris: redirectUris,
       token_endpoint_auth_method: client.tokenEndpointAuthMethod,
     };
 

@@ -1,5 +1,6 @@
 import { z } from 'zod/v3';
 import { z as z4 } from 'zod';
+import { InvalidArgumentError } from '../server/errors';
 import {
   SCOPE_CATEGORIES,
   type GrantContext,
@@ -10,12 +11,33 @@ import type { NeonTool } from './tool-definition';
 
 /**
  * Tools that are always available regardless of scope categories.
- * These are discovery/navigation tools the LLM needs to function.
+ * These are discovery/navigation tools the LLM needs to function, plus
+ * send_feedback so users can always reach the Neon team.
  */
 export const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
   'search',
   'fetch',
+  'send_feedback',
 ]);
+
+/**
+ * Tools served by the no-login `?category=docs` endpoint. None of them use
+ * the Neon API client, so they are safe to call anonymously.
+ */
+export function isDocsOnlyTool(tool: Pick<NeonTool, 'name' | 'scope'>) {
+  return tool.scope === 'docs' || tool.name === 'send_feedback';
+}
+
+// Hosts may cache this schema and its instructions independently of the grant.
+const PROJECT_ID_GUIDANCE =
+  'Required for an unscoped connection. May be omitted when the connection is ' +
+  'scoped to one project; if provided, it must match that project.';
+
+function withProjectIdGuidance(description: string | undefined): string {
+  const base = description?.trim();
+  if (!base) return PROJECT_ID_GUIDANCE;
+  return `${/[.!?]$/.test(base) ? base : `${base}.`} ${PROJECT_ID_GUIDANCE}`;
+}
 
 function isZod4Object(schema: unknown): schema is z4.ZodObject<z4.ZodRawShape> {
   return (
@@ -26,13 +48,31 @@ function isZod4Object(schema: unknown): schema is z4.ZodObject<z4.ZodRawShape> {
   );
 }
 
+/**
+ * Tools withheld when the grant pins a Postgres role. A pin keeps that role's
+ * credentials inside the server; `get_connection_string` exists to hand them
+ * out, which would let the caller run SQL as the role outside the server's
+ * read-only transaction.
+ */
+export const PINNED_ROLE_WITHHELD_TOOLS: ReadonlySet<string> = new Set([
+  'get_connection_string',
+]);
+
 export function filterToolsForGrant(
   tools: readonly NeonTool[],
   grant: GrantContext,
 ): NeonTool[] {
   let filtered = applyScopeCategoryFilter(tools, grant.scopes);
   filtered = applyProjectScopeFilter(filtered, grant);
-  return filtered;
+  if (grant.roleName !== undefined) {
+    filtered = filtered.filter(
+      (tool) => !PINNED_ROLE_WITHHELD_TOOLS.has(tool.name),
+    );
+  }
+  // Hosts can review and cache one schema independently of a user's grant.
+  // Keep project_id optional on the wire; the full handler schema still
+  // requires it after a scoped grant has supplied its project.
+  return filtered.map((tool) => optionalProjectIdSchema(tool) ?? tool);
 }
 
 /**
@@ -64,15 +104,10 @@ function applyProjectScopeFilter(
 ): NeonTool[] {
   if (!grant.projectId) return tools;
 
-  return tools
-    .filter((tool) => tool.projectScoped)
-    .map((tool) => {
-      const modified = removeProjectIdFromSchema(tool);
-      return modified ?? tool;
-    });
+  return tools.filter((tool) => tool.projectScoped);
 }
 
-function removeHostProjectId(tool: NeonTool): NeonTool | null {
+function optionalHostProjectId(tool: NeonTool): NeonTool | null {
   const schema = tool.inputSchema;
   if (!(schema instanceof z.ZodObject)) return null;
 
@@ -81,30 +116,43 @@ function removeHostProjectId(tool: NeonTool): NeonTool | null {
 
   return {
     ...tool,
-    inputSchema: schema.omit({ project_id: true }).strict(),
+    inputSchema: schema
+      .extend({
+        project_id: shape.project_id
+          .optional()
+          .describe(withProjectIdGuidance(shape.project_id.description)),
+      })
+      .strict(),
   };
 }
 
-function removeGeneratedProjectId(tool: NeonTool): NeonTool | null {
+function optionalGeneratedProjectId(tool: NeonTool): NeonTool | null {
   const schema = tool.inputSchema;
   if (!isZod4Object(schema)) return null;
   if (!('project_id' in schema.shape)) return null;
-
-  const newShape = Object.fromEntries(
-    Object.entries(schema.shape).filter(([key]) => key !== 'project_id'),
-  );
+  const projectIdSchema = schema.shape.project_id;
 
   return {
     ...tool,
-    inputSchema: z4.strictObject(newShape),
+    inputSchema: z4.strictObject({
+      ...schema.shape,
+      project_id: z4
+        .optional(projectIdSchema)
+        .describe(
+          withProjectIdGuidance(
+            z4.globalRegistry.get(projectIdSchema)?.description,
+          ),
+        ),
+    }),
   };
 }
 
-function removeProjectIdFromSchema(tool: NeonTool): NeonTool | null {
+function optionalProjectIdSchema(tool: NeonTool): NeonTool | null {
+  if (!tool.projectScoped) return null;
   if (tool.kind === 'generated') {
-    return removeGeneratedProjectId(tool);
+    return optionalGeneratedProjectId(tool);
   }
-  return removeHostProjectId(tool);
+  return optionalHostProjectId(tool);
 }
 
 /**
@@ -119,8 +167,9 @@ export function getAccessControlNotices(
   if (readOnly) {
     notices.push(
       'Notice: The MCP server is currently configured with read-only permissions. ' +
-        'All write-access tools have been removed. All remaining tools are limited to read-only operations ' +
-        '(for example, read-only SQL queries). Do not try to work around this restriction; it is intentional. ' +
+        'All write-access tools have been removed. Neon resources stay read-only: the remaining tools only read them ' +
+        '(for example, read-only SQL queries). The user can still send feedback to Neon with send_feedback. ' +
+        'Do not try to work around this restriction; it is intentional. ' +
         'If the user requests changes to Neon resources, inform them about the read-only configuration. ' +
         'Connection strings are unavailable in this mode because they carry a privileged role password; ' +
         'if the user needs a DATABASE_URL, tell them to copy it from https://console.neon.tech. ' +
@@ -138,14 +187,28 @@ export function getAccessControlNotices(
       );
     }
   }
-  if (grant.projectId) {
+  const hasProjectTools = getFilteredTools(grant, readOnly).some(
+    (tool) => tool.projectScoped && schemaHasProjectId(tool.inputSchema),
+  );
+  if (hasProjectTools) {
     notices.push(
-      `Notice: The MCP server is currently configured and scoped to one project only (${grant.projectId}). ` +
-        'Project management tools have been removed. All remaining tools are scoped to this project and can only interact with it. ' +
-        'Do not send `project_id`; it is supplied by the connection. ' +
-        'This is intentional. If the user requests changes to another project, inform them about the project-scoping configuration. ' +
-        'The user can remove project scoping by removing the projectId query param from the MCP server URL, ' +
-        'and by logging out and back in after removing the param when using OAuth.',
+      'Notice: For tools with `project_id`, always pass it on an unscoped connection, even though the published schema marks it optional. ' +
+        'A connection scoped to one project supplies it automatically when omitted; an explicit value must match the granted project. ' +
+        'A project-scoped connection also hides project management tools such as list_projects and create_project. ' +
+        'To change project scope, change or remove the projectId query param in the MCP server URL and reconnect. ' +
+        'With OAuth, the project is fixed when the connection is authorized: log out and authorize again, ' +
+        'and choose "All projects you can access" on the consent page to remove scoping.',
+    );
+  }
+  if (grant.roleName !== undefined) {
+    notices.push(
+      `Notice: SQL on this connection runs as the Postgres role "${grant.roleName}", ` +
+        'which is pinned by the connection. ' +
+        'Its grants decide what you can read and change; a permission error means the role lacks that privilege. ' +
+        'Do not pass a different `role_name`; it is rejected. ' +
+        'Connection strings are unavailable on a pinned connection. ' +
+        'The user can change the role by editing the roleName query param on the MCP server URL, ' +
+        'or, with OAuth, by authorizing again and changing the Postgres role on the consent page.',
     );
   }
   if (grant.unknownCategories?.length) {
@@ -214,8 +277,8 @@ export function getAccessControlWarnings(
 
   if (grant.scopes !== null && grant.scopes.length === 0) {
     const discoveryToolsText = grant.projectId
-      ? 'No tools are available.'
-      : 'Only the "search" and "fetch" tools are available.';
+      ? 'Only the "send_feedback" tool is available.'
+      : 'Only the "search", "fetch", and "send_feedback" tools are available.';
     warnings.push(
       '⚠️ Warning: No valid scope categories are set. ' +
         `${discoveryToolsText} ` +
@@ -244,10 +307,24 @@ export function injectProjectId(
     inputSchema?: NeonTool['inputSchema'];
   },
 ): Record<string, unknown> {
-  if (!grant.projectId) return args;
   if (tool && !tool.projectScoped) return args;
   if (tool?.inputSchema && !schemaHasProjectId(tool.inputSchema)) {
     return args;
+  }
+  if (!grant.projectId) {
+    if (args.project_id === undefined && tool?.inputSchema) {
+      throw new InvalidArgumentError(
+        'project_id is required because this connection is not scoped to a project. ' +
+          'Pass the target project ID, for example one returned by list_projects.',
+      );
+    }
+    return args;
+  }
+  if (args.project_id !== undefined && args.project_id !== grant.projectId) {
+    throw new InvalidArgumentError(
+      `project_id "${String(args.project_id)}" does not match this connection's project "${grant.projectId}". ` +
+        'Omit project_id to use that project. To work on another project, reconnect with access to it.',
+    );
   }
   return { ...args, project_id: grant.projectId };
 }

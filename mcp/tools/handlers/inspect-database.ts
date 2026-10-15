@@ -30,20 +30,23 @@ type InspectDatabaseParams = {
 };
 
 /**
- * A failed diagnostic is a bug in this catalog, not in a caller's SQL, so it must
- * not be classified as a client error the way a failed `run_sql` is.
+ * A diagnostic Postgres rejects is a bug in this catalog, not in a caller's SQL,
+ * so it must not be classified as a client error the way a failed `run_sql` is.
  * `handleToolError` returns `NeonDbError` straight to the caller without logging
  * it or reporting it to Sentry; rethrowing keeps the actionable message and gets
  * the failure recorded.
+ *
+ * A connection the Neon proxy refused never ran the query, so it stays a
+ * `NeonDbError`.
  */
-async function runDiagnostic<T>(
+export async function runDiagnostic<T>(
   check: InspectCheck,
   run: () => Promise<T>,
 ): Promise<T> {
   try {
     return await run();
   } catch (error) {
-    if (error instanceof NeonDbError) {
+    if (error instanceof NeonDbError && !isRefusedConnection(error)) {
       throw new Error(
         `The "${check}" diagnostic failed against Postgres: ${error.message}`,
         { cause: error },
@@ -51,6 +54,20 @@ async function runDiagnostic<T>(
     }
     throw error;
   }
+}
+
+/**
+ * The proxy refuses an IP allowlist or blocked-network connection with an HTTP
+ * 400 whose `severity` is empty; Postgres sets it on every error it raises. A
+ * quota refusal is another 4xx, which `@neondatabase/serverless` reports only as
+ * this message. A 5xx, a transport failure, or a malformed result is not a
+ * refusal, and if the driver rewords the message it falls back to being reported.
+ */
+function isRefusedConnection(error: NeonDbError): boolean {
+  return (
+    error.severity === '' ||
+    /^Server error \(HTTP status 4\d\d\)/.test(error.message)
+  );
 }
 
 async function runInspectOnDatabase(
@@ -80,7 +97,7 @@ async function runInspectOnDatabase(
   return rows;
 }
 
-function rethrowInspectError(
+export function rethrowInspectError(
   error: unknown,
   wrapped: string | undefined,
 ): never {
@@ -89,6 +106,9 @@ function rethrowInspectError(
   }
   if (error instanceof NotFoundError) {
     throw new NotFoundError(wrapped);
+  }
+  if (error instanceof NeonDbError) {
+    throw Object.assign(new NeonDbError(wrapped), { cause: error });
   }
   throw new Error(wrapped, {
     cause: error instanceof Error ? error : undefined,

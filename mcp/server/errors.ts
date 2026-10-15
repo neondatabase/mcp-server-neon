@@ -1,5 +1,5 @@
-import { NeonApiError } from '@neon/sdk';
 import { NeonDbError } from '@neondatabase/serverless';
+import { ZodError } from 'zod';
 import { logger } from '../utils/logger';
 import { captureException } from '@sentry/node';
 import { agentSentryTags } from '../sentry/utils';
@@ -19,11 +19,43 @@ export class NotFoundError extends Error {
   }
 }
 
-function isClientError(
-  error: unknown,
-): error is InvalidArgumentError | NotFoundError {
+function isClientError(error: unknown): boolean {
   return (
-    error instanceof InvalidArgumentError || error instanceof NotFoundError
+    error instanceof InvalidArgumentError ||
+    error instanceof NotFoundError ||
+    error instanceof ZodError ||
+    isNeonSdkClientError(error)
+  );
+}
+
+/**
+ * `@neon/sdk` 3 throws `NeonError` with `kind: 'client'`; `@neon/sdk` 7, which
+ * `@neon/tools` depends on, throws `NeonClientError`. Two copies of the SDK are
+ * installed, so neither class can be matched with `instanceof`.
+ */
+function isNeonSdkClientError(error: unknown): boolean {
+  return error instanceof Error && 'kind' in error && error.kind === 'client';
+}
+
+type NeonApiErrorLike = Error & {
+  kind: 'api' | 'not_found' | 'auth' | 'rate_limit';
+  status: number;
+  body: unknown;
+};
+
+function isNeonApiError(error: unknown): error is NeonApiErrorLike {
+  if (!(error instanceof Error)) return false;
+  if (!('kind' in error) || !('status' in error) || !('body' in error)) {
+    return false;
+  }
+  const kind = error.kind;
+  return (
+    (kind === 'api' ||
+      kind === 'not_found' ||
+      kind === 'auth' ||
+      kind === 'rate_limit') &&
+    typeof error.status === 'number' &&
+    Number.isInteger(error.status)
   );
 }
 
@@ -57,7 +89,7 @@ export function handleToolError(
 ) {
   if (error instanceof NeonDbError || isClientError(error)) {
     return errorResponse(error);
-  } else if (error instanceof NeonApiError && error.status < 500) {
+  } else if (isNeonApiError(error) && error.status < 500) {
     const reason = apiErrorReason(error.body);
     return {
       isError: true,

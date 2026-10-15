@@ -1,5 +1,6 @@
 import {
   SCOPE_CATEGORIES,
+  isValidRoleName,
   type GrantContext,
   type ScopeCategory,
 } from '../utils/grant-context';
@@ -9,6 +10,7 @@ import { issuedOauthScopes, oauthWriteAllowed } from './issued-scopes';
 const EDITOR_FIELD_NAMES = [
   'projectMode',
   'projectId',
+  'roleName',
   'category',
   'scopes',
   'mode',
@@ -87,13 +89,16 @@ type EditableSelection = {
   grantWrite: boolean;
 };
 
+export type ConsentField = 'projectId' | 'roleName';
+
 type FormFieldError = {
   kind: 'field';
-  field: 'projectId';
+  field: ConsentField;
   message: string;
   selection: {
     projectMode: 'all' | 'one';
     projectId: string;
+    roleName: string;
     categories: ScopeCategory[];
     grantWrite: boolean;
   };
@@ -161,10 +166,12 @@ function parseCategories(
 function grantFromEditableSelection({
   projectMode,
   projectId,
+  roleName,
   categories,
 }: {
   projectMode: 'all' | 'one';
   projectId: string;
+  roleName: string | undefined;
   categories: ScopeCategory[];
 }): GrantContext {
   const selectedProjectId = projectMode === 'one' ? projectId.trim() : null;
@@ -177,6 +184,7 @@ function grantFromEditableSelection({
   return {
     projectId: selectedProjectId,
     scopes,
+    ...(roleName !== undefined ? { roleName } : {}),
   };
 }
 
@@ -281,23 +289,54 @@ export function parseConsentPost({
     };
   }
   const projectId = projectIdField.value ?? '';
-  if (projectModeField.value === 'one' && projectId.trim() === '') {
+
+  const roleNameField = readScalarString(form, 'roleName');
+  if (!roleNameField.ok) {
+    return {
+      action: 'invalid',
+      error: {
+        kind: 'invalid_request',
+        description: 'Invalid Postgres role',
+      },
+    };
+  }
+  const roleNameInput = roleNameField.value ?? '';
+  const roleName = roleNameInput.trim() || undefined;
+
+  const fieldError = (
+    field: ConsentField,
+    message: string,
+  ): ParsedConsentPost => {
     const categoriesField = parseCategories(form);
     const scopesField = readScopeSelection(form);
     return {
       action: 'invalid',
       error: {
         kind: 'field',
-        field: 'projectId',
-        message: 'Enter the project ID this connection should use.',
+        field,
+        message,
         selection: {
-          projectMode: 'one',
+          projectMode: projectModeField.value === 'one' ? 'one' : 'all',
           projectId,
+          roleName: roleNameInput,
           categories: categoriesField.ok ? categoriesField.categories : [],
           grantWrite: scopesField.ok ? scopesField.grantWrite : false,
         },
       },
     };
+  };
+
+  if (projectModeField.value === 'one' && projectId.trim() === '') {
+    return fieldError(
+      'projectId',
+      'Enter the project ID this connection should use.',
+    );
+  }
+  if (roleName !== undefined && !isValidRoleName(roleName)) {
+    return fieldError(
+      'roleName',
+      'Enter one Postgres role name: letters, digits, "_" or "$", starting with a letter or "_", at most 63 characters.',
+    );
   }
 
   const categoriesField = parseCategories(form);
@@ -323,6 +362,7 @@ export function parseConsentPost({
     grant: grantFromEditableSelection({
       projectMode: projectModeField.value,
       projectId,
+      roleName,
       categories: categoriesField.categories,
     }),
     grantWrite: scopesField.grantWrite,

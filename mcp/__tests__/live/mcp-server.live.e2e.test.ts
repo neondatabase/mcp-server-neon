@@ -7,6 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { neon } from '@neondatabase/serverless';
 import { z } from 'zod';
 import type { NeonApiClient } from '../../neon-client';
+import type { ServerContext } from '../../types/context';
 import {
   INSPECT_CHECKS,
   INSPECT_QUERIES,
@@ -142,6 +143,8 @@ function holdTableLock(uri: string, table: string, marker: string) {
 describe.sequential('MCP server live Neon lifecycle', () => {
   let client: Client | undefined;
   let server: McpServer | undefined;
+  let readOnlyClient: Client | undefined;
+  let readOnlyServer: McpServer | undefined;
   let neonClient: NeonApiClient | undefined;
   let testOrgId = '';
   let projectId: string | undefined;
@@ -249,7 +252,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     }
     await neonClient.getOrganization(testOrgId);
 
-    server = await createMcpServer({
+    const context: ServerContext = {
       apiKey,
       authMethod: authDetails.auth_method,
       account: {
@@ -265,16 +268,24 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         version: 'live-e2e',
       },
       userAgent: 'mcp-server-neon-live-e2e',
-    });
+    };
+    const connect = async (serverContext: ServerContext) => {
+      const connectedServer = await createMcpServer(serverContext);
+      const connectedClient = new Client({
+        name: 'mcp-server-neon-live-e2e',
+        version: '1.0.0',
+      });
+      const [clientTransport, serverTransport] =
+        InMemoryTransport.createLinkedPair();
+      await connectedServer.connect(serverTransport);
+      await connectedClient.connect(clientTransport);
+      return { connectedServer, connectedClient };
+    };
 
-    client = new Client({
-      name: 'mcp-server-neon-live-e2e',
-      version: '1.0.0',
-    });
-    const [clientTransport, serverTransport] =
-      InMemoryTransport.createLinkedPair();
-    await server.connect(serverTransport);
-    await client.connect(clientTransport);
+    ({ connectedServer: server, connectedClient: client } =
+      await connect(context));
+    ({ connectedServer: readOnlyServer, connectedClient: readOnlyClient } =
+      await connect({ ...context, readOnly: true }));
   }, LIVE_TEST_TIMEOUT_MS);
 
   afterAll(async () => {
@@ -296,6 +307,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     } finally {
       await client?.close();
       await server?.close();
+      await readOnlyClient?.close();
+      await readOnlyServer?.close();
     }
   }, LIVE_TEST_TIMEOUT_MS);
 
@@ -330,6 +343,122 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         ],
       });
       assertToolSucceeded('run_sql_transaction', result);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'keeps writes out of a read-only connection',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!readOnlyClient)
+        throw new Error('Read-only client is not connected.');
+      const roClient = readOnlyClient;
+      const roRunSql = (sql: string) =>
+        roClient.callTool({
+          name: 'run_sql',
+          arguments: { project_id: projectId, sql },
+        });
+      const expectRejected = (result: unknown, message: string) => {
+        expect(toolResultSchema.parse(result).isError).toBe(true);
+        expect(textContent(result)).toContain(message);
+      };
+
+      const { tools } = await roClient.listTools();
+      const toolNames = tools.map((tool) => tool.name);
+      expect(toolNames).toContain('run_sql');
+      expect(toolNames).not.toContain('run_sql_transaction');
+
+      const transaction = await roClient.callTool({
+        name: 'run_sql_transaction',
+        arguments: {
+          project_id: projectId,
+          sql_statements: [
+            'COMMIT',
+            "INSERT INTO public.property_options VALUES ('escaped')",
+          ],
+        },
+      });
+      expectRejected(
+        transaction,
+        'MCP error -32602: Tool run_sql_transaction not found',
+      );
+
+      expectRejected(
+        await roRunSql(
+          "INSERT INTO public.property_options VALUES ('escaped')",
+        ),
+        'cannot execute INSERT in a read-only transaction',
+      );
+      expectRejected(
+        await roRunSql(
+          "COMMIT; INSERT INTO public.property_options VALUES ('escaped')",
+        ),
+        'cannot insert multiple commands into a prepared statement',
+      );
+      expectRejected(
+        await roRunSql(
+          "DO $$ BEGIN SET TRANSACTION READ WRITE; INSERT INTO public.property_options VALUES ('escaped'); END $$",
+        ),
+        'transaction read-write mode must be set before any query',
+      );
+
+      const count = await roRunSql(
+        'SELECT count(*)::int AS n FROM public.property_options',
+      );
+      expect(JSON.parse(assertToolSucceeded('run_sql', count))).toEqual([
+        { n: 0 },
+      ]);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'describes a branch without leaving show_db_tree in the database',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!neonClient) throw new Error('Neon SDK client is not initialized.');
+
+      const branches = await neonClient.listProjectBranches({ projectId });
+      const defaultBranch = branches.data.branches.find(
+        (branch) => branch.default,
+      );
+      if (!defaultBranch) throw new Error('Default branch was not found.');
+
+      const result = toolResultSchema.parse(
+        await callTool('describe_branch', {
+          project_id: projectId,
+          branch_id: defaultBranch.id,
+          database_name: 'neondb',
+        }),
+      );
+      expect(result.isError).toBeFalsy();
+      const structureText = result.content
+        .map((item) => textContentSchema.safeParse(item))
+        .flatMap((parsed) => (parsed.success ? [parsed.data.text] : []))
+        .find((text) => text.startsWith('Database Structure:'));
+      if (!structureText) {
+        throw new Error('describe_branch returned no database structure.');
+      }
+      const structure = z
+        .tuple([
+          z.array(z.unknown()),
+          z.array(z.object({ tree_structure: z.string() })),
+        ])
+        .parse(JSON.parse(structureText.slice('Database Structure:'.length)));
+      expect(
+        structure[1].some((row) =>
+          row.tree_structure.includes('property_options'),
+        ),
+      ).toBe(true);
+
+      const remaining = await callTool('run_sql', {
+        project_id: projectId,
+        sql: "SELECT count(*)::int AS n FROM pg_proc WHERE proname = 'show_db_tree'",
+      });
+      expect(JSON.parse(assertToolSucceeded('run_sql', remaining))).toEqual([
+        { n: 0 },
+      ]);
     },
     LIVE_TEST_TIMEOUT_MS,
   );

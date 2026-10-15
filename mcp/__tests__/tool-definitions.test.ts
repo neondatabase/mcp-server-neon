@@ -14,6 +14,7 @@ import { generatedToolPathHas } from '../tools/generated/adapt';
 import { PINNED_MCP_NAMES, TOOL_NAMES } from '../tools/generated/names';
 import { GENERATED_TOOL_IDS } from '../tools/generated/operations';
 import { NEON_HANDLERS } from '../tools/tools';
+import { explainSqlStatementInputSchema } from '../tools/toolsSchema';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
 
 const HOST_READ_ONLY_TOOLS = [
@@ -29,8 +30,8 @@ const HOST_READ_ONLY_TOOLS = [
   'list_organizations',
   'list_slow_queries',
   'run_sql',
-  'run_sql_transaction',
   'search',
+  'send_feedback',
 ];
 
 const SECRET_GENERATED_TOOLS = [
@@ -88,18 +89,20 @@ describe('NEON_TOOLS definitions', () => {
     }
   });
 
-  it('marks private Neon operations closed-world and docs open-world', () => {
-    expect(NEON_TOOLS).toHaveLength(113);
+  it('marks private Neon operations closed-world and public-capable ones open-world', () => {
+    expect(NEON_TOOLS).toHaveLength(114);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
     expect(generated).toHaveLength(94);
-    expect(
-      generated.every((tool) => tool.annotations.openWorldHint === false),
-    ).toBe(true);
     expect(
       NEON_TOOLS.filter((tool) => tool.annotations.openWorldHint)
         .map((tool) => tool.name)
         .sort(),
-    ).toEqual(['get_doc_resource', 'list_docs_resources']);
+    ).toEqual([
+      'create_storage_bucket',
+      'get_doc_resource',
+      'list_docs_resources',
+      'send_feedback',
+    ]);
   });
 
   it('every tool has a corresponding handler in NEON_HANDLERS', () => {
@@ -181,12 +184,36 @@ describe('read-only tool surface', () => {
     expect(tool!.readOnlySafe).toBe(false);
   });
 
+  it('withholds run_sql_transaction, whose statements can end the read-only transaction', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'run_sql_transaction');
+
+    expect(tool!.readOnlySafe).toBe(false);
+  });
+
   it('treats query_logs as read-only despite POST', () => {
     const tool = NEON_TOOLS.find((t) => t.name === 'query_logs');
     expect(tool).toBeDefined();
     expect(tool!.readOnlySafe).toBe(true);
     expect(tool!.annotations.readOnlyHint).toBe(true);
     expect(tool!.annotations.destructiveHint).toBe(false);
+  });
+
+  it('marks explain_sql_statement as potentially side-effecting', () => {
+    const tool = NEON_TOOLS.find(
+      (candidate) => candidate.name === 'explain_sql_statement',
+    );
+
+    expect(tool).toBeDefined();
+    expect(tool!.readOnlySafe).toBe(true);
+    expect(tool!.annotations.readOnlyHint).toBe(false);
+    expect(tool!.annotations.destructiveHint).toBe(true);
+    expect(tool!.annotations.idempotentHint).toBe(false);
+    expect(
+      explainSqlStatementInputSchema.parse({
+        sql: 'select 1',
+        project_id: 'proj-1',
+      }).analyze,
+    ).toBe(false);
   });
 
   it('publishes every tool argument in snake_case', () => {

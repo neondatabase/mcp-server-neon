@@ -1,13 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NEON_TOOLS } from '../tools/definitions';
+import { getFilteredTools } from '../tools/grant-filter';
 import { toListedTool } from '../tools/listed-schema';
 import type { GrantContext } from '../utils/grant-context';
 
 const { flushAnalyticsSpy, runSqlSpy, trackSpy } = vi.hoisted(() => ({
   flushAnalyticsSpy: vi.fn().mockResolvedValue(undefined),
-  runSqlSpy: vi.fn(async ({ params }: { params: Record<string, unknown> }) => ({
-    content: [{ type: 'text', text: JSON.stringify(params) }],
-  })),
+  runSqlSpy: vi.fn(
+    async (
+      { params }: { params: Record<string, unknown> },
+      ..._context: unknown[]
+    ) => {
+      void _context;
+      return {
+        content: [{ type: 'text', text: JSON.stringify(params) }],
+      };
+    },
+  ),
   trackSpy: vi.fn(),
 }));
 
@@ -17,16 +25,29 @@ vi.mock('../oauth/model', () => ({
   },
 }));
 
+// The invalid-token challenge test must not verify its fake key against Neon.
+vi.mock('../server/api', () => ({
+  createNeonClient: () => ({
+    getAuthDetails: vi.fn().mockRejectedValue(new Error('Invalid test token')),
+  }),
+}));
+
 // Mocks the module that defines the handlers, not the barrel that re-exports
 // them, so it applies no matter which one the code under test imports.
 vi.mock('../tools/tools', async () => {
   const actual =
     await vi.importActual<typeof import('../tools/tools')>('../tools/tools');
+  const { runSqlInputSchema } = await import('../tools/toolsSchema');
   return {
     ...actual,
     NEON_HANDLERS: {
       ...actual.NEON_HANDLERS,
-      run_sql: runSqlSpy,
+      // Preserve the real handler's required-ID validation after grant injection.
+      // The shared published schema now permits an omitted project_id.
+      run_sql: (...args: Parameters<typeof actual.NEON_HANDLERS.run_sql>) => {
+        const params = runSqlInputSchema.parse(args[0]?.params ?? {});
+        return runSqlSpy({ params }, args[1], args[2]);
+      },
     },
   };
 });
@@ -223,8 +244,9 @@ describe('transport dynamic tool composition', () => {
     };
     expect(initBody.result?.instructions).toContain('read-only permissions');
     expect(initBody.result?.instructions).toContain(
-      'scoped to one project only (proj_instructions)',
+      'always pass it on an unscoped connection',
     );
+    expect(initBody.result?.instructions).not.toContain('proj_instructions');
 
     const tools = await listToolsForToken(oauthToken);
     for (const tool of tools) {
@@ -591,6 +613,49 @@ describe('transport dynamic tool composition', () => {
     expect(readOnlyNames.has('list_projects')).toBe(true);
   });
 
+  it('withholds run_sql_transaction from an OAuth read token', async () => {
+    const fullAccessToken = 'oauth-full-tx';
+    const readOnlyToken = 'oauth-read-only-tx';
+
+    vi.mocked(model.getAccessToken).mockImplementation(async (token) => {
+      if (token === fullAccessToken) {
+        return buildOAuthToken(fullAccessToken, 'read write');
+      }
+      if (token === readOnlyToken) {
+        return buildOAuthToken(readOnlyToken, 'read');
+      }
+      return undefined;
+    });
+
+    const fullNames = new Set(
+      (await listToolsForToken(fullAccessToken)).map((t) => t.name),
+    );
+    const readOnlyNames = new Set(
+      (await listToolsForToken(readOnlyToken)).map((t) => t.name),
+    );
+
+    expect(fullNames.has('run_sql_transaction')).toBe(true);
+    expect(readOnlyNames.has('run_sql')).toBe(true);
+    expect(readOnlyNames.has('run_sql_transaction')).toBe(false);
+
+    const call = await mcpCall(readOnlyToken, 'tools/call', 3, {
+      name: 'run_sql_transaction',
+      arguments: {
+        project_id: 'proj_123',
+        sql_statements: ['COMMIT', 'DROP TABLE t'],
+      },
+    });
+    expect(call.status).toBe(200);
+    expect(call.body).toMatchObject({
+      jsonrpc: '2.0',
+      id: 3,
+      error: {
+        code: -32602,
+        message: 'Tool run_sql_transaction not found',
+      },
+    });
+  });
+
   it('ignores runtime URL grant params for OAuth tokens', async () => {
     const oauthToken = 'oauth-unscoped-with-query';
 
@@ -678,7 +743,11 @@ describe('transport dynamic tool composition', () => {
     );
 
     const tools = await listToolsForToken(oauthToken);
-    expect(tools).toEqual(NEON_TOOLS.map(toListedTool));
+    expect(tools).toEqual(
+      getFilteredTools({ projectId: null, scopes: null }, false).map(
+        toListedTool,
+      ),
+    );
 
     const inspect = tools.find((tool) => tool.name === 'inspect_database');
     expect(JSON.stringify(inspect?.inputSchema)).toContain('table-sizes');

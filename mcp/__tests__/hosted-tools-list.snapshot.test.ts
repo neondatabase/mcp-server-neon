@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { NEON_TOOLS } from '../tools/definitions';
-import { getFilteredTools } from '../tools/grant-filter';
+import { getFilteredTools, isDocsOnlyTool } from '../tools/grant-filter';
 import { toListedTool } from '../tools/listed-schema';
 
 const ALWAYS_AVAILABLE_NAMES = new Set(
@@ -42,7 +42,7 @@ function catalogRows() {
       listed,
       kind: tool.kind,
       scope: tool.scope ?? 'global',
-      public: tool.scope === 'docs',
+      public: isDocsOnlyTool(tool),
       alwaysAvailable: ALWAYS_AVAILABLE_NAMES.has(tool.name),
       projectScoped: tool.projectScoped,
       readOnlySafe: tool.readOnlySafe,
@@ -74,9 +74,9 @@ function catalogMarkdown(): string {
   ];
 
   const lines = [
-    '# Hosted MCP tool catalog',
+    '# Canonical MCP tool definitions',
     '',
-    'Default-grant `tools/list` plus host flags. `public` means the unauthenticated docs MCP (`?category=docs`). `readOnlySafe` is the server read-only allowlist; `readOnlyHint` is the MCP annotation.',
+    'Full internal `NEON_TOOLS` schemas plus host flags, before grant filtering or published-schema adaptation. `public` means the unauthenticated docs MCP (`?category=docs`). `readOnlySafe` is the server read-only allowlist; `readOnlyHint` is the MCP annotation.',
     '',
     `| ${header.join(' | ')} |`,
     `| ${header.map(() => '---').join(' | ')} |`,
@@ -109,8 +109,8 @@ function catalogMarkdown(): string {
   return `${lines.join('\n')}\n`;
 }
 
-describe('hosted tools/list catalog', () => {
-  it('snapshots the default-grant tools/list payload', async () => {
+describe('canonical tool definitions', () => {
+  it('snapshots the full internal tool schemas', async () => {
     const listed = catalogRows().map((row) => row.listed);
     await expect(`${JSON.stringify(listed, null, 2)}\n`).toMatchFileSnapshot(
       './__snapshots__/hosted-tools-list.json',

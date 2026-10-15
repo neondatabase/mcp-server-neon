@@ -20,6 +20,7 @@ import {
   getDocResource,
   listDocsResources,
 } from '../../../mcp/tools/handlers/docs';
+import { sendFeedback } from '../../../mcp/tools/handlers/feedback';
 import { createNeonClient } from '../../../mcp/server/api';
 import pkg from '../../../package.json';
 import { handleToolError } from '../../../mcp/server/errors';
@@ -38,15 +39,19 @@ import { agentSentryTags, setSentryTags } from '../../../mcp/sentry/utils';
 import type { ServerContext, AppContext } from '../../../mcp/types/context';
 import {
   isDocsOnlyRequest,
+  normalizeStoredGrant,
+  parseRoleNameParam,
   resolveGrantFromSearchParams,
   resolveGrantFromToken,
   DEFAULT_GRANT,
+  InvalidRoleNameError,
   type GrantContext,
 } from '../../../mcp/utils/grant-context';
 import {
   getAvailableTools,
   getAccessControlWarnings,
   formatAccessControlInstructions,
+  isDocsOnlyTool,
 } from '../../../mcp/tools/grant-filter';
 import { invokeTool, toolRegistration } from '../../../mcp/tools/registration';
 import { toListedInputSchema } from '../../../mcp/tools/listed-schema';
@@ -79,8 +84,15 @@ const ACTIVE_TRANSPORT_PATHS = new Set<string>([
 
 const JSON_RESPONSE_HEADERS = { 'Content-Type': 'application/json' } as const;
 
+type JsonErrorDefinition = {
+  status: number;
+  error: string;
+  code: string;
+};
+
 const HTTP_STATUS = {
   unauthorized: 401,
+  serviceUnavailable: 503,
 } as const;
 
 function v2ToolConfig(tool: NeonTool) {
@@ -124,6 +136,26 @@ type AuthenticatedAuthInfo = AuthInfo & {
     userAgent?: string;
   };
 };
+
+const TOKEN_STORE_UNAVAILABLE_RESPONSE: JsonErrorDefinition = {
+  status: HTTP_STATUS.serviceUnavailable,
+  error: 'Token store unavailable',
+  code: 'token_store_unavailable',
+};
+
+const TOKEN_STORE_RETRY_AFTER_SECONDS = '5';
+
+// verifyToken can only return auth info or nothing, and mcp-handler turns
+// nothing into a 401 that sends OAuth clients back through refresh. Requests
+// that failed because the token store was down are marked here so
+// handleRequest can answer 503 instead.
+const tokenStoreUnavailableRequests = new WeakSet<Request>();
+
+function tokenStoreUnavailableResponse(): Response {
+  const response = jsonErrorResponse(TOKEN_STORE_UNAVAILABLE_RESPONSE);
+  response.headers.set('Retry-After', TOKEN_STORE_RETRY_AFTER_SECONDS);
+  return response;
+}
 
 type StaticToolContext = {
   grant: GrantContext;
@@ -496,14 +528,16 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
   );
 }
 
-// The docs-only handler bypasses OAuth entirely. It only registers tools
-// scoped to the `docs` category, which currently fetch from neon.com via
-// global fetch and never touch the Neon API client. We deliberately avoid
-// going through `getAvailableTools` / `grant-filter` here so the
-// "always available" search/fetch tools (which require Neon API auth) are
-// not surfaced anonymously.
-const DOCS_ONLY_TOOLS = NEON_TOOLS.filter((tool) => tool.scope === 'docs');
-function getDocsOnlyToolDefinition(name: string) {
+// The docs-only handler bypasses OAuth entirely. It only registers the
+// `docs` category tools plus send_feedback. None of them touch the Neon API
+// client: they call neon.com or the feedback service via global fetch. We
+// deliberately avoid going through `getAvailableTools` / `grant-filter` here
+// so the "always available" search/fetch tools (which require Neon API auth)
+// are not surfaced anonymously.
+const DOCS_ONLY_TOOLS = NEON_TOOLS.filter(isDocsOnlyTool);
+function getDocsOnlyToolDefinition(
+  name: 'list_docs_resources' | 'get_doc_resource' | 'send_feedback',
+) {
   const tool = DOCS_ONLY_TOOLS.find((tool) => tool.name === name);
   assert(tool, `${name} tool definition not found`);
   return tool;
@@ -511,6 +545,7 @@ function getDocsOnlyToolDefinition(name: string) {
 
 const listDocsResourcesTool = getDocsOnlyToolDefinition('list_docs_resources');
 const getDocResourceTool = getDocsOnlyToolDefinition('get_doc_resource');
+const sendFeedbackTool = getDocsOnlyToolDefinition('send_feedback');
 
 const ANONYMOUS_DOCS_USER_ID = 'anonymous-docs';
 
@@ -624,6 +659,24 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
           );
         },
       );
+      server.registerTool(
+        sendFeedbackTool.name,
+        v2ToolConfig(sendFeedbackTool),
+        async (args: unknown) => {
+          assert(
+            !!args &&
+              typeof args === 'object' &&
+              'feedback' in args &&
+              typeof args.feedback === 'string',
+            'send_feedback arguments were not validated',
+          );
+          const feedback = args.feedback;
+          return runDocsTool(sendFeedbackTool.name, userAgent, async () => {
+            await sendFeedback({ feedback });
+            return 'Feedback received. Thank you!';
+          });
+        },
+      );
     },
     {
       serverInfo: {
@@ -672,15 +725,17 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
 const API_KEY_CACHE_TTL_MS = 5 * 60 * 1000;
 
 // Helper: Fetch and cache API key details
+// Resolves an API key's account, or reports `'oauth'` as soon as Neon says
+// the bearer is an OAuth token, before account resolution can fail it.
 const fetchAccountDetails = async (
   accessToken: string,
-): Promise<ApiKeyRecord | null> => {
+): Promise<ApiKeyRecord | 'oauth' | null> => {
   // 1. Check cache first
   try {
     const cached = await getApiKeys().get(accessToken);
     if (cached) {
       logger.info('API key cache hit', { accountId: cached.account.id });
-      return cached;
+      return cached.authMethod === 'oauth' ? 'oauth' : cached;
     }
   } catch (error) {
     logger.warn('API key cache read failed', { error });
@@ -690,6 +745,9 @@ const fetchAccountDetails = async (
   try {
     const neonClient = createNeonClient(accessToken);
     const { data: auth } = await neonClient.getAuthDetails();
+    if (auth.auth_method === 'oauth') {
+      return 'oauth';
+    }
 
     // Use shared account resolution with identify on cache miss
     const account = await resolveAccountFromAuth(auth, neonClient, {
@@ -753,54 +811,66 @@ const verifyToken = async (
   // PATH 1: Check OAuth tokens table FIRST
   // (For users who authenticated via OAuth flow)
   // ============================================
+  let tokenLookupFailed = false;
+  let token: Awaited<ReturnType<typeof model.getAccessToken>> | undefined;
   try {
-    const token = await model.getAccessToken(bearerToken);
-    if (token) {
-      // Expiration is checked by withMcpAuth using expiresAt field
-      // which returns proper RFC-compliant 401 with WWW-Authenticate header
-
-      logger.info('OAuth token found', { clientId: token.client.id });
-
-      const tokenGrant = resolveGrantFromToken(
-        token as { grant?: GrantContext },
-      );
-
-      const readOnly = isReadOnly({
-        scope: token.scope,
-      });
-
-      // Return auth from stored token (0 API calls!)
-      return {
-        token: token.accessToken,
-        scopes: Array.isArray(token.scope)
-          ? token.scope
-          : (token.scope?.split(' ') ?? ['read', 'write']),
-        clientId: token.client.id,
-        expiresAt: token.expires_at
-          ? Math.floor(token.expires_at / 1000)
-          : undefined,
-        extra: {
-          authMethod: 'oauth',
-          account: {
-            id: token.user.id,
-            name: token.user.name,
-            email: token.user.email,
-            isOrg: token.user.isOrg ?? false,
-          },
-          apiKey: bearerToken,
-          readOnly,
-          grant: tokenGrant,
-          client: {
-            id: token.client.id,
-            name: token.client.client_name,
-          },
-          transport: 'stream',
-          userAgent,
-        },
-      };
-    }
+    token = await model.getAccessToken(bearerToken);
   } catch (error) {
+    tokenLookupFailed = true;
     logger.warn('OAuth token lookup failed, trying API key path', { error });
+  }
+  if (token) {
+    // Expiration is checked by withMcpAuth using expiresAt field
+    // which returns proper RFC-compliant 401 with WWW-Authenticate header
+
+    logger.info('OAuth token found', { clientId: token.client.id });
+
+    let tokenGrant: GrantContext;
+    try {
+      tokenGrant = resolveGrantFromToken(token as { grant?: GrantContext });
+    } catch (error) {
+      // A stored grant we cannot read must not fall through to the API-key
+      // path, which would authenticate the same bearer without its grant.
+      logger.error('OAuth token grant is invalid', {
+        clientId: token.client.id,
+        errorName: error instanceof Error ? error.name : 'unknown',
+      });
+      return undefined;
+    }
+
+    const readOnly = isReadOnly({
+      scope: token.scope,
+    });
+
+    // Return auth from stored token (0 API calls!)
+    return {
+      token: token.accessToken,
+      scopes: Array.isArray(token.scope)
+        ? token.scope
+        : (token.scope?.split(' ') ?? ['read', 'write']),
+      clientId: token.client.id,
+      expiresAt: token.expires_at
+        ? Math.floor(token.expires_at / 1000)
+        : undefined,
+      extra: {
+        authMethod: 'oauth',
+        account: {
+          id: token.user.id,
+          name: token.user.name,
+          email: token.user.email,
+          isOrg: token.user.isOrg ?? false,
+        },
+        apiKey: bearerToken,
+        readOnly,
+        grant: tokenGrant,
+        client: {
+          id: token.client.id,
+          name: token.client.client_name,
+        },
+        transport: 'stream',
+        userAgent,
+      },
+    };
   }
 
   // ============================================
@@ -813,6 +883,19 @@ const verifyToken = async (
 
   const apiKeyRecord = await fetchAccountDetails(bearerToken);
   if (!apiKeyRecord) {
+    return undefined;
+  }
+
+  // Our access tokens are Neon OAuth tokens, so they also pass the API-key
+  // check. Their grant and scope live only in the token store; building them
+  // from the URL here would drop what the user chose at consent.
+  if (apiKeyRecord === 'oauth') {
+    logger.warn('OAuth bearer reached the API key path; refusing URL grant', {
+      tokenLookupFailed,
+    });
+    if (tokenLookupFailed) {
+      tokenStoreUnavailableRequests.add(req);
+    }
     return undefined;
   }
 
@@ -850,10 +933,7 @@ function getStaticToolContext(req: Request): StaticToolContext {
     typeof grantFromAuth === 'object' &&
     'projectId' in grantFromAuth &&
     'scopes' in grantFromAuth
-      ? {
-          projectId: grantFromAuth.projectId ?? null,
-          scopes: grantFromAuth.scopes ?? null,
-        }
+      ? normalizeStoredGrant(grantFromAuth)
       : DEFAULT_GRANT;
 
   return {
@@ -888,6 +968,17 @@ function stripBody(response: Response): Response {
     status: response.status,
     statusText: response.statusText,
     headers: response.headers,
+  });
+}
+
+function jsonErrorResponse({
+  status,
+  error,
+  code,
+}: JsonErrorDefinition): Response {
+  return new Response(JSON.stringify({ error, code }), {
+    status,
+    headers: JSON_RESPONSE_HEADERS,
   });
 }
 
@@ -992,6 +1083,23 @@ const handleRequest = (req: Request) => {
     return originRejection;
   }
 
+  // A malformed pinned role is rejected before auth rather than ignored, so a
+  // typo in the connection URL cannot silently fall back to the owner role.
+  try {
+    parseRoleNameParam(url.searchParams);
+  } catch (error) {
+    if (error instanceof InvalidRoleNameError) {
+      return new Response(
+        JSON.stringify({
+          error: 'invalid_request',
+          error_description: error.message,
+        }),
+        { status: 400, headers: JSON_RESPONSE_HEADERS },
+      );
+    }
+    throw error;
+  }
+
   if (url.pathname === ROUTE_PATHS.legacyMcp) {
     url.pathname = ROUTE_PATHS.canonicalMcp;
   }
@@ -1013,7 +1121,11 @@ const handleRequest = (req: Request) => {
       return headMirrorResponse();
     }
     return Promise.resolve(headAuthHandler(normalizedReq)).then((resolved) =>
-      stripBody(rewriteResourceMetadataHeader(resolved, req)),
+      stripBody(
+        tokenStoreUnavailableRequests.has(normalizedReq)
+          ? tokenStoreUnavailableResponse()
+          : rewriteResourceMetadataHeader(resolved, req),
+      ),
     );
   }
 
@@ -1026,13 +1138,11 @@ const handleRequest = (req: Request) => {
     );
   }
 
-  const response = authHandler(normalizedReq);
-  if (response instanceof Promise) {
-    return response.then((resolved) =>
-      rewriteResourceMetadataHeader(resolved, req),
-    );
-  }
-  return rewriteResourceMetadataHeader(response, req);
+  return Promise.resolve(authHandler(normalizedReq)).then((resolved) =>
+    tokenStoreUnavailableRequests.has(normalizedReq)
+      ? tokenStoreUnavailableResponse()
+      : rewriteResourceMetadataHeader(resolved, req),
+  );
 };
 
 // HEAD is exported explicitly. Next.js would otherwise route it to the GET export,
