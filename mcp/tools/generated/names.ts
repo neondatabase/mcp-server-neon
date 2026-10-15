@@ -106,6 +106,12 @@ export const PINNED_MCP_NAMES = {
   'storage.objects.delete': 'delete_storage_object',
   'storage.objects.deleteByPrefix': 'delete_storage_objects_by_prefix',
   'storage.objects.presign': 'presign_storage_object',
+
+  'realtime.get': 'get_realtime',
+  'realtime.enable': 'enable_realtime',
+  'realtime.disable': 'disable_realtime',
+  'realtime.secret': 'get_realtime_secret',
+  'realtime.rotateSecret': 'rotate_realtime_secret',
 } as const satisfies Record<GeneratedToolId, string>;
 
 export const TOOL_NAMES = Object.fromEntries(

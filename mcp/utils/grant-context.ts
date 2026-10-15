@@ -24,6 +24,7 @@ export const SCOPE_CATEGORIES = [
   'docs',
   'functions',
   'storage',
+  'realtime',
 ] as const;
 
 export type ScopeCategory = (typeof SCOPE_CATEGORIES)[number];

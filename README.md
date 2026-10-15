@@ -315,6 +315,7 @@ Each tool definition includes a `scope` category used for grant-based tool filte
 - `docs`
 - `functions`
 - `storage`
+- `realtime`
 - `null` (tools without a scope category: `search`, `fetch`, `send_feedback`)
 
 Notes:
@@ -422,6 +423,12 @@ Notes:
 - **`list_storage_buckets`**, **`create_storage_bucket`**, **`delete_storage_bucket`**
 - **`list_storage_objects`**, **`delete_storage_object`**, **`delete_storage_objects_by_prefix`**
 - **`presign_storage_object`**, **`get_storage`**
+
+**Realtime** (`?category=realtime`):
+
+- **`get_realtime`**, **`enable_realtime`**, **`disable_realtime`**: Branch Realtime state, enable (optional `allowed_origins`), and disable. Enable and disable wait until the change is applied.
+- **`get_realtime_secret`**: The shared secret the application backend issues Realtime tokens with. Not available in read-only mode.
+- **`rotate_realtime_secret`**: Replaces the shared secret and waits until the change is applied. Not idempotent. Call `get_realtime_secret` afterwards for the new value.
 
 ### Migrations
 

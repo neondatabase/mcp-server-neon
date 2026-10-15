@@ -30,6 +30,7 @@ const SCOPE_CATEGORY_LABELS: Record<ScopeCategory, string> = {
   docs: 'Docs',
   functions: 'Functions',
   storage: 'Storage',
+  realtime: 'Realtime',
 };
 
 const DISCOVERY_LABEL = 'Discovery';
@@ -441,6 +442,7 @@ function renderEditableGrant({
     'data_api',
     'docs',
     'storage',
+    'realtime',
   ] satisfies ScopeCategory[];
   const categoryBoxes = displayCategories
     .map((category) => {
@@ -955,7 +957,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     .choice-action { border: 0; padding: 0; background: transparent; color: var(--green); font-size: 15px; }
     .choice-action + .choice-action { padding-left: 12px; border-left: 1px solid var(--line); }
     .choice-action:hover { color: #fff; }
-    .check-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(4, auto); grid-auto-flow: column; gap: 12px 32px; }
+    .check-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(5, auto); grid-auto-flow: column; gap: 12px 32px; }
     .check-grid .check-option { min-width: 0; }
     .facts { display: grid; gap: 12px; margin: 0; }
     .facts > div { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; }
@@ -1003,7 +1005,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       .category-summary { font-size: 13px; text-align: left; }
       .card-foot { padding: 16px 20px; }
       .button { flex: 1; max-width: 152px; width: auto; }
-      .check-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(6, auto); gap: 12px 16px; }
+      .check-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(7, auto); gap: 12px 16px; }
       .facts > div { grid-template-columns: 38% minmax(0, 1fr); gap: 12px; }
       .tool-content { grid-template-columns: 1fr; }
       .client-meta > div { grid-template-columns: 1fr; gap: 4px; }
