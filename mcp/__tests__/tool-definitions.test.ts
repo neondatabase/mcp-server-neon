@@ -90,9 +90,9 @@ describe('NEON_TOOLS definitions', () => {
   });
 
   it('marks private Neon operations closed-world and public-capable ones open-world', () => {
-    expect(NEON_TOOLS).toHaveLength(114);
+    expect(NEON_TOOLS).toHaveLength(119);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
-    expect(generated).toHaveLength(94);
+    expect(generated).toHaveLength(99);
     expect(
       NEON_TOOLS.filter((tool) => tool.annotations.openWorldHint)
         .map((tool) => tool.name)
@@ -471,6 +471,27 @@ describe('generated tool interface', () => {
     expect(rotate?.annotations.destructiveHint).toBe(true);
     expect(rotate?.annotations.idempotentHint).toBe(false);
     expect(rotate?.readOnlySafe).toBe(false);
+  });
+
+  it('exposes Realtime tools under the realtime category and keeps the secret out of read-only mode', () => {
+    const byName = (name: string) =>
+      NEON_TOOLS.find((tool) => tool.name === name);
+    const get = byName('get_realtime');
+    const enable = byName('enable_realtime');
+    const disable = byName('disable_realtime');
+    const secret = byName('get_realtime_secret');
+    const rotate = byName('rotate_realtime_secret');
+    for (const tool of [get, enable, disable, secret, rotate]) {
+      expect(tool?.scope).toBe('realtime');
+    }
+    expect(get?.readOnlySafe).toBe(true);
+    expect(enable?.readOnlySafe).toBe(false);
+    expect(disable?.annotations.destructiveHint).toBe(true);
+    expect(secret?.readOnlySafe).toBe(false);
+    expect(secret?.annotations.readOnlyHint).toBe(true);
+    expect(rotate?.readOnlySafe).toBe(false);
+    expect(rotate?.annotations.destructiveHint).toBe(true);
+    expect(rotate?.annotations.idempotentHint).toBe(false);
   });
 
   it('tells the agent what to pass on register_functions_custom_domain', () => {

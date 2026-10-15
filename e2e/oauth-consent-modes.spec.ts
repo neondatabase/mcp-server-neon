@@ -220,7 +220,7 @@ test.describe('OAuth consent modes', () => {
     ).toBeVisible();
     const categoryDisclosure = page.locator('[data-category-disclosure]');
     const categorySummary = categoryDisclosure.locator('summary');
-    await expect(categorySummary).toContainText('12/12 selected');
+    await expect(categorySummary).toContainText('13/13 selected');
     await expect(categoryDisclosure).not.toHaveAttribute('open', '');
     await categorySummary.focus();
     await page.keyboard.press('Enter');
@@ -236,12 +236,12 @@ test.describe('OAuth consent modes', () => {
     expect(await page.locator('input[name="category"]:checked').count()).toBe(
       0,
     );
-    await expect(categorySummary).toContainText('0/12 selected');
+    await expect(categorySummary).toContainText('0/13 selected');
     await page.getByRole('button', { name: 'Select all' }).click();
     expect(await page.locator('input[name="category"]:checked').count()).toBe(
-      12,
+      13,
     );
-    await expect(categorySummary).toContainText('12/12 selected');
+    await expect(categorySummary).toContainText('13/13 selected');
     expect(
       await categoryGrid.evaluate(
         (element) =>
@@ -332,7 +332,7 @@ test.describe('OAuth consent modes', () => {
       }
     }
     await expect(page.locator('[data-category-summary]')).toContainText(
-      '2/12 selected',
+      '2/13 selected',
     );
     await expect(page.locator('[data-access-mode]')).toHaveText(
       'Read and write',
@@ -365,7 +365,7 @@ test.describe('OAuth consent modes', () => {
       await categories.nth(i).uncheck();
     }
     await expect(page.locator('[data-category-summary]')).toContainText(
-      '0/12 selected',
+      '0/13 selected',
     );
     await expect(
       page.getByText(
@@ -420,7 +420,7 @@ test.describe('OAuth consent modes', () => {
 
     await page.locator('input[name="projectId"]').fill('proj-example');
     await expect(page.locator('[data-category-summary]')).toContainText(
-      '2/12 selected',
+      '2/13 selected',
     );
     await expect(page.locator('.scope-checkbox')).not.toBeChecked();
     await expect(page.locator('input[name="category"]:checked')).toHaveCount(2);

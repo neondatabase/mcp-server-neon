@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+Branch Realtime tools under `?category=realtime`: `get_realtime`, `enable_realtime`, `disable_realtime`, `get_realtime_secret`, and `rotate_realtime_secret`. `get_realtime_secret` is unavailable in read-only mode. Requires `@neon/tools` 2.2.0. A token already issued with an explicit category list does not include `realtime`; tokens issued for every category do.
+
 `describe_branch` drops its `public.show_db_tree()` helper function in the same transaction that reads the tree, so the function no longer stays in the described database. The tool output is unchanged.
 
 `run_sql_transaction` is no longer available in read-only mode, because a `COMMIT` or `SET TRANSACTION READ WRITE` statement in the batch could end the read-only transaction. Read-only connections use `run_sql`, one statement per call.

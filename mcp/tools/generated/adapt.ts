@@ -57,6 +57,10 @@ const LIST_LOG_FIELD_VALUES_DESCRIPTION = `Lists distinct values for a low-cardi
 
 const RESTORE_SNAPSHOT_DESCRIPTION = `Restore a snapshot onto a new or existing branch. The call waits until the branch is ready. Pass \`target_branch_id\` to restore onto an existing branch; omit it to create one. Pass \`finalize: false\` then call \`finalize_branch_restore\` to swap names later.`;
 
+const GET_REALTIME_SECRET_DESCRIPTION = `Retrieves the secret the application backend issues Realtime tokens with. Requires write access: the secret lets its holder issue Realtime tokens for the branch, so it is unavailable in read-only mode. Call \`enable_realtime\` first.`;
+
+const ROTATE_REALTIME_SECRET_DESCRIPTION = `Replaces the branch's Realtime shared secret and waits until the change is applied. NEVER run autonomously; always ask the user first. Call \`get_realtime_secret\` afterwards and update the application backend with the new value.`;
+
 const BRANCH_ID_NOTE =
   'branch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.';
 
@@ -100,6 +104,8 @@ function createGeneratedNeonTools() {
       'functions.deploy': DEPLOY_FUNCTION_DESCRIPTION,
       'functions.customDomains.register':
         REGISTER_FUNCTIONS_CUSTOM_DOMAIN_DESCRIPTION,
+      'realtime.secret': GET_REALTIME_SECRET_DESCRIPTION,
+      'realtime.rotateSecret': ROTATE_REALTIME_SECRET_DESCRIPTION,
     },
   });
 }
@@ -196,6 +202,7 @@ const DESTRUCTIVE_POST_TOOLS = new Set<GeneratedToolId>([
   'functions.deploy',
   'storage.objects.presign',
   'credentials.rotate',
+  'realtime.rotateSecret',
 ]);
 
 function lastSegment(toolId: GeneratedToolId): string {

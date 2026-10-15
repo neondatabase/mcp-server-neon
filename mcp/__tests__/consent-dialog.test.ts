@@ -297,11 +297,11 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('src="/images/consent/neon.svg"');
     expect(html).toContain('>Included tools</button>');
     expect(html).toContain('is-collapsed');
-    expect(html).toContain('114 tools available');
+    expect(html).toContain('119 tools available');
     expect(html).toContain('data-tool-content');
     expect(html).toContain('data-category-disclosure');
     expect(html).toContain(
-      'data-category-summary>12/12 selected · 114 tools available</span>',
+      'data-category-summary>13/13 selected · 119 tools available</span>',
     );
     expect(html).toContain('choice-categories');
     expect(html).not.toMatch(/\.check-grid\s*\{[^}]*overflow-y/);
@@ -397,7 +397,7 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('aria-invalid="true"');
     expect(html).toContain('autofocus');
     expect(html).toContain('role="alert"');
-    expect(html).toContain('data-category-summary>2/12 selected · ');
+    expect(html).toContain('data-category-summary>2/13 selected · ');
   });
 
   it('renders an empty optional Postgres role field on editable consent', () => {
