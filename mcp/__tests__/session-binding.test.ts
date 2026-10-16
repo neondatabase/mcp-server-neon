@@ -7,20 +7,25 @@ const setSpy = vi.fn();
 const getSpy = vi.fn();
 const delSpy = vi.fn();
 const connectSpy = vi.fn();
+const disconnectSpies: Array<ReturnType<typeof vi.fn>> = [];
 const loggerInfoSpy = vi.fn();
 const loggerWarnSpy = vi.fn();
 const loggerErrorSpy = vi.fn();
 const loggerDebugSpy = vi.fn();
 
 vi.mock('redis', () => ({
-  createClient: vi.fn(() => ({
-    on: vi.fn(),
-    connect: connectSpy,
-    disconnect: vi.fn(async () => undefined),
-    set: setSpy,
-    get: getSpy,
-    del: delSpy,
-  })),
+  createClient: vi.fn(() => {
+    const disconnect = vi.fn(async () => undefined);
+    disconnectSpies.push(disconnect);
+    return {
+      on: vi.fn(),
+      connect: connectSpy,
+      disconnect,
+      set: setSpy,
+      get: getSpy,
+      del: delSpy,
+    };
+  }),
 }));
 
 vi.mock('../utils/logger', () => ({
@@ -155,6 +160,7 @@ describe('bindSession / verifySession / releaseSession', () => {
     delSpy.mockReset();
     connectSpy.mockReset();
     connectSpy.mockResolvedValue(undefined);
+    disconnectSpies.length = 0;
     process.env.KV_URL = 'redis://localhost:6379';
   });
 
@@ -290,6 +296,7 @@ describe('evaluateMessageOwnership (POST /message 403 gate)', () => {
     getSpy.mockReset();
     connectSpy.mockReset();
     connectSpy.mockResolvedValue(undefined);
+    disconnectSpies.length = 0;
     loggerInfoSpy.mockReset();
     loggerWarnSpy.mockReset();
     loggerErrorSpy.mockReset();
@@ -402,6 +409,7 @@ describe('evaluateMessageOwnership retries once on transient Redis failures', ()
     delSpy.mockReset();
     connectSpy.mockReset();
     connectSpy.mockResolvedValue(undefined);
+    disconnectSpies.length = 0;
     loggerInfoSpy.mockReset();
     loggerWarnSpy.mockReset();
     loggerErrorSpy.mockReset();
@@ -449,6 +457,66 @@ describe('evaluateMessageOwnership retries once on transient Redis failures', ()
           msg.startsWith('[SEC] sse-bind outcome=redis_error'),
       ),
     ).toBe(false);
+  });
+
+  it('retries an operation canceled when a peer retires the shared client', async () => {
+    const { evaluateMessageOwnership } = await loadModule();
+    getSpy
+      .mockRejectedValueOnce(new Error('Disconnects client'))
+      .mockResolvedValue('identity-A');
+
+    const result = await evaluateMessageOwnership(
+      'POST',
+      '/api/message',
+      'sess',
+      'identity-A',
+    );
+
+    expect(result).toEqual({ kind: 'pass' });
+    expect(getSpy).toHaveBeenCalledTimes(2);
+    expect(connectSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let a stale client failure retire its replacement', async () => {
+    let rejectFirst: (error: Error) => void = () => undefined;
+    let rejectSecond: (error: Error) => void = () => undefined;
+    const first = new Promise<string>((_resolve, reject) => {
+      rejectFirst = reject;
+    });
+    const second = new Promise<string>((_resolve, reject) => {
+      rejectSecond = reject;
+    });
+    getSpy
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second)
+      .mockResolvedValue('identity-A');
+    const { evaluateMessageOwnership } = await loadModule();
+
+    const requestA = evaluateMessageOwnership(
+      'POST',
+      '/api/message',
+      'session-a',
+      'identity-A',
+    );
+    const requestB = evaluateMessageOwnership(
+      'POST',
+      '/api/message',
+      'session-b',
+      'identity-A',
+    );
+    await vi.waitFor(() => expect(getSpy).toHaveBeenCalledTimes(2));
+
+    rejectFirst(new Error('session-binding get timed out'));
+    await vi.waitFor(() => expect(connectSpy).toHaveBeenCalledTimes(2));
+    rejectSecond(new Error('Disconnects client'));
+
+    await expect(Promise.all([requestA, requestB])).resolves.toEqual([
+      { kind: 'pass' },
+      { kind: 'pass' },
+    ]);
+    expect(disconnectSpies).toHaveLength(2);
+    expect(disconnectSpies[0]).toHaveBeenCalledOnce();
+    expect(disconnectSpies[1]).not.toHaveBeenCalled();
   });
 
   it('emits redis_error after exhausting the single retry on persistent timeouts', async () => {

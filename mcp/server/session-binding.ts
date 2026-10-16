@@ -63,6 +63,9 @@ export function isRedisTransientFailure(err: unknown): boolean {
   ) {
     return true;
   }
+  if (err.message === 'Disconnects client') {
+    return true;
+  }
   return false;
 }
 
@@ -74,10 +77,12 @@ export function isRedisTransientFailure(err: unknown): boolean {
  * fire-and-forget; if the cached promise hasn't resolved yet, we just drop
  * the reference.
  */
-function dropCachedRedis(): void {
-  const cached = clientPromise;
+function dropCachedRedis(expected: Promise<RedisClientType>): void {
+  // A failed operation may belong to a retired generation. Disconnecting the
+  // current promise here would turn one socket failure into another fanout.
+  if (clientPromise !== expected) return;
+  const cached = expected;
   clientPromise = null;
-  if (!cached) return;
   cached.then(
     (client) => {
       // Defensive: older redis client shapes may not expose disconnect.
@@ -115,17 +120,29 @@ function dropCachedRedis(): void {
  * burn budget on a deeper retry tree. Operations must be idempotent —
  * get/set with a fixed key/value satisfy this.
  */
-async function withRedisRetry<T>(op: string, fn: () => Promise<T>): Promise<T> {
-  return retryAsync(fn, {
-    attempts: 2,
-    delaysMs: [0],
-    op: `session-binding ${op}`,
-    shouldRetry: (err) => {
-      if (!isRedisTransientFailure(err)) return false;
-      dropCachedRedis();
-      return true;
+async function withRedisRetry<T>(
+  op: string,
+  fn: (redis: RedisClientType) => Promise<T>,
+): Promise<T> {
+  let attemptedClient: Promise<RedisClientType> | undefined;
+  return retryAsync(
+    async () => {
+      attemptedClient = getRedis();
+      return fn(await attemptedClient);
     },
-  });
+    {
+      attempts: 2,
+      delaysMs: [0],
+      op: `session-binding ${op}`,
+      shouldRetry: (err) => {
+        if (!isRedisTransientFailure(err)) return false;
+        if (attemptedClient) {
+          dropCachedRedis(attemptedClient);
+        }
+        return true;
+      },
+    },
+  );
 }
 
 function getRedis(): Promise<RedisClientType> {
@@ -139,20 +156,26 @@ function getRedis(): Promise<RedisClientType> {
   }
 
   const client = createClient({ url }) as RedisClientType;
+  const pending = Promise.resolve()
+    .then(() => client.connect())
+    .then(() => client);
   client.on('error', (err) => {
     // Log and reset so the next call reconnects. An in-flight promise held by
     // a concurrent caller may still resolve to this (now-failing) client; that
     // caller's operation will reject naturally and the subsequent retry will
     // build a fresh client.
     logger.error('session-binding redis error', { err });
-    clientPromise = null;
+    if (clientPromise === pending) {
+      clientPromise = null;
+    }
   });
 
-  const pending = client.connect().then(() => client);
   // If the initial connect fails, clear the cached promise so future callers
   // don't inherit a permanently-rejected promise.
   pending.catch(() => {
-    clientPromise = null;
+    if (clientPromise === pending) {
+      clientPromise = null;
+    }
   });
   clientPromise = pending;
   return clientPromise;
@@ -206,8 +229,7 @@ export async function bindSession(
   identity: string,
   ttlSec: number,
 ): Promise<void> {
-  await withRedisRetry('bind', async () => {
-    const redis = await getRedis();
+  await withRedisRetry('bind', async (redis) => {
     return withTimeout(
       redis.set(sessionKey(sessionId), identity, { EX: ttlSec }),
       'set',
@@ -219,8 +241,7 @@ export async function verifySession(
   sessionId: string,
   identity: string,
 ): Promise<boolean> {
-  const stored = await withRedisRetry('verify', async () => {
-    const redis = await getRedis();
+  const stored = await withRedisRetry('verify', async (redis) => {
     return withTimeout(redis.get(sessionKey(sessionId)), 'get');
   });
   if (!stored) return false;
@@ -231,8 +252,7 @@ export async function verifySession(
 }
 
 export async function releaseSession(sessionId: string): Promise<void> {
-  await withRedisRetry('release', async () => {
-    const redis = await getRedis();
+  await withRedisRetry('release', async (redis) => {
     return withTimeout(redis.del(sessionKey(sessionId)), 'del');
   });
 }
@@ -308,8 +328,7 @@ export async function evaluateMessageOwnership(
     };
   }
   try {
-    const stored = await withRedisRetry('verify', async () => {
-      const redis = await getRedis();
+    const stored = await withRedisRetry('verify', async (redis) => {
       return withTimeout(redis.get(sessionKey(sessionId)), 'get');
     });
     if (stored === null) {
