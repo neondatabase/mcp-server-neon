@@ -4,7 +4,147 @@ import { ToolHandlerExtraParams } from './types';
 import { NotFoundError } from '../server/errors';
 
 export const splitSqlStatements = (sql: string) => {
-  return sql.split(';').filter(Boolean);
+  const statements: string[] = [];
+  let current = '';
+  let index = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inLineComment = false;
+  let blockCommentDepth = 0;
+  let dollarQuoteTag: string | null = null;
+
+  const flushStatement = () => {
+    const trimmed = current.trim();
+    if (trimmed) {
+      statements.push(trimmed);
+    }
+    current = '';
+  };
+
+  const matchDollarQuoteTag = (start: number) => {
+    const remainder = sql.slice(start);
+    const match =
+      remainder.match(/^\$[A-Za-z_][A-Za-z0-9_]*\$/) ??
+      remainder.match(/^\$\$/);
+    return match?.[0] ?? null;
+  };
+
+  while (index < sql.length) {
+    if (inLineComment) {
+      current += sql[index];
+      if (sql[index] === '\n') {
+        inLineComment = false;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (blockCommentDepth > 0) {
+      if (sql.startsWith('/*', index)) {
+        current += '/*';
+        blockCommentDepth += 1;
+        index += 2;
+        continue;
+      }
+      if (sql.startsWith('*/', index)) {
+        current += '*/';
+        blockCommentDepth -= 1;
+        index += 2;
+        continue;
+      }
+      current += sql[index];
+      index += 1;
+      continue;
+    }
+
+    if (dollarQuoteTag) {
+      if (sql.startsWith(dollarQuoteTag, index)) {
+        current += dollarQuoteTag;
+        index += dollarQuoteTag.length;
+        dollarQuoteTag = null;
+        continue;
+      }
+      current += sql[index];
+      index += 1;
+      continue;
+    }
+
+    if (inSingleQuote) {
+      if (sql.startsWith("''", index)) {
+        current += "''";
+        index += 2;
+        continue;
+      }
+      current += sql[index];
+      if (sql[index] === "'") {
+        inSingleQuote = false;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (inDoubleQuote) {
+      if (sql.startsWith('""', index)) {
+        current += '""';
+        index += 2;
+        continue;
+      }
+      current += sql[index];
+      if (sql[index] === '"') {
+        inDoubleQuote = false;
+      }
+      index += 1;
+      continue;
+    }
+
+    const matchedDollarQuoteTag = matchDollarQuoteTag(index);
+    if (matchedDollarQuoteTag) {
+      current += matchedDollarQuoteTag;
+      index += matchedDollarQuoteTag.length;
+      dollarQuoteTag = matchedDollarQuoteTag;
+      continue;
+    }
+
+    if (sql.startsWith('--', index)) {
+      current += '--';
+      inLineComment = true;
+      index += 2;
+      continue;
+    }
+
+    if (sql.startsWith('/*', index)) {
+      current += '/*';
+      blockCommentDepth = 1;
+      index += 2;
+      continue;
+    }
+
+    if (sql[index] === "'") {
+      current += sql[index];
+      inSingleQuote = true;
+      index += 1;
+      continue;
+    }
+
+    if (sql[index] === '"') {
+      current += sql[index];
+      inDoubleQuote = true;
+      index += 1;
+      continue;
+    }
+
+    if (sql[index] === ';') {
+      flushStatement();
+      index += 1;
+      continue;
+    }
+
+    current += sql[index];
+    index += 1;
+  }
+
+  flushStatement();
+  return statements;
 };
 
 export const DESCRIBE_DATABASE_STATEMENTS = [
