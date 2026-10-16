@@ -15,8 +15,9 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // Backwards compatibility: old routes → new API routes
-  // This allows existing MCP client configurations to continue working
+  // Public paths → App Router handlers. `/mcp` is the live transport.
+  // `/sse` and `/message` still rewrite so retired clients get the 410 body
+  // instead of a Next 404.
   async rewrites() {
     return [
       {
@@ -26,6 +27,10 @@ const nextConfig: NextConfig = {
       {
         source: '/sse',
         destination: '/api/sse',
+      },
+      {
+        source: '/message',
+        destination: '/api/message',
       },
       {
         source: '/health',

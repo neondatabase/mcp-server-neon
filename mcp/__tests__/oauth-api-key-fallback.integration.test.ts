@@ -208,19 +208,23 @@ describe('OAuth bearer on the API-key path', () => {
   });
 
   it.each(['/sse', '/api/sse'])(
-    'answers 503 on GET %s before opening a stream',
+    'retires GET %s without consulting authentication',
     async (path) => {
       storeLookupFails();
       neonSays('oauth');
 
       const res = await GET(request('GET', path, OAUTH_BEARER));
 
-      expectTokenStoreUnavailable(res);
+      expect(res.status).toBe(410);
       expect(res.headers.get('Content-Type')).toBe('application/json');
+      await expect(res.json()).resolves.toMatchObject({
+        error: 'transport_gone',
+      });
+      expect(model.getAccessToken).not.toHaveBeenCalled();
     },
   );
 
-  it('answers 503 on an SSE message POST', async () => {
+  it('retires an SSE message POST without consulting authentication', async () => {
     storeLookupFails();
     neonSays('oauth');
 
@@ -232,10 +236,14 @@ describe('OAuth bearer on the API-key path', () => {
       }),
     );
 
-    expectTokenStoreUnavailable(res);
+    expect(res.status).toBe(410);
+    await expect(res.json()).resolves.toMatchObject({
+      error: 'transport_gone',
+    });
+    expect(model.getAccessToken).not.toHaveBeenCalled();
   });
 
-  it.each(['/mcp', '/api/mcp', '/sse'])(
+  it.each(['/mcp', '/api/mcp'])(
     'answers HEAD %s with an empty 503 when the store is down and 401 when the record is missing',
     async (path) => {
       storeLookupFails();
