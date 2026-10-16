@@ -8,6 +8,8 @@ MCP transport:
 - Retire HTTP+SSE. `GET/POST /sse`, `/message`, `/api/sse`, and `/api/message` return `410 Gone` pointing at Streamable HTTP `/mcp`. The Redis session-binding module is removed with the transport.
 - Validate `Origin` on Streamable HTTP requests: a present-and-invalid Origin is `403`; a missing Origin is allowed (CLI and server-side clients).
 
+Branch Realtime tools under `?category=realtime`: `get_realtime`, `enable_realtime`, `disable_realtime`, `get_realtime_secret`, and `rotate_realtime_secret`. `get_realtime_secret` is unavailable in read-only mode. Requires `@neon/tools` 2.2.0. A token already issued with an explicit category list does not include `realtime`; tokens issued for every category do.
+
 `describe_branch` drops its `public.show_db_tree()` helper function in the same transaction that reads the tree, so the function no longer stays in the described database. The tool output is unchanged.
 
 `run_sql_transaction` is no longer available in read-only mode, because a `COMMIT` or `SET TRANSACTION READ WRITE` statement in the batch could end the read-only transaction. Read-only connections use `run_sql`, one statement per call.

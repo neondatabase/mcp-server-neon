@@ -106,6 +106,12 @@ export const GENERATED_TOOL_SCOPES = {
   'storage.objects.delete': 'storage',
   'storage.objects.deleteByPrefix': 'storage',
   'storage.objects.presign': 'storage',
+
+  'realtime.get': 'realtime',
+  'realtime.enable': 'realtime',
+  'realtime.disable': 'realtime',
+  'realtime.secret': 'realtime',
+  'realtime.rotateSecret': 'realtime',
 } as const satisfies Partial<Record<NeonToolId, ScopeCategory>>;
 
 export type GeneratedToolId = keyof typeof GENERATED_TOOL_SCOPES;

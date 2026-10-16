@@ -160,6 +160,7 @@ describe('parseConsentPost', () => {
         ['category', 'docs'],
         ['category', 'functions'],
         ['category', 'storage'],
+        ['category', 'realtime'],
       ]),
       mode: 'editable',
       ceiling: editableCeiling(['read', 'write']),

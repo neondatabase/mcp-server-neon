@@ -554,6 +554,79 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    'enables Realtime, reads and rotates its secret, then disables it',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!readOnlyClient)
+        throw new Error('Read-only client is not connected.');
+      const readOnlyTools = (await readOnlyClient.listTools()).tools.map(
+        (tool) => tool.name,
+      );
+      expect(readOnlyTools).toContain('get_realtime');
+      expect(readOnlyTools).not.toContain('get_realtime_secret');
+      expect(readOnlyTools).not.toContain('enable_realtime');
+
+      const branch = z
+        .object({ id: z.string() })
+        .parse(
+          JSON.parse(
+            assertToolSucceeded(
+              'get_default_branch',
+              await callTool('get_default_branch', { project_id: projectId }),
+            ),
+          ),
+        );
+      const target = { project_id: projectId, branch_id: branch.id };
+      const realtimeState = z.object({
+        enabled: z.boolean(),
+        pending: z.boolean(),
+      });
+      const realtimeSecret = z.object({ secret: z.string().min(1) });
+      const readSecret = async () =>
+        realtimeSecret.parse(
+          JSON.parse(
+            assertToolSucceeded(
+              'get_realtime_secret',
+              await callTool('get_realtime_secret', target),
+            ),
+          ),
+        ).secret;
+      const readState = async () =>
+        realtimeState.parse(
+          JSON.parse(
+            assertToolSucceeded(
+              'get_realtime',
+              await callTool('get_realtime', target),
+            ),
+          ),
+        );
+
+      assertToolSucceeded(
+        'enable_realtime',
+        await callTool('enable_realtime', target),
+      );
+      expect(await readState()).toMatchObject({
+        enabled: true,
+        pending: false,
+      });
+
+      const first = await readSecret();
+      assertToolSucceeded(
+        'rotate_realtime_secret',
+        await callTool('rotate_realtime_secret', target),
+      );
+      expect(await readSecret()).not.toBe(first);
+
+      assertToolSucceeded(
+        'disable_realtime',
+        await callTool('disable_realtime', target),
+      );
+      expect((await readState()).enabled).toBe(false);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'preserves default public-schema describe behavior',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
