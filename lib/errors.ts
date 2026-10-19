@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { logger } from '../mcp/utils/logger';
 import { extractUpstreamErrorDetails } from './oauth/upstream-error';
+import { ClientMetadataUnavailableError } from './oauth/client-id-metadata-document';
 
 type OAuthErrorResponse = {
   error: string;
@@ -87,6 +88,24 @@ export function handleOAuthError(
       status: response.status,
       upstreamStatus: details.status,
       upstreamUrl: details.upstreamUrl,
+    });
+    return response;
+  }
+
+  // A client ID metadata document that could not be read right now. Not
+  // `invalid_client`: the client's credentials may be fine, and telling it
+  // otherwise during its own host's outage would make it discard them.
+  if (error instanceof ClientMetadataUnavailableError) {
+    const response = NextResponse.json(
+      {
+        error: 'temporarily_unavailable',
+        error_description: 'Could not read the client ID metadata document',
+      },
+      { status: 503, headers: { 'Retry-After': '30' } },
+    );
+    logger.debug('handleOAuthError returning client-metadata response', {
+      context,
+      status: response.status,
     });
     return response;
   }
