@@ -18,6 +18,7 @@ export async function GET() {
     authorization_endpoint: `${SERVER_HOST}/api/authorize`,
     token_endpoint: `${SERVER_HOST}/api/token`,
     registration_endpoint: `${SERVER_HOST}/api/register`,
+    client_id_metadata_document_supported: true,
     revocation_endpoint: `${SERVER_HOST}/api/revoke`,
     response_types_supported: SUPPORTED_RESPONSE_TYPES,
     response_modes_supported: ['query'],
