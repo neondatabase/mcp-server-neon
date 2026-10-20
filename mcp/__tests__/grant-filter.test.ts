@@ -8,6 +8,7 @@ import {
   getAccessControlWarnings,
   formatAccessControlInstructions,
   injectProjectId,
+  isDocsOnlyTool,
   ALWAYS_AVAILABLE_TOOLS,
 } from '../tools/grant-filter';
 import type { GrantContext } from '../utils/grant-context';
@@ -430,6 +431,34 @@ describe('scope coverage sanity', () => {
       'restore_snapshot',
       'set_snapshot_schedule',
       'update_snapshot',
+    ]);
+  });
+});
+
+describe('search_docs visibility', () => {
+  const visible = (g: GrantContext, readOnly = false) =>
+    getAvailableTools(g, readOnly)
+      .map((t) => t.name)
+      .includes('search_docs');
+
+  it('follows the other docs tools across grants and read-only mode', () => {
+    expect(visible(grant())).toBe(true);
+    expect(visible(grant({ scopes: ['docs'] }))).toBe(true);
+    expect(visible(grant({ scopes: ['docs'], projectId: 'proj-1' }))).toBe(
+      true,
+    );
+    expect(visible(grant(), true)).toBe(true);
+    expect(visible(grant({ scopes: ['querying'] }))).toBe(false);
+    expect(visible(grant({ scopes: [] }))).toBe(false);
+  });
+
+  it('is a docs-only tool for the anonymous endpoint', () => {
+    const docsOnly = NEON_TOOLS.filter(isDocsOnlyTool).map((t) => t.name);
+    expect(docsOnly.sort()).toEqual([
+      'get_doc_resource',
+      'list_docs_resources',
+      'search_docs',
+      'send_feedback',
     ]);
   });
 });

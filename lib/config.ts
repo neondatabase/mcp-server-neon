@@ -27,6 +27,13 @@ export const NEON_API_HOST =
 export const NEON_DOCS_INDEX_URL =
   process.env.NEON_DOCS_INDEX_URL ?? 'https://neon.com/docs/llms.txt';
 
+// Where search_docs posts to: neon-agent's site search (the assistant Neon
+// Function), which also backs the neon.com search box. Overridable so the e2e
+// suite can point it at a local fixture.
+export const NEON_SITE_SEARCH_URL =
+  process.env.NEON_SITE_SEARCH_URL ??
+  'https://br-frosty-cell-a5smzg39-assistant.compute.c-1.us-east-2.aws.neon.tech/site-search';
+
 // Where send_feedback posts to (the neondatabase/neon-feedback Function).
 // Overridable so tests and local runs never send real feedback.
 export const NEON_FEEDBACK_URL =

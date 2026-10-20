@@ -27,6 +27,58 @@ export const DOCS_FIXTURE_INDEX_URL = `http://127.0.0.1:${DOCS_FIXTURE_PORT}${DO
 const FEEDBACK_FIXTURE_PATH = '/feedback';
 export const FEEDBACK_FIXTURE_URL = `http://127.0.0.1:${DOCS_FIXTURE_PORT}${FEEDBACK_FIXTURE_PATH}`;
 
+// The same server stands in for neon-agent's site search behind search_docs.
+// The query picks the response, so one URL covers success and each failure.
+const SITE_SEARCH_FIXTURE_PATH = '/site-search';
+export const SITE_SEARCH_FIXTURE_URL = `http://127.0.0.1:${DOCS_FIXTURE_PORT}${SITE_SEARCH_FIXTURE_PATH}`;
+
+const SITE_SEARCH_FIXTURE_HIT = {
+  url: 'https://neon.com/docs/reference/glossary',
+  title: 'Glossary',
+  slug: 'docs/reference/glossary',
+  collection: 'docs',
+  category: 'docs',
+  breadcrumb: ['Docs'],
+  heading: 'Glossary > LSN',
+  excerpt:
+    'Log Sequence Number. A byte offset to a location in the WAL stream.',
+  score: 1.2,
+};
+
+const SITE_SEARCH_FIXTURE_RESPONSES: Record<
+  string,
+  { status: number; body: string }
+> = {
+  'fixture-empty': { status: 200, body: JSON.stringify({ hits: [] }) },
+  'fixture-400': {
+    status: 400,
+    body: JSON.stringify({ error: 'query must be 500 characters or fewer' }),
+  },
+  'fixture-500': {
+    status: 500,
+    body: JSON.stringify({ error: 'Site search failed.' }),
+  },
+  'fixture-not-json': { status: 200, body: '<html>' },
+  'fixture-malformed': { status: 200, body: JSON.stringify({ hits: [null] }) },
+};
+
+function siteSearchResponse(rawBody: string): {
+  status: number;
+  body: string;
+} {
+  const request: unknown = JSON.parse(rawBody);
+  const query =
+    typeof request === 'object' && request !== null && 'query' in request
+      ? String(request.query)
+      : '';
+  return (
+    SITE_SEARCH_FIXTURE_RESPONSES[query] ?? {
+      status: 200,
+      body: JSON.stringify({ hits: [SITE_SEARCH_FIXTURE_HIT] }),
+    }
+  );
+}
+
 /** Marker the e2e assertion matches on. Also present in the fixture file. */
 export const DOCS_FIXTURE_MARKER = 'E2E_DOCS_INDEX_FIXTURE_MARKER';
 
@@ -48,6 +100,18 @@ export async function startDocsFixtureServer(): Promise<Server> {
     if (request.url === DOCS_FIXTURE_PATH) {
       response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
       response.end(body);
+      return;
+    }
+    if (request.url === SITE_SEARCH_FIXTURE_PATH && request.method === 'POST') {
+      const chunks: Buffer[] = [];
+      request.on('data', (chunk: Buffer) => chunks.push(chunk));
+      request.on('end', () => {
+        const { status, body: responseBody } = siteSearchResponse(
+          Buffer.concat(chunks).toString('utf8'),
+        );
+        response.writeHead(status, { 'Content-Type': 'application/json' });
+        response.end(responseBody);
+      });
       return;
     }
     if (request.url === FEEDBACK_FIXTURE_PATH && request.method === 'POST') {

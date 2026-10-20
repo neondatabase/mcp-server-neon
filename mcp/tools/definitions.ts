@@ -21,6 +21,7 @@ import {
   listOrganizationsInputSchema,
   searchInputSchema,
   fetchInputSchema,
+  searchDocsInputSchema,
   listDocsResourcesInputSchema,
   getDocResourceInputSchema,
   sendFeedbackInputSchema,
@@ -278,7 +279,7 @@ const HOST_TOOL_DRAFTS = [
   {
     name: 'search' as const,
     scope: null,
-    description: `Search across all organizations, projects, and branches by keyword. Returns matching items with id, title, and URL. Query must be at least 3 characters. Do not use when you need all projects (use \`list_projects\` instead).`,
+    description: `Search across all organizations, projects, and branches by keyword. Returns matching items with id, title, and URL. Query must be at least 3 characters. Do not use when you need all projects (use \`list_projects\` instead) or to search Neon documentation (use \`search_docs\`).`,
     inputSchema: searchInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -304,10 +305,25 @@ const HOST_TOOL_DRAFTS = [
     } satisfies ToolAnnotations,
   },
   {
+    name: 'search_docs' as const,
+    scope: 'docs',
+    description:
+      'Search neon.com: docs, API reference, PostgreSQL tutorial, guides, FAQs, changelog, and blog. Returns ranked pages with title, URL, the matching section, and a slug; read a page with get_doc_resource. Use this before list_docs_resources.',
+    inputSchema: searchDocsInputSchema,
+    readOnlySafe: true,
+    annotations: {
+      title: 'Search Documentation',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    } satisfies ToolAnnotations,
+  },
+  {
     name: 'list_docs_resources' as const,
     scope: 'docs',
     description:
-      'List Neon documentation page slugs from neon.com/docs/llms.txt. Call this before get_doc_resource; do not guess slugs.',
+      'List every Neon documentation page slug from neon.com/docs/llms.txt. Prefer search_docs to find a page; use this to browse the full index. Do not guess slugs.',
     inputSchema: listDocsResourcesInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -322,7 +338,7 @@ const HOST_TOOL_DRAFTS = [
     name: 'get_doc_resource' as const,
     scope: 'docs',
     description:
-      'Fetch one Neon documentation page as markdown. Pass a slug from list_docs_resources (for example docs/guides/prisma.md).',
+      'Fetch one neon.com page as markdown. Pass a slug from search_docs or list_docs_resources (for example docs/guides/prisma).',
     inputSchema: getDocResourceInputSchema,
     readOnlySafe: true,
     annotations: {

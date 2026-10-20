@@ -205,6 +205,81 @@ describe('MCP server e2e tool calls', () => {
     });
   });
 
+  it('calls search_docs through MCP protocol and returns get_doc_resource slugs', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      Response.json({
+        hits: [
+          {
+            url: 'https://neon.com/postgresql/tutorial/joins',
+            title: 'PostgreSQL Joins',
+            slug: 'postgresql/tutorial/joins',
+            collection: 'postgresql',
+            category: 'postgresql',
+            breadcrumb: ['Learn PostgreSQL', 'Tutorial'],
+            heading: 'PostgreSQL Joins > Inner join',
+            excerpt: 'An inner join returns matching rows.',
+            score: 3.1,
+          },
+        ],
+      }),
+    );
+
+    await withConnectedClient(createTestContext(), async (client) => {
+      const result = await client.callTool({
+        name: 'search_docs',
+        arguments: { query: '  inner join ', categories: ['postgresql'] },
+      });
+      const content = result.content as Array<{ type: string; text?: string }>;
+
+      expect(result.isError).not.toBe(true);
+      const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+      expect(url).toMatch(/\/site-search$/);
+      expect(JSON.parse(String(init?.body))).toEqual({
+        query: 'inner join',
+        categories: ['postgresql'],
+        limit: 10,
+      });
+      expect(JSON.parse(content[0].text ?? '')).toEqual({
+        hits: [
+          {
+            title: 'PostgreSQL Joins',
+            url: 'https://neon.com/postgresql/tutorial/joins',
+            slug: 'postgresql/tutorial/joins',
+            category: 'postgresql',
+            breadcrumb: ['Learn PostgreSQL', 'Tutorial'],
+            heading: 'PostgreSQL Joins > Inner join',
+            excerpt: 'An inner join returns matching rows.',
+          },
+        ],
+      });
+    });
+  });
+
+  it('returns search_docs upstream and network failures as tool errors', async () => {
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce(
+        Response.json({ error: 'categories must be unique' }, { status: 400 }),
+      )
+      .mockRejectedValueOnce(new TypeError('fetch failed'));
+
+    await withConnectedClient(createTestContext(), async (client) => {
+      const rejected = await client.callTool({
+        name: 'search_docs',
+        arguments: { query: 'lsn' },
+      });
+      expect(rejected.isError).toBe(true);
+      expect(JSON.stringify(rejected.content)).toContain(
+        'categories must be unique',
+      );
+
+      const unreachable = await client.callTool({
+        name: 'search_docs',
+        arguments: { query: 'lsn' },
+      });
+      expect(unreachable.isError).toBe(true);
+    });
+  });
+
   it('calls get_doc_resource and auto-appends .md through MCP protocol', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response('# Prisma Guide\n\nUse Prisma with Neon.', { status: 200 }),

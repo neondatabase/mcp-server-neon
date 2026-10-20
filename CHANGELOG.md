@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+`search_docs` searches neon.com (docs, API reference, PostgreSQL tutorial, guides, FAQs, changelog, and blog) with the search behind the neon.com search box and returns ranked pages with a slug for `get_doc_resource`. It takes `query`, optional `categories`, and optional `limit` (1-40, default 10), is in the `docs` category, is available in read-only mode, under project-scoped grants, and on the no-login `?category=docs` endpoint. `list_docs_resources` and `get_doc_resource` are unchanged; their descriptions now point to `search_docs` first. `NEON_SITE_SEARCH_URL` overrides the endpoint.
+
 Branch Realtime tools under `?category=realtime`: `get_realtime`, `enable_realtime`, `disable_realtime`, `get_realtime_secret`, and `rotate_realtime_secret`. `get_realtime_secret` is unavailable in read-only mode. Requires `@neon/tools` 2.2.0. A token already issued with an explicit category list does not include `realtime`; tokens issued for every category do.
 
 `describe_branch` drops its `public.show_db_tree()` helper function in the same transaction that reads the tree, so the function no longer stays in the described database. The tool output is unchanged.

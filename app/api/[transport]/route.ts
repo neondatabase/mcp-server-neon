@@ -16,6 +16,7 @@ import { NEON_HANDLERS } from '../../../mcp/tools/index';
 import {
   getDocResource,
   listDocsResources,
+  searchDocs,
 } from '../../../mcp/tools/handlers/docs';
 import { sendFeedback } from '../../../mcp/tools/handlers/feedback';
 import { createNeonClient } from '../../../mcp/server/api';
@@ -53,6 +54,7 @@ import {
 import { invokeTool, toolRegistration } from '../../../mcp/tools/registration';
 import { toListedTool } from '../../../mcp/tools/listed-schema';
 import { NEON_TOOLS } from '../../../mcp/tools/definitions';
+import { searchDocsInputSchema } from '../../../mcp/tools/toolsSchema';
 import { assert } from '../../../lib/assert';
 import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
 import {
@@ -709,13 +711,18 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 // are not surfaced anonymously.
 const DOCS_ONLY_TOOLS = NEON_TOOLS.filter(isDocsOnlyTool);
 function getDocsOnlyToolDefinition(
-  name: 'list_docs_resources' | 'get_doc_resource' | 'send_feedback',
+  name:
+    | 'search_docs'
+    | 'list_docs_resources'
+    | 'get_doc_resource'
+    | 'send_feedback',
 ) {
   const tool = DOCS_ONLY_TOOLS.find((tool) => tool.name === name);
   assert(tool, `${name} tool definition not found`);
   return tool;
 }
 
+const searchDocsTool = getDocsOnlyToolDefinition('search_docs');
 const listDocsResourcesTool = getDocsOnlyToolDefinition('list_docs_resources');
 const getDocResourceTool = getDocsOnlyToolDefinition('get_doc_resource');
 const sendFeedbackTool = getDocsOnlyToolDefinition('send_feedback');
@@ -819,6 +826,15 @@ function createDocsOnlyMcpHandler() {
           },
         );
       }
+
+      server.registerTool(
+        searchDocsTool.name,
+        toolRegistration(searchDocsTool),
+        async (args: unknown, extra: { requestInfo?: RequestInfo }) =>
+          runDocsTool(searchDocsTool.name, readUserAgent(extra), () =>
+            searchDocs(searchDocsInputSchema.parse(args)),
+          ),
+      );
 
       server.registerTool(
         listDocsResourcesTool.name,

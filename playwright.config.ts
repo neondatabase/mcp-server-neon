@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import {
   DOCS_FIXTURE_INDEX_URL,
   FEEDBACK_FIXTURE_URL,
+  SITE_SEARCH_FIXTURE_URL,
 } from './e2e/docs-fixture.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -61,6 +62,8 @@ export default defineConfig({
       NEON_DOCS_INDEX_URL: DOCS_FIXTURE_INDEX_URL,
       // Same fixture server, so send_feedback never reaches the real service.
       NEON_FEEDBACK_URL: FEEDBACK_FIXTURE_URL,
+      // Same fixture server for search_docs, so no test depends on neon-agent.
+      NEON_SITE_SEARCH_URL: SITE_SEARCH_FIXTURE_URL,
     },
   },
 });

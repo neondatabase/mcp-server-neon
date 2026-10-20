@@ -31,6 +31,7 @@ const HOST_READ_ONLY_TOOLS = [
   'list_slow_queries',
   'run_sql',
   'search',
+  'search_docs',
   'send_feedback',
 ];
 
@@ -90,7 +91,7 @@ describe('NEON_TOOLS definitions', () => {
   });
 
   it('marks private Neon operations closed-world and public-capable ones open-world', () => {
-    expect(NEON_TOOLS).toHaveLength(119);
+    expect(NEON_TOOLS).toHaveLength(120);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
     expect(generated).toHaveLength(99);
     expect(
@@ -101,6 +102,7 @@ describe('NEON_TOOLS definitions', () => {
       'create_storage_bucket',
       'get_doc_resource',
       'list_docs_resources',
+      'search_docs',
       'send_feedback',
     ]);
   });
@@ -164,6 +166,21 @@ describe('docs tools definitions', () => {
   it('get_doc_resource is non-destructive and idempotent', () => {
     expect(getDocTool!.annotations.destructiveHint).toBe(false);
     expect(getDocTool!.annotations.idempotentHint).toBe(true);
+  });
+
+  it('search_docs is a read-only, open-world docs tool available to project-scoped grants', () => {
+    const searchDocsTool = NEON_TOOLS.find((t) => t.name === 'search_docs');
+    expect(searchDocsTool).toMatchObject({
+      scope: 'docs',
+      readOnlySafe: true,
+      projectScoped: true,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    });
   });
 });
 
