@@ -7,8 +7,9 @@
  * and assert that:
  *  - No WWW-Authenticate header is returned
  *  - The MCP initialize handshake succeeds without an Authorization header
- *  - tools/list returns the docs tools and send_feedback
+ *  - tools/list returns search_docs, get_doc, and send_feedback
  *  - tools/call search_docs returns hits and reports upstream failures
+ *  - tools/call get_doc reads the page for a returned slug
  *  - tools/call send_feedback works without auth
  *  - Any other category combination still requires auth (401)
  */
@@ -141,53 +142,12 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     expect(listResult?.result?.tools).toBeDefined();
 
     const toolNames = listResult!.result!.tools!.map((t) => t.name).sort();
-    expect(toolNames).toEqual([
-      'get_doc_resource',
-      'list_docs_resources',
-      'search_docs',
-      'send_feedback',
-    ]);
-  });
-
-  // Reads the docs index from the fixture server that `playwright.config.ts`
-  // points NEON_DOCS_INDEX_URL at, so this stays deterministic and off the
-  // network while still exercising the real handler and fetch.
-  test('tools/call list_docs_resources returns the markdown index', async ({
-    request,
-  }) => {
-    const response = await request.post('/mcp?category=docs', {
-      headers: MCP_HEADERS,
-      data: {
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: { name: 'list_docs_resources', arguments: {} },
-      },
-    });
-    expect(response.status()).toBeLessThan(300);
-
-    const messages = await readJsonRpcMessages(response);
-    const callResult = messages.find((m) => m.id === 3) as
-      | {
-          result?: {
-            content?: Array<{ type: string; text?: string }>;
-            isError?: boolean;
-          };
-        }
-      | undefined;
-    expect(callResult?.result).toBeDefined();
-    expect(callResult!.result!.isError).not.toBe(true);
-    expect(callResult!.result!.content?.[0]?.type).toBe('text');
-    // Matching the fixture's marker proves the index was fetched and returned,
-    // rather than the tool answering with an error string or an empty body.
-    expect(callResult!.result!.content?.[0]?.text).toContain(
-      DOCS_FIXTURE_MARKER,
-    );
+    expect(toolNames).toEqual(['get_doc', 'search_docs', 'send_feedback']);
   });
 
   // Posts to the site search stand-in that `playwright.config.ts` points
   // NEON_SITE_SEARCH_URL at; the query selects the fixture response.
-  test('tools/call search_docs returns hits with a get_doc_resource slug', async ({
+  test('tools/call search_docs returns hits with a get_doc slug', async ({
     request,
   }) => {
     const callResult = await callDocsTool(request, 10, 'search_docs', {
@@ -209,6 +169,39 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
         },
       ],
     });
+  });
+
+  // get_doc reads `<NEON_DOCS_BASE_URL>/<slug>.md`, which `playwright.config.ts`
+  // points at the fixture server, using the slug search_docs just returned.
+  test('tools/call get_doc reads the page for a search_docs slug', async ({
+    request,
+  }) => {
+    const searchResult = await callDocsTool(request, 12, 'search_docs', {
+      query: 'lsn',
+    });
+    const { hits } = JSON.parse(searchResult!.result!.content![0]!.text!) as {
+      hits: Array<{ slug: string }>;
+    };
+
+    const docResult = await callDocsTool(request, 13, 'get_doc', {
+      slug: hits[0]!.slug,
+    });
+    expect(docResult?.result?.isError).not.toBe(true);
+    // The marker proves the page body was fetched and returned, rather than
+    // an error string or an empty body.
+    expect(docResult!.result!.content?.[0]?.text).toContain(
+      DOCS_FIXTURE_MARKER,
+    );
+  });
+
+  test('tools/call get_doc reports a missing page as a tool error', async ({
+    request,
+  }) => {
+    const docResult = await callDocsTool(request, 14, 'get_doc', {
+      slug: 'docs/does-not-exist',
+    });
+    expect(docResult?.result?.isError).toBe(true);
+    expect(docResult!.result!.content?.[0]?.text).toMatch(/search_docs/);
   });
 
   test('tools/call search_docs returns an empty list when nothing matches', async ({

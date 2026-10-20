@@ -38,7 +38,7 @@ test.describe('/api/list-tools endpoint', () => {
     expect(body.grant.scopes).toEqual(['querying']);
   });
 
-  test('lists search_docs with the docs tools, including project-scoped', async ({
+  test('lists search_docs and get_doc for docs grants, including project-scoped', async ({
     request,
   }) => {
     for (const query of ['category=docs', 'category=docs&projectId=proj-123']) {
@@ -48,7 +48,7 @@ test.describe('/api/list-tools endpoint', () => {
         (t: { name: string }) => t.name,
       );
       expect(names, query).toContain('search_docs');
-      expect(names, query).toContain('get_doc_resource');
+      expect(names, query).toContain('get_doc');
     }
   });
 

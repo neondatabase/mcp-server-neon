@@ -2,7 +2,7 @@
 
 # [NEXT]
 
-`search_docs` searches neon.com (docs, API reference, PostgreSQL tutorial, guides, FAQs, changelog, and blog) with the search behind the neon.com search box and returns ranked pages with a slug for `get_doc_resource`. It takes `query`, optional `categories`, and optional `limit` (1-40, default 10), is in the `docs` category, is available in read-only mode, under project-scoped grants, and on the no-login `?category=docs` endpoint. `list_docs_resources` and `get_doc_resource` are unchanged; their descriptions now point to `search_docs` first. `NEON_SITE_SEARCH_URL` overrides the endpoint.
+`search_docs` and `get_doc` replace `list_docs_resources` and `get_doc_resource`. `search_docs` searches neon.com (docs, API reference, PostgreSQL tutorial, guides, FAQs, changelog, and blog) with the search behind the neon.com search box and returns ranked pages, each with a `slug`. It takes `query`, optional `categories`, and optional `limit` (1-40, default 10). `get_doc` takes that `slug` and returns the page as markdown. Both are in the `docs` category, available in read-only mode, under project-scoped grants, and on the no-login `?category=docs` endpoint. Calls to `list_docs_resources` or `get_doc_resource` now fail as unknown tools. `NEON_SITE_SEARCH_URL` and `NEON_DOCS_BASE_URL` override the endpoints; `NEON_DOCS_INDEX_URL` is gone.
 
 Branch Realtime tools under `?category=realtime`: `get_realtime`, `enable_realtime`, `disable_realtime`, `get_realtime_secret`, and `rotate_realtime_secret`. `get_realtime_secret` is unavailable in read-only mode. Requires `@neon/tools` 2.2.0. A token already issued with an explicit category list does not include `realtime`; tokens issued for every category do.
 

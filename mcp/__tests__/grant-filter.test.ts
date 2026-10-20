@@ -372,14 +372,16 @@ describe('injectProjectId', () => {
 
   it('does not inject project_id when the tool schema has none', () => {
     const scoped = grant({ projectId: 'proj-123' });
-    const getDoc = NEON_TOOLS.find((t) => t.name === 'get_doc_resource');
-    const listDocs = NEON_TOOLS.find((t) => t.name === 'list_docs_resources');
+    const getDoc = NEON_TOOLS.find((t) => t.name === 'get_doc');
+    const searchDocs = NEON_TOOLS.find((t) => t.name === 'search_docs');
     expect(getDoc).toBeDefined();
-    expect(listDocs).toBeDefined();
-    expect(injectProjectId({ slug: 'docs/x.md' }, scoped, getDoc)).toEqual({
-      slug: 'docs/x.md',
+    expect(searchDocs).toBeDefined();
+    expect(injectProjectId({ slug: 'docs/x' }, scoped, getDoc)).toEqual({
+      slug: 'docs/x',
     });
-    expect(injectProjectId({}, scoped, listDocs)).toEqual({});
+    expect(injectProjectId({ query: 'x' }, scoped, searchDocs)).toEqual({
+      query: 'x',
+    });
   });
 });
 
@@ -455,8 +457,7 @@ describe('search_docs visibility', () => {
   it('is a docs-only tool for the anonymous endpoint', () => {
     const docsOnly = NEON_TOOLS.filter(isDocsOnlyTool).map((t) => t.name);
     expect(docsOnly.sort()).toEqual([
-      'get_doc_resource',
-      'list_docs_resources',
+      'get_doc',
       'search_docs',
       'send_feedback',
     ]);

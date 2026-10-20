@@ -1,10 +1,11 @@
 /**
- * A stand-in for the Neon docs index, so the docs tools can be exercised by a
- * merge-gating test without depending on neon.com being up.
+ * A stand-in for neon.com page markdown, neon-agent's site search, and the
+ * feedback service, so the docs tools can be exercised by a merge-gating test
+ * without depending on any of them being up.
  *
- * `listDocsResources` fetches server-side, inside the Next dev server, so
- * Playwright's `request.route()` cannot intercept it — the URL has to be swapped
- * instead, which is what `NEON_DOCS_INDEX_URL` is for.
+ * The tools fetch server-side, inside the Next dev server, so Playwright's
+ * `request.route()` cannot intercept them; the URLs are swapped instead
+ * (`NEON_DOCS_BASE_URL`, `NEON_SITE_SEARCH_URL`, `NEON_FEEDBACK_URL`).
  *
  * The port is fixed rather than ephemeral because the dev server is spawned
  * before `globalSetup` runs, so its environment has to be built in
@@ -13,13 +14,13 @@
  * the fixture second is fine.
  */
 
-import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
-import path from 'node:path';
 
 const DOCS_FIXTURE_PORT = process.env.E2E_DOCS_PORT ?? '3101';
-const DOCS_FIXTURE_PATH = '/docs/llms.txt';
-export const DOCS_FIXTURE_INDEX_URL = `http://127.0.0.1:${DOCS_FIXTURE_PORT}${DOCS_FIXTURE_PATH}`;
+export const DOCS_FIXTURE_BASE_URL = `http://127.0.0.1:${DOCS_FIXTURE_PORT}`;
+
+// The one page get_doc can read here: the fixture search hit's slug plus `.md`.
+const DOCS_FIXTURE_PAGE_PATH = '/docs/reference/glossary.md';
 
 // The same server stands in for the feedback service, so send_feedback can be
 // called end to end without sending real feedback. It accepts a POST like the
@@ -79,27 +80,24 @@ function siteSearchResponse(rawBody: string): {
   );
 }
 
-/** Marker the e2e assertion matches on. Also present in the fixture file. */
-export const DOCS_FIXTURE_MARKER = 'E2E_DOCS_INDEX_FIXTURE_MARKER';
+/** Marker the e2e assertion matches on. */
+export const DOCS_FIXTURE_MARKER = 'E2E_DOCS_PAGE_FIXTURE_MARKER';
 
-const FIXTURE_FILE = path.resolve(
-  import.meta.dirname,
-  'fixtures',
-  'docs-index.txt',
-);
+const DOCS_FIXTURE_PAGE = `# Glossary\n\n## LSN\n\nLog Sequence Number. ${DOCS_FIXTURE_MARKER}\n`;
 
 /**
- * Serves the fixture at the one path the docs index is read from. Unreferenced on
+ * Serves the fixture page, site search, and feedback paths. Unreferenced on
  * purpose: `scripts/e2e-setup.ts` calls the setup and then expects the process to
  * exit, which an open listener would prevent. It still serves for as long as the
  * process lives, which covers a whole Playwright run.
  */
 export async function startDocsFixtureServer(): Promise<Server> {
-  const body = readFileSync(FIXTURE_FILE);
   const server = createServer((request, response) => {
-    if (request.url === DOCS_FIXTURE_PATH) {
-      response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-      response.end(body);
+    if (request.url === DOCS_FIXTURE_PAGE_PATH) {
+      response.writeHead(200, {
+        'Content-Type': 'text/markdown; charset=utf-8',
+      });
+      response.end(DOCS_FIXTURE_PAGE);
       return;
     }
     if (request.url === SITE_SEARCH_FIXTURE_PATH && request.method === 'POST') {

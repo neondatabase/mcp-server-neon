@@ -13,11 +13,7 @@ import { captureException, startSpan } from '@sentry/node';
 import { NeonApiError } from '@neon/sdk';
 
 import { NEON_HANDLERS } from '../../../mcp/tools/index';
-import {
-  getDocResource,
-  listDocsResources,
-  searchDocs,
-} from '../../../mcp/tools/handlers/docs';
+import { getDoc, searchDocs } from '../../../mcp/tools/handlers/docs';
 import { sendFeedback } from '../../../mcp/tools/handlers/feedback';
 import { createNeonClient } from '../../../mcp/server/api';
 import pkg from '../../../package.json';
@@ -711,11 +707,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 // are not surfaced anonymously.
 const DOCS_ONLY_TOOLS = NEON_TOOLS.filter(isDocsOnlyTool);
 function getDocsOnlyToolDefinition(
-  name:
-    | 'search_docs'
-    | 'list_docs_resources'
-    | 'get_doc_resource'
-    | 'send_feedback',
+  name: 'search_docs' | 'get_doc' | 'send_feedback',
 ) {
   const tool = DOCS_ONLY_TOOLS.find((tool) => tool.name === name);
   assert(tool, `${name} tool definition not found`);
@@ -723,8 +715,7 @@ function getDocsOnlyToolDefinition(
 }
 
 const searchDocsTool = getDocsOnlyToolDefinition('search_docs');
-const listDocsResourcesTool = getDocsOnlyToolDefinition('list_docs_resources');
-const getDocResourceTool = getDocsOnlyToolDefinition('get_doc_resource');
+const getDocTool = getDocsOnlyToolDefinition('get_doc');
 const sendFeedbackTool = getDocsOnlyToolDefinition('send_feedback');
 
 const ANONYMOUS_DOCS_USER_ID = 'anonymous-docs';
@@ -837,20 +828,11 @@ function createDocsOnlyMcpHandler() {
       );
 
       server.registerTool(
-        listDocsResourcesTool.name,
-        toolRegistration(listDocsResourcesTool),
-        async (_args: unknown, extra: { requestInfo?: RequestInfo }) =>
-          runDocsTool(listDocsResourcesTool.name, readUserAgent(extra), () =>
-            listDocsResources(),
-          ),
-      );
-
-      server.registerTool(
-        getDocResourceTool.name,
-        toolRegistration(getDocResourceTool),
+        getDocTool.name,
+        toolRegistration(getDocTool),
         async (args: { slug: string }, extra: { requestInfo?: RequestInfo }) =>
-          runDocsTool(getDocResourceTool.name, readUserAgent(extra), () =>
-            getDocResource({ slug: args.slug }),
+          runDocsTool(getDocTool.name, readUserAgent(extra), () =>
+            getDoc({ slug: args.slug }),
           ),
       );
 

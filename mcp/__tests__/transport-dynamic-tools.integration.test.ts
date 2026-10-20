@@ -464,7 +464,7 @@ describe('transport dynamic tool composition', () => {
       await anonymousDocsCall(
         'tools/call',
         1,
-        { name: 'list_docs_resources', arguments: {} },
+        { name: 'get_doc', arguments: { slug: 'docs/introduction' } },
         'v0bot',
       );
     } finally {

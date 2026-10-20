@@ -242,7 +242,7 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 <details>
 <summary><strong>Tools available in read-only mode</strong></summary>
 
-Host tools: `list_organizations`, `describe_branch`, `run_sql`, `get_database_tables`, `describe_table_schema`, `list_slow_queries`, `explain_sql_statement`, `inspect_database`, `get_neon_auth_config`, `search`, `fetch`, `search_docs`, `list_docs_resources`, `get_doc_resource`, `send_feedback`.
+Host tools: `list_organizations`, `describe_branch`, `run_sql`, `get_database_tables`, `describe_table_schema`, `list_slow_queries`, `explain_sql_statement`, `inspect_database`, `get_neon_auth_config`, `search`, `fetch`, `search_docs`, `get_doc`, `send_feedback`.
 
 Generated Management API tools that are GET and do not return secrets, plus `query_logs` (POST, read-only). Preview the exact set with `/api/list-tools?readonly=true`.
 
@@ -409,9 +409,8 @@ Notes:
 
 **Documentation and Resources** (`?category=docs`):
 
-- **`search_docs`**: Searches neon.com (docs, API reference, PostgreSQL tutorial, guides, FAQs, changelog, and blog) with the same search as the neon.com search box. Takes `query`, optional `categories` (`docs`, `api`, `postgresql`, `guides`, `faqs`, `blog`, `changelog`), and optional `limit` (1-40, default 10). Returns ranked pages with `title`, `url`, `slug`, `category`, `breadcrumb`, `heading`, and `excerpt`; pass `slug` to `get_doc_resource` to read the page.
-- **`list_docs_resources`**: Lists all available Neon documentation pages by fetching the index from `https://neon.com/docs/llms.txt`. Returns page URLs and titles that can be fetched individually using the `get_doc_resource` tool. Use `search_docs` to find a page; this tool returns the whole index.
-- **`get_doc_resource`**: Fetches a neon.com page as markdown content. Pass a slug from `search_docs` or `list_docs_resources`.
+- **`search_docs`**: Searches neon.com (docs, API reference, PostgreSQL tutorial, guides, FAQs, changelog, and blog) with the same search as the neon.com search box. Takes `query`, optional `categories` (`docs`, `api`, `postgresql`, `guides`, `faqs`, `blog`, `changelog`), and optional `limit` (1-40, default 10). Returns ranked pages with `title`, `url`, `slug`, `category`, `breadcrumb`, `heading`, and `excerpt`; pass `slug` to `get_doc` to read the page.
+- **`get_doc`**: Fetches one neon.com page as markdown. Takes `slug` from a `search_docs` hit (for example `docs/guides/prisma` or `postgresql/tutorial/inner-join`).
 
 **Functions** (`?category=functions`):
 

@@ -135,8 +135,8 @@ Run through the applicable subset of these tests based on the current config. Sk
 **Discovery + Docs Tools:**
 - `neon-preview.search`
 - `neon-preview.fetch`
-- `neon-preview.list_docs_resources`
-- `neon-preview.get_doc_resource`
+- `neon-preview.search_docs`
+- `neon-preview.get_doc` with a slug from `search_docs`
 
 **Performance Tool Check:**
 - `neon-preview.list_slow_queries`

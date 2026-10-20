@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import {
-  DOCS_FIXTURE_INDEX_URL,
+  DOCS_FIXTURE_BASE_URL,
   FEEDBACK_FIXTURE_URL,
   SITE_SEARCH_FIXTURE_URL,
 } from './e2e/docs-fixture.js';
@@ -54,12 +54,12 @@ export default defineConfig({
       // Load fresh values from .env.e2e for the webServer subprocess.
       ...loadE2eEnv(),
       SERVER_HOST: BASE_URL,
-      // Read the docs index from the fixture server that global setup starts, so
+      // Serve doc pages from the fixture server that global setup starts, so
       // no merge-gating test depends on neon.com being reachable. Set here and
       // not in global setup: Playwright starts the web server as a plugin task,
       // which runs before global setup, so anything global setup puts on
       // process.env arrives too late for this process.
-      NEON_DOCS_INDEX_URL: DOCS_FIXTURE_INDEX_URL,
+      NEON_DOCS_BASE_URL: DOCS_FIXTURE_BASE_URL,
       // Same fixture server, so send_feedback never reaches the real service.
       NEON_FEEDBACK_URL: FEEDBACK_FIXTURE_URL,
       // Same fixture server for search_docs, so no test depends on neon-agent.

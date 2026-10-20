@@ -714,7 +714,7 @@
   {
     "name": "search_docs",
     "title": "Search Documentation",
-    "description": "Search neon.com: docs, API reference, PostgreSQL tutorial, guides, FAQs, changelog, and blog. Returns ranked pages with title, URL, the matching section, and a slug; read a page with get_doc_resource. Use this before list_docs_resources.",
+    "description": "Search neon.com: docs, API reference, PostgreSQL tutorial, guides, FAQs, changelog, and blog. Returns ranked pages with title, URL, the matching section, and a slug; read a full page with get_doc.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -765,33 +765,15 @@
     }
   },
   {
-    "name": "list_docs_resources",
-    "title": "List Documentation Resources",
-    "description": "List every Neon documentation page slug from neon.com/docs/llms.txt. Prefer search_docs to find a page; use this to browse the full index. Do not guess slugs.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {},
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "title": "List Documentation Resources",
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true,
-      "openWorldHint": true
-    }
-  },
-  {
-    "name": "get_doc_resource",
-    "title": "Get Documentation Resource",
-    "description": "Fetch one neon.com page as markdown. Pass a slug from search_docs or list_docs_resources (for example docs/guides/prisma).",
+    "name": "get_doc",
+    "title": "Get Documentation Page",
+    "description": "Fetch one neon.com page as markdown. Pass the slug of a search_docs hit (for example docs/guides/prisma).",
     "inputSchema": {
       "type": "object",
       "properties": {
         "slug": {
           "type": "string",
-          "description": "The page slug (path) to fetch, e.g. 'docs/guides/prisma' or 'docs/guides/prisma.md'. Use a slug returned by search_docs, or one from list_docs_resources."
+          "description": "The slug of a hit returned by search_docs, e.g. 'docs/guides/prisma' or 'postgresql/tutorial/inner-join'."
         }
       },
       "required": [
@@ -801,7 +783,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
-      "title": "Get Documentation Resource",
+      "title": "Get Documentation Page",
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,

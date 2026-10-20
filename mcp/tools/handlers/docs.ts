@@ -1,5 +1,4 @@
-import { NEON_DOCS_INDEX_URL, NEON_SITE_SEARCH_URL } from '../../../lib/config';
-import { NEON_DOCS_BASE_URL } from '../../resources';
+import { NEON_DOCS_BASE_URL, NEON_SITE_SEARCH_URL } from '../../../lib/config';
 import { z } from 'zod/v3';
 import { InvalidArgumentError, NotFoundError } from '../../server/errors';
 
@@ -78,21 +77,6 @@ export async function searchDocs(params: {
   return JSON.stringify(parsed.data, null, 2);
 }
 
-export async function listDocsResources(): Promise<string> {
-  const response = await fetch(NEON_DOCS_INDEX_URL, {
-    signal: AbortSignal.timeout(DOCS_FETCH_TIMEOUT_MS),
-  });
-  if (!response.ok) {
-    if (response.status === 404) {
-      throw new NotFoundError('Neon docs index not found');
-    }
-    throw new Error(
-      `Failed to fetch Neon docs index: ${response.status} ${response.statusText}`,
-    );
-  }
-  return response.text();
-}
-
 function validateDocSlug(slug: string): void {
   if (slug.includes('..')) {
     throw new InvalidArgumentError(
@@ -111,11 +95,7 @@ function validateDocSlug(slug: string): void {
   }
 }
 
-export async function getDocResource({
-  slug,
-}: {
-  slug: string;
-}): Promise<string> {
+export async function getDoc({ slug }: { slug: string }): Promise<string> {
   validateDocSlug(slug);
   const mdSlug = slug.endsWith('.md') ? slug : `${slug}.md`;
   const url = `${NEON_DOCS_BASE_URL}/${mdSlug}`;
@@ -124,7 +104,9 @@ export async function getDocResource({
   });
   if (!response.ok) {
     if (response.status === 404) {
-      throw new NotFoundError(`Doc page not found: "${mdSlug}"`);
+      throw new NotFoundError(
+        `Doc page not found: "${mdSlug}". Pass a slug returned by search_docs.`,
+      );
     }
     throw new Error(
       `Failed to fetch doc page "${mdSlug}": ${response.status} ${response.statusText}`,

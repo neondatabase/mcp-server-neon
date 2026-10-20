@@ -376,8 +376,6 @@ export const fetchInputSchema = z
   })
   .strict();
 
-export const listDocsResourcesInputSchema = z.object({}).strict();
-
 const SITE_SEARCH_CATEGORIES = [
   'docs',
   'api',
@@ -435,12 +433,12 @@ export const sendFeedbackInputSchema = z
   })
   .strict();
 
-export const getDocResourceInputSchema = z
+export const getDocInputSchema = z
   .object({
     slug: z
       .string()
       .describe(
-        "The page slug (path) to fetch, e.g. 'docs/guides/prisma' or 'docs/guides/prisma.md'. Use a slug returned by search_docs, or one from list_docs_resources.",
+        "The slug of a hit returned by search_docs, e.g. 'docs/guides/prisma' or 'postgresql/tutorial/inner-join'.",
       ),
   })
   .strict();
