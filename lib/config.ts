@@ -20,12 +20,17 @@ export const CLIENT_SECRET = process.env.CLIENT_SECRET ?? '';
 export const NEON_API_HOST =
   process.env.NEON_API_HOST ?? 'https://console.neon.tech/api/v2';
 
-// Where the docs tools read the documentation index from. Overridable so a run
-// can be pointed at another origin; the e2e suite points it at a local fixture,
-// which is what keeps a merge-gating test off the network. Individual doc pages
-// still come from NEON_DOCS_BASE_URL in mcp/resources.ts.
-export const NEON_DOCS_INDEX_URL =
-  process.env.NEON_DOCS_INDEX_URL ?? 'https://neon.com/docs/llms.txt';
+// Where get_doc reads page markdown from (`<base>/<slug>.md`). Overridable so
+// the e2e suite can serve pages from a local fixture and stay off the network.
+export const NEON_DOCS_BASE_URL =
+  process.env.NEON_DOCS_BASE_URL ?? 'https://neon.com';
+
+// Where search_docs posts to: neon-agent's site search (the assistant Neon
+// Function), which also backs the neon.com search box. Overridable so the e2e
+// suite can point it at a local fixture.
+export const NEON_SITE_SEARCH_URL =
+  process.env.NEON_SITE_SEARCH_URL ??
+  'https://br-frosty-cell-a5smzg39-assistant.compute.c-1.us-east-2.aws.neon.tech/site-search';
 
 // Where send_feedback posts to (the neondatabase/neon-feedback Function).
 // Overridable so tests and local runs never send real feedback.

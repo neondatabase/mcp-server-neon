@@ -13,10 +13,7 @@ import { captureException, startSpan } from '@sentry/node';
 import { NeonApiError } from '@neon/sdk';
 
 import { NEON_HANDLERS } from '../../../mcp/tools/index';
-import {
-  getDocResource,
-  listDocsResources,
-} from '../../../mcp/tools/handlers/docs';
+import { getDoc, searchDocs } from '../../../mcp/tools/handlers/docs';
 import { sendFeedback } from '../../../mcp/tools/handlers/feedback';
 import { createNeonClient } from '../../../mcp/server/api';
 import pkg from '../../../package.json';
@@ -53,6 +50,7 @@ import {
 import { invokeTool, toolRegistration } from '../../../mcp/tools/registration';
 import { toListedTool } from '../../../mcp/tools/listed-schema';
 import { NEON_TOOLS } from '../../../mcp/tools/definitions';
+import { searchDocsInputSchema } from '../../../mcp/tools/toolsSchema';
 import { assert } from '../../../lib/assert';
 import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
 import {
@@ -709,15 +707,15 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 // are not surfaced anonymously.
 const DOCS_ONLY_TOOLS = NEON_TOOLS.filter(isDocsOnlyTool);
 function getDocsOnlyToolDefinition(
-  name: 'list_docs_resources' | 'get_doc_resource' | 'send_feedback',
+  name: 'search_docs' | 'get_doc' | 'send_feedback',
 ) {
   const tool = DOCS_ONLY_TOOLS.find((tool) => tool.name === name);
   assert(tool, `${name} tool definition not found`);
   return tool;
 }
 
-const listDocsResourcesTool = getDocsOnlyToolDefinition('list_docs_resources');
-const getDocResourceTool = getDocsOnlyToolDefinition('get_doc_resource');
+const searchDocsTool = getDocsOnlyToolDefinition('search_docs');
+const getDocTool = getDocsOnlyToolDefinition('get_doc');
 const sendFeedbackTool = getDocsOnlyToolDefinition('send_feedback');
 
 const ANONYMOUS_DOCS_USER_ID = 'anonymous-docs';
@@ -821,20 +819,20 @@ function createDocsOnlyMcpHandler() {
       }
 
       server.registerTool(
-        listDocsResourcesTool.name,
-        toolRegistration(listDocsResourcesTool),
-        async (_args: unknown, extra: { requestInfo?: RequestInfo }) =>
-          runDocsTool(listDocsResourcesTool.name, readUserAgent(extra), () =>
-            listDocsResources(),
+        searchDocsTool.name,
+        toolRegistration(searchDocsTool),
+        async (args: unknown, extra: { requestInfo?: RequestInfo }) =>
+          runDocsTool(searchDocsTool.name, readUserAgent(extra), () =>
+            searchDocs(searchDocsInputSchema.parse(args)),
           ),
       );
 
       server.registerTool(
-        getDocResourceTool.name,
-        toolRegistration(getDocResourceTool),
+        getDocTool.name,
+        toolRegistration(getDocTool),
         async (args: { slug: string }, extra: { requestInfo?: RequestInfo }) =>
-          runDocsTool(getDocResourceTool.name, readUserAgent(extra), () =>
-            getDocResource({ slug: args.slug }),
+          runDocsTool(getDocTool.name, readUserAgent(extra), () =>
+            getDoc({ slug: args.slug }),
           ),
       );
 

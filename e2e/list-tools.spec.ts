@@ -38,6 +38,20 @@ test.describe('/api/list-tools endpoint', () => {
     expect(body.grant.scopes).toEqual(['querying']);
   });
 
+  test('lists search_docs and get_doc for docs grants, including project-scoped', async ({
+    request,
+  }) => {
+    for (const query of ['category=docs', 'category=docs&projectId=proj-123']) {
+      const response = await request.get(`/api/list-tools?${query}`);
+      expect(response.ok()).toBeTruthy();
+      const names = (await response.json()).tools.map(
+        (t: { name: string }) => t.name,
+      );
+      expect(names, query).toContain('search_docs');
+      expect(names, query).toContain('get_doc');
+    }
+  });
+
   test('hides project-agnostic tools in project-scoped mode', async ({
     request,
   }) => {

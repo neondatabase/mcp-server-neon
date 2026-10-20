@@ -89,8 +89,8 @@ describe('createMcpServer grant + read-only integration', () => {
     expect(names).toContain('get_database_tables');
     expect(names).toContain('compare_database_schema');
     expect(names).not.toContain('reset_from_parent');
-    expect(names).toContain('list_docs_resources');
-    expect(names).toContain('get_doc_resource');
+    expect(names).toContain('search_docs');
+    expect(names).toContain('get_doc');
     expect(names).toContain('search');
     expect(names).toContain('fetch');
     expect(names).not.toContain('create_project');

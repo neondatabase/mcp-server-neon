@@ -88,12 +88,12 @@ describe('MCP server e2e tool calls', () => {
     await withConnectedClient(createTestContext(), async (client) => {
       const result = await client.listTools();
       const toolNames = result.tools.map((tool) => tool.name);
-      const docsTool = result.tools.find(
-        (tool) => tool.name === 'list_docs_resources',
-      );
+      const docsTool = result.tools.find((tool) => tool.name === 'search_docs');
 
-      expect(toolNames).toContain('list_docs_resources');
-      expect(toolNames).toContain('get_doc_resource');
+      expect(toolNames).toContain('search_docs');
+      expect(toolNames).toContain('get_doc');
+      expect(toolNames).not.toContain('list_docs_resources');
+      expect(toolNames).not.toContain('get_doc_resource');
       // Regression guard: MCP listTools must return JSON Schema, not raw Zod
       // internals. Raw Zod objects can cause runtime failures for some clients.
       expect(docsTool?.inputSchema).toMatchObject({
@@ -181,38 +181,89 @@ describe('MCP server e2e tool calls', () => {
     });
   });
 
-  it('calls list_docs_resources through MCP protocol', async () => {
-    const mockIndex =
-      '# Neon Docs\n- [AI Concepts](https://neon.com/docs/ai/ai-concepts.md)';
+  it('calls search_docs through MCP protocol and returns get_doc slugs', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
-      new Response(mockIndex, { status: 200 }),
+      Response.json({
+        hits: [
+          {
+            url: 'https://neon.com/postgresql/tutorial/joins',
+            title: 'PostgreSQL Joins',
+            slug: 'postgresql/tutorial/joins',
+            collection: 'postgresql',
+            category: 'postgresql',
+            breadcrumb: ['Learn PostgreSQL', 'Tutorial'],
+            heading: 'PostgreSQL Joins > Inner join',
+            excerpt: 'An inner join returns matching rows.',
+            score: 3.1,
+          },
+        ],
+      }),
     );
 
     await withConnectedClient(createTestContext(), async (client) => {
       const result = await client.callTool({
-        name: 'list_docs_resources',
-        arguments: {},
+        name: 'search_docs',
+        arguments: { query: '  inner join ', categories: ['postgresql'] },
       });
       const content = result.content as Array<{ type: string; text?: string }>;
 
       expect(result.isError).not.toBe(true);
-      expect(content[0]).toMatchObject({
-        type: 'text',
+      const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+      expect(url).toMatch(/\/site-search$/);
+      expect(JSON.parse(String(init?.body))).toEqual({
+        query: 'inner join',
+        categories: ['postgresql'],
+        limit: 10,
       });
-      if (content[0].type === 'text') {
-        expect(content[0].text).toContain('AI Concepts');
-      }
+      expect(JSON.parse(content[0].text ?? '')).toEqual({
+        hits: [
+          {
+            title: 'PostgreSQL Joins',
+            url: 'https://neon.com/postgresql/tutorial/joins',
+            slug: 'postgresql/tutorial/joins',
+            category: 'postgresql',
+            breadcrumb: ['Learn PostgreSQL', 'Tutorial'],
+            heading: 'PostgreSQL Joins > Inner join',
+            excerpt: 'An inner join returns matching rows.',
+          },
+        ],
+      });
     });
   });
 
-  it('calls get_doc_resource and auto-appends .md through MCP protocol', async () => {
+  it('returns search_docs upstream and network failures as tool errors', async () => {
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce(
+        Response.json({ error: 'categories must be unique' }, { status: 400 }),
+      )
+      .mockRejectedValueOnce(new TypeError('fetch failed'));
+
+    await withConnectedClient(createTestContext(), async (client) => {
+      const rejected = await client.callTool({
+        name: 'search_docs',
+        arguments: { query: 'lsn' },
+      });
+      expect(rejected.isError).toBe(true);
+      expect(JSON.stringify(rejected.content)).toContain(
+        'categories must be unique',
+      );
+
+      const unreachable = await client.callTool({
+        name: 'search_docs',
+        arguments: { query: 'lsn' },
+      });
+      expect(unreachable.isError).toBe(true);
+    });
+  });
+
+  it('calls get_doc and auto-appends .md through MCP protocol', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response('# Prisma Guide\n\nUse Prisma with Neon.', { status: 200 }),
     );
 
     await withConnectedClient(createTestContext(), async (client) => {
       const result = await client.callTool({
-        name: 'get_doc_resource',
+        name: 'get_doc',
         arguments: { slug: 'docs/guides/prisma' },
       });
       const content = result.content as Array<{ type: string; text?: string }>;
@@ -229,7 +280,7 @@ describe('MCP server e2e tool calls', () => {
   it('returns MCP tool error content for invalid slug', async () => {
     await withConnectedClient(createTestContext(), async (client) => {
       const result = await client.callTool({
-        name: 'get_doc_resource',
+        name: 'get_doc',
         arguments: { slug: 'https://evil.example/bad' },
       });
       const content = result.content as Array<{ type: string; text?: string }>;
@@ -256,8 +307,8 @@ describe('MCP server e2e tool calls', () => {
       createTestContext(),
       async (client) => {
         await client.callTool({
-          name: 'list_docs_resources',
-          arguments: {},
+          name: 'get_doc',
+          arguments: { slug: 'docs/introduction' },
         });
       },
       'v0bot',
@@ -291,8 +342,8 @@ describe('MCP server e2e tool calls', () => {
       createTestContext(),
       async (client) => {
         await client.callTool({
-          name: 'list_docs_resources',
-          arguments: {},
+          name: 'get_doc',
+          arguments: { slug: 'docs/introduction' },
         });
       },
       'UnclassifiedClient/0.1.0',
@@ -323,8 +374,8 @@ describe('MCP server e2e tool calls', () => {
         const result = await client.listTools();
         const toolNames = result.tools.map((tool) => tool.name);
 
-        expect(toolNames).toContain('list_docs_resources');
-        expect(toolNames).toContain('get_doc_resource');
+        expect(toolNames).toContain('search_docs');
+        expect(toolNames).toContain('get_doc');
         expect(toolNames).not.toContain('create_project');
         // Withheld even though it mutates nothing: the URI carries the branch
         // owner role's password, which works against the read-write compute.

@@ -660,7 +660,7 @@
   {
     "name": "search",
     "title": "Search",
-    "description": "Search across all organizations, projects, and branches by keyword. Returns matching items with id, title, and URL. Query must be at least 3 characters. Do not use when you need all projects (use `list_projects` instead).",
+    "description": "Search across all organizations, projects, and branches by keyword. Returns matching items with id, title, and URL. Query must be at least 3 characters. Do not use when you need all projects (use `list_projects` instead) or to search Neon documentation (use `search_docs`).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -712,17 +712,52 @@
     }
   },
   {
-    "name": "list_docs_resources",
-    "title": "List Documentation Resources",
-    "description": "List Neon documentation page slugs from neon.com/docs/llms.txt. Call this before get_doc_resource; do not guess slugs.",
+    "name": "search_docs",
+    "title": "Search Documentation",
+    "description": "Search neon.com: docs, API reference, PostgreSQL tutorial, guides, FAQs, changelog, and blog. Returns ranked pages with title, URL, the matching section, and a slug; read a full page with get_doc.",
     "inputSchema": {
       "type": "object",
-      "properties": {},
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "What to search for, in words, e.g. \"reset a branch\" or \"connection pooling\"."
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "docs",
+              "api",
+              "postgresql",
+              "guides",
+              "faqs",
+              "blog",
+              "changelog"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 7,
+          "description": "Only return pages in these categories: docs, api (API reference), postgresql (PostgreSQL tutorial), guides, faqs, blog, changelog. Omit to search everything."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 40,
+          "default": 10,
+          "description": "Maximum number of pages to return (1-40)."
+        }
+      },
+      "required": [
+        "query"
+      ],
       "additionalProperties": false,
       "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
-      "title": "List Documentation Resources",
+      "title": "Search Documentation",
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
@@ -730,15 +765,15 @@
     }
   },
   {
-    "name": "get_doc_resource",
-    "title": "Get Documentation Resource",
-    "description": "Fetch one Neon documentation page as markdown. Pass a slug from list_docs_resources (for example docs/guides/prisma.md).",
+    "name": "get_doc",
+    "title": "Get Documentation Page",
+    "description": "Fetch one neon.com page as markdown. Pass the slug of a search_docs hit (for example docs/guides/prisma).",
     "inputSchema": {
       "type": "object",
       "properties": {
         "slug": {
           "type": "string",
-          "description": "The docs page slug (path) to fetch, e.g. 'docs/guides/prisma.md'. Slugs use .md file endings matching the URLs in the documentation index. Use the list_docs_resources tool first to discover available slugs."
+          "description": "The slug of a hit returned by search_docs, e.g. 'docs/guides/prisma' or 'postgresql/tutorial/inner-join'."
         }
       },
       "required": [
@@ -748,7 +783,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "annotations": {
-      "title": "Get Documentation Resource",
+      "title": "Get Documentation Page",
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,

@@ -9,7 +9,7 @@
 
 import { ensureOauthDatabaseUrl } from './provision-oauth-db.js';
 import {
-  DOCS_FIXTURE_INDEX_URL,
+  DOCS_FIXTURE_BASE_URL,
   startDocsFixtureServer,
 } from './docs-fixture.js';
 
@@ -19,7 +19,7 @@ export default async function globalSetup() {
 
   const docsServer = await startDocsFixtureServer();
   console.log(
-    `[e2e-setup] Serving the docs index fixture on ${DOCS_FIXTURE_INDEX_URL}`,
+    `[e2e-setup] Serving the docs fixtures on ${DOCS_FIXTURE_BASE_URL}`,
   );
 
   return async () => {

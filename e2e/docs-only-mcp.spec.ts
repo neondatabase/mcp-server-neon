@@ -7,13 +7,43 @@
  * and assert that:
  *  - No WWW-Authenticate header is returned
  *  - The MCP initialize handshake succeeds without an Authorization header
- *  - tools/list returns the docs tools and send_feedback
+ *  - tools/list returns search_docs, get_doc, and send_feedback
+ *  - tools/call search_docs returns hits and reports upstream failures
+ *  - tools/call get_doc reads the page for a returned slug
  *  - tools/call send_feedback works without auth
  *  - Any other category combination still requires auth (401)
  */
 
 import { test, expect, type APIResponse } from '@playwright/test';
 import { DOCS_FIXTURE_MARKER } from './docs-fixture.js';
+
+async function callDocsTool(
+  request: import('@playwright/test').APIRequestContext,
+  id: number,
+  name: string,
+  args: Record<string, unknown>,
+) {
+  const response = await request.post('/mcp?category=docs', {
+    headers: MCP_HEADERS,
+    data: {
+      jsonrpc: '2.0',
+      id,
+      method: 'tools/call',
+      params: { name, arguments: args },
+    },
+  });
+  expect(response.status()).toBeLessThan(300);
+  const messages = await readJsonRpcMessages(response);
+  return messages.find((m) => m.id === id) as
+    | {
+        result?: {
+          content?: Array<{ type: string; text?: string }>;
+          isError?: boolean;
+        };
+        error?: { message?: string };
+      }
+    | undefined;
+}
 
 const MCP_HEADERS = {
   'Content-Type': 'application/json',
@@ -112,47 +142,119 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     expect(listResult?.result?.tools).toBeDefined();
 
     const toolNames = listResult!.result!.tools!.map((t) => t.name).sort();
-    expect(toolNames).toEqual([
-      'get_doc_resource',
-      'list_docs_resources',
-      'send_feedback',
-    ]);
+    expect(toolNames).toEqual(['get_doc', 'search_docs', 'send_feedback']);
   });
 
-  // Reads the docs index from the fixture server that `playwright.config.ts`
-  // points NEON_DOCS_INDEX_URL at, so this stays deterministic and off the
-  // network while still exercising the real handler and fetch.
-  test('tools/call list_docs_resources returns the markdown index', async ({
+  // Posts to the site search stand-in that `playwright.config.ts` points
+  // NEON_SITE_SEARCH_URL at; the query selects the fixture response.
+  test('tools/call search_docs returns hits with a get_doc slug', async ({
     request,
   }) => {
-    const response = await request.post('/mcp?category=docs', {
-      headers: MCP_HEADERS,
-      data: {
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: { name: 'list_docs_resources', arguments: {} },
-      },
+    const callResult = await callDocsTool(request, 10, 'search_docs', {
+      query: 'lsn',
+      categories: ['docs'],
     });
-    expect(response.status()).toBeLessThan(300);
+    expect(callResult?.result?.isError).not.toBe(true);
+    expect(JSON.parse(callResult!.result!.content![0]!.text!)).toEqual({
+      hits: [
+        {
+          title: 'Glossary',
+          url: 'https://neon.com/docs/reference/glossary',
+          slug: 'docs/reference/glossary',
+          category: 'docs',
+          breadcrumb: ['Docs'],
+          heading: 'Glossary > LSN',
+          excerpt:
+            'Log Sequence Number. A byte offset to a location in the WAL stream.',
+        },
+      ],
+    });
+  });
 
-    const messages = await readJsonRpcMessages(response);
-    const callResult = messages.find((m) => m.id === 3) as
-      | {
-          result?: {
-            content?: Array<{ type: string; text?: string }>;
-            isError?: boolean;
-          };
-        }
-      | undefined;
-    expect(callResult?.result).toBeDefined();
-    expect(callResult!.result!.isError).not.toBe(true);
-    expect(callResult!.result!.content?.[0]?.type).toBe('text');
-    // Matching the fixture's marker proves the index was fetched and returned,
-    // rather than the tool answering with an error string or an empty body.
-    expect(callResult!.result!.content?.[0]?.text).toContain(
+  // get_doc reads `<NEON_DOCS_BASE_URL>/<slug>.md`, which `playwright.config.ts`
+  // points at the fixture server, using the slug search_docs just returned.
+  test('tools/call get_doc reads the page for a search_docs slug', async ({
+    request,
+  }) => {
+    const searchResult = await callDocsTool(request, 12, 'search_docs', {
+      query: 'lsn',
+    });
+    const { hits } = JSON.parse(searchResult!.result!.content![0]!.text!) as {
+      hits: Array<{ slug: string }>;
+    };
+
+    const docResult = await callDocsTool(request, 13, 'get_doc', {
+      slug: hits[0]!.slug,
+    });
+    expect(docResult?.result?.isError).not.toBe(true);
+    // The marker proves the page body was fetched and returned, rather than
+    // an error string or an empty body.
+    expect(docResult!.result!.content?.[0]?.text).toContain(
       DOCS_FIXTURE_MARKER,
     );
+  });
+
+  test('tools/call get_doc reports a missing page as a tool error', async ({
+    request,
+  }) => {
+    const docResult = await callDocsTool(request, 14, 'get_doc', {
+      slug: 'docs/does-not-exist',
+    });
+    expect(docResult?.result?.isError).toBe(true);
+    expect(docResult!.result!.content?.[0]?.text).toMatch(/search_docs/);
+  });
+
+  test('tools/call search_docs returns an empty list when nothing matches', async ({
+    request,
+  }) => {
+    const callResult = await callDocsTool(request, 11, 'search_docs', {
+      query: 'fixture-empty',
+    });
+    expect(callResult?.result?.isError).not.toBe(true);
+    expect(JSON.parse(callResult!.result!.content![0]!.text!)).toEqual({
+      hits: [],
+    });
+  });
+
+  test('tools/call search_docs reports upstream failures as tool errors', async ({
+    request,
+  }) => {
+    const cases: Array<[string, RegExp]> = [
+      ['fixture-400', /query must be 500 characters or fewer/],
+      ['fixture-500', /HTTP 500/],
+      ['fixture-not-json', /not JSON/],
+      ['fixture-malformed', /unexpected response: hits\.0 /],
+    ];
+    let id = 20;
+    for (const [query, message] of cases) {
+      const callResult = await callDocsTool(request, id++, 'search_docs', {
+        query,
+      });
+      expect(callResult?.result?.isError, query).toBe(true);
+      expect(callResult!.result!.content?.[0]?.text, query).toMatch(message);
+    }
+  });
+
+  test('tools/call search_docs rejects invalid arguments', async ({
+    request,
+  }) => {
+    const invalid: Array<Record<string, unknown>> = [
+      { query: '   ' },
+      { query: 'x'.repeat(501) },
+      { query: 'lsn', limit: 0 },
+      { query: 'lsn', limit: 1.5 },
+      { query: 'lsn', categories: [] },
+      { query: 'lsn', categories: ['docs', 'docs'] },
+      { query: 'lsn', categories: ['nope'] },
+      { query: 'lsn', maxResults: 5 },
+    ];
+    let id = 40;
+    for (const args of invalid) {
+      const callResult = await callDocsTool(request, id++, 'search_docs', args);
+      const failed =
+        callResult?.error !== undefined || callResult?.result?.isError === true;
+      expect(failed, JSON.stringify(args)).toBe(true);
+    }
   });
 
   // Posts to the feedback stand-in that `playwright.config.ts` points

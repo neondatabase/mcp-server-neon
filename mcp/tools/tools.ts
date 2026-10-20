@@ -7,7 +7,7 @@ import { describeTable, formatTableDescription } from '../describeUtils';
 import { handleGetNeonAuthConfig } from './handlers/neon-auth-get-config';
 import { handleSearch } from './handlers/search';
 import { handleFetch } from './handlers/fetch';
-import { getDocResource, listDocsResources } from './handlers/docs';
+import { getDoc, searchDocs } from './handlers/docs';
 import { sendFeedback } from './handlers/feedback';
 
 import { getDefaultDatabase, splitSqlStatements } from './utils';
@@ -27,7 +27,8 @@ import {
   fetchInputSchema,
   getConnectionStringInputSchema,
   getDatabaseTablesInputSchema,
-  getDocResourceInputSchema,
+  getDocInputSchema,
+  searchDocsInputSchema,
   getNeonAuthConfigInputSchema,
   inspectDatabaseInputSchema,
   listOrganizationsInputSchema,
@@ -1394,8 +1395,9 @@ You MUST follow these steps:
     return await handleFetch(params, neonClient, extra);
   }),
 
-  list_docs_resources: async () => {
-    const content = await listDocsResources();
+  search_docs: async (args) => {
+    const params = parseHost(searchDocsInputSchema, args?.params);
+    const content = await searchDocs(params);
     return {
       content: [
         {
@@ -1406,9 +1408,9 @@ You MUST follow these steps:
     };
   },
 
-  get_doc_resource: async (args) => {
-    const params = parseHost(getDocResourceInputSchema, args?.params);
-    const content = await getDocResource({ slug: params.slug });
+  get_doc: async (args) => {
+    const params = parseHost(getDocInputSchema, args?.params);
+    const content = await getDoc({ slug: params.slug });
     return {
       content: [
         {

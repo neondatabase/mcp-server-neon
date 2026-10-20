@@ -376,7 +376,46 @@ export const fetchInputSchema = z
   })
   .strict();
 
-export const listDocsResourcesInputSchema = z.object({}).strict();
+const SITE_SEARCH_CATEGORIES = [
+  'docs',
+  'api',
+  'postgresql',
+  'guides',
+  'faqs',
+  'blog',
+  'changelog',
+] as const;
+
+export const searchDocsInputSchema = z
+  .object({
+    query: z
+      .string()
+      .trim()
+      .min(1)
+      .max(500)
+      .describe(
+        'What to search for, in words, e.g. "reset a branch" or "connection pooling".',
+      ),
+    categories: z
+      .array(z.enum(SITE_SEARCH_CATEGORIES))
+      .min(1)
+      .max(SITE_SEARCH_CATEGORIES.length)
+      .refine((values) => new Set(values).size === values.length, {
+        message: 'categories must not repeat a value',
+      })
+      .optional()
+      .describe(
+        'Only return pages in these categories: docs, api (API reference), postgresql (PostgreSQL tutorial), guides, faqs, blog, changelog. Omit to search everything.',
+      ),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(40)
+      .default(10)
+      .describe('Maximum number of pages to return (1-40).'),
+  })
+  .strict();
 
 // The feedback service truncates longer messages, so reject them instead.
 export const MAX_FEEDBACK_LENGTH = 10_000;
@@ -394,12 +433,12 @@ export const sendFeedbackInputSchema = z
   })
   .strict();
 
-export const getDocResourceInputSchema = z
+export const getDocInputSchema = z
   .object({
     slug: z
       .string()
       .describe(
-        "The docs page slug (path) to fetch, e.g. 'docs/guides/prisma.md'. Slugs use .md file endings matching the URLs in the documentation index. Use the list_docs_resources tool first to discover available slugs.",
+        "The slug of a hit returned by search_docs, e.g. 'docs/guides/prisma' or 'postgresql/tutorial/inner-join'.",
       ),
   })
   .strict();

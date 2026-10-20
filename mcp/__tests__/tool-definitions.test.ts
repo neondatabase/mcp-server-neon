@@ -23,14 +23,14 @@ const HOST_READ_ONLY_TOOLS = [
   'explain_sql_statement',
   'fetch',
   'get_database_tables',
-  'get_doc_resource',
+  'get_doc',
   'get_neon_auth_config',
   'inspect_database',
-  'list_docs_resources',
   'list_organizations',
   'list_slow_queries',
   'run_sql',
   'search',
+  'search_docs',
   'send_feedback',
 ];
 
@@ -99,8 +99,8 @@ describe('NEON_TOOLS definitions', () => {
         .sort(),
     ).toEqual([
       'create_storage_bucket',
-      'get_doc_resource',
-      'list_docs_resources',
+      'get_doc',
+      'search_docs',
       'send_feedback',
     ]);
   });
@@ -129,41 +129,27 @@ describe('NEON_TOOLS definitions', () => {
 });
 
 describe('docs tools definitions', () => {
-  const listDocsTool = NEON_TOOLS.find((t) => t.name === 'list_docs_resources');
-  const getDocTool = NEON_TOOLS.find((t) => t.name === 'get_doc_resource');
+  it.each(['search_docs', 'get_doc'])(
+    '%s is a read-only, open-world docs tool available to project-scoped grants',
+    (name) => {
+      expect(NEON_TOOLS.find((t) => t.name === name)).toMatchObject({
+        scope: 'docs',
+        readOnlySafe: true,
+        projectScoped: true,
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
+      });
+    },
+  );
 
-  it('list_docs_resources exists', () => {
-    expect(listDocsTool).toBeDefined();
-  });
-
-  it('get_doc_resource exists', () => {
-    expect(getDocTool).toBeDefined();
-  });
-
-  it('list_docs_resources is read-only safe', () => {
-    expect(listDocsTool!.readOnlySafe).toBe(true);
-  });
-
-  it('get_doc_resource is read-only safe', () => {
-    expect(getDocTool!.readOnlySafe).toBe(true);
-  });
-
-  it('list_docs_resources has openWorldHint: true (fetches external URL)', () => {
-    expect(listDocsTool!.annotations.openWorldHint).toBe(true);
-  });
-
-  it('get_doc_resource has openWorldHint: true (fetches external URL)', () => {
-    expect(getDocTool!.annotations.openWorldHint).toBe(true);
-  });
-
-  it('list_docs_resources is non-destructive and idempotent', () => {
-    expect(listDocsTool!.annotations.destructiveHint).toBe(false);
-    expect(listDocsTool!.annotations.idempotentHint).toBe(true);
-  });
-
-  it('get_doc_resource is non-destructive and idempotent', () => {
-    expect(getDocTool!.annotations.destructiveHint).toBe(false);
-    expect(getDocTool!.annotations.idempotentHint).toBe(true);
+  it('no longer defines list_docs_resources or get_doc_resource', () => {
+    const names = NEON_TOOLS.map((t) => t.name);
+    expect(names).not.toContain('list_docs_resources');
+    expect(names).not.toContain('get_doc_resource');
   });
 });
 

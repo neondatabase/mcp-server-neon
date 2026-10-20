@@ -137,7 +137,7 @@ infrastructure.
 **E2E tests** use [Playwright](https://playwright.dev/) and live in `e2e/`. Configuration is in `playwright.config.ts`.
 
 - **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com). The connection string is written to `.env.e2e` (gitignored) and passed to the Next.js dev server. It also starts the docs fixture server (see below).
-- **Docs fixture** (`e2e/docs-fixture.ts`): The docs tools fetch their index server-side, so `request.route()` cannot intercept it and a test calling `list_docs_resources` would otherwise depend on neon.com being up — which merge-gating tests must not. Global setup serves `e2e/fixtures/docs-index.txt` on port `3101` (`E2E_DOCS_PORT` to change it, and it fails loudly if the port is taken), and `playwright.config.ts` points the dev server's `NEON_DOCS_INDEX_URL` at it. That URL must be set in `webServer.env`, not in global setup: Playwright starts the web server as a plugin task, which runs **before** global setup, so anything global setup adds to `process.env` reaches the dev server too late. Only the index is redirected — individual doc pages still come from `NEON_DOCS_BASE_URL`, and the fixture serves no page paths.
+- **Docs fixture** (`e2e/docs-fixture.ts`): `search_docs`, `get_doc`, and `send_feedback` fetch server-side, so `request.route()` cannot intercept them, and a test calling them would otherwise depend on neon-agent, neon.com, and the feedback service being up — which merge-gating tests must not. Global setup serves canned site search responses (chosen by query), one page (`/docs/reference/glossary.md`), and a feedback endpoint on port `3101` (`E2E_DOCS_PORT` to change it, and it fails loudly if the port is taken). `playwright.config.ts` points the dev server's `NEON_SITE_SEARCH_URL`, `NEON_DOCS_BASE_URL`, and `NEON_FEEDBACK_URL` at it. Those URLs must be set in `webServer.env`, not in global setup: Playwright starts the web server as a plugin task, which runs **before** global setup, so anything global setup adds to `process.env` reaches the dev server too late.
 - **No secrets needed**: The e2e infrastructure is fully self-contained. Instagres databases expire after 72 hours; no explicit teardown is required.
 - **Reuse across runs**: If `.env.e2e` already exists, global-setup reuses it instead of re-provisioning. Delete the file to force a fresh database.
 - **CI**: The PR workflow runs format, lint, knip, `pnpm test`, live Neon E2E for trusted same-repo PRs, and build before merge.
@@ -174,11 +174,7 @@ infrastructure.
    - Token persistence using Keyv with Postgres backend
    - Cookie-based client approval tracking
 
-5. **Resources (`mcp/resources.ts`)**
-   - MCP resources that provide read-only context (like "getting started" guides)
-   - Registered alongside tools but don't execute operations
-
-6. **Grant Context & Tool Filtering (`mcp/utils/grant-context.ts`, `mcp/tools/grant-filter.ts`)**
+5. **Grant Context & Tool Filtering (`mcp/utils/grant-context.ts`, `mcp/tools/grant-filter.ts`)**
    - Fine-grained access control beyond plain read/write: per-category scopes (`projects`, `branches`, `endpoints`, `snapshots`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`, `functions`, `storage`, `realtime`) and optional project-scoping to a single `projectId`
    - Grant resolved from OAuth resource URI query params (authorize-time), OAuth token grant field (runtime), or direct MCP URL query params for API-key auth. Those URL params stay camelCase (`projectId`, `category`, `readonly`).
    - `grant-filter.ts` filters `NEON_TOOLS` by scope category and hides project-agnostic tools in project-scoped mode. Project-aware published schemas keep `project_id` optional across grants; unscoped calls must supply it, while scoped calls can omit it or provide the matching grant ID. Injection precedes the original full handler schema validation.
@@ -349,7 +345,6 @@ normally provided through `.env.local`. Key variables:
 │   │   ├── client-application.ts # Client application utilities
 │   │   └── logger.ts             # Logging utilities
 │   ├── describeUtils.ts # Postgres \d-style describe helpers (derived from @neondatabase/psql-describe)
-│   ├── resources.ts    # MCP resources
 │   └── constants.ts    # Shared constants
 ├── public/             # Static assets (favicons, OG image, llms.txt)
 ├── .prettierrc         # Prettier config (singleQuote: true)
