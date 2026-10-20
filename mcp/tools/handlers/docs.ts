@@ -1,5 +1,6 @@
 import { NEON_DOCS_INDEX_URL, NEON_SITE_SEARCH_URL } from '../../../lib/config';
 import { NEON_DOCS_BASE_URL } from '../../resources';
+import { z } from 'zod/v3';
 import { InvalidArgumentError, NotFoundError } from '../../server/errors';
 
 // Hard cap on upstream docs fetches so a stalled neon.com response
@@ -8,65 +9,23 @@ import { InvalidArgumentError, NotFoundError } from '../../server/errors';
 // vector without authentication.
 const DOCS_FETCH_TIMEOUT_MS = 10_000;
 
-type SearchDocsHit = {
-  title: string;
-  url: string;
-  slug: string;
-  category: string;
-  breadcrumb: string[];
-  heading: string;
-  excerpt: string;
-};
-
 const UNEXPECTED_SEARCH_RESPONSE =
   'Neon site search returned an unexpected response';
 
-function stringField(fields: Record<string, unknown>, key: string): string {
-  const value = fields[key];
-  if (typeof value !== 'string') {
-    throw new Error(
-      `${UNEXPECTED_SEARCH_RESPONSE}: hit.${key} is not a string`,
-    );
-  }
-  return value;
-}
-
-function parseSearchHits(body: unknown): SearchDocsHit[] {
-  if (
-    typeof body !== 'object' ||
-    body === null ||
-    !('hits' in body) ||
-    !Array.isArray(body.hits)
-  ) {
-    throw new Error(`${UNEXPECTED_SEARCH_RESPONSE}: missing hits`);
-  }
-  return body.hits.map((hit: unknown): SearchDocsHit => {
-    if (typeof hit !== 'object' || hit === null) {
-      throw new Error(`${UNEXPECTED_SEARCH_RESPONSE}: hit is not an object`);
-    }
-    const fields: Record<string, unknown> = Object.fromEntries(
-      Object.entries(hit),
-    );
-    const breadcrumb = fields.breadcrumb;
-    if (
-      !Array.isArray(breadcrumb) ||
-      !breadcrumb.every((part) => typeof part === 'string')
-    ) {
-      throw new Error(
-        `${UNEXPECTED_SEARCH_RESPONSE}: hit.breadcrumb is not a string array`,
-      );
-    }
-    return {
-      title: stringField(fields, 'title'),
-      url: stringField(fields, 'url'),
-      slug: stringField(fields, 'slug'),
-      category: stringField(fields, 'category'),
-      breadcrumb,
-      heading: stringField(fields, 'heading'),
-      excerpt: stringField(fields, 'excerpt'),
-    };
-  });
-}
+// Unknown keys (score, collection) are stripped; they are not part of the tool result.
+const searchDocsResponseSchema = z.object({
+  hits: z.array(
+    z.object({
+      title: z.string(),
+      url: z.string(),
+      slug: z.string(),
+      category: z.string(),
+      breadcrumb: z.array(z.string()),
+      heading: z.string(),
+      excerpt: z.string(),
+    }),
+  ),
+});
 
 function upstreamError(body: unknown): string | undefined {
   if (
@@ -109,7 +68,14 @@ export async function searchDocs(params: {
   if (!response.ok) {
     throw new Error(`Neon site search failed: HTTP ${response.status}`);
   }
-  return JSON.stringify({ hits: parseSearchHits(body) }, null, 2);
+  const parsed = searchDocsResponseSchema.safeParse(body);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    throw new Error(
+      `${UNEXPECTED_SEARCH_RESPONSE}: ${issue.path.join('.')} ${issue.message}`,
+    );
+  }
+  return JSON.stringify(parsed.data, null, 2);
 }
 
 export async function listDocsResources(): Promise<string> {

@@ -230,7 +230,7 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
       ['fixture-400', /query must be 500 characters or fewer/],
       ['fixture-500', /HTTP 500/],
       ['fixture-not-json', /not JSON/],
-      ['fixture-malformed', /hit is not an object/],
+      ['fixture-malformed', /unexpected response: hits\.0 /],
     ];
     let id = 20;
     for (const [query, message] of cases) {
