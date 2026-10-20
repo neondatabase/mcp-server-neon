@@ -210,6 +210,7 @@ describe('MCP server e2e tool calls', () => {
       expect(result.isError).not.toBe(true);
       const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
       expect(url).toMatch(/\/site-search$/);
+      expect(new Headers(init?.headers).get('x-neon-source')).toBe('mcp');
       expect(JSON.parse(String(init?.body))).toEqual({
         query: 'inner join',
         categories: ['postgresql'],

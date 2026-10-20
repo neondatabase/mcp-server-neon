@@ -204,6 +204,35 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     expect(docResult!.result!.content?.[0]?.text).toMatch(/search_docs/);
   });
 
+  test('tools/call search_docs tells the search service it is MCP and who called', async ({
+    request,
+  }) => {
+    const response = await request.post('/mcp?category=docs', {
+      headers: { ...MCP_HEADERS, 'User-Agent': 'Cursor/1.2.3' },
+      data: {
+        jsonrpc: '2.0',
+        id: 15,
+        method: 'tools/call',
+        params: {
+          name: 'search_docs',
+          arguments: { query: 'fixture-headers' },
+        },
+      },
+    });
+    const messages = await readJsonRpcMessages(response);
+    const callResult = messages.find((m) => m.id === 15) as
+      | { result?: { content?: Array<{ text?: string }> } }
+      | undefined;
+    const { hits } = JSON.parse(callResult!.result!.content![0]!.text!) as {
+      hits: Array<{ excerpt: string }>;
+    };
+    expect(JSON.parse(hits[0]!.excerpt)).toEqual({
+      source: 'mcp',
+      userAgent: 'Cursor/1.2.3',
+      client: 'cursor',
+    });
+  });
+
   test('tools/call search_docs returns an empty list when nothing matches', async ({
     request,
   }) => {

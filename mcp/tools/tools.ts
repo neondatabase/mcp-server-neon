@@ -1395,9 +1395,13 @@ You MUST follow these steps:
     return await handleFetch(params, neonClient, extra);
   }),
 
-  search_docs: async (args) => {
+  search_docs: async (args, _neonClient, extra) => {
     const params = parseHost(searchDocsInputSchema, args?.params);
-    const content = await searchDocs(params);
+    const userAgent = extra?.requestInfo?.headers['user-agent'];
+    const content = await searchDocs(params, {
+      userAgent: Array.isArray(userAgent) ? userAgent[0] : userAgent,
+      client: extra?.clientApplication,
+    });
     return {
       content: [
         {

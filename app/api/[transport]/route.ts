@@ -823,7 +823,10 @@ function createDocsOnlyMcpHandler() {
         toolRegistration(searchDocsTool),
         async (args: unknown, extra: { requestInfo?: RequestInfo }) =>
           runDocsTool(searchDocsTool.name, readUserAgent(extra), () =>
-            searchDocs(searchDocsInputSchema.parse(args)),
+            searchDocs(searchDocsInputSchema.parse(args), {
+              userAgent: readUserAgent(extra),
+              client: identifyClient(readUserAgent(extra)).clientApplication,
+            }),
           ),
       );
 

@@ -63,7 +63,11 @@ const SITE_SEARCH_FIXTURE_RESPONSES: Record<
   'fixture-malformed': { status: 200, body: JSON.stringify({ hits: [null] }) },
 };
 
-function siteSearchResponse(rawBody: string): {
+// `fixture-headers` echoes the caller headers back in the hit excerpt.
+function siteSearchResponse(
+  rawBody: string,
+  headers: Record<string, string | string[] | undefined>,
+): {
   status: number;
   body: string;
 } {
@@ -72,6 +76,17 @@ function siteSearchResponse(rawBody: string): {
     typeof request === 'object' && request !== null && 'query' in request
       ? String(request.query)
       : '';
+  if (query === 'fixture-headers') {
+    const excerpt = JSON.stringify({
+      source: headers['x-neon-source'],
+      userAgent: headers['x-neon-user-agent'],
+      client: headers['x-neon-client'],
+    });
+    return {
+      status: 200,
+      body: JSON.stringify({ hits: [{ ...SITE_SEARCH_FIXTURE_HIT, excerpt }] }),
+    };
+  }
   return (
     SITE_SEARCH_FIXTURE_RESPONSES[query] ?? {
       status: 200,
@@ -106,6 +121,7 @@ export async function startDocsFixtureServer(): Promise<Server> {
       request.on('end', () => {
         const { status, body: responseBody } = siteSearchResponse(
           Buffer.concat(chunks).toString('utf8'),
+          request.headers,
         );
         response.writeHead(status, { 'Content-Type': 'application/json' });
         response.end(responseBody);
