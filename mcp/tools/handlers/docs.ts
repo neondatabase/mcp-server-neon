@@ -39,14 +39,44 @@ function upstreamError(body: unknown): string | undefined {
   return undefined;
 }
 
-export async function searchDocs(params: {
-  query: string;
-  categories?: string[];
-  limit: number;
-}): Promise<string> {
+type SearchDocsCaller = {
+  userAgent?: string;
+  client?: string;
+};
+
+const PRINTABLE_ASCII = /^[\x20-\x7E]+$/;
+
+// The search service records each search by caller. A value that cannot be a
+// header is dropped rather than failing the search.
+export function searchDocsHeaders(
+  caller: SearchDocsCaller,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-neon-source': 'mcp',
+  };
+  const userAgent = caller.userAgent?.trim().slice(0, 512);
+  if (userAgent && PRINTABLE_ASCII.test(userAgent)) {
+    headers['x-neon-user-agent'] = userAgent;
+  }
+  const client = caller.client?.trim().slice(0, 100);
+  if (client && client !== 'unknown') {
+    headers['x-neon-client'] = encodeURIComponent(client);
+  }
+  return headers;
+}
+
+export async function searchDocs(
+  params: {
+    query: string;
+    categories?: string[];
+    limit: number;
+  },
+  caller: SearchDocsCaller,
+): Promise<string> {
   const response = await fetch(NEON_SITE_SEARCH_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: searchDocsHeaders(caller),
     body: JSON.stringify(params),
     signal: AbortSignal.timeout(DOCS_FETCH_TIMEOUT_MS),
   });

@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NEON_HANDLERS } from '../tools/tools';
 import { NEON_DOCS_BASE_URL } from '../../lib/config';
 import { InvalidArgumentError, NotFoundError } from '../server/errors';
+import { searchDocsHeaders } from '../tools/handlers/docs';
 
 // Type for the tool result returned by handlers
 type ToolResult = {
@@ -183,5 +184,44 @@ describe('get_doc handler', () => {
 describe('docs config', () => {
   it('NEON_DOCS_BASE_URL points to neon.com', () => {
     expect(NEON_DOCS_BASE_URL).toBe('https://neon.com');
+  });
+});
+
+describe('searchDocsHeaders', () => {
+  it('tags MCP and forwards the user agent and client', () => {
+    expect(
+      searchDocsHeaders({ userAgent: ' Cursor/1.2 ', client: 'cursor' }),
+    ).toEqual({
+      'Content-Type': 'application/json',
+      'x-neon-source': 'mcp',
+      'x-neon-user-agent': 'Cursor/1.2',
+      'x-neon-client': 'cursor',
+    });
+  });
+
+  it('drops values a header cannot carry and an unknown client', () => {
+    expect(
+      searchDocsHeaders({ userAgent: 'agent\nnext', client: 'unknown' }),
+    ).toEqual({ 'Content-Type': 'application/json', 'x-neon-source': 'mcp' });
+    expect(searchDocsHeaders({ userAgent: '助手/1.0' })).toEqual({
+      'Content-Type': 'application/json',
+      'x-neon-source': 'mcp',
+    });
+    expect(searchDocsHeaders({})).toEqual({
+      'Content-Type': 'application/json',
+      'x-neon-source': 'mcp',
+    });
+  });
+
+  it('encodes the client and caps both lengths', () => {
+    const headers = searchDocsHeaders({
+      userAgent: 'u'.repeat(600),
+      client: '助手 ' + 'c'.repeat(200),
+    });
+    expect(headers['x-neon-user-agent']).toHaveLength(512);
+    expect(decodeURIComponent(headers['x-neon-client'] ?? '')).toHaveLength(
+      100,
+    );
+    expect(() => new Headers(headers)).not.toThrow();
   });
 });
