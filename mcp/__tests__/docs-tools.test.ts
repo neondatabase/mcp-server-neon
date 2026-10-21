@@ -193,23 +193,23 @@ describe('searchDocsHeaders', () => {
       searchDocsHeaders({ userAgent: ' Cursor/1.2 ', client: 'cursor' }),
     ).toEqual({
       'Content-Type': 'application/json',
-      'x-neon-source': 'mcp',
-      'x-neon-user-agent': 'Cursor/1.2',
-      'x-neon-client': 'cursor',
+      'x-caller-source': 'mcp',
+      'x-caller-user-agent': 'Cursor/1.2',
+      'x-caller-client': 'cursor',
     });
   });
 
   it('drops values a header cannot carry and an unknown client', () => {
     expect(
       searchDocsHeaders({ userAgent: 'agent\nnext', client: 'unknown' }),
-    ).toEqual({ 'Content-Type': 'application/json', 'x-neon-source': 'mcp' });
+    ).toEqual({ 'Content-Type': 'application/json', 'x-caller-source': 'mcp' });
     expect(searchDocsHeaders({ userAgent: '助手/1.0' })).toEqual({
       'Content-Type': 'application/json',
-      'x-neon-source': 'mcp',
+      'x-caller-source': 'mcp',
     });
     expect(searchDocsHeaders({})).toEqual({
       'Content-Type': 'application/json',
-      'x-neon-source': 'mcp',
+      'x-caller-source': 'mcp',
     });
   });
 
@@ -218,8 +218,8 @@ describe('searchDocsHeaders', () => {
       userAgent: 'u'.repeat(600),
       client: '助手 ' + 'c'.repeat(200),
     });
-    expect(headers['x-neon-user-agent']).toHaveLength(512);
-    expect(decodeURIComponent(headers['x-neon-client'] ?? '')).toHaveLength(
+    expect(headers['x-caller-user-agent']).toHaveLength(512);
+    expect(decodeURIComponent(headers['x-caller-client'] ?? '')).toHaveLength(
       100,
     );
     expect(() => new Headers(headers)).not.toThrow();
