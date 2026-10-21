@@ -78,9 +78,9 @@ function siteSearchResponse(
       : '';
   if (query === 'fixture-headers') {
     const excerpt = JSON.stringify({
-      source: headers['x-neon-source'],
-      userAgent: headers['x-neon-user-agent'],
-      client: headers['x-neon-client'],
+      source: headers['x-caller-source'],
+      userAgent: headers['x-caller-user-agent'],
+      client: headers['x-caller-client'],
     });
     return {
       status: 200,

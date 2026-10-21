@@ -53,15 +53,15 @@ export function searchDocsHeaders(
 ): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'x-neon-source': 'mcp',
+    'x-caller-source': 'mcp',
   };
   const userAgent = caller.userAgent?.trim().slice(0, 512);
   if (userAgent && PRINTABLE_ASCII.test(userAgent)) {
-    headers['x-neon-user-agent'] = userAgent;
+    headers['x-caller-user-agent'] = userAgent;
   }
   const client = caller.client?.trim().slice(0, 100);
   if (client && client !== 'unknown') {
-    headers['x-neon-client'] = encodeURIComponent(client);
+    headers['x-caller-client'] = encodeURIComponent(client);
   }
   return headers;
 }
