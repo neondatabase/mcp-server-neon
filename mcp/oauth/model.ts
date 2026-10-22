@@ -18,12 +18,19 @@ import {
   RefreshResult,
   RefreshFailure,
 } from './kv-store';
+import {
+  isClientIdMetadataUrl,
+  resolveClientIdMetadataDocument,
+} from '../../lib/oauth/client-id-metadata-document';
 
 class Model implements AuthorizationCodeModel {
   getClient: (
     clientId: string,
     clientSecret: string,
   ) => Promise<Client | undefined> = async (clientId) => {
+    if (isClientIdMetadataUrl(clientId)) {
+      return resolveClientIdMetadataDocument(clientId);
+    }
     return getClients().get(clientId);
   };
   saveClient: (client: Client) => Promise<Client> = async (client) => {
