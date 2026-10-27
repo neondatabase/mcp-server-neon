@@ -85,4 +85,31 @@ describe('sanitizeGeneratedResult', () => {
       role: { name: 'app', protected: false },
     });
   });
+
+  it('keeps the one-time client_secret on OAuth client create and rotate', () => {
+    const data = { client_id: 'cid', client_secret: 'once', name: 'app' };
+    expect(sanitizeGeneratedResult('auth.oauthClients.create', data)).toEqual(
+      data,
+    );
+    expect(
+      sanitizeGeneratedResult('auth.oauthClients.rotateSecret', data),
+    ).toEqual(data);
+  });
+
+  it('strips client_secret from every other OAuth client and server result', () => {
+    const data = { client_id: 'cid', client_secret: 'stored', name: 'app' };
+    const expected = { client_id: 'cid', name: 'app' };
+    expect(sanitizeGeneratedResult('auth.oauthClients.get', data)).toEqual(
+      expected,
+    );
+    expect(sanitizeGeneratedResult('auth.oauthClients.update', data)).toEqual(
+      expected,
+    );
+    expect(sanitizeGeneratedResult('auth.oauthClients.list', [data])).toEqual([
+      expected,
+    ]);
+    expect(sanitizeGeneratedResult('auth.oauthServer.get', data)).toEqual(
+      expected,
+    );
+  });
 });

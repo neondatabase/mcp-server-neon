@@ -90,9 +90,9 @@ describe('NEON_TOOLS definitions', () => {
   });
 
   it('marks private Neon operations closed-world and public-capable ones open-world', () => {
-    expect(NEON_TOOLS).toHaveLength(119);
+    expect(NEON_TOOLS).toHaveLength(127);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
-    expect(generated).toHaveLength(99);
+    expect(generated).toHaveLength(107);
     expect(
       NEON_TOOLS.filter((tool) => tool.annotations.openWorldHint)
         .map((tool) => tool.name)
@@ -478,6 +478,70 @@ describe('generated tool interface', () => {
     expect(rotate?.readOnlySafe).toBe(false);
     expect(rotate?.annotations.destructiveHint).toBe(true);
     expect(rotate?.annotations.idempotentHint).toBe(false);
+  });
+
+  it('exposes the Neon Auth OAuth server and client tools under neon_auth', () => {
+    const byName = (name: string) =>
+      NEON_TOOLS.find((tool) => tool.name === name);
+    const reads = [
+      'get_auth_oauth_server',
+      'list_auth_oauth_clients',
+      'get_auth_oauth_client',
+    ];
+    const writes = [
+      'update_auth_oauth_server',
+      'create_auth_oauth_client',
+      'update_auth_oauth_client',
+      'delete_auth_oauth_client',
+      'rotate_auth_oauth_client_secret',
+    ];
+    for (const name of [...reads, ...writes]) {
+      const tool = byName(name);
+      expect(tool?.scope, name).toBe('neon_auth');
+      expect(tool?.projectScoped, name).toBe(true);
+    }
+    for (const name of reads) {
+      expect(byName(name)?.readOnlySafe, name).toBe(true);
+      expect(byName(name)?.annotations.readOnlyHint, name).toBe(true);
+      expect(byName(name)?.annotations.destructiveHint, name).toBe(false);
+    }
+    for (const name of writes) {
+      expect(byName(name)?.readOnlySafe, name).toBe(false);
+      expect(byName(name)?.annotations.readOnlyHint, name).toBe(false);
+    }
+    for (const name of [
+      'update_auth_oauth_server',
+      'update_auth_oauth_client',
+      'delete_auth_oauth_client',
+      'rotate_auth_oauth_client_secret',
+    ]) {
+      expect(byName(name)?.annotations.destructiveHint, name).toBe(true);
+    }
+    expect(
+      byName('rotate_auth_oauth_client_secret')?.annotations,
+    ).toMatchObject({ idempotentHint: false });
+  });
+
+  it('tells the agent how the OAuth server tools differ from social login', () => {
+    const byName = (name: string) =>
+      NEON_TOOLS.find((tool) => tool.name === name);
+    for (const name of ['get_auth_oauth_server', 'update_auth_oauth_server']) {
+      expect(byName(name)?.description, name).toContain(
+        'list_auth_oauth_providers',
+      );
+    }
+    expect(byName('update_auth_oauth_server')?.description).toContain(
+      'client_id_metadata_documents',
+    );
+    expect(byName('create_auth_oauth_client')?.description).toContain(
+      'client_secret',
+    );
+    expect(byName('rotate_auth_oauth_client_secret')?.description).toContain(
+      'old secret stops working',
+    );
+    expect(byName('delete_auth_oauth_client')?.description).toContain(
+      'not revoked',
+    );
   });
 
   it('tells the agent what to pass on register_functions_custom_domain', () => {

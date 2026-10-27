@@ -3565,6 +3565,380 @@
     }
   },
   {
+    "name": "get_auth_oauth_server",
+    "title": "Retrieve OAuth provider plugin configuration",
+    "description": "Retrieves how Neon Auth acts as an OAuth 2.1 authorization server for the branch, including for MCP servers. This is not social login; for providers such as GitHub or Google call `list_auth_oauth_providers`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve OAuth provider plugin configuration",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_oauth_server",
+    "title": "Update OAuth provider plugin configuration",
+    "description": "Configures Neon Auth as an OAuth 2.1 authorization server for the branch, including for MCP servers. This is not social login; for providers such as GitHub or Google see `list_auth_oauth_providers`. Enabling requires `login_page`, `consent_page` and at least one resource (or an MCP resource). `resources` replaces the stored list: call `get_auth_oauth_server` first and send the full list to add or remove one. `mcp.resource` is required whenever `mcp` is sent; omitted `mcp` booleans keep their stored value, and `mcp.resource: \"\"` removes the MCP configuration. Prefer `client_id_metadata_documents` over the deprecated `dynamic_registration`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "login_page": {
+          "type": "string"
+        },
+        "consent_page": {
+          "type": "string"
+        },
+        "mcp": {
+          "type": "object",
+          "properties": {
+            "resource": {
+              "type": "string"
+            },
+            "dynamic_registration": {
+              "type": "boolean"
+            },
+            "client_id_metadata_documents": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "resource"
+          ],
+          "additionalProperties": false
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "identifier": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "identifier"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update OAuth provider plugin configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_auth_oauth_clients",
+    "title": "List OAuth clients",
+    "description": "Lists the OAuth clients registered for the branch's Neon Auth OAuth provider.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List OAuth clients",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_auth_oauth_client",
+    "title": "Retrieve an OAuth client",
+    "description": "Returns an OAuth client registered with the branch's Neon Auth OAuth provider.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "client_id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9]+$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "client_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve an OAuth client",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_auth_oauth_client",
+    "title": "Create an OAuth client",
+    "description": "Registers an OAuth client with the branch's Neon Auth OAuth server. A confidential client returns `client_secret` only once: show it to the user and tell them to store it. Every entry in `resources` must already be configured on the OAuth server (see `get_auth_oauth_server`) or be its MCP resource. `type` cannot be changed later.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "redirect_uris": {
+          "minItems": 1,
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "confidential",
+            "public"
+          ]
+        },
+        "resources": {
+          "minItems": 1,
+          "maxItems": 11,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "skip_consent": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "name",
+        "redirect_uris",
+        "type",
+        "resources"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Create an OAuth client",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_oauth_client",
+    "title": "Update an OAuth client",
+    "description": "Updates an OAuth client. `redirect_uris` and `resources` replace the stored lists, so send the full list. At least one resource is required. `type` cannot be changed.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "client_id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "redirect_uris": {
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "skip_consent": {
+          "type": "boolean"
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "resources": {
+          "maxItems": 11,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "client_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update an OAuth client",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_auth_oauth_client",
+    "title": "Delete an OAuth client",
+    "description": "Deletes an OAuth client. Irreversible. Tokens already issued to the client are not revoked.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "client_id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9]+$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "client_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Delete an OAuth client",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "rotate_auth_oauth_client_secret",
+    "title": "Rotate an OAuth client secret",
+    "description": "Generates a new secret for a confidential OAuth client. The old secret stops working immediately. The new `client_secret` is shown only once: show it to the user and tell them to store it.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "client_id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9]+$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "client_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Rotate an OAuth client secret",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "get_data_api",
     "title": "Retrieve Neon Data API configuration",
     "description": "Retrieves the Neon Data API configuration for the specified branch, including endpoint URL, enabled state, and database settings.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",

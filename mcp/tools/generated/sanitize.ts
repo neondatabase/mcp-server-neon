@@ -5,6 +5,11 @@ const KEEP_ROLE_PASSWORD = new Set<GeneratedToolId>([
   'postgres.roles.resetPassword',
 ]);
 
+const KEEP_CLIENT_SECRET = new Set<GeneratedToolId>([
+  'auth.oauthClients.create',
+  'auth.oauthClients.rotateSecret',
+]);
+
 const DROP_KEYS = new Set([
   'connection_uris',
   'connectionString',
@@ -44,6 +49,10 @@ function sanitizeValue(toolId: GeneratedToolId, data: unknown): unknown {
 
   const next: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
+    if (key === 'client_secret' && KEEP_CLIENT_SECRET.has(toolId)) {
+      next[key] = value;
+      continue;
+    }
     if (DROP_KEYS.has(key)) continue;
     if (key === 'password' && !KEEP_ROLE_PASSWORD.has(toolId)) continue;
     if (key === 'roles' && Array.isArray(value)) {

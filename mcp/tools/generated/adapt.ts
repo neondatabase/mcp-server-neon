@@ -51,6 +51,18 @@ const DEPLOY_FUNCTION_DESCRIPTION = `Creates a deployment for the function. Supp
 
 const REGISTER_FUNCTIONS_CUSTOM_DOMAIN_DESCRIPTION = `Registers a hostname on the branch and routes it to a function. Pass \`entity_type: "function"\` and \`entity_id\` as the slug from \`list_functions\`. Point a CNAME at the returned \`cname_target\`.`;
 
+const GET_AUTH_OAUTH_SERVER_DESCRIPTION = `Retrieves how Neon Auth acts as an OAuth 2.1 authorization server for the branch, including for MCP servers. This is not social login; for providers such as GitHub or Google call \`list_auth_oauth_providers\`.`;
+
+const UPDATE_AUTH_OAUTH_SERVER_DESCRIPTION = `Configures Neon Auth as an OAuth 2.1 authorization server for the branch, including for MCP servers. This is not social login; for providers such as GitHub or Google see \`list_auth_oauth_providers\`. Enabling requires \`login_page\`, \`consent_page\` and at least one resource (or an MCP resource). \`resources\` replaces the stored list: call \`get_auth_oauth_server\` first and send the full list to add or remove one. \`mcp.resource\` is required whenever \`mcp\` is sent; omitted \`mcp\` booleans keep their stored value, and \`mcp.resource: ""\` removes the MCP configuration. Prefer \`client_id_metadata_documents\` over the deprecated \`dynamic_registration\`.`;
+
+const CREATE_AUTH_OAUTH_CLIENT_DESCRIPTION = `Registers an OAuth client with the branch's Neon Auth OAuth server. A confidential client returns \`client_secret\` only once: show it to the user and tell them to store it. Every entry in \`resources\` must already be configured on the OAuth server (see \`get_auth_oauth_server\`) or be its MCP resource. \`type\` cannot be changed later.`;
+
+const UPDATE_AUTH_OAUTH_CLIENT_DESCRIPTION = `Updates an OAuth client. \`redirect_uris\` and \`resources\` replace the stored lists, so send the full list. At least one resource is required. \`type\` cannot be changed.`;
+
+const DELETE_AUTH_OAUTH_CLIENT_DESCRIPTION = `Deletes an OAuth client. Irreversible. Tokens already issued to the client are not revoked.`;
+
+const ROTATE_AUTH_OAUTH_CLIENT_SECRET_DESCRIPTION = `Generates a new secret for a confidential OAuth client. The old secret stops working immediately. The new \`client_secret\` is shown only once: show it to the user and tell them to store it.`;
+
 const LIST_LOG_FIELDS_DESCRIPTION = `Lists the low-cardinality log fields observed on this branch. Call \`list_log_field_values\` with \`field_name\` to list distinct values.`;
 
 const LIST_LOG_FIELD_VALUES_DESCRIPTION = `Lists distinct values for a low-cardinality log field. Call \`list_log_fields\` first for \`field_name\`; a field the branch has never emitted returns \`unknown_field\`. Pass \`since\` or \`start_time\`, not both; default is the previous six hours, max seven days. Private beta.`;
@@ -104,6 +116,13 @@ function createGeneratedNeonTools() {
       'functions.deploy': DEPLOY_FUNCTION_DESCRIPTION,
       'functions.customDomains.register':
         REGISTER_FUNCTIONS_CUSTOM_DOMAIN_DESCRIPTION,
+      'auth.oauthServer.get': GET_AUTH_OAUTH_SERVER_DESCRIPTION,
+      'auth.oauthServer.update': UPDATE_AUTH_OAUTH_SERVER_DESCRIPTION,
+      'auth.oauthClients.create': CREATE_AUTH_OAUTH_CLIENT_DESCRIPTION,
+      'auth.oauthClients.update': UPDATE_AUTH_OAUTH_CLIENT_DESCRIPTION,
+      'auth.oauthClients.delete': DELETE_AUTH_OAUTH_CLIENT_DESCRIPTION,
+      'auth.oauthClients.rotateSecret':
+        ROTATE_AUTH_OAUTH_CLIENT_SECRET_DESCRIPTION,
       'realtime.secret': GET_REALTIME_SECRET_DESCRIPTION,
       'realtime.rotateSecret': ROTATE_REALTIME_SECRET_DESCRIPTION,
     },
@@ -203,6 +222,7 @@ const DESTRUCTIVE_POST_TOOLS = new Set<GeneratedToolId>([
   'storage.objects.presign',
   'credentials.rotate',
   'realtime.rotateSecret',
+  'auth.oauthClients.rotateSecret',
 ]);
 
 function lastSegment(toolId: GeneratedToolId): string {
