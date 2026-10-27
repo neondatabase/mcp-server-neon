@@ -3140,7 +3140,7 @@
   {
     "name": "list_auth_oauth_providers",
     "title": "List OAuth providers for the branch",
-    "description": "Lists the OAuth providers configured for the specified branch's Neon Auth integration.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists the social login providers (Google, GitHub, Microsoft, Vercel) configured for the branch's Neon Auth integration, which users sign in with. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3171,7 +3171,7 @@
   {
     "name": "add_auth_oauth_provider",
     "title": "Add an OAuth provider",
-    "description": "Adds an OAuth provider configuration to the specified branch's Neon Auth integration.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Adds a social login provider (Google, GitHub, Microsoft, Vercel) that users sign in with to the branch's Neon Auth integration. Takes the provider `id` and optionally `client_id`, `client_secret` and, for Microsoft, `microsoft_tenant_id`. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3221,7 +3221,7 @@
   {
     "name": "update_auth_oauth_provider",
     "title": "Update OAuth provider",
-    "description": "Updates an OAuth provider for the specified project.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Updates a social login provider (Google, GitHub, Microsoft, Vercel) that users sign in with on the branch's Neon Auth integration. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3271,7 +3271,7 @@
   {
     "name": "delete_auth_oauth_provider",
     "title": "Delete OAuth provider",
-    "description": "Deletes an OAuth provider from the specified project.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deletes a social login provider (Google, GitHub, Microsoft, Vercel) from the branch's Neon Auth integration. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3567,7 +3567,7 @@
   {
     "name": "get_auth_oauth_server",
     "title": "Retrieve OAuth provider plugin configuration",
-    "description": "Retrieves how Neon Auth acts as an OAuth 2.1 authorization server for the branch, including for MCP servers. This is not social login; for providers such as GitHub or Google call `list_auth_oauth_providers`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Retrieves how Neon Auth acts as an OAuth 2.1 authorization server for the branch, including for MCP servers. This is Better Auth's OAuth Provider plugin (API plugin `oauth_provider`), not social login; for providers such as GitHub or Google call `list_auth_oauth_providers`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3598,7 +3598,7 @@
   {
     "name": "update_auth_oauth_server",
     "title": "Update OAuth provider plugin configuration",
-    "description": "Configures Neon Auth as an OAuth 2.1 authorization server for the branch, including for MCP servers. This is not social login; for providers such as GitHub or Google see `list_auth_oauth_providers`. Enabling requires `login_page`, `consent_page` and at least one resource (or an MCP resource). `resources` replaces the stored list: call `get_auth_oauth_server` first and send the full list to add or remove one. `mcp.resource` is required whenever `mcp` is sent; omitted `mcp` booleans keep their stored value, and `mcp.resource: \"\"` removes the MCP configuration. Prefer `client_id_metadata_documents` over the deprecated `dynamic_registration`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Configures Neon Auth as an OAuth 2.1 authorization server for the branch, including for MCP servers. This is Better Auth's OAuth Provider plugin (API plugin `oauth_provider`), not social login; for providers such as GitHub or Google see `list_auth_oauth_providers`. Enabling requires `login_page`, `consent_page` and at least one resource (or an MCP resource). `resources` replaces the stored list: call `get_auth_oauth_server` first and send the full list to add or remove one. `mcp.resource` is required whenever `mcp` is sent; omitted `mcp` booleans keep their stored value, and `mcp.resource: \"\"` removes the MCP configuration. Prefer `client_id_metadata_documents` over the deprecated `dynamic_registration`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3671,7 +3671,7 @@
   {
     "name": "list_auth_oauth_clients",
     "title": "List OAuth clients",
-    "description": "Lists the OAuth clients registered for the branch's Neon Auth OAuth provider.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists the OAuth clients registered with the branch's Neon Auth OAuth server (apps and MCP clients that users authorize). Not social login providers.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3702,7 +3702,7 @@
   {
     "name": "get_auth_oauth_client",
     "title": "Retrieve an OAuth client",
-    "description": "Returns an OAuth client registered with the branch's Neon Auth OAuth provider.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Returns an OAuth client registered with the branch's Neon Auth OAuth server. Not a social login provider.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3805,7 +3805,7 @@
   {
     "name": "update_auth_oauth_client",
     "title": "Update an OAuth client",
-    "description": "Updates an OAuth client. `redirect_uris` and `resources` replace the stored lists, so send the full list. At least one resource is required. `type` cannot be changed.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Updates an OAuth client of the Neon Auth OAuth server. `redirect_uris` and `resources` replace the stored lists, so send the full list. At least one resource is required. `type` cannot be changed.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3867,7 +3867,7 @@
   {
     "name": "delete_auth_oauth_client",
     "title": "Delete an OAuth client",
-    "description": "Deletes an OAuth client. Irreversible. Tokens already issued to the client are not revoked.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deletes an OAuth client from the Neon Auth OAuth server. Irreversible. Tokens already issued to the client are not revoked.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3904,7 +3904,7 @@
   {
     "name": "rotate_auth_oauth_client_secret",
     "title": "Rotate an OAuth client secret",
-    "description": "Generates a new secret for a confidential OAuth client. The old secret stops working immediately. The new `client_secret` is shown only once: show it to the user and tell them to store it.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Generates a new secret for a confidential client of the Neon Auth OAuth server. The old secret stops working immediately. The new `client_secret` is shown only once: show it to the user and tell them to store it.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
