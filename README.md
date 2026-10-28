@@ -385,6 +385,8 @@ Notes:
 - **`provision_neon_auth`**, **`get_auth`**, **`disable_auth`**, **`update_auth_config`**
 - **`get_neon_auth_config`**: host tool; secrets redacted. Use generated Auth write tools to change settings.
 - **`list_auth_oauth_providers`**, **`add_auth_oauth_provider`**, **`update_auth_oauth_provider`**, **`delete_auth_oauth_provider`**
+- **`get_auth_oauth_server`**, **`update_auth_oauth_server`**: Configure Neon Auth as an OAuth 2.1 authorization server (including for MCP servers). Separate from the social login providers above.
+- **`list_auth_oauth_clients`**, **`get_auth_oauth_client`**, **`create_auth_oauth_client`**, **`update_auth_oauth_client`**, **`delete_auth_oauth_client`**, **`rotate_auth_oauth_client_secret`**: Manage the OAuth clients of that server. `create_auth_oauth_client` and `rotate_auth_oauth_client_secret` return the `client_secret` once.
 - **`list_auth_trusted_domains`**, **`add_auth_trusted_domain`**, **`delete_auth_trusted_domain`**
 - **`create_auth_user`**, **`delete_auth_user`**, **`update_auth_user_role`**
 
