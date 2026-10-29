@@ -3190,7 +3190,8 @@
             "google",
             "github",
             "microsoft",
-            "vercel"
+            "vercel",
+            "apple"
           ]
         },
         "client_id": {
@@ -3200,6 +3201,12 @@
           "type": "string"
         },
         "microsoft_tenant_id": {
+          "type": "string"
+        },
+        "apple_team_id": {
+          "type": "string"
+        },
+        "apple_key_id": {
           "type": "string"
         }
       },
@@ -3240,7 +3247,8 @@
             "google",
             "github",
             "microsoft",
-            "vercel"
+            "vercel",
+            "apple"
           ]
         },
         "client_id": {
@@ -3250,6 +3258,12 @@
           "type": "string"
         },
         "microsoft_tenant_id": {
+          "type": "string"
+        },
+        "apple_team_id": {
+          "type": "string"
+        },
+        "apple_key_id": {
           "type": "string"
         }
       },
@@ -3290,7 +3304,8 @@
             "google",
             "github",
             "microsoft",
-            "vercel"
+            "vercel",
+            "apple"
           ]
         }
       },
