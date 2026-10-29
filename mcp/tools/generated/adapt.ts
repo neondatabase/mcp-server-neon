@@ -54,13 +54,13 @@ const REGISTER_FUNCTIONS_CUSTOM_DOMAIN_DESCRIPTION = `Registers a hostname on th
 const SOCIAL_LOGIN_NOT_SERVER =
   'This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.';
 
-const LIST_AUTH_OAUTH_PROVIDERS_DESCRIPTION = `Lists the social login providers (Google, GitHub, Microsoft, Vercel) configured for the branch's Neon Auth integration, which users sign in with. ${SOCIAL_LOGIN_NOT_SERVER}`;
+const LIST_AUTH_OAUTH_PROVIDERS_DESCRIPTION = `Lists the social login providers (Google, GitHub, Microsoft, Vercel, Apple) configured for the branch's Neon Auth integration, which users sign in with. ${SOCIAL_LOGIN_NOT_SERVER}`;
 
-const ADD_AUTH_OAUTH_PROVIDER_DESCRIPTION = `Adds a social login provider (Google, GitHub, Microsoft, Vercel) that users sign in with to the branch's Neon Auth integration. Takes the provider \`id\` and optionally \`client_id\`, \`client_secret\` and, for Microsoft, \`microsoft_tenant_id\`. ${SOCIAL_LOGIN_NOT_SERVER}`;
+const ADD_AUTH_OAUTH_PROVIDER_DESCRIPTION = `Adds a social login provider (Google, GitHub, Microsoft, Vercel, Apple) that users sign in with to the branch's Neon Auth integration. Takes the provider \`id\` and optionally \`client_id\`, \`client_secret\` and, for Microsoft, \`microsoft_tenant_id\`. Microsoft and Apple have no shared app, so they need your own credentials; for Apple, \`client_id\` is the Services ID, \`client_secret\` is the \`.p8\` private key, and \`apple_team_id\` and \`apple_key_id\` are required. ${SOCIAL_LOGIN_NOT_SERVER}`;
 
-const UPDATE_AUTH_OAUTH_PROVIDER_DESCRIPTION = `Updates a social login provider (Google, GitHub, Microsoft, Vercel) that users sign in with on the branch's Neon Auth integration. ${SOCIAL_LOGIN_NOT_SERVER}`;
+const UPDATE_AUTH_OAUTH_PROVIDER_DESCRIPTION = `Updates a social login provider (Google, GitHub, Microsoft, Vercel, Apple) that users sign in with on the branch's Neon Auth integration. For Apple, a new \`client_secret\` (\`.p8\` key) must be sent with its \`apple_key_id\`. ${SOCIAL_LOGIN_NOT_SERVER}`;
 
-const DELETE_AUTH_OAUTH_PROVIDER_DESCRIPTION = `Deletes a social login provider (Google, GitHub, Microsoft, Vercel) from the branch's Neon Auth integration. ${SOCIAL_LOGIN_NOT_SERVER}`;
+const DELETE_AUTH_OAUTH_PROVIDER_DESCRIPTION = `Deletes a social login provider (Google, GitHub, Microsoft, Vercel, Apple) from the branch's Neon Auth integration. ${SOCIAL_LOGIN_NOT_SERVER}`;
 
 const GET_AUTH_OAUTH_SERVER_DESCRIPTION = `Retrieves how Neon Auth acts as an OAuth 2.1 authorization server for the branch, including for MCP servers. This is Better Auth's OAuth Provider plugin (API plugin \`oauth_provider\`), not social login; for providers such as GitHub or Google call \`list_auth_oauth_providers\`.`;
 
