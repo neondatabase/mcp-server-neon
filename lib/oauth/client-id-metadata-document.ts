@@ -177,6 +177,16 @@ export const fetchOverHttps: FetchMetadataDocument = (url) =>
     req.end();
   });
 
+function hasDotSegment(clientId: string): boolean {
+  const path = /^https:\/\/[^/?#]*([^?#]*)/i.exec(clientId)?.[1] ?? '';
+  return path.split('/').some((segment) => /^(\.|%2e){1,2}$/i.test(segment));
+}
+
+/**
+ * The client_id is compared to the document's `client_id` as the exact string
+ * the client sent, so it is validated without being normalized: an explicit
+ * `:443` is a different identifier from the portless one.
+ */
 function checkClientIdUrl(clientId: string): URL | string {
   let url: URL;
   try {
@@ -190,29 +200,56 @@ function checkClientIdUrl(clientId: string): URL | string {
   }
   if (clientId.includes('#')) return 'client_id must not have a fragment';
   if (url.pathname === '/') return 'client_id must have a path';
-  // Rejects dot segments and anything else URL parsing would rewrite: the
-  // document's client_id has to match this exact string.
-  if (url.href !== clientId) return 'client_id is not in normalized form';
+  if (hasDotSegment(clientId)) return 'client_id must not have dot segments';
   return url;
 }
 
+type DocumentAuth =
+  | { tokenEndpointAuthMethod: 'none' }
+  | {
+      tokenEndpointAuthMethod: 'private_key_jwt';
+      jwks_uri?: string;
+      jwks?: Record<string, unknown>;
+    };
+
 /**
- * `token_endpoint_auth_method` names one method; the OpenID RP metadata field
- * `token_endpoint_auth_methods_supported` lists every method the client can
- * use (ChatGPT's document offers both `none` and `private_key_jwt`). With
- * neither present, a document that carries no secret can only be public.
+ * `token_endpoint_auth_method` is the method the client declared. A declared
+ * `private_key_jwt` is enforced (CIMD draft §8.2) even when the OpenID RP
+ * field `token_endpoint_auth_methods_supported` also lists `none`, as
+ * ChatGPT's document does. With no declaration, a document that offers `none`
+ * or lists no method is a public client.
  */
-function offeredAuthMethods(doc: Record<string, unknown>): string[] {
-  const methods = new Set<string>();
-  if (typeof doc.token_endpoint_auth_method === 'string') {
-    methods.add(doc.token_endpoint_auth_method);
-  }
-  if (Array.isArray(doc.token_endpoint_auth_methods_supported)) {
-    for (const method of doc.token_endpoint_auth_methods_supported) {
-      if (typeof method === 'string') methods.add(method);
+function documentAuth(d: Record<string, unknown>): DocumentAuth | string {
+  const declared = d.token_endpoint_auth_method;
+  if (declared === 'private_key_jwt') {
+    if (typeof d.jwks_uri === 'string') {
+      let jwksUri: URL;
+      try {
+        jwksUri = new URL(d.jwks_uri);
+      } catch {
+        return 'jwks_uri is not a URL';
+      }
+      if (jwksUri.protocol !== 'https:') return 'jwks_uri must use https';
+      return {
+        tokenEndpointAuthMethod: 'private_key_jwt',
+        jwks_uri: d.jwks_uri,
+      };
     }
+    if (isJsonObject(d.jwks) && Array.isArray(d.jwks.keys)) {
+      return { tokenEndpointAuthMethod: 'private_key_jwt', jwks: d.jwks };
+    }
+    return 'private_key_jwt requires jwks_uri or jwks';
   }
-  return methods.size === 0 ? ['none'] : [...methods];
+  if (declared === 'none') return { tokenEndpointAuthMethod: 'none' };
+  if (declared !== undefined) {
+    return 'token_endpoint_auth_method must be none or private_key_jwt';
+  }
+  const supported = d.token_endpoint_auth_methods_supported;
+  if (supported === undefined) return { tokenEndpointAuthMethod: 'none' };
+  if (Array.isArray(supported) && supported.includes('none')) {
+    return { tokenEndpointAuthMethod: 'none' };
+  }
+  return 'document must offer token_endpoint_auth_method none or private_key_jwt';
 }
 
 function hasDangerousRedirectUri(redirectUris: string[]): boolean {
@@ -229,25 +266,24 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function checkDocument(url: URL, d: unknown, now: number): Client | string {
+function checkDocument(
+  clientId: string,
+  url: URL,
+  d: unknown,
+  now: number,
+): Client | string {
   if (!isJsonObject(d)) {
     return 'document is not a JSON object';
   }
 
-  if (d.client_id !== url.href) {
+  if (d.client_id !== clientId) {
     return 'document client_id does not match its URL';
   }
   if ('client_secret' in d || 'client_secret_expires_at' in d) {
     return 'document must not contain a client secret';
   }
-  const authMethods = offeredAuthMethods(d);
-  if (authMethods.some((method) => method.startsWith('client_secret_'))) {
-    return 'document must not offer a shared-secret auth method';
-  }
-  // Only public clients are served; PKCE protects their codes.
-  if (!authMethods.includes('none')) {
-    return 'document must offer token_endpoint_auth_method none';
-  }
+  const auth = documentAuth(d);
+  if (typeof auth === 'string') return auth;
   if (typeof d.client_name !== 'string' || d.client_name === '') {
     return 'document must have a client_name';
   }
@@ -261,7 +297,7 @@ function checkDocument(url: URL, d: unknown, now: number): Client | string {
   }
 
   return {
-    id: url.href,
+    id: clientId,
     client_name: d.client_name,
     // The consent page shows this as the client's website. The document's own
     // client_uri is self-asserted; the client_id's origin is the one thing
@@ -270,12 +306,12 @@ function checkDocument(url: URL, d: unknown, now: number): Client | string {
     redirect_uris: redirectUris,
     grants: ['authorization_code', 'refresh_token'],
     response_types: ['code'],
-    tokenEndpointAuthMethod: 'none',
+    ...auth,
     registrationDate: Math.floor(now / 1000),
   };
 }
 
-function cacheTtlMs(cacheControl: string | undefined): number {
+export function cacheTtlMs(cacheControl: string | undefined): number {
   if (!cacheControl) return DEFAULT_CACHE_TTL_MS;
   if (/\b(no-store|no-cache)\b/i.test(cacheControl)) return 0;
   const maxAge = /\bmax-age=(\d+)/i.exec(cacheControl);
@@ -283,7 +319,7 @@ function cacheTtlMs(cacheControl: string | undefined): number {
   return Math.min(Number(maxAge[1]) * 1000, MAX_CACHE_TTL_MS);
 }
 
-const isJson = (contentType: string | undefined): boolean =>
+export const isJson = (contentType: string | undefined): boolean =>
   /^application\/([\w.-]+\+)?json\b/i.test(contentType ?? '');
 
 /**
@@ -344,7 +380,7 @@ export function createClientMetadataResolver(
       return refuse(clientId, 'not valid JSON');
     }
 
-    const client = checkDocument(url, doc, now());
+    const client = checkDocument(clientId, url, doc, now());
     if (typeof client === 'string') return refuse(clientId, client);
 
     const ttl = cacheTtlMs(res.cacheControl);

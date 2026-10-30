@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { POST } from '../../app/api/token/route';
 import { model } from '../oauth/model';
 import { ClientMetadataUnavailableError } from '../../lib/oauth/client-id-metadata-document';
+import { CLIENT_ASSERTION_TYPE } from '../../lib/oauth/client-assertion';
+import { SERVER_HOST } from '../../lib/config';
+import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 
 vi.mock('../oauth/model', () => ({
   model: {
@@ -12,6 +15,7 @@ vi.mock('../oauth/model', () => ({
     saveRefreshToken: vi.fn(),
     revokeAuthorizationCode: vi.fn(),
     getRefreshToken: vi.fn(),
+    getRefreshFailure: vi.fn(),
     getAccessToken: vi.fn(),
     deleteToken: vi.fn(),
     deleteRefreshToken: vi.fn(),
@@ -211,6 +215,65 @@ describe('/api/token route integration', () => {
         error_description: 'Invalid redirect URI',
       });
       expect(model.saveToken).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a metadata-document client that declared private_key_jwt', async () => {
+    const { privateKey, publicKey } = await generateKeyPair('RS256');
+    const jwk = { ...(await exportJWK(publicKey)), kid: 'k1' };
+    const client = {
+      id: 'https://chatgpt.example/oauth/client.json',
+      tokenEndpointAuthMethod: 'private_key_jwt',
+      jwks: { keys: [jwk] },
+      redirect_uris: ['https://chatgpt.example/callback'],
+      grants: ['authorization_code', 'refresh_token'],
+      client_name: 'ChatGPT',
+    };
+
+    const refresh = (extra: Record<string, string>) => {
+      vi.mocked(model.getClient).mockResolvedValue(client as never);
+      vi.mocked(model.getRefreshFailure).mockResolvedValue(undefined as never);
+      vi.mocked(model.getRefreshToken).mockResolvedValue(undefined as never);
+      return POST(
+        new NextRequest('http://localhost/api/token', {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            client_id: client.id,
+            refresh_token: 'refresh-123',
+            ...extra,
+          }).toString(),
+        }),
+      );
+    };
+
+    it('is refused without an assertion before its refresh token is read', async () => {
+      const response = await refresh({});
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: 'invalid_client',
+      });
+      expect(model.getRefreshToken).not.toHaveBeenCalled();
+    });
+
+    it('authenticates with a signed assertion', async () => {
+      const assertion = await new SignJWT({})
+        .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
+        .setIssuer(client.id)
+        .setSubject(client.id)
+        .setAudience(`${SERVER_HOST}/api/token`)
+        .setExpirationTime('1m')
+        .sign(privateKey);
+
+      const response = await refresh({
+        client_assertion_type: CLIENT_ASSERTION_TYPE,
+        client_assertion: assertion,
+      });
+      expect(model.getRefreshToken).toHaveBeenCalled();
+      await expect(response.json()).resolves.not.toMatchObject({
+        error: 'invalid_client',
+      });
     });
   });
 

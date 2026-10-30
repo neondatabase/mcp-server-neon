@@ -71,7 +71,7 @@ describe('createClientMetadataResolver', () => {
     ['https://client.example.com/a#frag'],
     ['https://user:pw@client.example.com/a'],
     ['https://client.example.com/a/../b'],
-    ['https://CLIENT.example.com/a'],
+    ['https://client.example.com/a/%2E/b'],
   ])('refuses %s without fetching it', async (clientId) => {
     const fetchDocument = vi.fn<FetchMetadataDocument>();
 
@@ -92,12 +92,23 @@ describe('createClientMetadataResolver', () => {
       { token_endpoint_auth_method: 'client_secret_post' },
     ],
     [
-      'a shared-secret method among the supported ones',
+      'private_key_jwt without keys',
+      { token_endpoint_auth_method: 'private_key_jwt' },
+    ],
+    [
+      'private_key_jwt with a non-https jwks_uri',
       {
-        token_endpoint_auth_methods_supported: ['none', 'client_secret_basic'],
+        token_endpoint_auth_method: 'private_key_jwt',
+        jwks_uri: 'http://client.example.com/jwks.json',
       },
     ],
-    ['only private_key_jwt', { token_endpoint_auth_method: 'private_key_jwt' }],
+    [
+      'only shared-secret methods among the supported ones',
+      {
+        token_endpoint_auth_method: undefined,
+        token_endpoint_auth_methods_supported: ['client_secret_basic'],
+      },
+    ],
     ['no client_name', { client_name: undefined }],
     ['no redirect_uris', { redirect_uris: undefined }],
     [
@@ -119,13 +130,48 @@ describe('createClientMetadataResolver', () => {
     expect(client?.redirect_uris).toEqual(redirectUris);
   });
 
-  it('serves a client offering both none and private_key_jwt as public', async () => {
+  it('enforces a declared private_key_jwt even when none is also supported', async () => {
+    // ChatGPT's document has this shape.
     const client = await resolveDocument({
       token_endpoint_auth_method: 'private_key_jwt',
       token_endpoint_auth_methods_supported: ['none', 'private_key_jwt'],
+      jwks_uri: 'https://client.example.com/oauth/jwks.json',
+    });
+
+    expect(client).toMatchObject({
+      tokenEndpointAuthMethod: 'private_key_jwt',
+      jwks_uri: 'https://client.example.com/oauth/jwks.json',
+    });
+  });
+
+  it('serves a client that lists none among its supported methods as public', async () => {
+    const client = await resolveDocument({
+      token_endpoint_auth_method: undefined,
+      token_endpoint_auth_methods_supported: ['none', 'client_secret_basic'],
     });
 
     expect(client?.tokenEndpointAuthMethod).toBe('none');
+  });
+
+  it('keeps an explicit default port as part of the client_id', async () => {
+    const clientId = 'https://client.example.com:443/oauth/metadata.json';
+    const fetchDocument = vi.fn<FetchMetadataDocument>(async () =>
+      respond({ json: { ...validDocument, client_id: clientId } }),
+    );
+
+    const client = await createClientMetadataResolver(fetchDocument)(clientId);
+
+    expect(client?.id).toBe(clientId);
+    expect(fetchDocument).toHaveBeenCalledOnce();
+  });
+
+  it('refuses a document whose client_id drops the explicit port', async () => {
+    const clientId = 'https://client.example.com:443/oauth/metadata.json';
+    const client = await createClientMetadataResolver(async () =>
+      respond({ json: validDocument }),
+    )(clientId);
+
+    expect(client).toBeUndefined();
   });
 
   it.each([
