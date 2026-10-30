@@ -25,6 +25,7 @@ test.describe('Smoke tests', () => {
     expect(body.registration_endpoint).toContain('/api/register');
     expect(body.scopes_supported).toEqual(['read', 'write']);
     expect(body.code_challenge_methods_supported).toContain('S256');
+    expect(body.authorization_response_iss_parameter_supported).toBe(true);
   });
 
   test('GET /.well-known/oauth-protected-resource returns resource metadata', async ({

@@ -715,6 +715,7 @@ describe('/api/authorize route integration', () => {
     );
     expect(location.searchParams.get('error')).toBe('access_denied');
     expect(location.searchParams.get('state')).toBe('orig-state');
+    expect(location.searchParams.get('iss')).toBe(SERVER_HOST);
     expect(await authTransactions.getById(state)).toBeUndefined();
     expect(upstreamAuth).not.toHaveBeenCalled();
   });
