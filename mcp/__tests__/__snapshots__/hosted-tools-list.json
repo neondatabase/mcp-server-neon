@@ -3140,7 +3140,7 @@
   {
     "name": "list_auth_oauth_providers",
     "title": "List OAuth providers for the branch",
-    "description": "Lists the social login providers (Google, GitHub, Microsoft, Vercel) configured for the branch's Neon Auth integration, which users sign in with. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists the social login providers (Google, GitHub, Microsoft, Vercel, Apple) configured for the branch's Neon Auth integration, which users sign in with. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3171,7 +3171,7 @@
   {
     "name": "add_auth_oauth_provider",
     "title": "Add an OAuth provider",
-    "description": "Adds a social login provider (Google, GitHub, Microsoft, Vercel) that users sign in with to the branch's Neon Auth integration. Takes the provider `id` and optionally `client_id`, `client_secret` and, for Microsoft, `microsoft_tenant_id`. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Adds a social login provider (Google, GitHub, Microsoft, Vercel, Apple) that users sign in with to the branch's Neon Auth integration. Takes the provider `id` and optionally `client_id`, `client_secret` and, for Microsoft, `microsoft_tenant_id`. Microsoft and Apple have no shared app, so they need your own credentials; for Apple, `client_id` is the Services ID, `client_secret` is the `.p8` private key, and `apple_team_id` and `apple_key_id` are required. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3190,7 +3190,8 @@
             "google",
             "github",
             "microsoft",
-            "vercel"
+            "vercel",
+            "apple"
           ]
         },
         "client_id": {
@@ -3200,6 +3201,12 @@
           "type": "string"
         },
         "microsoft_tenant_id": {
+          "type": "string"
+        },
+        "apple_team_id": {
+          "type": "string"
+        },
+        "apple_key_id": {
           "type": "string"
         }
       },
@@ -3221,7 +3228,7 @@
   {
     "name": "update_auth_oauth_provider",
     "title": "Update OAuth provider",
-    "description": "Updates a social login provider (Google, GitHub, Microsoft, Vercel) that users sign in with on the branch's Neon Auth integration. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Updates a social login provider (Google, GitHub, Microsoft, Vercel, Apple) that users sign in with on the branch's Neon Auth integration. For Apple, a new `client_secret` (`.p8` key) must be sent with its `apple_key_id`. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3240,7 +3247,8 @@
             "google",
             "github",
             "microsoft",
-            "vercel"
+            "vercel",
+            "apple"
           ]
         },
         "client_id": {
@@ -3250,6 +3258,12 @@
           "type": "string"
         },
         "microsoft_tenant_id": {
+          "type": "string"
+        },
+        "apple_team_id": {
+          "type": "string"
+        },
+        "apple_key_id": {
           "type": "string"
         }
       },
@@ -3271,7 +3285,7 @@
   {
     "name": "delete_auth_oauth_provider",
     "title": "Delete OAuth provider",
-    "description": "Deletes a social login provider (Google, GitHub, Microsoft, Vercel) from the branch's Neon Auth integration. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deletes a social login provider (Google, GitHub, Microsoft, Vercel, Apple) from the branch's Neon Auth integration. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3290,7 +3304,8 @@
             "google",
             "github",
             "microsoft",
-            "vercel"
+            "vercel",
+            "apple"
           ]
         }
       },
