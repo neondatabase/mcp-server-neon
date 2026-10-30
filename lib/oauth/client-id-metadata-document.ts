@@ -44,7 +44,10 @@ export type FetchMetadataDocument = (
   url: URL,
 ) => Promise<MetadataDocumentResponse>;
 
-/** A fetch failure that retrying will not fix (blocked address, too large). */
+/**
+ * A fetch failure that retrying will not fix (blocked address, too large, a
+ * name that does not resolve, an invalid certificate).
+ */
 export class MetadataDocumentRefusedError extends Error {}
 
 /**
@@ -200,9 +203,42 @@ export const fetchOverHttps: FetchMetadataDocument = (url) =>
         });
       },
     );
-    req.on('error', reject);
+    req.on('error', (error) =>
+      reject(
+        isPermanentFetchError(error)
+          ? new MetadataDocumentRefusedError(error.message)
+          : error,
+      ),
+    );
     req.end();
   });
+
+// A name that does not resolve, or a certificate that does not verify, will
+// fail the same way on every retry: the client_id is wrong, not the document
+// host briefly down. EAI_AGAIN (resolver unavailable), timeouts, resets and
+// refused connections stay retryable.
+const PERMANENT_FETCH_ERROR_CODES = new Set([
+  'ENOTFOUND',
+  'ENODATA',
+  'CERT_HAS_EXPIRED',
+  'CERT_NOT_YET_VALID',
+  'CERT_REVOKED',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_GET_ISSUER_CERT',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+]);
+
+export function isPermanentFetchError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    typeof error.code === 'string' &&
+    PERMANENT_FETCH_ERROR_CODES.has(error.code)
+  );
+}
 
 function hasDotSegment(clientId: string): boolean {
   const path = /^https:\/\/[^/?#]*([^?#]*)/i.exec(clientId)?.[1] ?? '';

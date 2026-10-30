@@ -8,6 +8,7 @@ import {
   isClientIdMetadataUrl,
   MetadataDocumentRefusedError,
   readDocument,
+  isPermanentFetchError,
   type FetchMetadataDocument,
   type MetadataDocumentResponse,
 } from '../../lib/oauth/client-id-metadata-document';
@@ -282,6 +283,36 @@ describe('isBlockedAddress', () => {
 
   it.each(['93.184.215.14', '2606:4700::1111'])('allows %s', (address) => {
     expect(isBlockedAddress(address)).toBe(false);
+  });
+});
+
+describe('isPermanentFetchError', () => {
+  const withCode = (code: string) =>
+    Object.assign(new Error(`failed: ${code}`), { code });
+
+  it.each([
+    'ENOTFOUND',
+    'ENODATA',
+    'CERT_HAS_EXPIRED',
+    'DEPTH_ZERO_SELF_SIGNED_CERT',
+    'SELF_SIGNED_CERT_IN_CHAIN',
+    'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+    'ERR_TLS_CERT_ALTNAME_INVALID',
+  ])('treats %s as permanent, so the document is refused', (code) => {
+    expect(isPermanentFetchError(withCode(code))).toBe(true);
+  });
+
+  it.each(['EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'])(
+    'treats %s as retryable',
+    (code) => {
+      expect(isPermanentFetchError(withCode(code))).toBe(false);
+    },
+  );
+
+  it('treats an aborted fetch (the deadline) as retryable', () => {
+    expect(
+      isPermanentFetchError(new DOMException('aborted', 'AbortError')),
+    ).toBe(false);
   });
 });
 
