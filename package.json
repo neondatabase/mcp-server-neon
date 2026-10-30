@@ -37,6 +37,7 @@
     "@sentry/node": "9.19.0",
     "@vercel/functions": "3.3.4",
     "he": "1.2.0",
+    "jose": "6.2.2",
     "keyv": "5.3.2",
     "mcp-handler": "1.0.6",
     "next": "16.1.1",

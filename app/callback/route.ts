@@ -523,6 +523,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Resolved before the one-use transaction is consumed: a client ID
+    // metadata document can be temporarily unreadable, and the browser must
+    // be able to retry this callback.
+    const pendingClientId = (await authTransactions.getById(state))?.request
+      .clientId;
+    clientIdForSlo = pendingClientId;
+    const client = pendingClientId
+      ? await withPgConnectRetry('callback.getClient', () =>
+          model.getClient(pendingClientId, ''),
+        )
+      : undefined;
+
     const approved = await authTransactions.consumeApproved(
       state,
       browserSecret,
@@ -582,9 +594,6 @@ export async function GET(request: NextRequest) {
     }
 
     const clientId = requestParams.clientId;
-    const client = await withPgConnectRetry('callback.getClient', () =>
-      model.getClient(clientId, ''),
-    );
     if (!client) {
       logger.warn('Client not found at /callback', { clientId });
       emitAuthCallbackSlo('internal_error', sloStartMs, {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { SERVER_HOST } from '@/lib/config';
 import { SUPPORTED_SCOPES } from '@/mcp/utils/read-only';
 import { SCOPE_CATEGORIES } from '@/mcp/utils/grant-context';
+import { CLIENT_ASSERTION_SIGNING_ALGORITHMS } from '@/lib/oauth/client-assertion';
 
 const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
 const SUPPORTED_RESPONSE_TYPES = ['code'];
@@ -10,6 +11,7 @@ const SUPPORTED_AUTH_METHODS = [
   'client_secret_basic',
   'none',
 ];
+const CLIENT_AUTH_METHODS = [...SUPPORTED_AUTH_METHODS, 'private_key_jwt'];
 const SUPPORTED_CODE_CHALLENGE_METHODS = ['S256'];
 
 export async function GET() {
@@ -18,13 +20,18 @@ export async function GET() {
     authorization_endpoint: `${SERVER_HOST}/api/authorize`,
     token_endpoint: `${SERVER_HOST}/api/token`,
     registration_endpoint: `${SERVER_HOST}/api/register`,
+    client_id_metadata_document_supported: true,
     revocation_endpoint: `${SERVER_HOST}/api/revoke`,
     response_types_supported: SUPPORTED_RESPONSE_TYPES,
     response_modes_supported: ['query'],
     grant_types_supported: SUPPORTED_GRANT_TYPES,
-    token_endpoint_auth_methods_supported: SUPPORTED_AUTH_METHODS,
+    token_endpoint_auth_methods_supported: CLIENT_AUTH_METHODS,
+    token_endpoint_auth_signing_alg_values_supported:
+      CLIENT_ASSERTION_SIGNING_ALGORITHMS,
     registration_endpoint_auth_methods_supported: SUPPORTED_AUTH_METHODS,
-    revocation_endpoint_auth_methods_supported: SUPPORTED_AUTH_METHODS,
+    revocation_endpoint_auth_methods_supported: CLIENT_AUTH_METHODS,
+    revocation_endpoint_auth_signing_alg_values_supported:
+      CLIENT_ASSERTION_SIGNING_ALGORITHMS,
     code_challenge_methods_supported: SUPPORTED_CODE_CHALLENGE_METHODS,
     authorization_response_iss_parameter_supported: true,
     scopes_supported: SUPPORTED_SCOPES,

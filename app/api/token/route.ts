@@ -11,6 +11,10 @@ import { verifyPKCE } from '../../../mcp/oauth/utils';
 import { identify, flushAnalytics } from '../../../mcp/analytics/analytics';
 import { handleOAuthError } from '../../../lib/errors';
 import { logger } from '../../../mcp/utils/logger';
+import {
+  authenticateClient,
+  extractClientCredentials,
+} from '../../../lib/oauth/client-credentials';
 import { singleflight } from '../../../mcp/utils/singleflight';
 import { retryAsync } from '../../../mcp/utils/retry';
 import {
@@ -546,23 +550,6 @@ async function executeRefresh(
   return result;
 }
 
-const extractClientCredentials = (
-  request: NextRequest,
-  formData: URLSearchParams,
-) => {
-  const authorization = request.headers.get('authorization');
-  if (authorization?.startsWith('Basic ')) {
-    const credentials = atob(authorization.replace(/^Basic\s+/i, ''));
-    const [clientId, clientSecret] = credentials.split(':');
-    return { clientId, clientSecret };
-  }
-
-  return {
-    clientId: formData.get('client_id') ?? undefined,
-    clientSecret: formData.get('client_secret') ?? undefined,
-  };
-};
-
 export async function POST(request: NextRequest) {
   logger.info('Token endpoint called');
 
@@ -586,10 +573,8 @@ export async function POST(request: NextRequest) {
 
     logger.info('Token request parsed', { grantType });
 
-    const { clientId, clientSecret } = extractClientCredentials(
-      request,
-      formData,
-    );
+    const credentials = extractClientCredentials(request, formData);
+    const { clientId } = credentials;
 
     if (!clientId) {
       logger.warn('Token request missing client_id');
@@ -613,12 +598,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error, { status: 400 });
     }
 
-    const isPublicClient = client.tokenEndpointAuthMethod === 'none';
-    if (!isPublicClient) {
-      if (clientSecret !== client.secret) {
-        logger.warn('Client secret mismatch', { clientId });
-        return NextResponse.json(error, { status: 400 });
-      }
+    if (!(await authenticateClient(client, credentials))) {
+      logger.warn('Client authentication failed', {
+        clientId,
+        method: client.tokenEndpointAuthMethod,
+      });
+      return NextResponse.json(error, { status: 400 });
     }
 
     if (grantType === 'authorization_code') {
@@ -707,7 +692,13 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         );
       }
-      if (redirectUri && !client.redirect_uris.includes(redirectUri)) {
+      // A loopback redirect authorizes on any port (RFC 8252), so the
+      // URI bound to the code can differ from every registered string.
+      if (
+        redirectUri &&
+        redirectUri !== authorizationCode.redirectUri &&
+        !client.redirect_uris.includes(redirectUri)
+      ) {
         logger.warn('Invalid redirect_uri', { provided: redirectUri });
         return NextResponse.json(
           {

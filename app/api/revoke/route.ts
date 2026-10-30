@@ -2,22 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { model } from '../../../mcp/oauth/model';
 import { handleOAuthError } from '../../../lib/errors';
 import { logger } from '../../../mcp/utils/logger';
-
-const extractClientCredentials = (
-  request: NextRequest,
-  formData: URLSearchParams,
-) => {
-  const authorization = request.headers.get('authorization');
-  if (authorization?.startsWith('Basic ')) {
-    const credentials = atob(authorization.replace(/^Basic\s+/i, ''));
-    const [clientId, clientSecret] = credentials.split(':');
-    return { clientId, clientSecret };
-  }
-  return {
-    clientId: formData.get('client_id') ?? undefined,
-    clientSecret: formData.get('client_secret') ?? undefined,
-  };
-};
+import {
+  authenticateClient,
+  extractClientCredentials,
+} from '../../../lib/oauth/client-credentials';
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,10 +21,8 @@ export async function POST(request: NextRequest) {
     const formData = new URLSearchParams(body);
 
     // Validate client
-    const { clientId, clientSecret } = extractClientCredentials(
-      request,
-      formData,
-    );
+    const credentials = extractClientCredentials(request, formData);
+    const { clientId } = credentials;
     if (!clientId) {
       return NextResponse.json(
         {
@@ -53,8 +39,7 @@ export async function POST(request: NextRequest) {
       return new NextResponse(null, { status: 200 });
     }
 
-    const isPublicClient = client.tokenEndpointAuthMethod === 'none';
-    if (!isPublicClient && clientSecret !== client.secret) {
+    if (!(await authenticateClient(client, credentials))) {
       return NextResponse.json(
         {
           error: 'invalid_client',
