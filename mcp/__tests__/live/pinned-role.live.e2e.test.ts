@@ -20,6 +20,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { NeonApiClient } from '../../neon-client';
 import type { GrantContext } from '../../utils/grant-context';
+import { LIVE_TEST_REGION } from './live-test-region';
 
 loadEnv({ path: '.env.test', quiet: true });
 
@@ -226,7 +227,11 @@ describe.sequential('pinned Postgres role on live Neon', () => {
     async () => {
       const created = await owner?.callTool({
         name: 'create_project',
-        arguments: { name: projectName, org_id: testOrgId },
+        arguments: {
+          name: projectName,
+          org_id: testOrgId,
+          region_id: LIVE_TEST_REGION,
+        },
       });
       if (toolResultSchema.parse(created).isError) {
         throw new Error(`create_project failed: ${text(created)}`);
