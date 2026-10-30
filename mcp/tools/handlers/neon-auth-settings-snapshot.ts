@@ -57,6 +57,18 @@ type OAuthProviderSnapshot = {
   type: NeonAuthOauthProviderType;
   client_id: string | null;
   client_secret: typeof REDACTED_SECRET | null;
+  // Present only for the provider they belong to. Identifiers, not secrets.
+  microsoft_tenant_id?: string;
+  apple_team_id?: string;
+  apple_key_id?: string;
+};
+
+// The pinned `@neon/sdk` response type predates these fields, but the API
+// returns them.
+type OAuthProviderWithIdentifiers = NeonAuthOauthProvider & {
+  microsoft_tenant_id?: string;
+  apple_team_id?: string;
+  apple_key_id?: string;
 };
 
 type EmailProviderSnapshot =
@@ -110,7 +122,7 @@ function emailPasswordSnapshot(
 }
 
 function oauthProviderSnapshot(
-  p: NeonAuthOauthProvider,
+  p: OAuthProviderWithIdentifiers,
 ): OAuthProviderSnapshot {
   return {
     id: p.id,
@@ -119,6 +131,11 @@ function oauthProviderSnapshot(
     // Any non-empty client_secret returned by upstream becomes the sentinel.
     // Never echo the actual value back to the caller.
     client_secret: p.client_secret ? REDACTED_SECRET : null,
+    ...(p.microsoft_tenant_id && {
+      microsoft_tenant_id: p.microsoft_tenant_id,
+    }),
+    ...(p.apple_team_id && { apple_team_id: p.apple_team_id }),
+    ...(p.apple_key_id && { apple_key_id: p.apple_key_id }),
   };
 }
 

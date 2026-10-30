@@ -18,8 +18,8 @@ importers:
         specifier: 3.1.0
         version: 3.1.0
       '@neon/tools':
-        specifier: 2.5.0
-        version: 2.5.0
+        specifier: 2.5.1
+        version: 2.5.1
       '@neondatabase/serverless':
         specifier: 1.0.0
         version: 1.0.0
@@ -804,12 +804,12 @@ packages:
     resolution: {integrity: sha512-yBdxG+RKWuDsEdgjZNuQUV9YfzXktaUb5pZPrzNmsUJPgNkL/jgiMKoYQorsSXDja1CNg6OvCPsEYbxYTYohZQ==}
     engines: {node: '>=20.19.0'}
 
-  '@neon/sdk@7.6.0':
-    resolution: {integrity: sha512-CqNhupvYjP2KeO8v7aMy5hcDQuo118+KsNGkZd8UUyjYpC+MpLH1eot4uzTjITGPXBZ6yrfwtqnByVJOtuAmqg==}
+  '@neon/sdk@7.6.1':
+    resolution: {integrity: sha512-y9pYPxE8kY3VhThUSKyMcQBTuqSNf5fObV1eRZp3S4ty13N1oES9LJmVwyIDWJkLHXXHXie4TREDrePUsR1BOA==}
     engines: {node: '>=20.19.0'}
 
-  '@neon/tools@2.5.0':
-    resolution: {integrity: sha512-jhJbu/ffy0ic6vfZtVPTWDdDOZ6CnCIlW1rLTfOXoVvVVyvTT1NCj24Nuu+eykZaza2CvrLEwrVobadevs8CbQ==}
+  '@neon/tools@2.5.1':
+    resolution: {integrity: sha512-v3HIK0qVfIyM6QaPdbLcM7KuXVAz4GsfIBChUxrKwpQUvamU5b9AsMf7wf18NAoD5iJnno8r9Oqq+gygtYaMKQ==}
     engines: {node: '>=20.19.0'}
 
   '@neondatabase/serverless@1.0.0':
@@ -4321,11 +4321,11 @@ snapshots:
 
   '@neon/sdk@3.1.0': {}
 
-  '@neon/sdk@7.6.0': {}
+  '@neon/sdk@7.6.1': {}
 
-  '@neon/tools@2.5.0':
+  '@neon/tools@2.5.1':
     dependencies:
-      '@neon/sdk': 7.6.0
+      '@neon/sdk': 7.6.1
       zod: 4.6.5
 
   '@neondatabase/serverless@1.0.0':

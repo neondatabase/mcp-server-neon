@@ -194,6 +194,21 @@ describe('handleGetNeonAuthConfig', () => {
               type: 'shared',
               // Shared mode: no credentials in upstream payload at all.
             },
+            {
+              id: 'microsoft',
+              type: 'standard',
+              client_id: 'ms-app-id',
+              client_secret: 'super-secret-ms-from-upstream',
+              microsoft_tenant_id: 'tenant-1',
+            },
+            {
+              id: 'apple',
+              type: 'standard',
+              client_id: 'com.example.services',
+              client_secret: 'super-secret-apple-p8-from-upstream',
+              apple_team_id: 'TEAM123456',
+              apple_key_id: 'KEY1234567',
+            },
           ],
         },
       }),
@@ -225,6 +240,8 @@ describe('handleGetNeonAuthConfig', () => {
       // the rendered output.
       expect(rawText).not.toContain('super-secret-from-upstream');
       expect(rawText).not.toContain('super-secret-smtp-from-upstream');
+      expect(rawText).not.toContain('super-secret-ms-from-upstream');
+      expect(rawText).not.toContain('super-secret-apple-p8-from-upstream');
 
       const body = parseSettingsJson(rawText);
       expect(body.oauth_providers).toEqual([
@@ -239,6 +256,21 @@ describe('handleGetNeonAuthConfig', () => {
           type: 'shared',
           client_id: null,
           client_secret: null,
+        },
+        {
+          id: 'microsoft',
+          type: 'standard',
+          client_id: 'ms-app-id',
+          client_secret: REDACTED_SECRET,
+          microsoft_tenant_id: 'tenant-1',
+        },
+        {
+          id: 'apple',
+          type: 'standard',
+          client_id: 'com.example.services',
+          client_secret: REDACTED_SECRET,
+          apple_team_id: 'TEAM123456',
+          apple_key_id: 'KEY1234567',
         },
       ]);
       expect(body.email_provider).toEqual({
