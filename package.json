@@ -25,6 +25,7 @@
     "test:e2e:mcp": "vitest run mcp/__tests__/*.e2e.test.ts",
     "test:e2e:live": "vitest run mcp/__tests__/live/*.e2e.test.ts",
     "test:e2e:web": "tsx scripts/e2e-setup.ts && playwright test",
+    "test:ci": "pnpm test:unit && pnpm test:integration && pnpm test:e2e:mcp",
     "test:e2e": "pnpm test:e2e:mcp && pnpm test:e2e:web"
   },
   "dependencies": {

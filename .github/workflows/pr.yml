@@ -9,7 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  lint-and-build:
+  lint-build:
+    name: lint-build
     permissions:
       contents: read
       id-token: write
@@ -36,7 +37,7 @@ jobs:
         run: pnpm build
 
   test:
-    needs: lint-and-build
+    needs: lint-build
     permissions:
       contents: read
       id-token: write
@@ -48,15 +49,11 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Setup
         uses: ./.github/actions/setup
-      - name: Unit tests
-        run: pnpm test:unit
-      - name: Integration tests
-        run: pnpm test:integration
-      - name: MCP protocol e2e tests
-        run: pnpm test:e2e:mcp
+      - name: Server tests
+        run: pnpm test:ci
 
   e2e-web:
-    needs: lint-and-build
+    needs: lint-build
     permissions:
       contents: read
       id-token: write
@@ -77,7 +74,7 @@ jobs:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.actor != 'dependabot[bot]'
-    needs: test
+    needs: [test, e2e-web]
     permissions:
       contents: read
       id-token: write
@@ -93,3 +90,26 @@ jobs:
         env:
           NEON_API_KEY: ${{ secrets.NEON_TEST_API_KEY }}
         run: pnpm test:e2e:live
+
+  # The required status check is named "lint-and-build"; this job keeps that name so
+  # branch protection also gates on test and e2e-web. e2e-live is excluded on purpose
+  # because it depends on live Neon and must not block merges. A skipped dependency
+  # means an upstream job failed, so anything other than success fails the gate.
+  lint-and-build:
+    name: lint-and-build
+    if: always()
+    needs: [lint-build, test, e2e-web]
+    permissions:
+      contents: read
+    runs-on:
+      group: databricks-ghec-untrusted-runner-group
+      labels: linux-ubuntu-latest-untrusted-2core-8gb
+    steps:
+      - name: Require all gated jobs to succeed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Gated job results: $RESULTS"
+          for r in $RESULTS; do
+            [ "$r" = "success" ] || exit 1
+          done
