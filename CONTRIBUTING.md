@@ -2,6 +2,20 @@
 
 Development commands, architecture, and how to add tools are in [AGENTS.md](./AGENTS.md).
 
+## Which layer a change belongs in
+
+This server is one consumer of [`neondatabase/neon-pkgs`](https://github.com/neondatabase/neon-pkgs). It calls the Neon API through `@neon/sdk`, which the `neon` CLI also uses, and serves the generated tools from `@neon/tools`, which Mastra and Eve adapters also use.
+
+Before changing behavior here, check whether it belongs upstream, where more consumers get it:
+
+| Change | Where |
+| --- | --- |
+| How an API call behaves for every caller: error mapping and messages, retries, readiness waits, pagination | `@neon/sdk` ergonomic layer |
+| What an agent sees for a generated tool: name, description, argument schema, result shape | `@neon/tools` |
+| MCP transport, OAuth and consent, grants and tool filtering, hosting, analytics | this repository |
+
+Name the chosen layer and the reason in the PR. Keep a change here when it is specific to this server; don't add a shared abstraction for a consumer that doesn't exist yet.
+
 ## Read-only tools
 
 Tools marked `readOnlySafe: true` are the only tools registered in read-only mode. A read-only tool that runs caller-supplied SQL must run exactly one caller-supplied statement, as a prepared query, in its own `READ ONLY` transaction, as `run_sql` does. `run_sql_transaction` is not read-only safe: its statements share one transaction, so a `COMMIT` or `SET TRANSACTION READ WRITE` statement can end the transaction or switch it to read-write.
