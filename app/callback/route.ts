@@ -316,7 +316,9 @@ function browserSecretFromRequest(
   request: NextRequest,
   transactionId: string,
 ): string | undefined {
-  return request.cookies.get(consentCookieName(transactionId))?.value;
+  return request.cookies.get(
+    consentCookieName(transactionId, cookieSecureForRequest(request)),
+  )?.value;
 }
 
 function clearTransactionCookie(
@@ -325,7 +327,7 @@ function clearTransactionCookie(
   request: NextRequest,
 ): NextResponse {
   response.cookies.set(
-    consentCookieName(transactionId),
+    consentCookieName(transactionId, cookieSecureForRequest(request)),
     '',
     consentCookieClearOptions(cookieSecureForRequest(request)),
   );

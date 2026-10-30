@@ -698,6 +698,53 @@ describe('/api/authorize route integration', () => {
     });
   });
 
+  describe('consent cookie over HTTPS', () => {
+    const httpsHeaders = { 'x-forwarded-proto': 'https' };
+
+    const postOverHttps = (state: string, cookie: string) => {
+      const form = new FormData();
+      form.set('state', state);
+      form.set('action', 'cancel');
+      return POST(
+        new NextRequest(`${SERVER_HOST}/api/authorize`, {
+          method: 'POST',
+          headers: { ...httpsHeaders, cookie },
+          body: form,
+        }),
+      );
+    };
+
+    it('sets a __Host- prefixed, Secure, host-only cookie', async () => {
+      const response = await GET(buildAuthorizeRequest(httpsHeaders));
+      expect(response.status).toBe(200);
+      const [setCookie] = response.headers.getSetCookie();
+
+      expect(setCookie).toMatch(/^__Host-neon_mcp_at_[0-9a-f]{32}=/);
+      expect(setCookie).toMatch(/; Secure/i);
+      expect(setCookie).toMatch(/; Path=\//i);
+      expect(setCookie).toMatch(/; HttpOnly/i);
+      expect(setCookie).toMatch(/; SameSite=lax/i);
+      expect(setCookie).not.toMatch(/; Domain=/i);
+
+      const state = extractState(await response.text());
+      const accepted = await postOverHttps(state, cookieHeader(response));
+      expect(accepted.status).toBe(303);
+    });
+
+    it('does not accept the unprefixed cookie name', async () => {
+      const response = await GET(buildAuthorizeRequest(httpsHeaders));
+      const state = extractState(await response.text());
+      const unprefixed = cookieHeader(response).replace(/^__Host-/, '');
+
+      const rejected = await postOverHttps(state, unprefixed);
+      expect(rejected.status).toBe(400);
+      await expect(rejected.json()).resolves.toEqual({
+        error: 'invalid_request',
+        error_description: AUTH_RESTART_DESCRIPTION,
+      });
+    });
+  });
+
   it('cancels to the registered redirect with the original downstream state', async () => {
     const getResponse = await GET(
       buildAuthorizeRequest({}, 'read write', { state: 'orig-state' }),

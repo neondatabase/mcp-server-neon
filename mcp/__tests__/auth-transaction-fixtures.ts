@@ -69,7 +69,7 @@ export async function seedApprovedTransaction({
   return {
     id: created.transaction.id,
     browserSecret: created.browserSecret,
-    cookie: `${consentCookieName(created.transaction.id)}=${created.browserSecret}`,
+    cookie: `${consentCookieName(created.transaction.id, false)}=${created.browserSecret}`,
     approved,
   };
 }

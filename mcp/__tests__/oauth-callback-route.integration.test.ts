@@ -258,7 +258,7 @@ describe('/callback route integration', () => {
     const response = await GET(
       buildRequest(
         second.id,
-        `${consentCookieName(second.id)}=${first.browserSecret}`,
+        `${consentCookieName(second.id, false)}=${first.browserSecret}`,
       ),
     );
     expect(response.status).toBe(400);

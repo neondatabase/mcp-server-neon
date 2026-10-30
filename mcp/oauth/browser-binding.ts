@@ -20,8 +20,14 @@ export function hashBrowserSecret(secret: string): string {
   return crypto.createHash('sha256').update(secret).digest('hex');
 }
 
-export function consentCookieName(transactionId: string): string {
-  return `${COOKIE_PREFIX}${transactionId}`;
+// `__Host-` makes the browser refuse the cookie unless it is Secure, host-only
+// and Path=/, so a sibling subdomain cannot plant one. Browsers reject the
+// prefix on plain http, which local development uses.
+export function consentCookieName(
+  transactionId: string,
+  secure: boolean,
+): string {
+  return `${secure ? '__Host-' : ''}${COOKIE_PREFIX}${transactionId}`;
 }
 
 export function cookieSecureForRequest(request: {

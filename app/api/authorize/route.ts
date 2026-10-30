@@ -114,7 +114,9 @@ function browserSecretFromRequest(
   request: NextRequest,
   transactionId: string,
 ): string | undefined {
-  return request.cookies.get(consentCookieName(transactionId))?.value;
+  return request.cookies.get(
+    consentCookieName(transactionId, cookieSecureForRequest(request)),
+  )?.value;
 }
 
 function cancelRedirect(
@@ -138,7 +140,7 @@ function applyCookie(
   expiresAt: Date,
 ): NextResponse {
   response.cookies.set(
-    consentCookieName(transactionId),
+    consentCookieName(transactionId, cookieSecureForRequest(request)),
     browserSecret,
     consentCookieSetOptions(cookieSecureForRequest(request), expiresAt),
   );
@@ -151,7 +153,7 @@ function clearCookie(
   request: NextRequest,
 ): NextResponse {
   response.cookies.set(
-    consentCookieName(transactionId),
+    consentCookieName(transactionId, cookieSecureForRequest(request)),
     '',
     consentCookieClearOptions(cookieSecureForRequest(request)),
   );
