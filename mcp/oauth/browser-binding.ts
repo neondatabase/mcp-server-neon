@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 
 export const AUTH_TRANSACTION_TTL_MS = 30 * 60 * 1000;
 const AUTH_TRANSACTION_ID_PATTERN = /^[0-9a-f]{32}$/;
+const BROWSER_SECRET_PATTERN = /^[0-9a-f]{64}$/;
 const COOKIE_PREFIX = 'neon_mcp_at_';
 
 export function createAuthTransactionId(): string {
@@ -41,15 +42,25 @@ export function browserBindingKey(
   return hostPrefixed ? `__Host-:${secret}` : secret;
 }
 
+// Only a value createBrowserSecret could have produced is a secret; anything
+// else (such as `__Host-:<secret>` under the unprefixed name) would let a
+// planted cookie reproduce a prefixed binding.
+function isBrowserSecret(value: string | undefined): value is string {
+  return value !== undefined && BROWSER_SECRET_PATTERN.test(value);
+}
+
 export function browserBindingFromCookies(
   cookies: { get: (name: string) => { value: string } | undefined },
   transactionId: string,
 ): string | undefined {
   const prefixed = cookies.get(consentCookieName(transactionId, true))?.value;
-  if (prefixed) {
+  if (isBrowserSecret(prefixed)) {
     return browserBindingKey(prefixed, true);
   }
-  return cookies.get(consentCookieName(transactionId, false))?.value;
+  const unprefixed = cookies.get(
+    consentCookieName(transactionId, false),
+  )?.value;
+  return isBrowserSecret(unprefixed) ? unprefixed : undefined;
 }
 
 export function cookieSecureForRequest(request: {

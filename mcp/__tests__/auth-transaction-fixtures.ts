@@ -1,5 +1,5 @@
 import { authTransactions } from '../oauth/auth-transaction-store';
-import { consentCookieName } from '../oauth/browser-binding';
+import { browserBindingKey, consentCookieName } from '../oauth/browser-binding';
 import type { DownstreamAuthRequest } from '../oauth/downstream-auth-request';
 import { DEFAULT_GRANT, type GrantContext } from '../utils/grant-context';
 import type { ConsentCeiling } from '../oauth/consent-approval';
@@ -24,6 +24,7 @@ export async function seedPendingTransaction({
   defaultReadOnly = false,
   resourceGrant = DEFAULT_GRANT,
   resourceReadOnlyHard = false,
+  hostPrefixedCookie = false,
 }: {
   request?: DownstreamAuthRequest;
   mode?: ConsentMode;
@@ -31,6 +32,7 @@ export async function seedPendingTransaction({
   defaultReadOnly?: boolean;
   resourceGrant?: GrantContext;
   resourceReadOnlyHard?: boolean;
+  hostPrefixedCookie?: boolean;
 } = {}) {
   return authTransactions.createPending({
     request,
@@ -39,7 +41,7 @@ export async function seedPendingTransaction({
     defaultReadOnly,
     resourceGrant,
     resourceReadOnlyHard,
-    hostPrefixedCookie: false,
+    hostPrefixedCookie,
   });
 }
 
@@ -54,13 +56,15 @@ export async function seedApprovedTransaction({
   defaultReadOnly?: boolean;
   resourceGrant?: GrantContext;
   resourceReadOnlyHard?: boolean;
+  hostPrefixedCookie?: boolean;
   approvedGrant?: GrantContext;
   approvedScopes?: string[];
 } = {}) {
   const created = await seedPendingTransaction(pending);
+  const hostPrefixed = pending.hostPrefixedCookie ?? false;
   const approved = await authTransactions.approvePending({
     id: created.transaction.id,
-    browserSecret: created.browserSecret,
+    browserSecret: browserBindingKey(created.browserSecret, hostPrefixed),
     approvedGrant,
     approvedScopes,
   });
@@ -70,7 +74,7 @@ export async function seedApprovedTransaction({
   return {
     id: created.transaction.id,
     browserSecret: created.browserSecret,
-    cookie: `${consentCookieName(created.transaction.id, false)}=${created.browserSecret}`,
+    cookie: `${consentCookieName(created.transaction.id, hostPrefixed)}=${created.browserSecret}`,
     approved,
   };
 }

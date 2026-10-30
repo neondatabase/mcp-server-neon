@@ -756,6 +756,20 @@ describe('/api/authorize route integration', () => {
       );
     });
 
+    it('does not accept the prefixed binding planted as an unprefixed cookie value', async () => {
+      const response = await GET(buildAuthorizeRequest(httpsHeaders));
+      const state = extractState(await response.text());
+      const [name, secret] = cookieHeader(response).split('=');
+      const planted = `${name.replace(/^__Host-/, '')}=__Host-:${secret}`;
+
+      const rejected = await postOverHttps(state, planted);
+      expect(rejected.status).toBe(400);
+      await expect(rejected.json()).resolves.toEqual({
+        error: 'invalid_request',
+        error_description: AUTH_RESTART_DESCRIPTION,
+      });
+    });
+
     it('does not accept the unprefixed cookie name', async () => {
       const response = await GET(buildAuthorizeRequest(httpsHeaders));
       const state = extractState(await response.text());
