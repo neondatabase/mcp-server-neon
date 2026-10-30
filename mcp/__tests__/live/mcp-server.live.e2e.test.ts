@@ -15,6 +15,7 @@ import {
   INSPECT_QUERIES,
   type InspectCheck,
 } from '../../inspect/queries';
+import { LIVE_TEST_REGION } from './live-test-region';
 
 loadEnv({ path: '.env.test', quiet: true });
 
@@ -319,6 +320,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     async () => {
       const result = await callTool('create_project', {
         name: projectName,
+        region_id: LIVE_TEST_REGION,
       });
       const text = assertToolSucceeded('create_project', result);
       const created = z.object({ id: z.string() }).parse(JSON.parse(text));
@@ -327,6 +329,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       if (!neonClient) throw new Error('Neon SDK client is not initialized.');
       const response = await neonClient.getProject(projectId);
       expect(response.data.project.name).toBe(projectName);
+      expect(response.data.project.region_id).toBe(LIVE_TEST_REGION);
     },
     LIVE_TEST_TIMEOUT_MS,
   );
