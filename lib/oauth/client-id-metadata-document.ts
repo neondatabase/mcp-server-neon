@@ -11,7 +11,11 @@
  * Draft: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02
  */
 
-import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
+import {
+  lookup as dnsLookup,
+  promises as dnsPromises,
+  type LookupAddress,
+} from 'node:dns';
 import type { IncomingHttpHeaders } from 'node:http';
 import { request } from 'node:https';
 import { BlockList, isIP, type LookupFunction } from 'node:net';
@@ -44,7 +48,10 @@ export type FetchMetadataDocument = (
   url: URL,
 ) => Promise<MetadataDocumentResponse>;
 
-/** A fetch failure that retrying will not fix (blocked address, too large). */
+/**
+ * A fetch failure that retrying will not fix (blocked address, too large, a
+ * name that does not resolve, an invalid certificate).
+ */
 export class MetadataDocumentRefusedError extends Error {}
 
 /**
@@ -200,9 +207,73 @@ export const fetchOverHttps: FetchMetadataDocument = (url) =>
         });
       },
     );
-    req.on('error', reject);
+    req.on('error', (error) => {
+      classifyFetchError(error, host).then(reject, reject);
+    });
     req.end();
   });
+
+type HostResolver = {
+  resolve4: (hostname: string) => Promise<unknown>;
+  resolve6: (hostname: string) => Promise<unknown>;
+};
+
+const confirmingResolver = new dnsPromises.Resolver({
+  timeout: 2_000,
+  tries: 1,
+});
+
+function hasErrorCode(error: unknown, codes: Set<string>): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    typeof error.code === 'string' &&
+    codes.has(error.code)
+  );
+}
+
+const NO_ADDRESS_CODES = new Set(['ENOTFOUND', 'ENODATA']);
+
+/**
+ * getaddrinfo also reports ENOTFOUND for local failures such as file
+ * descriptor exhaustion, so a lookup failure only refuses the document when a
+ * separate DNS query (c-ares, not getaddrinfo) confirms the name has neither
+ * A nor AAAA records. Anything unconfirmed stays retryable.
+ */
+export async function classifyFetchError(
+  error: Error,
+  hostname: string,
+  resolver: HostResolver = confirmingResolver,
+): Promise<Error> {
+  if (hasErrorCode(error, CERTIFICATE_ERROR_CODES)) {
+    return new MetadataDocumentRefusedError(error.message);
+  }
+  if (!hasErrorCode(error, NO_ADDRESS_CODES)) return error;
+  const [v4, v6] = await Promise.allSettled([
+    resolver.resolve4(hostname),
+    resolver.resolve6(hostname),
+  ]);
+  const confirmed = [v4, v6].every(
+    (result) =>
+      result.status === 'rejected' &&
+      hasErrorCode(result.reason, NO_ADDRESS_CODES),
+  );
+  return confirmed ? new MetadataDocumentRefusedError(error.message) : error;
+}
+
+// A certificate that does not verify fails the same way on every retry: the
+// client_id host is misconfigured, not briefly down.
+const CERTIFICATE_ERROR_CODES = new Set([
+  'CERT_HAS_EXPIRED',
+  'CERT_NOT_YET_VALID',
+  'CERT_REVOKED',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_GET_ISSUER_CERT',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+]);
 
 function hasDotSegment(clientId: string): boolean {
   const path = /^https:\/\/[^/?#]*([^?#]*)/i.exec(clientId)?.[1] ?? '';

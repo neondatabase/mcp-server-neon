@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+A Client ID Metadata Document `client_id` whose host name does not resolve or whose TLS certificate does not verify is refused with `400 invalid_client` instead of `503 temporarily_unavailable`; timeouts and other connection failures still answer 503.
+
 OAuth authorization responses carry `iss` (RFC 9207) on every redirect back to the client: the code, an upstream error, and a cancelled consent. Authorization server metadata advertises `authorization_response_iss_parameter_supported: true`.
 
 OAuth clients can identify themselves with a Client ID Metadata Document: an `https://` URL as `client_id` that serves the client's metadata, used by Claude, ChatGPT, VS Code and others when a server advertises `client_id_metadata_document_supported: true`. No `/api/register` call is needed. A document that declares `token_endpoint_auth_method: private_key_jwt` (ChatGPT's does) authenticates at the token and revocation endpoints with a signed client assertion (RFC 7523) checked against its `jwks_uri`; the server now advertises `private_key_jwt`. Dynamic client registration and every registered client keep working. The token endpoint accepts the loopback `redirect_uri` an authorization code was issued for, so clients that register a portless loopback callback can exchange codes issued on a random port.

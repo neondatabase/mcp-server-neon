@@ -8,6 +8,7 @@ import {
   isClientIdMetadataUrl,
   MetadataDocumentRefusedError,
   readDocument,
+  classifyFetchError,
   type FetchMetadataDocument,
   type MetadataDocumentResponse,
 } from '../../lib/oauth/client-id-metadata-document';
@@ -282,6 +283,76 @@ describe('isBlockedAddress', () => {
 
   it.each(['93.184.215.14', '2606:4700::1111'])('allows %s', (address) => {
     expect(isBlockedAddress(address)).toBe(false);
+  });
+});
+
+describe('classifyFetchError', () => {
+  const withCode = (code: string) =>
+    Object.assign(new Error(`failed: ${code}`), { code });
+  const answers = (v4: unknown, v6: unknown) => ({
+    resolve4: async () => {
+      if (v4 instanceof Error) throw v4;
+      return v4;
+    },
+    resolve6: async () => {
+      if (v6 instanceof Error) throw v6;
+      return v6;
+    },
+  });
+  const nxdomain = answers(withCode('ENOTFOUND'), withCode('ENOTFOUND'));
+
+  it.each([
+    'CERT_HAS_EXPIRED',
+    'DEPTH_ZERO_SELF_SIGNED_CERT',
+    'SELF_SIGNED_CERT_IN_CHAIN',
+    'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+    'ERR_TLS_CERT_ALTNAME_INVALID',
+  ])('refuses a document whose certificate fails with %s', async (code) => {
+    await expect(
+      classifyFetchError(withCode(code), 'client.example', nxdomain),
+    ).resolves.toBeInstanceOf(MetadataDocumentRefusedError);
+  });
+
+  it.each([
+    ['no A or AAAA name', nxdomain],
+    ['no A or AAAA records', answers(withCode('ENODATA'), withCode('ENODATA'))],
+  ])('refuses a lookup failure when DNS confirms %s', async (_, resolver) => {
+    await expect(
+      classifyFetchError(withCode('ENOTFOUND'), 'client.invalid', resolver),
+    ).resolves.toBeInstanceOf(MetadataDocumentRefusedError);
+  });
+
+  it.each([
+    ['DNS returns an address', answers(['203.0.113.7'], withCode('ENODATA'))],
+    ['DNS times out', answers(withCode('ETIMEOUT'), withCode('ETIMEOUT'))],
+    [
+      'only one family is confirmed missing',
+      answers(withCode('ENOTFOUND'), withCode('ECONNREFUSED')),
+    ],
+  ])('keeps a lookup failure retryable when %s', async (_, resolver) => {
+    const error = withCode('ENOTFOUND');
+    await expect(
+      classifyFetchError(error, 'claude.ai', resolver),
+    ).resolves.toBe(error);
+  });
+
+  it.each(['EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'])(
+    'keeps %s retryable without a DNS query',
+    async (code) => {
+      const resolver = { resolve4: vi.fn(), resolve6: vi.fn() };
+      const error = withCode(code);
+      await expect(
+        classifyFetchError(error, 'client.example', resolver),
+      ).resolves.toBe(error);
+      expect(resolver.resolve4).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps an aborted fetch (the deadline) retryable', async () => {
+    const error = new DOMException('aborted', 'AbortError');
+    await expect(
+      classifyFetchError(error, 'client.example', nxdomain),
+    ).resolves.toBe(error);
   });
 });
 
