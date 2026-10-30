@@ -8,11 +8,11 @@ This server is one consumer of [`neondatabase/neon-pkgs`](https://github.com/neo
 
 Before changing behavior here, check whether it belongs upstream, where more consumers get it:
 
-| Change | Where |
-| --- | --- |
+| Change                                                                                                     | Where                       |
+| ---------------------------------------------------------------------------------------------------------- | --------------------------- |
 | How an API call behaves for every caller: error mapping and messages, retries, readiness waits, pagination | `@neon/sdk` ergonomic layer |
-| What an agent sees for a generated tool: name, description, argument schema, result shape | `@neon/tools` |
-| MCP transport, OAuth and consent, grants and tool filtering, hosting, analytics | this repository |
+| What an agent sees for a generated tool: name, description, argument schema, result shape                  | `@neon/tools`               |
+| MCP transport, OAuth and consent, grants and tool filtering, hosting, analytics                            | this repository             |
 
 Name the chosen layer and the reason in the PR. Keep a change here when it is specific to this server; don't add a shared abstraction for a consumer that doesn't exist yet.
 
