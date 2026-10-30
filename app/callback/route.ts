@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { SERVER_HOST } from '../../lib/config';
 import { model } from '../../mcp/oauth/model';
 import {
   isPgConnectFailure,
@@ -307,6 +308,7 @@ function buildClientErrorRedirect(
   if (requestParams.state) {
     url.searchParams.set('state', requestParams.state);
   }
+  url.searchParams.set('iss', SERVER_HOST);
   return url;
 }
 
@@ -669,6 +671,7 @@ export async function GET(request: NextRequest) {
     if (requestParams.state) {
       redirectUrl.searchParams.set('state', requestParams.state);
     }
+    redirectUrl.searchParams.set('iss', SERVER_HOST);
 
     emitAuthCallbackSlo('success', sloStartMs, { clientId });
     return clearTransactionCookie(

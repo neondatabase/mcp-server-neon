@@ -26,6 +26,7 @@ export async function GET() {
     registration_endpoint_auth_methods_supported: SUPPORTED_AUTH_METHODS,
     revocation_endpoint_auth_methods_supported: SUPPORTED_AUTH_METHODS,
     code_challenge_methods_supported: SUPPORTED_CODE_CHALLENGE_METHODS,
+    authorization_response_iss_parameter_supported: true,
     scopes_supported: SUPPORTED_SCOPES,
     'x-neon-scope-categories': SCOPE_CATEGORIES,
   });

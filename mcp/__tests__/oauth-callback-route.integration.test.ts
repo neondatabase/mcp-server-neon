@@ -10,6 +10,7 @@ import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
 import { AUTH_RESTART_DESCRIPTION } from '../oauth/consent-html-headers';
 import { createAuthTransactionStore } from '../oauth/auth-transaction-store';
 import { consentCookieName } from '../oauth/browser-binding';
+import { SERVER_HOST } from '../../lib/config';
 
 vi.mock('../oauth/model', () => ({
   model: {
@@ -109,6 +110,13 @@ describe('/callback route integration', () => {
     const response = await GET(buildRequest(seeded.id, seeded.cookie));
 
     expect(response.status).toBe(307);
+    const location = new URL(response.headers.get('location')!);
+    expect(location.origin + location.pathname).toBe(
+      'http://127.0.0.1:55667/callback',
+    );
+    expect(location.searchParams.get('code')).toBeTruthy();
+    expect(location.searchParams.get('state')).toBe('client-state');
+    expect(location.searchParams.get('iss')).toBe(SERVER_HOST);
     expect(exchangeCode).toHaveBeenCalledWith(expect.any(URL), seeded.id);
     expect(model.saveAuthorizationCode).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -264,6 +272,7 @@ describe('/callback route integration', () => {
     expect(url.origin + url.pathname).toBe('http://127.0.0.1:55667/callback');
     expect(url.searchParams.get('error')).toBe('error');
     expect(url.searchParams.get('state')).toBe('client-state');
+    expect(url.searchParams.get('iss')).toBe(SERVER_HOST);
     expect(exchangeCode).not.toHaveBeenCalled();
   });
 

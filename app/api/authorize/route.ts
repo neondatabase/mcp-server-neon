@@ -126,6 +126,7 @@ function cancelRedirect(
   if (downstreamState) {
     url.searchParams.set('state', downstreamState);
   }
+  url.searchParams.set('iss', SERVER_HOST);
   return NextResponse.redirect(url, 303);
 }
 

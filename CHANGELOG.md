@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+OAuth authorization responses carry `iss` (RFC 9207) on every redirect back to the client: the code, an upstream error, and a cancelled consent. Authorization server metadata advertises `authorization_response_iss_parameter_supported: true`.
+
 `add_auth_oauth_provider` and `update_auth_oauth_provider` accept the `apple` provider with `apple_team_id` and `apple_key_id`; `delete_auth_oauth_provider` accepts `apple` too. Requires `@neon/tools` 2.5.1.
 
 The `list_auth_oauth_providers`, `add_auth_oauth_provider`, `update_auth_oauth_provider` and `delete_auth_oauth_provider` descriptions name Apple among the social login providers and say that Microsoft and Apple have no shared app, so they need your own credentials. The `add_auth_oauth_provider` description lists the Apple fields (`client_id` as the Services ID, `client_secret` as the `.p8` key, `apple_team_id`, `apple_key_id`), and `update_auth_oauth_provider` says a new Apple `client_secret` must be sent with its `apple_key_id`. `get_neon_auth_config` shows `microsoft_tenant_id`, `apple_team_id` and `apple_key_id` on each OAuth provider that has them; `client_secret` stays redacted.
