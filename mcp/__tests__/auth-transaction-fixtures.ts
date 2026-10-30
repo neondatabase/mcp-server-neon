@@ -39,6 +39,7 @@ export async function seedPendingTransaction({
     defaultReadOnly,
     resourceGrant,
     resourceReadOnlyHard,
+    hostPrefixedCookie: false,
   });
 }
 

@@ -149,6 +149,22 @@ describe('/callback route integration', () => {
     expect(exchangeCode).toHaveBeenCalledTimes(1);
   });
 
+  it('completes a transaction approved before the cookie prefix over HTTPS with its unprefixed cookie', async () => {
+    const seeded = await seedApprovedTransaction();
+    const response = await GET(
+      new NextRequest(
+        `http://localhost/callback?code=upstream-code&state=${seeded.id}`,
+        {
+          method: 'GET',
+          headers: { cookie: seeded.cookie, 'x-forwarded-proto': 'https' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(model.saveAuthorizationCode).toHaveBeenCalledOnce();
+  });
+
   it('carries a pinned roleName from the approved transaction onto the authorization code', async () => {
     const seeded = await seedApprovedTransaction({
       request: {

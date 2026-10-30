@@ -8,6 +8,8 @@ import { authTransactions } from '../oauth/auth-transaction-store';
 import { AUTH_RESTART_DESCRIPTION } from '../oauth/consent-html-headers';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
 import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
+import { seedPendingTransaction } from './auth-transaction-fixtures';
+import { consentCookieName } from '../oauth/browser-binding';
 import { neon } from '@neondatabase/serverless';
 
 vi.mock('../oauth/model', () => ({
@@ -729,6 +731,29 @@ describe('/api/authorize route integration', () => {
       const state = extractState(await response.text());
       const accepted = await postOverHttps(state, cookieHeader(response));
       expect(accepted.status).toBe(303);
+    });
+
+    it('completes a consent created before the prefix with its unprefixed cookie', async () => {
+      const legacy = await seedPendingTransaction();
+      const response = await postOverHttps(
+        legacy.transaction.id,
+        `${consentCookieName(legacy.transaction.id, false)}=${legacy.browserSecret}`,
+      );
+      expect(response.status).toBe(303);
+      expect(
+        new URL(response.headers.get('location') ?? '').searchParams.get(
+          'error',
+        ),
+      ).toBe('access_denied');
+      const cleared = response.headers
+        .getSetCookie()
+        .map((c) => c.split('=')[0]);
+      expect(cleared).toEqual(
+        expect.arrayContaining([
+          consentCookieName(legacy.transaction.id, true),
+          consentCookieName(legacy.transaction.id, false),
+        ]),
+      );
     });
 
     it('does not accept the unprefixed cookie name', async () => {

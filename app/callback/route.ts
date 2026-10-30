@@ -15,6 +15,7 @@ import { logger } from '../../mcp/utils/logger';
 import type { AuthorizationCode } from 'oauth2-server';
 import { authTransactions } from '../../mcp/oauth/auth-transaction-store';
 import {
+  browserBindingFromCookies,
   consentCookieClearOptions,
   consentCookieName,
   cookieSecureForRequest,
@@ -316,9 +317,7 @@ function browserSecretFromRequest(
   request: NextRequest,
   transactionId: string,
 ): string | undefined {
-  return request.cookies.get(
-    consentCookieName(transactionId, cookieSecureForRequest(request)),
-  )?.value;
+  return browserBindingFromCookies(request.cookies, transactionId);
 }
 
 function clearTransactionCookie(
@@ -326,11 +325,14 @@ function clearTransactionCookie(
   transactionId: string,
   request: NextRequest,
 ): NextResponse {
-  response.cookies.set(
-    consentCookieName(transactionId, cookieSecureForRequest(request)),
-    '',
-    consentCookieClearOptions(cookieSecureForRequest(request)),
-  );
+  const secure = cookieSecureForRequest(request);
+  for (const hostPrefixed of secure ? [true, false] : [false]) {
+    response.cookies.set(
+      consentCookieName(transactionId, hostPrefixed),
+      '',
+      consentCookieClearOptions(secure),
+    );
+  }
   return response;
 }
 

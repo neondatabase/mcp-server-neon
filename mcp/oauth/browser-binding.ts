@@ -30,6 +30,28 @@ export function consentCookieName(
   return `${secure ? '__Host-' : ''}${COOKIE_PREFIX}${transactionId}`;
 }
 
+// The stored hash covers the cookie name, so a secret replayed under the
+// unprefixed name cannot authenticate a transaction created with __Host-.
+// Transactions created before the prefix existed hashed the bare secret and
+// still complete with their unprefixed cookie until they expire.
+export function browserBindingKey(
+  secret: string,
+  hostPrefixed: boolean,
+): string {
+  return hostPrefixed ? `__Host-:${secret}` : secret;
+}
+
+export function browserBindingFromCookies(
+  cookies: { get: (name: string) => { value: string } | undefined },
+  transactionId: string,
+): string | undefined {
+  const prefixed = cookies.get(consentCookieName(transactionId, true))?.value;
+  if (prefixed) {
+    return browserBindingKey(prefixed, true);
+  }
+  return cookies.get(consentCookieName(transactionId, false))?.value;
+}
+
 export function cookieSecureForRequest(request: {
   nextUrl: { protocol: string };
   headers: { get: (name: string) => string | null };
