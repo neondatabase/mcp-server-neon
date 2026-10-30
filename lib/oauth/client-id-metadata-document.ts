@@ -12,8 +12,10 @@
  */
 
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
+import type { IncomingHttpHeaders } from 'node:http';
 import { request } from 'node:https';
 import { BlockList, isIP, type LookupFunction } from 'node:net';
+import type { Readable } from 'node:stream';
 import type { Client } from 'oauth2-server';
 import { normalizeRedirectUris } from './redirect-uri';
 import { logger } from '../../mcp/utils/logger';
@@ -128,6 +130,50 @@ const publicOnlyLookup: LookupFunction = (hostname, options, callback) => {
   );
 };
 
+type DocumentStream = Readable & {
+  statusCode?: number;
+  headers: IncomingHttpHeaders;
+};
+
+/**
+ * Only a 200 body is read, so an error page larger than the cap still
+ * reports its status (a 503 stays retryable instead of reading as refused).
+ */
+export function readDocument(
+  res: DocumentStream,
+): Promise<MetadataDocumentResponse> {
+  const head = {
+    status: res.statusCode ?? 0,
+    contentType: res.headers['content-type'],
+    cacheControl: res.headers['cache-control'],
+  };
+  if (head.status !== 200) {
+    res.destroy();
+    return Promise.resolve({ ...head, body: '' });
+  }
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    res.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_DOCUMENT_BYTES) {
+        res.destroy();
+        reject(
+          new MetadataDocumentRefusedError(
+            `document exceeds ${MAX_DOCUMENT_BYTES} bytes`,
+          ),
+        );
+        return;
+      }
+      chunks.push(chunk);
+    });
+    res.on('end', () =>
+      resolve({ ...head, body: Buffer.concat(chunks).toString('utf8') }),
+    );
+    res.on('error', reject);
+  });
+}
+
 /** Never follows redirects: `https.request` does not. */
 export const fetchOverHttps: FetchMetadataDocument = (url) =>
   new Promise((resolve, reject) => {
@@ -148,29 +194,10 @@ export const fetchOverHttps: FetchMetadataDocument = (url) =>
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       },
       (res) => {
-        const chunks: Buffer[] = [];
-        let size = 0;
-        res.on('data', (chunk: Buffer) => {
-          size += chunk.length;
-          if (size > MAX_DOCUMENT_BYTES) {
-            req.destroy(
-              new MetadataDocumentRefusedError(
-                `document exceeds ${MAX_DOCUMENT_BYTES} bytes`,
-              ),
-            );
-            return;
-          }
-          chunks.push(chunk);
+        readDocument(res).then(resolve, (error: unknown) => {
+          req.destroy();
+          reject(error);
         });
-        res.on('end', () =>
-          resolve({
-            status: res.statusCode ?? 0,
-            contentType: res.headers['content-type'],
-            cacheControl: res.headers['cache-control'],
-            body: Buffer.concat(chunks).toString('utf8'),
-          }),
-        );
-        res.on('error', reject);
       },
     );
     req.on('error', reject);

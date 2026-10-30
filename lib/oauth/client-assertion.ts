@@ -34,6 +34,7 @@ export const CLIENT_ASSERTION_SIGNING_ALGORITHMS = [
 ];
 
 const CLOCK_TOLERANCE_S = 30;
+const MAX_CACHE_ENTRIES = 1_000;
 const MAX_LIFETIME_S = 5 * 60;
 
 /** The `iss` of an unverified assertion, for requests that omit client_id. */
@@ -101,7 +102,14 @@ export function createClientAssertionVerifier(
     if (!isJwks(jwks)) return undefined;
 
     const ttl = cacheTtlMs(res.cacheControl);
-    if (ttl > 0) cache.set(jwksUri, { jwks, until: now() + ttl });
+    if (ttl > 0) {
+      cache.delete(jwksUri);
+      const oldest = cache.keys().next();
+      if (cache.size >= MAX_CACHE_ENTRIES && !oldest.done) {
+        cache.delete(oldest.value);
+      }
+      cache.set(jwksUri, { jwks, until: now() + ttl });
+    }
     return jwks;
   };
 

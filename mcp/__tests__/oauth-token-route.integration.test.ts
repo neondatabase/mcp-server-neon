@@ -265,14 +265,32 @@ describe('/api/token route integration', () => {
         .setAudience(`${SERVER_HOST}/api/token`)
         .setExpirationTime('1m')
         .sign(privateKey);
+      vi.mocked(model.getClient).mockResolvedValue(client as never);
+      vi.mocked(model.getAuthorizationCode).mockResolvedValue(
+        undefined as never,
+      );
 
-      const response = await refresh({
-        client_assertion_type: CLIENT_ASSERTION_TYPE,
-        client_assertion: assertion,
-      });
-      expect(model.getRefreshToken).toHaveBeenCalled();
-      await expect(response.json()).resolves.not.toMatchObject({
-        error: 'invalid_client',
+      const response = await POST(
+        new NextRequest('http://localhost/api/token', {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'authorization_code',
+            client_id: client.id,
+            code: 'code-123',
+            client_assertion_type: CLIENT_ASSERTION_TYPE,
+            client_assertion: assertion,
+          }).toString(),
+        }),
+      );
+
+      // Authenticated, so the request reaches the code lookup; the code is
+      // unknown to this test's store.
+      expect(model.getAuthorizationCode).toHaveBeenCalledWith('code-123');
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: 'invalid_grant',
+        error_description: 'Invalid authorization code',
       });
     });
   });

@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import {
   ClientMetadataUnavailableError,
@@ -6,6 +7,7 @@ import {
   isBlockedAddress,
   isClientIdMetadataUrl,
   MetadataDocumentRefusedError,
+  readDocument,
   type FetchMetadataDocument,
   type MetadataDocumentResponse,
 } from '../../lib/oauth/client-id-metadata-document';
@@ -280,6 +282,34 @@ describe('isBlockedAddress', () => {
 
   it.each(['93.184.215.14', '2606:4700::1111'])('allows %s', (address) => {
     expect(isBlockedAddress(address)).toBe(false);
+  });
+});
+
+describe('readDocument', () => {
+  const stream = (status: number, bytes: number) =>
+    Object.assign(Readable.from([Buffer.alloc(bytes, 'a')]), {
+      statusCode: status,
+      headers: { 'content-type': 'text/html' },
+    });
+
+  it('reports the status of an error page larger than the cap without reading it', async () => {
+    await expect(readDocument(stream(503, 6 * 1024))).resolves.toEqual({
+      status: 503,
+      contentType: 'text/html',
+      cacheControl: undefined,
+      body: '',
+    });
+  });
+
+  it('refuses a 200 body larger than the cap', async () => {
+    await expect(readDocument(stream(200, 6 * 1024))).rejects.toBeInstanceOf(
+      MetadataDocumentRefusedError,
+    );
+  });
+
+  it('reads a 200 body within the cap', async () => {
+    const res = await readDocument(stream(200, 100));
+    expect(res.body).toHaveLength(100);
   });
 });
 
