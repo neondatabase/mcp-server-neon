@@ -70,6 +70,20 @@ describe('/api/register route integration', () => {
     );
   });
 
+  it('generates the client_id, so a registration cannot claim a metadata document URL', async () => {
+    const claimed = 'https://claude.ai/oauth/mcp-oauth-client-metadata';
+    const response = await POST(
+      buildRequest({ ...VALID_PAYLOAD, id: claimed, client_id: claimed }),
+    );
+    const body = (await response.json()) as { client_id: string };
+
+    expect(response.status).toBe(200);
+    expect(body.client_id).not.toMatch(/^https:\/\//);
+    expect(vi.mocked(model.saveClient)).toHaveBeenCalledWith(
+      expect.objectContaining({ id: body.client_id }),
+    );
+  });
+
   it('returns 400 when client_name is missing', async () => {
     const { client_name, ...payloadWithoutClientName } = VALID_PAYLOAD;
     void client_name;

@@ -171,6 +171,7 @@ infrastructure.
 4. **OAuth System (`lib/oauth/` and `mcp/oauth/`)**
    - OAuth 2.0 server implementation for remote MCP authentication
    - Integrates with Neon's OAuth provider (UPSTREAM_OAUTH_HOST)
+   - Two client registration paths: Dynamic Client Registration (`/api/register`, client stored in KV) and Client ID Metadata Documents (an `https://` `client_id` resolved per request by `lib/oauth/client-id-metadata-document.ts`, nothing stored). `model.getClient` routes by the `https://` prefix; registered client IDs are generated server-side and never start with it.
    - Token persistence using Keyv with Postgres backend
    - Cookie-based client approval tracking
 

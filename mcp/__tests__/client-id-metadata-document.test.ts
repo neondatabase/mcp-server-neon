@@ -219,6 +219,15 @@ describe('isBlockedAddress', () => {
     'fd00::1',
     'fe80::1',
     '::ffff:127.0.0.1',
+    '192.0.2.1',
+    '198.51.100.1',
+    '203.0.113.1',
+    '2001:db8::1',
+    // 6to4 address embedding 10.0.0.1
+    '2002:a00:1::1',
+    // Teredo
+    '2001:0:4136:e378::1',
+    '100::1',
   ])('blocks %s', (address) => {
     expect(isBlockedAddress(address)).toBe(true);
   });

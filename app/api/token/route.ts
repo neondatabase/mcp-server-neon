@@ -707,7 +707,13 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         );
       }
-      if (redirectUri && !client.redirect_uris.includes(redirectUri)) {
+      // A loopback redirect authorizes on any port (RFC 8252), so the
+      // URI bound to the code can differ from every registered string.
+      if (
+        redirectUri &&
+        redirectUri !== authorizationCode.redirectUri &&
+        !client.redirect_uris.includes(redirectUri)
+      ) {
         logger.warn('Invalid redirect_uri', { provided: redirectUri });
         return NextResponse.json(
           {

@@ -8,12 +8,12 @@
  * stored.
  *
  * Spec: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents
- * Draft: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00
+ * Draft: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02
  */
 
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import { request } from 'node:https';
-import { BlockList, isIP } from 'node:net';
+import { BlockList, isIP, type LookupFunction } from 'node:net';
 import type { Client } from 'oauth2-server';
 import { normalizeRedirectUris } from './redirect-uri';
 import { logger } from '../../mcp/utils/logger';
@@ -71,8 +71,11 @@ for (const [address, prefix] of [
   ['169.254.0.0', 16],
   ['172.16.0.0', 12],
   ['192.0.0.0', 24],
+  ['192.0.2.0', 24],
   ['192.168.0.0', 16],
   ['198.18.0.0', 15],
+  ['198.51.100.0', 24],
+  ['203.0.113.0', 24],
   ['224.0.0.0', 4],
   ['240.0.0.0', 4],
 ] as const) {
@@ -82,6 +85,13 @@ for (const [address, prefix] of [
   ['::', 128],
   ['::1', 128],
   ['64:ff9b::', 96],
+  ['100::', 64],
+  // IETF protocol assignments, including Teredo (2001::/32), which tunnels
+  // to an arbitrary IPv4 address.
+  ['2001::', 23],
+  ['2001:db8::', 32],
+  // 6to4 embeds an IPv4 address, including private ones.
+  ['2002::', 16],
   ['fc00::', 7],
   ['fe80::', 10],
   ['ff00::', 8],
@@ -98,29 +108,25 @@ export function isBlockedAddress(address: string): boolean {
 // Checked inside the connection's own lookup rather than before the request,
 // so a hostname cannot resolve to a public address for the check and to a
 // private one for the connection (DNS rebinding).
-const publicOnlyLookup = ((
-  hostname: string,
-  options: { all?: boolean },
-  callback: (
-    err: Error | null,
-    address: string | LookupAddress[],
-    family?: number,
-  ) => void,
-) => {
-  dnsLookup(hostname, { ...options, all: true }, (err, addresses) => {
-    if (err) return callback(err, []);
-    if (addresses.some((a) => isBlockedAddress(a.address))) {
-      return callback(
-        new MetadataDocumentRefusedError(
-          `${hostname} resolves to a non-public address`,
-        ),
-        [],
-      );
-    }
-    if (options.all) return callback(null, addresses);
-    callback(null, addresses[0].address, addresses[0].family);
-  });
-}) as unknown as typeof dnsLookup;
+const publicOnlyLookup: LookupFunction = (hostname, options, callback) => {
+  dnsLookup(
+    hostname,
+    { ...options, all: true },
+    (err, addresses: LookupAddress[]) => {
+      if (err) return callback(err, []);
+      if (addresses.some((a) => isBlockedAddress(a.address))) {
+        return callback(
+          new MetadataDocumentRefusedError(
+            `${hostname} resolves to a non-public address`,
+          ),
+          [],
+        );
+      }
+      if (options.all) return callback(null, addresses);
+      callback(null, addresses[0].address, addresses[0].family);
+    },
+  );
+};
 
 /** Never follows redirects: `https.request` does not. */
 export const fetchOverHttps: FetchMetadataDocument = (url) =>
@@ -137,7 +143,9 @@ export const fetchOverHttps: FetchMetadataDocument = (url) =>
         method: 'GET',
         headers: { accept: 'application/json' },
         lookup: publicOnlyLookup,
-        timeout: FETCH_TIMEOUT_MS,
+        // A deadline over DNS, connect, and the whole body; a socket
+        // inactivity timeout would let a host trickle bytes indefinitely.
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       },
       (res) => {
         const chunks: Buffer[] = [];
@@ -165,7 +173,6 @@ export const fetchOverHttps: FetchMetadataDocument = (url) =>
         res.on('error', reject);
       },
     );
-    req.on('timeout', () => req.destroy(new Error('timed out')));
     req.on('error', reject);
     req.end();
   });
@@ -218,11 +225,14 @@ function hasDangerousRedirectUri(redirectUris: string[]): boolean {
   });
 }
 
-function checkDocument(url: URL, doc: unknown, now: number): Client | string {
-  if (typeof doc !== 'object' || doc === null || Array.isArray(doc)) {
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function checkDocument(url: URL, d: unknown, now: number): Client | string {
+  if (!isJsonObject(d)) {
     return 'document is not a JSON object';
   }
-  const d = doc as Record<string, unknown>;
 
   if (d.client_id !== url.href) {
     return 'document client_id does not match its URL';
@@ -339,8 +349,9 @@ export function createClientMetadataResolver(
 
     const ttl = cacheTtlMs(res.cacheControl);
     if (ttl > 0) {
-      if (cache.size >= MAX_CACHE_ENTRIES) {
-        cache.delete(cache.keys().next().value as string);
+      const oldest = cache.keys().next();
+      if (cache.size >= MAX_CACHE_ENTRIES && !oldest.done) {
+        cache.delete(oldest.value);
       }
       cache.set(clientId, { client, until: now() + ttl });
     }
