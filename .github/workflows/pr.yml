@@ -97,7 +97,7 @@ jobs:
   # means an upstream job failed, so anything other than success fails the gate.
   lint-and-build:
     name: lint-and-build
-    if: always()
+    if: ${{ !cancelled() }}
     needs: [lint-build, test, e2e-web]
     permissions:
       contents: read
