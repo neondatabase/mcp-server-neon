@@ -5,6 +5,7 @@ import {
   COLLAPSE_ABOVE,
   renderConsentHtml,
   visibleToolCount,
+  type ConsentClientIdentity,
 } from '../oauth/consent-dialog';
 
 describe('buildConsentView', () => {
@@ -98,32 +99,20 @@ describe('renderConsentHtml', () => {
     redirect_uris: ['http://127.0.0.1:1/callback'],
   };
 
-  it('collapses exact client URLs behind a host summary', () => {
-    const html = renderConsentHtml({
-      client: {
-        client_name: 'Cursor',
-        client_uri: 'https://cursor.com/oauth',
-        redirect_uris: ['http://127.0.0.1:1/callback'],
-      },
-      state: 'abc',
-      mode: 'confirmation',
-      writeChecked: false,
-      showWriteControl: false,
-      grant: DEFAULT_GRANT,
-    });
-
-    expect(html).toContain(
-      '<summary><span class="app-details-title">App details</span><span class="client-summary">cursor.com → 127.0.0.1:1</span></summary>',
-    );
-    expect(html).toContain('<details class="client-verify">');
-    expect(html).not.toContain('<details class="client-verify" open>');
-    expect(html).toContain('https://cursor.com/oauth');
-    expect(html).toContain('http://127.0.0.1:1/callback');
-    expect(html).not.toContain('class="client-name"');
-  });
-
-  it('summarizes multiple redirect URIs without dropping their exact values', () => {
-    const html = renderConsentHtml({
+  const renderFor = ({
+    identity = { kind: 'registered' },
+    redirectUri = 'https://cursor.com/oauth/callback',
+    clientOverrides = {},
+  }: {
+    identity?: ConsentClientIdentity;
+    redirectUri?: string;
+    clientOverrides?: Partial<{
+      client_name: string;
+      client_uri: string;
+      redirect_uris: string[];
+    }>;
+  } = {}) =>
+    renderConsentHtml({
       client: {
         client_name: 'Cursor',
         client_uri: 'https://cursor.com',
@@ -131,7 +120,10 @@ describe('renderConsentHtml', () => {
           'http://127.0.0.1:1/callback',
           'https://cursor.com/oauth/callback',
         ],
+        ...clientOverrides,
       },
+      identity,
+      redirectUri,
       state: 'abc',
       mode: 'confirmation',
       writeChecked: false,
@@ -139,62 +131,113 @@ describe('renderConsentHtml', () => {
       grant: DEFAULT_GRANT,
     });
 
+  it("summarizes this request's redirect host and keeps every registered URL behind App details", () => {
+    const html = renderFor();
+
     expect(html).toContain(
-      '<summary><span class="app-details-title">App details</span><span class="client-summary">cursor.com → 127.0.0.1:1, cursor.com</span></summary>',
+      '<summary><span class="app-details-title">App details</span><span class="client-summary">Returns to cursor.com</span></summary>',
     );
+    expect(html).toContain('<details class="client-verify">');
+    expect(html).not.toContain('<details class="client-verify" open>');
+    expect(html).toContain('https://cursor.com');
     expect(html).toContain('http://127.0.0.1:1/callback');
     expect(html).toContain('https://cursor.com/oauth/callback');
+    expect(html).not.toContain('<span class="client-local-note">');
+  });
+
+  it.each([
+    'http://127.0.0.1:54321/callback',
+    'http://localhost:54321/callback',
+    'http://[::1]:54321/callback',
+  ])(
+    'notes that a loopback redirect %s returns to an app on this computer',
+    (redirectUri) => {
+      const html = renderFor({ redirectUri });
+
+      expect(html).toMatch(
+        /<span class="client-summary">Returns to an app on this computer \([^)]+:54321\)<\/span>/,
+      );
+      expect(html).toContain(
+        '<span class="client-local-note">Continue only if you started this sign-in from an app on this computer.</span>',
+      );
+    },
+  );
+
+  it('shows the host that published a metadata document without claiming the app is verified', () => {
+    const html = renderFor({
+      identity: { kind: 'metadata-document', host: 'claude.ai' },
+      redirectUri: 'https://claude.ai/api/mcp/auth_callback',
+      clientOverrides: {
+        client_name: 'Claude',
+        client_uri: 'https://claude.ai',
+        redirect_uris: ['https://claude.ai/api/mcp/auth_callback'],
+      },
+    });
+
+    expect(html).toContain('Connect Claude to Neon');
+    expect(html).toContain(
+      '<p class="client-identity">App identity published at <strong>claude.ai</strong></p>',
+    );
+    expect(html).not.toContain('Unverified app');
+  });
+
+  it('labels a registered client unverified, whatever name it registered', () => {
+    const html = renderFor({
+      redirectUri: 'https://attacker.example/cb',
+      clientOverrides: {
+        client_name: 'Claude',
+        client_uri: 'https://claude.ai',
+        redirect_uris: ['https://attacker.example/cb'],
+      },
+    });
+
+    expect(html).toContain('Connect Claude to Neon');
+    expect(html).toContain(
+      '<p class="client-identity"><strong>Unverified app.</strong> Its name was provided by the app and not checked by Neon.</p>',
+    );
+    expect(html).toContain('Returns to attacker.example');
+  });
+
+  it('escapes the metadata document host', () => {
+    const html = renderFor({
+      identity: { kind: 'metadata-document', host: '<b>x</b>' },
+    });
+
+    expect(html).not.toContain('<b>x</b>');
+    expect(html).toContain('&lt;b&gt;x&lt;/b&gt;');
   });
 
   it('shows non-web client URIs as text instead of links', () => {
-    const html = renderConsentHtml({
-      client: {
-        client_name: 'Cursor',
+    const html = renderFor({
+      redirectUri: 'cursor://oauth/callback',
+      clientOverrides: {
         client_uri: 'javascript:alert(1)',
         redirect_uris: ['cursor://oauth/callback'],
       },
-      state: 'abc',
-      mode: 'confirmation',
-      writeChecked: false,
-      showWriteControl: false,
-      grant: DEFAULT_GRANT,
     });
 
     expect(html).toContain('javascript:alert(1)');
     expect(html).not.toContain('href="javascript:alert(1)"');
   });
 
-  it('uses the redirect host when the client has no website', () => {
-    const html = renderConsentHtml({
-      client,
-      state: 'abc',
-      mode: 'confirmation',
-      writeChecked: false,
-      showWriteControl: false,
-      grant: DEFAULT_GRANT,
+  it('shows a custom-scheme redirect in full, not just its host', () => {
+    const html = renderFor({
+      redirectUri: 'cursor://anysphere.cursor-mcp/oauth/callback',
+      clientOverrides: {
+        redirect_uris: ['cursor://anysphere.cursor-mcp/oauth/callback'],
+      },
     });
 
     expect(html).toContain(
-      '<summary><span class="app-details-title">App details</span><span class="client-summary">Redirects to 127.0.0.1:1</span></summary>',
+      '<span class="client-summary">Returns to cursor://anysphere.cursor-mcp/oauth/callback</span>',
     );
-  });
-
-  it('omits client details when no URLs are registered', () => {
-    const html = renderConsentHtml({
-      client: { client_name: 'Cursor' },
-      state: 'abc',
-      mode: 'confirmation',
-      writeChecked: false,
-      showWriteControl: false,
-      grant: DEFAULT_GRANT,
-    });
-
-    expect(html).not.toContain('class="client-verify"');
   });
 
   it('escapes a project id that looks like HTML', () => {
     const html = renderConsentHtml({
       client,
+      identity: { kind: 'registered' },
+      redirectUri: 'http://127.0.0.1:1/callback',
       state: 'abc',
       mode: 'confirmation',
       writeChecked: false,
@@ -213,6 +256,8 @@ describe('renderConsentHtml', () => {
     const render = (roleName?: string) =>
       renderConsentHtml({
         client,
+        identity: { kind: 'registered' },
+        redirectUri: 'http://127.0.0.1:1/callback',
         state: 'abc',
         mode: 'confirmation',
         writeChecked: true,
@@ -237,6 +282,8 @@ describe('renderConsentHtml', () => {
   it('renders confirmation without editors, including for a writable URL', () => {
     const html = renderConsentHtml({
       client,
+      identity: { kind: 'registered' },
+      redirectUri: 'http://127.0.0.1:1/callback',
       state: 'abc',
       mode: 'confirmation',
       writeChecked: true,
@@ -266,6 +313,8 @@ describe('renderConsentHtml', () => {
   it('renders editable project, category, and write controls', () => {
     const html = renderConsentHtml({
       client,
+      identity: { kind: 'registered' },
+      redirectUri: 'http://127.0.0.1:1/callback',
       state: 'abc',
       mode: 'editable',
       writeChecked: true,
@@ -318,6 +367,8 @@ describe('renderConsentHtml', () => {
   it('disables the project ID field when All projects is selected', () => {
     const html = renderConsentHtml({
       client,
+      identity: { kind: 'registered' },
+      redirectUri: 'http://127.0.0.1:1/callback',
       state: 'abc',
       mode: 'editable',
       writeChecked: true,
@@ -334,6 +385,8 @@ describe('renderConsentHtml', () => {
   it('enables the project ID field for One project', () => {
     const html = renderConsentHtml({
       client,
+      identity: { kind: 'registered' },
+      redirectUri: 'http://127.0.0.1:1/callback',
       state: 'abc',
       mode: 'editable',
       writeChecked: true,
@@ -357,6 +410,8 @@ describe('renderConsentHtml', () => {
   it('omits Read and write when the OAuth ceiling is read-only', () => {
     const html = renderConsentHtml({
       client,
+      identity: { kind: 'registered' },
+      redirectUri: 'http://127.0.0.1:1/callback',
       state: 'abc',
       mode: 'editable',
       writeChecked: false,
@@ -372,6 +427,8 @@ describe('renderConsentHtml', () => {
   it('shows a project ID field error', () => {
     const html = renderConsentHtml({
       client,
+      identity: { kind: 'registered' },
+      redirectUri: 'http://127.0.0.1:1/callback',
       state: 'abc',
       mode: 'editable',
       writeChecked: false,
@@ -403,6 +460,8 @@ describe('renderConsentHtml', () => {
   it('renders an empty optional Postgres role field on editable consent', () => {
     const html = renderConsentHtml({
       client,
+      identity: { kind: 'registered' },
+      redirectUri: 'http://127.0.0.1:1/callback',
       state: 'abc',
       mode: 'editable',
       writeChecked: false,
@@ -424,6 +483,8 @@ describe('renderConsentHtml', () => {
   it('omits the Postgres role field on a confirmation', () => {
     const html = renderConsentHtml({
       client,
+      identity: { kind: 'registered' },
+      redirectUri: 'http://127.0.0.1:1/callback',
       state: 'abc',
       mode: 'confirmation',
       writeChecked: false,
@@ -439,6 +500,8 @@ describe('renderConsentHtml', () => {
   it('keeps an escaped role value and its error after a rejected submission', () => {
     const html = renderConsentHtml({
       client,
+      identity: { kind: 'registered' },
+      redirectUri: 'http://127.0.0.1:1/callback',
       state: 'abc',
       mode: 'editable',
       writeChecked: false,
@@ -468,6 +531,8 @@ describe('renderConsentHtml', () => {
     const render = (roleName: string) =>
       renderConsentHtml({
         client,
+        identity: { kind: 'registered' },
+        redirectUri: 'http://127.0.0.1:1/callback',
         state: 'abc',
         mode: 'editable',
         writeChecked: true,

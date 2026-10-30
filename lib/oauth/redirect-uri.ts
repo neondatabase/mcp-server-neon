@@ -19,7 +19,7 @@ export function normalizeRedirectUris(value: unknown): string[] | undefined {
   return redirectUris.length > 0 ? redirectUris : undefined;
 }
 
-function isLoopbackHost(host: string): boolean {
+export function isLoopbackHost(host: string): boolean {
   return LOOPBACK_HOSTS.has(host.toLowerCase());
 }
 
