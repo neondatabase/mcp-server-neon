@@ -89,15 +89,6 @@ const neonAuthEmailVerificationMethod = {
 
 export const NeonAuthEmailVerificationMethod = neonAuthEmailVerificationMethod;
 
-const neonAuthOauthProviderId = {
-  Github: 'github',
-  Google: 'google',
-  Microsoft: 'microsoft',
-  Vercel: 'vercel',
-} as const;
-
-export const NeonAuthOauthProviderId = neonAuthOauthProviderId;
-
 type ProjectBranchCreateRequest = NonNullable<
   Parameters<typeof raw.createProjectBranch>[0]
 >['body'];
