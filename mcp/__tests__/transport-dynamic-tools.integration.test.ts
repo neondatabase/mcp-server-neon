@@ -100,6 +100,7 @@ async function mcpCall(
   params?: unknown,
   queryString = '',
   userAgent?: string,
+  mcpHeaders?: Record<string, string>,
 ) {
   const req = new Request(`http://localhost/api/mcp${queryString}`, {
     method: 'POST',
@@ -108,6 +109,7 @@ async function mcpCall(
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
       ...(userAgent ? { 'User-Agent': userAgent } : {}),
+      ...mcpHeaders,
     },
     body: JSON.stringify({
       jsonrpc: '2.0',
@@ -161,7 +163,7 @@ async function anonymousDocsCall(
 
 async function listToolsForToken(token: string) {
   await mcpCall(token, 'initialize', 1, {
-    protocolVersion: '2025-03-26',
+    protocolVersion: '2025-11-25',
     capabilities: {},
     clientInfo: { name: 'test-client', version: '1.0.0' },
   });
@@ -290,6 +292,56 @@ describe('transport dynamic tool composition', () => {
         event: 'tool_call',
         properties: expect.objectContaining(attribution),
         context: expect.objectContaining({ clientName: 'v0bot' }),
+      }),
+    );
+  });
+
+  it('attributes modern stateless calls from per-request metadata', async () => {
+    const oauthToken = 'oauth-modern-client-application';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write', {
+        projectId: 'proj_analytics',
+        scopes: null,
+      }),
+    );
+
+    await mcpCall(
+      oauthToken,
+      'tools/call',
+      1,
+      {
+        name: 'run_sql',
+        arguments: { sql: 'select 1' },
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientInfo': {
+            name: 'v0bot',
+            version: '1.0.0',
+          },
+          'io.modelcontextprotocol/clientCapabilities': {},
+        },
+      },
+      '',
+      undefined,
+      {
+        'Mcp-Method': 'tools/call',
+        'Mcp-Name': 'run_sql',
+      },
+    );
+
+    const attribution = { clientName: 'v0bot', clientApplication: 'v0' };
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event: 'server_init',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        event: 'tool_call',
+        properties: expect.objectContaining(attribution),
       }),
     );
   });
@@ -595,14 +647,11 @@ describe('transport dynamic tool composition', () => {
     });
     expect(call.status).toBe(200);
     expect(call.body).toMatchObject({
-      result: {
-        content: [
-          {
-            type: 'text',
-            text: 'MCP error -32602: Tool run_sql_transaction not found',
-          },
-        ],
-        isError: true,
+      jsonrpc: '2.0',
+      id: 3,
+      error: {
+        code: -32602,
+        message: 'Tool run_sql_transaction not found',
       },
     });
   });
@@ -622,7 +671,7 @@ describe('transport dynamic tool composition', () => {
       'initialize',
       10,
       {
-        protocolVersion: '2025-03-26',
+        protocolVersion: '2025-11-25',
         capabilities: {},
         clientInfo: { name: 'test-client', version: '1.0.0' },
       },
@@ -657,7 +706,7 @@ describe('transport dynamic tool composition', () => {
       'initialize',
       20,
       {
-        protocolVersion: '2025-03-26',
+        protocolVersion: '2025-11-25',
         capabilities: {},
         clientInfo: { name: 'test-client', version: '1.0.0' },
       },
@@ -761,7 +810,7 @@ describe('transport dynamic tool composition', () => {
         id: 1,
         method: 'initialize',
         params: {
-          protocolVersion: '2025-03-26',
+          protocolVersion: '2025-11-25',
           capabilities: {},
           clientInfo: { name: 'docs-only-integration', version: '1.0.0' },
         },

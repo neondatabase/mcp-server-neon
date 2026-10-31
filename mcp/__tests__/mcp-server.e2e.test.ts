@@ -6,8 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Client } from '@modelcontextprotocol/sdk/client';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { z } from 'zod';
 
 const { trackSpy } = vi.hoisted(() => ({ trackSpy: vi.fn() }));
@@ -175,9 +174,9 @@ describe('MCP server e2e tool calls', () => {
       });
 
       expect(result.isError).toBe(true);
-      // Naming the rejected value proves schema validation refused it, rather
-      // than the call reaching Postgres and failing there.
-      expect(JSON.stringify(result.content)).toContain('cache-hit');
+      expect(JSON.stringify(result.content)).toContain(
+        'Input validation error: Invalid arguments for tool inspect_database',
+      );
     });
   });
 
@@ -391,21 +390,17 @@ describe('MCP server e2e tool calls', () => {
     await withConnectedClient(
       createTestContext({ readOnly: true }),
       async (client) => {
-        const result = await client.callTool({
-          name: 'run_sql_transaction',
-          arguments: {
-            project_id: 'proj_123',
-            sql_statements: ['COMMIT', 'DROP TABLE t'],
-          },
-        });
-        expect(result).toEqual({
-          content: [
-            {
-              type: 'text',
-              text: 'MCP error -32602: Tool run_sql_transaction not found',
+        await expect(
+          client.callTool({
+            name: 'run_sql_transaction',
+            arguments: {
+              project_id: 'proj_123',
+              sql_statements: ['COMMIT', 'DROP TABLE t'],
             },
-          ],
-          isError: true,
+          }),
+        ).rejects.toMatchObject({
+          code: -32602,
+          message: 'Tool run_sql_transaction not found',
         });
         expect(globalThis.fetch).not.toHaveBeenCalled();
       },

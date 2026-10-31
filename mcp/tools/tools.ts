@@ -1397,9 +1397,8 @@ You MUST follow these steps:
 
   search_docs: async (args, _neonClient, extra) => {
     const params = parseHost(searchDocsInputSchema, args?.params);
-    const userAgent = extra?.requestInfo?.headers['user-agent'];
     const content = await searchDocs(params, {
-      userAgent: Array.isArray(userAgent) ? userAgent[0] : userAgent,
+      userAgent: extra?.userAgent,
       client: extra?.clientApplication,
     });
     return {
