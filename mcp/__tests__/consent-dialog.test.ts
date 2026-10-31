@@ -178,10 +178,10 @@ describe('renderConsentHtml', () => {
     expect(html).toContain(
       '<p class="client-identity">App identity published at <strong>claude.ai</strong></p>',
     );
-    expect(html).not.toContain('Unverified app');
+    expect(html).not.toContain('Unverified');
   });
 
-  it('labels a registered client unverified, whatever name it registered', () => {
+  it('shows no identity line for a registered client, whatever name it registered, and names where it returns', () => {
     const html = renderFor({
       redirectUri: 'https://attacker.example/cb',
       clientOverrides: {
@@ -192,9 +192,7 @@ describe('renderConsentHtml', () => {
     });
 
     expect(html).toContain('Connect Claude to Neon');
-    expect(html).toContain(
-      '<p class="client-identity"><strong>Unverified app.</strong> Its name was provided by the app and not checked by Neon.</p>',
-    );
+    expect(html).not.toContain('<p class="client-identity">');
     expect(html).toContain('Returns to attacker.example');
   });
 

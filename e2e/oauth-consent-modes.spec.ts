@@ -196,9 +196,7 @@ test.describe('OAuth consent modes', () => {
     await expect(clientSummary).toHaveText(
       'App detailsReturns to an app on this computer (127.0.0.1:55667)Continue only if you started this sign-in from an app on this computer.',
     );
-    await expect(page.locator('.client-identity')).toHaveText(
-      'Unverified app. Its name was provided by the app and not checked by Neon.',
-    );
+    await expect(page.locator('.client-identity')).toHaveCount(0);
     await expect(clientDetails).not.toHaveAttribute('open', '');
     await clientSummary.focus();
     await page.keyboard.press('Enter');

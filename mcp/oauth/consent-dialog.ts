@@ -96,7 +96,7 @@ function renderClientIdentity(identity: ConsentClientIdentity): string {
   if (identity.kind === 'metadata-document') {
     return `<p class="client-identity">App identity published at <strong>${he.escape(identity.host)}</strong></p>`;
   }
-  return '<p class="client-identity"><strong>Unverified app.</strong> Its name was provided by the app and not checked by Neon.</p>';
+  return '';
 }
 
 function isLoopbackRedirect(redirectUri: string): boolean {
