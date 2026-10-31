@@ -6,7 +6,7 @@ MCP transport:
 
 - Migrate the remote `/mcp` route to stateless MCP 2026-07-28 (SDK v2 + mcp-handler 2.1.0) with a stateless fallback for 2025-era Streamable HTTP clients.
 - Retire HTTP+SSE. `GET/POST /sse`, `/message`, `/api/sse`, and `/api/message` return `410 Gone` pointing at Streamable HTTP `/mcp`. The Redis session-binding module is removed with the transport.
-- Validate `Origin` on Streamable HTTP requests: a malformed Origin is `403`. Any well-formed `http(s)` origin and `null` are accepted on the deployed endpoint, so browser-based clients keep working; a missing Origin is allowed (CLI and server-side clients).
+- Validate `Origin` on Streamable HTTP requests: a malformed Origin is `403`. Any serialized origin (web pages, browser extensions, desktop webviews) and `null` are accepted on the deployed endpoint, so browser-based clients keep working; a missing Origin is allowed (CLI and server-side clients).
 
 The OAuth consent screen says where the sign-in returns for this request ("Returns to cursor.com", the full URI for an app scheme such as `cursor://`) and, for a loopback redirect, that it returns to an app on this computer. A client that signs in with a Client ID Metadata Document shows "App identity published at <host>" under its name.
 

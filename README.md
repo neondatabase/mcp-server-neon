@@ -278,9 +278,9 @@ HTTP:
 }
 ```
 
-Requests that include an `Origin` header are accepted only when its hostname
-matches the server deployment; other origins receive `403 Forbidden` to prevent
-DNS rebinding against MCP HTTP endpoints. CLI and server-side clients that omit
+A request with a malformed `Origin` header receives `403 Forbidden`. Any
+serialized origin is accepted, including web pages, browser extensions, desktop
+webviews and `null`, so browser-based clients can connect. Requests without an
 `Origin` are unaffected.
 
 ## Remote Server Architecture

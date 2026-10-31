@@ -82,15 +82,17 @@ describe('Origin policy in production', () => {
     vi.unstubAllEnvs();
   });
 
-  it.each(['https://client.example', 'http://localhost:6274', 'null'])(
-    'accepts a well-formed Origin %s',
-    async (origin) => {
-      vi.stubEnv('NODE_ENV', 'production');
-      const response = await POST(legacyToolsListRequest(origin));
+  it.each([
+    'https://client.example',
+    'http://localhost:6274',
+    'chrome-extension://abcdefghijklmnopabcdefghijklmnop',
+    'null',
+  ])('accepts a well-formed Origin %s', async (origin) => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const response = await POST(legacyToolsListRequest(origin));
 
-      expect(response.status).toBe(200);
-    },
-  );
+    expect(response.status).toBe(200);
+  });
 
   it('rejects a malformed Origin with 403', async () => {
     vi.stubEnv('NODE_ENV', 'production');
