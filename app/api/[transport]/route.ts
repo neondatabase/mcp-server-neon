@@ -57,6 +57,7 @@ import { searchDocsInputSchema } from '../../../mcp/tools/toolsSchema';
 import type { NeonTool } from '../../../mcp/tools/tool-definition';
 import { assert } from '../../../lib/assert';
 import { SERVER_HOST } from '../../../lib/config';
+import { isWellFormedOrigin } from '../../../lib/origin';
 import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
 
 const ROUTE_PATHS = {
@@ -104,10 +105,28 @@ function v2ToolConfig(tool: NeonTool) {
 const PROTECTED_RESOURCE_METADATA_PATH =
   '/.well-known/oauth-protected-resource';
 
-const MCP_ALLOWED_ORIGIN_HOSTNAMES = [
+// Local development is the local-server case the spec's DNS-rebinding rule
+// targets, so `next dev` only accepts its own and localhost origins.
+const DEV_ALLOWED_ORIGIN_HOSTNAMES = [
   new URL(SERVER_HOST).hostname,
-  ...(process.env.NODE_ENV === 'production' ? [] : localhostAllowedOrigins()),
+  ...localhostAllowedOrigins(),
 ].filter((hostname, index, hostnames) => hostnames.indexOf(hostname) === index);
+
+function originRejection(req: Request): Response | undefined {
+  if (process.env.NODE_ENV !== 'production') {
+    return originValidationResponse(req, DEV_ALLOWED_ORIGIN_HOSTNAMES);
+  }
+  const origin = req.headers.get('origin');
+  if (origin === null || isWellFormedOrigin(origin)) return undefined;
+  return Response.json(
+    {
+      jsonrpc: '2.0',
+      error: { code: -32000, message: `Invalid Origin: ${origin}` },
+      id: null,
+    },
+    { status: 403 },
+  );
+}
 
 // A stateless client cancels by closing the HTTP request; an MCP
 // `notifications/cancelled` aborts `mcpReq.signal`. Either stops the upstream
@@ -1090,12 +1109,9 @@ const handleRequest = (req: Request) => {
     return new Response(null, { status: 404 });
   }
 
-  const originRejection = originValidationResponse(
-    req,
-    MCP_ALLOWED_ORIGIN_HOSTNAMES,
-  );
-  if (originRejection) {
-    return originRejection;
+  const rejectedOrigin = originRejection(req);
+  if (rejectedOrigin) {
+    return rejectedOrigin;
   }
 
   // A malformed pinned role is rejected before auth rather than ignored, so a

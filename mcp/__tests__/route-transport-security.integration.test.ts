@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SERVER_HOST } from '../../lib/config';
 
 const { GET, POST } = await import('../../app/api/[transport]/route');
@@ -52,7 +52,7 @@ describe('stateless MCP transport boundary', () => {
     await expect(response.text()).resolves.toBe('');
   });
 
-  it('rejects an untrusted Origin before docs-only and auth handling', async () => {
+  it('rejects a non-local Origin in local development before docs-only and auth handling', async () => {
     const response = await POST(
       legacyToolsListRequest('https://attacker.example'),
     );
@@ -74,5 +74,33 @@ describe('stateless MCP transport boundary', () => {
     );
 
     expect(response.status).toBe(200);
+  });
+});
+
+describe('Origin policy in production', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it.each(['https://client.example', 'http://localhost:6274', 'null'])(
+    'accepts a well-formed Origin %s',
+    async (origin) => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const response = await POST(legacyToolsListRequest(origin));
+
+      expect(response.status).toBe(200);
+    },
+  );
+
+  it('rejects a malformed Origin with 403', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const response = await POST(legacyToolsListRequest('attacker.example'));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      jsonrpc: '2.0',
+      error: { code: -32000, message: 'Invalid Origin: attacker.example' },
+      id: null,
+    });
   });
 });
