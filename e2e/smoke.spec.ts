@@ -62,4 +62,20 @@ test.describe('Smoke tests', () => {
       'https://neon.com/docs/ai/neon-mcp-server',
     );
   });
+
+  test('GET /sse returns 410 through the rewrite', async ({ request }) => {
+    const response = await request.get('/sse');
+    expect(response.status()).toBe(410);
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'transport_gone',
+    });
+  });
+
+  test('POST /message returns 410 through the rewrite', async ({ request }) => {
+    const response = await request.post('/message');
+    expect(response.status()).toBe(410);
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'transport_gone',
+    });
+  });
 });
