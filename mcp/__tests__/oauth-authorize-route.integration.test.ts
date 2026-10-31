@@ -8,6 +8,8 @@ import { authTransactions } from '../oauth/auth-transaction-store';
 import { AUTH_RESTART_DESCRIPTION } from '../oauth/consent-html-headers';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
 import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
+import { seedPendingTransaction } from './auth-transaction-fixtures';
+import { consentCookieName } from '../oauth/browser-binding';
 import { neon } from '@neondatabase/serverless';
 
 vi.mock('../oauth/model', () => ({
@@ -695,6 +697,90 @@ describe('/api/authorize route integration', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'invalid_request',
       error_description: AUTH_RESTART_DESCRIPTION,
+    });
+  });
+
+  describe('consent cookie over HTTPS', () => {
+    const httpsHeaders = { 'x-forwarded-proto': 'https' };
+
+    const postOverHttps = (state: string, cookie: string) => {
+      const form = new FormData();
+      form.set('state', state);
+      form.set('action', 'cancel');
+      return POST(
+        new NextRequest(`${SERVER_HOST}/api/authorize`, {
+          method: 'POST',
+          headers: { ...httpsHeaders, cookie },
+          body: form,
+        }),
+      );
+    };
+
+    it('sets a __Host- prefixed, Secure, host-only cookie', async () => {
+      const response = await GET(buildAuthorizeRequest(httpsHeaders));
+      expect(response.status).toBe(200);
+      const [setCookie] = response.headers.getSetCookie();
+
+      expect(setCookie).toMatch(/^__Host-neon_mcp_at_[0-9a-f]{32}=/);
+      expect(setCookie).toMatch(/; Secure/i);
+      expect(setCookie).toMatch(/; Path=\//i);
+      expect(setCookie).toMatch(/; HttpOnly/i);
+      expect(setCookie).toMatch(/; SameSite=lax/i);
+      expect(setCookie).not.toMatch(/; Domain=/i);
+
+      const state = extractState(await response.text());
+      const accepted = await postOverHttps(state, cookieHeader(response));
+      expect(accepted.status).toBe(303);
+    });
+
+    it('completes a consent created before the prefix with its unprefixed cookie', async () => {
+      const legacy = await seedPendingTransaction();
+      const response = await postOverHttps(
+        legacy.transaction.id,
+        `${consentCookieName(legacy.transaction.id, false)}=${legacy.browserSecret}`,
+      );
+      expect(response.status).toBe(303);
+      expect(
+        new URL(response.headers.get('location') ?? '').searchParams.get(
+          'error',
+        ),
+      ).toBe('access_denied');
+      const cleared = response.headers
+        .getSetCookie()
+        .map((c) => c.split('=')[0]);
+      expect(cleared).toEqual(
+        expect.arrayContaining([
+          consentCookieName(legacy.transaction.id, true),
+          consentCookieName(legacy.transaction.id, false),
+        ]),
+      );
+    });
+
+    it('does not accept the prefixed binding planted as an unprefixed cookie value', async () => {
+      const response = await GET(buildAuthorizeRequest(httpsHeaders));
+      const state = extractState(await response.text());
+      const [name, secret] = cookieHeader(response).split('=');
+      const planted = `${name.replace(/^__Host-/, '')}=__Host-:${secret}`;
+
+      const rejected = await postOverHttps(state, planted);
+      expect(rejected.status).toBe(400);
+      await expect(rejected.json()).resolves.toEqual({
+        error: 'invalid_request',
+        error_description: AUTH_RESTART_DESCRIPTION,
+      });
+    });
+
+    it('does not accept the unprefixed cookie name', async () => {
+      const response = await GET(buildAuthorizeRequest(httpsHeaders));
+      const state = extractState(await response.text());
+      const unprefixed = cookieHeader(response).replace(/^__Host-/, '');
+
+      const rejected = await postOverHttps(state, unprefixed);
+      expect(rejected.status).toBe(400);
+      await expect(rejected.json()).resolves.toEqual({
+        error: 'invalid_request',
+        error_description: AUTH_RESTART_DESCRIPTION,
+      });
     });
   });
 

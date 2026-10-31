@@ -21,6 +21,7 @@ import {
 import { renderConsentHtml } from '../../../mcp/oauth/consent-dialog';
 import { authTransactions } from '../../../mcp/oauth/auth-transaction-store';
 import {
+  browserBindingFromCookies,
   consentCookieClearOptions,
   consentCookieName,
   consentCookieSetOptions,
@@ -114,7 +115,7 @@ function browserSecretFromRequest(
   request: NextRequest,
   transactionId: string,
 ): string | undefined {
-  return request.cookies.get(consentCookieName(transactionId))?.value;
+  return browserBindingFromCookies(request.cookies, transactionId);
 }
 
 function cancelRedirect(
@@ -138,7 +139,7 @@ function applyCookie(
   expiresAt: Date,
 ): NextResponse {
   response.cookies.set(
-    consentCookieName(transactionId),
+    consentCookieName(transactionId, cookieSecureForRequest(request)),
     browserSecret,
     consentCookieSetOptions(cookieSecureForRequest(request), expiresAt),
   );
@@ -150,11 +151,14 @@ function clearCookie(
   transactionId: string,
   request: NextRequest,
 ): NextResponse {
-  response.cookies.set(
-    consentCookieName(transactionId),
-    '',
-    consentCookieClearOptions(cookieSecureForRequest(request)),
-  );
+  const secure = cookieSecureForRequest(request);
+  for (const hostPrefixed of secure ? [true, false] : [false]) {
+    response.cookies.set(
+      consentCookieName(transactionId, hostPrefixed),
+      '',
+      consentCookieClearOptions(secure),
+    );
+  }
   return response;
 }
 
@@ -273,6 +277,7 @@ export async function GET(request: NextRequest) {
       defaultReadOnly: prefReadOnly,
       resourceGrant,
       resourceReadOnlyHard,
+      hostPrefixedCookie: cookieSecureForRequest(request),
     });
 
     const writeChecked =

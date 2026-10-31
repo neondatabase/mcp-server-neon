@@ -149,6 +149,50 @@ describe('/callback route integration', () => {
     expect(exchangeCode).toHaveBeenCalledTimes(1);
   });
 
+  it('completes a transaction approved before the cookie prefix over HTTPS with its unprefixed cookie', async () => {
+    const seeded = await seedApprovedTransaction();
+    const response = await GET(
+      new NextRequest(
+        `http://localhost/callback?code=upstream-code&state=${seeded.id}`,
+        {
+          method: 'GET',
+          headers: { cookie: seeded.cookie, 'x-forwarded-proto': 'https' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(model.saveAuthorizationCode).toHaveBeenCalledOnce();
+  });
+
+  it('rejects an HTTPS transaction whose prefixed binding is planted as an unprefixed cookie value', async () => {
+    const seeded = await seedApprovedTransaction({ hostPrefixedCookie: true });
+    const planted = `${consentCookieName(seeded.id, false)}=__Host-:${seeded.browserSecret}`;
+    const response = await GET(
+      new NextRequest(
+        `http://localhost/callback?code=upstream-code&state=${seeded.id}`,
+        {
+          method: 'GET',
+          headers: { cookie: planted, 'x-forwarded-proto': 'https' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    expect(model.saveAuthorizationCode).not.toHaveBeenCalled();
+
+    const genuine = await GET(
+      new NextRequest(
+        `http://localhost/callback?code=upstream-code&state=${seeded.id}`,
+        {
+          method: 'GET',
+          headers: { cookie: seeded.cookie, 'x-forwarded-proto': 'https' },
+        },
+      ),
+    );
+    expect(genuine.status).toBe(307);
+  });
+
   it('carries a pinned roleName from the approved transaction onto the authorization code', async () => {
     const seeded = await seedApprovedTransaction({
       request: {
@@ -258,7 +302,7 @@ describe('/callback route integration', () => {
     const response = await GET(
       buildRequest(
         second.id,
-        `${consentCookieName(second.id)}=${first.browserSecret}`,
+        `${consentCookieName(second.id, false)}=${first.browserSecret}`,
       ),
     );
     expect(response.status).toBe(400);

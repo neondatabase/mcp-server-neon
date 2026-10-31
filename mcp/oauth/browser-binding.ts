@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 
 export const AUTH_TRANSACTION_TTL_MS = 30 * 60 * 1000;
 const AUTH_TRANSACTION_ID_PATTERN = /^[0-9a-f]{32}$/;
+const BROWSER_SECRET_PATTERN = /^[0-9a-f]{64}$/;
 const COOKIE_PREFIX = 'neon_mcp_at_';
 
 export function createAuthTransactionId(): string {
@@ -20,8 +21,46 @@ export function hashBrowserSecret(secret: string): string {
   return crypto.createHash('sha256').update(secret).digest('hex');
 }
 
-export function consentCookieName(transactionId: string): string {
-  return `${COOKIE_PREFIX}${transactionId}`;
+// `__Host-` makes the browser refuse the cookie unless it is Secure, host-only
+// and Path=/, so a sibling subdomain cannot plant one. Browsers reject the
+// prefix on plain http, which local development uses.
+export function consentCookieName(
+  transactionId: string,
+  secure: boolean,
+): string {
+  return `${secure ? '__Host-' : ''}${COOKIE_PREFIX}${transactionId}`;
+}
+
+// The stored hash covers the cookie name, so a secret replayed under the
+// unprefixed name cannot authenticate a transaction created with __Host-.
+// Transactions created before the prefix existed hashed the bare secret and
+// still complete with their unprefixed cookie until they expire.
+export function browserBindingKey(
+  secret: string,
+  hostPrefixed: boolean,
+): string {
+  return hostPrefixed ? `__Host-:${secret}` : secret;
+}
+
+// Only a value createBrowserSecret could have produced is a secret; anything
+// else (such as `__Host-:<secret>` under the unprefixed name) would let a
+// planted cookie reproduce a prefixed binding.
+function isBrowserSecret(value: string | undefined): value is string {
+  return value !== undefined && BROWSER_SECRET_PATTERN.test(value);
+}
+
+export function browserBindingFromCookies(
+  cookies: { get: (name: string) => { value: string } | undefined },
+  transactionId: string,
+): string | undefined {
+  const prefixed = cookies.get(consentCookieName(transactionId, true))?.value;
+  if (isBrowserSecret(prefixed)) {
+    return browserBindingKey(prefixed, true);
+  }
+  const unprefixed = cookies.get(
+    consentCookieName(transactionId, false),
+  )?.value;
+  return isBrowserSecret(unprefixed) ? unprefixed : undefined;
 }
 
 export function cookieSecureForRequest(request: {

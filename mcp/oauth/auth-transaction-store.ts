@@ -8,6 +8,7 @@ import {
 } from './auth-transaction';
 import {
   AUTH_TRANSACTION_TTL_MS,
+  browserBindingKey,
   createAuthTransactionId,
   createBrowserSecret,
   hashBrowserSecret,
@@ -25,6 +26,7 @@ type CreatePendingInput = {
   defaultReadOnly: boolean;
   resourceGrant: GrantContext;
   resourceReadOnlyHard: boolean;
+  hostPrefixedCookie: boolean;
 };
 
 type CreatedPendingTransaction = {
@@ -142,7 +144,9 @@ export function createAuthTransactionStore(connectionString: string) {
         const sql = sqlFor(connectionString);
         const id = createAuthTransactionId();
         const browserSecret = createBrowserSecret();
-        const browserSecretHash = hashBrowserSecret(browserSecret);
+        const browserSecretHash = hashBrowserSecret(
+          browserBindingKey(browserSecret, input.hostPrefixedCookie),
+        );
         const expiresAt = new Date(Date.now() + AUTH_TRANSACTION_TTL_MS);
         const rows = await sql`
           INSERT INTO mcpauth.auth_transactions (
