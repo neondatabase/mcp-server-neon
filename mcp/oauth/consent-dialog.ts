@@ -1,4 +1,5 @@
 import he from 'he';
+import { isLoopbackHost } from '../../lib/oauth/redirect-uri';
 import { SCOPE_DEFINITIONS } from '../utils/read-only';
 import {
   SCOPE_CATEGORIES,
@@ -82,23 +83,46 @@ function isWebUrl(value: string): boolean {
   }
 }
 
-function renderClientVerification(client: ConsentClient): string {
+/**
+ * Where the client's name and redirect URIs came from. A metadata document
+ * proves control of the `client_id` host, not that the named app is behind
+ * it; a registered client described itself.
+ */
+export type ConsentClientIdentity =
+  | { kind: 'metadata-document'; host: string }
+  | { kind: 'registered' };
+
+function renderClientIdentity(identity: ConsentClientIdentity): string {
+  if (identity.kind === 'metadata-document') {
+    return `<p class="client-identity">App identity published at <strong>${he.escape(identity.host)}</strong></p>`;
+  }
+  return '';
+}
+
+function isLoopbackRedirect(redirectUri: string): boolean {
+  try {
+    return isLoopbackHost(new URL(redirectUri).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function renderClientVerification(
+  client: ConsentClient,
+  redirectUri: string,
+): string {
   const website = client.client_uri;
   const redirects = client.redirect_uris ?? [];
-  if (!website && redirects.length === 0) {
-    return '';
-  }
-
-  let summary = website ? urlSummary(website) : '';
-  if (redirects.length === 1) {
-    const redirect = urlSummary(redirects[0]);
-    summary = website ? `${summary} → ${redirect}` : `Redirects to ${redirect}`;
-  } else if (redirects.length > 1) {
-    const redirectHosts = [...new Set(redirects.map(urlSummary))].join(', ');
-    summary = website
-      ? `${summary} → ${redirectHosts}`
-      : `Redirects to ${redirectHosts}`;
-  }
+  const local = isLoopbackRedirect(redirectUri);
+  const destination = isWebUrl(redirectUri)
+    ? urlSummary(redirectUri)
+    : redirectUri;
+  const summary = local
+    ? `Returns to an app on this computer (${destination})`
+    : `Returns to ${destination}`;
+  const localNote = local
+    ? '<span class="client-local-note">Continue only if you started this sign-in from an app on this computer.</span>'
+    : '';
   const websiteHtml = website
     ? `
         <div>
@@ -123,7 +147,7 @@ function renderClientVerification(client: ConsentClient): string {
 
   return `
     <details class="client-verify">
-      <summary><span class="app-details-title">App details</span><span class="client-summary">${he.escape(summary)}</span></summary>
+      <summary><span class="app-details-title">App details</span><span class="client-summary">${he.escape(summary)}</span>${localNote}</summary>
       <dl class="client-meta">
         ${websiteHtml}
         ${redirectHtml}
@@ -143,6 +167,9 @@ type ConsentFieldError = { field: ConsentField; message: string };
 
 type ConsentDialogProps = {
   client: ConsentClient;
+  identity: ConsentClientIdentity;
+  /** The redirect URI of this authorization request. */
+  redirectUri: string;
   state: string;
   mode: ConsentMode;
   writeChecked: boolean;
@@ -825,7 +852,10 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
   });
   const client = props.client;
   const clientName = he.escape(client.client_name || 'A new MCP Client');
-  const clientVerification = renderClientVerification(client);
+  const clientVerification = renderClientVerification(
+    client,
+    props.redirectUri,
+  );
   const grantHtml =
     props.mode === 'confirmation'
       ? renderGrantSummary(view)
@@ -922,6 +952,9 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     summary::-webkit-details-marker { display: none; }
     .app-details-title { margin-bottom: 6px; }
     .client-summary { display: block; color: var(--muted); overflow-wrap: anywhere; }
+    .client-local-note { display: block; margin-top: 6px; color: var(--muted); font-size: 14px; }
+    .client-identity { margin: 8px 0 0; color: var(--muted); font-size: 15px; overflow-wrap: anywhere; }
+    .client-identity strong { color: var(--text); font-weight: 500; }
     .client-meta { display: grid; gap: 12px; margin: 20px 0 0; font-size: 15px; }
     .client-meta > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; }
     .client-uris { display: flex; flex-direction: column; gap: 8px; }
@@ -1041,6 +1074,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
           <img class="brand" src="/images/consent/neon.svg" alt="" width="40" height="40">
         </div>
         <h1 title="Connect ${clientName} to Neon">Connect ${clientName} to Neon</h1>
+        ${renderClientIdentity(props.identity)}
       </header>
       <div class="card-body" tabindex="0" role="region" aria-label="Connection access details">
       ${clientVerification}

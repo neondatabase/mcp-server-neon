@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+The OAuth consent screen says where the sign-in returns for this request ("Returns to cursor.com", the full URI for an app scheme such as `cursor://`) and, for a loopback redirect, that it returns to an app on this computer. A client that signs in with a Client ID Metadata Document shows "App identity published at <host>" under its name.
+
 Realtime, Neon Functions, function trigger, Object Storage, and AI Gateway tools called on a project outside the regions that run those features now say which region the project is in and which regions support the feature, followed by the API's original message: `Realtime is not available for this project: it is in aws-us-west-2. Realtime runs in aws-us-east-2, aws-us-east-1, aws-eu-central-1, and aws-ap-southeast-1. Create a project in one of those regions to use it. (API error: "Realtime is not available for this project")`. Requires `@neon/tools` 2.5.2.
 
 A Client ID Metadata Document `client_id` whose host name does not resolve or whose TLS certificate does not verify is refused with `400 invalid_client` instead of `503 temporarily_unavailable`; timeouts and other connection failures still answer 503.

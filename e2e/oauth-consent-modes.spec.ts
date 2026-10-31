@@ -194,8 +194,9 @@ test.describe('OAuth consent modes', () => {
     const clientDetails = page.locator('details.client-verify');
     const clientSummary = clientDetails.locator('summary');
     await expect(clientSummary).toHaveText(
-      'App detailsexample.com → 127.0.0.1:55667',
+      'App detailsReturns to an app on this computer (127.0.0.1:55667)Continue only if you started this sign-in from an app on this computer.',
     );
+    await expect(page.locator('.client-identity')).toHaveCount(0);
     await expect(clientDetails).not.toHaveAttribute('open', '');
     await clientSummary.focus();
     await page.keyboard.press('Enter');
