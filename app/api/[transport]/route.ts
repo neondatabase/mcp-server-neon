@@ -109,6 +109,16 @@ const MCP_ALLOWED_ORIGIN_HOSTNAMES = [
   ...(process.env.NODE_ENV === 'production' ? [] : localhostAllowedOrigins()),
 ].filter((hostname, index, hostnames) => hostnames.indexOf(hostname) === index);
 
+// A stateless client cancels by closing the HTTP request; an MCP
+// `notifications/cancelled` aborts `mcpReq.signal`. Either stops the upstream
+// Neon API call.
+function toolCallSignal(ctx: McpServerContext): AbortSignal {
+  const httpSignal = ctx.http?.req?.signal;
+  return httpSignal
+    ? AbortSignal.any([ctx.mcpReq.signal, httpSignal])
+    : ctx.mcpReq.signal;
+}
+
 function getRequestClientName(ctx: McpServerContext): string | undefined {
   const envelope: unknown = ctx.mcpReq.envelope;
   if (!envelope || typeof envelope !== 'object') return undefined;
@@ -414,6 +424,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   clientApplication: clientApp,
                   apiKey,
                   userAgent,
+                  signal: toolCallSignal(ctx),
                 };
 
                 try {
@@ -1112,6 +1123,7 @@ const handleRequest = (req: Request) => {
     method: req.method,
     headers: req.headers,
     body: req.body,
+    signal: req.signal,
     // @ts-expect-error duplex is required for streaming bodies
     duplex: 'half',
   });

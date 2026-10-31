@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
-import { fromJsonSchema, McpServer } from '@modelcontextprotocol/server';
+import {
+  fromJsonSchema,
+  McpServer,
+  type ServerContext as McpServerContext,
+} from '@modelcontextprotocol/server';
 import { invokeTool, toolRegistration } from '../tools/registration';
 import { toListedInputSchema } from '../tools/listed-schema';
 import { logger } from '../utils/logger';
@@ -106,7 +110,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
           toListedInputSchema(registration.inputSchema),
         ),
       },
-      async (args: unknown) => {
+      async (args: unknown, ctx: McpServerContext) => {
         const traceId = generateTraceId();
         return await startSpan(
           {
@@ -145,6 +149,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
               readOnly: context.readOnly,
               clientApplication,
               apiKey: context.apiKey,
+              signal: ctx.mcpReq.signal,
             };
             try {
               const result = await invokeTool(
