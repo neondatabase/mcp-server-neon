@@ -94,10 +94,12 @@ jobs:
   # Branch protection requires the "lint-and-build" check, so this job keeps that
   # name and passes only when every job before it succeeded. A skipped job means an
   # upstream job failed, except e2e-live on fork and Dependabot PRs, which cannot
-  # read the test-org secret; LIVE_REQUIRED mirrors e2e-live's `if:`.
+  # read the test-org secret; LIVE_REQUIRED mirrors e2e-live's `if:`. It runs on
+  # always() because a skipped required check counts as passed, so a cancelled run
+  # must reach the result checks and fail them.
   lint-and-build:
     name: lint-and-build
-    if: ${{ !cancelled() }}
+    if: ${{ always() }}
     needs: [lint-build, test, e2e-web, e2e-live]
     permissions:
       contents: read
