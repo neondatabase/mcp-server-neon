@@ -25,11 +25,13 @@ import type { NeonTool } from './tool-definition';
 import type { ToolHandlerExtraParams } from './types';
 
 export function toolRegistration(tool: NeonTool): {
+  title?: string;
   description: string;
   inputSchema: NeonTool['inputSchema'];
   annotations: ToolAnnotations;
 } {
   return {
+    title: tool.annotations?.title,
     description: tool.description,
     inputSchema: tool.inputSchema,
     annotations: tool.annotations,

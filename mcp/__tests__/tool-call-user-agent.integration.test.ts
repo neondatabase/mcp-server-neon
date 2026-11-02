@@ -1,3 +1,4 @@
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 /**
  * The Neon control plane attributes traffic to a caller by user agent, and that
  * attribution is what separates MCP usage from direct API usage in analytics.
@@ -11,8 +12,6 @@
  * records what arrived.
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
