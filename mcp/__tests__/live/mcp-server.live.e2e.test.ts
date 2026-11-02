@@ -333,6 +333,30 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    'finds the project once with search and fetches it by the returned id',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const searchText = assertToolSucceeded(
+        'search',
+        await callTool('search', { query: projectName }),
+      );
+      const results = z
+        .array(z.object({ id: z.string(), type: z.string() }))
+        .parse(JSON.parse(searchText));
+      expect(
+        results.filter((result) => result.id === `project:${projectId}`),
+      ).toEqual([{ id: `project:${projectId}`, type: 'project' }]);
+
+      const fetchText = assertToolSucceeded(
+        'fetch',
+        await callTool('fetch', { id: `project:${projectId}` }),
+      );
+      expect(fetchText).toContain(projectId);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'creates same-named public and CRM tables in the real database',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
