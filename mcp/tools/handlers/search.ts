@@ -49,25 +49,8 @@ export async function handleSearch(
       organizations = response.organizations || [];
     }
 
-    // If in personal account, search projects
-    if (!extra.account.isOrg) {
-      const projects = await handleListProjects(
-        {
-          limit: 400,
-        },
-        neonClient,
-        extra,
-      );
-      const searchResults = await searchProjectsAndBranches(
-        projects,
-        neonClient,
-        searchQuery,
-      );
-
-      results.push(...searchResults);
-    }
-
-    // Search in all organizations
+    // Every project belongs to an organization, so this loop also covers a
+    // personal account's projects.
     for (const org of organizations) {
       // Check if organization matches the search query
       if (matches(org, searchQuery)) {

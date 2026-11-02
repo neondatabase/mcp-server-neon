@@ -8,6 +8,8 @@ MCP transport:
 - Retire HTTP+SSE. `GET/POST /sse`, `/message`, `/api/sse`, and `/api/message` return `410 Gone` pointing at Streamable HTTP `/mcp`. The Redis session-binding module is removed with the transport.
 - Validate `Origin` on Streamable HTTP requests: a malformed Origin is `403`. Any serialized origin (web pages, browser extensions, desktop webviews) and `null` are accepted on the deployed endpoint, so browser-based clients keep working; a missing Origin is allowed (CLI and server-side clients).
 
+`search` works for a personal account (every OAuth sign-in and personal API key) that belongs to more than one organization; it failed with `Multiple organizations found. Please specify the org_id parameter`, a parameter `search` does not take. With one organization, each matching project and branch is listed once instead of twice.
+
 The OAuth consent screen says where the sign-in returns for this request ("Returns to cursor.com", the full URI for an app scheme such as `cursor://`) and, for a loopback redirect, that it returns to an app on this computer. A client that signs in with a Client ID Metadata Document shows "App identity published at <host>" under its name.
 
 Realtime, Neon Functions, function trigger, Object Storage, and AI Gateway tools called on a project outside the regions that run those features now say which region the project is in and which regions support the feature, followed by the API's original message: `Realtime is not available for this project: it is in aws-us-west-2. Realtime runs in aws-us-east-2, aws-us-east-1, aws-eu-central-1, and aws-ap-southeast-1. Create a project in one of those regions to use it. (API error: "Realtime is not available for this project")`. Requires `@neon/tools` 2.5.2.
