@@ -372,20 +372,21 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       expect(toolNames).toContain('run_sql');
       expect(toolNames).not.toContain('run_sql_transaction');
 
-      const transaction = await roClient.callTool({
-        name: 'run_sql_transaction',
-        arguments: {
-          project_id: projectId,
-          sql_statements: [
-            'COMMIT',
-            "INSERT INTO public.property_options VALUES ('escaped')",
-          ],
-        },
+      await expect(
+        roClient.callTool({
+          name: 'run_sql_transaction',
+          arguments: {
+            project_id: projectId,
+            sql_statements: [
+              'COMMIT',
+              "INSERT INTO public.property_options VALUES ('escaped')",
+            ],
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: -32602,
+        message: 'Tool run_sql_transaction not found',
       });
-      expectRejected(
-        transaction,
-        'MCP error -32602: Tool run_sql_transaction not found',
-      );
 
       expectRejected(
         await roRunSql(

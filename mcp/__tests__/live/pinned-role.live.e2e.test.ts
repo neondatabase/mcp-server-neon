@@ -402,13 +402,22 @@ describe.sequential('pinned Postgres role on live Neon', () => {
         expect(override.output).toContain(
           `pinned to Postgres role "${PINNED_ROLE}"`,
         );
+      }
 
-        const transaction = await call(client, 'run_sql_transaction', {
+      const transaction = await call(pinned, 'run_sql_transaction', {
+        sql_statements: ['SELECT session_user::text'],
+        role_name: ownerRole,
+      });
+      expect(transaction.isError).toBe(true);
+      await expect(
+        call(pinnedReadOnly, 'run_sql_transaction', {
           sql_statements: ['SELECT session_user::text'],
           role_name: ownerRole,
-        });
-        expect(transaction.isError).toBe(true);
-      }
+        }),
+      ).rejects.toMatchObject({
+        code: -32602,
+        message: 'Tool run_sql_transaction not found',
+      });
 
       // No connection strings on a pinned connection.
       const tools = (await pinned?.listTools())?.tools.map((tool) => tool.name);
@@ -438,14 +447,20 @@ describe.sequential('pinned Postgres role on live Neon', () => {
     async () => {
       if (!ownerSql) throw new Error('Owner connection is not ready.');
       await ownerSql.query(`ALTER ROLE ${PINNED_ROLE} NOLOGIN`);
+      // NOLOGIN only refuses new logins. Neon's SQL-over-HTTP proxy can keep
+      // serving the role on a session it already holds, so end those too.
+      await ownerSql.query(
+        'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = $1',
+        [PINNED_ROLE],
+      );
       try {
         const refused = await call(pinned, 'run_sql', {
           sql: 'SELECT session_user::text',
         });
         expect(refused.isError).toBe(true);
         // An authentication error: the login was refused, so the statement
-        // never reached the executor. Neon's proxy reports NOLOGIN as a failed
-        // SASL exchange (08P01) rather than Postgres's "not permitted to log in".
+        // never reached the executor. Neon's proxy reports NOLOGIN either as
+        // Postgres's "not permitted to log in" or as a failed SASL exchange (08P01).
         expect(refused.output).toMatch(
           /SASL authentication failed|not permitted to log in/,
         );
@@ -454,13 +469,26 @@ describe.sequential('pinned Postgres role on live Neon', () => {
         await ownerSql.query(`ALTER ROLE ${PINNED_ROLE} LOGIN`);
       }
 
-      const restored = identitySchema.parse(
-        JSON.parse(
-          await succeeds(pinned, 'run_sql', {
-            sql: 'SELECT session_user::text, current_user::text',
-          }),
-        ),
-      );
+      // The proxy caches the refused login for roughly 15 seconds
+      // (server_login_retry), so LOGIN takes effect only after that expires.
+      let identity = await call(pinned, 'run_sql', {
+        sql: 'SELECT session_user::text, current_user::text',
+      });
+      const recoveryDeadline = Date.now() + 60_000;
+      while (
+        identity.isError &&
+        identity.output.includes('server_login_retry') &&
+        Date.now() < recoveryDeadline
+      ) {
+        await delay(2_000);
+        identity = await call(pinned, 'run_sql', {
+          sql: 'SELECT session_user::text, current_user::text',
+        });
+      }
+      if (identity.isError) {
+        throw new Error(`run_sql failed after LOGIN: ${identity.output}`);
+      }
+      const restored = identitySchema.parse(JSON.parse(identity.output));
       expect(restored[0]?.session_user).toBe(PINNED_ROLE);
     },
     LIVE_TEST_TIMEOUT_MS,
