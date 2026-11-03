@@ -5,6 +5,7 @@ import {
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { NEON_API_HOST } from '../../constants';
 import { fetchAsMcpServer } from '../../neon-client';
+import { InvalidArgumentError } from '../../server/errors';
 import type { NeonTool } from '../tool-definition';
 import type { ToolHandlerExtended, ToolHandlers } from '../types';
 import { getOrgByOrgIdOrDefault } from '../utils';
@@ -298,6 +299,25 @@ function jsonTextResult(data: unknown) {
   };
 }
 
+/**
+ * A scoped `create_postgres_role` runs its SQL as the database owner, and a pinned
+ * connection promises that every SQL the server runs logs in as the pinned role.
+ */
+function assertRoleCreateAllowed(
+  parsed: unknown,
+  pinnedRoleName: string | undefined,
+): void {
+  if (pinnedRoleName === undefined) return;
+  if (typeof parsed !== 'object' || parsed === null || !('access' in parsed)) {
+    return;
+  }
+  if (parsed.access === 'read_only' || parsed.access === 'read_write') {
+    throw new InvalidArgumentError(
+      `This connection is pinned to Postgres role "${pinnedRoleName}", so its SQL runs only as that role. access ${parsed.access} creates the role with SQL as the database owner, which this connection does not allow. Connect without roleName to create a ${parsed.access} role.`,
+    );
+  }
+}
+
 function orgIdArgs(parsed: unknown): { org_id?: string } {
   if (typeof parsed !== 'object' || parsed === null) {
     throw new Error('Generated tool input must be an object');
@@ -322,6 +342,9 @@ export function createGeneratedToolHandlers(): ToolHandlers {
         throw new Error(`Tool ${tool.id} requires an API key`);
       }
       let parsed = tool.inputSchema.parse(args?.params ?? {});
+      if (toolId === 'postgres.roles.create') {
+        assertRoleCreateAllowed(parsed, extra.pinnedRoleName);
+      }
       if (GENERATED_TOOLS_REQUIRING_ORG_ID.has(toolId)) {
         if (!neonClient) {
           throw new Error(

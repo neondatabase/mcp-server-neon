@@ -212,6 +212,29 @@ describe('pinned Postgres role', () => {
     },
   );
 
+  it.each(['read_only', 'read_write'])(
+    'create_postgres_role refuses access %s on a pinned connection, whose SQL would run as the owner',
+    async (access) => {
+      const error = await invokeTool(
+        'create_postgres_role',
+        {
+          project_id: PROJECT_ID,
+          branch_id: BRANCH_ID,
+          name: 'app_reader',
+          access,
+        },
+        PINNED_GRANT,
+        fakeNeonClient() as unknown as Api<unknown>,
+        { ...extra(false), apiKey: 'napi_test' },
+      ).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).name).toBe('InvalidArgumentError');
+      expect((error as Error).message).toContain(PINNED);
+      expect((error as Error).message).toContain(access);
+    },
+  );
+
   it('fails closed when Neon cannot resolve the pinned role', async () => {
     const client = fakeNeonClient();
     client.getConnectionUri.mockRejectedValueOnce(

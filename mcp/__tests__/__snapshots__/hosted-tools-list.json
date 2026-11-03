@@ -1977,7 +1977,7 @@
   {
     "name": "create_postgres_role",
     "title": "Create role",
-    "description": "Creates a Postgres role in the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Create a Postgres role on a branch and return it with its password. access defaults to admin: the role joins neon_superuser, so it can read and write every database, create databases and roles, and bypass row-level security, and it cannot be narrowed later. For a least-privilege credential pass access read_only or read_write, scoped to database_name and schemas. Scoped roles are created with SQL as the database owner and cover tables that owner owns, now and later.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1995,6 +1995,29 @@
         },
         "no_login": {
           "type": "boolean"
+        },
+        "access": {
+          "type": "string",
+          "enum": [
+            "admin",
+            "read_only",
+            "read_write"
+          ],
+          "description": "What the role may do. Default admin: the role joins neon_superuser. read_only: SELECT. read_write: SELECT, INSERT, UPDATE, DELETE and sequence use. Scoped roles get these grants on top of whatever PUBLIC already has in the database."
+        },
+        "database_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Database a read_only or read_write role is scoped to. Optional when the branch has exactly one database."
+        },
+        "schemas": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Schemas a read_only or read_write role can use. Default [\"public\"]."
         }
       },
       "required": [
