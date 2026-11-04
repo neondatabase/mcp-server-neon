@@ -425,7 +425,11 @@ export function createNeonClient(apiKey: string) {
       branchId: string,
       providerId: NeonAuthOauthProviderId,
     ) {
-      await neon.auth.oauthProviders.delete({ projectId, branchId, providerId });
+      await neon.auth.oauthProviders.delete({
+        projectId,
+        branchId,
+        providerId,
+      });
       return success(undefined);
     },
 
@@ -570,7 +574,12 @@ export function createNeonClient(apiKey: string) {
       fieldName: string,
       query?: LogFieldValuesQuery,
     ) {
-      return neon.logs.fieldValues({ projectId, branchId, fieldName, ...query });
+      return neon.logs.fieldValues({
+        projectId,
+        branchId,
+        fieldName,
+        ...query,
+      });
     },
 
     get apiKey() {
