@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  Client,
+  StreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client';
 import { getFilteredTools } from '../tools/grant-filter';
 import { toListedTool } from '../tools/listed-schema';
 import type { GrantContext } from '../utils/grant-context';
@@ -789,6 +793,71 @@ describe('transport dynamic tool composition', () => {
     expect(challenge).toContain(
       'resource_metadata="https://localhost:3100/.well-known/oauth-protected-resource/mcp?readonly=true"',
     );
+  });
+
+  it('does not advertise listChanged on 2025-era initialize', async () => {
+    const oauthToken = 'oauth-legacy-capabilities';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write'),
+    );
+
+    const init = await mcpCall(oauthToken, 'initialize', 1, {
+      protocolVersion: '2025-11-25',
+      capabilities: {},
+      clientInfo: { name: 'test-client', version: '1.0.0' },
+    });
+
+    expect(init.body).toMatchObject({
+      result: { protocolVersion: '2025-11-25' },
+    });
+    expect(
+      (init.body as { result: { capabilities: unknown } }).result.capabilities,
+    ).toEqual({
+      tools: { listChanged: false },
+      resources: { listChanged: false },
+    });
+  });
+
+  it('does not advertise listChanged to 2026-07-28 clients, which then open no listen stream', async () => {
+    const oauthToken = 'oauth-modern-capabilities';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write'),
+    );
+
+    const sentMethods: string[] = [];
+    const transport = new StreamableHTTPClientTransport(
+      new URL('http://localhost/api/mcp'),
+      {
+        requestInit: { headers: { Authorization: `Bearer ${oauthToken}` } },
+        fetch: async (input, init) => {
+          const request = new Request(input, init);
+          sentMethods.push(request.headers.get('mcp-method') ?? request.method);
+          return POST(request);
+        },
+      },
+    );
+    const client = new Client(
+      { name: 'modern-test-client', version: '1.0.0' },
+      {
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+        listChanged: {
+          tools: { onChanged: () => {} },
+          resources: { onChanged: () => {} },
+        },
+      },
+    );
+
+    try {
+      await client.connect(transport);
+      expect(transport.protocolVersion).toBe('2026-07-28');
+      expect(sentMethods).toEqual(['server/discover']);
+      expect(client.getServerCapabilities()).toEqual({
+        tools: { listChanged: false },
+        resources: { listChanged: false },
+      });
+    } finally {
+      await client.close();
+    }
   });
 
   it('?category=docs bypasses OAuth without an Authorization header', async () => {
