@@ -42,13 +42,7 @@ type EmailPasswordAuthMethodSnapshot = {
   email_verification_method: NeonAuthEmailVerificationMethod;
   require_email_verification: boolean;
   auto_sign_in_after_verification: boolean;
-  revoke_sessions_on_password_reset: boolean | null;
-};
-
-// The pinned `@neon/sdk` response type predates this field, but the API
-// returns it.
-type EmailAndPasswordConfigWithRevoke = NeonAuthEmailAndPasswordConfig & {
-  revoke_sessions_on_password_reset?: boolean;
+  revoke_sessions_on_password_reset: boolean;
 };
 
 /**
@@ -65,14 +59,6 @@ type OAuthProviderSnapshot = {
   client_id: string | null;
   client_secret: typeof REDACTED_SECRET | null;
   // Present only for the provider they belong to. Identifiers, not secrets.
-  microsoft_tenant_id?: string;
-  apple_team_id?: string;
-  apple_key_id?: string;
-};
-
-// The pinned `@neon/sdk` response type predates these fields, but the API
-// returns them.
-type OAuthProviderWithIdentifiers = NeonAuthOauthProvider & {
   microsoft_tenant_id?: string;
   apple_team_id?: string;
   apple_key_id?: string;
@@ -115,7 +101,7 @@ type NeonAuthConfigurableSettingsErrors = Partial<{
 type Slice<T> = { status: number; statusText: string; data?: T };
 
 function emailPasswordSnapshot(
-  data: EmailAndPasswordConfigWithRevoke,
+  data: NeonAuthEmailAndPasswordConfig,
 ): EmailPasswordAuthMethodSnapshot {
   return {
     enabled: data.enabled,
@@ -125,13 +111,12 @@ function emailPasswordSnapshot(
     email_verification_method: data.email_verification_method,
     require_email_verification: data.require_email_verification,
     auto_sign_in_after_verification: data.auto_sign_in_after_verification,
-    revoke_sessions_on_password_reset:
-      data.revoke_sessions_on_password_reset ?? null,
+    revoke_sessions_on_password_reset: data.revoke_sessions_on_password_reset,
   };
 }
 
 function oauthProviderSnapshot(
-  p: OAuthProviderWithIdentifiers,
+  p: NeonAuthOauthProvider,
 ): OAuthProviderSnapshot {
   return {
     id: p.id,
