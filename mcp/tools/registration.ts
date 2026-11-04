@@ -25,11 +25,12 @@ import type { NeonTool } from './tool-definition';
 import type { ToolHandlerExtraParams } from './types';
 
 /**
- * `McpServer` advertises `tools.listChanged: true` unless it is explicitly
- * `false`. Every request builds a server whose tool list is fixed by the grant,
- * so no server ever sends `notifications/tools/list_changed`.
+ * `McpServer` advertises `listChanged: true` for tools and resources unless it
+ * is explicitly `false`. Every request builds a server whose tools are fixed by
+ * the grant and which registers no resources, so no server ever sends a
+ * list-changed notification.
  */
-export const TOOLS_CAPABILITY = { listChanged: false };
+export const NO_LIST_CHANGED = { listChanged: false };
 
 export function toolRegistration(tool: NeonTool): {
   title?: string;

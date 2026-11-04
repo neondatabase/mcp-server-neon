@@ -52,7 +52,7 @@ import {
 } from '../../../mcp/tools/grant-filter';
 import {
   invokeTool,
-  TOOLS_CAPABILITY,
+  NO_LIST_CHANGED,
   toolRegistration,
 } from '../../../mcp/tools/registration';
 import { toListedInputSchema } from '../../../mcp/tools/listed-schema';
@@ -510,8 +510,8 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         version: pkg.version,
       },
       capabilities: {
-        tools: TOOLS_CAPABILITY,
-        resources: {},
+        tools: NO_LIST_CHANGED,
+        resources: NO_LIST_CHANGED,
       },
       instructions: formatAccessControlInstructions(
         staticToolContext.grant,
@@ -722,7 +722,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
         version: pkg.version,
       },
       capabilities: {
-        tools: TOOLS_CAPABILITY,
+        tools: NO_LIST_CHANGED,
       },
       verboseLogs: process.env.NODE_ENV !== 'production',
       onEvent: (event) => {

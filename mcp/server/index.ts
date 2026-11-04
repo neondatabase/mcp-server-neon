@@ -7,7 +7,7 @@ import {
 } from '@modelcontextprotocol/server';
 import {
   invokeTool,
-  TOOLS_CAPABILITY,
+  NO_LIST_CHANGED,
   toolRegistration,
 } from '../tools/registration';
 import { toListedInputSchema } from '../tools/listed-schema';
@@ -39,7 +39,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
     },
     {
       capabilities: {
-        tools: TOOLS_CAPABILITY,
+        tools: NO_LIST_CHANGED,
       },
       instructions: formatAccessControlInstructions(grant, readOnly),
     },

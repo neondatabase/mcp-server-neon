@@ -795,7 +795,7 @@ describe('transport dynamic tool composition', () => {
     );
   });
 
-  it('does not advertise tools.listChanged on 2025-era initialize', async () => {
+  it('does not advertise listChanged on 2025-era initialize', async () => {
     const oauthToken = 'oauth-legacy-capabilities';
     vi.mocked(model.getAccessToken).mockResolvedValue(
       buildOAuthToken(oauthToken, 'read write'),
@@ -808,14 +808,17 @@ describe('transport dynamic tool composition', () => {
     });
 
     expect(init.body).toMatchObject({
-      result: {
-        protocolVersion: '2025-11-25',
-        capabilities: { tools: { listChanged: false } },
-      },
+      result: { protocolVersion: '2025-11-25' },
+    });
+    expect(
+      (init.body as { result: { capabilities: unknown } }).result.capabilities,
+    ).toEqual({
+      tools: { listChanged: false },
+      resources: { listChanged: false },
     });
   });
 
-  it('does not advertise tools.listChanged to 2026-07-28 clients, which then open no listen stream', async () => {
+  it('does not advertise listChanged to 2026-07-28 clients, which then open no listen stream', async () => {
     const oauthToken = 'oauth-modern-capabilities';
     vi.mocked(model.getAccessToken).mockResolvedValue(
       buildOAuthToken(oauthToken, 'read write'),
@@ -837,7 +840,10 @@ describe('transport dynamic tool composition', () => {
       { name: 'modern-test-client', version: '1.0.0' },
       {
         versionNegotiation: { mode: { pin: '2026-07-28' } },
-        listChanged: { tools: { onChanged: () => {} } },
+        listChanged: {
+          tools: { onChanged: () => {} },
+          resources: { onChanged: () => {} },
+        },
       },
     );
 
@@ -845,8 +851,9 @@ describe('transport dynamic tool composition', () => {
       await client.connect(transport);
       expect(transport.protocolVersion).toBe('2026-07-28');
       expect(sentMethods).toEqual(['server/discover']);
-      expect(client.getServerCapabilities()?.tools).toEqual({
-        listChanged: false,
+      expect(client.getServerCapabilities()).toEqual({
+        tools: { listChanged: false },
+        resources: { listChanged: false },
       });
     } finally {
       await client.close();
