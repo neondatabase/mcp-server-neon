@@ -595,6 +595,16 @@ describe('generated tool interface', () => {
       expect(description, name).toContain('There is no `cursor` argument');
       expect(generatedShape(byName(name)!), name).not.toHaveProperty('cursor');
     }
+    const project = byName('get_project_consumption')?.description;
+    const branch = byName('get_branch_consumption')?.description;
+    expect(project).toContain('Business');
+    expect(project).toContain('`snapshot_storage_bytes_month`');
+    expect(project).toContain('unknown names return no data');
+    expect(branch).not.toContain('Business');
+    expect(branch).toContain('any other name returns HTTP 400');
+    expect(branch).toContain(
+      '`extra_branches_month`, `snapshot_storage_bytes_month` are per-project only',
+    );
   });
 
   it('does not publish the legacy-plan consumption endpoint', () => {

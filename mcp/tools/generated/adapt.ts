@@ -29,28 +29,33 @@ const LIST_PROJECTS_DESCRIPTION = `List Neon projects you own. Returns every pag
 
 const COUNT_PROJECTS_DESCRIPTION = `Returns the number of active projects you can access in an organization, without listing them. \`org_id\` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from.`;
 
-const CONSUMPTION_METRICS = [
+const BRANCH_CONSUMPTION_METRICS = [
   'compute_unit_seconds',
   'root_branch_bytes_month',
   'child_branch_bytes_month',
   'instant_restore_bytes_month',
   'public_network_transfer_bytes',
   'private_network_transfer_bytes',
-  'extra_branches_month',
-  'snapshot_storage_bytes_month',
   'functions_active_capacity_microseconds',
   'functions_waiting_capacity_microseconds',
   'functions_invocations',
   'functions_egress_bytes',
-]
-  .map((metric) => `\`${metric}\``)
-  .join(', ');
+];
 
-const CONSUMPTION_REQUIREMENTS = `Requires a Launch, Scale, Agent, Business, or Enterprise plan; other plans return HTTP 403. \`org_id\` is required; call \`list_organizations\` for it. \`metrics\` is required, one or more of ${CONSUMPTION_METRICS}; the API ignores unknown names instead of rejecting them. \`from\` and \`to\` are UTC date-times rounded to \`granularity\`: \`hourly\` reaches back 168 hours, \`daily\` 60 days, \`monthly\` one year. Returns every page. Pass \`limit\` to cap how many. There is no \`cursor\` argument.`;
+const PROJECT_ONLY_CONSUMPTION_METRICS = [
+  'extra_branches_month',
+  'snapshot_storage_bytes_month',
+];
 
-const GET_PROJECT_CONSUMPTION_DESCRIPTION = `Returns consumption metrics per project in an organization, grouped by billing period. Omitting \`project_ids\` returns every project with history in the organization, including deleted ones; pass \`project_ids\` to narrow it. ${CONSUMPTION_REQUIREMENTS} For per-branch numbers, call \`get_branch_consumption\`.`;
+function codeList(values: string[]): string {
+  return values.map((value) => `\`${value}\``).join(', ');
+}
 
-const GET_BRANCH_CONSUMPTION_DESCRIPTION = `Returns consumption metrics per branch for the 1 to 100 projects in \`project_ids\`, grouped by billing period. Pass \`branch_ids\` to narrow it. ${CONSUMPTION_REQUIREMENTS} For per-project totals, call \`get_project_consumption\`.`;
+const CONSUMPTION_WINDOW = `\`org_id\` is required; call \`list_organizations\` for it. \`from\` and \`to\` are UTC date-times rounded to \`granularity\`: \`hourly\` reaches back 168 hours, \`daily\` 60 days, \`monthly\` one year. Returns every page. Pass \`limit\` to cap how many. There is no \`cursor\` argument.`;
+
+const GET_PROJECT_CONSUMPTION_DESCRIPTION = `Returns consumption metrics per project in an organization, grouped by billing period. Omitting \`project_ids\` returns every project with history in the organization, including deleted ones; pass \`project_ids\` to narrow it. Requires a Launch, Scale, Agent, Business, or Enterprise plan; other plans return HTTP 403. \`metrics\` is required, one or more of ${codeList([...BRANCH_CONSUMPTION_METRICS, ...PROJECT_ONLY_CONSUMPTION_METRICS])}; unknown names return no data instead of an error. ${CONSUMPTION_WINDOW} For per-branch numbers, call \`get_branch_consumption\`.`;
+
+const GET_BRANCH_CONSUMPTION_DESCRIPTION = `Returns consumption metrics per branch for the 1 to 100 projects in \`project_ids\`, grouped by billing period. Pass \`branch_ids\` to narrow it. Requires a usage-based Launch, Scale, Agent, or Enterprise plan; other plans return HTTP 403. \`metrics\` is required, one or more of ${codeList(BRANCH_CONSUMPTION_METRICS)}; any other name returns HTTP 400. ${codeList(PROJECT_ONLY_CONSUMPTION_METRICS)} are per-project only, on \`get_project_consumption\`. ${CONSUMPTION_WINDOW}`;
 
 const CREATE_PROJECT_DESCRIPTION = `Creates a Neon project and waits until the default compute is ready. \`org_id\` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from. Does not return a connection string; call \`get_connection_string\` with the project id.`;
 

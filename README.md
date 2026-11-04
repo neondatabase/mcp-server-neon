@@ -349,7 +349,7 @@ Notes:
 - **`list_projects`**: Lists Neon projects. `limit` caps how many items come back.
 - **`count_projects`**: Returns the number of active projects in an organization. `org_id` is optional and resolves the same way as on `list_projects`.
 - **`describe_project`**: Fetches a Neon project by id (`{ "project_id": "…" }`).
-- **`get_project_consumption`**, **`get_branch_consumption`**: Consumption metrics per project or per branch, grouped by billing period. Take `org_id`, `metrics`, `from`, `to`, and `granularity`; `get_branch_consumption` also requires `project_ids`. Need a Launch, Scale, Agent, Business, or Enterprise plan. The legacy-plan endpoint `/consumption_history/projects` is not published.
+- **`get_project_consumption`**, **`get_branch_consumption`**: Consumption metrics per project or per branch, grouped by billing period. Take `org_id`, `metrics`, `from`, `to`, and `granularity`, and need a Launch, Scale, Agent, Business, or Enterprise plan. `get_branch_consumption` also requires `project_ids`, rejects the `extra_branches_month` and `snapshot_storage_bytes_month` metrics, and is not available on the Business plan. The legacy-plan endpoint `/consumption_history/projects` is not published.
 - **`create_project`**: Creates a Neon project and waits for the default compute. Does not return a connection string. Arguments are `{ "name": "…", "org_id": "…", "region_id": "…" }`. Call `get_connection_string` after it succeeds.
 - **`delete_project`**: Deletes an existing Neon project. Arguments are `{ "project_id": "…" }`.
 - **`list_organizations`**: Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.
