@@ -7,27 +7,35 @@ import { getFilteredTools } from '../tools/grant-filter';
 import { toListedTool } from '../tools/listed-schema';
 import type { GrantContext } from '../utils/grant-context';
 
-const { flushAnalyticsSpy, runSqlSpy, trackSpy } = vi.hoisted(() => ({
-  flushAnalyticsSpy: vi.fn().mockResolvedValue(undefined),
-  runSqlSpy: vi.fn(
-    async (
-      { params }: { params: Record<string, unknown> },
-      ..._context: unknown[]
-    ) => {
-      void _context;
-      return {
-        content: [{ type: 'text', text: JSON.stringify(params) }],
-      };
-    },
-  ),
-  trackSpy: vi.fn(),
-}));
+const { captureExceptionSpy, flushAnalyticsSpy, runSqlSpy, trackSpy } =
+  vi.hoisted(() => ({
+    captureExceptionSpy: vi.fn(),
+    flushAnalyticsSpy: vi.fn().mockResolvedValue(undefined),
+    runSqlSpy: vi.fn(
+      async (
+        { params }: { params: Record<string, unknown> },
+        ..._context: unknown[]
+      ) => {
+        void _context;
+        return {
+          content: [{ type: 'text', text: JSON.stringify(params) }],
+        };
+      },
+    ),
+    trackSpy: vi.fn(),
+  }));
 
 vi.mock('../oauth/model', () => ({
   model: {
     getAccessToken: vi.fn(),
   },
 }));
+
+vi.mock('@sentry/node', async () => {
+  const actual =
+    await vi.importActual<typeof import('@sentry/node')>('@sentry/node');
+  return { ...actual, captureException: captureExceptionSpy };
+});
 
 // The invalid-token challenge test must not verify its fake key against Neon.
 vi.mock('../server/api', () => ({
@@ -72,6 +80,7 @@ vi.mock('../utils/logger', () => ({
 }));
 
 const { model } = await import('../oauth/model');
+const { logger } = await import('../utils/logger');
 const { POST } = await import('../../app/api/[transport]/route');
 
 type TokenShape = {
@@ -858,6 +867,81 @@ describe('transport dynamic tool composition', () => {
     } finally {
       await client.close();
     }
+  });
+
+  it.each([
+    { name: 'authenticated', queryString: '', authorized: true },
+    { name: 'docs-only', queryString: '?category=docs', authorized: false },
+  ])(
+    'logs an SDK-rejected request on the $name handler without reporting it to Sentry',
+    async ({ queryString, authorized }) => {
+      const token = 'oauth-sdk-error';
+      if (authorized) {
+        vi.mocked(model.getAccessToken).mockResolvedValue(
+          buildOAuthToken(token, 'read write'),
+        );
+      }
+
+      const res = await POST(
+        new Request(`http://localhost/api/mcp${queryString}`, {
+          method: 'POST',
+          headers: {
+            ...(authorized ? { Authorization: `Bearer ${token}` } : {}),
+            'Content-Type': 'text/plain',
+            Accept: 'application/json, text/event-stream',
+          },
+          body: '{}',
+        }),
+      );
+      await res.text();
+
+      expect(res.status).toBe(415);
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+        'MCP SDK rejected request',
+        { status: 415, source: 'request', errorName: 'Error' },
+      );
+      expect(captureExceptionSpy).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps request values out of the log when the SDK rejects a request', async () => {
+    const secret = 'REJECTED_REQUEST_PASSWORD';
+    const res = await POST(
+      new Request('http://localhost/api/mcp?category=docs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Mcp-Method': 'resources/read',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'resources/read',
+          params: {
+            uri: `postgresql://user:${secret}@db.example/test`,
+            _meta: {
+              'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+              'io.modelcontextprotocol/clientCapabilities': {},
+            },
+          },
+        }),
+      }),
+    );
+    await res.text();
+
+    expect(res.status).toBe(400);
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+      'MCP SDK rejected request',
+      expect.objectContaining({ status: 400 }),
+    );
+    const logged = JSON.stringify([
+      vi.mocked(logger.info).mock.calls,
+      vi.mocked(logger.warn).mock.calls,
+      vi.mocked(logger.error).mock.calls,
+    ]);
+    expect(logged).not.toContain(secret);
+    expect(captureExceptionSpy).not.toHaveBeenCalled();
   });
 
   it('?category=docs bypasses OAuth without an Authorization header', async () => {
