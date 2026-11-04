@@ -64,6 +64,9 @@ export default defineConfig({
       NEON_FEEDBACK_URL: FEEDBACK_FIXTURE_URL,
       // Same fixture server for search_docs, so no test depends on neon-agent.
       NEON_SITE_SEARCH_URL: SITE_SEARCH_FIXTURE_URL,
+      // An unset SENTRY_DSN falls back to the production DSN in lib/config.ts,
+      // and the suite triggers server errors on purpose.
+      SENTRY_DSN: '',
     },
   },
 });
