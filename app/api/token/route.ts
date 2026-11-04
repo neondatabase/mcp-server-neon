@@ -380,13 +380,12 @@ async function executeRefresh(
     }
 
     // Signal the lock waiters that the upstream is currently flaky so they
-    // exit their poll loop fast instead of timing out 5s later as 503s. We
-    // ride this on the lock release via an atomic Lua script (see
-    // RELEASE_WITH_TRANSIENT_LUA in refresh-lock.ts): writing the marker and
-    // releasing the lock as two separate Redis SETs lets a waiter on Upstash
-    // HA Redis see the release on a replica that hasn't replicated the
-    // marker yet, which manifested as 12 cascaded `transient_lock_timeout`
-    // events during the 2026-05-08 07:17 UTC Hydra burst.
+    // exit their poll loop fast instead of timing out as 503s. The marker is
+    // written atomically with the lock release (see `release` in
+    // refresh-lock-store.ts): as two separate writes, a waiter can see the
+    // release before the marker, which manifested as 12 cascaded
+    // `transient_lock_timeout` events during the 2026-05-08 07:17 UTC Hydra
+    // burst.
     hint.markTransientForWaiters = true;
 
     // Distinguish network-layer failures (no HTTP response) from HTTP 5xx
@@ -874,14 +873,14 @@ export async function POST(request: NextRequest) {
 
       try {
         // Distributed lock + singleflight + cross-instance cache, in order:
-        //   - withRefreshLock holds a Redis lock so two Vercel instances
-        //     can't both forward the same RT to upstream Hydra and trigger
-        //     reuse-detection (which would revoke the entire chain).
+        //   - withRefreshLock holds a cross-instance lock so two Vercel
+        //     instances can't both forward the same RT to upstream Hydra and
+        //     trigger reuse-detection (which would revoke the entire chain).
         //   - The peek closure lets a waiter return as soon as the lock
         //     holder writes the success cache, avoiding the upstream call
         //     entirely.
         //   - Inside the lock, singleflight still dedups same-instance
-        //     concurrent calls so we don't spam Redis SET ops.
+        //     concurrent calls so we don't hammer the lock store.
         const result = await withRefreshLock(
           refreshToken,
           (hint) =>

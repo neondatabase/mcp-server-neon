@@ -39,6 +39,7 @@ beforeEach(() => {
   connectSpy.mockResolvedValue(undefined);
   evalSpy.mockResolvedValue(1);
   process.env.KV_URL = 'redis://test';
+  delete process.env.OAUTH_DATABASE_URL;
 });
 
 afterEach(() => {
@@ -47,7 +48,7 @@ afterEach(() => {
 });
 
 describe('withRefreshLock', () => {
-  it('falls through to execute when KV_URL is unset', async () => {
+  it('falls through to execute when neither KV_URL nor OAUTH_DATABASE_URL is set', async () => {
     delete process.env.KV_URL;
     delete process.env.REDIS_URL;
     const { withRefreshLock } = await loadModule();

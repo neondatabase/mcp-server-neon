@@ -290,6 +290,7 @@ beforeEach(() => {
   resetState();
   __resetForTests();
   process.env.KV_URL = 'redis://test';
+  delete process.env.OAUTH_DATABASE_URL;
 });
 
 afterEach(() => {
