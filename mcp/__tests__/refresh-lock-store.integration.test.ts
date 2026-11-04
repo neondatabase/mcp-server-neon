@@ -129,7 +129,7 @@ describe('Postgres refresh lock store', () => {
     expect(hashed).toHaveLength(2);
   });
 
-  it('creates the schema safely from concurrent first calls', async () => {
+  it('runs schema setup concurrently from several instances', async () => {
     const graphs = await Promise.all(
       [0, 1, 2].map(async () => {
         vi.resetModules();

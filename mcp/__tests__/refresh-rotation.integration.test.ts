@@ -15,7 +15,8 @@
  * Hydra revoke a user's whole token chain.
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { neon } from '@neondatabase/serverless';
 import { NextRequest } from 'next/server';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
@@ -285,13 +286,27 @@ describe('refresh rotation across lock rollout phases', () => {
       'postgres',
       'postgres',
     ]);
+    const refreshToken = await seedRefreshToken();
+    const key = createHash('sha256').update(refreshToken).digest('hex');
+    const sql = neon(databaseUrl);
+    const lockExpiry = async () => {
+      const rows = await sql`
+        SELECT extract(epoch FROM expires_at) * 1000 AS ms
+        FROM mcpauth.refresh_locks WHERE key = ${key}
+      `;
+      return rows.length === 1 ? Number(rows[0].ms) : undefined;
+    };
 
-    const responses = await refreshConcurrently(
-      instances,
-      await seedRefreshToken(),
-      9,
-    );
+    const pending = refreshConcurrently(instances, refreshToken, 9);
+    await new Promise((r) => setTimeout(r, 1_000));
+    const early = await lockExpiry();
+    await new Promise((r) => setTimeout(r, 2_000));
+    const late = await lockExpiry();
+    const responses = await pending;
 
+    expect(early).toBeDefined();
+    expect(late).toBeDefined();
+    expect(late! - early!).toBeGreaterThan(1_500);
     expectOneRotation(responses);
     expect(shared.upstreamCalls).toBe(1);
     expect(shared.reuse).toEqual([]);
