@@ -896,21 +896,53 @@ describe('transport dynamic tool composition', () => {
       await res.text();
 
       expect(res.status).toBe(415);
-      const message =
-        'Unsupported Media Type: Content-Type must be application/json';
       expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
         'MCP SDK rejected request',
-        expect.objectContaining({
-          message,
-          stack: expect.stringContaining(message),
-          source: 'request',
-          severity: 'error',
-          status: 415,
-        }),
+        { status: 415, source: 'request', errorName: 'Error' },
       );
       expect(captureExceptionSpy).not.toHaveBeenCalled();
     },
   );
+
+  it('keeps request values out of the log when the SDK rejects a request', async () => {
+    const secret = 'REJECTED_REQUEST_PASSWORD';
+    const res = await POST(
+      new Request('http://localhost/api/mcp?category=docs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Mcp-Method': 'resources/read',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'resources/read',
+          params: {
+            uri: `postgresql://user:${secret}@db.example/test`,
+            _meta: {
+              'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+              'io.modelcontextprotocol/clientCapabilities': {},
+            },
+          },
+        }),
+      }),
+    );
+    await res.text();
+
+    expect(res.status).toBe(400);
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+      'MCP SDK rejected request',
+      expect.objectContaining({ status: 400 }),
+    );
+    const logged = JSON.stringify([
+      vi.mocked(logger.info).mock.calls,
+      vi.mocked(logger.warn).mock.calls,
+      vi.mocked(logger.error).mock.calls,
+    ]);
+    expect(logged).not.toContain(secret);
+    expect(captureExceptionSpy).not.toHaveBeenCalled();
+  });
 
   it('?category=docs bypasses OAuth without an Authorization header', async () => {
     // Critical contract: the docs-only branch in handleRequest routes the

@@ -23,19 +23,23 @@ export function createSdkErrorReporter(tags: () => Record<string, string>) {
       event.error instanceof Error
         ? event.error
         : new Error(String(event.error));
-    const fields = {
+    if (status !== undefined && status < 500) {
+      // Rejection messages quote the request, which can carry credentials.
+      logger.warn('MCP SDK rejected request', {
+        status,
+        source: event.source,
+        errorName: error.name,
+      });
+      return;
+    }
+    logger.error('MCP SDK error', {
       message: error.message,
       stack: error.stack,
       source: event.source,
       severity: event.severity,
       context: event.context,
       status,
-    };
-    if (status !== undefined && status < 500) {
-      logger.warn('MCP SDK rejected request', fields);
-      return;
-    }
-    logger.error('MCP SDK error', fields);
+    });
     captureException(error, {
       tags: tags(),
       extra: { source: event.source, severity: event.severity, status },

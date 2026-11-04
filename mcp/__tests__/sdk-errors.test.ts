@@ -54,13 +54,11 @@ describe('createSdkErrorReporter', () => {
       Promise.resolve(new Response(null, { status: 400 })),
     );
 
-    expect(logger.warn).toHaveBeenCalledWith(
-      'MCP SDK rejected request',
-      expect.objectContaining({
-        message: 'Unsupported protocol version',
-        status: 400,
-      }),
-    );
+    expect(logger.warn).toHaveBeenCalledWith('MCP SDK rejected request', {
+      status: 400,
+      source: 'request',
+      errorName: 'Error',
+    });
     expect(logger.error).not.toHaveBeenCalled();
     expect(captureExceptionSpy).not.toHaveBeenCalled();
   });
