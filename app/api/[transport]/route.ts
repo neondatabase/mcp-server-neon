@@ -11,7 +11,11 @@ import type {
   AuthInfo,
   ServerContext as McpServerContext,
 } from '@modelcontextprotocol/server';
-import { createMcpHandler, withMcpAuth } from 'mcp-handler';
+import {
+  createMcpHandler,
+  type McpHandlerOptions,
+  withMcpAuth,
+} from 'mcp-handler';
 import { captureException, startSpan } from '@sentry/node';
 import { NeonApiError } from '@neon/sdk';
 
@@ -186,6 +190,31 @@ function tokenStoreUnavailableResponse(): Response {
   const response = jsonErrorResponse(TOKEN_STORE_UNAVAILABLE_RESPONSE);
   response.headers.set('Retry-After', TOKEN_STORE_RETRY_AFTER_SECONDS);
   return response;
+}
+
+type McpErrorEvent = Extract<
+  Parameters<NonNullable<McpHandlerOptions['onEvent']>>[0],
+  { type: 'ERROR' }
+>;
+
+/**
+ * mcp-handler forwards every SDK `onerror` report as severity `error`,
+ * including the SDK's own 500 responses, which leave no other trace.
+ */
+function reportSdkError(event: McpErrorEvent, tags: Record<string, string>) {
+  const error =
+    event.error instanceof Error ? event.error : new Error(String(event.error));
+  logger.error('MCP SDK error', {
+    message: error.message,
+    stack: error.stack,
+    source: event.source,
+    severity: event.severity,
+    context: event.context,
+  });
+  captureException(error, {
+    tags,
+    extra: { source: event.source, severity: event.severity },
+  });
 }
 
 type StaticToolContext = {
@@ -541,19 +570,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                 severity: event.severity,
                 context: event.context,
               });
-            } else if (event.severity === 'fatal') {
-              logger.error('MCP fatal error', {
-                error: event.error,
-                source: event.source,
-                context: event.context,
-              });
-              captureException(
-                event.error instanceof Error
-                  ? event.error
-                  : new Error(String(event.error)),
-                {
-                  tags: agentSentryTags({ clientName, clientApplication }),
-                },
+            } else {
+              reportSdkError(
+                event,
+                agentSentryTags({ clientName, clientApplication }),
               );
             }
             break;
@@ -736,21 +756,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
             }
             break;
           case 'ERROR':
-            if (event.severity === 'fatal') {
-              logger.error('MCP docs-only fatal error', {
-                error: event.error,
-                source: event.source,
-                context: event.context,
-              });
-              captureException(
-                event.error instanceof Error
-                  ? event.error
-                  : new Error(String(event.error)),
-                {
-                  tags: agentSentryTags(docsAgent),
-                },
-              );
-            }
+            reportSdkError(event, agentSentryTags(docsAgent));
             break;
         }
       },

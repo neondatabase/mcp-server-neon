@@ -7,27 +7,35 @@ import { getFilteredTools } from '../tools/grant-filter';
 import { toListedTool } from '../tools/listed-schema';
 import type { GrantContext } from '../utils/grant-context';
 
-const { flushAnalyticsSpy, runSqlSpy, trackSpy } = vi.hoisted(() => ({
-  flushAnalyticsSpy: vi.fn().mockResolvedValue(undefined),
-  runSqlSpy: vi.fn(
-    async (
-      { params }: { params: Record<string, unknown> },
-      ..._context: unknown[]
-    ) => {
-      void _context;
-      return {
-        content: [{ type: 'text', text: JSON.stringify(params) }],
-      };
-    },
-  ),
-  trackSpy: vi.fn(),
-}));
+const { captureExceptionSpy, flushAnalyticsSpy, runSqlSpy, trackSpy } =
+  vi.hoisted(() => ({
+    captureExceptionSpy: vi.fn(),
+    flushAnalyticsSpy: vi.fn().mockResolvedValue(undefined),
+    runSqlSpy: vi.fn(
+      async (
+        { params }: { params: Record<string, unknown> },
+        ..._context: unknown[]
+      ) => {
+        void _context;
+        return {
+          content: [{ type: 'text', text: JSON.stringify(params) }],
+        };
+      },
+    ),
+    trackSpy: vi.fn(),
+  }));
 
 vi.mock('../oauth/model', () => ({
   model: {
     getAccessToken: vi.fn(),
   },
 }));
+
+vi.mock('@sentry/node', async () => {
+  const actual =
+    await vi.importActual<typeof import('@sentry/node')>('@sentry/node');
+  return { ...actual, captureException: captureExceptionSpy };
+});
 
 // The invalid-token challenge test must not verify its fake key against Neon.
 vi.mock('../server/api', () => ({
@@ -72,6 +80,7 @@ vi.mock('../utils/logger', () => ({
 }));
 
 const { model } = await import('../oauth/model');
+const { logger } = await import('../utils/logger');
 const { POST } = await import('../../app/api/[transport]/route');
 
 type TokenShape = {
@@ -859,6 +868,53 @@ describe('transport dynamic tool composition', () => {
       await client.close();
     }
   });
+
+  it.each([
+    { name: 'authenticated', queryString: '', authorized: true },
+    { name: 'docs-only', queryString: '?category=docs', authorized: false },
+  ])(
+    'logs and reports SDK errors on the $name handler',
+    async ({ queryString, authorized }) => {
+      const token = 'oauth-sdk-error';
+      if (authorized) {
+        vi.mocked(model.getAccessToken).mockResolvedValue(
+          buildOAuthToken(token, 'read write'),
+        );
+      }
+
+      const res = await POST(
+        new Request(`http://localhost/api/mcp${queryString}`, {
+          method: 'POST',
+          headers: {
+            ...(authorized ? { Authorization: `Bearer ${token}` } : {}),
+            'Content-Type': 'text/plain',
+            Accept: 'application/json, text/event-stream',
+          },
+          body: '{}',
+        }),
+      );
+      await res.text();
+
+      expect(res.status).toBe(415);
+      const message =
+        'Unsupported Media Type: Content-Type must be application/json';
+      expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+        'MCP SDK error',
+        expect.objectContaining({
+          message,
+          stack: expect.stringContaining(message),
+          source: 'request',
+          severity: 'error',
+        }),
+      );
+      expect(captureExceptionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ message }),
+        expect.objectContaining({
+          extra: { source: 'request', severity: 'error' },
+        }),
+      );
+    },
+  );
 
   it('?category=docs bypasses OAuth without an Authorization header', async () => {
     // Critical contract: the docs-only branch in handleRequest routes the
