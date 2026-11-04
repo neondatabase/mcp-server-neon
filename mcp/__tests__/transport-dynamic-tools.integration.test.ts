@@ -873,7 +873,7 @@ describe('transport dynamic tool composition', () => {
     { name: 'authenticated', queryString: '', authorized: true },
     { name: 'docs-only', queryString: '?category=docs', authorized: false },
   ])(
-    'logs and reports SDK errors on the $name handler',
+    'logs an SDK-rejected request on the $name handler without reporting it to Sentry',
     async ({ queryString, authorized }) => {
       const token = 'oauth-sdk-error';
       if (authorized) {
@@ -898,21 +898,17 @@ describe('transport dynamic tool composition', () => {
       expect(res.status).toBe(415);
       const message =
         'Unsupported Media Type: Content-Type must be application/json';
-      expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
-        'MCP SDK error',
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+        'MCP SDK rejected request',
         expect.objectContaining({
           message,
           stack: expect.stringContaining(message),
           source: 'request',
           severity: 'error',
+          status: 415,
         }),
       );
-      expect(captureExceptionSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ message }),
-        expect.objectContaining({
-          extra: { source: 'request', severity: 'error' },
-        }),
-      );
+      expect(captureExceptionSpy).not.toHaveBeenCalled();
     },
   );
 

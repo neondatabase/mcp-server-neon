@@ -11,11 +11,7 @@ import type {
   AuthInfo,
   ServerContext as McpServerContext,
 } from '@modelcontextprotocol/server';
-import {
-  createMcpHandler,
-  type McpHandlerOptions,
-  withMcpAuth,
-} from 'mcp-handler';
+import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { captureException, startSpan } from '@sentry/node';
 import { NeonApiError } from '@neon/sdk';
 
@@ -25,6 +21,7 @@ import { sendFeedback } from '../../../mcp/tools/handlers/feedback';
 import { createNeonClient } from '../../../mcp/server/api';
 import pkg from '../../../package.json';
 import { handleToolError } from '../../../mcp/server/errors';
+import { createSdkErrorReporter } from '../../../mcp/server/sdk-errors';
 import type { ToolHandlerExtraParams } from '../../../mcp/tools/types';
 import { identifyClient } from '../../../mcp/utils/client-application';
 import { isReadOnly } from '../../../mcp/utils/read-only';
@@ -192,31 +189,6 @@ function tokenStoreUnavailableResponse(): Response {
   return response;
 }
 
-type McpErrorEvent = Extract<
-  Parameters<NonNullable<McpHandlerOptions['onEvent']>>[0],
-  { type: 'ERROR' }
->;
-
-/**
- * mcp-handler forwards every SDK `onerror` report as severity `error`,
- * including the SDK's own 500 responses, which leave no other trace.
- */
-function reportSdkError(event: McpErrorEvent, tags: Record<string, string>) {
-  const error =
-    event.error instanceof Error ? event.error : new Error(String(event.error));
-  logger.error('MCP SDK error', {
-    message: error.message,
-    stack: error.stack,
-    source: event.source,
-    severity: event.severity,
-    context: event.context,
-  });
-  captureException(error, {
-    tags,
-    extra: { source: event.source, severity: event.severity },
-  });
-}
-
 type StaticToolContext = {
   grant: GrantContext;
   readOnly: boolean;
@@ -224,8 +196,11 @@ type StaticToolContext = {
 
 function createContextualMcpHandler(staticToolContext: StaticToolContext) {
   let { clientName, clientApplication } = identifyClient();
+  const sdkErrors = createSdkErrorReporter(() =>
+    agentSentryTags({ clientName, clientApplication }),
+  );
 
-  return createMcpHandler(
+  const handler = createMcpHandler(
     (server: McpServer) => {
       // Request-scoped mutable state (isolated per server instance)
       let hasTrackedServerInit = false;
@@ -571,16 +546,15 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                 context: event.context,
               });
             } else {
-              reportSdkError(
-                event,
-                agentSentryTags({ clientName, clientApplication }),
-              );
+              sdkErrors.onError(event);
             }
             break;
         }
       },
     },
   );
+
+  return (req: Request) => sdkErrors.settleAfter(handler(req));
 }
 
 // The docs-only handler bypasses OAuth entirely. It only registers the
@@ -618,7 +592,9 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
     clientApplication: identifyClient(userAgent).clientApplication,
   };
 
-  return createMcpHandler(
+  const sdkErrors = createSdkErrorReporter(() => agentSentryTags(docsAgent));
+
+  const handler = createMcpHandler(
     (server: McpServer) => {
       async function runDocsTool(
         toolName: string,
@@ -756,12 +732,14 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
             }
             break;
           case 'ERROR':
-            reportSdkError(event, agentSentryTags(docsAgent));
+            sdkErrors.onError(event);
             break;
         }
       },
     },
   );
+
+  return (req: Request) => sdkErrors.settleAfter(handler(req));
 }
 
 // Cache TTL for API key verification (5 minutes)
