@@ -82,6 +82,7 @@ describe('handleGetNeonAuthConfig', () => {
           send_verification_email_on_sign_up: true,
           send_verification_email_on_sign_in: false,
           disable_sign_up: false,
+          revoke_sessions_on_password_reset: true,
         },
       }),
     };
@@ -125,6 +126,7 @@ describe('handleGetNeonAuthConfig', () => {
           email_verification_method: NeonAuthEmailVerificationMethod.Link,
           require_email_verification: false,
           auto_sign_in_after_verification: true,
+          revoke_sessions_on_password_reset: true,
         },
       });
       // PR2 additions: oauth_providers + email_provider slices show up in
