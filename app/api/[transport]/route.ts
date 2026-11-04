@@ -50,7 +50,11 @@ import {
   formatAccessControlInstructions,
   isDocsOnlyTool,
 } from '../../../mcp/tools/grant-filter';
-import { invokeTool, toolRegistration } from '../../../mcp/tools/registration';
+import {
+  invokeTool,
+  TOOLS_CAPABILITY,
+  toolRegistration,
+} from '../../../mcp/tools/registration';
 import { toListedInputSchema } from '../../../mcp/tools/listed-schema';
 import { NEON_TOOLS } from '../../../mcp/tools/definitions';
 import { searchDocsInputSchema } from '../../../mcp/tools/toolsSchema';
@@ -506,7 +510,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
         version: pkg.version,
       },
       capabilities: {
-        tools: {},
+        tools: TOOLS_CAPABILITY,
         resources: {},
       },
       instructions: formatAccessControlInstructions(
@@ -718,7 +722,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
         version: pkg.version,
       },
       capabilities: {
-        tools: {},
+        tools: TOOLS_CAPABILITY,
       },
       verboseLogs: process.env.NODE_ENV !== 'production',
       onEvent: (event) => {

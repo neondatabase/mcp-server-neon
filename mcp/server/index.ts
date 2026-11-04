@@ -5,7 +5,11 @@ import {
   McpServer,
   type ServerContext as McpServerContext,
 } from '@modelcontextprotocol/server';
-import { invokeTool, toolRegistration } from '../tools/registration';
+import {
+  invokeTool,
+  TOOLS_CAPABILITY,
+  toolRegistration,
+} from '../tools/registration';
 import { toListedInputSchema } from '../tools/listed-schema';
 import { logger } from '../utils/logger';
 import { generateTraceId } from '../utils/trace';
@@ -35,7 +39,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
     },
     {
       capabilities: {
-        tools: {},
+        tools: TOOLS_CAPABILITY,
       },
       instructions: formatAccessControlInstructions(grant, readOnly),
     },

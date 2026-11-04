@@ -19,6 +19,8 @@ import {
   Client,
   StreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client';
+import { Client as LegacyClient } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport as LegacyStreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { DOCS_FIXTURE_MARKER } from './docs-fixture.js';
 
 async function callDocsTool(
@@ -183,6 +185,9 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
       const result = await client.listTools();
 
       expect(transport.protocolVersion).toBe('2026-07-28');
+      expect(client.getServerCapabilities()?.tools).toEqual({
+        listChanged: false,
+      });
       expect(result.tools.map((tool) => tool.name).sort()).toEqual([
         'get_doc',
         'search_docs',
@@ -200,6 +205,34 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
           additionalProperties: false,
         });
       }
+    } finally {
+      await client.close();
+    }
+  });
+
+  test('2025-era SDK client sees no tools.listChanged capability', async () => {
+    const port = process.env.E2E_PORT ?? '3100';
+    const transport = new LegacyStreamableHTTPClientTransport(
+      new URL(`http://localhost:${port}/mcp?category=docs`),
+    );
+    const client = new LegacyClient(
+      { name: 'docs-only-legacy-e2e', version: '1.0.0' },
+      { listChanged: { tools: { onChanged: () => {} } } },
+    );
+
+    try {
+      await client.connect(transport);
+      const result = await client.listTools();
+
+      expect(transport.protocolVersion).toBe('2025-11-25');
+      expect(client.getServerCapabilities()?.tools).toEqual({
+        listChanged: false,
+      });
+      expect(result.tools.map((tool) => tool.name).sort()).toEqual([
+        'get_doc',
+        'search_docs',
+        'send_feedback',
+      ]);
     } finally {
       await client.close();
     }

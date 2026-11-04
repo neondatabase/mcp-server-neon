@@ -6,6 +6,7 @@ MCP transport:
 
 - Migrate the remote `/mcp` route to stateless MCP 2026-07-28 (SDK v2 + mcp-handler 2.1.0) with a stateless fallback for 2025-era Streamable HTTP clients.
 - Retire HTTP+SSE. `GET/POST /sse`, `/message`, `/api/sse`, and `/api/message` return `410 Gone` pointing at Streamable HTTP `/mcp`. The Redis session-binding module is removed with the transport.
+- `initialize` and `server/discover` advertise `tools: { listChanged: false }`. The tool list is fixed for a connection's grant, so the server never sends `notifications/tools/list_changed`, and 2026-07-28 clients no longer open a `subscriptions/listen` stream waiting for one.
 - Validate `Origin` on Streamable HTTP requests: a malformed Origin is `403`. Any serialized origin (web pages, browser extensions, desktop webviews) and `null` are accepted on the deployed endpoint, so browser-based clients keep working; a missing Origin is allowed (CLI and server-side clients).
 
 `create_postgres_role` takes `access`: `read_only` or `read_write` creates a role scoped to `database_name` (optional when the branch has one database) and `schemas` (default `["public"]`), and returns its password like an admin role. Without `access` the role still joins `neon_superuser`, and the description now says so. A connection pinned with `?roleName=` refuses scoped `access`, because the role is created with SQL as the database owner. Requires `@neon/tools` 2.6.0.
