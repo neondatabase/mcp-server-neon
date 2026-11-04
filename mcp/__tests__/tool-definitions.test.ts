@@ -90,9 +90,9 @@ describe('NEON_TOOLS definitions', () => {
   });
 
   it('marks private Neon operations closed-world and public-capable ones open-world', () => {
-    expect(NEON_TOOLS).toHaveLength(127);
+    expect(NEON_TOOLS).toHaveLength(130);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
-    expect(generated).toHaveLength(107);
+    expect(generated).toHaveLength(110);
     expect(
       NEON_TOOLS.filter((tool) => tool.annotations.openWorldHint)
         .map((tool) => tool.name)
@@ -568,6 +568,40 @@ describe('generated tool interface', () => {
     expect(tool!.description).toContain('`org_id` is optional');
     expect(tool!.description).toContain('auto-select when unambiguous');
     expect(generatedShape(tool!)).not.toHaveProperty('cursor');
+  });
+
+  it('publishes count and v2 consumption as read-only org-level project tools', () => {
+    const byName = (name: string) =>
+      NEON_TOOLS.find((tool) => tool.name === name);
+    for (const name of [
+      'count_projects',
+      'get_project_consumption',
+      'get_branch_consumption',
+    ]) {
+      expect(byName(name), name).toMatchObject({
+        scope: 'projects',
+        readOnlySafe: true,
+        projectScoped: false,
+        annotations: { readOnlyHint: true, destructiveHint: false },
+      });
+    }
+    expect(byName('count_projects')?.description).toContain(
+      'auto-select when unambiguous',
+    );
+    for (const name of ['get_project_consumption', 'get_branch_consumption']) {
+      const description = byName(name)?.description;
+      expect(description, name).toContain('`compute_unit_seconds`');
+      expect(description, name).toContain('list_organizations');
+      expect(description, name).toContain('There is no `cursor` argument');
+      expect(generatedShape(byName(name)!), name).not.toHaveProperty('cursor');
+    }
+  });
+
+  it('does not publish the legacy-plan consumption endpoint', () => {
+    expect(GENERATED_TOOL_IDS).not.toContain('consumption.perProject');
+    expect(
+      NEON_TOOLS.some((tool) => tool.name === 'per_project_consumption'),
+    ).toBe(false);
   });
 
   it('says describe_project returns the project record only', () => {

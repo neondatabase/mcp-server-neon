@@ -72,6 +72,9 @@ describe('filterToolsForGrant', () => {
       NEON_TOOLS.filter((tool) => tool.projectScoped).length,
     );
     expect(names).not.toContain('list_projects');
+    expect(names).not.toContain('count_projects');
+    expect(names).not.toContain('get_project_consumption');
+    expect(names).not.toContain('get_branch_consumption');
     expect(names).not.toContain('create_project');
     expect(names).not.toContain('delete_project');
     expect(names).not.toContain('projects_permissions_grant');

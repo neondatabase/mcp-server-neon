@@ -3,6 +3,7 @@ import type { GeneratedToolId } from './operations';
 
 export const PINNED_MCP_NAMES = {
   'projects.list': 'list_projects',
+  'projects.count': 'count_projects',
   'projects.get': 'describe_project',
   'projects.create': 'create_project',
   'projects.update': 'update_project',
@@ -13,6 +14,8 @@ export const PINNED_MCP_NAMES = {
   'regions.list': 'list_regions',
   'operations.list': 'list_operations',
   'operations.get': 'get_operation',
+  'consumption.perProjectV2': 'get_project_consumption',
+  'consumption.perBranchV2': 'get_branch_consumption',
 
   'branches.list': 'list_branches',
   'branches.get': 'get_branch',
