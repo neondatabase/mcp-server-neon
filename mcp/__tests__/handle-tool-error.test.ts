@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NeonApiError, NeonError } from '@neon/sdk';
+import { NeonApiError, NeonClientError, NeonError } from '@neon/sdk';
 import { createNeonTools } from '@neon/tools';
 import { NeonDbError } from '@neondatabase/serverless';
 import { InvalidArgumentError } from '../server/errors';
@@ -104,18 +104,9 @@ describe('handleToolError', () => {
     expect(captureException).not.toHaveBeenCalled();
   });
 
-  it('does not capture Neon SDK client errors from either SDK copy', () => {
+  it('does not capture Neon SDK client errors', () => {
     handleToolError(
-      new NeonError('Branch has no parent and cannot be reset.', 'client'),
-      properties,
-      'trace-1',
-      agent,
-    );
-    handleToolError(
-      Object.assign(new Error('Branch has no parent and cannot be reset.'), {
-        name: 'NeonClientError',
-        kind: 'client',
-      }),
+      new NeonClientError('Branch has no parent and cannot be reset.'),
       properties,
       'trace-1',
       agent,
@@ -131,16 +122,11 @@ describe('handleToolError', () => {
     expect(captureException).toHaveBeenCalledWith(error, expect.anything());
   });
 
-  it('does not capture 4xx API errors created by another SDK copy', () => {
-    const error = Object.assign(
-      new Error('role with that name already exists'),
-      {
-        name: 'NeonApiError',
-        kind: 'api',
-        status: 409,
-        body: { message: 'role with that name already exists' },
-      },
-    );
+  it('reports a 4xx API error with its status and does not capture it', () => {
+    const error = new NeonApiError('role with that name already exists', {
+      status: 409,
+      body: { message: 'role with that name already exists' },
+    });
 
     const result = handleToolError(error, properties, 'trace-1', agent);
 

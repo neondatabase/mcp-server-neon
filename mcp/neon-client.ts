@@ -1,6 +1,7 @@
 import {
   createNeonClient as createSdkClient,
   raw,
+  type AuthCreateParams,
   type AuthDetailsResponse,
   type Branch,
   type ListProjectsData,
@@ -117,17 +118,6 @@ function success<T>(data: T, status = 200): ApiResponse<T> {
   };
 }
 
-async function readPage<T>(
-  page: Promise<
-    | { data: { items: T[]; cursor?: string }; error: undefined }
-    | { data: undefined; error: Error }
-  >,
-): Promise<{ items: T[]; cursor?: string }> {
-  const result = await page;
-  if (result.error) throw result.error;
-  return result.data;
-}
-
 const USER_AGENT = `mcp-server-neon/${pkg.version}`;
 
 /**
@@ -170,18 +160,18 @@ export function createNeonClient(apiKey: string) {
     },
 
     async deleteProject(projectId: string) {
-      const data = await neon.projects.delete(projectId);
+      const data = await neon.projects.delete({ projectId });
       return success(data);
     },
 
     async getProject(projectId: string) {
-      const project = await neon.projects.get(projectId);
+      const project = await neon.projects.get({ projectId });
       return success({ project });
     },
 
     async listProjects(params: ListProjectsParams = {}) {
       const { cursor, ...query } = params;
-      const page = await readPage(neon.projects.list(query).page(cursor));
+      const page = await neon.projects.list(query).page(cursor);
       return success({
         projects: page.items,
         pagination: { cursor: page.cursor },
@@ -202,12 +192,12 @@ export function createNeonClient(apiKey: string) {
     },
 
     async deleteProjectBranch(projectId: string, branchId: string) {
-      await neon.branches.delete(projectId, branchId);
+      await neon.branches.delete({ projectId, branchId });
       return success(undefined);
     },
 
     async getProjectBranch(projectId: string, branchId: string) {
-      const branch = await neon.branches.get(projectId, branchId);
+      const branch = await neon.branches.get({ projectId, branchId });
       return success({ branch });
     },
 
@@ -218,7 +208,7 @@ export function createNeonClient(apiKey: string) {
       projectId: string;
       cursor?: string;
     }) {
-      const page = await readPage(neon.branches.list(projectId).page(cursor));
+      const page = await neon.branches.list({ projectId }).page(cursor);
       return success({
         branches: page.items,
         pagination: { cursor: page.cursor },
@@ -240,20 +230,23 @@ export function createNeonClient(apiKey: string) {
     },
 
     async listProjectEndpoints(projectId: string) {
-      const endpoints = await neon.postgres.endpoints.list(projectId);
+      const endpoints = await neon.postgres.endpoints.list({ projectId });
       return success({ endpoints });
     },
 
     async listProjectBranchEndpoints(projectId: string, branchId: string) {
-      const endpoints = await neon.postgres.endpoints.listByBranch(
+      const endpoints = await neon.postgres.endpoints.listByBranch({
         projectId,
         branchId,
-      );
+      });
       return success({ endpoints });
     },
 
     async listProjectBranchDatabases(projectId: string, branchId: string) {
-      const databases = await neon.postgres.databases.list(projectId, branchId);
+      const databases = await neon.postgres.databases.list({
+        projectId,
+        branchId,
+      });
       return success({ databases });
     },
 
@@ -262,11 +255,11 @@ export function createNeonClient(apiKey: string) {
       branchId: string,
       databaseName: string,
     ) {
-      const database = await neon.postgres.databases.get(
+      const database = await neon.postgres.databases.get({
         projectId,
         branchId,
         databaseName,
-      );
+      });
       return success({ database });
     },
 
@@ -340,15 +333,18 @@ export function createNeonClient(apiKey: string) {
     },
 
     async getNeonAuth(projectId: string, branchId: string) {
-      return success(await neon.auth.get(projectId, branchId));
+      return success(await neon.auth.get({ projectId, branchId }));
     },
 
     async createNeonAuth(
       projectId: string,
       branchId: string,
-      request: Parameters<typeof neon.auth.create>[2],
+      request: Omit<AuthCreateParams, 'projectId' | 'branchId'>,
     ) {
-      return success(await neon.auth.create(projectId, branchId, request), 201);
+      return success(
+        await neon.auth.create({ projectId, branchId, ...request }),
+        201,
+      );
     },
 
     async listBranchNeonAuthTrustedDomains(
@@ -356,7 +352,7 @@ export function createNeonClient(apiKey: string) {
       branchId: string,
     ) {
       return success({
-        domains: await neon.auth.trustedDomains.list(projectId, branchId),
+        domains: await neon.auth.trustedDomains.list({ projectId, branchId }),
       });
     },
 
@@ -368,7 +364,7 @@ export function createNeonClient(apiKey: string) {
         auth_provider: 'better_auth';
       },
     ) {
-      await neon.auth.trustedDomains.add(projectId, branchId, request);
+      await neon.auth.trustedDomains.add({ projectId, branchId, ...request });
       return success(undefined, 201);
     },
 
@@ -380,7 +376,11 @@ export function createNeonClient(apiKey: string) {
         domains: { domain: string }[];
       },
     ) {
-      await neon.auth.trustedDomains.delete(projectId, branchId, request);
+      await neon.auth.trustedDomains.delete({
+        projectId,
+        branchId,
+        ...request,
+      });
       return success(undefined);
     },
 
@@ -389,7 +389,7 @@ export function createNeonClient(apiKey: string) {
       branchId: string,
     ) {
       return success({
-        providers: await neon.auth.oauthProviders.list(projectId, branchId),
+        providers: await neon.auth.oauthProviders.list({ projectId, branchId }),
       });
     },
 
@@ -399,7 +399,7 @@ export function createNeonClient(apiKey: string) {
       request: NeonAuthAddOAuthProviderRequest,
     ) {
       return success(
-        await neon.auth.oauthProviders.add(projectId, branchId, request),
+        await neon.auth.oauthProviders.add({ projectId, branchId, ...request }),
         201,
       );
     },
@@ -411,12 +411,12 @@ export function createNeonClient(apiKey: string) {
       request: NeonAuthUpdateOAuthProviderRequest,
     ) {
       return success(
-        await neon.auth.oauthProviders.update(
+        await neon.auth.oauthProviders.update({
           projectId,
           branchId,
           providerId,
-          request,
-        ),
+          ...request,
+        }),
       );
     },
 
@@ -425,7 +425,11 @@ export function createNeonClient(apiKey: string) {
       branchId: string,
       providerId: NeonAuthOauthProviderId,
     ) {
-      await neon.auth.oauthProviders.delete(projectId, branchId, providerId);
+      await neon.auth.oauthProviders.delete({
+        projectId,
+        branchId,
+        providerId,
+      });
       return success(undefined);
     },
 
@@ -521,7 +525,7 @@ export function createNeonClient(apiKey: string) {
       databaseName: string,
     ) {
       return success(
-        await neon.postgres.dataApi.get(projectId, branchId, databaseName),
+        await neon.postgres.dataApi.get({ projectId, branchId, databaseName }),
       );
     },
 
@@ -532,12 +536,12 @@ export function createNeonClient(apiKey: string) {
       request: DataApiCreateRequest,
     ) {
       return success(
-        await neon.postgres.dataApi.create(
+        await neon.postgres.dataApi.create({
           projectId,
           branchId,
           databaseName,
-          request,
-        ),
+          ...request,
+        }),
         201,
       );
     },
@@ -561,7 +565,7 @@ export function createNeonClient(apiKey: string) {
     },
 
     async listLogFields(projectId: string, branchId: string) {
-      return neon.logs.fields(projectId, branchId);
+      return neon.logs.fields({ projectId, branchId });
     },
 
     async listLogFieldValues(
@@ -570,7 +574,12 @@ export function createNeonClient(apiKey: string) {
       fieldName: string,
       query?: LogFieldValuesQuery,
     ) {
-      return neon.logs.fieldValues(projectId, branchId, fieldName, query);
+      return neon.logs.fieldValues({
+        projectId,
+        branchId,
+        fieldName,
+        ...query,
+      });
     },
 
     get apiKey() {
