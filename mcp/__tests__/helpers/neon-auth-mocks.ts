@@ -18,6 +18,7 @@ const EMAIL_PASSWORD_DEFAULTS = {
   send_verification_email_on_sign_up: false,
   send_verification_email_on_sign_in: false,
   disable_sign_up: false,
+  revoke_sessions_on_password_reset: false,
 };
 
 export function defaultSnapshotMocks() {

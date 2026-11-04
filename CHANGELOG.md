@@ -10,6 +10,8 @@ MCP transport:
 - The refresh-token lock now lives in the OAuth Postgres database (`mcpauth.refresh_locks`, `mcpauth.refresh_transient`, keyed by a SHA-256 of the refresh token). While `KV_URL` is set, `/api/token` also takes the Redis lock first, so deployments that only use Redis keep coordinating during the rollover; a follow-up removes Redis.
 - Validate `Origin` on Streamable HTTP requests: a malformed Origin is `403`. Any serialized origin (web pages, browser extensions, desktop webviews) and `null` are accepted on the deployed endpoint, so browser-based clients keep working; a missing Origin is allowed (CLI and server-side clients).
 
+`get_neon_auth_config` reports `revoke_sessions_on_password_reset` under `auth_methods.email_password`: whether resetting a user's password revokes all of their sessions. It is `null` if the API does not return the field.
+
 `create_postgres_role` takes `access`: `read_only` or `read_write` creates a role scoped to `database_name` (optional when the branch has one database) and `schemas` (default `["public"]`), and returns its password like an admin role. Without `access` the role still joins `neon_superuser`, and the description now says so. A connection pinned with `?roleName=` refuses scoped `access`, because the role is created with SQL as the database owner. Requires `@neon/tools` 2.6.0.
 
 `search` works for a personal account (every OAuth sign-in and personal API key) that belongs to more than one organization; it failed with `Multiple organizations found. Please specify the org_id parameter`, a parameter `search` does not take. With one organization, each matching project and branch is listed once instead of twice.
