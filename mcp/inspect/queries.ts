@@ -5,7 +5,7 @@
  *
  * Every query is copied verbatim from the `neon` CLI, where the same catalog
  * powers `neon inspect db <check>`:
- * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ df56774.
+ * neondatabase/neon-pkgs, packages/cli/src/utils/inspect_queries.ts @ 5f05c06.
  * The CLI does not publish this module, so the SQL is duplicated rather than
  * imported. Keep the SQL a verbatim copy — port fixes in both directions instead
  * of letting the two catalogs diverge.
@@ -328,7 +328,7 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
   'lfc-hit-rate': {
     describe: 'Local File Cache hit rate (compute-wide, needs neon extension)',
     scope: 'compute',
-    fields: ['name', 'ratio'],
+    fields: ['name', 'ratio', 'note'],
     emptyMessage: 'No LFC stats available.',
     requiresExtension: 'neon',
     // Read the hit/miss counters from neon_get_lfc_stats() rather than the
@@ -336,47 +336,86 @@ export const INSPECT_QUERIES: Record<InspectCheck, InspectQuery> = {
     // cloud_admin and are not always readable by end-user roles, whereas the
     // function is EXECUTE-able by the default role.
     sql: /* sql */ `
-      WITH lfc AS (
-        SELECT lfc_key AS k, lfc_value AS v
-        FROM neon_get_lfc_stats() t(lfc_key text, lfc_value bigint)
+      WITH settings AS (
+        SELECT
+          COALESCE(
+            pg_size_bytes(current_setting('neon.file_cache_size_limit', true)),
+            0
+          ) AS lfc_bytes,
+          current_setting('shared_buffers') AS shared_buffers
       )
       SELECT
         'lfc hit rate' AS name,
-        max(v) FILTER (WHERE k = 'file_cache_hits')::float
-          / nullif(
-            max(v) FILTER (WHERE k = 'file_cache_hits')
-            + max(v) FILTER (WHERE k = 'file_cache_misses'),
-            0
-          ) AS ratio
-      FROM lfc;
+        CASE
+          WHEN settings.lfc_bytes > 0 THEN
+            (
+              SELECT
+                max(v) FILTER (WHERE k = 'file_cache_hits')::float
+                  / nullif(
+                    max(v) FILTER (WHERE k = 'file_cache_hits')
+                    + max(v) FILTER (WHERE k = 'file_cache_misses'),
+                    0
+                  )
+              FROM neon_get_lfc_stats() t(k text, v bigint)
+            )
+        END AS ratio,
+        CASE
+          WHEN settings.lfc_bytes = 0 THEN
+            'LFC disabled; cache is served from shared_buffers ('
+            || settings.shared_buffers
+            || '). Use SHOW shared_buffers and the Compute cache hit rate metric.'
+        END AS note
+      FROM settings;
     `,
   },
   'working-set': {
     describe:
       'Estimated working set vs LFC size (compute-wide, needs neon extension)',
     scope: 'compute',
-    fields: ['window', 'working_set', 'lfc_size', 'exceeds_lfc'],
+    fields: ['window', 'working_set', 'lfc_size', 'exceeds_lfc', 'note'],
     emptyMessage: 'No working-set estimate available.',
     requiresExtension: 'neon',
     sql: /* sql */ `
+      WITH settings AS (
+        SELECT
+          COALESCE(
+            pg_size_bytes(current_setting('neon.file_cache_size_limit', true)),
+            0
+          ) AS lfc_bytes,
+          current_setting('shared_buffers') AS shared_buffers
+      )
       SELECT
-        w.window,
-        pg_size_pretty(w.working_set_bytes) AS working_set,
-        pg_size_pretty(pg_size_bytes(current_setting('neon.file_cache_size_limit'))) AS lfc_size,
+        working_set.window,
+        pg_size_pretty(working_set.working_set_bytes) AS working_set,
         CASE
-          WHEN w.working_set_bytes
-            > pg_size_bytes(current_setting('neon.file_cache_size_limit'))
-          THEN 'yes' ELSE 'no'
-        END AS exceeds_lfc
-      FROM (
+          WHEN settings.lfc_bytes > 0 THEN
+            pg_size_pretty(settings.lfc_bytes)
+        END AS lfc_size,
+        CASE
+          WHEN settings.lfc_bytes = 0 THEN NULL
+          WHEN working_set.working_set_bytes > settings.lfc_bytes THEN 'yes'
+          ELSE 'no'
+        END AS exceeds_lfc,
+        CASE
+          WHEN settings.lfc_bytes = 0 THEN
+            'LFC disabled; cache is served from shared_buffers ('
+            || settings.shared_buffers
+            || '). Use SHOW shared_buffers and the Compute cache hit rate metric.'
+        END AS note
+      FROM settings
+      LEFT JOIN LATERAL (
         SELECT
           x AS window,
-          approximate_working_set_size_seconds(
-            extract('epoch' from x::interval)::int
-          )::bigint * 8192 AS working_set_bytes
+          CASE
+            WHEN settings.lfc_bytes > 0 THEN
+              approximate_working_set_size_seconds(
+                extract('epoch' from x::interval)::int
+              )::bigint * 8192
+          END AS working_set_bytes
         FROM (VALUES ('1m'), ('5m'), ('15m'), ('1h')) AS t(x)
-      ) w
-      ORDER BY working_set_bytes;
+        WHERE settings.lfc_bytes > 0
+      ) working_set ON true
+      ORDER BY working_set.working_set_bytes;
     `,
   },
   'vacuum-stats': {

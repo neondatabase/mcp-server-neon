@@ -48,6 +48,7 @@ describe('inspect query catalog', () => {
   // accidentally vendored two would only fail at runtime against a real database.
   it.each(INSPECT_CHECKS)('%s is a single statement', (check) => {
     const statements = INSPECT_QUERIES[check].sql
+      .replace(/'(?:''|[^'])*'/g, "''")
       .split(';')
       .filter((part) => part.trim().length > 0);
     expect(statements).toHaveLength(1);
@@ -128,6 +129,79 @@ describe('inspect query catalog', () => {
     expect(INSPECT_QUERIES[check].scope).toBe('compute');
     expect(INSPECT_QUERIES[check].describe).toContain('compute-wide');
   });
+
+  it.each([
+    ['lfc-hit-rate', 'neon_get_lfc_stats()'],
+    ['working-set', 'approximate_working_set_size_seconds('],
+  ] as const)(
+    '%s short-circuits Neon metrics when LFC is disabled',
+    (check, fn) => {
+      const query = INSPECT_QUERIES[check];
+
+      expect(query.requiresExtension).toBe('neon');
+      expect(query.sql).toContain(
+        "current_setting('neon.file_cache_size_limit', true)",
+      );
+      expect(query.sql).toContain('WHEN settings.lfc_bytes > 0 THEN');
+      expect(query.sql).toContain(fn);
+      expect(query.sql).toContain(
+        'LFC disabled; cache is served from shared_buffers',
+      );
+      expect(query.sql).toContain('SHOW shared_buffers');
+      expect(query.sql).toContain('Compute cache hit rate metric');
+    },
+  );
+
+  it.each([
+    [
+      'lfc-hit-rate',
+      { name: 'lfc hit rate', ratio: 0.9, note: null },
+      {
+        name: 'lfc hit rate',
+        ratio: null,
+        note: 'LFC disabled; cache is served from shared_buffers (128MB). Use SHOW shared_buffers and the Compute cache hit rate metric.',
+      },
+    ],
+    [
+      'working-set',
+      {
+        window: '5m',
+        working_set: '64 MB',
+        lfc_size: '1 GB',
+        exceeds_lfc: 'no',
+        note: null,
+      },
+      {
+        window: null,
+        working_set: null,
+        lfc_size: null,
+        exceeds_lfc: null,
+        note: 'LFC disabled; cache is served from shared_buffers (128MB). Use SHOW shared_buffers and the Compute cache hit rate metric.',
+      },
+    ],
+  ] as const)(
+    '%s keeps enabled metrics and disabled notes structured',
+    (check, enabled, disabled) => {
+      const query = INSPECT_QUERIES[check];
+
+      expect(query.fields).toEqual(Object.keys(enabled));
+      for (const row of [enabled, disabled]) {
+        const report = assembleInspectReport({
+          check,
+          query,
+          projectId: 'proj-1',
+          branchId: 'br-1',
+          batches: [{ database: 'neondb', rows: [{ ...row }] }],
+          includeDatabaseColumn: false,
+          includeDatabaseName: false,
+          limit: 50,
+        });
+
+        expect(report.fields).toEqual(query.fields);
+        expect(report.rows).toEqual([row]);
+      }
+    },
+  );
 
   it('stalled-queries preserves its diagnostic SQL filter and fields', () => {
     expect(INSPECT_QUERIES['stalled-queries']).toMatchObject({
