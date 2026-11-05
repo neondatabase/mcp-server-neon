@@ -7,6 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { neon } from '@neondatabase/serverless';
 import { z } from 'zod';
 import type { NeonApiClient } from '../../neon-client';
+import { REDACTED_SECRET } from '../../tools/handlers/neon-auth-settings-snapshot';
 import type { ServerContext } from '../../types/context';
 import {
   INSPECT_CHECKS,
@@ -727,6 +728,152 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         await callTool('disable_realtime', target),
       );
       expect((await readState()).enabled).toBe(false);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'provisions Neon Auth, updates each branch setting, and reads it back with get_neon_auth_config',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!readOnlyClient)
+        throw new Error('Read-only client is not connected.');
+      const readOnlyTools = (await readOnlyClient.listTools()).tools.map(
+        (tool) => tool.name,
+      );
+      expect(readOnlyTools).toContain('get_neon_auth_config');
+      expect(readOnlyTools).not.toContain('update_auth_webhooks');
+      expect(readOnlyTools).not.toContain('send_auth_test_email');
+
+      const branch = z
+        .object({ id: z.string() })
+        .parse(
+          JSON.parse(
+            assertToolSucceeded(
+              'get_default_branch',
+              await callTool('get_default_branch', { project_id: projectId }),
+            ),
+          ),
+        );
+      const target = { project_id: projectId, branch_id: branch.id };
+      assertToolSucceeded(
+        'provision_neon_auth',
+        await callTool('provision_neon_auth', {
+          ...target,
+          auth_provider: 'better_auth',
+        }),
+      );
+
+      const readConfig = async () => {
+        const text = assertToolSucceeded(
+          'get_neon_auth_config',
+          await callTool('get_neon_auth_config', target),
+        );
+        return z
+          .object({
+            allow_localhost: z.boolean(),
+            auth_methods: z.object({
+              email_password: z.object({
+                revoke_sessions_on_password_reset: z.boolean(),
+              }),
+            }),
+            email_provider: z.record(z.string(), z.unknown()),
+            plugins: z.object({
+              organization: z.object({ membership_limit: z.number() }),
+              magic_link: z.object({ expires_in: z.number() }),
+              phone_number: z.object({ otp_expires_in: z.number() }),
+            }),
+            webhook: z.object({
+              enabled: z.boolean(),
+              webhook_url: z.string().optional(),
+            }),
+            _errors: z.never().optional(),
+          })
+          .parse(
+            JSON.parse(
+              text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1),
+            ),
+          );
+      };
+      const update = async (name: string, args: Record<string, unknown>) =>
+        assertToolSucceeded(name, await callTool(name, { ...target, ...args }));
+
+      const before = await readConfig();
+      const smtpPassword = `live-e2e-${projectName}`;
+      await update('update_auth_allow_localhost', {
+        allow_localhost: !before.allow_localhost,
+      });
+      await update('update_auth_email_and_password', {
+        revoke_sessions_on_password_reset:
+          !before.auth_methods.email_password.revoke_sessions_on_password_reset,
+      });
+      const smtpUpdated = await update('update_auth_email_provider', {
+        body: {
+          type: 'standard',
+          // RFC 6761 reserves .invalid, so the test send fails at DNS and no mail leaves.
+          host: 'smtp.invalid',
+          port: 587,
+          username: 'live-e2e',
+          password: smtpPassword,
+          sender_email: 'live-e2e@example.com',
+          sender_name: 'MCP live e2e',
+        },
+      });
+      expect(smtpUpdated).not.toContain(smtpPassword);
+      const sent = z
+        .object({ success: z.boolean(), error_message: z.string() })
+        .parse(
+          JSON.parse(
+            await update('send_auth_test_email', {
+              recipient_email: 'live-e2e@example.com',
+            }),
+          ),
+        );
+      expect(sent.success).toBe(false);
+      expect(sent.error_message).toContain('smtp.invalid');
+      await update('update_auth_plugins_organization', {
+        membership_limit: before.plugins.organization.membership_limit + 1,
+      });
+      await update('update_auth_plugins_magic_link', {
+        expires_in: before.plugins.magic_link.expires_in + 1,
+      });
+      await update('update_auth_plugins_phone_number', {
+        otp_expires_in: before.plugins.phone_number.otp_expires_in + 60,
+      });
+      await update('update_auth_webhooks', {
+        enabled: true,
+        webhook_url: 'https://example.com/neon-auth-webhook',
+        enabled_events: ['user.created'],
+      });
+
+      const after = await readConfig();
+      expect(after.allow_localhost).toBe(!before.allow_localhost);
+      expect(
+        after.auth_methods.email_password.revoke_sessions_on_password_reset,
+      ).toBe(
+        !before.auth_methods.email_password.revoke_sessions_on_password_reset,
+      );
+      expect(after.email_provider).toMatchObject({
+        type: 'standard',
+        host: 'smtp.invalid',
+        password: REDACTED_SECRET,
+      });
+      expect(after.plugins.organization.membership_limit).toBe(
+        before.plugins.organization.membership_limit + 1,
+      );
+      expect(after.plugins.magic_link.expires_in).toBe(
+        before.plugins.magic_link.expires_in + 1,
+      );
+      expect(after.plugins.phone_number.otp_expires_in).toBe(
+        before.plugins.phone_number.otp_expires_in + 60,
+      );
+      expect(after.webhook).toMatchObject({
+        enabled: true,
+        webhook_url: 'https://example.com/neon-auth-webhook',
+      });
+
+      await update('update_auth_webhooks', { enabled: false });
+      expect((await readConfig()).webhook.webhook_url).toBeUndefined();
     },
     LIVE_TEST_TIMEOUT_MS,
   );

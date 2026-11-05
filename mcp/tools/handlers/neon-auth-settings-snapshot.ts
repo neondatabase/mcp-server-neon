@@ -6,6 +6,8 @@ import {
   NeonAuthOauthProvider,
   NeonAuthOauthProviderId,
   NeonAuthOauthProviderType,
+  NeonAuthPluginConfigs,
+  NeonAuthWebhookConfig,
 } from '../../neon-client';
 import { NeonApiError } from '@neon/sdk';
 
@@ -80,6 +82,12 @@ type EmailProviderSnapshot =
       sender_name: string | null;
     };
 
+type PluginsSnapshot = {
+  [Name in 'organization' | 'magic_link' | 'phone_number']: NonNullable<
+    NeonAuthPluginConfigs[Name]
+  > | null;
+};
+
 type NeonAuthConfigurableSettings = {
   trusted_origins: string[];
   allow_localhost: boolean | null;
@@ -88,6 +96,8 @@ type NeonAuthConfigurableSettings = {
   };
   oauth_providers: OAuthProviderSnapshot[];
   email_provider: EmailProviderSnapshot | null;
+  plugins: PluginsSnapshot | null;
+  webhook: NeonAuthWebhookConfig | null;
 };
 
 type NeonAuthConfigurableSettingsErrors = Partial<{
@@ -96,6 +106,8 @@ type NeonAuthConfigurableSettingsErrors = Partial<{
   email_password: string;
   oauth_providers: string;
   email_provider: string;
+  plugins: string;
+  webhook: string;
 }>;
 
 type Slice<T> = { status: number; statusText: string; data?: T };
@@ -163,12 +175,22 @@ function emailProviderSnapshot(
   };
 }
 
+function pluginsSnapshot(data: NeonAuthPluginConfigs): PluginsSnapshot {
+  return {
+    organization: data.organization ?? null,
+    magic_link: data.magic_link ?? null,
+    phone_number: data.phone_number ?? null,
+  };
+}
+
 function buildNeonAuthConfigurableSettingsFromSlices(
   domainsRes: Slice<{ domains: { domain: string }[] }>,
   localhostRes: Slice<{ allow_localhost: boolean }>,
   emailRes: Slice<NeonAuthEmailAndPasswordConfig>,
   oauthRes: Slice<{ providers: NeonAuthOauthProvider[] }>,
   emailProviderRes: Slice<NeonAuthEmailServerConfigResponse>,
+  pluginsRes: Slice<NeonAuthPluginConfigs>,
+  webhookRes: Slice<NeonAuthWebhookConfig>,
 ): {
   settings: NeonAuthConfigurableSettings;
   errors: NeonAuthConfigurableSettingsErrors;
@@ -213,6 +235,20 @@ function buildNeonAuthConfigurableSettingsFromSlices(
     errors.email_provider = `${emailProviderRes.status} ${emailProviderRes.statusText}`;
   }
 
+  let plugins: PluginsSnapshot | null = null;
+  if (pluginsRes.status === 200 && pluginsRes.data) {
+    plugins = pluginsSnapshot(pluginsRes.data);
+  } else {
+    errors.plugins = `${pluginsRes.status} ${pluginsRes.statusText}`;
+  }
+
+  let webhook: NeonAuthWebhookConfig | null = null;
+  if (webhookRes.status === 200 && webhookRes.data) {
+    webhook = webhookRes.data;
+  } else {
+    errors.webhook = `${webhookRes.status} ${webhookRes.statusText}`;
+  }
+
   return {
     settings: {
       trusted_origins,
@@ -220,6 +256,8 @@ function buildNeonAuthConfigurableSettingsFromSlices(
       auth_methods: { email_password },
       oauth_providers,
       email_provider,
+      plugins,
+      webhook,
     },
     errors,
   };
@@ -262,18 +300,17 @@ function summarizeApiErrorBody(data: unknown): string | undefined {
 
 // Email provider may not be configured on a fresh branch; the upstream API
 // returns 404 in that case, which the SDK surfaces as a typed API error.
-// We translate that into the same Slice<T> shape the other endpoints use so
-// the caller sees a uniform "missing data" signal instead of a thrown
-// rejection. For non-404 failures we fold a short, sanitized snippet of the
-// upstream body into `statusText` so callers get an actionable hint instead
-// of a bare `${status} ${statusText}`.
-async function safeFetchEmailProvider(
-  neonClient: Api<unknown>,
-  projectId: string,
-  branchId: string,
-): Promise<Slice<NeonAuthEmailServerConfigResponse>> {
+// The email provider, plugin, and webhook reads go through here so an API
+// error on one of them becomes a `Slice<T>` the caller reports under
+// `_errors` instead of a rejection that fails the whole tool. For non-404
+// failures we fold a short, sanitized snippet of the upstream body into
+// `statusText` so callers get an actionable hint instead of a bare
+// `${status} ${statusText}`.
+async function safeFetchSlice<T>(
+  fetchSlice: () => Promise<Slice<T>>,
+): Promise<Slice<T>> {
   try {
-    return await neonClient.getNeonAuthEmailProvider(projectId, branchId);
+    return await fetchSlice();
   } catch (err) {
     if (err instanceof NeonApiError) {
       const { status, body: data } = err;
@@ -301,19 +338,36 @@ export async function fetchNeonAuthConfigurableSettings(
   settings: NeonAuthConfigurableSettings;
   errors: NeonAuthConfigurableSettingsErrors;
 }> {
-  const [domainsRes, localhostRes, emailRes, oauthRes, emailProviderRes] =
-    await Promise.all([
-      neonClient.listBranchNeonAuthTrustedDomains(projectId, branchId),
-      neonClient.getNeonAuthAllowLocalhost(projectId, branchId),
-      neonClient.getNeonAuthEmailAndPasswordConfig(projectId, branchId),
-      neonClient.listBranchNeonAuthOauthProviders(projectId, branchId),
-      safeFetchEmailProvider(neonClient, projectId, branchId),
-    ]);
+  const [
+    domainsRes,
+    localhostRes,
+    emailRes,
+    oauthRes,
+    emailProviderRes,
+    pluginsRes,
+    webhookRes,
+  ] = await Promise.all([
+    neonClient.listBranchNeonAuthTrustedDomains(projectId, branchId),
+    neonClient.getNeonAuthAllowLocalhost(projectId, branchId),
+    neonClient.getNeonAuthEmailAndPasswordConfig(projectId, branchId),
+    neonClient.listBranchNeonAuthOauthProviders(projectId, branchId),
+    safeFetchSlice(() =>
+      neonClient.getNeonAuthEmailProvider(projectId, branchId),
+    ),
+    safeFetchSlice(() =>
+      neonClient.getNeonAuthPluginConfigs(projectId, branchId),
+    ),
+    safeFetchSlice(() =>
+      neonClient.getNeonAuthWebhookConfig(projectId, branchId),
+    ),
+  ]);
   return buildNeonAuthConfigurableSettingsFromSlices(
     domainsRes,
     localhostRes,
     emailRes,
     oauthRes,
     emailProviderRes,
+    pluginsRes,
+    webhookRes,
   );
 }

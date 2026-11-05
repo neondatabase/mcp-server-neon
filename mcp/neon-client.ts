@@ -11,15 +11,15 @@ import {
   type MemberWithUser,
   type NeonAuthAddOAuthProviderRequest,
   type NeonAuthEmailAndPasswordConfig,
-  type NeonAuthEmailAndPasswordConfigUpdate,
   type NeonAuthEmailVerificationMethod as SdkNeonAuthEmailVerificationMethod,
-  type NeonAuthEmailServerConfig,
   type NeonAuthEmailServerConfigResponse,
   type NeonAuthIntegration,
   type NeonAuthOauthProviderId as SdkNeonAuthOauthProviderId,
   type NeonAuthOauthProvider,
   type NeonAuthOauthProviderType,
+  type NeonAuthPluginConfigs,
   type NeonAuthUpdateOAuthProviderRequest,
+  type NeonAuthWebhookConfig,
   type Organization,
   type ProjectBranchLogsQueryResponse,
   type ProjectCreateRequest,
@@ -37,6 +37,8 @@ export type {
   NeonAuthIntegration,
   NeonAuthOauthProvider,
   NeonAuthOauthProviderType,
+  NeonAuthPluginConfigs,
+  NeonAuthWebhookConfig,
   Organization,
   ProjectListItem,
 };
@@ -434,89 +436,32 @@ export function createNeonClient(apiKey: string) {
     },
 
     async getNeonAuthAllowLocalhost(projectId: string, branchId: string) {
-      const data = await raw.getNeonAuthAllowLocalhost({
-        client: neon.client,
-        path: { project_id: projectId, branch_id: branchId },
-        throwOnError: true,
-      });
-      return success(data);
-    },
-
-    async updateNeonAuthAllowLocalhost(
-      projectId: string,
-      branchId: string,
-      request: { allow_localhost: boolean },
-    ) {
-      const data = await raw.updateNeonAuthAllowLocalhost({
-        client: neon.client,
-        path: { project_id: projectId, branch_id: branchId },
-        body: request,
-        throwOnError: true,
-      });
-      return success(data);
+      return success(
+        await neon.auth.allowLocalhost.get({ projectId, branchId }),
+      );
     },
 
     async getNeonAuthEmailAndPasswordConfig(
       projectId: string,
       branchId: string,
     ) {
-      const data = await raw.getNeonAuthEmailAndPasswordConfig({
-        client: neon.client,
-        path: { project_id: projectId, branch_id: branchId },
-        throwOnError: true,
-      });
-      return success(data);
-    },
-
-    async updateNeonAuthEmailAndPasswordConfig(
-      projectId: string,
-      branchId: string,
-      request: NeonAuthEmailAndPasswordConfigUpdate,
-    ) {
-      const data = await raw.updateNeonAuthEmailAndPasswordConfig({
-        client: neon.client,
-        path: { project_id: projectId, branch_id: branchId },
-        body: request,
-        throwOnError: true,
-      });
-      return success(data);
+      return success(
+        await neon.auth.emailAndPassword.get({ projectId, branchId }),
+      );
     },
 
     async getNeonAuthEmailProvider(projectId: string, branchId: string) {
-      const data = await raw.getNeonAuthEmailProvider({
-        client: neon.client,
-        path: { project_id: projectId, branch_id: branchId },
-        throwOnError: true,
-      });
-      return success(data);
+      return success(
+        await neon.auth.emailProvider.get({ projectId, branchId }),
+      );
     },
 
-    async updateNeonAuthEmailProvider(
-      projectId: string,
-      branchId: string,
-      request: NeonAuthEmailServerConfig,
-    ) {
-      const data = await raw.updateNeonAuthEmailProvider({
-        client: neon.client,
-        path: { project_id: projectId, branch_id: branchId },
-        body: request,
-        throwOnError: true,
-      });
-      return success(data);
+    async getNeonAuthPluginConfigs(projectId: string, branchId: string) {
+      return success(await neon.auth.plugins.get({ projectId, branchId }));
     },
 
-    async sendNeonAuthEmailProviderTest(
-      projectId: string,
-      branchId: string,
-      request: { recipient_email: string },
-    ) {
-      const data = await raw.sendNeonAuthEmailProviderTest({
-        client: neon.client,
-        path: { project_id: projectId, branch_id: branchId },
-        body: { recipient_email: request.recipient_email },
-        throwOnError: true,
-      });
-      return success(data);
+    async getNeonAuthWebhookConfig(projectId: string, branchId: string) {
+      return success(await neon.auth.webhooks.get({ projectId, branchId }));
     },
 
     async getProjectBranchDataApi(
