@@ -22,6 +22,7 @@ import {
 import { Client as LegacyClient } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport as LegacyStreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { DOCS_FIXTURE_MARKER } from './docs-fixture.js';
+import serverJson from '../server.json' with { type: 'json' };
 
 async function callDocsTool(
   request: import('@playwright/test').APIRequestContext,
@@ -142,7 +143,13 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     expect(initResult).toMatchObject({
       jsonrpc: '2.0',
       result: expect.objectContaining({
-        serverInfo: expect.objectContaining({ name: 'mcp-server-neon' }),
+        serverInfo: expect.objectContaining({
+          name: 'mcp-server-neon',
+          title: serverJson.title,
+          description: serverJson.description,
+          websiteUrl: serverJson.websiteUrl,
+          icons: serverJson.icons,
+        }),
       }),
     });
   });

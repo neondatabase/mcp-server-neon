@@ -30,23 +30,17 @@ import {
   getAccessControlWarnings,
   formatAccessControlInstructions,
 } from '../tools/grant-filter';
-import pkg from '../../package.json';
+import { SERVER_INFO } from '../../lib/server-metadata';
 
 export const createMcpServer = async (context: NeonServerContext) => {
   const grant = { ...(context.grant ?? DEFAULT_GRANT) };
   const readOnly = context.readOnly ?? false;
-  const server = new McpServer(
-    {
-      name: 'mcp-server-neon',
-      version: pkg.version,
+  const server = new McpServer(SERVER_INFO, {
+    capabilities: {
+      tools: NO_LIST_CHANGED,
     },
-    {
-      capabilities: {
-        tools: NO_LIST_CHANGED,
-      },
-      instructions: formatAccessControlInstructions(grant, readOnly),
-    },
-  );
+    instructions: formatAccessControlInstructions(grant, readOnly),
+  });
 
   const neonClient = createNeonClient(context.apiKey);
 

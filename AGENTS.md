@@ -372,6 +372,7 @@ Code comments reference these files by path (e.g. `ai-notes/refresh-slo.md`).
 
 - **TypeScript Configuration**: Uses `bundler` module resolution for Next.js compatibility. Imports use extensionless paths (no `.js` suffix).
 - **Registry metadata version sync**: Keep root `server.json` `version` in sync with `package.json` `version`. CI enforces this via the PR workflow.
+- **Server metadata**: `server.json` `title`, `description`, `websiteUrl`, and `icons` are also the `serverInfo` sent on `initialize` and `server/discover`, and the Server Card fields (`lib/server-metadata.ts`). Edit them there only.
 
 - **Migration Pattern**: Tools like `prepare_database_migration` and `prepare_query_tuning` create temporary branches and return all context (branch IDs, SQL, database name, etc.) in the response. The LLM must pass this context back to subsequent `complete_*` tools. No state is stored server-side, enabling serverless deployment.
 
@@ -403,6 +404,9 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 | `/api/list-tools`                         | Stateless preview of available tools for a given grant (no auth)                  |
 | `/.well-known/oauth-authorization-server` | OAuth server metadata (includes `scopes_supported` and `x-neon-scope-categories`) |
 | `/.well-known/oauth-protected-resource`   | OAuth protected resource metadata                                                 |
+| `/mcp/server-card`                        | MCP Server Card (public, built from `server.json`)                                |
+| `/.well-known/ai-catalog.json`            | AI Catalog pointing at the Server Card                                            |
+| `/.well-known/mcp.json`                   | Same Server Card at the SEP-1649 path that directory scanners probe               |
 
 ### OAuth Scopes
 

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import serverJson from '../server.json' with { type: 'json' };
 
 test.describe('Smoke tests', () => {
   test('GET /api/health returns status ok', async ({ request }) => {
@@ -53,6 +54,64 @@ test.describe('Smoke tests', () => {
     expect(body.resource).toMatch(/^https:\/\//);
     expect(body.resource.endsWith('/mcp?readonly=true')).toBeTruthy();
     expect(body.authorization_servers).toEqual([new URL(body.resource).origin]);
+  });
+
+  for (const { path, contentType } of [
+    {
+      path: '/mcp/server-card',
+      contentType: 'application/mcp-server-card+json',
+    },
+    { path: '/.well-known/mcp.json', contentType: 'application/json' },
+  ]) {
+    test(`GET ${path} returns the public Server Card`, async ({ request }) => {
+      const response = await request.get(path);
+      expect(response.status()).toBe(200);
+      expect(response.headers()['content-type']).toBe(contentType);
+      expect(response.headers()['access-control-allow-origin']).toBe('*');
+
+      const card = await response.json();
+      expect(card).toMatchObject({
+        $schema:
+          'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json',
+        name: serverJson.name,
+        version: serverJson.version,
+        title: serverJson.title,
+        description: serverJson.description,
+        websiteUrl: serverJson.websiteUrl,
+        repository: serverJson.repository,
+        icons: serverJson.icons,
+      });
+      expect(card.remotes).toEqual([
+        {
+          type: 'streamable-http',
+          url: expect.stringMatching(/\/mcp$/),
+          headers: serverJson.remotes[0].headers,
+        },
+      ]);
+    });
+  }
+
+  test('GET /.well-known/ai-catalog.json points at the Server Card', async ({
+    request,
+  }) => {
+    const response = await request.get('/.well-known/ai-catalog.json');
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toBe(
+      'application/ai-catalog+json',
+    );
+
+    const catalog = await response.json();
+    expect(catalog.specVersion).toBe('1.0');
+    expect(catalog.entries).toEqual([
+      {
+        identifier: 'urn:air:neon.com:mcp:mcp',
+        type: 'application/mcp-server-card+json',
+        url: expect.stringMatching(/\/mcp\/server-card$/),
+      },
+    ]);
+
+    const card = await request.get(new URL(catalog.entries[0].url).pathname);
+    expect(card.status()).toBe(200);
   });
 
   test('/ redirects to Neon docs', async ({ request }) => {

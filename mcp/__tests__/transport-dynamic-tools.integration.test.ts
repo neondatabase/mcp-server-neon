@@ -6,6 +6,7 @@ import {
 import { getFilteredTools } from '../tools/grant-filter';
 import { toListedTool } from '../tools/listed-schema';
 import type { GrantContext } from '../utils/grant-context';
+import serverJson from '../../server.json';
 
 const { captureExceptionSpy, flushAnalyticsSpy, runSqlSpy, trackSpy } =
   vi.hoisted(() => ({
@@ -866,6 +867,32 @@ describe('transport dynamic tool composition', () => {
     expect(challenge).toContain(
       'resource_metadata="https://localhost:3100/.well-known/oauth-protected-resource/mcp?readonly=true"',
     );
+  });
+
+  it('reports the server.json title, description, website, and icons on initialize', async () => {
+    const oauthToken = 'oauth-server-info';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write'),
+    );
+
+    const init = await mcpCall(oauthToken, 'initialize', 1, {
+      protocolVersion: '2025-11-25',
+      capabilities: {},
+      clientInfo: { name: 'test-client', version: '1.0.0' },
+    });
+
+    expect(init.body).toMatchObject({
+      result: {
+        serverInfo: {
+          name: 'mcp-server-neon',
+          version: serverJson.version,
+          title: serverJson.title,
+          description: serverJson.description,
+          websiteUrl: serverJson.websiteUrl,
+          icons: serverJson.icons,
+        },
+      },
+    });
   });
 
   it('does not advertise listChanged on 2025-era initialize', async () => {

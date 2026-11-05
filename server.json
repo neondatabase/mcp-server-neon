@@ -11,13 +11,13 @@
   "websiteUrl": "https://neon.com/docs/ai/neon-mcp-server",
   "icons": [
     {
-      "src": "https://neon.com/brand/neon-logo-light-color.svg",
+      "src": "https://neon.com/brand/neon-logomark-light-color.svg",
       "mimeType": "image/svg+xml",
       "sizes": ["any"],
       "theme": "light"
     },
     {
-      "src": "https://neon.com/brand/neon-logo-dark-color.svg",
+      "src": "https://neon.com/brand/neon-logomark-dark-color.svg",
       "mimeType": "image/svg+xml",
       "sizes": ["any"],
       "theme": "dark"

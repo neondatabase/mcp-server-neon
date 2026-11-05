@@ -63,6 +63,7 @@ import { searchDocsInputSchema } from '../../../mcp/tools/toolsSchema';
 import type { NeonTool } from '../../../mcp/tools/tool-definition';
 import { assert } from '../../../lib/assert';
 import { SERVER_HOST } from '../../../lib/config';
+import { SERVER_INFO } from '../../../lib/server-metadata';
 import { isWellFormedOrigin } from '../../../lib/origin';
 import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
 
@@ -509,10 +510,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
       });
     },
     {
-      serverInfo: {
-        name: 'mcp-server-neon',
-        version: pkg.version,
-      },
+      serverInfo: SERVER_INFO,
       capabilities: {
         tools: NO_LIST_CHANGED,
         resources: NO_LIST_CHANGED,
@@ -715,10 +713,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
       );
     },
     {
-      serverInfo: {
-        name: 'mcp-server-neon',
-        version: pkg.version,
-      },
+      serverInfo: SERVER_INFO,
       capabilities: {
         tools: NO_LIST_CHANGED,
       },
