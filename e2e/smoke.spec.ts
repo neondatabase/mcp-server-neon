@@ -91,6 +91,31 @@ test.describe('Smoke tests', () => {
     });
   }
 
+  for (const path of [
+    '/mcp/server-card',
+    '/.well-known/mcp.json',
+    '/.well-known/ai-catalog.json',
+  ]) {
+    test(`OPTIONS ${path} allows a cross-origin conditional GET`, async ({
+      request,
+    }) => {
+      const response = await request.fetch(path, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://client.example',
+          'Access-Control-Request-Method': 'GET',
+          'Access-Control-Request-Headers': 'content-type, if-none-match',
+        },
+      });
+      expect(response.status()).toBe(204);
+      expect(response.headers()).toMatchObject({
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'GET',
+        'access-control-allow-headers': 'Content-Type, If-None-Match',
+      });
+    });
+  }
+
   test('GET /.well-known/ai-catalog.json points at the Server Card', async ({
     request,
   }) => {

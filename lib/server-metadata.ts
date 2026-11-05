@@ -62,12 +62,22 @@ export function buildAiCatalog() {
 
 // Discovery documents are public and read by browser-based clients before
 // they connect, so they allow any origin.
+const DISCOVERY_CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET',
+  'Access-Control-Allow-Headers': 'Content-Type, If-None-Match',
+};
+
 export function discoveryResponse(body: unknown, contentType: string) {
   return new Response(JSON.stringify(body), {
     headers: {
+      ...DISCOVERY_CORS_HEADERS,
       'Content-Type': contentType,
-      'Access-Control-Allow-Origin': '*',
       'Cache-Control': 'public, max-age=3600',
     },
   });
+}
+
+export function discoveryPreflight() {
+  return new Response(null, { status: 204, headers: DISCOVERY_CORS_HEADERS });
 }
