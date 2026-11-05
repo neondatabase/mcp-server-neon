@@ -347,6 +347,36 @@ describe('transport dynamic tool composition', () => {
     });
   });
 
+  it('answers an unreadable request body with the SDK parse error', async () => {
+    const oauthToken = 'oauth-unreadable-body';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write', {
+        projectId: null,
+        scopes: null,
+      }),
+    );
+
+    const res = await POST(
+      new Request('http://localhost/api/mcp', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${oauthToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+        },
+        body: new ReadableStream({
+          start(controller) {
+            controller.error(new Error('stream failure'));
+          },
+        }),
+        // @ts-expect-error duplex is required for streaming bodies
+        duplex: 'half',
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: -32700 } });
+  });
+
   // Every streamable-HTTP request builds a fresh server instance, so the
   // `initialize` handshake and the `tools/call` land on different ones and
   // `clientInfo` is gone by the time anything is tracked. The User-Agent is

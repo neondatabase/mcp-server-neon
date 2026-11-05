@@ -196,17 +196,17 @@ type StaticToolContext = {
 };
 
 /**
- * The tool a `tools/call` request names. Unparseable bodies return
- * `undefined` so the SDK answers them with its own JSON-RPC parse error.
+ * The tool a single `tools/call` request names. A body that cannot be read or
+ * parsed returns `undefined`: the SDK reads the same body and answers with its
+ * JSON-RPC parse error.
  */
 async function calledToolName(req: Request): Promise<string | undefined> {
   if (req.method !== 'POST') return undefined;
   let message: unknown;
   try {
     message = await req.clone().json();
-  } catch (error) {
-    if (error instanceof SyntaxError) return undefined;
-    throw error;
+  } catch {
+    return undefined;
   }
   if (!message || typeof message !== 'object') return undefined;
   if (!('method' in message) || message.method !== 'tools/call') {
