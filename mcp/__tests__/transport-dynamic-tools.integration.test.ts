@@ -472,7 +472,7 @@ describe('transport dynamic tool composition', () => {
         oauthToken,
         'read write',
         { projectId: 'proj_analytics', scopes: null },
-        'Claude',
+        'Nous Research',
       ),
     );
 
@@ -495,8 +495,107 @@ describe('transport dynamic tool composition', () => {
         }),
         context: expect.objectContaining({
           clientName: 'node',
+          client: expect.objectContaining({ name: 'Nous Research' }),
+        }),
+      }),
+    );
+  });
+
+  it('attributes the Claude connector User-Agent to claude-desktop', async () => {
+    const oauthToken = 'oauth-claude-connector';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(
+        oauthToken,
+        'read write',
+        { projectId: 'proj_analytics', scopes: null },
+        'Claude',
+      ),
+    );
+
+    await mcpCall(
+      oauthToken,
+      'tools/call',
+      1,
+      { name: 'run_sql', arguments: { sql: 'select 1' } },
+      '',
+      'Anthropic/ClaudeAI',
+    );
+
+    const attribution = {
+      clientName: 'Anthropic/ClaudeAI',
+      clientApplication: 'claude-desktop',
+    };
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event: 'server_init',
+        properties: expect.objectContaining(attribution),
+        context: expect.objectContaining({
+          clientName: 'Anthropic/ClaudeAI',
           client: expect.objectContaining({ name: 'Claude' }),
         }),
+      }),
+    );
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        event: 'tool_call',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
+  });
+
+  it('attributes the Claude connector to claude-desktop when its clientInfo says claude-code', async () => {
+    const oauthToken = 'oauth-claude-connector-modern';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(
+        oauthToken,
+        'read write',
+        { projectId: 'proj_analytics', scopes: null },
+        'Claude',
+      ),
+    );
+
+    await mcpCall(
+      oauthToken,
+      'tools/call',
+      1,
+      {
+        name: 'run_sql',
+        arguments: { sql: 'select 1' },
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientInfo': {
+            name: 'claude-code',
+            version: '2.1.300',
+          },
+          'io.modelcontextprotocol/clientCapabilities': {},
+        },
+      },
+      '',
+      'Anthropic/ClaudeAI',
+      {
+        'Mcp-Method': 'tools/call',
+        'Mcp-Name': 'run_sql',
+      },
+    );
+
+    const attribution = {
+      clientName: 'claude-code',
+      clientApplication: 'claude-desktop',
+    };
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event: 'server_init',
+        properties: expect.objectContaining(attribution),
+      }),
+    );
+    expect(trackSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        event: 'tool_call',
+        properties: expect.objectContaining(attribution),
       }),
     );
   });
