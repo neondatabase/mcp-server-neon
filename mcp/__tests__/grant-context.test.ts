@@ -6,7 +6,9 @@ import {
   resolveGrantFromToken,
   parseScopeCategories,
   DEFAULT_GRANT,
+  grantAnalyticsProperties,
   InvalidRoleNameError,
+  SCOPE_CATEGORIES,
   normalizeStoredGrant,
   type GrantContext,
 } from '../utils/grant-context';
@@ -335,5 +337,41 @@ describe('pinned roleName', () => {
         roleName: 'bad role',
       }),
     ).toThrow(InvalidRoleNameError);
+  });
+});
+
+describe('grantAnalyticsProperties', () => {
+  it('reports the default grant as unrestricted', () => {
+    expect(grantAnalyticsProperties(DEFAULT_GRANT)).toEqual({
+      projectScoped: 'false',
+      customScopes: 'all',
+      rolePinned: 'false',
+    });
+  });
+
+  it('lists selected categories in catalog order', () => {
+    expect(
+      grantAnalyticsProperties({
+        projectId: 'proj_1',
+        scopes: ['querying', 'branches'],
+        roleName: 'app_reader',
+      }),
+    ).toEqual({
+      projectScoped: 'true',
+      customScopes: 'branches,querying',
+      rolePinned: 'true',
+    });
+  });
+
+  it('distinguishes no categories from every category', () => {
+    expect(
+      grantAnalyticsProperties({ projectId: null, scopes: [] }).customScopes,
+    ).toBe('none');
+    expect(
+      grantAnalyticsProperties({
+        projectId: null,
+        scopes: [...SCOPE_CATEGORIES].reverse(),
+      }).customScopes,
+    ).toBe('all');
   });
 });

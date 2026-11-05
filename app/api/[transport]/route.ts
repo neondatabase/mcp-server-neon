@@ -42,6 +42,7 @@ import {
   resolveGrantFromSearchParams,
   resolveGrantFromToken,
   DEFAULT_GRANT,
+  grantAnalyticsProperties,
   InvalidRoleNameError,
   type GrantContext,
 } from '../../../mcp/utils/grant-context';
@@ -226,9 +227,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
           clientName,
           clientApplication,
           readOnly: String(context.readOnly ?? false),
-          projectScoped: String(!!grant.projectId),
-          customScopes: grant.scopes?.join(',') ?? 'all',
-          rolePinned: String(grant.roleName !== undefined),
+          ...grantAnalyticsProperties(grant),
         };
 
         track({
@@ -422,8 +421,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   toolName: tool.name,
                   tool_name: tool.name,
                   readOnly: String(readOnly),
-                  projectScoped: String(!!grant.projectId),
-                  rolePinned: String(grant.roleName !== undefined),
+                  ...grantAnalyticsProperties(grant),
                   clientName: cName,
                   clientApplication: clientApp,
                   traceId,
@@ -620,6 +618,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
               tool_name: toolName,
               readOnly: 'true',
               projectScoped: 'false',
+              customScopes: 'docs',
               rolePinned: 'false',
               clientName: docsAgent.clientName,
               clientApplication: docsAgent.clientApplication,

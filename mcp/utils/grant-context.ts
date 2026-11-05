@@ -94,6 +94,28 @@ function isValidScopeCategory(value: string): value is ScopeCategory {
 }
 
 /**
+ * Grant fields sent on analytics events. `customScopes` is `all`, `none`, or
+ * the allowed categories in `SCOPE_CATEGORIES` order, so one selection always
+ * produces one value. Only whether a role is pinned is sent, never its name.
+ */
+export function grantAnalyticsProperties(grant: GrantContext) {
+  const allowed =
+    grant.scopes === null
+      ? SCOPE_CATEGORIES
+      : SCOPE_CATEGORIES.filter((category) => grant.scopes?.includes(category));
+  let customScopes: string;
+  if (allowed.length === SCOPE_CATEGORIES.length) customScopes = 'all';
+  else if (allowed.length === 0) customScopes = 'none';
+  else customScopes = allowed.join(',');
+
+  return {
+    projectScoped: String(!!grant.projectId),
+    customScopes,
+    rolePinned: String(grant.roleName !== undefined),
+  };
+}
+
+/**
  * Parse scope categories from a comma-separated string.
  *
  * - "projects,branches,querying" -> ['projects', 'branches', 'querying']
