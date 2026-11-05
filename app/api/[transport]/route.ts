@@ -50,6 +50,7 @@ import {
   getAccessControlWarnings,
   formatAccessControlInstructions,
   isDocsOnlyTool,
+  withheldToolMessage,
 } from '../../../mcp/tools/grant-filter';
 import {
   invokeTool,
@@ -194,7 +195,35 @@ type StaticToolContext = {
   readOnly: boolean;
 };
 
-function createContextualMcpHandler(staticToolContext: StaticToolContext) {
+/**
+ * The tool a `tools/call` request names. Unparseable bodies return
+ * `undefined` so the SDK answers them with its own JSON-RPC parse error.
+ */
+async function calledToolName(req: Request): Promise<string | undefined> {
+  if (req.method !== 'POST') return undefined;
+  let message: unknown;
+  try {
+    message = await req.clone().json();
+  } catch (error) {
+    if (error instanceof SyntaxError) return undefined;
+    throw error;
+  }
+  if (!message || typeof message !== 'object') return undefined;
+  if (!('method' in message) || message.method !== 'tools/call') {
+    return undefined;
+  }
+  if (!('params' in message)) return undefined;
+  const { params } = message;
+  if (!params || typeof params !== 'object' || !('name' in params)) {
+    return undefined;
+  }
+  return typeof params.name === 'string' ? params.name : undefined;
+}
+
+function createContextualMcpHandler(
+  staticToolContext: StaticToolContext,
+  calledTool: string | undefined,
+) {
   let { clientName, clientApplication } = identifyClient();
   const sdkErrors = createSdkErrorReporter(() =>
     agentSentryTags({ clientName, clientApplication }),
@@ -507,6 +536,39 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
           },
         );
       });
+
+      // Registered only on the request that calls it, so tools/list never
+      // advertises a tool the grant withholds.
+      const withheldMessage =
+        calledTool === undefined
+          ? undefined
+          : withheldToolMessage(
+              calledTool,
+              staticToolContext.grant,
+              staticToolContext.readOnly,
+            );
+      if (calledTool !== undefined && withheldMessage !== undefined) {
+        server.registerTool(
+          calledTool,
+          { description: withheldMessage },
+          async (ctx: McpServerContext) => {
+            const { clientName: cName, clientApplication: clientApp } =
+              await getAuthContext(ctx);
+            logger.warn('withheld tool call:', {
+              toolName: calledTool,
+              readOnly: String(staticToolContext.readOnly),
+              projectScoped: String(!!staticToolContext.grant.projectId),
+              scopes: staticToolContext.grant.scopes?.join(',') ?? 'all',
+              clientName: cName,
+              clientApplication: clientApp,
+            });
+            return {
+              content: [{ type: 'text' as const, text: withheldMessage }],
+              isError: true,
+            };
+          },
+        );
+      }
     },
     {
       serverInfo: {
@@ -1007,7 +1069,11 @@ function jsonErrorResponse({
 // Wrap with authentication. After auth is resolved, route to a context-scoped
 // MCP handler whose registered tools match the token grant/read-only context.
 const authHandler = withMcpAuth(
-  async (req) => createContextualMcpHandler(getStaticToolContext(req))(req),
+  async (req) =>
+    createContextualMcpHandler(
+      getStaticToolContext(req),
+      await calledToolName(req),
+    )(req),
   verifyToken,
   {
     required: true,

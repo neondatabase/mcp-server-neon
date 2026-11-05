@@ -29,6 +29,22 @@ export const SCOPE_CATEGORIES = [
 
 export type ScopeCategory = (typeof SCOPE_CATEGORIES)[number];
 
+export const SCOPE_CATEGORY_LABELS: Record<ScopeCategory, string> = {
+  projects: 'Projects',
+  branches: 'Branches',
+  endpoints: 'Endpoints',
+  snapshots: 'Snapshots',
+  schema: 'Schema',
+  querying: 'Querying',
+  neon_auth: 'Neon Auth',
+  data_api: 'Data API',
+  observability: 'Observability',
+  docs: 'Docs',
+  functions: 'Functions',
+  storage: 'Storage',
+  realtime: 'Realtime',
+};
+
 export type GrantContext = {
   /** Single project ID for project-scoped access, or null for all projects. */
   projectId: string | null;
