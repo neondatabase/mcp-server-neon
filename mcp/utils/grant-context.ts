@@ -93,11 +93,7 @@ function isValidScopeCategory(value: string): value is ScopeCategory {
   return SCOPE_CATEGORIES.includes(value as ScopeCategory);
 }
 
-/**
- * Grant fields sent on analytics events. `customScopes` is `all`, `none`, or
- * the allowed categories in `SCOPE_CATEGORIES` order, so one selection always
- * produces one value. Only whether a role is pinned is sent, never its name.
- */
+// Canonical ordering keeps equivalent scope selections in one analytics bucket.
 export function grantAnalyticsProperties(grant: GrantContext) {
   const allowed =
     grant.scopes === null
