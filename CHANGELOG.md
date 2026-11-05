@@ -1,9 +1,10 @@
 # Changelog
 
-# [NEXT]
+# [2.0.0] 2026-11-05
 
 MCP transport:
 
+- `serverInfo` on `initialize` and `server/discover` carries `title`, `description`, `websiteUrl`, and `icons` from `server.json`. The same metadata is published as an MCP Server Card at `/mcp/server-card` and `/.well-known/mcp.json`, with an AI Catalog at `/.well-known/ai-catalog.json`.
 - Migrate the remote `/mcp` route to stateless MCP 2026-07-28 (SDK v2 + mcp-handler 2.1.0) with a stateless fallback for 2025-era Streamable HTTP clients.
 - Retire HTTP+SSE. `GET/POST /sse`, `/message`, `/api/sse`, and `/api/message` return `410 Gone` pointing at Streamable HTTP `/mcp`. The Redis session-binding module is removed with the transport.
 - `initialize` and `server/discover` advertise `listChanged: false` for `tools` and `resources`. The tool list is fixed for a connection's grant and the server has no resources, so it never sends a list-changed notification, and 2026-07-28 clients no longer open a `subscriptions/listen` stream waiting for one.
