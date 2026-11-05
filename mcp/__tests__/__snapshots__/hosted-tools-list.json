@@ -363,7 +363,7 @@
   {
     "name": "get_neon_auth_config",
     "title": "Get Neon Auth configuration",
-    "description": "Read Neon Auth config for a branch with OAuth and SMTP secrets redacted as \"***redacted***\". Requires provision_neon_auth first.",
+    "description": "Read Neon Auth config for a branch: trusted origins, localhost access, email and password, OAuth providers, email provider, the organization, magic link, and phone number plugins, and the webhook. OAuth and SMTP secrets are redacted as \"***redacted***\". Requires provision_neon_auth first.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4139,6 +4139,420 @@
     },
     "annotations": {
       "title": "Rotate an OAuth client secret",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_allow_localhost",
+    "title": "Update localhost allow setting",
+    "description": "Sets whether the branch's Neon Auth accepts requests from localhost origins. Turn it off for production. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "allow_localhost": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "allow_localhost"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update localhost allow setting",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_email_and_password",
+    "title": "Update email and password configuration",
+    "description": "Updates email and password sign-in for the branch's Neon Auth: whether it is enabled, sign-up, email verification, and whether a password reset revokes the user's sessions. Omitted fields keep their value. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "email_verification_method": {
+          "type": "string",
+          "enum": [
+            "link",
+            "otp"
+          ]
+        },
+        "require_email_verification": {
+          "type": "boolean"
+        },
+        "auto_sign_in_after_verification": {
+          "type": "boolean"
+        },
+        "send_verification_email_on_sign_up": {
+          "type": "boolean"
+        },
+        "send_verification_email_on_sign_in": {
+          "type": "boolean"
+        },
+        "disable_sign_up": {
+          "type": "boolean"
+        },
+        "revoke_sessions_on_password_reset": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update email and password configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_email_provider",
+    "title": "Update email provider configuration",
+    "description": "Sets the email provider Neon Auth sends verification, reset, and invitation emails with. Pass `body.type: \"shared\"` for Neon's sender, or `body.type: \"standard\"` with `host`, `port`, `username`, `password`, `sender_email`, and `sender_name` for your own SMTP server. The response omits `password`. Check the server with `send_auth_test_email`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "host": {
+                  "type": "string"
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "username": {
+                  "type": "string"
+                },
+                "password": {
+                  "type": "string"
+                },
+                "sender_email": {
+                  "type": "string"
+                },
+                "sender_name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "const": "standard"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "sender_email": {
+                  "type": "string"
+                },
+                "sender_name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "const": "shared"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update email provider configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "send_auth_test_email",
+    "title": "Send test email using the saved email provider",
+    "description": "Sends a test email through the branch's saved SMTP provider (`type: \"standard\"`) to `recipient_email`. Only send to an address the user gave you. A failed send returns `success: false` with `error_message`, not a tool error.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "recipient_email": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "format": "email",
+          "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "recipient_email"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Send test email using the saved email provider",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "update_auth_plugins_magic_link",
+    "title": "Update magic link plugin configuration",
+    "description": "Updates the Neon Auth magic link plugin: whether it is enabled, how many minutes a link is valid (`expires_in`), and whether it can sign up new users. Omitted fields keep their value. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "expires_in": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 1440
+        },
+        "disable_sign_up": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update magic link plugin configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_plugins_organization",
+    "title": "Update organization plugin configuration",
+    "description": "Updates the Neon Auth organization plugin, which lets your app's users create and join organizations. These are not Neon organizations. Omitted fields keep their value. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "organization_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "membership_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "creator_role": {
+          "type": "string",
+          "enum": [
+            "admin",
+            "owner"
+          ]
+        },
+        "send_invitation_email": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update organization plugin configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_plugins_phone_number",
+    "title": "Update phone number plugin configuration",
+    "description": "Updates the Neon Auth phone number (SMS OTP) plugin: whether it is enabled and how many seconds an OTP is valid (`otp_expires_in`). Omitted fields keep their value. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "otp_expires_in": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 600
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update phone number plugin configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_webhooks",
+    "title": "Update Neon Auth webhook configuration",
+    "description": "Replaces the branch's Neon Auth webhook configuration. Omitted fields reset: `{ enabled: false }` alone clears `webhook_url` and `enabled_events`. Call `get_neon_auth_config` first and send every field to keep.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "webhook_url": {
+          "type": "string"
+        },
+        "enabled_events": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "user.before_create",
+              "user.created",
+              "send.otp",
+              "send.magic_link",
+              "organization.invitation.created",
+              "organization.invitation.accepted",
+              "phone_number.verified"
+            ]
+          }
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "enabled"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update Neon Auth webhook configuration",
       "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": false,

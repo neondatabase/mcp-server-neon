@@ -21,6 +21,21 @@ const EMAIL_PASSWORD_DEFAULTS = {
   revoke_sessions_on_password_reset: false,
 };
 
+export const PLUGIN_DEFAULTS = {
+  organization: {
+    enabled: true,
+    organization_limit: 10,
+    membership_limit: 100,
+    creator_role: 'owner' as const,
+    send_invitation_email: false,
+  },
+  magic_link: { enabled: false, expires_in: 5, disable_sign_up: false },
+  phone_number: { enabled: false, otp_expires_in: 300 },
+  email_provider: { type: 'shared' as const },
+  email_and_password: EMAIL_PASSWORD_DEFAULTS,
+  allow_localhost: false,
+};
+
 export function defaultSnapshotMocks() {
   return {
     listBranchNeonAuthTrustedDomains: vi.fn().mockResolvedValue({
@@ -46,6 +61,14 @@ export function defaultSnapshotMocks() {
     getNeonAuthEmailProvider: vi.fn().mockResolvedValue({
       status: 200,
       data: { type: 'shared' },
+    }),
+    getNeonAuthPluginConfigs: vi.fn().mockResolvedValue({
+      status: 200,
+      data: PLUGIN_DEFAULTS,
+    }),
+    getNeonAuthWebhookConfig: vi.fn().mockResolvedValue({
+      status: 200,
+      data: { enabled: false, enabled_events: [], timeout_seconds: 5 },
     }),
   };
 }

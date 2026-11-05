@@ -12,6 +12,8 @@ MCP transport:
 
 New `projects` tools: `count_projects` returns how many active projects an organization has, resolving `org_id` the way `list_projects` does. `get_project_consumption` and `get_branch_consumption` return consumption metrics (`compute_unit_seconds`, `root_branch_bytes_month`, `public_network_transfer_bytes`, …) per project or per branch for an organization on a Launch, Scale, Agent, Business, or Enterprise plan (per branch excludes Business). All three are available in read-only mode and hidden on project-scoped connections.
 
+Neon Auth branch settings can be changed through MCP: `update_auth_allow_localhost`, `update_auth_email_and_password`, `update_auth_email_provider`, `send_auth_test_email`, `update_auth_plugins_organization`, `update_auth_plugins_magic_link`, `update_auth_plugins_phone_number`, and `update_auth_webhooks`, in the `neon_auth` category and hidden in read-only mode. `get_neon_auth_config` also returns `plugins` (organization, magic link, phone number) and `webhook`; a failed read of either is reported under `_errors` without failing the tool. Requires `@neon/tools` 2.8.0.
+
 `get_neon_auth_config` reports `revoke_sessions_on_password_reset` under `auth_methods.email_password`: whether resetting a user's password revokes all of their sessions.
 
 `create_postgres_role` takes `access`: `read_only` or `read_write` creates a role scoped to `database_name` (optional when the branch has one database) and `schemas` (default `["public"]`), and returns its password like an admin role. Without `access` the role still joins `neon_superuser`, and the description now says so. A connection pinned with `?roleName=` refuses scoped `access`, because the role is created with SQL as the database owner. Requires `@neon/tools` 2.6.0.

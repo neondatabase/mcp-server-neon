@@ -90,9 +90,9 @@ describe('NEON_TOOLS definitions', () => {
   });
 
   it('marks private Neon operations closed-world and public-capable ones open-world', () => {
-    expect(NEON_TOOLS).toHaveLength(130);
+    expect(NEON_TOOLS).toHaveLength(138);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
-    expect(generated).toHaveLength(110);
+    expect(generated).toHaveLength(118);
     expect(
       NEON_TOOLS.filter((tool) => tool.annotations.openWorldHint)
         .map((tool) => tool.name)
@@ -101,6 +101,7 @@ describe('NEON_TOOLS definitions', () => {
       'create_storage_bucket',
       'get_doc',
       'search_docs',
+      'send_auth_test_email',
       'send_feedback',
     ]);
   });
