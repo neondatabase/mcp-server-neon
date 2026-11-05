@@ -64,6 +64,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
         readOnly: String(context.readOnly ?? false),
         projectScoped: String(!!grant.projectId),
         customScopes: grant.scopes?.join(',') ?? 'all',
+        rolePinned: String(grant.roleName !== undefined),
       },
       context: {
         client: context.client,
@@ -131,6 +132,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
               projectScoped: String(!!grant.projectId),
+              rolePinned: String(grant.roleName !== undefined),
               clientName,
               clientApplication,
               traceId,
