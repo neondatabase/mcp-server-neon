@@ -342,12 +342,14 @@ Notes:
 - Project member and permission writes are not published. `list_project_members` and `list_project_permissions` are reads.
 - Schema tools (`?category=schema`) are the host tools `get_database_tables` and `describe_table_schema`, plus generated `compare_database_schema`.
 - Read-only enforcement still relies on `readOnlySafe` and server-side read-only logic; `scope` is category metadata, not a standalone read/write switch.
-- In project-scoped mode (`?projectId=...`), tools without a project path (`list_projects`, `create_project`, `list_organizations`, `list_regions`, `search`, `fetch`, …) are hidden. `delete_project` is also hidden.
+- In project-scoped mode (`?projectId=...`), tools without a project path (`list_projects`, `count_projects`, `create_project`, `get_project_consumption`, `get_branch_consumption`, `list_organizations`, `list_regions`, `search`, `fetch`, …) are hidden. `delete_project` is also hidden.
 
 **Project Management:**
 
 - **`list_projects`**: Lists Neon projects. `limit` caps how many items come back.
+- **`count_projects`**: Returns the number of active projects in an organization. `org_id` is optional and resolves the same way as on `list_projects`.
 - **`describe_project`**: Fetches a Neon project by id (`{ "project_id": "…" }`).
+- **`get_project_consumption`**, **`get_branch_consumption`**: Consumption metrics per project or per branch, grouped by billing period. Take `org_id`, `metrics`, `from`, `to`, and `granularity`, and need a Launch, Scale, Agent, Business, or Enterprise plan. `get_branch_consumption` also requires `project_ids`, rejects the `extra_branches_month` and `snapshot_storage_bytes_month` metrics, and is not available on the Business plan. The legacy-plan endpoint `/consumption_history/projects` is not published.
 - **`create_project`**: Creates a Neon project and waits for the default compute. Does not return a connection string. Arguments are `{ "name": "…", "org_id": "…", "region_id": "…" }`. Call `get_connection_string` after it succeeds.
 - **`delete_project`**: Deletes an existing Neon project. Arguments are `{ "project_id": "…" }`.
 - **`list_organizations`**: Lists all organizations that the current user has access to. Optionally filter by organization name or ID using the search parameter.

@@ -3,6 +3,7 @@ import type { ScopeCategory } from '../../utils/grant-context';
 
 export const GENERATED_TOOL_SCOPES = {
   'projects.list': 'projects',
+  'projects.count': 'projects',
   'projects.get': 'projects',
   'projects.create': 'projects',
   'projects.update': 'projects',
@@ -13,6 +14,8 @@ export const GENERATED_TOOL_SCOPES = {
   'regions.list': 'projects',
   'operations.list': 'projects',
   'operations.get': 'projects',
+  'consumption.perProjectV2': 'projects',
+  'consumption.perBranchV2': 'projects',
 
   'branches.list': 'branches',
   'branches.get': 'branches',

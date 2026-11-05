@@ -333,6 +333,50 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    'counts projects and reads project and branch consumption on a read-only connection',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!readOnlyClient)
+        throw new Error('Read-only client is not connected.');
+      const roClient = readOnlyClient;
+      const roCall = async (name: string, args: Record<string, unknown>) =>
+        assertToolSucceeded(
+          name,
+          await roClient.callTool({ name, arguments: args }),
+        );
+
+      const count = z
+        .number()
+        .int()
+        .parse(JSON.parse(await roCall('count_projects', {})));
+      expect(count).toBeGreaterThanOrEqual(1);
+
+      const to = new Date();
+      const window = {
+        org_id: testOrgId,
+        project_ids: [projectId],
+        from: new Date(to.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+        to: to.toISOString(),
+        granularity: 'hourly',
+        metrics: ['compute_unit_seconds', 'root_branch_bytes_month'],
+      };
+      const perProject = z
+        .array(
+          z.object({ project_id: z.string(), periods: z.array(z.unknown()) }),
+        )
+        .parse(JSON.parse(await roCall('get_project_consumption', window)));
+      const perBranch = z
+        .array(z.object({ project_id: z.string(), branch_id: z.string() }))
+        .parse(JSON.parse(await roCall('get_branch_consumption', window)));
+      // A project created moments ago has no history yet, so both lists may be empty.
+      for (const row of [...perProject, ...perBranch]) {
+        expect(row.project_id).toBe(projectId);
+      }
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'finds the project once with search and fetches it by the returned id',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');

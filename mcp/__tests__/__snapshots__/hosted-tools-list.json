@@ -858,6 +858,29 @@
     }
   },
   {
+    "name": "count_projects",
+    "title": "Retrieve projects count",
+    "description": "Returns the number of active projects you can access in an organization, without listing them. `org_id` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "org_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve projects count",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "describe_project",
     "title": "Retrieve project details",
     "description": "Retrieves the project record (settings, compute, usage). Call `list_branches` for branches.",
@@ -1498,6 +1521,152 @@
     },
     "annotations": {
       "title": "Retrieve operation details",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_project_consumption",
+    "title": "Retrieve project consumption metrics",
+    "description": "Returns consumption metrics per project in an organization, grouped by billing period. Omitting `project_ids` returns every project with history in the organization, including deleted ones; pass `project_ids` to narrow it. Requires a Launch, Scale, Agent, Business, or Enterprise plan; other plans return HTTP 403. `metrics` is required, one or more of `compute_unit_seconds`, `root_branch_bytes_month`, `child_branch_bytes_month`, `instant_restore_bytes_month`, `public_network_transfer_bytes`, `private_network_transfer_bytes`, `functions_active_capacity_microseconds`, `functions_waiting_capacity_microseconds`, `functions_invocations`, `functions_egress_bytes`, `extra_branches_month`, `snapshot_storage_bytes_month`; unknown names return no data instead of an error. `org_id` is required; call `list_organizations` for it. `from` and `to` are UTC date-times rounded to `granularity`: `hourly` reaches back 168 hours, `daily` 60 days, `monthly` one year. Returns every page. Pass `limit` to cap how many. There is no `cursor` argument. For per-branch numbers, call `get_branch_consumption`.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "project_ids": {
+          "minItems": 0,
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^([a-z0-9-]{1,60}(,[a-z0-9-]{1,60}){0,99})?$"
+          }
+        },
+        "from": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        },
+        "to": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        },
+        "granularity": {
+          "type": "string",
+          "enum": [
+            "hourly",
+            "daily",
+            "monthly"
+          ]
+        },
+        "org_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "granularity",
+        "org_id",
+        "metrics"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve project consumption metrics",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_branch_consumption",
+    "title": "Retrieve branch consumption metrics",
+    "description": "Returns consumption metrics per branch for the 1 to 100 projects in `project_ids`, grouped by billing period. Pass `branch_ids` to narrow it. Requires a usage-based Launch, Scale, Agent, or Enterprise plan; other plans return HTTP 403. `metrics` is required, one or more of `compute_unit_seconds`, `root_branch_bytes_month`, `child_branch_bytes_month`, `instant_restore_bytes_month`, `public_network_transfer_bytes`, `private_network_transfer_bytes`, `functions_active_capacity_microseconds`, `functions_waiting_capacity_microseconds`, `functions_invocations`, `functions_egress_bytes`; any other name returns HTTP 400. `extra_branches_month`, `snapshot_storage_bytes_month` are per-project only, on `get_project_consumption`. `org_id` is required; call `list_organizations` for it. `from` and `to` are UTC date-times rounded to `granularity`: `hourly` reaches back 168 hours, `daily` 60 days, `monthly` one year. Returns every page. Pass `limit` to cap how many. There is no `cursor` argument.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "project_ids": {
+          "minItems": 1,
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^([a-z0-9-]{1,60}(,[a-z0-9-]{1,60}){0,99})?$"
+          }
+        },
+        "branch_ids": {
+          "minItems": 0,
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^([a-z0-9-]{1,60}(,[a-z0-9-]{1,60}){0,99})?$"
+          }
+        },
+        "from": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        },
+        "to": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        },
+        "granularity": {
+          "type": "string",
+          "enum": [
+            "hourly",
+            "daily",
+            "monthly"
+          ]
+        },
+        "org_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$"
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "project_ids",
+        "from",
+        "to",
+        "granularity",
+        "org_id",
+        "metrics"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Retrieve branch consumption metrics",
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
