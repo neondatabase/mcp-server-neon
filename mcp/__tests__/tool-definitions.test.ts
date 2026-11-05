@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { z } from 'zod/v3';
 import { publishedId } from '@neon/tools';
 import { HOST_TOOLS, NEON_TOOLS } from '../tools/definitions';
+import { toListedTool } from '../tools/listed-schema';
 import { generatedToolPathHas } from '../tools/generated/adapt';
 import { PINNED_MCP_NAMES, TOOL_NAMES } from '../tools/generated/names';
 import { GENERATED_TOOL_IDS } from '../tools/generated/operations';
@@ -48,6 +49,9 @@ const OMITTED_ACCESS_CONTROL_WRITES = [
 ];
 
 const OMITTED_BLOB_TOOLS = ['storage_objects_get'];
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 describe('NEON_TOOLS definitions', () => {
   it('every tool has a name, scope (or null), kind, projectScoped, and readOnlySafe flag', () => {
@@ -209,6 +213,24 @@ describe('read-only tool surface', () => {
         expect(key, `${tool.name}.${key}`).toMatch(/^[a-z][a-z0-9_]*$/);
       }
     }
+  });
+
+  it('describes every published top-level tool input', () => {
+    const undocumented: string[] = [];
+    let checked = 0;
+    for (const tool of NEON_TOOLS) {
+      const schema: Record<string, unknown> = toListedTool(tool).inputSchema;
+      const properties = isRecord(schema.properties) ? schema.properties : {};
+      for (const [key, property] of Object.entries(properties)) {
+        checked += 1;
+        const description = isRecord(property) ? property.description : null;
+        if (typeof description !== 'string' || description.trim() === '') {
+          undocumented.push(`${tool.name}.${key}`);
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(500);
+    expect(undocumented).toEqual([]);
   });
 
   it('rejects camelCase aliases on host tool schemas', () => {
