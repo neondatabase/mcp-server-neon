@@ -16,6 +16,8 @@ New `projects` tools: `count_projects` returns how many active projects an organ
 
 `create_postgres_role` takes `access`: `read_only` or `read_write` creates a role scoped to `database_name` (optional when the branch has one database) and `schemas` (default `["public"]`), and returns its password like an admin role. Without `access` the role still joins `neon_superuser`, and the description now says so. A connection pinned with `?roleName=` refuses scoped `access`, because the role is created with SQL as the database owner. Requires `@neon/tools` 2.6.0.
 
+A tool argument of `.` or `..` that goes into a Management API path, such as `database_name: ".."` on `delete_postgres_database`, is now a tool error (`Path parameter database_name cannot be "..".`) and no request is sent. URL parsing resolved it as a dot segment, so the request could reach a different route. Requires `@neon/sdk` 7.8.2 and `@neon/tools` 2.6.2.
+
 `search` works for a personal account (every OAuth sign-in and personal API key) that belongs to more than one organization; it failed with `Multiple organizations found. Please specify the org_id parameter`, a parameter `search` does not take. With one organization, each matching project and branch is listed once instead of twice.
 
 The OAuth consent screen says where the sign-in returns for this request ("Returns to cursor.com", the full URI for an app scheme such as `cursor://`) and, for a loopback redirect, that it returns to an app on this computer. A client that signs in with a Client ID Metadata Document shows "App identity published at <host>" under its name.
