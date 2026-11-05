@@ -280,6 +280,8 @@ async function handleSchemaMigration(
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
 ) {
+  // Reject malformed SQL before creating a branch.
+  const sqlStatements = splitSqlStatements(migrationSql);
   return await startSpan({ name: 'prepare_schema_migration' }, async (span) => {
     let newBranch: { branch: Branch } | undefined;
 
@@ -307,7 +309,7 @@ async function handleSchemaMigration(
 
       const result = await handleRunSqlTransaction(
         {
-          sqlStatements: splitSqlStatements(migrationSql),
+          sqlStatements,
           databaseName: resolvedDatabaseName,
           projectId,
           branchId: createdBranch.branch.id,

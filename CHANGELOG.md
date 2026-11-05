@@ -1,5 +1,9 @@
 # Changelog
 
+# [NEXT]
+
+`prepare_database_migration` and `complete_database_migration` split migration SQL only on top-level semicolons, as psql does. A semicolon inside a string literal, quoted identifier, dollar-quoted function body or `DO` block, a comment, or the `BEGIN ATOMIC ... END` body of a SQL-standard function or procedure no longer ends the statement, so migrations with `INSERT ... VALUES ('a;b')`, trigger functions, `DO` blocks or `BEGIN ATOMIC` bodies apply. Pieces holding only whitespace or comments are no longer sent. A migration with an unterminated string, quoted identifier, dollar quote or block comment is rejected with the line it starts on (`Migration SQL has an unterminated block comment starting on line 3.`) before `prepare_database_migration` creates a branch.
+
 # [2.0.0] 2026-11-05
 
 MCP transport:

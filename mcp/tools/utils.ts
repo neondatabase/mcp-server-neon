@@ -1,10 +1,123 @@
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
 import { Api, Organization } from '../neon-client';
 import { ToolHandlerExtraParams } from './types';
-import { NotFoundError } from '../server/errors';
+import { InvalidArgumentError, NotFoundError } from '../server/errors';
 
-export const splitSqlStatements = (sql: string) => {
-  return sql.split(';').filter(Boolean);
+/**
+ * Splits a migration into statements on top-level semicolons, as psql does.
+ * Semicolons inside quoted strings ('...', E'...'), quoted identifiers ("..."),
+ * dollar-quoted bodies ($$...$$, $tag$...$tag$), comments (--, nested /* *\/)
+ * and the BEGIN ATOMIC ... END body of a CREATE FUNCTION or CREATE PROCEDURE do
+ * not end a statement. Pieces that hold only whitespace and comments are
+ * dropped. An unterminated string, identifier, dollar quote or block comment is
+ * rejected rather than sent or dropped.
+ */
+export const splitSqlStatements = (sql: string): string[] => {
+  const statements: string[] = [];
+  let start = 0;
+  let hasCode = false;
+  // Leading words of the statement, parenthesis depth, and BEGIN ... END
+  // depth inside a CREATE FUNCTION or PROCEDURE, tracked like psql's lexer.
+  let words: string[] = [];
+  let parenDepth = 0;
+  let beginDepth = 0;
+  let i = 0;
+  const end = (to: number) => {
+    if (hasCode) statements.push(sql.slice(start, to).trim());
+    start = to + 1;
+    hasCode = false;
+    words = [];
+    parenDepth = 0;
+    beginDepth = 0;
+  };
+  const unterminated = (what: string, at: number): never => {
+    const line = sql.slice(0, at).split('\n').length;
+    throw new InvalidArgumentError(
+      `Migration SQL has an unterminated ${what} starting on line ${line}.`,
+    );
+  };
+  const routine = () =>
+    words[0] === 'create' &&
+    (['function', 'procedure'].includes(words[1] ?? '') ||
+      (words[1] === 'or' &&
+        words[2] === 'replace' &&
+        ['function', 'procedure'].includes(words[3] ?? '')));
+  while (i < sql.length) {
+    const char = sql[i];
+    const next = sql[i + 1];
+    if (char === '-' && next === '-') {
+      const newline = sql.indexOf('\n', i);
+      i = newline === -1 ? sql.length : newline + 1;
+    } else if (char === '/' && next === '*') {
+      const from = i;
+      let depth = 1;
+      i += 2;
+      while (i < sql.length && depth > 0) {
+        if (sql[i] === '/' && sql[i + 1] === '*') {
+          depth++;
+          i += 2;
+        } else if (sql[i] === '*' && sql[i + 1] === '/') {
+          depth--;
+          i += 2;
+        } else i++;
+      }
+      if (depth > 0) unterminated('block comment', from);
+    } else if (char === "'" || char === '"') {
+      // E'...' strings also end at an unescaped quote; '' or "" is an escape.
+      const from = i;
+      const escapes =
+        char === "'" &&
+        /[eE]/.test(sql[i - 1] ?? '') &&
+        !/\w/.test(sql[i - 2] ?? '');
+      hasCode = true;
+      i++;
+      while (i < sql.length) {
+        if (escapes && sql[i] === '\\') i += 2;
+        else if (sql[i] === char && sql[i + 1] === char) i += 2;
+        else if (sql[i] === char) break;
+        else i++;
+      }
+      if (i >= sql.length)
+        unterminated(char === "'" ? 'string' : 'quoted identifier', from);
+      i++;
+    } else if (char === '$') {
+      const tag = /^\$(?:[A-Za-z_\u0080-\uffff][\w\u0080-\uffff]*)?\$/.exec(
+        sql.slice(i),
+      );
+      // A $n parameter is not a quote; identifiers holding $ are read as words.
+      if (tag) {
+        const close = sql.indexOf(tag[0], i + tag[0].length);
+        if (close === -1) unterminated(`${tag[0]} dollar quote`, i);
+        i = close + tag[0].length;
+      } else i++;
+      hasCode = true;
+    } else if (/[A-Za-z_\u0080-\uffff]/.test(char)) {
+      const word = /^[\w$\u0080-\uffff]+/.exec(sql.slice(i))![0];
+      const lower = word.toLowerCase();
+      if (words.length < 4) words.push(lower);
+      // As in psql: only outside parentheses, and CASE ... END counts only
+      // inside a BEGIN, so a parameter named begin does not open a body.
+      if (parenDepth === 0 && routine()) {
+        if (lower === 'begin' || (lower === 'case' && beginDepth > 0))
+          beginDepth++;
+        else if (lower === 'end' && beginDepth > 0) beginDepth--;
+      }
+      hasCode = true;
+      i += word.length;
+    } else if (char === '(' || char === ')') {
+      parenDepth = Math.max(0, parenDepth + (char === '(' ? 1 : -1));
+      hasCode = true;
+      i++;
+    } else if (char === ';' && beginDepth === 0) {
+      end(i);
+      i++;
+    } else {
+      if (!/\s/.test(char)) hasCode = true;
+      i++;
+    }
+  }
+  end(sql.length);
+  return statements;
 };
 
 export const DESCRIBE_DATABASE_STATEMENTS = [
