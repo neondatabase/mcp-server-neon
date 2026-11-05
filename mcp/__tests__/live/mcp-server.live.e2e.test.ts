@@ -536,6 +536,39 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    'refuses a .. database name instead of sending the request to another route',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!neonClient) throw new Error('Neon SDK client is not initialized.');
+
+      const branches = await neonClient.listProjectBranches({ projectId });
+      const defaultBranch = branches.data.branches.find(
+        (branch) => branch.default,
+      );
+      if (!defaultBranch) throw new Error('Default branch was not found.');
+
+      const result = toolResultSchema.parse(
+        await callTool('delete_postgres_database', {
+          project_id: projectId,
+          branch_id: defaultBranch.id,
+          database_name: '..',
+        }),
+      );
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result.content)).toContain(
+        'Path parameter database_name cannot be \\"..\\".',
+      );
+
+      const databases = await neonClient.listProjectBranchDatabases(
+        projectId,
+        defaultBranch.id,
+      );
+      expect(databases.data.databases.map((db) => db.name)).toContain('neondb');
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'compares a child branch schema, then resets it from parent',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
