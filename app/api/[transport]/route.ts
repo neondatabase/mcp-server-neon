@@ -228,6 +228,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
           readOnly: String(context.readOnly ?? false),
           projectScoped: String(!!grant.projectId),
           customScopes: grant.scopes?.join(',') ?? 'all',
+          rolePinned: String(grant.roleName !== undefined),
         };
 
         track({
@@ -422,6 +423,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   tool_name: tool.name,
                   readOnly: String(readOnly),
                   projectScoped: String(!!grant.projectId),
+                  rolePinned: String(grant.roleName !== undefined),
                   clientName: cName,
                   clientApplication: clientApp,
                   traceId,
@@ -618,6 +620,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
               tool_name: toolName,
               readOnly: 'true',
               projectScoped: 'false',
+              rolePinned: 'false',
               clientName: docsAgent.clientName,
               clientApplication: docsAgent.clientApplication,
               traceId,

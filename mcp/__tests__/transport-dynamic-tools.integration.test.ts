@@ -225,17 +225,51 @@ describe('transport dynamic tool composition', () => {
       1,
       expect.objectContaining({
         event: 'server_init',
-        properties: expect.objectContaining({ authMethod: 'oauth' }),
+        properties: expect.objectContaining({
+          authMethod: 'oauth',
+          rolePinned: 'false',
+        }),
       }),
     );
     expect(trackSpy).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         event: 'tool_call',
-        properties: expect.objectContaining({ authMethod: 'oauth' }),
+        properties: expect.objectContaining({
+          authMethod: 'oauth',
+          rolePinned: 'false',
+        }),
       }),
     );
     expect(flushAnalyticsSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('tracks whether a Postgres role is pinned without sending its name', async () => {
+    const oauthToken = 'oauth-role-pinned';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write', {
+        projectId: 'proj_analytics',
+        scopes: null,
+        roleName: 'app_reader',
+      }),
+    );
+
+    await listToolsForToken(oauthToken);
+    await mcpCall(oauthToken, 'tools/call', 3, {
+      name: 'run_sql',
+      arguments: { sql: 'select 1' },
+    });
+
+    for (const [index, event] of ['server_init', 'tool_call'].entries()) {
+      expect(trackSpy).toHaveBeenNthCalledWith(
+        index + 1,
+        expect.objectContaining({
+          event,
+          properties: expect.objectContaining({ rolePinned: 'true' }),
+        }),
+      );
+    }
+    expect(JSON.stringify(trackSpy.mock.calls)).not.toContain('app_reader');
   });
 
   it('returns access-control notices on initialize, not in tool descriptions', async () => {
