@@ -63,7 +63,10 @@ test.describe('Smoke tests', () => {
     },
     { path: '/.well-known/mcp.json', contentType: 'application/json' },
   ]) {
-    test(`GET ${path} returns the public Server Card`, async ({ request }) => {
+    test(`GET ${path} returns the public Server Card`, async ({
+      request,
+      baseURL,
+    }) => {
       const response = await request.get(path);
       expect(response.status()).toBe(200);
       expect(response.headers()['content-type']).toBe(contentType);
@@ -84,7 +87,7 @@ test.describe('Smoke tests', () => {
       expect(card.remotes).toEqual([
         {
           type: 'streamable-http',
-          url: expect.stringMatching(/\/mcp$/),
+          url: `${baseURL}/mcp`,
           headers: serverJson.remotes[0].headers,
         },
       ]);
@@ -96,9 +99,7 @@ test.describe('Smoke tests', () => {
     '/.well-known/mcp.json',
     '/.well-known/ai-catalog.json',
   ]) {
-    test(`OPTIONS ${path} allows a cross-origin conditional GET`, async ({
-      request,
-    }) => {
+    test(`OPTIONS ${path} allows a cross-origin GET`, async ({ request }) => {
       const response = await request.fetch(path, {
         method: 'OPTIONS',
         headers: {
@@ -118,6 +119,7 @@ test.describe('Smoke tests', () => {
 
   test('GET /.well-known/ai-catalog.json points at the Server Card', async ({
     request,
+    baseURL,
   }) => {
     const response = await request.get('/.well-known/ai-catalog.json');
     expect(response.status()).toBe(200);
@@ -131,11 +133,11 @@ test.describe('Smoke tests', () => {
       {
         identifier: 'urn:air:neon.com:mcp:mcp',
         type: 'application/mcp-server-card+json',
-        url: expect.stringMatching(/\/mcp\/server-card$/),
+        url: `${baseURL}/mcp/server-card`,
       },
     ]);
 
-    const card = await request.get(new URL(catalog.entries[0].url).pathname);
+    const card = await request.get(catalog.entries[0].url);
     expect(card.status()).toBe(200);
   });
 

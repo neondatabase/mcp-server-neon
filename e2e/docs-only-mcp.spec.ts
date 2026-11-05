@@ -192,6 +192,13 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
       const result = await client.listTools();
 
       expect(transport.protocolVersion).toBe('2026-07-28');
+      expect(client.getServerVersion()).toMatchObject({
+        name: 'mcp-server-neon',
+        title: serverJson.title,
+        description: serverJson.description,
+        websiteUrl: serverJson.websiteUrl,
+        icons: serverJson.icons,
+      });
       expect(client.getServerCapabilities()?.tools).toEqual({
         listChanged: false,
       });
