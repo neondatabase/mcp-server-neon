@@ -21,7 +21,10 @@ import { agentSentryTags, setSentryTags } from '../sentry/utils';
 import { ToolHandlerExtraParams } from '../tools/types';
 import { handleToolError } from './errors';
 import { identifyClient } from '../utils/client-application';
-import { DEFAULT_GRANT } from '../utils/grant-context';
+import {
+  DEFAULT_GRANT,
+  grantAnalyticsProperties,
+} from '../utils/grant-context';
 import {
   getAvailableTools,
   getAccessControlWarnings,
@@ -62,9 +65,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
         clientName,
         clientApplication,
         readOnly: String(context.readOnly ?? false),
-        projectScoped: String(!!grant.projectId),
-        customScopes: grant.scopes?.join(',') ?? 'all',
-        rolePinned: String(grant.roleName !== undefined),
+        ...grantAnalyticsProperties(grant),
       },
       context: {
         client: context.client,
@@ -131,8 +132,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
               toolName: tool.name,
               tool_name: tool.name,
               readOnly: String(context.readOnly ?? false),
-              projectScoped: String(!!grant.projectId),
-              rolePinned: String(grant.roleName !== undefined),
+              ...grantAnalyticsProperties(grant),
               clientName,
               clientApplication,
               traceId,

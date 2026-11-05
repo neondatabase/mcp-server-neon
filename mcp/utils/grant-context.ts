@@ -93,6 +93,24 @@ function isValidScopeCategory(value: string): value is ScopeCategory {
   return SCOPE_CATEGORIES.includes(value as ScopeCategory);
 }
 
+// Canonical ordering keeps equivalent scope selections in one analytics bucket.
+export function grantAnalyticsProperties(grant: GrantContext) {
+  const allowed =
+    grant.scopes === null
+      ? SCOPE_CATEGORIES
+      : SCOPE_CATEGORIES.filter((category) => grant.scopes?.includes(category));
+  let customScopes: string;
+  if (allowed.length === SCOPE_CATEGORIES.length) customScopes = 'all';
+  else if (allowed.length === 0) customScopes = 'none';
+  else customScopes = allowed.join(',');
+
+  return {
+    projectScoped: String(!!grant.projectId),
+    customScopes,
+    rolePinned: String(grant.roleName !== undefined),
+  };
+}
+
 /**
  * Parse scope categories from a comma-separated string.
  *

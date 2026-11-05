@@ -244,6 +244,36 @@ describe('transport dynamic tool composition', () => {
     expect(flushAnalyticsSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('tracks the OAuth project scope and selected categories on both events', async () => {
+    const oauthToken = 'oauth-access-scopes';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write', {
+        projectId: 'proj_analytics',
+        scopes: ['querying', 'branches'],
+      }),
+    );
+
+    await listToolsForToken(oauthToken);
+    await mcpCall(oauthToken, 'tools/call', 3, {
+      name: 'run_sql',
+      arguments: { sql: 'select 1' },
+    });
+
+    for (const [index, event] of ['server_init', 'tool_call'].entries()) {
+      expect(trackSpy).toHaveBeenNthCalledWith(
+        index + 1,
+        expect.objectContaining({
+          event,
+          properties: expect.objectContaining({
+            authMethod: 'oauth',
+            projectScoped: 'true',
+            customScopes: 'branches,querying',
+          }),
+        }),
+      );
+    }
+  });
+
   it('tracks whether a Postgres role is pinned without sending its name', async () => {
     const oauthToken = 'oauth-role-pinned';
     vi.mocked(model.getAccessToken).mockResolvedValue(
