@@ -2,10 +2,7 @@ import { Api, Branch } from '../../neon-client';
 import { ToolHandlerExtraParams } from '../types';
 import { handleGetConnectionString } from './connection-string';
 import { neon } from '@neondatabase/serverless';
-import {
-  DESCRIBE_DATABASE_STATEMENTS,
-  DROP_DB_TREE_FUNCTION_STATEMENT,
-} from '../utils';
+import { DESCRIBE_DATABASE_QUERY } from '../utils';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { CONSOLE_URLS, generateConsoleUrl } from './urls';
 
@@ -64,11 +61,13 @@ export async function handleDescribeBranch(
       extra,
     );
     const runQuery = neon(connectionString.uri);
-    const results = await runQuery.transaction([
-      ...DESCRIBE_DATABASE_STATEMENTS.map((sql) => runQuery.query(sql)),
-      runQuery.query(DROP_DB_TREE_FUNCTION_STATEMENT),
-    ]);
-    response = results.slice(0, DESCRIBE_DATABASE_STATEMENTS.length);
+    const [tree] = await runQuery.transaction(
+      [runQuery.query(DESCRIBE_DATABASE_QUERY)],
+      { readOnly: true },
+    );
+    // The leading empty array stood for the former CREATE FUNCTION statement's
+    // result; it is kept so the output format is unchanged.
+    response = [[], tree];
 
     return {
       content: [
@@ -85,28 +84,19 @@ export async function handleDescribeBranch(
       ],
     };
   } catch (error) {
-    // A pinned role is the likeliest cause of a failure here (the structure
-    // query creates a function in `public`), so say why it is missing rather
-    // than returning metadata alone.
-    if (extra.pinnedRoleName !== undefined) {
-      return {
-        content: [
-          { type: 'text', text: branchInfo(branch) },
-          {
-            type: 'text',
-            text: `Database structure unavailable as Postgres role "${extra.pinnedRoleName}": ${error instanceof Error ? error.message : String(error)}`,
-          },
-        ],
-      };
-    }
+    // Say why the structure is missing rather than returning metadata alone.
+    const role =
+      extra.pinnedRoleName !== undefined
+        ? ` as Postgres role "${extra.pinnedRoleName}"`
+        : '';
+    return {
+      content: [
+        { type: 'text', text: branchInfo(branch) },
+        {
+          type: 'text',
+          text: `Database structure unavailable${role}: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+    };
   }
-
-  return {
-    content: [
-      {
-        type: 'text',
-        text: branchInfo(branch),
-      },
-    ],
-  };
 }

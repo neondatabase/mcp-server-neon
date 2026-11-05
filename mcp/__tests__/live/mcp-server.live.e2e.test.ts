@@ -569,6 +569,94 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    "keeps the database's own show_db_tree when describing a branch",
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!neonClient) throw new Error('Neon SDK client is not initialized.');
+
+      const branches = await neonClient.listProjectBranches({ projectId });
+      const defaultBranch = branches.data.branches.find(
+        (branch) => branch.default,
+      );
+      if (!defaultBranch) throw new Error('Default branch was not found.');
+
+      const marker = 'application show_db_tree';
+      assertToolSucceeded(
+        'run_sql',
+        await callTool('run_sql', {
+          project_id: projectId,
+          sql: `CREATE FUNCTION public.show_db_tree() RETURNS TABLE (tree_structure text) LANGUAGE sql AS $$ SELECT '${marker}'::text $$`,
+        }),
+      );
+      try {
+        const result = toolResultSchema.parse(
+          await callTool('describe_branch', {
+            project_id: projectId,
+            branch_id: defaultBranch.id,
+            database_name: 'neondb',
+          }),
+        );
+        expect(result.isError).toBeFalsy();
+        const texts = result.content
+          .map((item) => textContentSchema.safeParse(item))
+          .flatMap((parsed) => (parsed.success ? [parsed.data.text] : []));
+        expect(
+          texts.some((text) => text.startsWith('Database Structure:')),
+        ).toBe(true);
+
+        const after = await callTool('run_sql', {
+          project_id: projectId,
+          sql: 'SELECT tree_structure FROM public.show_db_tree()',
+        });
+        expect(JSON.parse(assertToolSucceeded('run_sql', after))).toEqual([
+          { tree_structure: marker },
+        ]);
+      } finally {
+        await callTool('run_sql', {
+          project_id: projectId,
+          sql: 'DROP FUNCTION IF EXISTS public.show_db_tree()',
+        });
+      }
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'says why describe_branch has no database structure',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!neonClient) throw new Error('Neon SDK client is not initialized.');
+
+      const branches = await neonClient.listProjectBranches({ projectId });
+      const defaultBranch = branches.data.branches.find(
+        (branch) => branch.default,
+      );
+      if (!defaultBranch) throw new Error('Default branch was not found.');
+
+      const result = toolResultSchema.parse(
+        await callTool('describe_branch', {
+          project_id: projectId,
+          branch_id: defaultBranch.id,
+          database_name: 'mcp_missing_database',
+        }),
+      );
+      expect(result.isError).toBeFalsy();
+      const texts = result.content
+        .map((item) => textContentSchema.safeParse(item))
+        .flatMap((parsed) => (parsed.success ? [parsed.data.text] : []));
+      expect(texts.some((text) => text.startsWith('Branch Details:'))).toBe(
+        true,
+      );
+      expect(
+        texts.some((text) =>
+          text.startsWith('Database structure unavailable: '),
+        ),
+      ).toBe(true);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'compares a child branch schema, then resets it from parent',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
