@@ -79,6 +79,8 @@ const FINALIZE_BRANCH_RESTORE_DESCRIPTION = `Finalize a branch created with \`re
 
 const CREATE_PROJECT_ENDPOINT_DESCRIPTION = `Creates a compute endpoint on a branch. Does not return a connection string; call \`get_connection_string\`.`;
 
+const LIST_PROJECT_ENDPOINTS_DESCRIPTION = `Retrieves the compute endpoints of every branch in the project. For one branch, call \`list_branch_computes\`.`;
+
 const DEPLOY_FUNCTION_DESCRIPTION = `Creates a deployment for the function. Supply at least one of \`zip\`, \`environment\`, or \`runtime\`; omitted fields inherit the latest version. The first deployment must include \`zip\`.`;
 
 const REGISTER_FUNCTIONS_CUSTOM_DOMAIN_DESCRIPTION = `Registers a hostname on the branch and routes it to a function. Pass \`entity_type: "function"\` and \`entity_id\` as the slug from \`list_functions\`. Point a CNAME at the returned \`cname_target\`.`;
@@ -109,6 +111,8 @@ const UPDATE_AUTH_OAUTH_CLIENT_DESCRIPTION = `Updates an OAuth client of the Neo
 const DELETE_AUTH_OAUTH_CLIENT_DESCRIPTION = `Deletes an OAuth client from the Neon Auth OAuth server. Irreversible. Tokens already issued to the client are not revoked.`;
 
 const ROTATE_AUTH_OAUTH_CLIENT_SECRET_DESCRIPTION = `Generates a new secret for a confidential client of the Neon Auth OAuth server. The old secret stops working immediately. The new \`client_secret\` is shown only once: show it to the user and tell them to store it.`;
+
+const GET_AUTH_DESCRIPTION = `Retrieves the Neon Auth integration record for a branch: provider, base URL, JWKS URL, and database. \`get_neon_auth_config\` returns these fields plus every Neon Auth setting; prefer it unless you only need the record.`;
 
 const READ_AUTH_SETTINGS =
   'Call `get_neon_auth_config` to read the current value.';
@@ -176,6 +180,7 @@ function createGeneratedNeonTools() {
       'projects.delete': DELETE_PROJECT_DESCRIPTION,
       'branches.delete': DELETE_BRANCH_DESCRIPTION,
       'branches.finalizeRestore': FINALIZE_BRANCH_RESTORE_DESCRIPTION,
+      'postgres.endpoints.list': LIST_PROJECT_ENDPOINTS_DESCRIPTION,
       'postgres.endpoints.create': CREATE_PROJECT_ENDPOINT_DESCRIPTION,
       'logs.query': QUERY_LOGS_DESCRIPTION,
       'logs.fields': LIST_LOG_FIELDS_DESCRIPTION,
@@ -185,6 +190,7 @@ function createGeneratedNeonTools() {
       'functions.deploy': DEPLOY_FUNCTION_DESCRIPTION,
       'functions.customDomains.register':
         REGISTER_FUNCTIONS_CUSTOM_DOMAIN_DESCRIPTION,
+      'auth.get': GET_AUTH_DESCRIPTION,
       'auth.oauthProviders.list': LIST_AUTH_OAUTH_PROVIDERS_DESCRIPTION,
       'auth.oauthProviders.add': ADD_AUTH_OAUTH_PROVIDER_DESCRIPTION,
       'auth.oauthProviders.update': UPDATE_AUTH_OAUTH_PROVIDER_DESCRIPTION,

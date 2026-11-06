@@ -153,7 +153,7 @@ const HOST_TOOL_DRAFTS = [
     name: 'describe_branch' as const,
     scope: 'branches',
     description:
-      'Get a tree view of all objects in a branch, including databases, schemas, tables, views, and functions. Do not use when you only need table names (use `get_database_tables` instead) or column detail (use `describe_table_schema` instead).',
+      'Get a summary of a branch and a tree view of all its objects, including databases, schemas, tables, views, and functions. Connects to the database, so it starts a suspended compute; for the branch record alone, use `get_branch`. Do not use when you only need table names (use `get_database_tables` instead) or column detail (use `describe_table_schema` instead).',
     inputSchema: describeBranchInputSchema,
     readOnlySafe: true,
     annotations: {
