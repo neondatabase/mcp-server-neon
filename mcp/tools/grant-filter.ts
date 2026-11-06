@@ -3,6 +3,7 @@ import { z as z4 } from 'zod';
 import { InvalidArgumentError } from '../server/errors';
 import {
   SCOPE_CATEGORIES,
+  SCOPE_CATEGORY_LABELS,
   type GrantContext,
   type ScopeCategory,
 } from '../utils/grant-context';
@@ -247,6 +248,72 @@ export function getAvailableTools(
   readOnly: boolean,
 ): NeonTool[] {
   return getFilteredTools(grant, readOnly);
+}
+
+/**
+ * Hosts such as ChatGPT advertise the tool list they reviewed, not the one
+ * this grant produces, so a model can call a Neon tool the grant withholds.
+ * Returns the tool result text for that call, or `undefined` when `toolName`
+ * is not a Neon tool or the grant allows it.
+ */
+export function withheldToolMessage(
+  toolName: string,
+  grant: GrantContext,
+  readOnly: boolean,
+): string | undefined {
+  const tool = NEON_TOOLS.find((candidate) => candidate.name === toolName);
+  if (!tool) return undefined;
+  if (getFilteredTools(grant, readOnly).some((t) => t.name === toolName)) {
+    return undefined;
+  }
+
+  const reasons: string[] = [];
+  if (
+    grant.scopes !== null &&
+    tool.scope !== null &&
+    !ALWAYS_AVAILABLE_TOOLS.has(tool.name) &&
+    !grant.scopes.includes(tool.scope)
+  ) {
+    const label = SCOPE_CATEGORY_LABELS[tool.scope];
+    reasons.push(
+      `The connection does not include the ${label} category. ` +
+        `Reconnect Neon and select ${label} on the consent screen, ` +
+        `or add category=${tool.scope} to the MCP server URL.`,
+    );
+  }
+  if (grant.projectId && !tool.projectScoped) {
+    reasons.push(
+      'The connection is scoped to one project. ' +
+        'Reconnect Neon and choose "All projects you can access" on the consent screen, ' +
+        'or remove projectId from the MCP server URL.',
+    );
+  }
+  if (
+    grant.roleName !== undefined &&
+    PINNED_ROLE_WITHHELD_TOOLS.has(toolName)
+  ) {
+    reasons.push(
+      'The connection pins a Postgres role. ' +
+        'Reconnect Neon and clear the Postgres role on the consent screen, ' +
+        'or remove roleName from the MCP server URL.',
+    );
+  }
+  if (readOnly && !tool.readOnlySafe) {
+    reasons.push(
+      'The connection is read-only. ' +
+        'Reconnect Neon and check "Allow writes" on the consent screen, ' +
+        'or remove readonly from the MCP server URL.',
+    );
+  }
+  if (reasons.length === 0) {
+    throw new Error(`No grant rule explains why ${toolName} is withheld`);
+  }
+
+  return [
+    `${toolName} is not enabled on this connection.`,
+    ...reasons.map((reason) => `- ${reason}`),
+    'Tell the user what to change. Calling the tool again on this connection fails the same way.',
+  ].join('\n');
 }
 
 export function formatAccessControlInstructions(
