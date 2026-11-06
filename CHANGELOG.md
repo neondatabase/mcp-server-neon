@@ -8,6 +8,8 @@ A failed SQL tool call returns the Postgres SQLSTATE, error position, and any de
 
 `describe_branch` reads the database structure with one `SELECT` in a `READ ONLY` transaction instead of creating, calling and dropping a `public.show_db_tree()` function. It now works for roles without `CREATE` on `public` and on read-only connections, and it no longer replaces or drops a user's own `public.show_db_tree()`. The tree no longer lists the helper itself; the output format is unchanged. When the structure cannot be read, the result says why, with or without a pinned role.
 
+New `observability` tool: `query_loki_logs` runs a LogQL range query on a branch's Loki-compatible read API and returns Loki's response, with lines grouped by stream labels and nanosecond timestamp strings. It is available in read-only mode. `list_log_fields` and `list_log_field_values` remain the discovery tools for both `query_logs` and `query_loki_logs`. Requires `@neon/tools` 2.10.0.
+
 # [2.0.0] 2026-11-05
 
 MCP transport:

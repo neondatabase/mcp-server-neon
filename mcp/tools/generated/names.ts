@@ -95,6 +95,7 @@ export const PINNED_MCP_NAMES = {
   'logs.query': 'query_logs',
   'logs.fields': 'list_log_fields',
   'logs.fieldValues': 'list_log_field_values',
+  'logs.loki.queryRange': 'query_loki_logs',
   'aiGateway.get': 'get_ai_gateway',
 
   'functions.list': 'list_functions',

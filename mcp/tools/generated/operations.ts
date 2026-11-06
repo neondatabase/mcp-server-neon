@@ -95,6 +95,7 @@ export const GENERATED_TOOL_SCOPES = {
   'logs.query': 'observability',
   'logs.fields': 'observability',
   'logs.fieldValues': 'observability',
+  'logs.loki.queryRange': 'observability',
   'aiGateway.get': 'observability',
 
   'functions.list': 'functions',

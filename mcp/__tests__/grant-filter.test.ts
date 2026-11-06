@@ -53,6 +53,29 @@ describe('filterToolsForGrant', () => {
     expect(names).not.toContain('create_project');
   });
 
+  it('offers query_loki_logs with the other log tools under observability only', () => {
+    const names = (scopes: GrantContext['scopes']) =>
+      filterToolsForGrant(NEON_TOOLS, grant({ scopes })).map((t) => t.name);
+    expect(names(['observability'])).toEqual(
+      expect.arrayContaining([
+        'query_logs',
+        'query_loki_logs',
+        'list_log_fields',
+        'list_log_field_values',
+      ]),
+    );
+    expect(names(['projects', 'branches', 'querying'])).not.toContain(
+      'query_loki_logs',
+    );
+    const scoped = filterToolsForGrant(
+      NEON_TOOLS,
+      grant({ projectId: 'proj-123', scopes: ['observability'] }),
+    ).find((tool) => tool.name === 'query_loki_logs');
+    expect(
+      scoped?.inputSchema.safeParse({ branch_id: 'br-1', query: '{}' }).success,
+    ).toBe(true);
+  });
+
   it('returns only always-available tools when scopes are empty', () => {
     const tools = filterToolsForGrant(NEON_TOOLS, grant({ scopes: [] }));
     expect(tools.map((t) => t.name).sort()).toEqual([

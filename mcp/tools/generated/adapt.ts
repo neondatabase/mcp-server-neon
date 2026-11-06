@@ -133,6 +133,8 @@ const LIST_LOG_FIELDS_DESCRIPTION = `Lists the low-cardinality log fields observ
 
 const LIST_LOG_FIELD_VALUES_DESCRIPTION = `Lists distinct values for a low-cardinality log field. Call \`list_log_fields\` first for \`field_name\`; a field the branch has never emitted returns \`unknown_field\`. Pass \`since\` or \`start_time\`, not both; default is the previous six hours, max seven days. Private beta.`;
 
+const QUERY_LOKI_LOGS_DESCRIPTION = `Runs a LogQL range query on the branch's Loki-compatible read API and returns Loki's response: \`data.result\` groups lines by stream labels, and each value is \`[nanosecond timestamp string, line]\`. Use it for sub-second ordering or stream labels; use \`query_logs\` for structured filters and one record per line. The source label is \`entity_type\`; \`list_log_fields\` and \`list_log_field_values\` list labels and values. There is no cursor: a result with \`limit\` lines, or 10,000 (the server's cap, which adds no warning), may be incomplete, so narrow \`since\` or the selector. Max seven days.`;
+
 const RESTORE_SNAPSHOT_DESCRIPTION = `Restore a snapshot onto a new or existing branch. The call waits until the branch is ready. Pass \`target_branch_id\` to restore onto an existing branch; omit it to create one. Pass \`finalize: false\` then call \`finalize_branch_restore\` to swap names later.`;
 
 const GET_REALTIME_SECRET_DESCRIPTION = `Retrieves the secret the application backend issues Realtime tokens with. Requires write access: the secret lets its holder issue Realtime tokens for the branch, so it is unavailable in read-only mode. Call \`enable_realtime\` first.`;
@@ -180,6 +182,7 @@ function createGeneratedNeonTools() {
       'logs.query': QUERY_LOGS_DESCRIPTION,
       'logs.fields': LIST_LOG_FIELDS_DESCRIPTION,
       'logs.fieldValues': LIST_LOG_FIELD_VALUES_DESCRIPTION,
+      'logs.loki.queryRange': QUERY_LOKI_LOGS_DESCRIPTION,
       'snapshots.restore': RESTORE_SNAPSHOT_DESCRIPTION,
       'operations.list': LIST_OPERATIONS_DESCRIPTION,
       'functions.deploy': DEPLOY_FUNCTION_DESCRIPTION,
