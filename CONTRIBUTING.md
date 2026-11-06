@@ -20,7 +20,7 @@ Name the chosen layer and the reason in the PR. Keep a change here when it is sp
 
 Tools marked `readOnlySafe: true` are the only tools registered in read-only mode. A read-only tool that runs caller-supplied SQL must run exactly one caller-supplied statement, as a prepared query, in its own `READ ONLY` transaction, as `run_sql` does. `run_sql_transaction` is not read-only safe: its statements share one transaction, so a `COMMIT` or `SET TRANSACTION READ WRITE` statement can end the transaction or switch it to read-write.
 
-Known exception: `describe_branch` runs `CREATE OR REPLACE FUNCTION public.show_db_tree()` outside a `READ ONLY` transaction, calls it, and drops it in the same transaction. The SQL is fixed and the function only reads the system catalogs. This write exists to serve the read and is considered safe. See [AGENTS.md](./AGENTS.md) for details.
+`describe_branch` reads the database structure with one fixed `SELECT` over the system catalogs, also in a `READ ONLY` transaction. Do not create helper objects to serve a read.
 
 ## Tool arguments
 

@@ -7,21 +7,13 @@ export const splitSqlStatements = (sql: string) => {
   return sql.split(';').filter(Boolean);
 };
 
-export const DESCRIBE_DATABASE_STATEMENTS = [
-  `
-CREATE OR REPLACE FUNCTION public.show_db_tree()
-RETURNS TABLE (tree_structure text) AS
-$$
-BEGIN
-    -- First show all databases
-    RETURN QUERY
-    SELECT ':file_folder: ' || datname || ' (DATABASE)'
-    FROM pg_database 
-    WHERE datistemplate = false;
-
-    -- Then show current database structure
-    RETURN QUERY
-    WITH RECURSIVE 
+// One read-only SELECT over the system catalogs: all databases, then the
+// current database's schemas and objects as an indented tree. It returns the
+// rows the former `show_db_tree()` helper did, less the helper's own entry, but
+// creates nothing: it runs in a READ ONLY transaction, needs no CREATE
+// privilege, and leaves any user function of that name alone.
+export const DESCRIBE_DATABASE_QUERY = `
+WITH RECURSIVE 
     -- Get schemas
     schemas AS (
         SELECT 
@@ -72,8 +64,16 @@ BEGIN
         SELECT * FROM objects
     )
 
-    -- Final output with tree-like formatting
-    SELECT 
+SELECT tree_structure FROM (
+    -- First show all databases
+    SELECT 0 AS part, NULL::text AS path, ':file_folder: ' || datname || ' (DATABASE)' AS tree_structure
+    FROM pg_database
+    WHERE datistemplate = false
+
+    UNION ALL
+
+    -- Then show current database structure, with tree-like formatting
+    SELECT 1 AS part, path,
         REPEAT('    ', level) || 
         CASE 
             WHEN level = 1 THEN '└── :open_file_folder: '
@@ -88,20 +88,11 @@ BEGIN
                     WHEN 'FOREIGN TABLE' THEN ':globe_with_meridians: '
                     ELSE ''
                 END
-        END || object_name || ' (' || object_type || ')'
+        END || object_name || ' (' || object_type || ')' AS tree_structure
     FROM combined
-    ORDER BY path;
-END;
-$$ LANGUAGE plpgsql;
-`,
-  `     
--- To use the function:
-SELECT * FROM show_db_tree();
-`,
-];
-
-export const DROP_DB_TREE_FUNCTION_STATEMENT =
-  'DROP FUNCTION IF EXISTS public.show_db_tree();';
+) tree
+ORDER BY part, path;
+`;
 
 /**
  * Returns the default database for a project branch

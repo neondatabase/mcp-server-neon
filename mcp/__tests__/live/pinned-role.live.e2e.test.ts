@@ -349,7 +349,7 @@ describe.sequential('pinned Postgres role on live Neon', () => {
   );
 
   it(
-    'says why describe_branch has no structure for a role without CREATE on public',
+    'returns the structure from describe_branch for a role without CREATE on public',
     async () => {
       if (!neonClient || !projectId) throw new Error('Project not ready.');
       const branchId = (
@@ -361,10 +361,9 @@ describe.sequential('pinned Postgres role on live Neon', () => {
         branch_id: branchId,
       });
       expect(described).toContain('Branch Details:');
-      expect(described).toContain(
-        `Database structure unavailable as Postgres role "${PINNED_ROLE}"`,
-      );
-      expect(described).toMatch(/permission denied for schema public/);
+      expect(described).toContain('Database Structure:');
+      expect(described).toContain(`${GRANTED_TABLE} (TABLE)`);
+      expect(described).not.toContain('Database structure unavailable');
 
       const asOwner = await succeeds(owner, 'describe_branch', {
         branch_id: branchId,
