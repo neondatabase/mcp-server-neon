@@ -22,23 +22,13 @@ const { neonSpy, querySpy, transactionSpy } = vi.hoisted(() => {
     ],
   );
   const transactionSpy = vi.fn<
-    (queries: unknown[], options?: { readOnly?: boolean }) => Promise<unknown[]>
+    (queries: unknown[], options?: { readOnly?: boolean }) => Promise<unknown>
   >(async (queries) => queries.map(() => [{ ok: true }]));
-  const neonSpy = vi.fn(
-    (uri: string, neonOptions?: { fullResults?: boolean }) => {
-      const shape = (rows: unknown) =>
-        neonOptions?.fullResults ? { command: 'SELECT', rows } : rows;
-      return {
-        uri,
-        query: async (sql: string, params?: unknown[]) =>
-          shape(await querySpy(sql, params)),
-        transaction: async (
-          queries: unknown[],
-          options?: { readOnly?: boolean },
-        ) => (await transactionSpy(queries, options)).map(shape),
-      };
-    },
-  );
+  const neonSpy = vi.fn((uri: string) => ({
+    uri,
+    query: (sql: string, params?: unknown[]) => querySpy(sql, params),
+    transaction: transactionSpy,
+  }));
   return { neonSpy, querySpy, transactionSpy };
 });
 

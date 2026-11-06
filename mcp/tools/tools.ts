@@ -11,7 +11,7 @@ import { getDoc, searchDocs } from './handlers/docs';
 import { sendFeedback } from './handlers/feedback';
 
 import { getDefaultDatabase, splitSqlStatements } from './utils';
-import { capStatementRows } from './sql-rows';
+import { capStatementRows, sqlRowsContent } from './sql-rows';
 import { startSpan } from '@sentry/node';
 import type { z } from 'zod/v3';
 import {
@@ -88,7 +88,7 @@ async function handleRunSql(
       neonClient,
       extra,
     );
-    const runQuery = neon(connectionString.uri, { fullResults: true });
+    const runQuery = neon(connectionString.uri);
 
     // If in read-only mode, use transaction with readOnly option
     if (extra.readOnly) {
@@ -135,7 +135,7 @@ async function handleRunSqlTransaction(
     neonClient,
     extra,
   );
-  const runQuery = neon(connectionString.uri, { fullResults: true });
+  const runQuery = neon(connectionString.uri);
 
   // Use transaction with readOnly option when in read-only mode
   const response = await runQuery.transaction(
@@ -332,7 +332,7 @@ async function handleSchemaMigration(
         projectId,
         branch: createdBranch.branch,
         parentBranchId: createdBranch.branch.parent_id,
-        migrationResult: result.map((statement) => statement.rows),
+        migrationResult: result,
       };
     } catch (error) {
       // Clean up orphaned branch if it was created
@@ -381,18 +381,16 @@ async function handleCommitMigration(
     let migrationResult;
     if (applyChanges) {
       // Apply migration to parent branch
-      migrationResult = (
-        await handleRunSqlTransaction(
-          {
-            sqlStatements: splitSqlStatements(migrationSql),
-            databaseName,
-            projectId,
-            branchId: parentBranchId,
-          },
-          neonClient,
-          extra,
-        )
-      ).map((statement) => statement.rows);
+      migrationResult = await handleRunSqlTransaction(
+        {
+          sqlStatements: splitSqlStatements(migrationSql),
+          databaseName,
+          projectId,
+          branchId: parentBranchId,
+        },
+        neonClient,
+        extra,
+      );
     }
 
     // Always clean up temporary branch
@@ -456,7 +454,7 @@ async function handleExplainSqlStatement(
     content: [
       {
         type: 'text' as const,
-        text: JSON.stringify(result.rows, null, 2),
+        text: JSON.stringify(result, null, 2),
       },
     ],
   };
@@ -790,18 +788,16 @@ async function handleCompleteTuning(
     ) {
       operationLog.push('Applying optimizations to main branch...');
 
-      results = (
-        await handleRunSqlTransaction(
-          {
-            sqlStatements: params.suggestedSqlStatements,
-            databaseName: params.databaseName,
-            projectId: params.projectId,
-            branchId: params.branch?.id,
-          },
-          neonClient,
-          extra,
-        )
-      ).map((statement) => statement.rows);
+      results = await handleRunSqlTransaction(
+        {
+          sqlStatements: params.suggestedSqlStatements,
+          databaseName: params.databaseName,
+          projectId: params.projectId,
+          branchId: params.branch?.id,
+        },
+        neonClient,
+        extra,
+      );
 
       operationLog.push('Successfully applied optimizations to main branch.');
     } else {
@@ -1010,19 +1006,7 @@ const HOST_HANDLERS: ToolHandlers = {
       extra,
     );
     const { rows, summaries } = capStatementRows([result], params.max_rows);
-    return {
-      content: [
-        { type: 'text', text: JSON.stringify(rows[0], null, 2) },
-        ...(summaries
-          ? [
-              {
-                type: 'text' as const,
-                text: JSON.stringify(summaries[0], null, 2),
-              },
-            ]
-          : []),
-      ],
-    };
+    return { content: sqlRowsContent(rows[0], summaries?.[0]) };
   }),
 
   run_sql_transaction: host(
@@ -1041,19 +1025,7 @@ const HOST_HANDLERS: ToolHandlers = {
         extra,
       );
       const { rows, summaries } = capStatementRows(result, params.max_rows);
-      return {
-        content: [
-          { type: 'text', text: JSON.stringify(rows, null, 2) },
-          ...(summaries
-            ? [
-                {
-                  type: 'text' as const,
-                  text: JSON.stringify(summaries, null, 2),
-                },
-              ]
-            : []),
-        ],
-      };
+      return { content: sqlRowsContent(rows, summaries) };
     },
   ),
 

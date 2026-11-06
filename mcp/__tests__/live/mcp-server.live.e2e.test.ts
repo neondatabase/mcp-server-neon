@@ -507,10 +507,12 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       );
       expect(cappedRows).toHaveLength(100);
       expect(z.array(z.unknown()).parse(cappedRows)[99]).toEqual({ n: 100 });
+      const rerunNote =
+        'To see more, raise `max_rows` or narrow the query with WHERE or LIMIT. The SQL already ran, so if it changed data, running it again repeats the change.';
       expect(cappedSummary).toEqual({
         totalRowCount: 150,
         truncated: true,
-        note: 'Showing the first 100 of 150 rows. Raise `max_rows` or narrow the query with WHERE or LIMIT to see more.',
+        note: `Showing the first 100 of 150 rows. ${rerunNote}`,
       });
 
       const raised = jsonBlocks(
@@ -526,22 +528,21 @@ describe.sequential('MCP server live Neon lifecycle', () => {
           project_id: projectId,
           sql_statements: [
             'CREATE TABLE public.max_rows_probe (n int)',
-            'INSERT INTO public.max_rows_probe SELECT generate_series(1, 5) RETURNING n',
-            'UPDATE public.max_rows_probe SET n = n + 1 WHERE n <= 3',
+            // A writable CTE reports a SELECT command tag.
+            'WITH inserted AS (INSERT INTO public.max_rows_probe SELECT generate_series(1, 5) RETURNING n) SELECT n FROM inserted ORDER BY n',
             'DROP TABLE public.max_rows_probe',
           ],
           max_rows: 2,
         }),
       );
-      expect(writeRows).toEqual([[], [{ n: 1 }, { n: 2 }], [], []]);
+      expect(writeRows).toEqual([[], [{ n: 1 }, { n: 2 }], []]);
       expect(writeSummaries).toEqual([
         { totalRowCount: 0, truncated: false },
         {
           totalRowCount: 5,
           truncated: true,
-          note: 'Showing the first 2 of 5 rows. The SQL already ran, so running it again to see more rows would repeat its changes.',
+          note: `Showing the first 2 of 5 rows. ${rerunNote}`,
         },
-        { totalRowCount: 0, truncated: false },
         { totalRowCount: 0, truncated: false },
       ]);
 
