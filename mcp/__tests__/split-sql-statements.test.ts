@@ -29,6 +29,14 @@ describe('splitSqlStatements', () => {
     ]);
   });
 
+  it('keeps a trailing U+00A0, which Postgres reads as part of an identifier', async () => {
+    expect(
+      await splitSqlStatements(
+        'CREATE SCHEMA foo\u00a0;\nDROP SCHEMA foo\u00a0;',
+      ),
+    ).toEqual(['CREATE SCHEMA foo\u00a0', 'DROP SCHEMA foo\u00a0']);
+  });
+
   it('returns no statements for SQL that holds only comments', async () => {
     expect(await splitSqlStatements('-- nothing to run\n')).toEqual([]);
   });

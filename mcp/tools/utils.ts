@@ -27,7 +27,7 @@ export async function splitSqlStatements(sql: string): Promise<string[]> {
   return (tree.stmts ?? []).map((statement) => {
     const start = statement.stmt_location ?? 0;
     const end = statement.stmt_len ? start + statement.stmt_len : bytes.length;
-    return decoder.decode(bytes.subarray(start, end)).trim();
+    return decoder.decode(bytes.subarray(start, end));
   });
 }
 
