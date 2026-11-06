@@ -136,7 +136,9 @@ export const prepareDatabaseMigrationInputSchema = z
   .object({
     migration_sql: z
       .string()
-      .describe('The SQL to execute to create the migration'),
+      .describe(
+        "The SQL to apply. It is split into statements at every semicolon, so use semicolons only to end statements: none inside a string (write chr(59), e.g. 'a' || chr(59) || 'b'), a comment, or a function, trigger, or DO body. Create a function, trigger function, or DO block with run_sql instead, which runs one statement as written.",
+      ),
     project_id: z
       .string()
       .describe('The ID of the project to execute the query against'),

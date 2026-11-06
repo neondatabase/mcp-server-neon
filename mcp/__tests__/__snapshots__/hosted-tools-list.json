@@ -215,7 +215,7 @@
       "properties": {
         "migration_sql": {
           "type": "string",
-          "description": "The SQL to execute to create the migration"
+          "description": "The SQL to apply. It is split into statements at every semicolon, so use semicolons only to end statements: none inside a string (write chr(59), e.g. 'a' || chr(59) || 'b'), a comment, or a function, trigger, or DO body. Create a function, trigger function, or DO block with run_sql instead, which runs one statement as written."
         },
         "project_id": {
           "type": "string",
