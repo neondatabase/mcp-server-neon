@@ -1,7 +1,7 @@
 import { Api, Branch, EndpointType } from '../neon-client';
-import { neon } from '@neondatabase/serverless';
+import { Client, neon, type QueryResult } from '@neondatabase/serverless';
 import crypto from 'crypto';
-import { NotFoundError } from '../server/errors';
+import { InvalidArgumentError, NotFoundError } from '../server/errors';
 
 import { describeTable, formatTableDescription } from '../describeUtils';
 import { handleGetNeonAuthConfig } from './handlers/neon-auth-get-config';
@@ -10,7 +10,7 @@ import { handleFetch } from './handlers/fetch';
 import { getDoc, searchDocs } from './handlers/docs';
 import { sendFeedback } from './handlers/feedback';
 
-import { getDefaultDatabase, splitSqlStatements } from './utils';
+import { getDefaultDatabase } from './utils';
 import { capStatementRows, sqlRowsContent } from './sql-rows';
 import { startSpan } from '@sentry/node';
 import type { z } from 'zod/v3';
@@ -144,6 +144,62 @@ async function handleRunSqlTransaction(
   );
 
   return response;
+}
+
+const STANDARD_CONFORMING_STRINGS = /standard_conforming_strings/i;
+
+/**
+ * Runs migration SQL as one simple-protocol query so Postgres splits the
+ * statements itself; semicolons in strings, `$$` bodies, comments, and
+ * `BEGIN ATOMIC` bodies stay in their statement. `BEGIN` and `COMMIT` go as
+ * separate messages, so the migration is all-or-nothing and a migration that
+ * opens its own transaction without closing it is still committed.
+ */
+async function handleRunMigrationSql(
+  {
+    sql,
+    databaseName,
+    projectId,
+    branchId,
+  }: {
+    sql: string;
+    databaseName: string;
+    projectId: string;
+    branchId: string;
+  },
+  neonClient: Api<unknown>,
+  extra: ToolHandlerExtraParams,
+): Promise<Record<string, unknown>[][]> {
+  const connectionString = await handleGetConnectionString(
+    { projectId, branchId, databaseName },
+    neonClient,
+    extra,
+  );
+  const client = new Client(connectionString.uri);
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    const result: QueryResult | QueryResult[] = await client.query(sql);
+    await client.query('COMMIT');
+    return (Array.isArray(result) ? result : [result]).map(
+      (statement) => statement.rows,
+    );
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Postgres parses the whole query before running any statement, so a `SET
+ * standard_conforming_strings` in the migration would not apply to the
+ * strings after it.
+ */
+function assertMigrationSqlSupported(sql: string) {
+  if (STANDARD_CONFORMING_STRINGS.test(sql)) {
+    throw new InvalidArgumentError(
+      'Migration SQL cannot change standard_conforming_strings: the migration is parsed as one query before any statement runs, so the setting would not apply to the strings after it. Set it for the database first with ALTER DATABASE <name> SET standard_conforming_strings = ..., then run the migration without it.',
+    );
+  }
 }
 
 async function handleGetDatabaseTables(
@@ -281,6 +337,7 @@ async function handleSchemaMigration(
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
 ) {
+  assertMigrationSqlSupported(migrationSql);
   return await startSpan({ name: 'prepare_schema_migration' }, async (span) => {
     let newBranch: { branch: Branch } | undefined;
 
@@ -306,9 +363,9 @@ async function handleSchemaMigration(
         resolvedDatabaseName = dbObject.name;
       }
 
-      const result = await handleRunSqlTransaction(
+      const result = await handleRunMigrationSql(
         {
-          sqlStatements: splitSqlStatements(migrationSql),
+          sql: migrationSql,
           databaseName: resolvedDatabaseName,
           projectId,
           branchId: createdBranch.branch.id,
@@ -380,10 +437,11 @@ async function handleCommitMigration(
 
     let migrationResult;
     if (applyChanges) {
+      assertMigrationSqlSupported(migrationSql);
       // Apply migration to parent branch
-      migrationResult = await handleRunSqlTransaction(
+      migrationResult = await handleRunMigrationSql(
         {
-          sqlStatements: splitSqlStatements(migrationSql),
+          sql: migrationSql,
           databaseName,
           projectId,
           branchId: parentBranchId,

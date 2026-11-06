@@ -741,6 +741,186 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    'applies a migration that Postgres splits, semicolons inside strings, bodies and comments included',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      // The migration opens its own transaction and never commits it, uses a
+      // CR-only line ending after a comment, and names a function begin.
+      const migrationSql = [
+        'BEGIN;',
+        'CREATE TABLE mcp_split_notes (id serial PRIMARY KEY, body text, updated_at timestamptz);',
+        "INSERT INTO mcp_split_notes (body) VALUES ('a;b'), (E'c\\;d');",
+        'CREATE FUNCTION mcp_split_touch() RETURNS trigger AS $$',
+        'BEGIN',
+        '  NEW.updated_at := now();',
+        '  RETURN NEW;',
+        'END;',
+        '$$ LANGUAGE plpgsql;',
+        '-- touch updated_at; on every update',
+        'CREATE TRIGGER mcp_split_touch BEFORE UPDATE ON mcp_split_notes FOR EACH ROW EXECUTE FUNCTION mcp_split_touch();',
+        'CREATE FUNCTION mcp_split_add1(i int) RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT i + 1; END;',
+        "DO $do$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'mcp_split_mood') THEN CREATE TYPE mcp_split_mood AS ENUM ('ok'); END IF; END $do$;",
+        '-- a CR-only line ending ends this comment;\rCREATE FUNCTION begin() RETURNS int LANGUAGE sql RETURN 7;',
+      ].join('\n');
+      try {
+        const prepared = assertToolSucceeded(
+          'prepare_database_migration',
+          await callTool('prepare_database_migration', {
+            project_id: projectId,
+            database_name: 'neondb',
+            migration_sql: migrationSql,
+          }),
+        );
+        const context = (key: string) => {
+          const value = new RegExp(`- ${key}: (\\S+)`).exec(prepared)?.[1];
+          if (!value) throw new Error(`${key} missing from: ${prepared}`);
+          return value;
+        };
+        assertToolSucceeded(
+          'complete_database_migration',
+          await callTool('complete_database_migration', {
+            migration_id: context('migration_id'),
+            migration_sql: migrationSql,
+            database_name: context('database_name'),
+            project_id: projectId,
+            temporary_branch_id: context('temporary_branch_id'),
+            parent_branch_id: context('parent_branch_id'),
+            apply_changes: true,
+          }),
+        );
+
+        const rows = await callTool('run_sql', {
+          project_id: projectId,
+          sql: `UPDATE mcp_split_notes SET body = body || ';x' RETURNING body, updated_at IS NOT NULL AS touched, mcp_split_add1(1) AS added, begin() AS seven, 'ok'::mcp_split_mood::text AS mood`,
+        });
+        expect(JSON.parse(assertToolSucceeded('run_sql', rows))).toEqual([
+          { body: 'a;b;x', touched: true, added: 2, seven: 7, mood: 'ok' },
+          { body: 'c;d;x', touched: true, added: 2, seven: 7, mood: 'ok' },
+        ]);
+      } finally {
+        await callTool('run_sql_transaction', {
+          project_id: projectId,
+          sql_statements: [
+            'DROP TABLE IF EXISTS mcp_split_notes',
+            'DROP FUNCTION IF EXISTS mcp_split_touch()',
+            'DROP FUNCTION IF EXISTS mcp_split_add1(int)',
+            'DROP FUNCTION IF EXISTS begin()',
+            'DROP TYPE IF EXISTS mcp_split_mood',
+          ],
+        });
+      }
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'reports a failed migration with its Postgres error and leaves no branch behind',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!neonClient) throw new Error('Neon SDK client is not initialized.');
+      const client = neonClient;
+      const branchNames = async () =>
+        (
+          await client.listProjectBranches({ projectId: projectId! })
+        ).data.branches.map((branch) => branch.name);
+      const before = await branchNames();
+
+      const unterminated = toolResultSchema.parse(
+        await callTool('prepare_database_migration', {
+          project_id: projectId,
+          database_name: 'neondb',
+          migration_sql:
+            "CREATE TABLE mcp_split_never (id int);\nINSERT INTO mcp_split_never VALUES ('a);",
+        }),
+      );
+      expect(unterminated.isError).toBe(true);
+      expect(textContent(unterminated)).toMatch(
+        /^DatabaseError: unterminated quoted string at or near "'a\);"\nSQLSTATE: 42601\nPOSITION: \d+/,
+      );
+
+      const conformingStrings = toolResultSchema.parse(
+        await callTool('prepare_database_migration', {
+          project_id: projectId,
+          database_name: 'neondb',
+          migration_sql:
+            "SET standard_conforming_strings = off;\nSELECT 'a\\nb';",
+        }),
+      );
+      expect(conformingStrings.isError).toBe(true);
+      expect(textContent(conformingStrings)).toContain(
+        'Migration SQL cannot change standard_conforming_strings',
+      );
+
+      expect(await branchNames()).toEqual(before);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'applies nothing on the parent when a later migration statement fails',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!neonClient) throw new Error('Neon SDK client is not initialized.');
+      assertToolSucceeded(
+        'run_sql',
+        await callTool('run_sql', {
+          project_id: projectId,
+          sql: 'CREATE TABLE mcp_split_atomic (id int)',
+        }),
+      );
+      let temporaryBranchId: string | undefined;
+      try {
+        const prepared = assertToolSucceeded(
+          'prepare_database_migration',
+          await callTool('prepare_database_migration', {
+            project_id: projectId,
+            database_name: 'neondb',
+            migration_sql: 'SELECT 1',
+          }),
+        );
+        const context = (key: string) => {
+          const value = new RegExp(`- ${key}: (\\S+)`).exec(prepared)?.[1];
+          if (!value) throw new Error(`${key} missing from: ${prepared}`);
+          return value;
+        };
+        temporaryBranchId = context('temporary_branch_id');
+
+        const failed = toolResultSchema.parse(
+          await callTool('complete_database_migration', {
+            migration_id: context('migration_id'),
+            migration_sql:
+              'INSERT INTO mcp_split_atomic VALUES (1);\nSELECT 1 / 0;',
+            database_name: context('database_name'),
+            project_id: projectId,
+            temporary_branch_id: temporaryBranchId,
+            parent_branch_id: context('parent_branch_id'),
+            apply_changes: true,
+          }),
+        );
+        expect(failed.isError).toBe(true);
+        expect(textContent(failed)).toContain('SQLSTATE: 22012');
+
+        const count = await callTool('run_sql', {
+          project_id: projectId,
+          sql: 'SELECT count(*)::int AS n FROM mcp_split_atomic',
+        });
+        expect(JSON.parse(assertToolSucceeded('run_sql', count))).toEqual([
+          { n: 0 },
+        ]);
+      } finally {
+        if (temporaryBranchId) {
+          await neonClient.deleteProjectBranch(projectId, temporaryBranchId);
+        }
+        await callTool('run_sql', {
+          project_id: projectId,
+          sql: 'DROP TABLE IF EXISTS mcp_split_atomic',
+        });
+      }
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'compares a child branch schema, then resets it from parent',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');

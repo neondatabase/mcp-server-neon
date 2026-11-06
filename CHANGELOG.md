@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+`prepare_database_migration` and `complete_database_migration` send the migration to Postgres as one query, so a semicolon inside a string, a `$$` function body, a comment, or a `BEGIN ATOMIC` body no longer splits a statement. The migration still runs in one transaction. A failed migration returns the Postgres error with SQLSTATE and position. A migration that sets `standard_conforming_strings` is rejected before a branch is created.
+
 `run_sql` and `run_sql_transaction` return at most `max_rows` rows per statement (default 100, up to 10,000). When rows were cut, a second content block reports `totalRowCount`, `truncated`, and a note on how to see the rest. A result that fits is unchanged.
 
 A failed SQL tool call returns the Postgres SQLSTATE, error position, and any detail, hint, or context under the error message.
