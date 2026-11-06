@@ -4,6 +4,10 @@ const nextConfig: NextConfig = {
   // Serverless deployment on Vercel - do not use 'export' mode
   // API routes require dynamic server-side rendering
 
+  // libpg-query loads its .wasm file relative to its own directory, which
+  // bundling breaks.
+  serverExternalPackages: ['libpg-query'],
+
   // Redirect root path to Neon docs (single source of truth; there is no landing page)
   async redirects() {
     return [

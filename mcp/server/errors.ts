@@ -1,5 +1,5 @@
 import { NeonApiError, NeonClientError } from '@neon/sdk';
-import { DatabaseError, NeonDbError } from '@neondatabase/serverless';
+import { NeonDbError } from '@neondatabase/serverless';
 import { ZodError } from 'zod';
 import { logger } from '../utils/logger';
 import { captureException } from '@sentry/node';
@@ -41,10 +41,8 @@ function errorText(error: unknown): string {
   if (!(error instanceof Error)) {
     return 'Unknown error';
   }
-  // pg sets DatabaseError's `name` to the protocol message type, "error".
-  const name = error instanceof DatabaseError ? 'DatabaseError' : error.name;
-  const lines = [`${name}: ${error.message}`];
-  if (error instanceof NeonDbError || error instanceof DatabaseError) {
+  const lines = [`${error.name}: ${error.message}`];
+  if (error instanceof NeonDbError) {
     for (const [field, label] of POSTGRES_ERROR_FIELDS) {
       const value = error[field];
       if (value) {
@@ -75,11 +73,7 @@ export function handleToolError(
   traceId: string | undefined,
   agent: IdentifiedClient,
 ) {
-  if (
-    error instanceof NeonDbError ||
-    error instanceof DatabaseError ||
-    isClientError(error)
-  ) {
+  if (error instanceof NeonDbError || isClientError(error)) {
     return errorResponse(error);
   } else if (error instanceof NeonApiError && error.status < 500) {
     const reason = apiErrorReason(error.body);
