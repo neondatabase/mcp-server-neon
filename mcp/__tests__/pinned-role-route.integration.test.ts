@@ -21,18 +21,25 @@ const API_KEY = 'fake-api-key-for-tests';
 const mocks = vi.hoisted(() => {
   const querySpy = vi.fn(async () => [{ session_user: 'mcp_pinned_reader' }]);
   const transactionSpy = vi.fn<
-    (queries: unknown[], options?: { readOnly?: boolean }) => Promise<unknown>
+    (queries: unknown[], options?: { readOnly?: boolean }) => Promise<unknown[]>
   >(async (queries) =>
     queries.map(() => [{ session_user: 'mcp_pinned_reader' }]),
   );
   return {
     querySpy,
     transactionSpy,
-    neonSpy: vi.fn((uri: string) => ({
-      uri,
-      query: querySpy,
-      transaction: transactionSpy,
-    })),
+    neonSpy: vi.fn((uri: string, neonOptions?: { fullResults?: boolean }) => {
+      const shape = (rows: unknown) =>
+        neonOptions?.fullResults ? { command: 'SELECT', rows } : rows;
+      return {
+        uri,
+        query: async () => shape(await querySpy()),
+        transaction: async (
+          queries: unknown[],
+          options?: { readOnly?: boolean },
+        ) => (await transactionSpy(queries, options)).map(shape),
+      };
+    }),
     getConnectionUri: vi.fn(),
     getProjectBranchDatabase: vi.fn(),
     getAuthDetails: vi.fn(),

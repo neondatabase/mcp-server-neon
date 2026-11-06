@@ -34,7 +34,7 @@ const sqlMaxRowsSchema = z
   .optional()
   .default(SQL_DEFAULT_MAX_ROWS)
   .describe(
-    'Maximum number of rows to return per statement. The response reports how many rows the statement returned and whether they were truncated, so raise this only when `truncated` is true.',
+    'Maximum number of rows to return per statement. When a statement returns more, the response adds a second block with `totalRowCount` and `truncated: true`; raise this only then.',
   );
 
 export const runSqlInputSchema = z

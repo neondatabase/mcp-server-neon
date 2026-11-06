@@ -2,7 +2,7 @@
 
 # [NEXT]
 
-`run_sql` and `run_sql_transaction` return at most `max_rows` rows per statement (default 100, up to 10,000). Each result is `{ rows, totalRowCount, truncated, note? }` instead of a bare row array, and `run_sql_transaction` returns one per statement.
+`run_sql` and `run_sql_transaction` return at most `max_rows` rows per statement (default 100, up to 10,000). When rows were cut, a second content block reports `totalRowCount`, `truncated`, and a note on how to see the rest. A result that fits is unchanged.
 
 A failed SQL tool call returns the Postgres SQLSTATE, error position, and any detail, hint, or context under the error message.
 

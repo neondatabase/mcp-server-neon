@@ -124,6 +124,13 @@ function textContent(result: unknown): string {
   throw new Error('Expected the MCP tool to return text content.');
 }
 
+function jsonBlocks(toolName: string, result: unknown): unknown[] {
+  assertToolSucceeded(toolName, result);
+  return toolResultSchema
+    .parse(result)
+    .content.map((item) => JSON.parse(textContentSchema.parse(item).text));
+}
+
 function assertToolSucceeded(toolName: string, result: unknown): string {
   const parsedResult = toolResultSchema.parse(result);
   const text = textContent(result);
@@ -479,58 +486,64 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       const count = await roRunSql(
         'SELECT count(*)::int AS n FROM public.property_options',
       );
-      expect(JSON.parse(assertToolSucceeded('run_sql', count))).toEqual({
-        rows: [{ n: 0 }],
-        totalRowCount: 1,
-        truncated: false,
-      });
+      expect(JSON.parse(assertToolSucceeded('run_sql', count))).toEqual([
+        { n: 0 },
+      ]);
     },
     LIVE_TEST_TIMEOUT_MS,
   );
 
   it(
-    'caps run_sql rows and returns the Postgres error fields',
+    'caps run_sql rows and returns Postgres error fields',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
       const runSql = (args: Record<string, unknown>) =>
         callTool('run_sql', { project_id: projectId, ...args });
       const series = 'SELECT n FROM generate_series(1, 150) AS n';
 
-      const capped = JSON.parse(
-        assertToolSucceeded('run_sql', await runSql({ sql: series })),
+      const [cappedRows, cappedSummary] = jsonBlocks(
+        'run_sql',
+        await runSql({ sql: series }),
       );
-      expect(capped).toMatchObject({
+      expect(cappedRows).toHaveLength(100);
+      expect(z.array(z.unknown()).parse(cappedRows)[99]).toEqual({ n: 100 });
+      expect(cappedSummary).toEqual({
         totalRowCount: 150,
         truncated: true,
         note: 'Showing the first 100 of 150 rows. Raise `max_rows` or narrow the query with WHERE or LIMIT to see more.',
       });
-      expect(capped.rows).toHaveLength(100);
-      expect(capped.rows[99]).toEqual({ n: 100 });
 
-      const raised = JSON.parse(
-        assertToolSucceeded(
-          'run_sql',
-          await runSql({ sql: series, max_rows: 150 }),
-        ),
+      const raised = jsonBlocks(
+        'run_sql',
+        await runSql({ sql: series, max_rows: 150 }),
       );
-      expect(raised).toMatchObject({ totalRowCount: 150, truncated: false });
-      expect(raised.rows).toHaveLength(150);
+      expect(raised).toHaveLength(1);
+      expect(raised[0]).toHaveLength(150);
 
-      const transaction = JSON.parse(
-        assertToolSucceeded(
-          'run_sql_transaction',
-          await callTool('run_sql_transaction', {
-            project_id: projectId,
-            sql_statements: [series, 'SELECT 1 AS one'],
-            max_rows: 10,
-          }),
-        ),
+      const [writeRows, writeSummaries] = jsonBlocks(
+        'run_sql_transaction',
+        await callTool('run_sql_transaction', {
+          project_id: projectId,
+          sql_statements: [
+            'CREATE TABLE public.max_rows_probe (n int)',
+            'INSERT INTO public.max_rows_probe SELECT generate_series(1, 5) RETURNING n',
+            'UPDATE public.max_rows_probe SET n = n + 1 WHERE n <= 3',
+            'DROP TABLE public.max_rows_probe',
+          ],
+          max_rows: 2,
+        }),
       );
-      expect(transaction).toEqual([
-        expect.objectContaining({ totalRowCount: 150, truncated: true }),
-        { rows: [{ one: 1 }], totalRowCount: 1, truncated: false },
+      expect(writeRows).toEqual([[], [{ n: 1 }, { n: 2 }], [], []]);
+      expect(writeSummaries).toEqual([
+        { totalRowCount: 0, truncated: false },
+        {
+          totalRowCount: 5,
+          truncated: true,
+          note: 'Showing the first 2 of 5 rows. The SQL already ran, so running it again to see more rows would repeat its changes.',
+        },
+        { totalRowCount: 0, truncated: false },
+        { totalRowCount: 0, truncated: false },
       ]);
-      expect(transaction[0].rows).toHaveLength(10);
 
       const missingTable = await runSql({ sql: 'SELECT * FROM no_such_table' });
       expect(toolResultSchema.parse(missingTable).isError).toBe(true);
@@ -598,11 +611,9 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         project_id: projectId,
         sql: "SELECT count(*)::int AS n FROM pg_proc WHERE proname = 'show_db_tree'",
       });
-      expect(JSON.parse(assertToolSucceeded('run_sql', remaining))).toEqual({
-        rows: [{ n: 0 }],
-        totalRowCount: 1,
-        truncated: false,
-      });
+      expect(JSON.parse(assertToolSucceeded('run_sql', remaining))).toEqual([
+        { n: 0 },
+      ]);
     },
     LIVE_TEST_TIMEOUT_MS,
   );
