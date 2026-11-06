@@ -104,7 +104,7 @@ export async function searchDocs(
       `${UNEXPECTED_SEARCH_RESPONSE}: ${issue.path.join('.')} ${issue.message}`,
     );
   }
-  return JSON.stringify(parsed.data, null, 2);
+  return JSON.stringify(parsed.data);
 }
 
 function validateDocSlug(slug: string): void {

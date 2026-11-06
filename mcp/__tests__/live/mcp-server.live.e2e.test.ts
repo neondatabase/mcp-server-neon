@@ -402,6 +402,27 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    'returns generated and host tool results as one compact JSON text block',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const calls = [
+        ['describe_project', { project_id: projectId }],
+        ['list_branches', { project_id: projectId }],
+        ['run_sql', { project_id: projectId, sql: 'SELECT 1 AS one' }],
+        ['search', { query: projectName }],
+      ] as const;
+      for (const [name, args] of calls) {
+        const result = await callTool(name, args);
+        const text = assertToolSucceeded(name, result);
+        expect(result.content).toHaveLength(1);
+        expect(result.structuredContent).toBeUndefined();
+        expect(text).toBe(JSON.stringify(JSON.parse(text)));
+      }
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'creates same-named public and CRM tables in the real database',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');

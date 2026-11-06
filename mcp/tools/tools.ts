@@ -7,6 +7,7 @@ import { describeTable, formatTableDescription } from '../describeUtils';
 import { handleGetNeonAuthConfig } from './handlers/neon-auth-get-config';
 import { handleSearch } from './handlers/search';
 import { handleFetch } from './handlers/fetch';
+import { toMcpToolResult } from '@neon/tools/mcp';
 import { getDoc, searchDocs } from './handlers/docs';
 import { sendFeedback } from './handlers/feedback';
 
@@ -449,14 +450,7 @@ async function handleExplainSqlStatement(
     extra,
   );
 
-  return {
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(result, null, 2),
-      },
-    ],
-  };
+  return toMcpToolResult(result);
 }
 
 async function createTemporaryBranch(
@@ -1004,9 +998,7 @@ const HOST_HANDLERS: ToolHandlers = {
       neonClient,
       extra,
     );
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
+    return toMcpToolResult(result);
   }),
 
   run_sql_transaction: host(
@@ -1024,9 +1016,7 @@ const HOST_HANDLERS: ToolHandlers = {
         neonClient,
         extra,
       );
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
+      return toMcpToolResult(result);
     },
   ),
 
@@ -1043,9 +1033,7 @@ const HOST_HANDLERS: ToolHandlers = {
         neonClient,
         extra,
       );
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
+      return toMcpToolResult(result);
     },
   ),
 
@@ -1061,14 +1049,7 @@ const HOST_HANDLERS: ToolHandlers = {
         neonClient,
         extra,
       );
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
+      return toMcpToolResult(result);
     },
   ),
 
@@ -1262,26 +1243,15 @@ You MUST follow these steps:
         neonClient,
         extra,
       );
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                tuning_id: result.tuningId,
-                database_name: result.databaseName,
-                project_id: result.projectId,
-                temporary_branch_id: result.temporaryBranch.id,
-                execution_plan: result.originalPlan,
-                table_schemas: result.tableSchemas,
-                sql: result.sql,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return toMcpToolResult({
+        tuning_id: result.tuningId,
+        database_name: result.databaseName,
+        project_id: result.projectId,
+        temporary_branch_id: result.temporaryBranch.id,
+        execution_plan: result.originalPlan,
+        table_schemas: result.tableSchemas,
+        sql: result.sql,
+      });
     },
   ),
 
@@ -1311,14 +1281,7 @@ You MUST follow these steps:
         extra,
       );
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
+      return toMcpToolResult(result);
     },
   ),
 
@@ -1336,14 +1299,7 @@ You MUST follow these steps:
         neonClient,
         extra,
       );
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
+      return toMcpToolResult(result);
     },
   ),
 
@@ -1362,9 +1318,7 @@ You MUST follow these steps:
         neonClient,
         extra,
       );
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
+      return toMcpToolResult(result);
     },
   ),
 
@@ -1376,14 +1330,7 @@ You MUST follow these steps:
         extra.account,
         params.search,
       );
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(organizations, null, 2),
-          },
-        ],
-      };
+      return toMcpToolResult(organizations);
     },
   ),
 

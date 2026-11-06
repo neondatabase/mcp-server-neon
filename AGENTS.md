@@ -262,6 +262,8 @@ export const myNewToolHandler: ToolHandler<'my_new_tool'> = async (
 };
 ```
 
+   A tool that returns JSON data returns `toMcpToolResult(data)` from `@neon/tools/mcp`: one compact JSON text block and no `structuredContent`, the same shape as every generated tool.
+
 4. Register the handler in `mcp/tools/tools.ts`:
 
 ```typescript

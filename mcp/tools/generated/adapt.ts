@@ -2,6 +2,7 @@ import {
   createNeonTools,
   type NeonTool as GeneratedNeonTool,
 } from '@neon/tools';
+import { toMcpToolResult } from '@neon/tools/mcp';
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { NEON_API_HOST } from '../../constants';
 import { fetchAsMcpServer } from '../../neon-client';
@@ -353,17 +354,6 @@ export function createGeneratedToolDefinitions(): NeonTool[] {
   });
 }
 
-function jsonTextResult(data: unknown) {
-  return {
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(data, null, 2),
-      },
-    ],
-  };
-}
-
 /**
  * A scoped `create_postgres_role` runs its SQL as the database owner, and a pinned
  * connection promises that every SQL the server runs logs in as the pinned role.
@@ -431,7 +421,7 @@ export function createGeneratedToolHandlers(): ToolHandlers {
         apiKey: extra.apiKey,
         signal: extra.signal,
       });
-      return jsonTextResult(sanitizeGeneratedResult(toolId, result.data));
+      return toMcpToolResult(sanitizeGeneratedResult(toolId, result.data));
     };
     handlers[tool.id] = handler;
   }

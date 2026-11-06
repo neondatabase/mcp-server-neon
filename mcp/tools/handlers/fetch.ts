@@ -1,4 +1,5 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { toMcpToolResult } from '@neon/tools/mcp';
 import { Api, MemberWithUser, ProjectListItem } from '../../neon-client';
 import { fetchInputSchema } from '../toolsSchema';
 import { z } from 'zod/v3';
@@ -183,14 +184,7 @@ async function fetchBranchDetails(
       extra,
     );
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
+    return toMcpToolResult(result);
   } catch (error) {
     return {
       isError: true,

@@ -1,4 +1,5 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { toMcpToolResult } from '@neon/tools/mcp';
 import { Api, Branch, Organization, ProjectListItem } from '../../neon-client';
 import { searchInputSchema } from '../toolsSchema';
 import { z } from 'zod/v3';
@@ -103,14 +104,7 @@ export async function handleSearch(
       // Skip shared projects if we can't access them
     }
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(results, null, 2),
-        },
-      ],
-    };
+    return toMcpToolResult(results);
   } catch (error) {
     return {
       isError: true,
