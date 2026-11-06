@@ -9,8 +9,10 @@ import {
 } from '@modelcontextprotocol/server';
 import type {
   AuthInfo,
+  CallToolResult,
   ServerContext as McpServerContext,
 } from '@modelcontextprotocol/server';
+import { toMcpToolResult } from '@neon/tools/mcp';
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { captureException, startSpan } from '@sentry/node';
 import { NeonApiError } from '@neon/sdk';
@@ -597,7 +599,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
       async function runDocsTool(
         toolName: string,
         userAgent: string | undefined,
-        call: () => Promise<string>,
+        call: () => Promise<CallToolResult>,
       ) {
         const traceId = generateTraceId();
         return await startSpan(
@@ -635,15 +637,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
             waitUntil(flushAnalytics());
 
             try {
-              const text = await call();
-              return {
-                content: [
-                  {
-                    type: 'text' as const,
-                    text,
-                  },
-                ],
-              };
+              return await call();
             } catch (error) {
               span.setStatus({ code: 2 });
               const errorResult = handleToolError(
@@ -668,11 +662,13 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
         searchDocsTool.name,
         v2ToolConfig(searchDocsTool),
         async (args: unknown) =>
-          runDocsTool(searchDocsTool.name, userAgent, () =>
-            searchDocs(searchDocsInputSchema.parse(args), {
-              userAgent,
-              client: docsAgent.clientApplication,
-            }),
+          runDocsTool(searchDocsTool.name, userAgent, async () =>
+            toMcpToolResult(
+              await searchDocs(searchDocsInputSchema.parse(args), {
+                userAgent,
+                client: docsAgent.clientApplication,
+              }),
+            ),
           ),
       );
 
@@ -688,9 +684,9 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
             'get_doc arguments were not validated',
           );
           const { slug } = args;
-          return runDocsTool(getDocTool.name, userAgent, () =>
-            getDoc({ slug }),
-          );
+          return runDocsTool(getDocTool.name, userAgent, async () => ({
+            content: [{ type: 'text', text: await getDoc({ slug }) }],
+          }));
         },
       );
       server.registerTool(
@@ -707,7 +703,11 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
           const feedback = args.feedback;
           return runDocsTool(sendFeedbackTool.name, userAgent, async () => {
             await sendFeedback({ feedback });
-            return 'Feedback received. Thank you!';
+            return {
+              content: [
+                { type: 'text', text: 'Feedback received. Thank you!' },
+              ],
+            };
           });
         },
       );

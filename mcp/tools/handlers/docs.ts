@@ -26,6 +26,8 @@ const searchDocsResponseSchema = z.object({
   ),
 });
 
+type SearchDocsResult = z.infer<typeof searchDocsResponseSchema>;
+
 function upstreamError(body: unknown): string | undefined {
   if (
     typeof body === 'object' &&
@@ -73,7 +75,7 @@ export async function searchDocs(
     limit: number;
   },
   caller: SearchDocsCaller,
-): Promise<string> {
+): Promise<SearchDocsResult> {
   const response = await fetch(NEON_SITE_SEARCH_URL, {
     method: 'POST',
     headers: searchDocsHeaders(caller),
@@ -104,7 +106,7 @@ export async function searchDocs(
       `${UNEXPECTED_SEARCH_RESPONSE}: ${issue.path.join('.')} ${issue.message}`,
     );
   }
-  return JSON.stringify(parsed.data);
+  return parsed.data;
 }
 
 function validateDocSlug(slug: string): void {

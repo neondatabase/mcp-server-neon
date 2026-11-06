@@ -1344,18 +1344,11 @@ You MUST follow these steps:
 
   search_docs: async (args, _neonClient, extra) => {
     const params = parseHost(searchDocsInputSchema, args?.params);
-    const content = await searchDocs(params, {
+    const results = await searchDocs(params, {
       userAgent: extra?.userAgent,
       client: extra?.clientApplication,
     });
-    return {
-      content: [
-        {
-          type: 'text',
-          text: content,
-        },
-      ],
-    };
+    return toMcpToolResult(results);
   },
 
   get_doc: async (args) => {
