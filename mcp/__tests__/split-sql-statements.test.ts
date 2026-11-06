@@ -33,13 +33,11 @@ describe('splitSqlStatements', () => {
     expect(await splitSqlStatements('-- nothing to run\n')).toEqual([]);
   });
 
-  it('rejects SQL that does not parse with the Postgres message and position', async () => {
-    await expect(
-      splitSqlStatements(
-        "CREATE TABLE t (id int);\nINSERT INTO t VALUES ('a);",
+  it('splits SQL the parser rejects on semicolons, for Postgres to judge', async () => {
+    expect(
+      await splitSqlStatements(
+        "SET standard_conforming_strings = off;\nSELECT 'it\\'s'",
       ),
-    ).rejects.toThrow(
-      `Migration SQL does not parse at position 48: unterminated quoted string at or near "'a);"`,
-    );
+    ).toEqual(['SET standard_conforming_strings = off', "\nSELECT 'it\\'s'"]);
   });
 });

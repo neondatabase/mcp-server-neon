@@ -829,7 +829,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
-    'rejects migration SQL that does not parse, at the position Postgres reports, before creating a branch',
+    'runs SQL the parser rejects as before: legacy strings apply, broken SQL fails in Postgres',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
       if (!neonClient) throw new Error('Neon SDK client is not initialized.');
@@ -839,26 +839,34 @@ describe.sequential('MCP server live Neon lifecycle', () => {
           await client.listProjectBranches({ projectId: projectId! })
         ).data.branches.map((branch) => branch.name);
       const before = await branchNames();
-      const sql =
-        "CREATE TABLE mcp_split_never (id int);\nINSERT INTO mcp_split_never VALUES ('a);";
 
-      const postgres = await callTool('run_sql', {
-        project_id: projectId,
-        sql,
-      });
-      const position = /POSITION: (\d+)/.exec(textContent(postgres))?.[1];
-      expect(position).toBeDefined();
-
-      const rejected = toolResultSchema.parse(
+      const legacy = assertToolSucceeded(
+        'prepare_database_migration',
         await callTool('prepare_database_migration', {
           project_id: projectId,
           database_name: 'neondb',
-          migration_sql: sql,
+          migration_sql:
+            "SET LOCAL standard_conforming_strings = off;\nSELECT 'it\\'s' AS body;",
         }),
       );
-      expect(rejected.isError).toBe(true);
-      expect(textContent(rejected)).toBe(
-        `InvalidArgumentError: Migration SQL does not parse at position ${position}: unterminated quoted string at or near "'a);"`,
+      expect(legacy).toContain('"body": "it\'s"');
+      const temporaryBranchId = /- temporary_branch_id: (\S+)/.exec(
+        legacy,
+      )?.[1];
+      if (!temporaryBranchId) throw new Error(`No branch in: ${legacy}`);
+      await client.deleteProjectBranch(projectId, temporaryBranchId);
+
+      const broken = toolResultSchema.parse(
+        await callTool('prepare_database_migration', {
+          project_id: projectId,
+          database_name: 'neondb',
+          migration_sql:
+            "CREATE TABLE mcp_split_never (id int);\nINSERT INTO mcp_split_never VALUES ('a);",
+        }),
+      );
+      expect(broken.isError).toBe(true);
+      expect(textContent(broken)).toMatch(
+        /^NeonDbError: unterminated quoted string at or near "'a\)"\nSQLSTATE: 42601/,
       );
       expect(await branchNames()).toEqual(before);
     },

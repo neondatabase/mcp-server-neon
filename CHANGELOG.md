@@ -2,7 +2,7 @@
 
 # [NEXT]
 
-`prepare_database_migration` and `complete_database_migration` split migration SQL with the Postgres parser (`libpg-query`) instead of on every semicolon, so a semicolon inside a string, a `$$` function body, a comment, or a `BEGIN ATOMIC` body no longer splits a statement. The statements still run in one transaction, as before. SQL that does not parse is rejected with the Postgres message and position before a temporary branch is created.
+`prepare_database_migration` and `complete_database_migration` split migration SQL with the Postgres parser (`libpg-query`) instead of on every semicolon, so a semicolon inside a string, a `$$` function body, a comment, or a `BEGIN ATOMIC` body no longer splits a statement. The statements still run in one transaction, as before.
 
 `run_sql` and `run_sql_transaction` return at most `max_rows` rows per statement (default 100, up to 10,000). When rows were cut, a second content block reports `totalRowCount`, `truncated`, and a note on how to see the rest. A result that fits is unchanged.
 

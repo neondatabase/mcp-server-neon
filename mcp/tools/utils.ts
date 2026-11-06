@@ -2,12 +2,12 @@ import { parse, SqlError } from 'libpg-query';
 import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
 import { Api, Organization } from '../neon-client';
 import { ToolHandlerExtraParams } from './types';
-import { InvalidArgumentError, NotFoundError } from '../server/errors';
+import { NotFoundError } from '../server/errors';
 
 /**
  * Splits migration SQL with the Postgres parser (libpg_query), so semicolons
  * inside strings, `$$` bodies, comments, and `BEGIN ATOMIC` bodies stay in
- * their statement. SQL that does not parse is rejected before anything runs.
+ * their statement.
  */
 export async function splitSqlStatements(sql: string): Promise<string[]> {
   let tree;
@@ -15,11 +15,10 @@ export async function splitSqlStatements(sql: string): Promise<string[]> {
     tree = await parse(sql);
   } catch (error) {
     if (!(error instanceof SqlError)) throw error;
-    const cursor = error.sqlDetails?.cursorPosition;
-    const at = cursor === undefined ? '' : ` at position ${cursor + 1}`;
-    throw new InvalidArgumentError(
-      `Migration SQL does not parse${at}: ${error.message}`,
-    );
+    // The parser always reads strings with standard_conforming_strings on, so
+    // SQL it rejects can still run (`SET standard_conforming_strings = off;
+    // SELECT 'it\'s'`). Split it on semicolons and let Postgres judge it.
+    return sql.split(';').filter(Boolean);
   }
   // stmt_location and stmt_len are byte offsets; stmt_len is 0 for a last
   // statement that runs to the end of the input.
