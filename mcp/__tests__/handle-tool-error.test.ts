@@ -87,6 +87,35 @@ describe('handleToolError', () => {
     expect(captureException).not.toHaveBeenCalled();
   });
 
+  it('reports the Postgres error fields an agent needs to fix the query', () => {
+    const error = Object.assign(
+      new NeonDbError('function lower(integer) does not exist'),
+      {
+        severity: 'ERROR',
+        code: '42883',
+        position: '8',
+        hint: 'No function matches the given name and argument types. You might need to add explicit type casts.',
+        detail: undefined,
+        where: '',
+        routine: 'ParseFuncOrColumn',
+      },
+    );
+
+    const result = handleToolError(error, properties, 'trace-1', agent);
+
+    expect(result.content).toEqual([
+      {
+        type: 'text',
+        text: [
+          'NeonDbError: function lower(integer) does not exist',
+          'SQLSTATE: 42883',
+          'POSITION: 8',
+          'HINT: No function matches the given name and argument types. You might need to add explicit type casts.',
+        ].join('\n'),
+      },
+    ]);
+  });
+
   it('does not capture tool input that fails schema validation', () => {
     const { error } = createNeonTools({
       tools: ['projects.get'],

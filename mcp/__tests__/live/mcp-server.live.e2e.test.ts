@@ -124,6 +124,13 @@ function textContent(result: unknown): string {
   throw new Error('Expected the MCP tool to return text content.');
 }
 
+function jsonBlocks(toolName: string, result: unknown): unknown[] {
+  assertToolSucceeded(toolName, result);
+  return toolResultSchema
+    .parse(result)
+    .content.map((item) => JSON.parse(textContentSchema.parse(item).text));
+}
+
 function assertToolSucceeded(toolName: string, result: unknown): string {
   const parsedResult = toolResultSchema.parse(result);
   const text = textContent(result);
@@ -482,6 +489,82 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       expect(JSON.parse(assertToolSucceeded('run_sql', count))).toEqual([
         { n: 0 },
       ]);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'caps run_sql rows and returns Postgres error fields',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const runSql = (args: Record<string, unknown>) =>
+        callTool('run_sql', { project_id: projectId, ...args });
+      const series = 'SELECT n FROM generate_series(1, 150) AS n';
+
+      const [cappedRows, cappedSummary] = jsonBlocks(
+        'run_sql',
+        await runSql({ sql: series }),
+      );
+      expect(cappedRows).toHaveLength(100);
+      expect(z.array(z.unknown()).parse(cappedRows)[99]).toEqual({ n: 100 });
+      const rerunNote =
+        'To see more, raise `max_rows` or narrow the query with WHERE or LIMIT. The SQL already ran, so if it changed data, running it again repeats the change.';
+      expect(cappedSummary).toEqual({
+        totalRowCount: 150,
+        truncated: true,
+        note: `Showing the first 100 of 150 rows. ${rerunNote}`,
+      });
+
+      const raised = jsonBlocks(
+        'run_sql',
+        await runSql({ sql: series, max_rows: 150 }),
+      );
+      expect(raised).toHaveLength(1);
+      expect(raised[0]).toHaveLength(150);
+
+      const [writeRows, writeSummaries] = jsonBlocks(
+        'run_sql_transaction',
+        await callTool('run_sql_transaction', {
+          project_id: projectId,
+          sql_statements: [
+            'CREATE TABLE public.max_rows_probe (n int)',
+            // A writable CTE reports a SELECT command tag.
+            'WITH inserted AS (INSERT INTO public.max_rows_probe SELECT generate_series(1, 5) RETURNING n) SELECT n FROM inserted ORDER BY n',
+            'DROP TABLE public.max_rows_probe',
+          ],
+          max_rows: 2,
+        }),
+      );
+      expect(writeRows).toEqual([[], [{ n: 1 }, { n: 2 }], []]);
+      expect(writeSummaries).toEqual([
+        { totalRowCount: 0, truncated: false },
+        {
+          totalRowCount: 5,
+          truncated: true,
+          note: `Showing the first 2 of 5 rows. ${rerunNote}`,
+        },
+        { totalRowCount: 0, truncated: false },
+      ]);
+
+      const missingTable = await runSql({ sql: 'SELECT * FROM no_such_table' });
+      expect(toolResultSchema.parse(missingTable).isError).toBe(true);
+      expect(textContent(missingTable)).toBe(
+        [
+          'NeonDbError: relation "no_such_table" does not exist',
+          'SQLSTATE: 42P01',
+          'POSITION: 15',
+        ].join('\n'),
+      );
+
+      const wrongArgs = await runSql({ sql: 'SELECT lower(1)' });
+      expect(textContent(wrongArgs)).toBe(
+        [
+          'NeonDbError: function lower(integer) does not exist',
+          'SQLSTATE: 42883',
+          'POSITION: 8',
+          'HINT: No function matches the given name and argument types. You might need to add explicit type casts.',
+        ].join('\n'),
+      );
     },
     LIVE_TEST_TIMEOUT_MS,
   );
