@@ -6,6 +6,8 @@
 
 A failed SQL tool call returns the Postgres SQLSTATE, error position, and any detail, hint, or context under the error message.
 
+`describe_branch` reads the database structure with one `SELECT` in a `READ ONLY` transaction instead of creating, calling and dropping a `public.show_db_tree()` function. It now works for roles without `CREATE` on `public` and on read-only connections, and it no longer replaces or drops a user's own `public.show_db_tree()`. The tree no longer lists the helper itself; the output format is unchanged. When the structure cannot be read, the result says why, with or without a pinned role.
+
 # [2.0.0] 2026-11-05
 
 MCP transport:
@@ -28,8 +30,6 @@ Neon Auth branch settings can be changed through MCP: `update_auth_allow_localho
 A tool argument of `.` or `..` that goes into a Management API path, such as `database_name: ".."` on `delete_postgres_database`, is now a tool error (`Path parameter database_name cannot be "..".`) and no request is sent. URL parsing resolved it as a dot segment, so the request could reach a different route. Requires `@neon/sdk` 7.8.2 and `@neon/tools` 2.6.2.
 
 `search` works for a personal account (every OAuth sign-in and personal API key) that belongs to more than one organization; it failed with `Multiple organizations found. Please specify the org_id parameter`, a parameter `search` does not take. With one organization, each matching project and branch is listed once instead of twice.
-
-`describe_branch` reads the database structure with one `SELECT` in a `READ ONLY` transaction instead of creating, calling and dropping a `public.show_db_tree()` function. It now works for roles without `CREATE` on `public` and on read-only connections, and it no longer replaces or drops a user's own `public.show_db_tree()`. The tree no longer lists the helper itself; the output format is unchanged. When the structure cannot be read, the result says why, with or without a pinned role.
 
 The OAuth consent screen says where the sign-in returns for this request ("Returns to cursor.com", the full URI for an app scheme such as `cursor://`) and, for a loopback redirect, that it returns to an app on this computer. A client that signs in with a Client ID Metadata Document shows "App identity published at <host>" under its name.
 
