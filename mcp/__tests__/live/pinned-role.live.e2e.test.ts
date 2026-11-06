@@ -43,6 +43,12 @@ const identitySchema = z.array(
   z.object({ session_user: z.string(), current_user: z.string() }),
 );
 
+const sqlResultSchema = z.object({ rows: z.array(z.unknown()) });
+
+function rowsOf(output: string): unknown[] {
+  return sqlResultSchema.parse(JSON.parse(output)).rows;
+}
+
 type Connected = { client: Client; server: McpServer };
 
 function requireApiKey(): string {
@@ -285,7 +291,7 @@ describe.sequential('pinned Postgres role on live Neon', () => {
       const sql = 'SELECT session_user::text, current_user::text';
       for (const client of [pinned, pinnedReadOnly]) {
         const rows = identitySchema.parse(
-          JSON.parse(await succeeds(client, 'run_sql', { sql })),
+          rowsOf(await succeeds(client, 'run_sql', { sql })),
         );
         expect(rows).toEqual([
           { session_user: PINNED_ROLE, current_user: PINNED_ROLE },
@@ -293,12 +299,14 @@ describe.sequential('pinned Postgres role on live Neon', () => {
       }
 
       // Every statement of a transaction runs as the pinned role.
-      const statements = JSON.parse(
-        await succeeds(pinned, 'run_sql_transaction', {
-          sql_statements: [sql, sql],
-        }),
-      ) as unknown[];
-      for (const rows of statements) {
+      const statements = z.array(sqlResultSchema).parse(
+        JSON.parse(
+          await succeeds(pinned, 'run_sql_transaction', {
+            sql_statements: [sql, sql],
+          }),
+        ),
+      );
+      for (const { rows } of statements) {
         expect(identitySchema.parse(rows)[0]).toEqual({
           session_user: PINNED_ROLE,
           current_user: PINNED_ROLE,
@@ -319,7 +327,7 @@ describe.sequential('pinned Postgres role on live Neon', () => {
       const granted = await succeeds(pinned, 'run_sql', {
         sql: `SELECT count(*)::int AS n FROM ${GRANTED_TABLE}`,
       });
-      expect(JSON.parse(granted)).toEqual([{ n: 2 }]);
+      expect(rowsOf(granted)).toEqual([{ n: 2 }]);
 
       const write = await call(pinned, 'run_sql', {
         sql: `INSERT INTO ${GRANTED_TABLE} VALUES (3)`,
@@ -380,12 +388,12 @@ describe.sequential('pinned Postgres role on live Neon', () => {
       const setting = await succeeds(pinnedReadOnly, 'run_sql', {
         sql: "SELECT current_setting('transaction_read_only') AS ro",
       });
-      expect(JSON.parse(setting)).toEqual([{ ro: 'on' }]);
+      expect(rowsOf(setting)).toEqual([{ ro: 'on' }]);
 
       const unpinnedWritable = await succeeds(owner, 'run_sql', {
         sql: "SELECT current_setting('transaction_read_only') AS ro",
       });
-      expect(JSON.parse(unpinnedWritable)).toEqual([{ ro: 'off' }]);
+      expect(rowsOf(unpinnedWritable)).toEqual([{ ro: 'off' }]);
     },
     LIVE_TEST_TIMEOUT_MS,
   );
@@ -488,7 +496,7 @@ describe.sequential('pinned Postgres role on live Neon', () => {
       if (identity.isError) {
         throw new Error(`run_sql failed after LOGIN: ${identity.output}`);
       }
-      const restored = identitySchema.parse(JSON.parse(identity.output));
+      const restored = identitySchema.parse(rowsOf(identity.output));
       expect(restored[0]?.session_user).toBe(PINNED_ROLE);
     },
     LIVE_TEST_TIMEOUT_MS,
@@ -514,7 +522,7 @@ describe.sequential('pinned Postgres role on live Neon', () => {
     'lets an unpinned connection pick the role per call (issue #347)',
     async () => {
       const rows = identitySchema.parse(
-        JSON.parse(
+        rowsOf(
           await succeeds(owner, 'run_sql', {
             sql: 'SELECT session_user::text, current_user::text',
             role_name: PINNED_ROLE,
@@ -527,7 +535,7 @@ describe.sequential('pinned Postgres role on live Neon', () => {
       });
 
       const defaultRole = identitySchema.parse(
-        JSON.parse(
+        rowsOf(
           await succeeds(owner, 'run_sql', {
             sql: 'SELECT session_user::text, current_user::text',
           }),

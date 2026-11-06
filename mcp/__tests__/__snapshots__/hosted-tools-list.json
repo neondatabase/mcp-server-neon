@@ -52,6 +52,13 @@
         "compute_id": {
           "type": "string",
           "description": "An optional ID of the compute/endpoint to run on. If not provided, the read-write compute of the branch is used."
+        },
+        "max_rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 100,
+          "description": "Maximum number of rows to return per statement. The response reports how many rows the statement returned and whether they were truncated, so raise this only when `truncated` is true."
         }
       },
       "required": [
@@ -102,6 +109,13 @@
         "compute_id": {
           "type": "string",
           "description": "An optional ID of the compute/endpoint to run on. If not provided, the read-write compute of the branch is used."
+        },
+        "max_rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 100,
+          "description": "Maximum number of rows to return per statement. The response reports how many rows the statement returned and whether they were truncated, so raise this only when `truncated` is true."
         }
       },
       "required": [

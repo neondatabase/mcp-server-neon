@@ -1,5 +1,11 @@
 # Changelog
 
+# [NEXT]
+
+`run_sql` and `run_sql_transaction` return at most `max_rows` rows per statement (default 100, up to 10,000). Each result is `{ rows, totalRowCount, truncated, note? }` instead of a bare row array, and `run_sql_transaction` returns one per statement.
+
+A failed SQL tool call returns the Postgres SQLSTATE, error position, and any detail, hint, or context under the error message.
+
 # [2.0.0] 2026-11-05
 
 MCP transport:

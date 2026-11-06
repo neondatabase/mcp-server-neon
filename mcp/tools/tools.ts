@@ -11,6 +11,7 @@ import { getDoc, searchDocs } from './handlers/docs';
 import { sendFeedback } from './handlers/feedback';
 
 import { getDefaultDatabase, splitSqlStatements } from './utils';
+import { capSqlRows } from './sql-rows';
 import { startSpan } from '@sentry/node';
 import type { z } from 'zod/v3';
 import {
@@ -1005,7 +1006,12 @@ const HOST_HANDLERS: ToolHandlers = {
       extra,
     );
     return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(capSqlRows(result, params.max_rows), null, 2),
+        },
+      ],
     };
   }),
 
@@ -1025,7 +1031,16 @@ const HOST_HANDLERS: ToolHandlers = {
         extra,
       );
       return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              result.map((rows) => capSqlRows(rows, params.max_rows)),
+              null,
+              2,
+            ),
+          },
+        ],
       };
     },
   ),

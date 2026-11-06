@@ -13,6 +13,7 @@ import {
   INSPECT_DEFAULT_LIMIT,
   INSPECT_MAX_LIMIT,
 } from '../inspect/queries';
+import { SQL_DEFAULT_MAX_ROWS, SQL_MAX_ROWS_LIMIT } from './sql-rows';
 
 const DATABASE_NAME_DESCRIPTION = `The name of the database. If not provided, the default ${NEON_DEFAULT_DATABASE_NAME} or first available database is used.`;
 
@@ -24,6 +25,17 @@ const SQL_ROLE_NAME_DESCRIPTION =
 
 const SQL_COMPUTE_ID_DESCRIPTION =
   'An optional ID of the compute/endpoint to run on. If not provided, the read-write compute of the branch is used.';
+
+const sqlMaxRowsSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(SQL_MAX_ROWS_LIMIT)
+  .optional()
+  .default(SQL_DEFAULT_MAX_ROWS)
+  .describe(
+    'Maximum number of rows to return per statement. The response reports how many rows the statement returned and whether they were truncated, so raise this only when `truncated` is true.',
+  );
 
 export const runSqlInputSchema = z
   .object({
@@ -40,6 +52,7 @@ export const runSqlInputSchema = z
     database_name: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
     role_name: z.string().optional().describe(SQL_ROLE_NAME_DESCRIPTION),
     compute_id: z.string().optional().describe(SQL_COMPUTE_ID_DESCRIPTION),
+    max_rows: sqlMaxRowsSchema,
   })
   .strict();
 
@@ -60,6 +73,7 @@ export const runSqlTransactionInputSchema = z
     database_name: z.string().optional().describe(DATABASE_NAME_DESCRIPTION),
     role_name: z.string().optional().describe(SQL_ROLE_NAME_DESCRIPTION),
     compute_id: z.string().optional().describe(SQL_COMPUTE_ID_DESCRIPTION),
+    max_rows: sqlMaxRowsSchema,
   })
   .strict();
 

@@ -381,8 +381,8 @@ Notes:
 **SQL Query Execution:**
 
 - **`get_connection_string`**: Returns your database connection string.
-- **`run_sql`**: Executes a single SQL query against a specified Neon database. Supports both read and write operations. Optional `role_name` logs in as that Postgres role instead of the database owner, and `compute_id` picks the compute; credentials stay on the server. On a connection with `?roleName=`, `role_name` must be omitted or match it.
-- **`run_sql_transaction`**: Executes a series of SQL queries within a single transaction against a Neon database. Takes the same optional `role_name` and `compute_id` as `run_sql`.
+- **`run_sql`**: Executes a single SQL query against a specified Neon database. Supports both read and write operations. Optional `role_name` logs in as that Postgres role instead of the database owner, and `compute_id` picks the compute; credentials stay on the server. On a connection with `?roleName=`, `role_name` must be omitted or match it. Returns `{ rows, totalRowCount, truncated, note? }` with at most `max_rows` rows (default 100, up to 10,000). A failed query returns the Postgres SQLSTATE, error position, and any detail, hint, or context.
+- **`run_sql_transaction`**: Executes a series of SQL queries within a single transaction against a Neon database. Takes the same optional `role_name`, `compute_id`, and `max_rows` as `run_sql`, and returns one `{ rows, totalRowCount, truncated, note? }` per statement.
 - **`get_database_tables`**: Lists all tables within a specified Neon database.
 - **`describe_table_schema`**: Retrieves the schema definition of a specific table, detailing columns, data types, and constraints.
 

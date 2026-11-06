@@ -479,9 +479,78 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       const count = await roRunSql(
         'SELECT count(*)::int AS n FROM public.property_options',
       );
-      expect(JSON.parse(assertToolSucceeded('run_sql', count))).toEqual([
-        { n: 0 },
+      expect(JSON.parse(assertToolSucceeded('run_sql', count))).toEqual({
+        rows: [{ n: 0 }],
+        totalRowCount: 1,
+        truncated: false,
+      });
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'caps run_sql rows and returns the Postgres error fields',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const runSql = (args: Record<string, unknown>) =>
+        callTool('run_sql', { project_id: projectId, ...args });
+      const series = 'SELECT n FROM generate_series(1, 150) AS n';
+
+      const capped = JSON.parse(
+        assertToolSucceeded('run_sql', await runSql({ sql: series })),
+      );
+      expect(capped).toMatchObject({
+        totalRowCount: 150,
+        truncated: true,
+        note: 'Showing the first 100 of 150 rows. Raise `max_rows` or narrow the query with WHERE or LIMIT to see more.',
+      });
+      expect(capped.rows).toHaveLength(100);
+      expect(capped.rows[99]).toEqual({ n: 100 });
+
+      const raised = JSON.parse(
+        assertToolSucceeded(
+          'run_sql',
+          await runSql({ sql: series, max_rows: 150 }),
+        ),
+      );
+      expect(raised).toMatchObject({ totalRowCount: 150, truncated: false });
+      expect(raised.rows).toHaveLength(150);
+
+      const transaction = JSON.parse(
+        assertToolSucceeded(
+          'run_sql_transaction',
+          await callTool('run_sql_transaction', {
+            project_id: projectId,
+            sql_statements: [series, 'SELECT 1 AS one'],
+            max_rows: 10,
+          }),
+        ),
+      );
+      expect(transaction).toEqual([
+        expect.objectContaining({ totalRowCount: 150, truncated: true }),
+        { rows: [{ one: 1 }], totalRowCount: 1, truncated: false },
       ]);
+      expect(transaction[0].rows).toHaveLength(10);
+
+      const missingTable = await runSql({ sql: 'SELECT * FROM no_such_table' });
+      expect(toolResultSchema.parse(missingTable).isError).toBe(true);
+      expect(textContent(missingTable)).toBe(
+        [
+          'NeonDbError: relation "no_such_table" does not exist',
+          'SQLSTATE: 42P01',
+          'POSITION: 15',
+        ].join('\n'),
+      );
+
+      const wrongArgs = await runSql({ sql: 'SELECT lower(1)' });
+      expect(textContent(wrongArgs)).toBe(
+        [
+          'NeonDbError: function lower(integer) does not exist',
+          'SQLSTATE: 42883',
+          'POSITION: 8',
+          'HINT: No function matches the given name and argument types. You might need to add explicit type casts.',
+        ].join('\n'),
+      );
     },
     LIVE_TEST_TIMEOUT_MS,
   );
@@ -529,9 +598,11 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         project_id: projectId,
         sql: "SELECT count(*)::int AS n FROM pg_proc WHERE proname = 'show_db_tree'",
       });
-      expect(JSON.parse(assertToolSucceeded('run_sql', remaining))).toEqual([
-        { n: 0 },
-      ]);
+      expect(JSON.parse(assertToolSucceeded('run_sql', remaining))).toEqual({
+        rows: [{ n: 0 }],
+        totalRowCount: 1,
+        truncated: false,
+      });
     },
     LIVE_TEST_TIMEOUT_MS,
   );
