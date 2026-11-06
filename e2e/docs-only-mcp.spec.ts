@@ -287,7 +287,10 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
       categories: ['docs'],
     });
     expect(callResult?.result?.isError).not.toBe(true);
-    expect(JSON.parse(callResult!.result!.content![0]!.text!)).toEqual({
+    expect(callResult!.result).not.toHaveProperty('structuredContent');
+    const text = callResult!.result!.content![0]!.text!;
+    expect(text).toBe(JSON.stringify(JSON.parse(text)));
+    expect(JSON.parse(text)).toEqual({
       hits: [
         {
           title: 'Glossary',

@@ -215,7 +215,11 @@ describe('MCP server e2e tool calls', () => {
         categories: ['postgresql'],
         limit: 10,
       });
-      expect(JSON.parse(content[0].text ?? '')).toEqual({
+      expect(result.structuredContent).toBeUndefined();
+      expect(content).toHaveLength(1);
+      const text = content[0].text ?? '';
+      expect(text).toBe(JSON.stringify(JSON.parse(text)));
+      expect(JSON.parse(text)).toEqual({
         hits: [
           {
             title: 'PostgreSQL Joins',
