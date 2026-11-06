@@ -5466,6 +5466,71 @@
     }
   },
   {
+    "name": "query_loki_logs",
+    "title": "Query branch logs (Loki)",
+    "description": "Runs a LogQL range query on the branch's Loki-compatible read API and returns Loki's response: `data.result` groups lines by stream labels, and each value is `[nanosecond timestamp string, line]`. Use it for sub-second ordering or stream labels; use `query_logs` for structured filters and one record per line. The source label is `entity_type`; `list_log_fields` and `list_log_field_values` list labels and values. There is no cursor: a result with `limit` lines, or 10,000 (the server's cap, which adds no warning), may be incomplete, so narrow `since` or the selector. Max seven days.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "description": "LogQL stream selector with optional line filters, e.g. {entity_type=\"function\"} |= \"error\". The source label is entity_type. No parsers, formatting stages, or metric queries."
+        },
+        "since": {
+          "type": "string",
+          "description": "Lookback as a Go duration such as 30m or 24h, ending at end or now. Defaults to 1h. start takes precedence."
+        },
+        "start": {
+          "type": "string",
+          "description": "Window start as RFC 3339 or Unix nanoseconds."
+        },
+        "end": {
+          "type": "string",
+          "description": "Window end as RFC 3339 or Unix nanoseconds. Defaults to now."
+        },
+        "limit": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Maximum log lines. The server enforces its own cap."
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "forward",
+            "backward"
+          ],
+          "description": "backward (default) is newest first."
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Query branch logs (Loki)",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "get_ai_gateway",
     "title": "Get branch AI Gateway endpoint",
     "description": "Returns the AI Gateway endpoint host for the specified branch, used to render code-snippet base URLs.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",

@@ -94,9 +94,9 @@ describe('NEON_TOOLS definitions', () => {
   });
 
   it('marks private Neon operations closed-world and public-capable ones open-world', () => {
-    expect(NEON_TOOLS).toHaveLength(138);
+    expect(NEON_TOOLS).toHaveLength(139);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
-    expect(generated).toHaveLength(118);
+    expect(generated).toHaveLength(119);
     expect(
       NEON_TOOLS.filter((tool) => tool.annotations.openWorldHint)
         .map((tool) => tool.name)
@@ -425,6 +425,19 @@ describe('generated tool interface', () => {
     expect(tool!.description).toContain('unknown_field');
     expect(tool!.description).toContain('six hours');
     expect(tool!.description).not.toContain('previous hour');
+  });
+
+  it('exposes query_loki_logs as a read-only observability tool that points at the log discovery tools', () => {
+    const tool = NEON_TOOLS.find((t) => t.name === 'query_loki_logs');
+    expect(tool?.scope).toBe('observability');
+    expect(tool?.readOnlySafe).toBe(true);
+    expect(tool?.annotations.destructiveHint).toBe(false);
+    expect(tool!.description).toContain('query_logs');
+    expect(tool!.description).toContain('list_log_fields');
+    expect(tool!.description).toContain('no cursor');
+    expect(
+      NEON_TOOLS.some((t) => /labels?_.*loki|loki.*labels?/.test(t.name)),
+    ).toBe(false);
   });
 
   it('keeps deploy_function zip and at-least-one-field constraints', () => {

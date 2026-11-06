@@ -344,11 +344,11 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('src="/images/consent/neon.svg"');
     expect(html).toContain('>Included tools</button>');
     expect(html).toContain('is-collapsed');
-    expect(html).toContain('138 tools available');
+    expect(html).toContain('139 tools available');
     expect(html).toContain('data-tool-content');
     expect(html).toContain('data-category-disclosure');
     expect(html).toContain(
-      'data-category-summary>13/13 selected · 138 tools available</span>',
+      'data-category-summary>13/13 selected · 139 tools available</span>',
     );
     expect(html).toContain('choice-categories');
     expect(html).not.toMatch(/\.check-grid\s*\{[^}]*overflow-y/);
