@@ -11,6 +11,7 @@ import { getDoc, searchDocs } from './handlers/docs';
 import { sendFeedback } from './handlers/feedback';
 
 import { getDefaultDatabase, splitSqlStatements } from './utils';
+import { capStatementRows, sqlRowsContent } from './sql-rows';
 import { startSpan } from '@sentry/node';
 import type { z } from 'zod/v3';
 import {
@@ -1004,9 +1005,8 @@ const HOST_HANDLERS: ToolHandlers = {
       neonClient,
       extra,
     );
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
+    const { rows, summaries } = capStatementRows([result], params.max_rows);
+    return { content: sqlRowsContent(rows[0], summaries?.[0]) };
   }),
 
   run_sql_transaction: host(
@@ -1024,9 +1024,8 @@ const HOST_HANDLERS: ToolHandlers = {
         neonClient,
         extra,
       );
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
+      const { rows, summaries } = capStatementRows(result, params.max_rows);
+      return { content: sqlRowsContent(rows, summaries) };
     },
   ),
 

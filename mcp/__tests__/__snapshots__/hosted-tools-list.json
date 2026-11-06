@@ -52,6 +52,13 @@
         "compute_id": {
           "type": "string",
           "description": "An optional ID of the compute/endpoint to run on. If not provided, the read-write compute of the branch is used."
+        },
+        "max_rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 100,
+          "description": "Maximum number of rows to return per statement. When a statement returns more, the response adds a second block with `totalRowCount` and `truncated: true`; raise this only then."
         }
       },
       "required": [
@@ -102,6 +109,13 @@
         "compute_id": {
           "type": "string",
           "description": "An optional ID of the compute/endpoint to run on. If not provided, the read-write compute of the branch is used."
+        },
+        "max_rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 100,
+          "description": "Maximum number of rows to return per statement. When a statement returns more, the response adds a second block with `totalRowCount` and `truncated: true`; raise this only then."
         }
       },
       "required": [
@@ -363,7 +377,7 @@
   {
     "name": "get_neon_auth_config",
     "title": "Get Neon Auth configuration",
-    "description": "Read Neon Auth config for a branch with OAuth and SMTP secrets redacted as \"***redacted***\". Requires provision_neon_auth first.",
+    "description": "Read Neon Auth config for a branch: trusted origins, localhost access, email and password, OAuth providers, email provider, the organization, magic link, and phone number plugins, and the webhook. OAuth and SMTP secrets are redacted as \"***redacted***\". Requires provision_neon_auth first.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -829,22 +843,27 @@
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 400
+          "maximum": 400,
+          "description": "Specify a value from 1 to 400 to limit number of projects in the response."
         },
         "search": {
-          "type": "string"
+          "type": "string",
+          "description": "Search by project `name` or `id`."
         },
         "org_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "Search for projects by `org_id`."
         },
         "timeout": {
           "type": "integer",
           "minimum": 100,
-          "maximum": 30000
+          "maximum": 30000,
+          "description": "Specify an explicit timeout in milliseconds to limit response delay."
         },
         "recoverable": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Show only deleted projects within the recovery window."
         }
       },
       "additionalProperties": false
@@ -867,7 +886,8 @@
       "properties": {
         "org_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "Count projects in the organization with this `org_id`."
         }
       },
       "additionalProperties": false
@@ -890,7 +910,8 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         }
       },
       "required": [
@@ -923,30 +944,36 @@
                 "active_time_seconds": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 9007199254740991
+                  "maximum": 9007199254740991,
+                  "description": "The total amount of wall-clock time allowed to be spent by the project's compute endpoints."
                 },
                 "compute_time_seconds": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 9007199254740991
+                  "maximum": 9007199254740991,
+                  "description": "The total amount of CPU seconds allowed to be spent by the project's compute endpoints."
                 },
                 "written_data_bytes": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 9007199254740991
+                  "maximum": 9007199254740991,
+                  "description": "Total amount of data written to all of a project's branches."
                 },
                 "data_transfer_bytes": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 9007199254740991
+                  "maximum": 9007199254740991,
+                  "description": "Total amount of data transferred from all of a project's branches using the proxy."
                 },
                 "logical_size_bytes": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 9007199254740991
+                  "maximum": 9007199254740991,
+                  "description": "Limit on the logical size of every project's branch."
                 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "description": "Per-project consumption quotas."
             },
             "allowed_ips": {
               "type": "object",
@@ -955,16 +982,20 @@
                   "type": "array",
                   "items": {
                     "type": "string"
-                  }
+                  },
+                  "description": "A list of IP addresses that are allowed to connect to the endpoint."
                 },
                 "protected_branches_only": {
-                  "type": "boolean"
+                  "type": "boolean",
+                  "description": "If true, the list will be applied only to protected branches."
                 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "description": "A list of IP addresses that are allowed to connect to the compute endpoint."
             },
             "enable_logical_replication": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Sets wal_level=logical for all compute endpoints in this project."
             },
             "maintenance_window": {
               "type": "object",
@@ -975,13 +1006,16 @@
                     "type": "integer",
                     "minimum": -9007199254740991,
                     "maximum": 9007199254740991
-                  }
+                  },
+                  "description": "A list of weekdays when the maintenance window is active."
                 },
                 "start_time": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Start time of the maintenance window, in the format of \"HH:MM\"."
                 },
                 "end_time": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "End time of the maintenance window, in the format of \"HH:MM\"."
                 }
               },
               "required": [
@@ -989,13 +1023,16 @@
                 "start_time",
                 "end_time"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "description": "A maintenance window is a time period during which Neon may perform maintenance on the project's infrastructure."
             },
             "block_public_connections": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "When set, connections from the public internet are disallowed."
             },
             "block_vpc_connections": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "When set, connections using VPC endpoints are disallowed."
             },
             "audit_log_level": {
               "type": "string",
@@ -1006,30 +1043,36 @@
               ]
             },
             "hipaa": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Enables HIPAA compliance mode for the project, including audit logging."
             },
             "preload_libraries": {
               "type": "object",
               "properties": {
                 "use_defaults": {
-                  "type": "boolean"
+                  "type": "boolean",
+                  "description": "When true, the project's preload libraries include the platform default set in addition to any libraries listed in `enabled_libraries`."
                 },
                 "enabled_libraries": {
                   "type": "array",
                   "items": {
                     "type": "string"
-                  }
+                  },
+                  "description": "Names of shared preload libraries to enable for the project."
                 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "description": "The shared libraries to preload into the project's compute instances."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "Project-level settings applied at creation."
         },
         "name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "The project name."
         },
         "realtime": {
           "type": "object",
@@ -1042,10 +1085,12 @@
                 "minLength": 1,
                 "maxLength": 2048,
                 "pattern": "^(\\*|https?:\\/\\/[^\\/?#@,*\\s]+)$"
-              }
+              },
+              "description": "The browser origins allowed to connect, each `http` or `https` with a host and optional port and no path."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "Enable Realtime for the default branch with these options."
         },
         "branch": {
           "type": "object",
@@ -1053,13 +1098,16 @@
             "name": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 256
+              "maxLength": 256,
+              "description": "The default branch name."
             },
             "role_name": {
-              "type": "string"
+              "type": "string",
+              "description": "The role name."
             },
             "database_name": {
-              "type": "string"
+              "type": "string",
+              "description": "The database name."
             },
             "annotations": {
               "type": "object",
@@ -1068,24 +1116,30 @@
               },
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "Arbitrary key-value metadata to attach to the branch."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "Configuration for the initial branch created with the project."
         },
         "autoscaling_limit_min_cu": {
           "type": "number",
-          "minimum": 0.25
+          "minimum": 0.25,
+          "description": "Deprecated. Use `default_endpoint_settings.autoscaling_limit_min_cu` instead."
         },
         "autoscaling_limit_max_cu": {
           "type": "number",
-          "minimum": 0.25
+          "minimum": 0.25,
+          "description": "Deprecated. Use `default_endpoint_settings.autoscaling_limit_max_cu` instead."
         },
         "provisioner": {
-          "type": "string"
+          "type": "string",
+          "description": "Compute provisioner."
         },
         "region_id": {
-          "type": "string"
+          "type": "string",
+          "description": "The region identifier."
         },
         "default_endpoint_settings": {
           "type": "object",
@@ -1097,7 +1151,8 @@
               },
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "A raw representation of Postgres settings"
             },
             "pgbouncer_settings": {
               "type": "object",
@@ -1106,40 +1161,49 @@
               },
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "Deprecated. Use the endpoint-level connection pooler configuration instead."
             },
             "autoscaling_limit_min_cu": {
               "type": "number",
-              "minimum": 0.25
+              "minimum": 0.25,
+              "description": "Minimum number of Compute Units for this endpoint."
             },
             "autoscaling_limit_max_cu": {
               "type": "number",
-              "minimum": 0.25
+              "minimum": 0.25,
+              "description": "Default maximum number of Compute Units for endpoints created under this account."
             },
             "suspend_timeout_seconds": {
               "type": "integer",
               "minimum": -1,
-              "maximum": 604800
+              "maximum": 604800,
+              "description": "Scale-to-zero idle timeout, in seconds, before the compute suspends."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "A collection of settings for a Neon endpoint"
         },
         "pg_version": {
           "type": "integer",
           "minimum": 14,
-          "maximum": 19
+          "maximum": 19,
+          "description": "The major Postgres version number."
         },
         "store_passwords": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether or not passwords are stored for roles in the Neon project."
         },
         "history_retention_seconds": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 2592000
+          "maximum": 2592000,
+          "description": "History window (point-in-time restore range) for all branches, in seconds."
         },
         "org_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "ID of the organization that will own the project."
         }
       },
       "additionalProperties": false
@@ -1162,7 +1226,8 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "settings": {
           "type": "object",
@@ -1173,30 +1238,36 @@
                 "active_time_seconds": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 9007199254740991
+                  "maximum": 9007199254740991,
+                  "description": "The total amount of wall-clock time allowed to be spent by the project's compute endpoints."
                 },
                 "compute_time_seconds": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 9007199254740991
+                  "maximum": 9007199254740991,
+                  "description": "The total amount of CPU seconds allowed to be spent by the project's compute endpoints."
                 },
                 "written_data_bytes": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 9007199254740991
+                  "maximum": 9007199254740991,
+                  "description": "Total amount of data written to all of a project's branches."
                 },
                 "data_transfer_bytes": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 9007199254740991
+                  "maximum": 9007199254740991,
+                  "description": "Total amount of data transferred from all of a project's branches using the proxy."
                 },
                 "logical_size_bytes": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 9007199254740991
+                  "maximum": 9007199254740991,
+                  "description": "Limit on the logical size of every project's branch."
                 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "description": "Per-project consumption quotas."
             },
             "allowed_ips": {
               "type": "object",
@@ -1205,16 +1276,20 @@
                   "type": "array",
                   "items": {
                     "type": "string"
-                  }
+                  },
+                  "description": "A list of IP addresses that are allowed to connect to the endpoint."
                 },
                 "protected_branches_only": {
-                  "type": "boolean"
+                  "type": "boolean",
+                  "description": "If true, the list will be applied only to protected branches."
                 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "description": "A list of IP addresses that are allowed to connect to the compute endpoint."
             },
             "enable_logical_replication": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Sets wal_level=logical for all compute endpoints in this project."
             },
             "maintenance_window": {
               "type": "object",
@@ -1225,13 +1300,16 @@
                     "type": "integer",
                     "minimum": -9007199254740991,
                     "maximum": 9007199254740991
-                  }
+                  },
+                  "description": "A list of weekdays when the maintenance window is active."
                 },
                 "start_time": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Start time of the maintenance window, in the format of \"HH:MM\"."
                 },
                 "end_time": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "End time of the maintenance window, in the format of \"HH:MM\"."
                 }
               },
               "required": [
@@ -1239,13 +1317,16 @@
                 "start_time",
                 "end_time"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "description": "A maintenance window is a time period during which Neon may perform maintenance on the project's infrastructure."
             },
             "block_public_connections": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "When set, connections from the public internet are disallowed."
             },
             "block_vpc_connections": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "When set, connections using VPC endpoints are disallowed."
             },
             "audit_log_level": {
               "type": "string",
@@ -1256,30 +1337,36 @@
               ]
             },
             "hipaa": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Enables HIPAA compliance mode for the project, including audit logging."
             },
             "preload_libraries": {
               "type": "object",
               "properties": {
                 "use_defaults": {
-                  "type": "boolean"
+                  "type": "boolean",
+                  "description": "When true, the project's preload libraries include the platform default set in addition to any libraries listed in `enabled_libraries`."
                 },
                 "enabled_libraries": {
                   "type": "array",
                   "items": {
                     "type": "string"
-                  }
+                  },
+                  "description": "Names of shared preload libraries to enable for the project."
                 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "description": "The shared libraries to preload into the project's compute instances."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "Project-level settings, for example `quota`, `allowed_ips`, `enable_logical_replication`, and `maintenance_window`."
         },
         "name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "The project name"
         },
         "default_endpoint_settings": {
           "type": "object",
@@ -1291,7 +1378,8 @@
               },
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "A raw representation of Postgres settings"
             },
             "pgbouncer_settings": {
               "type": "object",
@@ -1300,28 +1388,34 @@
               },
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "Deprecated. Use the endpoint-level connection pooler configuration instead."
             },
             "autoscaling_limit_min_cu": {
               "type": "number",
-              "minimum": 0.25
+              "minimum": 0.25,
+              "description": "Minimum number of Compute Units for this endpoint."
             },
             "autoscaling_limit_max_cu": {
               "type": "number",
-              "minimum": 0.25
+              "minimum": 0.25,
+              "description": "Default maximum number of Compute Units for endpoints created under this account."
             },
             "suspend_timeout_seconds": {
               "type": "integer",
               "minimum": -1,
-              "maximum": 604800
+              "maximum": 604800,
+              "description": "Scale-to-zero idle timeout, in seconds, before the compute suspends."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "A collection of settings for a Neon endpoint"
         },
         "history_retention_seconds": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 2592000
+          "maximum": 2592000,
+          "description": "History window (point-in-time restore range) for all branches, in seconds."
         }
       },
       "required": [
@@ -1347,7 +1441,8 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         }
       },
       "required": [
@@ -1373,7 +1468,8 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         }
       },
       "required": [
@@ -1399,7 +1495,8 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         }
       },
       "required": [
@@ -1425,12 +1522,14 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 500
+          "maximum": 500,
+          "description": "The maximum number of members to return in the response"
         }
       },
       "required": [
@@ -1474,12 +1573,14 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 1000
+          "maximum": 1000,
+          "description": "Specify a value from 1 to 1000 to limit number of operations in the response"
         }
       },
       "required": [
@@ -1505,12 +1606,14 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "operation_id": {
           "type": "string",
           "format": "uuid",
-          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "The operation ID"
         }
       },
       "required": [
@@ -1538,7 +1641,8 @@
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Maximum number of projects per page."
         },
         "project_ids": {
           "minItems": 0,
@@ -1547,17 +1651,20 @@
           "items": {
             "type": "string",
             "pattern": "^([a-z0-9-]{1,60}(,[a-z0-9-]{1,60}){0,99})?$"
-          }
+          },
+          "description": "Optional project IDs to filter the response (up to 100)."
         },
         "from": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "description": "Specify the start `date-time` for the consumption period."
         },
         "to": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "description": "Specify the end `date-time` for the consumption period."
         },
         "granularity": {
           "type": "string",
@@ -1565,17 +1672,20 @@
             "hourly",
             "daily",
             "monthly"
-          ]
+          ],
+          "description": "Specify the granularity of consumption metrics."
         },
         "org_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "Organization ID."
         },
         "metrics": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Required. List the metrics to return."
         }
       },
       "required": [
@@ -1606,7 +1716,8 @@
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 1000
+          "maximum": 1000,
+          "description": "Maximum number of branches per page."
         },
         "project_ids": {
           "minItems": 1,
@@ -1615,7 +1726,8 @@
           "items": {
             "type": "string",
             "pattern": "^([a-z0-9-]{1,60}(,[a-z0-9-]{1,60}){0,99})?$"
-          }
+          },
+          "description": "Project IDs to include (required, 1 to 100)."
         },
         "branch_ids": {
           "minItems": 0,
@@ -1624,17 +1736,20 @@
           "items": {
             "type": "string",
             "pattern": "^([a-z0-9-]{1,60}(,[a-z0-9-]{1,60}){0,99})?$"
-          }
+          },
+          "description": "Optional branch IDs to filter the response (up to 100)."
         },
         "from": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "description": "Specify the start `date-time` for the consumption period."
         },
         "to": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "description": "Specify the end `date-time` for the consumption period."
         },
         "granularity": {
           "type": "string",
@@ -1642,17 +1757,20 @@
             "hourly",
             "daily",
             "monthly"
-          ]
+          ],
+          "description": "Specify the granularity of consumption metrics."
         },
         "org_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "Organization ID."
         },
         "metrics": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Required. List the metrics to return."
         }
       },
       "required": [
@@ -1683,10 +1801,12 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "search": {
-          "type": "string"
+          "type": "string",
+          "description": "Search by branch `name` or `id`."
         },
         "sort_by": {
           "type": "string",
@@ -1694,22 +1814,26 @@
             "name",
             "created_at",
             "updated_at"
-          ]
+          ],
+          "description": "Sort the branches by sort_field."
         },
         "sort_order": {
           "type": "string",
           "enum": [
             "asc",
             "desc"
-          ]
+          ],
+          "description": "Defines the sorting order of entities."
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 10000
+          "maximum": 10000,
+          "description": "The maximum number of records to be returned in the response"
         },
         "include_deleted": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "If true, return recoverable deleted branches too (soft-deleted within the recovery window)."
         }
       },
       "required": [
@@ -1735,11 +1859,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         }
       },
       "required": [
@@ -1766,16 +1892,19 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "The branch name"
         },
         "parent_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The `branch_id` of the parent branch."
         },
         "compute": {
           "type": "object",
@@ -1791,10 +1920,12 @@
             "suspend_timeout_seconds": {
               "type": "integer",
               "minimum": -1,
-              "maximum": 604800
+              "maximum": 604800,
+              "description": "Duration of inactivity in seconds after which the compute endpoint is automatically suspended."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "Autoscaling limits and suspend timeout for the read-write endpoint."
         },
         "no_compute": {
           "type": "boolean",
@@ -1824,21 +1955,26 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "New display name for the branch."
         },
         "protected": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the branch is protected."
         },
         "expires_at": {
+          "description": "The timestamp when the branch is scheduled to expire and be automatically deleted.",
           "anyOf": [
             {
               "type": "string",
@@ -1875,11 +2011,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         }
       },
       "required": [
@@ -1906,7 +2044,8 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         }
       },
       "required": [
@@ -1932,11 +2071,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         }
       },
       "required": [
@@ -1963,11 +2104,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "preserve_under_name": {
           "description": "Name under which to save the current branch before the reset. Required when the branch has children; those children move to the new branch.",
@@ -1998,34 +2141,42 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "database_name": {
-          "type": "string"
+          "type": "string",
+          "description": "Name of the database for which the schema is retrieved"
         },
         "base_branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID to compare the schema with"
         },
         "lsn": {
-          "type": "string"
+          "type": "string",
+          "description": "The Log Sequence Number (LSN) for which the schema is retrieved"
         },
         "timestamp": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "description": "The point in time for which the schema is retrieved"
         },
         "base_lsn": {
-          "type": "string"
+          "type": "string",
+          "description": "The Log Sequence Number (LSN) for the base branch schema"
         },
         "base_timestamp": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "description": "The point in time for the base branch schema"
         }
       },
       "required": [
@@ -2053,14 +2204,17 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "Name for the replaced branch."
         }
       },
       "required": [
@@ -2087,11 +2241,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         }
       },
       "required": [
@@ -2118,14 +2274,17 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "role_name": {
-          "type": "string"
+          "type": "string",
+          "description": "The role name"
         }
       },
       "required": [
@@ -2153,17 +2312,21 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "The role name."
         },
         "no_login": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether to create a role that cannot login."
         },
         "access": {
           "type": "string",
@@ -2214,14 +2377,17 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "role_name": {
-          "type": "string"
+          "type": "string",
+          "description": "The role name"
         }
       },
       "required": [
@@ -2249,14 +2415,17 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "role_name": {
-          "type": "string"
+          "type": "string",
+          "description": "The role name"
         }
       },
       "required": [
@@ -2284,11 +2453,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         }
       },
       "required": [
@@ -2315,14 +2486,17 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "database_name": {
-          "type": "string"
+          "type": "string",
+          "description": "The database name"
         }
       },
       "required": [
@@ -2350,17 +2524,21 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "Name of the database to create."
         },
         "owner_name": {
-          "type": "string"
+          "type": "string",
+          "description": "The name of the role that owns the database"
         }
       },
       "required": [
@@ -2389,20 +2567,25 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "database_name": {
-          "type": "string"
+          "type": "string",
+          "description": "The database name"
         },
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "Name of the database to update."
         },
         "owner_name": {
-          "type": "string"
+          "type": "string",
+          "description": "The name of the role that owns the database"
         }
       },
       "required": [
@@ -2430,14 +2613,17 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "database_name": {
-          "type": "string"
+          "type": "string",
+          "description": "The database name"
         }
       },
       "required": [
@@ -2465,7 +2651,8 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         }
       },
       "required": [
@@ -2491,11 +2678,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         }
       },
       "required": [
@@ -2522,11 +2711,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "endpoint_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The endpoint ID"
         }
       },
       "required": [
@@ -2553,21 +2744,25 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The ID of the branch the compute endpoint will be associated with"
         },
         "region_id": {
-          "type": "string"
+          "type": "string",
+          "description": "The region where the compute endpoint will be created."
         },
         "type": {
           "type": "string",
           "enum": [
             "read_only",
             "read_write"
-          ]
+          ],
+          "description": "Compute endpoint type."
         },
         "settings": {
           "type": "object",
@@ -2579,7 +2774,8 @@
               },
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "A raw representation of Postgres settings"
             },
             "pgbouncer_settings": {
               "type": "object",
@@ -2588,61 +2784,75 @@
               },
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "Deprecated. PgBouncer settings for the compute endpoint."
             },
             "preload_libraries": {
               "type": "object",
               "properties": {
                 "use_defaults": {
-                  "type": "boolean"
+                  "type": "boolean",
+                  "description": "When true, the project's preload libraries include the platform default set in addition to any libraries listed in `enabled_libraries`."
                 },
                 "enabled_libraries": {
                   "type": "array",
                   "items": {
                     "type": "string"
-                  }
+                  },
+                  "description": "Names of shared preload libraries to enable for the project."
                 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "description": "The shared libraries to preload into the project's compute instances."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "A collection of settings for a compute endpoint"
         },
         "autoscaling_limit_min_cu": {
           "type": "number",
-          "minimum": 0.25
+          "minimum": 0.25,
+          "description": "The minimum number of Compute Units."
         },
         "autoscaling_limit_max_cu": {
           "type": "number",
-          "minimum": 0.25
+          "minimum": 0.25,
+          "description": "The maximum number of Compute Units."
         },
         "provisioner": {
-          "type": "string"
+          "type": "string",
+          "description": "Compute provisioner."
         },
         "pooler_enabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Deprecated. To enable connection pooling, append `-pooler` to the endpoint ID in the connection string."
         },
         "pooler_mode": {
           "type": "string",
           "enum": [
             "transaction"
-          ]
+          ],
+          "description": "Deprecated. The connection pooler mode."
         },
         "disabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether to restrict connections to the compute endpoint."
         },
         "passwordless_access": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "NOT YET IMPLEMENTED."
         },
         "suspend_timeout_seconds": {
           "type": "integer",
           "minimum": -1,
-          "maximum": 604800
+          "maximum": 604800,
+          "description": "Scale-to-zero idle timeout, in seconds, before the compute suspends."
         },
         "name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 64
+          "maxLength": 64,
+          "description": "Optional name of the compute endpoint"
         }
       },
       "required": [
@@ -2670,26 +2880,32 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "endpoint_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The endpoint ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "Deprecated. The destination branch ID; must not have an existing read-write endpoint."
         },
         "autoscaling_limit_min_cu": {
           "type": "number",
-          "minimum": 0.25
+          "minimum": 0.25,
+          "description": "The minimum number of Compute Units."
         },
         "autoscaling_limit_max_cu": {
           "type": "number",
-          "minimum": 0.25
+          "minimum": 0.25,
+          "description": "The maximum number of Compute Units."
         },
         "provisioner": {
-          "type": "string"
+          "type": "string",
+          "description": "Compute provisioner."
         },
         "settings": {
           "type": "object",
@@ -2701,7 +2917,8 @@
               },
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "A raw representation of Postgres settings"
             },
             "pgbouncer_settings": {
               "type": "object",
@@ -2710,50 +2927,61 @@
               },
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "Deprecated. PgBouncer settings for the compute endpoint."
             },
             "preload_libraries": {
               "type": "object",
               "properties": {
                 "use_defaults": {
-                  "type": "boolean"
+                  "type": "boolean",
+                  "description": "When true, the project's preload libraries include the platform default set in addition to any libraries listed in `enabled_libraries`."
                 },
                 "enabled_libraries": {
                   "type": "array",
                   "items": {
                     "type": "string"
-                  }
+                  },
+                  "description": "Names of shared preload libraries to enable for the project."
                 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "description": "The shared libraries to preload into the project's compute instances."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "A collection of settings for a compute endpoint"
         },
         "pooler_enabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Deprecated. To enable connection pooling, append `-pooler` to the endpoint ID in the connection string."
         },
         "pooler_mode": {
           "type": "string",
           "enum": [
             "transaction"
-          ]
+          ],
+          "description": "Deprecated. The connection pooler mode."
         },
         "disabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether to restrict connections to the compute endpoint."
         },
         "passwordless_access": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "NOT YET IMPLEMENTED."
         },
         "suspend_timeout_seconds": {
           "type": "integer",
           "minimum": -1,
-          "maximum": 604800
+          "maximum": 604800,
+          "description": "Scale-to-zero idle timeout, in seconds, before the compute suspends."
         },
         "name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 64
+          "maxLength": 64,
+          "description": "Optional name of the compute endpoint"
         }
       },
       "required": [
@@ -2780,11 +3008,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "endpoint_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The endpoint ID"
         }
       },
       "required": [
@@ -2811,11 +3041,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "endpoint_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The endpoint ID"
         }
       },
       "required": [
@@ -2842,11 +3074,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "endpoint_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The endpoint ID"
         }
       },
       "required": [
@@ -2873,11 +3107,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "endpoint_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The endpoint ID"
         }
       },
       "required": [
@@ -2904,7 +3140,8 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         }
       },
       "required": [
@@ -2930,11 +3167,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         }
       },
       "required": [
@@ -2961,11 +3200,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "schedule": {
           "type": "array",
@@ -2983,29 +3224,34 @@
               "hour": {
                 "type": "integer",
                 "minimum": 0,
-                "maximum": 23
+                "maximum": 23,
+                "description": "The hour of the day to take the snapshot (if applicable)."
               },
               "day": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 31
+                "maximum": 31,
+                "description": "The day of the week or month to take the snapshot (if applicable)."
               },
               "month": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 12
+                "maximum": 12,
+                "description": "The month of the year to take the snapshot (if applicable)."
               },
               "retention_seconds": {
                 "type": "integer",
                 "minimum": 3600,
-                "maximum": 3024000
+                "maximum": 3024000,
+                "description": "How long to keep a scheduled snapshot (in seconds) before it's automatically deleted."
               }
             },
             "required": [
               "frequency"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "Schedule entries defining the backup frequency."
         }
       },
       "required": [
@@ -3033,23 +3279,29 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "lsn": {
-          "type": "string"
+          "type": "string",
+          "description": "The target Log Sequence Number (LSN) to take the snapshot from."
         },
         "timestamp": {
-          "type": "string"
+          "type": "string",
+          "description": "The target timestamp for the snapshot."
         },
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "A name for the snapshot."
         },
         "expires_at": {
-          "type": "string"
+          "type": "string",
+          "description": "The time at which the snapshot will be automatically deleted."
         }
       },
       "required": [
@@ -3076,16 +3328,20 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "snapshot_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The snapshot ID"
         },
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "Human-readable label for the snapshot."
         },
         "expires_at": {
+          "description": "The date and time when the snapshot will expire.",
           "anyOf": [
             {
               "type": "string",
@@ -3122,11 +3378,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "snapshot_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The snapshot ID"
         }
       },
       "required": [
@@ -3153,17 +3411,21 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "snapshot_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The snapshot ID"
         },
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "A name for the newly restored branch."
         },
         "target_branch_id": {
-          "type": "string"
+          "type": "string",
+          "description": "ID of the branch to restore the snapshot into."
         },
         "finalize": {
           "type": "boolean",
@@ -3194,11 +3456,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         }
       },
       "required": [
@@ -3225,11 +3489,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "auth_provider": {
           "type": "string",
@@ -3237,10 +3503,12 @@
             "mock",
             "stack",
             "better_auth"
-          ]
+          ],
+          "description": "Authentication provider integrated with this Neon Auth configuration."
         },
         "database_name": {
-          "type": "string"
+          "type": "string",
+          "description": "Name of the database to enable Neon Auth on."
         }
       },
       "required": [
@@ -3268,14 +3536,17 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "delete_data": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "If true, deletes the `neon_auth` schema from the database"
         }
       },
       "required": [
@@ -3302,16 +3573,19 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "The application name used in auth emails and communications."
         }
       },
       "required": [
@@ -3339,11 +3613,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         }
       },
       "required": [
@@ -3370,11 +3646,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "id": {
           "type": "string",
@@ -3384,22 +3662,28 @@
             "microsoft",
             "vercel",
             "apple"
-          ]
+          ],
+          "description": "OAuth provider to configure for Neon Auth."
         },
         "client_id": {
-          "type": "string"
+          "type": "string",
+          "description": "The client ID issued by the OAuth provider for your application."
         },
         "client_secret": {
-          "type": "string"
+          "type": "string",
+          "description": "OAuth client secret for the provider."
         },
         "microsoft_tenant_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Tenant ID for the Microsoft OAuth provider."
         },
         "apple_team_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Apple Developer Team ID."
         },
         "apple_key_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Key ID of the Sign in with Apple private key supplied in `client_secret`."
         }
       },
       "required": [
@@ -3427,11 +3711,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "oauth_provider_id": {
           "type": "string",
@@ -3441,22 +3727,28 @@
             "microsoft",
             "vercel",
             "apple"
-          ]
+          ],
+          "description": "The OAuth provider ID"
         },
         "client_id": {
-          "type": "string"
+          "type": "string",
+          "description": "The OAuth client ID registered with the provider."
         },
         "client_secret": {
-          "type": "string"
+          "type": "string",
+          "description": "OAuth client secret for the provider."
         },
         "microsoft_tenant_id": {
-          "type": "string"
+          "type": "string",
+          "description": "The tenant ID scoping the Microsoft OAuth provider."
         },
         "apple_team_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Apple Developer Team ID."
         },
         "apple_key_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Key ID of the Sign in with Apple private key supplied in `client_secret`."
         }
       },
       "required": [
@@ -3484,11 +3776,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "oauth_provider_id": {
           "type": "string",
@@ -3498,7 +3792,8 @@
             "microsoft",
             "vercel",
             "apple"
-          ]
+          ],
+          "description": "The OAuth provider ID"
         }
       },
       "required": [
@@ -3526,11 +3821,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         }
       },
       "required": [
@@ -3557,15 +3854,18 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "domain": {
           "type": "string",
-          "format": "uri"
+          "format": "uri",
+          "description": "URI to add to the redirect URI allowlist for the auth provider."
         },
         "auth_provider": {
           "type": "string",
@@ -3573,7 +3873,8 @@
             "mock",
             "stack",
             "better_auth"
-          ]
+          ],
+          "description": "Authentication provider integrated with this Neon Auth configuration."
         }
       },
       "required": [
@@ -3602,11 +3903,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "auth_provider": {
           "type": "string",
@@ -3614,7 +3917,8 @@
             "mock",
             "stack",
             "better_auth"
-          ]
+          ],
+          "description": "Authentication provider integrated with this Neon Auth configuration."
         },
         "domains": {
           "type": "array",
@@ -3623,14 +3927,16 @@
             "properties": {
               "domain": {
                 "type": "string",
-                "format": "uri"
+                "format": "uri",
+                "description": "URI to remove from the redirect URI whitelist."
               }
             },
             "required": [
               "domain"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "Domain names to remove from the redirect URI whitelist for the specified auth provider."
         }
       },
       "required": [
@@ -3659,23 +3965,27 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "email": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
           "format": "email",
-          "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+          "description": "Email address of the new Neon Auth user to create."
         },
         "name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 255
+          "maxLength": 255,
+          "description": "Display name for the new user."
         }
       },
       "required": [
@@ -3703,14 +4013,17 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "auth_user_id": {
-          "type": "string"
+          "type": "string",
+          "description": "The Neon user ID"
         }
       },
       "required": [
@@ -3738,21 +4051,25 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "auth_user_id": {
-          "type": "string"
+          "type": "string",
+          "description": "The Neon user ID"
         },
         "roles": {
           "minItems": 1,
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Roles to assign to the user in the Neon Auth (Better Auth) directory."
         }
       },
       "required": [
@@ -3781,11 +4098,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         }
       },
       "required": [
@@ -3812,38 +4131,47 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "enabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the OAuth provider plugin is enabled."
         },
         "login_page": {
-          "type": "string"
+          "type": "string",
+          "description": "URL of the page that authorization requests redirect to for sign-in."
         },
         "consent_page": {
-          "type": "string"
+          "type": "string",
+          "description": "URL of the page that authorization requests redirect to for consent."
         },
         "mcp": {
           "type": "object",
           "properties": {
             "resource": {
-              "type": "string"
+              "type": "string",
+              "description": "The MCP server URL that MCP clients (Client ID Metadata Document and dynamically registered) are linked to."
             },
             "dynamic_registration": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Whether MCP clients may register themselves via dynamic client registration (RFC 7591)."
             },
             "client_id_metadata_documents": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Whether MCP clients may identify themselves with an https Client ID Metadata Document (CIMD) URL."
             }
           },
           "required": [
             "resource"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "MCP resource configuration."
         },
         "resources": {
           "type": "array",
@@ -3851,14 +4179,16 @@
             "type": "object",
             "properties": {
               "identifier": {
-                "type": "string"
+                "type": "string",
+                "description": "Absolute URL identifying a protected resource."
               }
             },
             "required": [
               "identifier"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "Protected resources that clients can be linked to."
         }
       },
       "required": [
@@ -3885,11 +4215,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         }
       },
       "required": [
@@ -3916,16 +4248,19 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "client_id": {
           "type": "string",
           "maxLength": 64,
-          "pattern": "^[A-Za-z0-9]+$"
+          "pattern": "^[A-Za-z0-9]+$",
+          "description": "The OAuth client ID"
         }
       },
       "required": [
@@ -3953,16 +4288,19 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 100
+          "maxLength": 100,
+          "description": "Display name of the client."
         },
         "redirect_uris": {
           "minItems": 1,
@@ -3970,14 +4308,16 @@
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Redirect URIs the client may use."
         },
         "type": {
           "type": "string",
           "enum": [
             "confidential",
             "public"
-          ]
+          ],
+          "description": "Confidential clients authenticate with a client secret."
         },
         "resources": {
           "minItems": 1,
@@ -3985,10 +4325,12 @@
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Identifiers of the protected resources to link the client to."
         },
         "skip_consent": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether to skip the consent prompt for this client."
         }
       },
       "required": [
@@ -4019,41 +4361,49 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "client_id": {
           "type": "string",
           "maxLength": 64,
-          "pattern": "^[A-Za-z0-9]+$"
+          "pattern": "^[A-Za-z0-9]+$",
+          "description": "The OAuth client ID"
         },
         "name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 100
+          "maxLength": 100,
+          "description": "Display name of the client."
         },
         "redirect_uris": {
           "maxItems": 10,
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Redirect URIs the client may use."
         },
         "skip_consent": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether to skip the consent prompt for this client."
         },
         "disabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the client is disabled."
         },
         "resources": {
           "maxItems": 11,
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Identifiers of the protected resources to link the client to."
         }
       },
       "required": [
@@ -4081,16 +4431,19 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "client_id": {
           "type": "string",
           "maxLength": 64,
-          "pattern": "^[A-Za-z0-9]+$"
+          "pattern": "^[A-Za-z0-9]+$",
+          "description": "The OAuth client ID"
         }
       },
       "required": [
@@ -4118,16 +4471,19 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "client_id": {
           "type": "string",
           "maxLength": 64,
-          "pattern": "^[A-Za-z0-9]+$"
+          "pattern": "^[A-Za-z0-9]+$",
+          "description": "The OAuth client ID"
         }
       },
       "required": [
@@ -4146,6 +4502,469 @@
     }
   },
   {
+    "name": "update_auth_allow_localhost",
+    "title": "Update localhost allow setting",
+    "description": "Sets whether the branch's Neon Auth accepts requests from localhost origins. Turn it off for production. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
+        },
+        "allow_localhost": {
+          "type": "boolean",
+          "description": "Whether to allow localhost connections"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "allow_localhost"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update localhost allow setting",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_email_and_password",
+    "title": "Update email and password configuration",
+    "description": "Updates email and password sign-in for the branch's Neon Auth: whether it is enabled, sign-up, email verification, and whether a password reset revokes the user's sessions. Omitted fields keep their value. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Controls whether email and password authentication is enabled for this project."
+        },
+        "email_verification_method": {
+          "type": "string",
+          "enum": [
+            "link",
+            "otp"
+          ],
+          "description": "Email verification method."
+        },
+        "require_email_verification": {
+          "type": "boolean",
+          "description": "When true, users must verify their email address before they can sign in."
+        },
+        "auto_sign_in_after_verification": {
+          "type": "boolean",
+          "description": "Whether users are automatically signed in after verifying their email"
+        },
+        "send_verification_email_on_sign_up": {
+          "type": "boolean",
+          "description": "Whether to send a verification email when users sign up."
+        },
+        "send_verification_email_on_sign_in": {
+          "type": "boolean",
+          "description": "Whether to send a verification email when a user with an unverified email signs in."
+        },
+        "disable_sign_up": {
+          "type": "boolean",
+          "description": "Whether to disable new user sign ups."
+        },
+        "revoke_sessions_on_password_reset": {
+          "type": "boolean",
+          "description": "Whether all of a user's sessions are revoked when their password is reset."
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update email and password configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_email_provider",
+    "title": "Update email provider configuration",
+    "description": "Sets the email provider Neon Auth sends verification, reset, and invitation emails with. Pass `body.type: \"shared\"` for Neon's sender, or `body.type: \"standard\"` with `host`, `port`, `username`, `password`, `sender_email`, and `sender_name` for your own SMTP server. The response omits `password`. Check the server with `send_auth_test_email`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "host": {
+                  "type": "string",
+                  "description": "Hostname of the email server."
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "TCP port of the SMTP server."
+                },
+                "username": {
+                  "type": "string",
+                  "description": "Username for authenticating with the SMTP server."
+                },
+                "password": {
+                  "type": "string",
+                  "description": "Password for authenticating with the SMTP server."
+                },
+                "sender_email": {
+                  "type": "string",
+                  "description": "Email address used as the From address on outgoing auth emails."
+                },
+                "sender_name": {
+                  "type": "string",
+                  "description": "Display name shown as the sender in outgoing emails."
+                },
+                "type": {
+                  "type": "string",
+                  "const": "standard"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "sender_email": {
+                  "type": "string",
+                  "description": "Email address used as the sender for outgoing messages from this shared email server."
+                },
+                "sender_name": {
+                  "type": "string",
+                  "description": "Display name shown as the sender in outgoing emails."
+                },
+                "type": {
+                  "type": "string",
+                  "const": "shared"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Email provider configuration for the branch's Neon Auth integration."
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update email provider configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "send_auth_test_email",
+    "title": "Send test email using the saved email provider",
+    "description": "Sends a test email through the branch's saved SMTP provider (`type: \"standard\"`) to `recipient_email`. Only send to an address the user gave you. A failed send returns `success: false` with `error_message`, not a tool error.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
+        },
+        "recipient_email": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "format": "email",
+          "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+          "description": "The email address to send the test email to."
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "recipient_email"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Send test email using the saved email provider",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "update_auth_plugins_magic_link",
+    "title": "Update magic link plugin configuration",
+    "description": "Updates the Neon Auth magic link plugin: whether it is enabled, how many minutes a link is valid (`expires_in`), and whether it can sign up new users. Omitted fields keep their value. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether to enable the magic link plugin."
+        },
+        "expires_in": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 1440,
+          "description": "Minutes until the magic link expires."
+        },
+        "disable_sign_up": {
+          "type": "boolean",
+          "description": "When true, sign-up via magic link is disabled."
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update magic link plugin configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_plugins_organization",
+    "title": "Update organization plugin configuration",
+    "description": "Updates the Neon Auth organization plugin, which lets your app's users create and join organizations. These are not Neon organizations. Omitted fields keep their value. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Controls whether the organization plugin is active for the organization."
+        },
+        "organization_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Maximum organizations a user can belong to (created or joined)."
+        },
+        "membership_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Maximum members per organization."
+        },
+        "creator_role": {
+          "type": "string",
+          "enum": [
+            "admin",
+            "owner"
+          ],
+          "description": "Role of the organization's creator."
+        },
+        "send_invitation_email": {
+          "type": "boolean",
+          "description": "When true, invited users receive an email containing an accept link."
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update organization plugin configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_plugins_phone_number",
+    "title": "Update phone number plugin configuration",
+    "description": "Updates the Neon Auth phone number (SMS OTP) plugin: whether it is enabled and how many seconds an OTP is valid (`otp_expires_in`). Omitted fields keep their value. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the phone number plugin is enabled."
+        },
+        "otp_expires_in": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 600,
+          "description": "Time in seconds before the OTP expires"
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update phone number plugin configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_webhooks",
+    "title": "Update Neon Auth webhook configuration",
+    "description": "Replaces the branch's Neon Auth webhook configuration. Omitted fields reset: `{ enabled: false }` alone clears `webhook_url` and `enabled_events`. Call `get_neon_auth_config` first and send every field to keep.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the webhook is active."
+        },
+        "webhook_url": {
+          "type": "string",
+          "description": "Destination URL that receives webhook event payloads."
+        },
+        "enabled_events": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "user.before_create",
+              "user.created",
+              "send.otp",
+              "send.magic_link",
+              "organization.invitation.created",
+              "organization.invitation.accepted",
+              "phone_number.verified"
+            ]
+          },
+          "description": "Event types that trigger this webhook."
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum time, in seconds, to wait for a response from the webhook endpoint."
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "enabled"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update Neon Auth webhook configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "get_data_api",
     "title": "Retrieve Neon Data API configuration",
     "description": "Retrieves the Neon Data API configuration for the specified branch, including endpoint URL, enabled state, and database settings.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
@@ -4155,14 +4974,17 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "database_name": {
-          "type": "string"
+          "type": "string",
+          "description": "The database name"
         }
       },
       "required": [
@@ -4190,80 +5012,100 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "database_name": {
-          "type": "string"
+          "type": "string",
+          "description": "The database name"
         },
         "auth_provider": {
           "type": "string",
           "enum": [
             "neon_auth",
             "external"
-          ]
+          ],
+          "description": "Authentication provider for the Neon Data API."
         },
         "jwks_url": {
           "type": "string",
-          "format": "uri"
+          "format": "uri",
+          "description": "URL of the JWKS endpoint used to verify JWTs for this Data API."
         },
         "provider_name": {
-          "type": "string"
+          "type": "string",
+          "description": "Display name for the authentication provider."
         },
         "jwt_audience": {
-          "type": "string"
+          "type": "string",
+          "description": "Expected `aud` claim in incoming JWTs."
         },
         "add_default_grants": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Grant all permissions to the tables in the public schema to authenticated users"
         },
         "skip_auth_schema": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Skip creating the auth schema and RLS functions"
         },
         "settings": {
           "type": "object",
           "properties": {
             "db_aggregates_enabled": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Enable aggregates feature"
             },
             "db_anon_role": {
-              "type": "string"
+              "type": "string",
+              "description": "Database role to use for anonymous requests"
             },
             "db_extra_search_path": {
-              "type": "string"
+              "type": "string",
+              "description": "Extra schemas to add to the search path"
             },
             "db_max_rows": {
               "type": "integer",
               "minimum": -9007199254740991,
-              "maximum": 9007199254740991
+              "maximum": 9007199254740991,
+              "description": "Hard limit on the number of rows returned in a single Data API response."
             },
             "db_schemas": {
               "type": "array",
               "items": {
                 "type": "string"
-              }
+              },
+              "description": "List of schemas to expose via the API."
             },
             "jwt_role_claim_key": {
-              "type": "string"
+              "type": "string",
+              "description": "JWT claim key to use for role extraction"
             },
             "jwt_cache_max_lifetime": {
               "type": "integer",
               "minimum": -9007199254740991,
-              "maximum": 9007199254740991
+              "maximum": 9007199254740991,
+              "description": "Maximum lifetime of the Data API's JWT cache, in seconds."
             },
             "openapi_mode": {
-              "type": "string"
+              "type": "string",
+              "description": "OpenAPI specification mode (ignore-privileges, disabled)"
             },
             "server_cors_allowed_origins": {
-              "type": "string"
+              "type": "string",
+              "description": "CORS allowed origins"
             },
             "server_timing_enabled": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "When enabled, the Data API adds `Server-Timing` headers to each response showing database execution and internal processing time."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "Auth and schema configuration for the Data API."
         }
       },
       "required": [
@@ -4291,51 +5133,64 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "database_name": {
-          "type": "string"
+          "type": "string",
+          "description": "The database name"
         },
         "db_aggregates_enabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Enable aggregates feature"
         },
         "db_anon_role": {
-          "type": "string"
+          "type": "string",
+          "description": "Database role to use for anonymous requests"
         },
         "db_extra_search_path": {
-          "type": "string"
+          "type": "string",
+          "description": "Extra schemas to add to the search path"
         },
         "db_max_rows": {
           "type": "integer",
           "minimum": -9007199254740991,
-          "maximum": 9007199254740991
+          "maximum": 9007199254740991,
+          "description": "Hard limit on the number of rows returned in a single Data API response."
         },
         "db_schemas": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "List of schemas to expose via the API."
         },
         "jwt_role_claim_key": {
-          "type": "string"
+          "type": "string",
+          "description": "JWT claim key to use for role extraction"
         },
         "jwt_cache_max_lifetime": {
           "type": "integer",
           "minimum": -9007199254740991,
-          "maximum": 9007199254740991
+          "maximum": 9007199254740991,
+          "description": "Maximum lifetime of the Data API's JWT cache, in seconds."
         },
         "openapi_mode": {
-          "type": "string"
+          "type": "string",
+          "description": "OpenAPI specification mode (ignore-privileges, disabled)"
         },
         "server_cors_allowed_origins": {
-          "type": "string"
+          "type": "string",
+          "description": "CORS allowed origins"
         },
         "server_timing_enabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "When enabled, the Data API adds `Server-Timing` headers to each response showing database execution and internal processing time."
         }
       },
       "required": [
@@ -4363,14 +5218,17 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "database_name": {
-          "type": "string"
+          "type": "string",
+          "description": "The database name"
         }
       },
       "required": [
@@ -4398,37 +5256,44 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "since": {
           "type": "string",
-          "pattern": "^[0-9]{1,6}(ms|s|m|h|d)$"
+          "pattern": "^[0-9]{1,6}(ms|s|m|h|d)$",
+          "description": "A length of time as a count and a unit, for example `30m`, `6h`, or `7d`."
         },
         "start_time": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "description": "Inclusive beginning of the query window."
         },
         "end_time": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "description": "Exclusive end of the query window."
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 1000
+          "maximum": 1000,
+          "description": "Maximum number of log records to return per page."
         },
         "sort_order": {
           "type": "string",
           "enum": [
             "asc",
             "desc"
-          ]
+          ],
+          "description": "Order matching records by timestamp."
         },
         "source": {
           "type": "string",
@@ -4436,15 +5301,18 @@
             "function",
             "storage",
             "pg_endpoint"
-          ]
+          ],
+          "description": "The Neon service that emitted the log record."
         },
         "service_name": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Match the OpenTelemetry `service.name` resource attribute exactly."
         },
         "scope_name": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Match the OpenTelemetry instrumentation scope name exactly."
         },
         "minimum_severity": {
           "type": "string",
@@ -4455,23 +5323,28 @@
             "warn",
             "error",
             "fatal"
-          ]
+          ],
+          "description": "An OpenTelemetry severity level."
         },
         "severity_text": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Match the OpenTelemetry severity text exactly."
         },
         "body_contains": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Match records whose rendered `message` contains this case-sensitive substring."
         },
         "trace_id": {
           "type": "string",
-          "pattern": "^[0-9a-f]{32}$"
+          "pattern": "^[0-9a-f]{32}$",
+          "description": "Match records associated with this OpenTelemetry trace ID."
         },
         "logql": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Escape hatch for selections the structured filters cannot express: a raw LogQL expression, evaluated against this branch's log stream."
         }
       },
       "required": [
@@ -4498,11 +5371,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         }
       },
       "required": [
@@ -4529,29 +5404,35 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "field_name": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "The log field whose distinct values should be returned."
         },
         "since": {
           "type": "string",
-          "pattern": "^[0-9]{1,6}(ms|s|m|h|d)$"
+          "pattern": "^[0-9]{1,6}(ms|s|m|h|d)$",
+          "description": "Length of the lookup window, ending at `end_time` or at the current time when `end_time` is omitted."
         },
         "start_time": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "description": "Inclusive beginning of the lookup window."
         },
         "end_time": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "description": "Exclusive end of the lookup window."
         },
         "source": {
           "type": "string",
@@ -4559,12 +5440,14 @@
             "function",
             "storage",
             "pg_endpoint"
-          ]
+          ],
+          "description": "Only consider records emitted by this Neon service."
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 1000
+          "maximum": 1000,
+          "description": "Maximum number of distinct values to return."
         }
       },
       "required": [
@@ -4592,11 +5475,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         }
       },
       "required": [
@@ -4623,16 +5508,19 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 1000
+          "maximum": 1000,
+          "description": "Specify a value from 1 to 1000 to limit number of functions in the response"
         }
       },
       "required": [
@@ -4659,15 +5547,18 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "slug": {
           "type": "string",
-          "pattern": "^[a-z0-9]{1,20}$"
+          "pattern": "^[a-z0-9]{1,20}$",
+          "description": "The function slug"
         }
       },
       "required": [
@@ -4695,15 +5586,18 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "slug": {
           "type": "string",
-          "pattern": "^[a-z0-9]{1,20}$"
+          "pattern": "^[a-z0-9]{1,20}$",
+          "description": "The function slug"
         },
         "name": {
           "anyOf": [
@@ -4715,7 +5609,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "New display name for the function."
         }
       },
       "required": [
@@ -4744,15 +5639,18 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "slug": {
           "type": "string",
-          "pattern": "^[a-z0-9]{1,20}$"
+          "pattern": "^[a-z0-9]{1,20}$",
+          "description": "The function slug"
         }
       },
       "required": [
@@ -4780,31 +5678,36 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "slug": {
           "type": "string",
-          "pattern": "^[a-z0-9]{1,20}$"
+          "pattern": "^[a-z0-9]{1,20}$",
+          "description": "The function slug"
         },
         "zip": {
           "type": "string",
           "format": "base64",
           "contentEncoding": "base64",
           "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
-          "description": "Base64-encoded binary file contents."
+          "description": "Base64-encoded ZIP of the function source. Omit to reuse the latest bundle; required for the first deployment."
         },
         "runtime": {
+          "description": "The Node.js runtime for the deployment.",
           "type": "string",
           "enum": [
             "nodejs24"
           ]
         },
         "environment": {
-          "type": "string"
+          "type": "string",
+          "description": "Optional JSON object (a string-to-string map) of environment variables for the deployment, e.g. {\"KEY\":\"VALUE\"}."
         }
       },
       "required": [
@@ -4832,16 +5735,19 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 1000
+          "maximum": 1000,
+          "description": "Specify a value from 1 to 1000 to limit number of domains in the response"
         }
       },
       "required": [
@@ -4868,26 +5774,31 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "domain": {
           "type": "string",
           "minLength": 3,
-          "maxLength": 254
+          "maxLength": 254,
+          "description": "The custom domain to register (for example `dashboard.acme.com`)."
         },
         "entity_type": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 32
+          "maxLength": 32,
+          "description": "The kind of branch entity to point the domain at."
         },
         "entity_id": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 255
+          "maxLength": 255,
+          "description": "The target entity's identifier within the branch."
         }
       },
       "required": [
@@ -4917,17 +5828,20 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "domain": {
           "type": "string",
           "minLength": 3,
           "maxLength": 254,
-          "pattern": "^[A-Za-z0-9.-]+$"
+          "pattern": "^[A-Za-z0-9.-]+$",
+          "description": "The registered custom domain (case-insensitive)."
         }
       },
       "required": [
@@ -4955,11 +5869,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         }
       },
       "required": [
@@ -4986,17 +5902,20 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "trigger_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.\\-]{0,127}$"
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.\\-]{0,127}$",
+          "description": "The opaque, project-wide trigger ID"
         }
       },
       "required": [
@@ -5024,11 +5943,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "body": {
           "oneOf": [
@@ -5041,17 +5962,20 @@
                 },
                 "function_slug": {
                   "type": "string",
-                  "pattern": "^[a-z0-9]{1,20}$"
+                  "pattern": "^[a-z0-9]{1,20}$",
+                  "description": "The branch-local Function slug to invoke."
                 },
                 "name": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 256
+                  "maxLength": 256,
+                  "description": "Human-readable name, unique among triggers visible on the branch."
                 },
                 "function_path": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 2048
+                  "maxLength": 2048,
+                  "description": "Path passed to the target Function."
                 },
                 "schedule": {
                   "type": "object",
@@ -5059,16 +5983,19 @@
                     "cron": {
                       "type": "string",
                       "minLength": 1,
-                      "maxLength": 1024
+                      "maxLength": 1024,
+                      "description": "Numeric five-field cron expression (minute through day-of-week), interpreted in UTC."
                     }
                   },
                   "required": [
                     "cron"
                   ],
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "description": "A numeric five-field cron schedule interpreted in UTC."
                 },
                 "enabled": {
-                  "type": "boolean"
+                  "type": "boolean",
+                  "description": "Whether future occurrences should be scheduled."
                 }
               },
               "required": [
@@ -5088,17 +6015,20 @@
                 },
                 "function_slug": {
                   "type": "string",
-                  "pattern": "^[a-z0-9]{1,20}$"
+                  "pattern": "^[a-z0-9]{1,20}$",
+                  "description": "The branch-local Function slug to invoke."
                 },
                 "name": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 256
+                  "maxLength": 256,
+                  "description": "Human-readable name, unique among triggers visible on the branch."
                 },
                 "function_path": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 2048
+                  "maxLength": 2048,
+                  "description": "Path passed to the target Function."
                 },
                 "storage_object_created": {
                   "type": "object",
@@ -5106,22 +6036,26 @@
                     "bucket_name": {
                       "type": "string",
                       "minLength": 3,
-                      "maxLength": 63
+                      "maxLength": 63,
+                      "description": "The exact object-storage bucket name to watch."
                     },
                     "prefix": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 1024,
-                      "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
+                      "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$",
+                      "description": "Optional object-key prefix of at most 1024 UTF-8 bytes."
                     }
                   },
                   "required": [
                     "bucket_name"
                   ],
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "description": "Matches successful uploads to one exact bucket and, when configured, an object-key prefix."
                 },
                 "enabled": {
-                  "type": "boolean"
+                  "type": "boolean",
+                  "description": "Whether successful matching uploads should invoke the Function."
                 }
               },
               "required": [
@@ -5132,7 +6066,8 @@
               ],
               "additionalProperties": false
             }
-          ]
+          ],
+          "description": "Trigger creation payload discriminated by `type`."
         }
       },
       "required": [
@@ -5160,17 +6095,20 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "trigger_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.\\-]{0,127}$"
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.\\-]{0,127}$",
+          "description": "The opaque, project-wide trigger ID"
         },
         "body": {
           "oneOf": [
@@ -5183,7 +6121,8 @@
                 },
                 "function_slug": {
                   "type": "string",
-                  "pattern": "^[a-z0-9]{1,20}$"
+                  "pattern": "^[a-z0-9]{1,20}$",
+                  "description": "Replacement branch-local Function slug."
                 },
                 "name": {
                   "type": "string",
@@ -5201,16 +6140,19 @@
                     "cron": {
                       "type": "string",
                       "minLength": 1,
-                      "maxLength": 1024
+                      "maxLength": 1024,
+                      "description": "Numeric five-field cron expression (minute through day-of-week), interpreted in UTC."
                     }
                   },
                   "required": [
                     "cron"
                   ],
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "description": "A numeric five-field cron schedule interpreted in UTC."
                 },
                 "enabled": {
-                  "type": "boolean"
+                  "type": "boolean",
+                  "description": "True enables and false disables future scheduling."
                 }
               },
               "required": [
@@ -5227,7 +6169,8 @@
                 },
                 "function_slug": {
                   "type": "string",
-                  "pattern": "^[a-z0-9]{1,20}$"
+                  "pattern": "^[a-z0-9]{1,20}$",
+                  "description": "Replacement branch-local Function slug."
                 },
                 "name": {
                   "type": "string",
@@ -5245,22 +6188,26 @@
                     "bucket_name": {
                       "type": "string",
                       "minLength": 3,
-                      "maxLength": 63
+                      "maxLength": 63,
+                      "description": "The exact object-storage bucket name to watch."
                     },
                     "prefix": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 1024,
-                      "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
+                      "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$",
+                      "description": "Optional object-key prefix of at most 1024 UTF-8 bytes."
                     }
                   },
                   "required": [
                     "bucket_name"
                   ],
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "description": "Matches successful uploads to one exact bucket and, when configured, an object-key prefix."
                 },
                 "enabled": {
-                  "type": "boolean"
+                  "type": "boolean",
+                  "description": "True enables and false disables future matching uploads."
                 }
               },
               "required": [
@@ -5268,7 +6215,8 @@
               ],
               "additionalProperties": false
             }
-          ]
+          ],
+          "description": "Partial trigger update discriminated by `type`."
         }
       },
       "required": [
@@ -5297,17 +6245,20 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "trigger_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.\\-]{0,127}$"
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.\\-]{0,127}$",
+          "description": "The opaque, project-wide trigger ID"
         }
       },
       "required": [
@@ -5335,11 +6286,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         }
       },
       "required": [
@@ -5366,15 +6319,18 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "name": {
           "type": "string",
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "Free-form customer label for the credential."
         },
         "scopes": {
           "minItems": 1,
@@ -5387,14 +6343,17 @@
               "storage:write",
               "ai_gateway:invoke",
               "functions:invoke"
-            ]
-          }
+            ],
+            "description": "A single capability you may request when issuing a credential."
+          },
+          "description": "Capabilities to grant. The credential may only perform actions in these scopes."
         },
         "principal_type": {
           "type": "string",
           "enum": [
             "user"
-          ]
+          ],
+          "description": "Principal type for the credential."
         }
       },
       "required": [
@@ -5423,14 +6382,17 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "token_id": {
-          "type": "string"
+          "type": "string",
+          "description": "The opaque credential id (e.g. nak_live_<32hex>)."
         }
       },
       "required": [
@@ -5458,14 +6420,17 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "token_id": {
-          "type": "string"
+          "type": "string",
+          "description": "The opaque credential id (e.g. nak_live_<32hex>)."
         }
       },
       "required": [
@@ -5493,11 +6458,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         }
       },
       "required": [
@@ -5524,11 +6491,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         }
       },
       "required": [
@@ -5555,23 +6524,27 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 255
+          "maxLength": 255,
+          "description": "The bucket name."
         },
         "access_level": {
           "type": "string",
           "enum": [
             "private",
             "public_read"
-          ]
+          ],
+          "description": "Access level for the bucket."
         }
       },
       "required": [
@@ -5599,16 +6572,19 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "bucket_name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 255
+          "maxLength": 255,
+          "description": "The bucket name"
         }
       },
       "required": [
@@ -5636,27 +6612,33 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "bucket_name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 255
+          "maxLength": 255,
+          "description": "The bucket name"
         },
         "prefix": {
-          "type": "string"
+          "type": "string",
+          "description": "Only list objects whose key starts with this prefix."
         },
         "delimiter": {
-          "type": "string"
+          "type": "string",
+          "description": "Collapse keys sharing a common prefix up to the first occurrence of this delimiter (typically `/`) into the `folders` array."
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 1000
+          "maximum": 1000,
+          "description": "Maximum number of items (objects + folders) to return."
         }
       },
       "required": [
@@ -5684,21 +6666,25 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "bucket_name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 255
+          "maxLength": 255,
+          "description": "The bucket name"
         },
         "object_key": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1024
+          "maxLength": 1024,
+          "description": "The object key."
         }
       },
       "required": [
@@ -5727,21 +6713,25 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "bucket_name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 255
+          "maxLength": 255,
+          "description": "The bucket name"
         },
         "prefix": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1024
+          "maxLength": 1024,
+          "description": "The key prefix (folder) to delete."
         }
       },
       "required": [
@@ -5770,36 +6760,43 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
         },
         "bucket_name": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 255
+          "maxLength": 255,
+          "description": "The bucket name"
         },
         "object_key": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1024
+          "maxLength": 1024,
+          "description": "The object key."
         },
         "operation": {
           "type": "string",
           "enum": [
             "upload",
             "download"
-          ]
+          ],
+          "description": "The transfer direction."
         },
         "content_type": {
-          "type": "string"
+          "type": "string",
+          "description": "The `Content-Type` to bind into the signed request."
         },
         "expires_in_seconds": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 604800
+          "maximum": 604800,
+          "description": "How long the presigned URL stays valid, in seconds."
         }
       },
       "required": [
@@ -5829,11 +6826,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         }
       },
       "required": [
@@ -5860,11 +6859,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         },
         "allowed_origins": {
           "maxItems": 16,
@@ -5874,7 +6875,8 @@
             "minLength": 1,
             "maxLength": 2048,
             "pattern": "^(\\*|https?:\\/\\/[^\\/?#@,*\\s]+)$"
-          }
+          },
+          "description": "The browser origins allowed to connect, each `http` or `https` with a host and optional port and no path."
         }
       },
       "required": [
@@ -5901,11 +6903,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         }
       },
       "required": [
@@ -5932,11 +6936,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         }
       },
       "required": [
@@ -5963,11 +6969,13 @@
       "properties": {
         "project_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The project ID"
         },
         "branch_id": {
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The branch ID"
         }
       },
       "required": [

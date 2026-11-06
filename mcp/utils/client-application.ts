@@ -27,7 +27,15 @@ type KnownClientApplication =
   | 'devin'
   | 'perplexity'
   | 'hermes-agent'
-  | 'grok';
+  | 'grok'
+  | 'replit'
+  | 'manus'
+  | 'openbot'
+  | 'composio'
+  | 'executor'
+  | 'oh-my-pi'
+  | 'pi'
+  | 'amp';
 
 export type ClientApplication = KnownClientApplication | 'unknown';
 
@@ -58,7 +66,8 @@ export function detectClientApplication(
   if (normalized.includes('claude-code')) return 'claude-code';
   if (
     normalized.includes('claude-user') ||
-    normalized.includes('claude desktop')
+    normalized.includes('claude desktop') ||
+    tokenAtStart(normalized, 'anthropic/claudeai')
   )
     return 'claude-desktop';
   if (normalized.includes('claude-ai')) return 'claude-ai';
@@ -113,6 +122,16 @@ export function detectClientApplication(
   )
     return 'hermes-agent';
   if (tokenAtStart(normalized, 'grok')) return 'grok';
+  if (normalized.includes('replit')) return 'replit';
+  if (tokenAtStart(normalized, 'manus')) return 'manus';
+  if (tokenAtStart(normalized, 'openbot')) return 'openbot';
+  if (normalized.includes('composio')) return 'composio';
+  if (tokenAtStart(normalized, 'executor')) return 'executor';
+  if (normalized.includes('oh-my-pi') || tokenAtStart(normalized, 'omp'))
+    return 'oh-my-pi';
+  if (normalized === 'pi' || normalized.startsWith('pi coding agent'))
+    return 'pi';
+  if (tokenAtStart(normalized, 'amp')) return 'amp';
 
   return 'unknown';
 }
@@ -124,6 +143,11 @@ export function identifyClient(
   try {
     const clientName =
       typeof primary === 'string' && primary.length > 0 ? primary : 'unknown';
+    // The Claude app connector registers as "Claude" and its handshake can say
+    // claude-code. Claude Code itself registers as "Claude Code (...)".
+    if (dcrClientName === 'Claude') {
+      return { clientName, clientApplication: 'claude-desktop' };
+    }
     const fromPrimary = detectClientApplication(clientName);
     if (fromPrimary !== 'unknown') {
       return { clientName, clientApplication: fromPrimary };

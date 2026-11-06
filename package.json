@@ -1,6 +1,6 @@
 {
   "name": "@neondatabase/mcp-server-neon",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "MCP server for interacting with Neon Management API and databases",
   "license": "MIT",
   "author": "Neon, Inc. (https://neon.com/)",
@@ -32,8 +32,8 @@
     "@keyv/postgres": "2.1.2",
     "@modelcontextprotocol/sdk": "1.25.3",
     "@modelcontextprotocol/server": "2.0.0",
-    "@neon/sdk": "7.8.2",
-    "@neon/tools": "2.6.2",
+    "@neon/sdk": "7.10.0",
+    "@neon/tools": "2.9.0",
     "@neondatabase/serverless": "1.0.0",
     "@segment/analytics-node": "2.2.1",
     "@sentry/node": "9.19.0",

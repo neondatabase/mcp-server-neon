@@ -29,18 +29,34 @@ function isClientError(error: unknown): boolean {
   );
 }
 
+const POSTGRES_ERROR_FIELDS = [
+  ['code', 'SQLSTATE'],
+  ['position', 'POSITION'],
+  ['detail', 'DETAIL'],
+  ['hint', 'HINT'],
+  ['where', 'CONTEXT'],
+] as const;
+
+function errorText(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return 'Unknown error';
+  }
+  const lines = [`${error.name}: ${error.message}`];
+  if (error instanceof NeonDbError) {
+    for (const [field, label] of POSTGRES_ERROR_FIELDS) {
+      const value = error[field];
+      if (value) {
+        lines.push(`${label}: ${value}`);
+      }
+    }
+  }
+  return lines.join('\n');
+}
+
 function errorResponse(error: unknown) {
   return {
     isError: true,
-    content: [
-      {
-        type: 'text' as const,
-        text:
-          error instanceof Error
-            ? `${error.name}: ${error.message}`
-            : 'Unknown error',
-      },
-    ],
+    content: [{ type: 'text' as const, text: errorText(error) }],
   };
 }
 

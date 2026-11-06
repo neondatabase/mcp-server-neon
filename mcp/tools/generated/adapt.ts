@@ -110,6 +110,25 @@ const DELETE_AUTH_OAUTH_CLIENT_DESCRIPTION = `Deletes an OAuth client from the N
 
 const ROTATE_AUTH_OAUTH_CLIENT_SECRET_DESCRIPTION = `Generates a new secret for a confidential client of the Neon Auth OAuth server. The old secret stops working immediately. The new \`client_secret\` is shown only once: show it to the user and tell them to store it.`;
 
+const READ_AUTH_SETTINGS =
+  'Call `get_neon_auth_config` to read the current value.';
+
+const UPDATE_AUTH_ALLOW_LOCALHOST_DESCRIPTION = `Sets whether the branch's Neon Auth accepts requests from localhost origins. Turn it off for production. ${READ_AUTH_SETTINGS}`;
+
+const UPDATE_AUTH_EMAIL_AND_PASSWORD_DESCRIPTION = `Updates email and password sign-in for the branch's Neon Auth: whether it is enabled, sign-up, email verification, and whether a password reset revokes the user's sessions. Omitted fields keep their value. ${READ_AUTH_SETTINGS}`;
+
+const UPDATE_AUTH_EMAIL_PROVIDER_DESCRIPTION = `Sets the email provider Neon Auth sends verification, reset, and invitation emails with. Pass \`body.type: "shared"\` for Neon's sender, or \`body.type: "standard"\` with \`host\`, \`port\`, \`username\`, \`password\`, \`sender_email\`, and \`sender_name\` for your own SMTP server. The response omits \`password\`. Check the server with \`send_auth_test_email\`.`;
+
+const SEND_AUTH_TEST_EMAIL_DESCRIPTION = `Sends a test email through the branch's saved SMTP provider (\`type: "standard"\`) to \`recipient_email\`. Only send to an address the user gave you. A failed send returns \`success: false\` with \`error_message\`, not a tool error.`;
+
+const UPDATE_AUTH_PLUGINS_MAGIC_LINK_DESCRIPTION = `Updates the Neon Auth magic link plugin: whether it is enabled, how many minutes a link is valid (\`expires_in\`), and whether it can sign up new users. Omitted fields keep their value. ${READ_AUTH_SETTINGS}`;
+
+const UPDATE_AUTH_PLUGINS_ORGANIZATION_DESCRIPTION = `Updates the Neon Auth organization plugin, which lets your app's users create and join organizations. These are not Neon organizations. Omitted fields keep their value. ${READ_AUTH_SETTINGS}`;
+
+const UPDATE_AUTH_PLUGINS_PHONE_NUMBER_DESCRIPTION = `Updates the Neon Auth phone number (SMS OTP) plugin: whether it is enabled and how many seconds an OTP is valid (\`otp_expires_in\`). Omitted fields keep their value. ${READ_AUTH_SETTINGS}`;
+
+const UPDATE_AUTH_WEBHOOKS_DESCRIPTION = `Replaces the branch's Neon Auth webhook configuration. Omitted fields reset: \`{ enabled: false }\` alone clears \`webhook_url\` and \`enabled_events\`. Call \`get_neon_auth_config\` first and send every field to keep.`;
+
 const LIST_LOG_FIELDS_DESCRIPTION = `Lists the low-cardinality log fields observed on this branch. Call \`list_log_field_values\` with \`field_name\` to list distinct values.`;
 
 const LIST_LOG_FIELD_VALUES_DESCRIPTION = `Lists distinct values for a low-cardinality log field. Call \`list_log_fields\` first for \`field_name\`; a field the branch has never emitted returns \`unknown_field\`. Pass \`since\` or \`start_time\`, not both; default is the previous six hours, max seven days. Private beta.`;
@@ -179,6 +198,18 @@ function createGeneratedNeonTools() {
       'auth.oauthClients.delete': DELETE_AUTH_OAUTH_CLIENT_DESCRIPTION,
       'auth.oauthClients.rotateSecret':
         ROTATE_AUTH_OAUTH_CLIENT_SECRET_DESCRIPTION,
+      'auth.allowLocalhost.update': UPDATE_AUTH_ALLOW_LOCALHOST_DESCRIPTION,
+      'auth.emailAndPassword.update':
+        UPDATE_AUTH_EMAIL_AND_PASSWORD_DESCRIPTION,
+      'auth.emailProvider.update': UPDATE_AUTH_EMAIL_PROVIDER_DESCRIPTION,
+      'auth.emailProvider.sendTest': SEND_AUTH_TEST_EMAIL_DESCRIPTION,
+      'auth.plugins.magicLink.update':
+        UPDATE_AUTH_PLUGINS_MAGIC_LINK_DESCRIPTION,
+      'auth.plugins.organization.update':
+        UPDATE_AUTH_PLUGINS_ORGANIZATION_DESCRIPTION,
+      'auth.plugins.phoneNumber.update':
+        UPDATE_AUTH_PLUGINS_PHONE_NUMBER_DESCRIPTION,
+      'auth.webhooks.update': UPDATE_AUTH_WEBHOOKS_DESCRIPTION,
       'realtime.secret': GET_REALTIME_SECRET_DESCRIPTION,
       'realtime.rotateSecret': ROTATE_REALTIME_SECRET_DESCRIPTION,
     },

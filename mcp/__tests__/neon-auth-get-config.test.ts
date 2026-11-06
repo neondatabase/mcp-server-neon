@@ -8,7 +8,10 @@ import {
 import { handleGetNeonAuthConfig } from '../tools/handlers/neon-auth-get-config';
 import { REDACTED_SECRET } from '../tools/handlers/neon-auth-settings-snapshot';
 import type { ToolHandlerExtraParams } from '../tools/types';
-import { defaultSnapshotMocks } from './helpers/neon-auth-mocks';
+import {
+  defaultSnapshotMocks,
+  PLUGIN_DEFAULTS,
+} from './helpers/neon-auth-mocks';
 
 const extra = {} as ToolHandlerExtraParams;
 
@@ -138,6 +141,16 @@ describe('handleGetNeonAuthConfig', () => {
         sender_email: null,
         sender_name: null,
       });
+      expect(body.plugins).toEqual({
+        organization: PLUGIN_DEFAULTS.organization,
+        magic_link: PLUGIN_DEFAULTS.magic_link,
+        phone_number: PLUGIN_DEFAULTS.phone_number,
+      });
+      expect(body.webhook).toEqual({
+        enabled: false,
+        enabled_events: [],
+        timeout_seconds: 5,
+      });
       expect(body._errors).toBeUndefined();
     }
   });
@@ -225,6 +238,30 @@ describe('handleGetNeonAuthConfig', () => {
           password: 'super-secret-smtp-from-upstream',
           sender_email: 'noreply@example.com',
           sender_name: 'Acme',
+        },
+      }),
+      // The plugins response repeats the email provider and OAuth providers.
+      getNeonAuthPluginConfigs: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          ...PLUGIN_DEFAULTS,
+          email_provider: {
+            type: 'standard',
+            host: 'smtp.sendgrid.net',
+            port: 587,
+            username: 'apikey',
+            password: 'super-secret-smtp-from-upstream',
+            sender_email: 'noreply@example.com',
+            sender_name: 'Acme',
+          },
+          oauth_providers: [
+            {
+              id: 'github',
+              type: 'standard',
+              client_id: 'gh-app-id',
+              client_secret: 'super-secret-from-upstream',
+            },
+          ],
         },
       }),
     };
@@ -494,6 +531,50 @@ describe('handleGetNeonAuthConfig', () => {
       // 404 is "not configured", not an error — should NOT contribute to
       // the partial-failures _errors block.
       expect(body._errors).toBeUndefined();
+    }
+  });
+
+  it('reports plugins and webhook failures under _errors without failing the tool', async () => {
+    const apiError500 = new NeonApiError('Internal Server Error', {
+      status: 500,
+    });
+    const neonClient = {
+      ...defaultSnapshotMocks(),
+      listProjectBranches: vi.fn().mockResolvedValue({
+        data: { branches: [{ id: 'br-1', default: true }] },
+      }),
+      getNeonAuth: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          auth_provider: NeonAuthSupportedAuthProvider.BetterAuth,
+          branch_id: 'br-1',
+          db_name: 'neondb',
+          jwks_url: 'https://jwks.example/',
+        },
+      }),
+      getProjectBranch: vi.fn().mockResolvedValue({
+        status: 200,
+        data: { branch: { id: 'br-1', name: 'main' } },
+      }),
+      getNeonAuthPluginConfigs: vi.fn().mockRejectedValue(apiError500),
+      getNeonAuthWebhookConfig: vi.fn().mockRejectedValue(apiError500),
+    };
+
+    const result = await handleGetNeonAuthConfig(
+      { projectId: 'p1' },
+      neonClient as never,
+      extra,
+    );
+
+    expect(result.isError).toBeFalsy();
+    if (result.content[0].type === 'text') {
+      const body = parseSettingsJson(result.content[0].text);
+      expect(body.allow_localhost).toBe(false);
+      expect(body.plugins).toBeNull();
+      expect(body.webhook).toBeNull();
+      const errors = body._errors as Record<string, string>;
+      expect(errors.plugins).toContain('500');
+      expect(errors.webhook).toContain('500');
     }
   });
 

@@ -14,6 +14,9 @@ describe('detectClientApplication', () => {
     ['claude-code/2.1.226 (claude-vscode, agent-sdk/0.3.226)', 'claude-code'],
     ['claude-user', 'claude-desktop'],
     ['Claude Desktop', 'claude-desktop'],
+    ['Anthropic/ClaudeAI', 'claude-desktop'],
+    ['Anthropic/ClaudeAI/1.0', 'claude-desktop'],
+    ['Claude', 'unknown'],
     ['claude-ai', 'claude-ai'],
     ['ChatGPT', 'chatgpt'],
     ['chatgpt', 'chatgpt'],
@@ -79,6 +82,27 @@ describe('detectClientApplication', () => {
     ['Zed/1.14.2+stable (linux; x86_64)', 'zed'],
     ['Postman', 'postman'],
     ['Postman-Client', 'postman'],
+    ['Replit MCP Connector', 'replit'],
+    ['Replit-Agent-MCP-Client/1.0.0', 'replit'],
+    ['Manus', 'manus'],
+    ['manuscript', 'unknown'],
+    ['OpenBot', 'openbot'],
+    ['OpenBot/0.4.2', 'openbot'],
+    ['Composio', 'composio'],
+    ['Executor', 'executor'],
+    ['executor-mcp', 'executor'],
+    ['executorch', 'unknown'],
+    ['oh-my-pi', 'oh-my-pi'],
+    ['omp/12.1.0', 'oh-my-pi'],
+    ['ompl', 'unknown'],
+    ['pi', 'pi'],
+    ['Pi Coding Agent', 'pi'],
+    ['pip/24.0', 'unknown'],
+    ['pipeline', 'unknown'],
+    ['Amp', 'amp'],
+    ['amp/0.0.1', 'amp'],
+    ['ampere', 'unknown'],
+    ['Nous Research', 'unknown'],
     ['MCP CLI Proxy', 'unknown'],
     ['decline', 'unknown'],
     ['mongoose', 'unknown'],
@@ -165,6 +189,58 @@ describe('identifyClient', () => {
     expect(identifyClient('python-httpx', 'Hermes Agent')).toEqual({
       clientName: 'python-httpx',
       clientApplication: 'hermes-agent',
+    });
+  });
+
+  it.each([
+    ['Replit-Agent-MCP-Client/1.0.0', 'Replit MCP Connector', 'replit'],
+    ['Go-http-client/2.0', 'Manus', 'manus'],
+    ['node', 'OpenBot', 'openbot'],
+    ['python-httpx/0.28.1', 'Composio', 'composio'],
+    ['Bun/1.3.0', 'Executor', 'executor'],
+    ['Bun/1.3.0', 'oh-my-pi', 'oh-my-pi'],
+    ['undici', 'pi', 'pi'],
+    ['undici', 'Pi Coding Agent', 'pi'],
+    ['undici', 'Amp', 'amp'],
+    ['python-httpx/0.28.1', 'Nous Research', 'unknown'],
+  ] as const)(
+    'attributes %s with OAuth client %s to %s',
+    (primary, dcrClientName, expected) => {
+      expect(identifyClient(primary, dcrClientName)).toEqual({
+        clientName: primary,
+        clientApplication: expected,
+      });
+    },
+  );
+
+  it('attributes the Claude connector over its claude-code handshake', () => {
+    expect(identifyClient('claude-code', 'Claude')).toEqual({
+      clientName: 'claude-code',
+      clientApplication: 'claude-desktop',
+    });
+    expect(identifyClient('Anthropic/ClaudeAI', 'Claude')).toEqual({
+      clientName: 'Anthropic/ClaudeAI',
+      clientApplication: 'claude-desktop',
+    });
+    expect(identifyClient('node', 'Claude')).toEqual({
+      clientName: 'node',
+      clientApplication: 'claude-desktop',
+    });
+  });
+
+  it('keeps Claude Code on claude-code whatever its OAuth client name', () => {
+    expect(identifyClient('claude-code', 'Claude Code (neon)')).toEqual({
+      clientName: 'claude-code',
+      clientApplication: 'claude-code',
+    });
+    expect(
+      identifyClient(
+        'claude-code/2.1.295 (claude-desktop, agent-sdk/0.3.295)',
+        'Claude Code (plugin:neon:neon)',
+      ),
+    ).toEqual({
+      clientName: 'claude-code/2.1.295 (claude-desktop, agent-sdk/0.3.295)',
+      clientApplication: 'claude-code',
     });
   });
 

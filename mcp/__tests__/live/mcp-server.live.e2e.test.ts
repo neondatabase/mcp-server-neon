@@ -7,6 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { neon } from '@neondatabase/serverless';
 import { z } from 'zod';
 import type { NeonApiClient } from '../../neon-client';
+import { REDACTED_SECRET } from '../../tools/handlers/neon-auth-settings-snapshot';
 import type { ServerContext } from '../../types/context';
 import {
   INSPECT_CHECKS,
@@ -121,6 +122,13 @@ function textContent(result: unknown): string {
     if (parsedContent.success) return parsedContent.data.text;
   }
   throw new Error('Expected the MCP tool to return text content.');
+}
+
+function jsonBlocks(toolName: string, result: unknown): unknown[] {
+  assertToolSucceeded(toolName, result);
+  return toolResultSchema
+    .parse(result)
+    .content.map((item) => JSON.parse(textContentSchema.parse(item).text));
 }
 
 function assertToolSucceeded(toolName: string, result: unknown): string {
@@ -486,6 +494,82 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    'caps run_sql rows and returns Postgres error fields',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const runSql = (args: Record<string, unknown>) =>
+        callTool('run_sql', { project_id: projectId, ...args });
+      const series = 'SELECT n FROM generate_series(1, 150) AS n';
+
+      const [cappedRows, cappedSummary] = jsonBlocks(
+        'run_sql',
+        await runSql({ sql: series }),
+      );
+      expect(cappedRows).toHaveLength(100);
+      expect(z.array(z.unknown()).parse(cappedRows)[99]).toEqual({ n: 100 });
+      const rerunNote =
+        'To see more, raise `max_rows` or narrow the query with WHERE or LIMIT. The SQL already ran, so if it changed data, running it again repeats the change.';
+      expect(cappedSummary).toEqual({
+        totalRowCount: 150,
+        truncated: true,
+        note: `Showing the first 100 of 150 rows. ${rerunNote}`,
+      });
+
+      const raised = jsonBlocks(
+        'run_sql',
+        await runSql({ sql: series, max_rows: 150 }),
+      );
+      expect(raised).toHaveLength(1);
+      expect(raised[0]).toHaveLength(150);
+
+      const [writeRows, writeSummaries] = jsonBlocks(
+        'run_sql_transaction',
+        await callTool('run_sql_transaction', {
+          project_id: projectId,
+          sql_statements: [
+            'CREATE TABLE public.max_rows_probe (n int)',
+            // A writable CTE reports a SELECT command tag.
+            'WITH inserted AS (INSERT INTO public.max_rows_probe SELECT generate_series(1, 5) RETURNING n) SELECT n FROM inserted ORDER BY n',
+            'DROP TABLE public.max_rows_probe',
+          ],
+          max_rows: 2,
+        }),
+      );
+      expect(writeRows).toEqual([[], [{ n: 1 }, { n: 2 }], []]);
+      expect(writeSummaries).toEqual([
+        { totalRowCount: 0, truncated: false },
+        {
+          totalRowCount: 5,
+          truncated: true,
+          note: `Showing the first 2 of 5 rows. ${rerunNote}`,
+        },
+        { totalRowCount: 0, truncated: false },
+      ]);
+
+      const missingTable = await runSql({ sql: 'SELECT * FROM no_such_table' });
+      expect(toolResultSchema.parse(missingTable).isError).toBe(true);
+      expect(textContent(missingTable)).toBe(
+        [
+          'NeonDbError: relation "no_such_table" does not exist',
+          'SQLSTATE: 42P01',
+          'POSITION: 15',
+        ].join('\n'),
+      );
+
+      const wrongArgs = await runSql({ sql: 'SELECT lower(1)' });
+      expect(textContent(wrongArgs)).toBe(
+        [
+          'NeonDbError: function lower(integer) does not exist',
+          'SQLSTATE: 42883',
+          'POSITION: 8',
+          'HINT: No function matches the given name and argument types. You might need to add explicit type casts.',
+        ].join('\n'),
+      );
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'describes a branch without leaving show_db_tree in the database',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
@@ -815,6 +899,152 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         await callTool('disable_realtime', target),
       );
       expect((await readState()).enabled).toBe(false);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'provisions Neon Auth, updates each branch setting, and reads it back with get_neon_auth_config',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!readOnlyClient)
+        throw new Error('Read-only client is not connected.');
+      const readOnlyTools = (await readOnlyClient.listTools()).tools.map(
+        (tool) => tool.name,
+      );
+      expect(readOnlyTools).toContain('get_neon_auth_config');
+      expect(readOnlyTools).not.toContain('update_auth_webhooks');
+      expect(readOnlyTools).not.toContain('send_auth_test_email');
+
+      const branch = z
+        .object({ id: z.string() })
+        .parse(
+          JSON.parse(
+            assertToolSucceeded(
+              'get_default_branch',
+              await callTool('get_default_branch', { project_id: projectId }),
+            ),
+          ),
+        );
+      const target = { project_id: projectId, branch_id: branch.id };
+      assertToolSucceeded(
+        'provision_neon_auth',
+        await callTool('provision_neon_auth', {
+          ...target,
+          auth_provider: 'better_auth',
+        }),
+      );
+
+      const readConfig = async () => {
+        const text = assertToolSucceeded(
+          'get_neon_auth_config',
+          await callTool('get_neon_auth_config', target),
+        );
+        return z
+          .object({
+            allow_localhost: z.boolean(),
+            auth_methods: z.object({
+              email_password: z.object({
+                revoke_sessions_on_password_reset: z.boolean(),
+              }),
+            }),
+            email_provider: z.record(z.string(), z.unknown()),
+            plugins: z.object({
+              organization: z.object({ membership_limit: z.number() }),
+              magic_link: z.object({ expires_in: z.number() }),
+              phone_number: z.object({ otp_expires_in: z.number() }),
+            }),
+            webhook: z.object({
+              enabled: z.boolean(),
+              webhook_url: z.string().optional(),
+            }),
+            _errors: z.never().optional(),
+          })
+          .parse(
+            JSON.parse(
+              text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1),
+            ),
+          );
+      };
+      const update = async (name: string, args: Record<string, unknown>) =>
+        assertToolSucceeded(name, await callTool(name, { ...target, ...args }));
+
+      const before = await readConfig();
+      const smtpPassword = `live-e2e-${projectName}`;
+      await update('update_auth_allow_localhost', {
+        allow_localhost: !before.allow_localhost,
+      });
+      await update('update_auth_email_and_password', {
+        revoke_sessions_on_password_reset:
+          !before.auth_methods.email_password.revoke_sessions_on_password_reset,
+      });
+      const smtpUpdated = await update('update_auth_email_provider', {
+        body: {
+          type: 'standard',
+          // RFC 6761 reserves .invalid, so the test send fails at DNS and no mail leaves.
+          host: 'smtp.invalid',
+          port: 587,
+          username: 'live-e2e',
+          password: smtpPassword,
+          sender_email: 'live-e2e@example.com',
+          sender_name: 'MCP live e2e',
+        },
+      });
+      expect(smtpUpdated).not.toContain(smtpPassword);
+      const sent = z
+        .object({ success: z.boolean(), error_message: z.string() })
+        .parse(
+          JSON.parse(
+            await update('send_auth_test_email', {
+              recipient_email: 'live-e2e@example.com',
+            }),
+          ),
+        );
+      expect(sent.success).toBe(false);
+      expect(sent.error_message).toContain('smtp.invalid');
+      await update('update_auth_plugins_organization', {
+        membership_limit: before.plugins.organization.membership_limit + 1,
+      });
+      await update('update_auth_plugins_magic_link', {
+        expires_in: before.plugins.magic_link.expires_in + 1,
+      });
+      await update('update_auth_plugins_phone_number', {
+        otp_expires_in: before.plugins.phone_number.otp_expires_in + 60,
+      });
+      await update('update_auth_webhooks', {
+        enabled: true,
+        webhook_url: 'https://example.com/neon-auth-webhook',
+        enabled_events: ['user.created'],
+      });
+
+      const after = await readConfig();
+      expect(after.allow_localhost).toBe(!before.allow_localhost);
+      expect(
+        after.auth_methods.email_password.revoke_sessions_on_password_reset,
+      ).toBe(
+        !before.auth_methods.email_password.revoke_sessions_on_password_reset,
+      );
+      expect(after.email_provider).toMatchObject({
+        type: 'standard',
+        host: 'smtp.invalid',
+        password: REDACTED_SECRET,
+      });
+      expect(after.plugins.organization.membership_limit).toBe(
+        before.plugins.organization.membership_limit + 1,
+      );
+      expect(after.plugins.magic_link.expires_in).toBe(
+        before.plugins.magic_link.expires_in + 1,
+      );
+      expect(after.plugins.phone_number.otp_expires_in).toBe(
+        before.plugins.phone_number.otp_expires_in + 60,
+      );
+      expect(after.webhook).toMatchObject({
+        enabled: true,
+        webhook_url: 'https://example.com/neon-auth-webhook',
+      });
+
+      await update('update_auth_webhooks', { enabled: false });
+      expect((await readConfig()).webhook.webhook_url).toBeUndefined();
     },
     LIVE_TEST_TIMEOUT_MS,
   );

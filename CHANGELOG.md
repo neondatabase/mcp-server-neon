@@ -2,8 +2,15 @@
 
 # [NEXT]
 
+`run_sql` and `run_sql_transaction` return at most `max_rows` rows per statement (default 100, up to 10,000). When rows were cut, a second content block reports `totalRowCount`, `truncated`, and a note on how to see the rest. A result that fits is unchanged.
+
+A failed SQL tool call returns the Postgres SQLSTATE, error position, and any detail, hint, or context under the error message.
+
+# [2.0.0] 2026-11-05
+
 MCP transport:
 
+- `serverInfo` on `initialize` and `server/discover` carries `title`, `description`, `websiteUrl`, and `icons` from `server.json`. The same metadata is published as an MCP Server Card at `/mcp/server-card` and `/.well-known/mcp.json`, with an AI Catalog at `/.well-known/ai-catalog.json`.
 - Migrate the remote `/mcp` route to stateless MCP 2026-07-28 (SDK v2 + mcp-handler 2.1.0) with a stateless fallback for 2025-era Streamable HTTP clients.
 - Retire HTTP+SSE. `GET/POST /sse`, `/message`, `/api/sse`, and `/api/message` return `410 Gone` pointing at Streamable HTTP `/mcp`. The Redis session-binding module is removed with the transport.
 - `initialize` and `server/discover` advertise `listChanged: false` for `tools` and `resources`. The tool list is fixed for a connection's grant and the server has no resources, so it never sends a list-changed notification, and 2026-07-28 clients no longer open a `subscriptions/listen` stream waiting for one.
@@ -11,6 +18,8 @@ MCP transport:
 - Validate `Origin` on Streamable HTTP requests: a malformed Origin is `403`. Any serialized origin (web pages, browser extensions, desktop webviews) and `null` are accepted on the deployed endpoint, so browser-based clients keep working; a missing Origin is allowed (CLI and server-side clients).
 
 New `projects` tools: `count_projects` returns how many active projects an organization has, resolving `org_id` the way `list_projects` does. `get_project_consumption` and `get_branch_consumption` return consumption metrics (`compute_unit_seconds`, `root_branch_bytes_month`, `public_network_transfer_bytes`, …) per project or per branch for an organization on a Launch, Scale, Agent, Business, or Enterprise plan (per branch excludes Business). All three are available in read-only mode and hidden on project-scoped connections.
+
+Neon Auth branch settings can be changed through MCP: `update_auth_allow_localhost`, `update_auth_email_and_password`, `update_auth_email_provider`, `send_auth_test_email`, `update_auth_plugins_organization`, `update_auth_plugins_magic_link`, `update_auth_plugins_phone_number`, and `update_auth_webhooks`, in the `neon_auth` category and hidden in read-only mode. `get_neon_auth_config` also returns `plugins` (organization, magic link, phone number) and `webhook`; a failed read of either is reported under `_errors` without failing the tool. Requires `@neon/tools` 2.8.0.
 
 `get_neon_auth_config` reports `revoke_sessions_on_password_reset` under `auth_methods.email_password`: whether resetting a user's password revokes all of their sessions.
 
