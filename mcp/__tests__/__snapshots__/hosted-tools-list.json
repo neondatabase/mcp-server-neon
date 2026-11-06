@@ -3435,7 +3435,7 @@
   {
     "name": "get_auth",
     "title": "Retrieve Neon Auth details for the branch",
-    "description": "Retrieves the Neon Auth integration record for a branch: provider, base URL, JWKS URL, and database. `get_neon_auth_config` returns these fields plus every Neon Auth setting; prefer it unless you only need the record.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Retrieves the Neon Auth integration record for a branch: provider, base URL, JWKS URL, and database. `get_neon_auth_config` returns these fields plus additional Neon Auth settings; prefer it unless you only need the record.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",

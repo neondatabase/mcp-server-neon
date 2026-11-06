@@ -112,7 +112,7 @@ const DELETE_AUTH_OAUTH_CLIENT_DESCRIPTION = `Deletes an OAuth client from the N
 
 const ROTATE_AUTH_OAUTH_CLIENT_SECRET_DESCRIPTION = `Generates a new secret for a confidential client of the Neon Auth OAuth server. The old secret stops working immediately. The new \`client_secret\` is shown only once: show it to the user and tell them to store it.`;
 
-const GET_AUTH_DESCRIPTION = `Retrieves the Neon Auth integration record for a branch: provider, base URL, JWKS URL, and database. \`get_neon_auth_config\` returns these fields plus every Neon Auth setting; prefer it unless you only need the record.`;
+const GET_AUTH_DESCRIPTION = `Retrieves the Neon Auth integration record for a branch: provider, base URL, JWKS URL, and database. \`get_neon_auth_config\` returns these fields plus additional Neon Auth settings; prefer it unless you only need the record.`;
 
 const READ_AUTH_SETTINGS =
   'Call `get_neon_auth_config` to read the current value.';
