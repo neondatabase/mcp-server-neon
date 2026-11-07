@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+OAuth sign-in, token refresh, and API-key requests keep working after the OAuth database drops its connections, for example on a compute restart. Before, one dropped connection could leave every token store on a server instance failing with `Cannot use a pool after calling end on the pool`, and an idle dropped connection raised an uncaught exception.
+
 `run_sql` and `run_sql_transaction` return at most `max_rows` rows per statement (default 100, up to 10,000). When rows were cut, a second content block reports `totalRowCount`, `truncated`, and a note on how to see the rest. A result that fits is unchanged.
 
 A failed SQL tool call returns the Postgres SQLSTATE, error position, and any detail, hint, or context under the error message.

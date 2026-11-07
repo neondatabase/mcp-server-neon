@@ -1,4 +1,5 @@
-import { KeyvPostgres } from '@keyv/postgres';
+import { EventEmitter } from 'node:events';
+import pg from 'pg';
 import { logger } from '../utils/logger';
 import { retryAsync } from '../utils/retry';
 import type { AuthorizationCode, Client, Token } from 'oauth2-server';
@@ -8,11 +9,7 @@ import { AuthDetailsResponse } from '../neon-client';
 
 const SCHEMA = 'mcpauth';
 
-// Errors where the cached pg pool is likely poisoned and a fresh Keyv
-// instance (new pool, fresh env read) is worth trying. Pure config errors
-// (wrong URL in env) will still fail after reinit - the cooldown below
-// prevents hot-looping in that case.
-const REINIT_ERROR_PATTERNS: readonly RegExp[] = [
+const PG_CONNECT_ERROR_PATTERNS: readonly RegExp[] = [
   /password authentication failed/i,
   /terminating connection/i,
   /connection terminated/i,
@@ -22,13 +19,6 @@ const REINIT_ERROR_PATTERNS: readonly RegExp[] = [
   /ENOTFOUND/,
 ];
 
-const REINIT_COOLDOWN_MS = 60_000;
-
-export const shouldReinitKeyv = (err: unknown): boolean => {
-  const msg = err instanceof Error ? err.message : String(err);
-  return REINIT_ERROR_PATTERNS.some((re) => re.test(msg));
-};
-
 // Postgres `XX000` is Neon's "Couldn't connect to compute node" — emitted
 // when a suspended compute fails to scale-from-zero within the connect
 // budget. Surfaces on the auth-callback critical path because the
@@ -36,12 +26,12 @@ export const shouldReinitKeyv = (err: unknown): boolean => {
 // after the idle window pays an 8–10s wake-up that exceeds the lambda's
 // own timeouts. A single retry with a brief delay catches the next request
 // against the freshly-woken compute and masks the user-visible failure.
-// The lazy Keyv pool re-inits in its error listener concurrently, so the
-// retried call grabs a clean pool.
+// pg.Pool discards the broken client, so the retry opens a new connection.
 export const isPgConnectFailure = (err: unknown): boolean => {
   const code = (err as { code?: unknown } | null)?.code;
   if (code === 'XX000') return true;
-  return shouldReinitKeyv(err);
+  const msg = err instanceof Error ? err.message : String(err);
+  return PG_CONNECT_ERROR_PATTERNS.some((re) => re.test(msg));
 };
 
 /**
@@ -61,35 +51,105 @@ export const withPgConnectRetry = <T>(
     shouldRetry: isPgConnectFailure,
   });
 
+let pool: pg.Pool | null = null;
+
+const getPool = (): pg.Pool => {
+  if (!pool) {
+    pool = new pg.Pool({ connectionString: process.env.OAUTH_DATABASE_URL });
+    // An idle client whose connection the server ends (a compute restart)
+    // errors on the pool; without a listener that is an uncaught exception.
+    pool.on('error', (err) => {
+      logger.error('OAuth database idle connection error:', { err });
+    });
+  }
+  return pool;
+};
+
+const isUniqueViolation = (err: unknown): boolean =>
+  typeof err === 'object' &&
+  err !== null &&
+  'code' in err &&
+  err.code === '23505';
+
+/**
+ * Keyv store on one mcpauth table, with the table layout and SQL of
+ * @keyv/postgres 2.1.2 so rows written by either read back in the other.
+ */
+export class PostgresStore extends EventEmitter {
+  readonly opts: { table: string };
+  namespace?: string;
+  private readonly qualifiedTable: string;
+  private ready: Promise<void> | null = null;
+
+  constructor(table: string) {
+    super();
+    this.opts = { table };
+    this.qualifiedTable = `${SCHEMA}.${table}`;
+  }
+
+  private async createTable(): Promise<void> {
+    const ddl = `CREATE SCHEMA IF NOT EXISTS ${SCHEMA}; CREATE TABLE IF NOT EXISTS ${this.qualifiedTable}(key VARCHAR(255) PRIMARY KEY, value TEXT)`;
+    try {
+      await getPool().query(ddl);
+    } catch (err) {
+      // Concurrent CREATE ... IF NOT EXISTS can lose the race on a catalog
+      // unique index and roll back before the table exists; by now the
+      // winner has committed, so the second run is a no-op.
+      if (!isUniqueViolation(err)) throw err;
+      await getPool().query(ddl);
+    }
+  }
+
+  private async query<Row extends pg.QueryResultRow>(
+    text: string,
+    values: unknown[],
+  ): Promise<pg.QueryResult<Row>> {
+    this.ready ??= this.createTable().catch((err: unknown) => {
+      this.ready = null;
+      throw err;
+    });
+    await this.ready;
+    return getPool().query<Row>(text, values);
+  }
+
+  async get(key: string): Promise<string | undefined> {
+    const { rows } = await this.query<{ value: string }>(
+      `SELECT value FROM ${this.qualifiedTable} WHERE key = $1`,
+      [key],
+    );
+    return rows[0]?.value;
+  }
+
+  async set(key: string, value: string): Promise<void> {
+    await this.query(
+      `INSERT INTO ${this.qualifiedTable} (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+      [key, value],
+    );
+  }
+
+  async delete(key: string): Promise<boolean> {
+    const { rowCount } = await this.query(
+      `DELETE FROM ${this.qualifiedTable} WHERE key = $1`,
+      [key],
+    );
+    return (rowCount ?? 0) > 0;
+  }
+
+  async clear(): Promise<void> {
+    await this.query(`DELETE FROM ${this.qualifiedTable} WHERE key LIKE $1`, [
+      this.namespace ? `${this.namespace}:%` : '%',
+    ]);
+  }
+}
+
 const createLazyKeyv = <T>(table: string, errorLabel: string) => {
   let instance: Keyv<T> | null = null;
-  let lastReinitAt = 0;
 
   const build = (): Keyv<T> => {
     logger.info(`initializing keyv for ${table}`);
-    const inst = new Keyv<T>({
-      store: new KeyvPostgres({
-        connectionString: process.env.OAUTH_DATABASE_URL,
-        schema: SCHEMA,
-        table,
-      }),
-    });
+    const inst = new Keyv<T>({ store: new PostgresStore(table) });
     inst.on('error', (err) => {
       logger.error(`${errorLabel} keyv error:`, { err });
-      if (instance !== inst) return;
-      if (!shouldReinitKeyv(err)) return;
-      const now = Date.now();
-      if (now - lastReinitAt < REINIT_COOLDOWN_MS) return;
-      lastReinitAt = now;
-      instance = null;
-      logger.warn(
-        `${errorLabel} keyv: dropping cached instance to reinit on next call`,
-      );
-      inst.disconnect().catch((disconnectErr) => {
-        logger.warn(`${errorLabel} keyv: error disconnecting stale instance`, {
-          err: disconnectErr,
-        });
-      });
     });
     logger.info(`keyv initialized for ${table}`);
     return inst;
