@@ -16,8 +16,11 @@ export async function handleFetch(
 ): Promise<CallToolResult> {
   try {
     // Parse the ID format
-    if (id.startsWith('org:') || id.startsWith('org-')) {
+    if (id.startsWith('org:')) {
       return await fetchOrganizationDetails(id.slice(4), neonClient);
+    } else if (id.startsWith('org-')) {
+      // A bare organization ID such as `org-cool-bird-12345678`
+      return await fetchOrganizationDetails(id, neonClient);
     } else if (id.startsWith('branch:')) {
       const [projectId, branchId] = id.slice(7).split('/');
       return await fetchBranchDetails(projectId, branchId, neonClient, extra);
