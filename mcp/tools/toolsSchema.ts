@@ -137,7 +137,7 @@ export const prepareDatabaseMigrationInputSchema = z
     migration_sql: z
       .string()
       .describe(
-        "The SQL to apply. It is split into statements at every semicolon, so use semicolons only to end statements: none inside a string (write it as \\073 in an E'' string, e.g. E'a\\073b' for 'a;b'), a comment, or a function, trigger, or DO body. Create a function, trigger function, or DO block with run_sql instead, which runs one statement as written.",
+        "The SQL to apply, split at every semicolon: create functions, triggers, and DO blocks with run_sql, and keep semicolons out of strings (use E'\\073') and comments.",
       ),
     project_id: z
       .string()

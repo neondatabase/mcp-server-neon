@@ -2,7 +2,7 @@
 
 # [NEXT]
 
-The `migration_sql` input of `prepare_database_migration` says that the SQL is split at every semicolon, how to write a semicolon inside a string (`E'a\073b'`), and to create functions, trigger functions, and `DO` blocks with `run_sql`.
+The `migration_sql` input of `prepare_database_migration` says the SQL is split at every semicolon and how to work with that.
 
 `run_sql` and `run_sql_transaction` return at most `max_rows` rows per statement (default 100, up to 10,000). When rows were cut, a second content block reports `totalRowCount`, `truncated`, and a note on how to see the rest. A result that fits is unchanged.
 
