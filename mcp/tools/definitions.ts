@@ -4,16 +4,12 @@ import type { ZodTypeAny } from 'zod/v3';
 import { createGeneratedToolDefinitions } from './generated/adapt';
 import type { NeonTool } from './tool-definition';
 import {
-  completeDatabaseMigrationInputSchema,
-  completeQueryTuningInputSchema,
   describeBranchInputSchema,
   describeTableSchemaInputSchema,
   explainSqlStatementInputSchema,
   getConnectionStringInputSchema,
   getDatabaseTablesInputSchema,
   inspectDatabaseInputSchema,
-  prepareDatabaseMigrationInputSchema,
-  prepareQueryTuningInputSchema,
   getNeonAuthConfigInputSchema,
   runSqlInputSchema,
   runSqlTransactionInputSchema,
@@ -60,7 +56,7 @@ const HOST_TOOL_DRAFTS = [
     name: 'run_sql' as const,
     scope: 'querying',
     description:
-      'Execute one SQL statement on a Neon database. If a prior step created a temporary branch, pass that branch_id. NEVER run destructive SQL autonomously; always ask the user first.',
+      'Execute one SQL statement on a Neon database. To try a risky change first, run it on a branch from create_branch by passing branch_id. NEVER run destructive SQL autonomously; always ask the user first.',
     inputSchema: runSqlInputSchema,
     readOnlySafe: true,
     annotations: {
@@ -75,7 +71,7 @@ const HOST_TOOL_DRAFTS = [
     name: 'run_sql_transaction' as const,
     scope: 'querying',
     description:
-      'Execute multiple SQL statements as one transaction. If a prior step created a temporary branch, pass that branch_id. NEVER run destructive SQL autonomously; always ask the user first.',
+      'Execute multiple SQL statements as one transaction, one statement per array item. For a schema migration or other risky change, create_branch from the target branch, run the statements there with its branch_id, ask the user, then run them on the target branch, and delete_branch the test branch either way. NEVER run destructive SQL autonomously; always ask the user first.',
     inputSchema: runSqlTransactionInputSchema,
     // Not `readOnlySafe`: each statement runs in the same session, so a
     // leading `COMMIT` or `SET TRANSACTION READ WRITE` leaves the read-only
@@ -116,36 +112,6 @@ const HOST_TOOL_DRAFTS = [
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
-      openWorldHint: false,
-    } satisfies ToolAnnotations,
-  },
-  {
-    name: 'prepare_database_migration' as const,
-    scope: 'querying',
-    readOnlySafe: false,
-    description:
-      'Apply a schema change on a temporary branch and return a migration_id. Test with run_sql on that branch, ask the user, then complete_database_migration — even if they reject, so the temporary branch is deleted. Pass every field from the prepare response.',
-    inputSchema: prepareDatabaseMigrationInputSchema,
-    annotations: {
-      title: 'Prepare Database Migration',
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: false,
-    } satisfies ToolAnnotations,
-  },
-  {
-    name: 'complete_database_migration' as const,
-    scope: 'querying',
-    description:
-      'Apply or discard a prepared migration and delete the temporary branch. NEVER run autonomously; always ask the user first. Pass migration_id, migration_sql, database_name, project_id, temporary_branch_id, and parent_branch_id from prepare_database_migration. Set apply_changes false to discard; omitting it applies the migration.',
-    inputSchema: completeDatabaseMigrationInputSchema,
-    readOnlySafe: false,
-    annotations: {
-      title: 'Complete Database Migration',
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: false,
       openWorldHint: false,
     } satisfies ToolAnnotations,
   },
@@ -216,36 +182,6 @@ const HOST_TOOL_DRAFTS = [
     } satisfies ToolAnnotations,
   },
   {
-    name: 'prepare_query_tuning' as const,
-    scope: 'querying',
-    readOnlySafe: false,
-    description:
-      'Analyze a slow query on a temporary branch and return a tuning_id. Apply suggested SQL with run_sql on that branch, re-run explain_sql_statement there, then complete_query_tuning with the tuning_id (not the branch id) — apply_changes true if they accept, omit it or pass false if they reject, so the temporary branch is deleted. Do not use prepare_database_migration.',
-    inputSchema: prepareQueryTuningInputSchema,
-    annotations: {
-      title: 'Prepare Query Tuning',
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: false,
-    } satisfies ToolAnnotations,
-  },
-  {
-    name: 'complete_query_tuning' as const,
-    scope: 'querying',
-    readOnlySafe: false,
-    description:
-      'Apply or discard query-tuning changes and delete the temporary branch. NEVER run autonomously. Before calling, apply suggested SQL with run_sql on the temporary branch and re-run explain_sql_statement. Pass the tuning_id from prepare_query_tuning, not the branch id, plus temporary_branch_id. Set apply_changes true to apply; omitting it discards. Call this even when the user rejects the changes. Do not use prepare_database_migration.',
-    inputSchema: completeQueryTuningInputSchema,
-    annotations: {
-      title: 'Complete Query Tuning',
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: false,
-      openWorldHint: false,
-    } satisfies ToolAnnotations,
-  },
-  {
     name: 'list_slow_queries' as const,
     scope: 'querying',
     description:
@@ -264,7 +200,7 @@ const HOST_TOOL_DRAFTS = [
     name: 'inspect_database' as const,
     scope: 'querying',
     description:
-      "Run one read-only neon inspect db check (pick `check` from the input schema). Not for arbitrary SQL (`run_sql`), one statement's plan (`explain_sql_statement`), or applying indexes (`prepare_query_tuning`). Omit `database_name` to cover every database; some checks are compute-wide. If a check needs an extension, the tool names `CREATE EXTENSION`; ask before running it.",
+      "Run one read-only neon inspect db check (pick `check` from the input schema). Not for arbitrary SQL (`run_sql`), one statement's plan (`explain_sql_statement`), or creating indexes (`run_sql`). Omit `database_name` to cover every database; some checks are compute-wide. If a check needs an extension, the tool names `CREATE EXTENSION`; ask before running it.",
     inputSchema: inspectDatabaseInputSchema,
     readOnlySafe: true,
     annotations: {

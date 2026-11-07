@@ -363,7 +363,7 @@ describe('pinned role tool surface', () => {
     expect(unpinned).toContain('get_connection_string');
     expect(pinned).not.toContain('get_connection_string');
     expect(pinned).toContain('run_sql');
-    expect(pinned).toContain('prepare_database_migration');
+    expect(pinned).toContain('run_sql_transaction');
   });
 
   it('tells the client which role SQL runs as', () => {

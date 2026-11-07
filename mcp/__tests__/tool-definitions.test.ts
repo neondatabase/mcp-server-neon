@@ -94,7 +94,7 @@ describe('NEON_TOOLS definitions', () => {
   });
 
   it('marks private Neon operations closed-world and public-capable ones open-world', () => {
-    expect(NEON_TOOLS).toHaveLength(139);
+    expect(NEON_TOOLS).toHaveLength(135);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
     expect(generated).toHaveLength(119);
     expect(
@@ -815,47 +815,26 @@ describe('generated tool interface', () => {
   });
 
   it('keeps host workflow constraints in the short descriptions', () => {
-    const prepareMigration = NEON_TOOLS.find(
-      (tool) => tool.name === 'prepare_database_migration',
-    );
-    const completeMigration = NEON_TOOLS.find(
-      (tool) => tool.name === 'complete_database_migration',
-    );
-    const prepareTuning = NEON_TOOLS.find(
-      (tool) => tool.name === 'prepare_query_tuning',
-    );
-    const completeTuning = NEON_TOOLS.find(
-      (tool) => tool.name === 'complete_query_tuning',
-    );
     const authConfig = NEON_TOOLS.find(
       (tool) => tool.name === 'get_neon_auth_config',
     );
     const inspect = NEON_TOOLS.find((tool) => tool.name === 'inspect_database');
     const runSql = NEON_TOOLS.find((tool) => tool.name === 'run_sql');
+    const runSqlTransaction = NEON_TOOLS.find(
+      (tool) => tool.name === 'run_sql_transaction',
+    );
 
-    expect(prepareMigration?.description).toContain(
-      'complete_database_migration',
-    );
-    expect(completeMigration?.description).toContain(
-      'prepare_database_migration',
-    );
-    expect(completeMigration?.description).toContain(
-      'Set apply_changes false to discard',
-    );
-    expect(completeMigration?.description).not.toContain(
-      'apply_changes from prepare_database_migration',
-    );
-    expect(prepareTuning?.description).toContain('tuning_id');
-    expect(prepareTuning?.description).toContain('explain_sql_statement');
-    expect(prepareTuning?.description).toContain('apply_changes true');
-    expect(prepareTuning?.description).toContain('prepare_database_migration');
-    expect(completeTuning?.description).toContain('even when the user rejects');
-    expect(completeTuning?.description).toContain('explain_sql_statement');
-    expect(completeTuning?.description).toContain(
-      'Set apply_changes true to apply',
-    );
     expect(authConfig?.description).toContain('redacted');
-    expect(runSql?.description).toContain('temporary branch');
+    expect(runSql?.description).toContain('create_branch');
+    for (const step of [
+      'create_branch',
+      'branch_id',
+      'ask the user',
+      'target branch',
+      'delete_branch',
+    ]) {
+      expect(runSqlTransaction?.description).toContain(step);
+    }
     expect(inspect?.description).toContain('CREATE EXTENSION');
     expect(inspect?.description).toContain('ask before');
   });
