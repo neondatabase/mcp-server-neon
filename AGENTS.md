@@ -180,6 +180,7 @@ infrastructure.
    - Grant resolved from OAuth resource URI query params (authorize-time), OAuth token grant field (runtime), or direct MCP URL query params for API-key auth. Those URL params stay camelCase (`projectId`, `category`, `readonly`).
    - `grant-filter.ts` filters `NEON_TOOLS` by scope category and hides project-agnostic tools in project-scoped mode. Project-aware published schemas keep `project_id` optional across grants; unscoped calls must supply it, while scoped calls can omit it or provide the matching grant ID. Injection precedes the original full handler schema validation.
    - Exposed publicly via `GET /api/list-tools` (stateless preview of tool visibility for a given grant)
+   - Hosts can cache a tool list independently of the grant, so a `tools/call` naming a Neon tool the grant withholds registers that one tool for that request only and returns `withheldToolMessage` (the causes and how to change them) as an `isError` result. `tools/list` never includes it.
 
 ### Key Architectural Patterns
 

@@ -3,6 +3,7 @@ import { isLoopbackHost } from '../../lib/oauth/redirect-uri';
 import { SCOPE_DEFINITIONS } from '../utils/read-only';
 import {
   SCOPE_CATEGORIES,
+  SCOPE_CATEGORY_LABELS,
   type GrantContext,
   type ScopeCategory,
 } from '../utils/grant-context';
@@ -17,22 +18,6 @@ import {
   getConsentToolCatalog,
   type ConsentToolMeta,
 } from './consent-tools';
-
-const SCOPE_CATEGORY_LABELS: Record<ScopeCategory, string> = {
-  projects: 'Projects',
-  branches: 'Branches',
-  endpoints: 'Endpoints',
-  snapshots: 'Snapshots',
-  schema: 'Schema',
-  querying: 'Querying',
-  neon_auth: 'Neon Auth',
-  data_api: 'Data API',
-  observability: 'Observability',
-  docs: 'Docs',
-  functions: 'Functions',
-  storage: 'Storage',
-  realtime: 'Realtime',
-};
 
 const DISCOVERY_LABEL = 'Discovery';
 export const COLLAPSE_ABOVE = 4;

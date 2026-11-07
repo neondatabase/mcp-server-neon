@@ -332,6 +332,116 @@ describe('transport dynamic tool composition', () => {
     }
   });
 
+  it('explains a call to a tool the grant withholds without listing it', async () => {
+    const oauthToken = 'oauth-withheld-category';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write', {
+        projectId: null,
+        scopes: ['projects', 'querying'],
+      }),
+    );
+
+    const tools = await listToolsForToken(oauthToken);
+    expect(tools.map((tool) => tool.name)).not.toContain('deploy_function');
+
+    const call = await mcpCall(oauthToken, 'tools/call', 3, {
+      name: 'deploy_function',
+      arguments: { project_id: 'proj-1', branch_id: 'br-1', slug: 'api' },
+    });
+    expect(call.status).toBe(200);
+    expect(call.body).toMatchObject({
+      result: {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: expect.stringContaining(
+              'does not include the Functions category',
+            ),
+          },
+        ],
+      },
+    });
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+      'withheld tool call:',
+      expect.objectContaining({
+        toolName: 'deploy_function',
+        scopes: 'projects,querying',
+      }),
+    );
+  });
+
+  it('explains a write tool called on a read-only connection', async () => {
+    const oauthToken = 'oauth-withheld-read-only';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read', { projectId: null, scopes: null }),
+    );
+
+    const call = await mcpCall(oauthToken, 'tools/call', 1, {
+      name: 'create_branch',
+      arguments: {},
+    });
+    expect(call.body).toMatchObject({
+      result: {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: expect.stringContaining('The connection is read-only.'),
+          },
+        ],
+      },
+    });
+  });
+
+  it('still rejects a tool name that is not a Neon tool', async () => {
+    const oauthToken = 'oauth-unknown-tool';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write', {
+        projectId: null,
+        scopes: null,
+      }),
+    );
+
+    const call = await mcpCall(oauthToken, 'tools/call', 1, {
+      name: 'not_a_tool',
+      arguments: {},
+    });
+    expect(call.body).toMatchObject({
+      error: { message: expect.stringContaining('Tool not_a_tool not found') },
+    });
+  });
+
+  it('answers an unreadable request body with the SDK parse error', async () => {
+    const oauthToken = 'oauth-unreadable-body';
+    vi.mocked(model.getAccessToken).mockResolvedValue(
+      buildOAuthToken(oauthToken, 'read write', {
+        projectId: null,
+        scopes: null,
+      }),
+    );
+
+    const res = await POST(
+      new Request('http://localhost/api/mcp', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${oauthToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+        },
+        body: new ReadableStream({
+          start(controller) {
+            controller.error(new Error('stream failure'));
+          },
+        }),
+        // @ts-expect-error duplex is required for streaming bodies
+        duplex: 'half',
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: -32700 } });
+  });
+
   // Every streamable-HTTP request builds a fresh server instance, so the
   // `initialize` handshake and the `tools/call` land on different ones and
   // `clientInfo` is gone by the time anything is tracked. The User-Agent is
@@ -826,9 +936,18 @@ describe('transport dynamic tool composition', () => {
     expect(call.body).toMatchObject({
       jsonrpc: '2.0',
       id: 3,
-      error: {
-        code: -32602,
-        message: 'Tool run_sql_transaction not found',
+      result: {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: [
+              'run_sql_transaction is not enabled on this connection.',
+              '- The connection is read-only. Reconnect Neon and check "Allow writes" on the consent screen, or remove readonly from the MCP server URL.',
+              'Tell the user what to change. Calling the tool again on this connection fails the same way.',
+            ].join('\n'),
+          },
+        ],
       },
     });
   });

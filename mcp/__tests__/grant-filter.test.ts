@@ -10,6 +10,7 @@ import {
   injectProjectId,
   isDocsOnlyTool,
   ALWAYS_AVAILABLE_TOOLS,
+  withheldToolMessage,
 } from '../tools/grant-filter';
 import type { GrantContext } from '../utils/grant-context';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
@@ -487,5 +488,81 @@ describe('search_docs visibility', () => {
       'search_docs',
       'send_feedback',
     ]);
+  });
+});
+
+describe('withheldToolMessage', () => {
+  it('returns undefined for a tool the grant allows', () => {
+    expect(
+      withheldToolMessage('deploy_function', grant(), false),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined for a name that is not a Neon tool', () => {
+    expect(
+      withheldToolMessage('not_a_tool', grant({ scopes: [] }), true),
+    ).toBeUndefined();
+  });
+
+  it('names the missing category and how to add it', () => {
+    expect(
+      withheldToolMessage(
+        'deploy_function',
+        grant({ scopes: ['projects', 'querying'] }),
+        false,
+      ),
+    ).toBe(
+      [
+        'deploy_function is not enabled on this connection.',
+        '- The connection does not include the Functions category. Reconnect Neon and select Functions on the consent screen, or add category=functions to the MCP server URL.',
+        'Tell the user what to change. Calling the tool again on this connection fails the same way.',
+      ].join('\n'),
+    );
+  });
+
+  it('lists every rule that withholds the tool', () => {
+    const message = withheldToolMessage(
+      'deploy_function',
+      grant({ scopes: ['querying'] }),
+      true,
+    );
+    expect(message).toContain('does not include the Functions category');
+    expect(message).toContain('The connection is read-only.');
+  });
+
+  it('explains project scoping for a project-agnostic tool', () => {
+    expect(
+      withheldToolMessage(
+        'list_projects',
+        grant({ projectId: 'proj-1' }),
+        false,
+      ),
+    ).toContain('The connection is scoped to one project.');
+  });
+
+  it('explains a pinned Postgres role for get_connection_string', () => {
+    expect(
+      withheldToolMessage(
+        'get_connection_string',
+        grant({ roleName: 'app_reader' }),
+        false,
+      ),
+    ).toContain('The connection pins a Postgres role.');
+  });
+
+  it('explains every tool the filters withhold', () => {
+    const grants: Array<[GrantContext, boolean]> = [
+      [grant({ scopes: [] }), false],
+      [grant({ projectId: 'proj-1', roleName: 'app_reader' }), true],
+    ];
+    for (const [g, readOnly] of grants) {
+      const available = new Set(
+        getFilteredTools(g, readOnly).map((tool) => tool.name),
+      );
+      for (const tool of NEON_TOOLS) {
+        const message = withheldToolMessage(tool.name, g, readOnly);
+        expect(message === undefined).toBe(available.has(tool.name));
+      }
+    }
   });
 });
