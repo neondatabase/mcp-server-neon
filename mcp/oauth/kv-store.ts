@@ -193,6 +193,8 @@ export const getClientRegisterHeaders =
 
 /** Cached outcome of a refresh token exchange for cross-instance deduplication. */
 export type RefreshResult = {
+  /** Client binding; older cache rows are verified against their access token. */
+  clientId?: string;
   accessToken: string;
   refreshToken: string;
   expiresAt: number;

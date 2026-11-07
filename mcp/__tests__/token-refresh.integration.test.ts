@@ -591,11 +591,13 @@ describe('Token refresh flow', () => {
       expect(response.status).toBe(400);
       expect(body.error).toBe('invalid_grant');
 
-      // Critical: upstream must not be touched, and we must not even consult
-      // the success cache or refresh-token store.
+      // Never touch upstream or the refresh-token store. An owned cached
+      // success is checked before a stale replay failure becomes authoritative.
       expect(mockExchange).not.toHaveBeenCalled();
       expect(mockModel.getRefreshToken).not.toHaveBeenCalled();
-      expect(mockModel.getRefreshResult).not.toHaveBeenCalled();
+      expect(mockModel.getRefreshResult).toHaveBeenCalledWith(
+        'old-refresh-token',
+      );
     });
 
     it('does not cache failure on transient 5xx', async () => {
@@ -641,7 +643,7 @@ describe('Token refresh flow', () => {
       expect(mockExchange).not.toHaveBeenCalled();
     });
 
-    it('caches failure when client_id does not match the token', async () => {
+    it('does not poison the owner failure cache on a client mismatch', async () => {
       mockModel.getAccessToken.mockResolvedValue({
         ...TEST_OLD_ACCESS_TOKEN,
         client: { ...TEST_CLIENT, id: 'different-client' },
@@ -650,9 +652,7 @@ describe('Token refresh flow', () => {
       const response = await POST(makeTokenRequest('old-refresh-token'));
       expect(response.status).toBe(400);
 
-      expect(mockModel.saveRefreshFailure).toHaveBeenCalledTimes(1);
-      const [, detail] = mockModel.saveRefreshFailure.mock.calls[0];
-      expect(detail.oauthErrorDescription).toBe('client_mismatch');
+      expect(mockModel.saveRefreshFailure).not.toHaveBeenCalled();
       expect(mockExchange).not.toHaveBeenCalled();
     });
   });
