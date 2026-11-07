@@ -1,3 +1,4 @@
+import { resolveCachedGrant } from '../../../mcp/oauth/cached-grant';
 import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { Client } from 'oauth2-server';
@@ -290,7 +291,8 @@ async function executeRefresh(
       tokenClientId: oldToken.client.id,
       requestClientId: client.id,
     });
-    await cachePreUpstreamFailure(refreshToken, 'client_mismatch');
+    // A client mismatch says nothing about the owner's token validity.
+    // Caching it by refresh token would reject the legitimate client too.
     throw new RefreshError(
       'invalid_grant',
       'Invalid or expired refresh token',
@@ -470,6 +472,7 @@ async function executeRefresh(
   // upstream again and gets `token_inactive`.
   await model
     .saveRefreshResult(refreshToken, {
+      clientId: client.id,
       accessToken: result.access_token,
       refreshToken: result.refresh_token,
       expiresAt,
@@ -790,31 +793,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Absorb retry storms: if upstream already rejected this RT recently,
-      // skip the singleflight + upstream call and return the cached failure.
-      const cachedFailure = await model
-        .getRefreshFailure(refreshToken)
-        .catch(() => undefined);
-      if (cachedFailure) {
-        logger.info('Refresh token in failure cache; rejecting fast', {
-          clientId: client.id,
-          ageMs: Date.now() - cachedFailure.failedAt,
-          oauthError: cachedFailure.oauthError,
-        });
-        emitRefreshSlo('correct_invalid_grant', sloStartMs, {
-          clientId: client.id,
-          reason: 'failure_cache_hit',
-          upstreamOauthError: cachedFailure.oauthError,
-        });
-        return NextResponse.json(
-          {
-            error: 'invalid_grant',
-            error_description: 'Invalid or expired refresh token',
-          },
-          { status: 400 },
-        );
-      }
-
       const cachedToResponse = (cached: {
         accessToken: string;
         refreshToken: string;
@@ -836,12 +814,50 @@ export async function POST(request: NextRequest) {
         const cached = await model
           .getRefreshResult(refreshToken)
           .catch(() => undefined);
-        return cached ? cachedToResponse(cached) : undefined;
+        if (!cached) return undefined;
+        const resolved = await resolveCachedGrant(refreshToken, cached).catch(
+          () => undefined,
+        );
+        return resolved?.clientId === client.id
+          ? cachedToResponse(cached)
+          : undefined;
       };
 
-      // Used by the lock-waiter poll loop. The failure cache wins: if a peer
-      // marked this RT dead (either via an upstream 4xx or a pre-upstream
-      // RT-not-found / client-mismatch), throw RefreshError so the waiter
+      // Absorb retry storms: if upstream already rejected this RT recently,
+      // skip the singleflight + upstream call and return the cached failure.
+      const cachedFailure = await model
+        .getRefreshFailure(refreshToken)
+        .catch(() => undefined);
+      if (cachedFailure) {
+        // A failed replay of an already-consumed token can coexist with a
+        // completed rotation. Only its owning client may recover that result.
+        const cached = await checkSuccessCache();
+        if (cached) {
+          emitRefreshSlo('success', sloStartMs, { clientId: client.id });
+          return NextResponse.json(cached);
+        }
+        logger.info('Refresh token in failure cache; rejecting fast', {
+          clientId: client.id,
+          ageMs: Date.now() - cachedFailure.failedAt,
+          oauthError: cachedFailure.oauthError,
+        });
+        emitRefreshSlo('correct_invalid_grant', sloStartMs, {
+          clientId: client.id,
+          reason: 'failure_cache_hit',
+          upstreamOauthError: cachedFailure.oauthError,
+        });
+        return NextResponse.json(
+          {
+            error: 'invalid_grant',
+            error_description: 'Invalid or expired refresh token',
+          },
+          { status: 400 },
+        );
+      }
+
+      // Used by the lock-waiter poll loop. A peer's failure wakes the waiter;
+      // the outer catch may still recover a completed rotation for its owner.
+      // Otherwise, throw RefreshError so the waiter
       // surfaces 400 immediately instead of polling until the lock-wait
       // timeout and surfacing 503.
       const peekResolution = async (): Promise<
@@ -884,8 +900,9 @@ export async function POST(request: NextRequest) {
         const result = await withRefreshLock(
           refreshToken,
           (hint) =>
-            singleflight(`refresh:${refreshToken}`, () =>
-              executeRefresh(refreshToken, client, hint),
+            singleflight(
+              JSON.stringify(['refresh', client.id, refreshToken]),
+              () => executeRefresh(refreshToken, client, hint),
             ),
           peekResolution,
         );
