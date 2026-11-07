@@ -29,7 +29,6 @@
     "test:e2e": "pnpm test:e2e:mcp && pnpm test:e2e:web"
   },
   "dependencies": {
-    "@keyv/postgres": "2.1.2",
     "@modelcontextprotocol/sdk": "1.25.3",
     "@modelcontextprotocol/server": "2.0.0",
     "@neon/sdk": "7.11.0",
@@ -45,6 +44,7 @@
     "next": "16.1.1",
     "oauth2-server": "3.1.1",
     "openid-client": "6.3.4",
+    "pg": "8.14.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "redis": "4.6.0",
@@ -59,6 +59,7 @@
     "@types/he": "1.2.3",
     "@types/node": "20.17.48",
     "@types/oauth2-server": "3.0.18",
+    "@types/pg": "8.20.0",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.1.5",
     "dotenv": "17.2.4",

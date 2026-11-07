@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  isPgConnectFailure,
-  shouldReinitKeyv,
-  withPgConnectRetry,
-} from '../oauth/kv-store';
+import { isPgConnectFailure, withPgConnectRetry } from '../oauth/kv-store';
 
 // These pin the predicate / retry helper contract that the /callback
 // hot-path depends on. Regression for the 2026-05-12 OAUTH_DATABASE_URL
@@ -19,14 +15,25 @@ describe('isPgConnectFailure', () => {
     expect(isPgConnectFailure(err)).toBe(true);
   });
 
-  it('matches existing connect-failure patterns via shouldReinitKeyv', () => {
-    // Sanity-check that we still catch the patterns we already covered.
-    expect(isPgConnectFailure(new Error('ECONNRESET'))).toBe(true);
-    expect(isPgConnectFailure(new Error('ETIMEDOUT'))).toBe(true);
-    expect(
-      isPgConnectFailure(new Error('password authentication failed')),
-    ).toBe(true);
-    expect(shouldReinitKeyv(new Error('ETIMEDOUT'))).toBe(true);
+  it.each([
+    ['password authentication failed for user "mcp"'],
+    ['terminating connection due to administrator command'],
+    ['Connection terminated unexpectedly'],
+    ['read ECONNRESET'],
+    ['connect ECONNREFUSED 10.0.0.1:5432'],
+    ['connect ETIMEDOUT'],
+    ['getaddrinfo ENOTFOUND ep-xyz.neon.tech'],
+  ])('matches %s', (msg) => {
+    expect(isPgConnectFailure(new Error(msg))).toBe(true);
+  });
+
+  it.each([
+    ['relation "mcpauth.tokens" does not exist'],
+    ['permission denied for schema mcpauth'],
+    ['invalid input syntax for type json'],
+    ['duplicate key value violates unique constraint'],
+  ])('does NOT match %s', (msg) => {
+    expect(isPgConnectFailure(new Error(msg))).toBe(false);
   });
 
   it('does NOT match unrelated errors', () => {
