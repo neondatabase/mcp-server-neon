@@ -59,7 +59,10 @@ const getPool = (): pg.Pool => {
     // An idle client whose connection the server ends (a compute restart)
     // errors on the pool; without a listener that is an uncaught exception.
     pool.on('error', (err) => {
-      logger.error('OAuth database idle connection error:', { err });
+      logger.error('OAuth database idle connection error:', {
+        message: err.message,
+        code: 'code' in err ? err.code : undefined,
+      });
     });
   }
   return pool;

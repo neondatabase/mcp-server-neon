@@ -22,9 +22,12 @@ let url: string;
 
 beforeAll(async () => {
   url = await ensureOauthDatabaseUrl();
-  const tagged = new URL(url);
-  tagged.searchParams.set('application_name', APPLICATION_NAME);
-  process.env.OAUTH_DATABASE_URL = tagged.toString();
+  // Through the transaction pooler an idle client holds no backend of its
+  // own, so its connection can only be targeted on the direct endpoint.
+  const direct = new URL(url);
+  direct.hostname = direct.hostname.replace('-pooler.', '.');
+  direct.searchParams.set('application_name', APPLICATION_NAME);
+  process.env.OAUTH_DATABASE_URL = direct.toString();
 });
 
 const waitFor = async (check: () => Promise<boolean>, timeoutMs = 10_000) => {
