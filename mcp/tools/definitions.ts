@@ -71,7 +71,7 @@ const HOST_TOOL_DRAFTS = [
     name: 'run_sql_transaction' as const,
     scope: 'querying',
     description:
-      'Execute multiple SQL statements as one transaction, one statement per array item. For a schema migration or other risky change, create_branch from the target branch, run the statements there with its branch_id, ask the user, then run them on the target branch, and delete_branch the test branch either way. NEVER run destructive SQL autonomously; always ask the user first.',
+      'Execute multiple SQL statements as one transaction, one statement per array item. For a schema migration or other risky change, create_branch from the target branch, run the statements there with its branch_id, verify the result with run_sql, ask the user, then run them on the target branch, and delete_branch the test branch either way. NEVER run destructive SQL autonomously; always ask the user first.',
     inputSchema: runSqlTransactionInputSchema,
     // Not `readOnlySafe`: each statement runs in the same session, so a
     // leading `COMMIT` or `SET TRANSACTION READ WRITE` leaves the read-only

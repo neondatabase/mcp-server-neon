@@ -829,6 +829,7 @@ describe('generated tool interface', () => {
     for (const step of [
       'create_branch',
       'branch_id',
+      'verify the result',
       'ask the user',
       'target branch',
       'delete_branch',

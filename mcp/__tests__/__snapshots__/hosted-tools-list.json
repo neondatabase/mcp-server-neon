@@ -79,7 +79,7 @@
   {
     "name": "run_sql_transaction",
     "title": "Run SQL Transaction",
-    "description": "Execute multiple SQL statements as one transaction, one statement per array item. For a schema migration or other risky change, create_branch from the target branch, run the statements there with its branch_id, ask the user, then run them on the target branch, and delete_branch the test branch either way. NEVER run destructive SQL autonomously; always ask the user first.",
+    "description": "Execute multiple SQL statements as one transaction, one statement per array item. For a schema migration or other risky change, create_branch from the target branch, run the statements there with its branch_id, verify the result with run_sql, ask the user, then run them on the target branch, and delete_branch the test branch either way. NEVER run destructive SQL autonomously; always ask the user first.",
     "inputSchema": {
       "type": "object",
       "properties": {

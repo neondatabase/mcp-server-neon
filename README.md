@@ -446,7 +446,7 @@ Notes:
 
 ### Migrations
 
-Test a schema change on a branch before applying it: `create_branch` from the target branch, run the statements with `run_sql_transaction` and that `branch_id`, check the result and ask the user, then run the same statements on the target branch and delete the test branch. `run_sql_transaction` takes one statement per array item, so a function body or a string that contains a semicolon needs no special handling.
+Test a schema change on a branch before applying it: `create_branch` from the target branch, run the statements with `run_sql_transaction` and that `branch_id`, verify the result with `run_sql` and ask the user, then run the same statements on the target branch and delete the test branch. `run_sql_transaction` takes one statement per array item, so a function body or a string that contains a semicolon needs no special handling.
 
 ## Development
 
