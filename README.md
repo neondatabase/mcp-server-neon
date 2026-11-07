@@ -222,7 +222,7 @@ Grant context (scope categories, project scoping, read-only mode, pinned Postgre
 }
 ```
 
-`roleName` pins the Postgres login role for the whole connection. Every SQL the server runs for you (`run_sql`, `run_sql_transaction`, `explain_sql_statement`, `get_database_tables`, `describe_table_schema`, `describe_branch`, `list_slow_queries`, `inspect_database`, and the SQL inside migrations and query tuning) logs in as that role, so Postgres grants decide what the agent can read or change. Without it, SQL runs as the database owner. Read-only mode still wraps queries in a `READ ONLY` transaction; the pinned role adds a limit that Postgres enforces on the login itself, so SQL that gets out of the transaction still has only the role's privileges.
+`roleName` pins the Postgres login role for the whole connection. Every SQL the server runs for you (`run_sql`, `run_sql_transaction`, `explain_sql_statement`, `get_database_tables`, `describe_table_schema`, `describe_branch`, `list_slow_queries`, `inspect_database`) logs in as that role, so Postgres grants decide what the agent can read or change. Without it, SQL runs as the database owner. Read-only mode still wraps queries in a `READ ONLY` transaction; the pinned role adds a limit that Postgres enforces on the login itself, so SQL that gets out of the transaction still has only the role's privileges.
 
 - The server resolves the role's credentials internally and never returns them. `get_connection_string` is not available on a pinned connection.
 - A `role_name` tool argument that differs from the pinned role is rejected. Omitting it uses the pinned role, never the owner.
@@ -251,8 +251,6 @@ Generated Management API tools that are GET and do not return secrets, plus `que
 - Generated Management API writes (`create_project`, `create_branch`, `delete_project`, …)
 - `get_connection_string` (the connection string carries a privileged role password, so it is withheld in read-only mode; copy it from the [Neon Console](https://console.neon.tech) instead)
 - `run_sql_transaction` (its statements run in one session, so a `COMMIT` or `SET TRANSACTION READ WRITE` statement would end the read-only transaction)
-- `prepare_database_migration`, `complete_database_migration`
-- `prepare_query_tuning`, `complete_query_tuning`
 
 </details>
 
@@ -386,18 +384,11 @@ Notes:
 - **`get_database_tables`**: Lists all tables within a specified Neon database.
 - **`describe_table_schema`**: Retrieves the schema definition of a specific table, detailing columns, data types, and constraints.
 
-**Database Migrations (Schema Changes):**
-
-- **`prepare_database_migration`**: Initiates a database migration process. Critically, it creates a temporary branch to apply and test the migration safely before affecting the main branch.
-- **`complete_database_migration`**: Finalizes and applies a prepared database migration to the main branch. This action merges changes from the temporary migration branch and cleans up temporary resources.
-
 **SQL Querying and Optimization:**
 
 - **`inspect_database`**: Runs one of 15 predefined read-only Postgres diagnostics against a branch — relation and index sizes, index and sequential-scan usage, active queries and locks, the heaviest and most frequent queries, cache hit rate and working-set size, autovacuum and bloat estimates, and replication state. Same checks as the `neon inspect db` CLI command. Omit `database_name` to cover every database on the branch; pass a name to inspect one. Four of them need the `pg_stat_statements` or `neon` extension.
 - **`list_slow_queries`**: Identifies performance bottlenecks by finding the slowest queries in a database. Requires the pg_stat_statements extension.
 - **`explain_sql_statement`**: Provides detailed execution plans for SQL queries to help identify performance bottlenecks.
-- **`prepare_query_tuning`**: Analyzes query performance and suggests optimizations, like index creation. Creates a temporary branch for safely testing these optimizations.
-- **`complete_query_tuning`**: Finalizes query tuning by either applying optimizations to the main branch or discarding them. Cleans up the temporary tuning branch.
 
 **Neon Auth** (`?category=neon_auth`):
 
@@ -455,9 +446,7 @@ Notes:
 
 ### Migrations
 
-Migrations are a way to manage changes to your database schema over time. With the Neon MCP server, LLMs are empowered to do migrations safely with separate "Start" (`prepare_database_migration`) and "Commit" (`complete_database_migration`) commands.
-
-The "Start" command accepts a migration and runs it in a new temporary branch. Upon returning, this command hints to the LLM that it should test the migration on this branch. The LLM can then run the "Commit" command to apply the migration to the original branch.
+Test a schema change on a branch before applying it: `create_branch` from the target branch, run the statements with `run_sql_transaction` and that `branch_id`, verify the result with `run_sql` and ask the user, then run the same statements on the target branch and delete the test branch. `run_sql_transaction` takes one statement per array item, so a function body or a string that contains a semicolon needs no special handling.
 
 ## Development
 

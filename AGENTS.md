@@ -187,7 +187,7 @@ infrastructure.
 
 - **Error Handling**: Tools throw errors which are caught by the server wrapper, logged to Sentry, and returned as structured error messages to the LLM.
 
-- **Stateless Design**: The server is designed for serverless deployment. Tools like migrations and query tuning create temporary branches but do NOT store state in memory. Instead, all context (branch IDs, migration SQL, etc.) is returned to the LLM, which passes it back to subsequent tool calls. This enables horizontal scaling on Vercel.
+- **Stateless Design**: The server is designed for serverless deployment and keeps no state in memory between tool calls. A multi-step workflow, such as testing a migration on a branch, is a sequence of calls the LLM makes with the IDs earlier calls returned. This enables horizontal scaling on Vercel.
 
 - **Read-Only Mode** (`mcp/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. Read-only mode is determined by priority: `X-Neon-Read-Only` header > `x-read-only` header (legacy) > OAuth scope (only `read` scope = read-only) > default (false). The module also exports `SCOPE_DEFINITIONS` for human-readable scope labels and `hasWriteScope()` to check for write permissions.
 
@@ -373,8 +373,6 @@ Code comments reference these files by path (e.g. `ai-notes/refresh-slo.md`).
 - **TypeScript Configuration**: Uses `bundler` module resolution for Next.js compatibility. Imports use extensionless paths (no `.js` suffix).
 - **Registry metadata version sync**: Keep root `server.json` `version` in sync with `package.json` `version`. CI enforces this via the PR workflow.
 - **Server metadata**: `server.json` `title`, `description`, `websiteUrl`, and `icons` are also the `serverInfo` sent on `initialize` and `server/discover`, and the Server Card fields (`lib/server-metadata.ts`). Edit them there only.
-
-- **Migration Pattern**: Tools like `prepare_database_migration` and `prepare_query_tuning` create temporary branches and return all context (branch IDs, SQL, database name, etc.) in the response. The LLM must pass this context back to subsequent `complete_*` tools. No state is stored server-side, enabling serverless deployment.
 
 - **Neon API Client**: Created in `mcp/neon-client.ts` on top of `@neon/sdk`. Every Neon request a tool makes goes through it — there is no raw-HTTP escape hatch — and all tool handlers receive a pre-configured `neonClient` instance.
 

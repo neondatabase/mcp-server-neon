@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+**Breaking:** `prepare_database_migration`, `complete_database_migration`, `prepare_query_tuning`, and `complete_query_tuning` are removed. To test a schema change, `create_branch` from the target branch, run the statements with `run_sql_transaction` and that `branch_id`, then run them on the target branch and `delete_branch` the test branch; the `run_sql_transaction` description says so. `run_sql_transaction` takes one statement per array item, so semicolons inside strings, function bodies, and comments no longer break a migration (#201). The next release is 3.0.0.
+
 OAuth sign-in, token refresh, and API-key requests keep working after the OAuth database drops its connections, for example on a compute restart. Before, one dropped connection could leave every token store on a server instance failing with `Cannot use a pool after calling end on the pool`, and an idle dropped connection raised an uncaught exception.
 
 `run_sql` and `run_sql_transaction` return at most `max_rows` rows per statement (default 100, up to 10,000). When rows were cut, a second content block reports `totalRowCount`, `truncated`, and a note on how to see the rest. A result that fits is unchanged.

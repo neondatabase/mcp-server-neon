@@ -3,10 +3,6 @@ import { Api, Organization } from '../neon-client';
 import { ToolHandlerExtraParams } from './types';
 import { NotFoundError } from '../server/errors';
 
-export const splitSqlStatements = (sql: string) => {
-  return sql.split(';').filter(Boolean);
-};
-
 // One read-only SELECT over the system catalogs: all databases, then the
 // current database's schemas and objects as an indented tree. It returns the
 // rows the former `show_db_tree()` helper did, less the helper's own entry, but
