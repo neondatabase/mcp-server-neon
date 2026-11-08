@@ -1,3 +1,4 @@
+import he from 'he';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET } from '../../app/callback/route';
@@ -694,6 +695,57 @@ describe('/callback route integration', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'invalid_request',
       error_description: 'Missing code or state',
+    });
+  });
+
+  describe('completion page', () => {
+    const appRequest = {
+      responseType: 'code',
+      clientId: 'client-123',
+      redirectUri: 'cursor://anysphere.cursor-mcp/oauth/callback',
+      scope: ['read', 'write'],
+      state: 'client-state',
+    };
+
+    function returnLink(html: string): URL {
+      const href = /id="return-link" href="([^"]+)"/.exec(html)?.[1];
+      expect(href).toBeTruthy();
+      return new URL(he.decode(href!));
+    }
+
+    it('renders the success page for a native app redirect and hands it the code', async () => {
+      const seeded = await seedApprovedTransaction({ request: appRequest });
+
+      const response = await GET(buildRequest(seeded.id, seeded.cookie));
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      const html = await response.text();
+      expect(html).toContain('You’ve approved access to Neon');
+      expect(html).toContain('Copy prompt');
+      const link = returnLink(html);
+      expect(link.protocol).toBe('cursor:');
+      expect(link.searchParams.get('code')).toBeTruthy();
+      expect(link.searchParams.get('state')).toBe('client-state');
+      expect(link.searchParams.get('iss')).toBe(SERVER_HOST);
+      expect(response.headers.getSetCookie().join('\n')).toContain(
+        `${consentCookieName(seeded.id, false)}=;`,
+      );
+    });
+
+    it('renders the cancelled page and relays access_denied to a native app', async () => {
+      const seeded = await seedApprovedTransaction({ request: appRequest });
+
+      const response = await GET(
+        buildErrorRequest(seeded.id, seeded.cookie, 'access_denied'),
+      );
+
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      expect(html).toContain('Connection cancelled');
+      expect(html).not.toContain('Copy prompt');
+      expect(returnLink(html).searchParams.get('error')).toBe('access_denied');
     });
   });
 

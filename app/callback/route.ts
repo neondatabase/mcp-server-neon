@@ -22,6 +22,7 @@ import {
   isAuthTransactionId,
 } from '../../mcp/oauth/browser-binding';
 import { AUTH_RESTART_DESCRIPTION } from '../../mcp/oauth/consent-html-headers';
+import { presentToBrowser } from '../../mcp/oauth/auth-complete-response';
 import type { DownstreamAuthRequest } from '../../mcp/oauth/downstream-auth-request';
 import type { AuthTransaction } from '../../mcp/oauth/auth-transaction';
 
@@ -351,6 +352,10 @@ async function consumeBoundTransaction(
 }
 
 export async function GET(request: NextRequest) {
+  return presentToBrowser(request, await handleCallback(request));
+}
+
+async function handleCallback(request: NextRequest): Promise<NextResponse> {
   const sloStartMs = Date.now();
   // Captured for the outer catch so an internal_error event carries a
   // usable clientId in the SLO line. Without this, post-mortems on
