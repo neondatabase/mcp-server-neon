@@ -20,6 +20,14 @@ export const OAUTH_PAGE_BASE_CSS = `
       --danger: #ff7d87;
     }
     * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.375;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      background: var(--bg);
+    }
     [hidden] { display: none !important; }
     button, input, textarea { font: inherit; letter-spacing: inherit; }
     button { cursor: pointer; }

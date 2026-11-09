@@ -3,6 +3,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET } from '../../app/callback/route';
 import { model } from '../oauth/model';
+import { track } from '../analytics/analytics';
 import { exchangeCode } from '../../lib/oauth/client';
 import { resolveAccountFromAuth } from '../server/account';
 import { logger } from '../utils/logger';
@@ -741,6 +742,17 @@ describe('/callback route integration', () => {
       expect(response.headers.getSetCookie().join('\n')).toContain(
         `${consentCookieName(seeded.id, false)}=;`,
       );
+      expect(track).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-1',
+          event: 'auth_complete_viewed',
+          properties: expect.objectContaining({
+            outcome: 'success',
+            clientId: 'client-123',
+            clientName: 'Callback Test Client',
+          }),
+        }),
+      );
     });
 
     it('renders the cancelled page and relays access_denied to a native app', async () => {
@@ -755,6 +767,18 @@ describe('/callback route integration', () => {
       expect(html).toContain('Connection cancelled');
       expect(html).not.toContain('Copy prompt');
       expect(returnLink(html).searchParams.get('error')).toBe('access_denied');
+      expect(track).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'auth_complete_viewed',
+          properties: expect.objectContaining({
+            outcome: 'cancelled',
+            clientId: 'client-123',
+          }),
+        }),
+      );
+      expect(vi.mocked(track).mock.calls.at(-1)![0]).not.toHaveProperty(
+        'userId',
+      );
     });
   });
 

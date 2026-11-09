@@ -151,11 +151,7 @@ function renderAgentTooling(): string {
       </section>`;
 }
 
-function script(
-  hasReturn: boolean,
-  hasTooling: boolean,
-  pageViewId: string | undefined,
-): string {
+function script(hasReturn: boolean, hasTooling: boolean): string {
   // The callback's code and state are single use. Dropping them from the
   // address bar keeps a reload or restored tab from replaying a spent
   // transaction, which would show a failure and count against the auth SLO.
@@ -164,16 +160,12 @@ function script(
     history.replaceState(null, '', location.pathname);`,
   ];
   // sendBeacon still delivers when the click leaves the page or opens the app.
-  parts.push(
-    pageViewId
-      ? `
+  parts.push(`
+    var pageViewId = document.body.dataset.pageViewId;
     function trackAction(action) {
-      if (!navigator.sendBeacon) return;
-      navigator.sendBeacon(${JSON.stringify(AUTH_COMPLETE_EVENTS_PATH)}, JSON.stringify({ pageViewId: ${JSON.stringify(pageViewId)}, action: action }));
-    }`
-      : `
-    function trackAction() {}`,
-  );
+      if (!pageViewId || !navigator.sendBeacon) return;
+      navigator.sendBeacon(${JSON.stringify(AUTH_COMPLETE_EVENTS_PATH)}, JSON.stringify({ pageViewId: pageViewId, action: action }));
+    }`);
   if (hasReturn) {
     parts.push(`
     var returnLink = document.getElementById('return-link');
@@ -230,6 +222,9 @@ export function renderAuthCompleteHtml(props: AuthCompletePageProps): string {
   const nonce = he.escape(props.nonce);
   const subtitle =
     props.outcome === 'failed' && props.message ? props.message : text.subtitle;
+  const pageViewAttribute = props.pageViewId
+    ? ` data-page-view-id="${he.escape(props.pageViewId)}"`
+    : '';
   const returnHtml = returnUrl
     ? `<p class="return">Didn’t open? <a id="return-link" href="${he.escape(returnUrl)}">Return to your app</a></p>`
     : '';
@@ -244,14 +239,8 @@ export function renderAuthCompleteHtml(props: AuthCompletePageProps): string {
   ${OAUTH_PAGE_FONT_LINKS}
   <style nonce="${nonce}">${OAUTH_PAGE_BASE_CSS}
     body {
-      margin: 0;
       padding: 80px 24px;
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       font-size: 16px;
-      line-height: 1.375;
-      letter-spacing: -0.02em;
-      color: var(--text);
-      background: var(--bg);
       -webkit-font-smoothing: antialiased;
     }
     h1, h2, p { margin: 0; }
@@ -290,7 +279,7 @@ export function renderAuthCompleteHtml(props: AuthCompletePageProps): string {
     }
   </style>
 </head>
-<body>
+<body${pageViewAttribute}>
   <main>
     <div class="card">
       <header class="complete-header">
@@ -303,7 +292,7 @@ export function renderAuthCompleteHtml(props: AuthCompletePageProps): string {
     </div>
     <p class="close-hint">You can close this window.</p>
   </main>
-  <script nonce="${nonce}">${script(Boolean(returnUrl), showTooling, props.pageViewId)}
+  <script nonce="${nonce}">${script(Boolean(returnUrl), showTooling)}
   </script>
 </body>
 </html>`;

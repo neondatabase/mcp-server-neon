@@ -202,7 +202,7 @@ describe('auth_complete_viewed', () => {
       },
     });
     expect(await response.text()).toContain(
-      `pageViewId: ${JSON.stringify(event.anonymousId)}`,
+      `<body data-page-view-id="${event.anonymousId}">`,
     );
   });
 

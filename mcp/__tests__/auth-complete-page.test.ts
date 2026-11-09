@@ -149,8 +149,9 @@ describe('action beacons', () => {
       returnUrl: 'cursor://cb',
       pageViewId,
     });
+    expect(html).toContain(`<body data-page-view-id="${pageViewId}">`);
     expect(html).toContain(
-      `navigator.sendBeacon("/api/auth-complete/events", JSON.stringify({ pageViewId: "${pageViewId}", action: action }))`,
+      'navigator.sendBeacon("/api/auth-complete/events", JSON.stringify({ pageViewId: pageViewId, action: action }))',
     );
     for (const action of [
       'prompt_copied',
@@ -164,7 +165,18 @@ describe('action beacons', () => {
 
   it('sends nothing without a page view id', () => {
     const html = render({ outcome: 'success' });
-    expect(html).not.toContain('sendBeacon');
-    expect(html).toContain('function trackAction() {}');
+    expect(html).toContain('<body>');
+    expect(html).toContain('if (!pageViewId || !navigator.sendBeacon) return;');
+  });
+
+  it('keeps the page view id out of the script', () => {
+    const html = render({
+      outcome: 'success',
+      pageViewId: '"></body><script>x',
+    });
+    expect(html).toContain(
+      'data-page-view-id="&quot;&gt;&lt;/body&gt;&lt;script&gt;x"',
+    );
+    expect(html).not.toContain('"></body><script>x');
   });
 });

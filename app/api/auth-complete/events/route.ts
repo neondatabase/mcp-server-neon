@@ -7,7 +7,7 @@ import {
 } from '../../../../mcp/oauth/auth-complete-page';
 import { requestPublicOrigin } from '../../../../mcp/oauth/consent-canonical-url';
 
-const MAX_BODY_BYTES = 256;
+const MAX_BODY_LENGTH = 256;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function isAction(value: unknown): value is AuthCompleteAction {
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.text();
-  if (body.length > MAX_BODY_BYTES) {
+  if (body.length > MAX_BODY_LENGTH) {
     return new NextResponse(null, { status: 413 });
   }
   let event: unknown;

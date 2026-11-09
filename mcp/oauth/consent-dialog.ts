@@ -879,15 +879,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
   ${OAUTH_PAGE_FONT_LINKS}
   <style>${OAUTH_PAGE_BASE_CSS}
     html, body { height: 100%; overflow: hidden; }
-    body {
-      margin: 0;
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 15px;
-      line-height: 1.375;
-      letter-spacing: -0.02em;
-      color: var(--text);
-      background: var(--bg);
-    }
+    body { font-size: 15px; }
     button, summary, label { -webkit-tap-highlight-color: transparent; }
     .page {
       display: flex;
