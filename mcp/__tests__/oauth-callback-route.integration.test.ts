@@ -1,7 +1,9 @@
+import he from 'he';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET } from '../../app/callback/route';
 import { model } from '../oauth/model';
+import { track } from '../analytics/analytics';
 import { exchangeCode } from '../../lib/oauth/client';
 import { resolveAccountFromAuth } from '../server/account';
 import { logger } from '../utils/logger';
@@ -39,6 +41,15 @@ vi.mock('../server/api', () => ({
 
 vi.mock('../server/account', () => ({
   resolveAccountFromAuth: vi.fn(),
+}));
+
+vi.mock('../analytics/analytics', () => ({
+  track: vi.fn(),
+  flushAnalytics: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@vercel/functions', () => ({
+  waitUntil: vi.fn(),
 }));
 
 function buildRequest(state: string, cookie: string): NextRequest {
@@ -694,6 +705,188 @@ describe('/callback route integration', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'invalid_request',
       error_description: 'Missing code or state',
+    });
+  });
+
+  describe('completion page', () => {
+    const appRequest = {
+      responseType: 'code',
+      clientId: 'client-123',
+      redirectUri: 'cursor://anysphere.cursor-mcp/oauth/callback',
+      scope: ['read', 'write'],
+      state: 'client-state',
+    };
+
+    function returnLink(html: string): URL {
+      const href = /id="return-link" href="([^"]+)"/.exec(html)?.[1];
+      expect(href).toBeTruthy();
+      return new URL(he.decode(href!));
+    }
+
+    // The page is only for browsers, which send this on every navigation.
+    function fromBrowser(request: NextRequest): NextRequest {
+      request.headers.set('accept', 'text/html,application/xhtml+xml');
+      return request;
+    }
+
+    it('renders the success page for a native app redirect and hands it the code', async () => {
+      const seeded = await seedApprovedTransaction({ request: appRequest });
+
+      const response = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      const html = await response.text();
+      expect(html).toContain('You’ve approved access to Neon');
+      expect(html).toContain('Copy prompt');
+      const link = returnLink(html);
+      expect(link.protocol).toBe('cursor:');
+      expect(link.searchParams.get('code')).toBeTruthy();
+      expect(link.searchParams.get('state')).toBe('client-state');
+      expect(link.searchParams.get('iss')).toBe(SERVER_HOST);
+      expect(response.headers.getSetCookie().join('\n')).toContain(
+        `${consentCookieName(seeded.id, false)}=;`,
+      );
+      expect(track).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-1',
+          event: 'auth_complete_viewed',
+          properties: expect.objectContaining({
+            outcome: 'success',
+            clientId: 'client-123',
+            clientName: 'Callback Test Client',
+          }),
+        }),
+      );
+    });
+
+    it('shows success when the registered redirect_uri carries an error param', async () => {
+      const seeded = await seedApprovedTransaction({
+        request: {
+          ...appRequest,
+          redirectUri: `${appRequest.redirectUri}?error=access_denied`,
+        },
+      });
+
+      const response = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      expect(html).toContain('You’ve approved access to Neon');
+      expect(returnLink(html).searchParams.get('code')).toBeTruthy();
+    });
+
+    it('renders the cancelled page and relays access_denied to a native app', async () => {
+      const seeded = await seedApprovedTransaction({ request: appRequest });
+
+      const response = await GET(
+        fromBrowser(
+          buildErrorRequest(seeded.id, seeded.cookie, 'access_denied'),
+        ),
+      );
+
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      expect(html).toContain('Connection cancelled');
+      expect(html).not.toContain('Copy prompt');
+      expect(returnLink(html).searchParams.get('error')).toBe('access_denied');
+      expect(track).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'auth_complete_viewed',
+          properties: expect.objectContaining({
+            outcome: 'cancelled',
+            clientId: 'client-123',
+            clientName: 'Callback Test Client',
+          }),
+        }),
+      );
+      expect(vi.mocked(track).mock.calls.at(-1)![0]).not.toHaveProperty(
+        'userId',
+      );
+    });
+
+    it('keeps the query on a retryable failure so a reload completes it', async () => {
+      const seeded = await seedApprovedTransaction({ request: appRequest });
+      vi.mocked(model.getClient).mockRejectedValueOnce(
+        new ClientMetadataUnavailableError('answered 502'),
+      );
+
+      const failed = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+      expect(failed.status).toBe(503);
+      expect(failed.headers.get('retry-after')).toBe('30');
+      expect(await failed.text()).not.toContain('history.replaceState');
+
+      const retried = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+      expect(retried.status).toBe(200);
+      expect(await retried.text()).toContain('You’ve approved access to Neon');
+    });
+
+    it('lets a reload retry a server failure before the transaction is used up', async () => {
+      const seeded = await seedApprovedTransaction({ request: appRequest });
+      vi.mocked(model.getClient).mockRejectedValueOnce(
+        new Error('unexpected non-pg failure'),
+      );
+
+      const failed = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+      expect(failed.status).toBe(500);
+      const html = await failed.text();
+      expect(html).toContain('Reload this page in a moment to try again.');
+      expect(html).not.toContain('history.replaceState');
+
+      const retried = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+      expect(retried.status).toBe(200);
+    });
+
+    it('drops the query after a server failure that used up the transaction', async () => {
+      const seeded = await seedApprovedTransaction({ request: appRequest });
+      vi.mocked(model.saveAuthorizationCode).mockRejectedValueOnce(
+        new Error('unexpected non-pg failure'),
+      );
+
+      const failed = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+      expect(failed.status).toBe(500);
+      const html = await failed.text();
+      expect(html).toContain('Start again from your app.');
+      expect(html).toContain('history.replaceState');
+    });
+
+    it('keeps the plain redirect for a browser returning to a loopback client', async () => {
+      const seeded = await seedApprovedTransaction();
+
+      const response = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+
+      expect(response.status).toBe(307);
+      const location = new URL(response.headers.get('location')!);
+      expect(location.origin).toBe('http://127.0.0.1:55667');
+      expect(location.searchParams.get('code')).toBeTruthy();
+      expect(location.searchParams.get('state')).toBe('client-state');
+      expect(track).not.toHaveBeenCalled();
+    });
+
+    it('keeps the native app redirect for a non-browser caller', async () => {
+      const seeded = await seedApprovedTransaction({ request: appRequest });
+
+      const response = await GET(buildRequest(seeded.id, seeded.cookie));
+
+      expect(response.status).toBe(307);
+      expect(response.headers.get('location')).toMatch(/^cursor:/);
     });
   });
 
