@@ -197,6 +197,27 @@ describe('refresh token client binding', () => {
     expect(pair(replay.body)).toEqual(pair(second.body));
     expect(upstream.calls).toBe(2);
   });
+
+  it('attributes a cached rotation without a client whose new pair was never persisted', async () => {
+    const rotated = await seedRefreshToken();
+    const cached = {
+      accessToken: `at-${randomUUID()}`,
+      refreshToken: `rt-${randomUUID()}`,
+      expiresAt: Date.now() + 3_600_000,
+      scope: 'read write',
+    };
+    await model.saveRefreshResult(rotated, cached);
+
+    expectRejected(await refresh(other, rotated));
+    const replay = await refresh(owner, rotated);
+
+    expect(replay.status).toBe(200);
+    expect(pair(replay.body)).toEqual([
+      cached.accessToken,
+      cached.refreshToken,
+    ]);
+    expect(upstream.calls).toBe(0);
+  });
 });
 
 describe('refresh token revocation client binding', () => {
