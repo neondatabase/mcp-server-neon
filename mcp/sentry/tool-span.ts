@@ -14,6 +14,10 @@ const SPAN_STATUS_ERROR = 2;
 // not span attributes.
 const CLIENT_NAME_MAX_LENGTH = 200;
 
+// Sentry's server-side scrubbing stores any attribute whose key contains
+// "auth" as [Filtered], so the auth method goes under a neutral key.
+const AUTH_METHOD_ATTRIBUTE = 'mcp.caller';
+
 export function toolSpanClientAttributes(
   agent: IdentifiedClient,
   authMethod: string,
@@ -21,7 +25,7 @@ export function toolSpanClientAttributes(
   return {
     'mcp.client.name': agent.clientName.slice(0, CLIENT_NAME_MAX_LENGTH),
     'client.application': agent.clientApplication,
-    'auth.method': authMethod,
+    [AUTH_METHOD_ATTRIBUTE]: authMethod,
   };
 }
 

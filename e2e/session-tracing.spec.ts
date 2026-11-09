@@ -183,7 +183,7 @@ test.describe('Session tracing', () => {
         expect(span?.data).toMatchObject({
           'mcp.method.name': 'tools/call',
           'mcp.tool.result.is_error': false,
-          'auth.method': 'anonymous',
+          'mcp.caller': 'anonymous',
         });
         expect(span?.data['mcp.tool.name']).toBe(span?.data.tool_name);
       }
