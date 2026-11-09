@@ -11,12 +11,23 @@ import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
 import { seedPendingTransaction } from './auth-transaction-fixtures';
 import { consentCookieName } from '../oauth/browser-binding';
 import { neon } from '@neondatabase/serverless';
+import he from 'he';
+import { track } from '../analytics/analytics';
 
 vi.mock('../oauth/model', () => ({
   model: {
     getClient: vi.fn(),
     getClientRegisterHeaders: vi.fn(),
   },
+}));
+
+vi.mock('../analytics/analytics', () => ({
+  track: vi.fn(),
+  flushAnalytics: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@vercel/functions', () => ({
+  waitUntil: vi.fn(),
 }));
 
 vi.mock('../../lib/oauth/client', () => ({
@@ -79,10 +90,12 @@ async function postAuthorize({
   state,
   cookie,
   fields,
+  accept,
 }: {
   state: string;
   cookie: string;
   fields: Array<[string, string]>;
+  accept?: string;
 }): Promise<Response> {
   const form = new FormData();
   form.set('state', state);
@@ -92,7 +105,7 @@ async function postAuthorize({
   return POST(
     new NextRequest(`${SERVER_HOST}/api/authorize`, {
       method: 'POST',
-      headers: { cookie },
+      headers: { cookie, ...(accept ? { accept } : {}) },
       body: form,
     }),
   );
@@ -804,6 +817,79 @@ describe('/api/authorize route integration', () => {
     expect(location.searchParams.get('iss')).toBe(SERVER_HOST);
     expect(await authTransactions.getById(state)).toBeUndefined();
     expect(upstreamAuth).not.toHaveBeenCalled();
+  });
+
+  describe('cancel from the consent form', () => {
+    const APP_REDIRECT = 'cursor://anysphere.cursor-mcp/oauth/callback';
+    const BROWSER_ACCEPT = 'text/html,application/xhtml+xml';
+
+    async function cancel(redirectUri: string, accept?: string) {
+      vi.mocked(model.getClient).mockResolvedValue({
+        ...VALID_CLIENT,
+        redirect_uris: [redirectUri],
+      } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+      const getResponse = await GET(
+        buildAuthorizeRequest({}, 'read write', {
+          redirect_uri: redirectUri,
+          state: 'orig-state',
+        }),
+      );
+      const state = extractState(await getResponse.text());
+      const response = await postAuthorize({
+        state,
+        cookie: cookieHeader(getResponse),
+        fields: [['action', 'cancel']],
+        accept,
+      });
+      return { response, state };
+    }
+
+    it('shows the cancelled page to a browser cancelling for a desktop app', async () => {
+      const { response, state } = await cancel(APP_REDIRECT, BROWSER_ACCEPT);
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      const html = await response.text();
+      expect(html).toContain('<h1>Connection cancelled</h1>');
+      const href = /id="return-link" href="([^"]+)"/.exec(html)?.[1];
+      const link = new URL(he.decode(href ?? ''));
+      expect(link.protocol).toBe('cursor:');
+      expect(link.searchParams.get('error')).toBe('access_denied');
+      expect(link.searchParams.get('state')).toBe('orig-state');
+      expect(response.headers.getSetCookie().join('\n')).toContain(
+        `${consentCookieName(state, false)}=;`,
+      );
+      expect(await authTransactions.getById(state)).toBeUndefined();
+      expect(track).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'auth_complete_viewed',
+          properties: expect.objectContaining({
+            outcome: 'cancelled',
+            clientId: VALID_CLIENT.id,
+            clientName: VALID_CLIENT.client_name,
+          }),
+        }),
+      );
+    });
+
+    it.each([
+      [
+        'a browser returning to a loopback client',
+        VALID_CLIENT.redirect_uris[0],
+        BROWSER_ACCEPT,
+      ],
+      ['a non-browser caller for a desktop app', APP_REDIRECT, undefined],
+    ])(
+      'keeps the plain redirect for %s',
+      async (_label, redirectUri, accept) => {
+        const { response } = await cancel(redirectUri!, accept);
+
+        expect(response.status).toBe(303);
+        const location = new URL(response.headers.get('location') ?? '');
+        expect(location.searchParams.get('error')).toBe('access_denied');
+        expect(track).not.toHaveBeenCalled();
+      },
+    );
   });
 
   it('lets only one of two concurrent approvals win', async () => {

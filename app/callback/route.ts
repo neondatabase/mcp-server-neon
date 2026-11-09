@@ -22,6 +22,11 @@ import {
   isAuthTransactionId,
 } from '../../mcp/oauth/browser-binding';
 import { AUTH_RESTART_DESCRIPTION } from '../../mcp/oauth/consent-html-headers';
+import {
+  clientNameForPage,
+  presentToBrowser,
+  withCompletionContext,
+} from '../../mcp/oauth/auth-complete-response';
 import type { DownstreamAuthRequest } from '../../mcp/oauth/downstream-auth-request';
 import type { AuthTransaction } from '../../mcp/oauth/auth-transaction';
 
@@ -351,12 +356,19 @@ async function consumeBoundTransaction(
 }
 
 export async function GET(request: NextRequest) {
+  return presentToBrowser(request, await handleCallback(request));
+}
+
+async function handleCallback(request: NextRequest): Promise<NextResponse> {
   const sloStartMs = Date.now();
   // Captured for the outer catch so an internal_error event carries a
   // usable clientId in the SLO line. Without this, post-mortems on
   // /callback failures (e.g. the 2026-05-12 OAUTH_DATABASE_URL compute
   // scale-from-zero blip) can't be correlated to a specific user.
   let clientIdForSlo: string | undefined;
+  // Until the one-time transaction is used up, a server failure leaves this
+  // callback URL valid, so the browser can retry it by reloading.
+  let transactionConsumed = false;
   try {
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
@@ -430,10 +442,20 @@ export async function GET(request: NextRequest) {
             // all of them). See ai-notes/auth-callback-slo.md.
             downstreamRequest: summarizeDownstreamRequest(state, requestParams),
           });
-          return clearTransactionCookie(
-            NextResponse.redirect(redirectUrl.href),
-            state,
-            request,
+          return withCompletionContext(
+            clearTransactionCookie(
+              NextResponse.redirect(redirectUrl.href),
+              state,
+              request,
+            ),
+            {
+              clientId: requestParams.clientId,
+              clientName: await clientNameForPage(
+                requestParams.clientId,
+                requestParams.redirectUri,
+              ),
+              relayedError: upstreamError,
+            },
           );
         } catch (decodeErr) {
           // State decode failed — fall through to JSON 400 below.
@@ -543,6 +565,7 @@ export async function GET(request: NextRequest) {
       state,
       browserSecret,
     );
+    transactionConsumed = true;
     if (!approved) {
       emitAuthCallbackSlo('state_decode_failed', sloStartMs, {
         reason: 'transaction_not_approved',
@@ -687,10 +710,13 @@ export async function GET(request: NextRequest) {
     redirectUrl.searchParams.set('iss', SERVER_HOST);
 
     emitAuthCallbackSlo('success', sloStartMs, { clientId });
-    return clearTransactionCookie(
-      NextResponse.redirect(redirectUrl.href),
-      state,
-      request,
+    return withCompletionContext(
+      clearTransactionCookie(
+        NextResponse.redirect(redirectUrl.href),
+        state,
+        request,
+      ),
+      { userId: userInfo.id, clientId, clientName: client.client_name },
     );
   } catch (error: unknown) {
     // Catch-all for anything not classified above (KV failures, neon API
@@ -707,7 +733,10 @@ export async function GET(request: NextRequest) {
       clientId: clientIdForSlo,
       reason,
     });
-    return handleOAuthError(error, 'OAuth callback error');
+    const response = handleOAuthError(error, 'OAuth callback error');
+    return transactionConsumed || response.status < 500
+      ? response
+      : withCompletionContext(response, { retryable: true });
   }
 }
 
