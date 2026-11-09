@@ -27,6 +27,7 @@ const HOST_READ_ONLY_TOOLS = [
   'get_doc',
   'get_neon_auth_config',
   'inspect_database',
+  'list_incidents',
   'list_organizations',
   'list_slow_queries',
   'run_sql',
@@ -94,7 +95,7 @@ describe('NEON_TOOLS definitions', () => {
   });
 
   it('marks private Neon operations closed-world and public-capable ones open-world', () => {
-    expect(NEON_TOOLS).toHaveLength(139);
+    expect(NEON_TOOLS).toHaveLength(140);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
     expect(generated).toHaveLength(119);
     expect(
@@ -104,6 +105,7 @@ describe('NEON_TOOLS definitions', () => {
     ).toEqual([
       'create_storage_bucket',
       'get_doc',
+      'list_incidents',
       'search_docs',
       'send_auth_test_email',
       'send_feedback',

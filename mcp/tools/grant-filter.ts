@@ -11,13 +11,15 @@ import type { NeonTool } from './tool-definition';
 
 /**
  * Tools that are always available regardless of scope categories.
- * These are discovery/navigation tools the LLM needs to function, plus
- * send_feedback so users can always reach the Neon team.
+ * These are discovery/navigation tools the LLM needs to function,
+ * send_feedback so users can always reach the Neon team, and list_incidents
+ * so an agent can tell a Neon incident from its own mistake.
  */
 export const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
   'search',
   'fetch',
   'send_feedback',
+  'list_incidents',
 ]);
 
 /**
@@ -25,7 +27,11 @@ export const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
  * the Neon API client, so they are safe to call anonymously.
  */
 export function isDocsOnlyTool(tool: Pick<NeonTool, 'name' | 'scope'>) {
-  return tool.scope === 'docs' || tool.name === 'send_feedback';
+  return (
+    tool.scope === 'docs' ||
+    tool.name === 'send_feedback' ||
+    tool.name === 'list_incidents'
+  );
 }
 
 // Hosts may cache this schema and its instructions independently of the grant.
@@ -277,8 +283,8 @@ export function getAccessControlWarnings(
 
   if (grant.scopes !== null && grant.scopes.length === 0) {
     const discoveryToolsText = grant.projectId
-      ? 'Only the "send_feedback" tool is available.'
-      : 'Only the "search", "fetch", and "send_feedback" tools are available.';
+      ? 'Only the "send_feedback" and "list_incidents" tools are available.'
+      : 'Only the "search", "fetch", "send_feedback", and "list_incidents" tools are available.';
     warnings.push(
       '⚠️ Warning: No valid scope categories are set. ' +
         `${discoveryToolsText} ` +

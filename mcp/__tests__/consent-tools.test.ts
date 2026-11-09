@@ -36,28 +36,33 @@ describe('filterConsentCatalog', () => {
     ).toEqual(getFilteredTools(context, false).map((tool) => tool.name));
   });
 
-  it('keeps search, fetch, and send_feedback for no categories without a project', () => {
+  it('keeps search, fetch, send_feedback, and list_incidents for no categories without a project', () => {
     const names = filterConsentCatalog(
       catalog,
       { projectId: null, scopes: [] },
       true,
     ).map((tool) => tool.name);
-    expect(names.sort()).toEqual(['fetch', 'search', 'send_feedback']);
+    expect(names.sort()).toEqual([
+      'fetch',
+      'list_incidents',
+      'search',
+      'send_feedback',
+    ]);
   });
 
-  it('has only send_feedback for no categories with a project', () => {
+  it('has only send_feedback and list_incidents for no categories with a project', () => {
     expect(
       filterConsentCatalog(
         catalog,
         { projectId: 'proj-123', scopes: [] },
         true,
       ).map((tool) => tool.name),
-    ).toEqual(['send_feedback']);
+    ).toEqual(['send_feedback', 'list_incidents']);
   });
 
   it('can stay at or below the collapse threshold while hidden write tools exceed it', () => {
-    const grant = { projectId: null, scopes: ['data_api'] as const };
-    const context = { projectId: null, scopes: [...grant.scopes] };
+    const grant = { projectId: 'proj-123', scopes: ['data_api'] as const };
+    const context = { projectId: grant.projectId, scopes: [...grant.scopes] };
     const visible = filterConsentCatalog(catalog, context, false);
     const withWrites = filterConsentCatalog(catalog, context, true);
     const hiddenWrites = withWrites.length - visible.length;
