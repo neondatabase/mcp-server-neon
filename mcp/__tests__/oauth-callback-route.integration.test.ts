@@ -763,6 +763,24 @@ describe('/callback route integration', () => {
       );
     });
 
+    it('shows success when the registered redirect_uri carries an error param', async () => {
+      const seeded = await seedApprovedTransaction({
+        request: {
+          ...appRequest,
+          redirectUri: `${appRequest.redirectUri}?error=access_denied`,
+        },
+      });
+
+      const response = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      expect(html).toContain('You’ve approved access to Neon');
+      expect(returnLink(html).searchParams.get('code')).toBeTruthy();
+    });
+
     it('renders the cancelled page and relays access_denied to a native app', async () => {
       const seeded = await seedApprovedTransaction({ request: appRequest });
 

@@ -447,7 +447,7 @@ async function handleCallback(request: NextRequest): Promise<NextResponse> {
               state,
               request,
             ),
-            { clientId: requestParams.clientId },
+            { clientId: requestParams.clientId, relayedError: upstreamError },
           );
         } catch (decodeErr) {
           // State decode failed — fall through to JSON 400 below.

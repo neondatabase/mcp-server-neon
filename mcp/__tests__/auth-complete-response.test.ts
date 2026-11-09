@@ -25,6 +25,14 @@ function callbackRequest(query = '', accept?: string): NextRequest {
   });
 }
 
+/** A native-app redirect, tagged the way /callback tags it. */
+function appRedirect(query: string, relayedError?: string): NextResponse {
+  return withCompletionContext(
+    NextResponse.redirect(`${APP_CALLBACK}${query}`),
+    relayedError ? { relayedError } : {},
+  );
+}
+
 function returnLink(html: string): URL | undefined {
   const href = /id="return-link" href="([^"]+)"/.exec(html)?.[1];
   return href ? new URL(he.decode(href)) : undefined;
@@ -37,16 +45,26 @@ describe('presentToBrowser', () => {
 
   describe('native app redirects', () => {
     it.each([
-      ['?code=c&state=s', 'You’ve approved access to Neon', true],
-      ['?error=access_denied&state=s', 'Connection cancelled', false],
-      ['?error=server_error&state=s', 'Couldn’t connect to Neon', false],
+      ['?code=c&state=s', undefined, 'You’ve approved access to Neon', true],
+      [
+        '?error=access_denied&state=s',
+        'access_denied',
+        'Connection cancelled',
+        false,
+      ],
+      [
+        '?error=server_error&state=s',
+        'server_error',
+        'Couldn’t connect to Neon',
+        false,
+      ],
     ])(
       '%s renders "%s" and hands the redirect back to the app',
-      async (query, title, hasOnboard) => {
+      async (query, relayedError, title, hasOnboard) => {
         const location = `${APP_CALLBACK}${query}`;
         const response = await presentToBrowser(
           callbackRequest('', BROWSER_ACCEPT),
-          NextResponse.redirect(location),
+          appRedirect(query, relayedError),
         );
 
         expect(response.status).toBe(200);
@@ -63,8 +81,9 @@ describe('presentToBrowser', () => {
     it('relays the error_description to the app without showing it', async () => {
       const response = await presentToBrowser(
         callbackRequest('', BROWSER_ACCEPT),
-        NextResponse.redirect(
-          `${APP_CALLBACK}?error=server_error&error_description=Call%20evil.example`,
+        appRedirect(
+          '?error=server_error&error_description=Call%20evil.example',
+          'server_error',
         ),
       );
       const html = await response.text();
@@ -75,7 +94,7 @@ describe('presentToBrowser', () => {
     });
 
     it('keeps the cookies the callback set', async () => {
-      const original = NextResponse.redirect(`${APP_CALLBACK}?code=c`);
+      const original = appRedirect('?code=c');
       original.cookies.set('mcp-consent-abc', '', { maxAge: 0 });
 
       const response = await presentToBrowser(
@@ -95,7 +114,7 @@ describe('presentToBrowser', () => {
     ])('explains a relayed %s with fixed text', async (error, isTemporary) => {
       const response = await presentToBrowser(
         callbackRequest('', BROWSER_ACCEPT),
-        NextResponse.redirect(`${APP_CALLBACK}?error=${error}&state=s`),
+        appRedirect(`?error=${error}&state=s`, error),
       );
       const html = await response.text();
       expect(
@@ -105,8 +124,28 @@ describe('presentToBrowser', () => {
     });
 
     it('keeps the redirect for a non-browser caller', async () => {
-      const original = NextResponse.redirect(`${APP_CALLBACK}?code=c`);
+      const original = appRedirect('?code=c');
       const response = await presentToBrowser(callbackRequest(), original);
+      expect(response).toBe(original);
+    });
+
+    it('takes the outcome from /callback, not from the client redirect_uri', async () => {
+      // A client can register a redirect_uri that already carries `error`.
+      const response = await presentToBrowser(
+        callbackRequest('', BROWSER_ACCEPT),
+        appRedirect('?error=access_denied&code=c&state=s'),
+      );
+      const html = await response.text();
+      expect(html).toContain('<h1>You’ve approved access to Neon</h1>');
+      expect(returnLink(html)?.searchParams.get('code')).toBe('c');
+    });
+
+    it('keeps a redirect /callback did not tag', async () => {
+      const original = NextResponse.redirect(`${APP_CALLBACK}?code=c`);
+      const response = await presentToBrowser(
+        callbackRequest('', BROWSER_ACCEPT),
+        original,
+      );
       expect(response).toBe(original);
     });
   });

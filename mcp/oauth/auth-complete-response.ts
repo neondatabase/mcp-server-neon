@@ -22,6 +22,11 @@ type CompletionContext = {
   userId?: string;
   clientId?: string;
   clientName?: string;
+  /**
+   * The OAuth error /callback relayed to the client. Never read it back from
+   * the redirect: the client chose its redirect_uri, query string included.
+   */
+  relayedError?: string;
   /** Failed before the one-time transaction was used up, so a reload can retry. */
   retryable?: boolean;
 };
@@ -50,12 +55,14 @@ export async function presentToBrowser(
     return response;
   }
 
+  const context = completionContexts.get(response);
   const isRedirect = response.status >= 300 && response.status < 400;
   const appRedirect = isRedirect
     ? nativeAppRedirect(response.headers.get('location'))
     : undefined;
-  if (appRedirect) {
-    const error = appRedirect.searchParams.get('error');
+  // Only a redirect /callback tagged gets a page, so its outcome is known.
+  if (appRedirect && context) {
+    const error = context.relayedError;
     return completionPage(response, 200, {
       outcome: error ? failureOutcome(error) : 'success',
       message:
@@ -80,7 +87,7 @@ export async function presentToBrowser(
     .clone()
     .json()
     .catch(() => ({}));
-  const retryable = completionContexts.get(response)?.retryable === true;
+  const retryable = context?.retryable === true;
   return completionPage(response, response.status, {
     outcome: failureOutcome(body.error),
     message: retryable
