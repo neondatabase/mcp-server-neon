@@ -68,11 +68,17 @@ const getPool = (): pg.Pool => {
   return pool;
 };
 
-const isUniqueViolation = (err: unknown): boolean =>
+// unique_violation on pg_type's index, or duplicate_object ("type ... already
+// exists") when the winner commits between the IF NOT EXISTS check and the
+// row type's creation.
+const LOST_CREATE_RACE_CODES = new Set(['23505', '42710']);
+
+const lostCreateRace = (err: unknown): boolean =>
   typeof err === 'object' &&
   err !== null &&
   'code' in err &&
-  err.code === '23505';
+  typeof err.code === 'string' &&
+  LOST_CREATE_RACE_CODES.has(err.code);
 
 /**
  * Keyv store on one mcpauth table, with the table layout and SQL of
@@ -95,10 +101,10 @@ export class PostgresStore extends EventEmitter {
     try {
       await getPool().query(ddl);
     } catch (err) {
-      // Concurrent CREATE ... IF NOT EXISTS can lose the race on a catalog
-      // unique index and roll back before the table exists; by now the
-      // winner has committed, so the second run is a no-op.
-      if (!isUniqueViolation(err)) throw err;
+      // Concurrent CREATE ... IF NOT EXISTS can lose the race and roll back
+      // before the table exists; by now the winner has committed, so the
+      // second run is a no-op.
+      if (!lostCreateRace(err)) throw err;
       await getPool().query(ddl);
     }
   }
