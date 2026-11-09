@@ -6,7 +6,9 @@ import {
   OAUTH_PAGE_FONT_LINKS,
 } from './page-shell';
 
-export type AuthCompleteOutcome = 'success' | 'cancelled' | 'failed';
+// `none` is a /callback with no authorization in it: a reload after the page
+// dropped its query, a restored tab, or a prefetch.
+export type AuthCompleteOutcome = 'success' | 'cancelled' | 'failed' | 'none';
 
 export type AuthCompletePageProps = {
   outcome: AuthCompleteOutcome;
@@ -18,6 +20,8 @@ export type AuthCompletePageProps = {
   nonce: string;
   /** Ties the page's action events to its auth_complete_viewed event. */
   pageViewId?: string;
+  /** The server's signature for pageViewId, which the events endpoint checks. */
+  pageViewToken?: string;
   /** The callback can be retried as is, so a reload must keep its query. */
   retryable?: boolean;
 };
@@ -119,6 +123,11 @@ const OUTCOME_TEXT = {
     subtitle:
       'This request expired or is no longer valid. Start again from your app.',
   },
+  none: {
+    title: 'Nothing to finish here',
+    subtitle:
+      'There is no authorization in progress on this page. If you just approved access, head back to your app.',
+  },
 } satisfies Record<AuthCompleteOutcome, { title: string; subtitle: string }>;
 
 const AGENT_ICONS = [
@@ -169,9 +178,10 @@ function script(
   // sendBeacon still delivers when the click leaves the page or opens the app.
   parts.push(`
     var pageViewId = document.body.dataset.pageViewId;
+    var pageViewToken = document.body.dataset.pageViewToken;
     function trackAction(action) {
-      if (!pageViewId || !navigator.sendBeacon) return;
-      navigator.sendBeacon(${JSON.stringify(AUTH_COMPLETE_EVENTS_PATH)}, JSON.stringify({ pageViewId: pageViewId, action: action }));
+      if (!pageViewId || !pageViewToken || !navigator.sendBeacon) return;
+      navigator.sendBeacon(${JSON.stringify(AUTH_COMPLETE_EVENTS_PATH)}, JSON.stringify({ pageViewId: pageViewId, token: pageViewToken, action: action }));
     }`);
   if (hasReturn) {
     parts.push(`
@@ -211,12 +221,17 @@ function script(
     copyButton.addEventListener('click', function () {
       clearTimeout(resetTimer);
       copyStatus.textContent = '';
-      // Undefined outside secure contexts and in some embedded browsers.
-      if (!navigator.clipboard) {
+      // navigator.clipboard is undefined outside secure contexts, and some
+      // embedded browsers lack writeText or throw from it synchronously.
+      var copying;
+      try {
+        copying = navigator.clipboard.writeText(prompt.value);
+      } catch (error) {}
+      if (!copying || !copying.then) {
         showManualCopy();
         return;
       }
-      navigator.clipboard.writeText(prompt.value).then(showCopied, showManualCopy);
+      copying.then(showCopied, showManualCopy);
     });`);
   }
   return parts.join('\n');
@@ -231,6 +246,9 @@ export function renderAuthCompleteHtml(props: AuthCompletePageProps): string {
     props.outcome === 'failed' && props.message ? props.message : text.subtitle;
   const pageViewAttribute = props.pageViewId
     ? ` data-page-view-id="${he.escape(props.pageViewId)}"`
+    : '';
+  const pageViewTokenAttribute = props.pageViewToken
+    ? ` data-page-view-token="${he.escape(props.pageViewToken)}"`
     : '';
   const returnHtml = returnUrl
     ? `<p class="return">Didn’t open? <a id="return-link" href="${he.escape(returnUrl)}">Return to your app</a></p>`
@@ -286,7 +304,7 @@ export function renderAuthCompleteHtml(props: AuthCompletePageProps): string {
     }
   </style>
 </head>
-<body${pageViewAttribute}>
+<body${pageViewAttribute}${pageViewTokenAttribute}>
   <main>
     <div class="card">
       <header class="complete-header">

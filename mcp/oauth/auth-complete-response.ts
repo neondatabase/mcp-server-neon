@@ -1,13 +1,14 @@
 import { waitUntil } from '@vercel/functions';
 import { NextResponse, type NextRequest } from 'next/server';
 import { flushAnalytics, track } from '../analytics/analytics';
-import { detectClientApplication } from '../utils/client-application';
+import { identifyClient } from '../utils/client-application';
 import {
   nativeAppRedirect,
   renderAuthCompletePage,
   type AuthCompleteOutcome,
   type AuthCompletePageProps,
 } from './auth-complete-page';
+import { signPageView } from './auth-complete-page-view';
 
 const SERVER_FAILURE_MESSAGE =
   'Neon could not finish authorization right now. Start again from your app.';
@@ -80,6 +81,11 @@ export async function presentToBrowser(
     return response;
   }
 
+  const query = request.nextUrl.searchParams;
+  if (!query.has('code') && !query.has('state') && !query.has('error')) {
+    return completionPage(response, response.status, { outcome: 'none' });
+  }
+
   // The JSON keeps its detail for developers. The page only shows fixed text:
   // error_description is often relayed from the query string, where anyone
   // can put words on a Neon-branded page.
@@ -103,11 +109,35 @@ function failureOutcome(error: unknown): AuthCompleteOutcome {
   return error === 'access_denied' ? 'cancelled' : 'failed';
 }
 
+type CompletionPageProps = Omit<
+  AuthCompletePageProps,
+  'nonce' | 'pageViewId' | 'pageViewToken'
+>;
+
 function completionPage(
   original: NextResponse,
   status: number,
-  props: Omit<AuthCompletePageProps, 'nonce' | 'pageViewId'>,
+  props: CompletionPageProps,
 ): NextResponse {
+  // A page with no authorization in it is not a view worth counting, and
+  // without a page view its script sends no action events.
+  const pageView = props.outcome === 'none' ? {} : trackView(original, props);
+  const { html, headers } = renderAuthCompletePage({ ...props, ...pageView });
+  const page = new NextResponse(html, { status, headers });
+  const retryAfter = original.headers.get('retry-after');
+  if (retryAfter !== null) {
+    page.headers.set('retry-after', retryAfter);
+  }
+  for (const cookie of original.headers.getSetCookie()) {
+    page.headers.append('set-cookie', cookie);
+  }
+  return page;
+}
+
+function trackView(
+  original: NextResponse,
+  props: CompletionPageProps,
+): { pageViewId: string; pageViewToken: string } {
   const pageViewId = crypto.randomUUID();
   const context = completionContexts.get(original) ?? {};
   // anonymousId is the page view so the browser's action events, which only
@@ -122,19 +152,10 @@ function completionPage(
       opensApp: Boolean(props.returnUrl),
       clientId: context.clientId,
       clientName: context.clientName,
-      clientApplication: detectClientApplication(context.clientName),
+      clientApplication: identifyClient(undefined, context.clientName)
+        .clientApplication,
     },
   });
   waitUntil(flushAnalytics());
-
-  const { html, headers } = renderAuthCompletePage({ ...props, pageViewId });
-  const page = new NextResponse(html, { status, headers });
-  const retryAfter = original.headers.get('retry-after');
-  if (retryAfter !== null) {
-    page.headers.set('retry-after', retryAfter);
-  }
-  for (const cookie of original.headers.getSetCookie()) {
-    page.headers.append('set-cookie', cookie);
-  }
-  return page;
+  return { pageViewId, pageViewToken: signPageView(pageViewId) };
 }

@@ -3,6 +3,7 @@ import {
   ONBOARD_AGENT_PROMPT,
   renderAuthCompletePage,
 } from '../mcp/oauth/auth-complete-page.js';
+import { signPageView } from '../mcp/oauth/auth-complete-page-view.js';
 
 const PAGE_VIEW_ID = '3f6a9a3e-2c1b-4d1e-9f5a-0b8c7d6e5f40';
 
@@ -20,12 +21,22 @@ function watchCspViolations(page: Page): string[] {
  * A real success needs the upstream code exchange, so the browser gets the
  * page /callback builds for it, headers included.
  */
-async function serveSuccessPage(page: Page, returnUrl?: string) {
+async function serveSuccessPage(
+  page: Page,
+  returnUrl?: string,
+  withPageView = true,
+) {
   await page.route('**/callback?*', async (route) => {
     const { html, headers } = renderAuthCompletePage({
       outcome: 'success',
       returnUrl,
-      pageViewId: PAGE_VIEW_ID,
+      // Signed with the secret playwright.config.ts gives the dev server.
+      ...(withPageView
+        ? {
+            pageViewId: PAGE_VIEW_ID,
+            pageViewToken: signPageView(PAGE_VIEW_ID),
+          }
+        : {}),
     });
     await route.fulfill({ status: 200, headers, body: html });
   });
@@ -80,22 +91,46 @@ test.describe('auth completion page', () => {
     expect(violations).toEqual([]);
   });
 
-  test('falls back to manual copy without the clipboard API', async ({
+  test('shows a neutral page for a /callback with nothing in it', async ({
     page,
   }) => {
-    await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'clipboard', { value: undefined });
-    });
-    await serveSuccessPage(page);
-    await page.goto('/callback?code=c&state=s');
+    await page.goto('/callback');
 
-    await page.getByRole('button', { name: 'Copy prompt' }).click();
-
-    const prompt = page.getByLabel('Copy this prompt into your coding agent:');
-    await expect(prompt).toBeVisible();
-    await expect(prompt).toBeFocused();
-    await expect(prompt).toHaveValue(ONBOARD_AGENT_PROMPT);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      'Nothing to finish here',
+    );
   });
+
+  for (const [label, clipboard] of [
+    ['without the clipboard API', 'missing'],
+    ['when writeText throws', 'throws'],
+  ] as const) {
+    test(`falls back to manual copy ${label}`, async ({ page }) => {
+      await page.addInitScript((mode) => {
+        Object.defineProperty(navigator, 'clipboard', {
+          value:
+            mode === 'missing'
+              ? undefined
+              : {
+                  writeText() {
+                    throw new Error('blocked');
+                  },
+                },
+        });
+      }, clipboard);
+      await serveSuccessPage(page);
+      await page.goto('/callback?code=c&state=s');
+
+      await page.getByRole('button', { name: 'Copy prompt' }).click();
+
+      const prompt = page.getByLabel(
+        'Copy this prompt into your coding agent:',
+      );
+      await expect(prompt).toBeVisible();
+      await expect(prompt).toBeFocused();
+      await expect(prompt).toHaveValue(ONBOARD_AGENT_PROMPT);
+    });
+  }
 
   test('hands the redirect back to the app on load', async ({ page }) => {
     // Browsers in tests cannot follow cursor:// and the like, so the return
@@ -154,9 +189,32 @@ test.describe('auth completion page', () => {
       ]);
       expect(beacon.postDataJSON()).toEqual({
         pageViewId: PAGE_VIEW_ID,
+        token: expect.any(String),
         action,
       });
       expect((await beacon.response())?.status()).toBe(204);
     }
+  });
+
+  test('sends no action events without a page view', async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    const beacons: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().endsWith('/api/auth-complete/events')) {
+        beacons.push(request.url());
+      }
+    });
+    await serveSuccessPage(page, undefined, false);
+    await page.goto('/callback?code=c&state=s');
+
+    await page.getByRole('button', { name: 'Copy prompt' }).click();
+    await expect(page.getByRole('button', { name: 'Copied!' })).toBeVisible();
+    // The copy handler sends its beacon before it changes the button, so one
+    // would already be on its way.
+    await page.waitForTimeout(500);
+    expect(beacons).toEqual([]);
   });
 });

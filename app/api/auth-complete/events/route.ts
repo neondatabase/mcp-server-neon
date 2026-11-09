@@ -5,9 +5,10 @@ import {
   AUTH_COMPLETE_ACTIONS,
   type AuthCompleteAction,
 } from '../../../../mcp/oauth/auth-complete-page';
+import { isIssuedPageView } from '../../../../mcp/oauth/auth-complete-page-view';
 import { requestPublicOrigin } from '../../../../mcp/oauth/consent-canonical-url';
 
-const MAX_BODY_LENGTH = 256;
+const MAX_BODY_BYTES = 256;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function isAction(value: unknown): value is AuthCompleteAction {
@@ -15,9 +16,34 @@ function isAction(value: unknown): value is AuthCompleteAction {
 }
 
 /**
- * Action beacons from the auth completion page. Unauthenticated by design:
- * the page holds no identity, only the page view id that joins these events
- * to its auth_complete_viewed event.
+ * Reads at most `limit` bytes, whatever Content-Length says or whether it is
+ * sent at all. Undefined when the body is longer.
+ */
+async function readBody(
+  request: NextRequest,
+  limit: number,
+): Promise<string | undefined> {
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel();
+      return undefined;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+/**
+ * Action beacons from the auth completion page. The page holds no identity,
+ * only the page view id that joins these events to its auth_complete_viewed
+ * event, and the server's signature for it, so forged ids are rejected.
  */
 export async function POST(request: NextRequest) {
   // Firefox sends `Origin: null` under the page's no-referrer policy, so the
@@ -29,13 +55,8 @@ export async function POST(request: NextRequest) {
     return new NextResponse(null, { status: 403 });
   }
 
-  // Checked before reading so an oversized body is never buffered. The
-  // length check after reading covers a body sent without Content-Length.
-  if (Number(request.headers.get('content-length')) > MAX_BODY_LENGTH) {
-    return new NextResponse(null, { status: 413 });
-  }
-  const body = await request.text();
-  if (body.length > MAX_BODY_LENGTH) {
+  const body = await readBody(request, MAX_BODY_BYTES);
+  if (body === undefined) {
     return new NextResponse(null, { status: 413 });
   }
   let event: unknown;
@@ -47,13 +68,17 @@ export async function POST(request: NextRequest) {
   if (typeof event !== 'object' || event === null) {
     return new NextResponse(null, { status: 400 });
   }
-  const { pageViewId, action } = event as Record<string, unknown>;
+  const { pageViewId, token, action } = event as Record<string, unknown>;
   if (
     typeof pageViewId !== 'string' ||
     !UUID.test(pageViewId) ||
+    typeof token !== 'string' ||
     !isAction(action)
   ) {
     return new NextResponse(null, { status: 400 });
+  }
+  if (!isIssuedPageView(pageViewId, token)) {
+    return new NextResponse(null, { status: 403 });
   }
 
   track({

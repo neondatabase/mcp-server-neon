@@ -1,11 +1,13 @@
 import he from 'he';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
-import { track } from '../analytics/analytics';
+import { waitUntil } from '@vercel/functions';
+import { flushAnalytics, track } from '../analytics/analytics';
 import {
   presentToBrowser,
   withCompletionContext,
 } from '../oauth/auth-complete-response';
+import { isIssuedPageView } from '../oauth/auth-complete-page-view';
 
 vi.mock('../analytics/analytics', () => ({
   track: vi.fn(),
@@ -172,7 +174,7 @@ describe('presentToBrowser', () => {
           error_description: 'Missing code or state',
         },
         400,
-        '',
+        '?code=c&state=s',
         'Couldn’t connect to Neon',
         'This request expired or is no longer valid. Start again from your app.',
       ],
@@ -191,7 +193,7 @@ describe('presentToBrowser', () => {
           error_description: 'Upstream returned a non-conforming response',
         },
         502,
-        '',
+        '?code=c&state=s',
         'Couldn’t connect to Neon',
         'Neon could not finish authorization right now. Start again from your app.',
       ],
@@ -241,6 +243,44 @@ describe('presentToBrowser', () => {
       expect(html).not.toContain('history.replaceState');
     });
 
+    it.each([400, 500])(
+      'shows a neutral page and reports nothing for a bare /callback %i',
+      async (status) => {
+        const response = await presentToBrowser(
+          callbackRequest('', BROWSER_ACCEPT),
+          NextResponse.json({ error: 'invalid_request' }, { status }),
+        );
+
+        expect(response.status).toBe(status);
+        const html = await response.text();
+        expect(html).toContain('<h1>Nothing to finish here</h1>');
+        expect(html).not.toContain('data-page-view-id');
+        expect(track).not.toHaveBeenCalled();
+      },
+    );
+
+    it('keeps a failure that is not JSON', async () => {
+      const original = new NextResponse('upstream down', { status: 502 });
+      const response = await presentToBrowser(
+        callbackRequest('?code=c&state=s', BROWSER_ACCEPT),
+        original,
+      );
+      expect(response).toBe(original);
+    });
+
+    it('shows the failed page when the JSON body cannot be parsed', async () => {
+      const response = await presentToBrowser(
+        callbackRequest('?code=c&state=s', BROWSER_ACCEPT),
+        new NextResponse('{', {
+          status: 400,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+      expect(await response.text()).toContain(
+        '<h1>Couldn’t connect to Neon</h1>',
+      );
+    });
+
     it.each([
       ['a non-browser caller', undefined, 400],
       ['a JSON client', 'application/json', 400],
@@ -261,6 +301,8 @@ describe('presentToBrowser', () => {
 describe('auth_complete_viewed', () => {
   beforeEach(() => {
     vi.mocked(track).mockClear();
+    vi.mocked(waitUntil).mockClear();
+    vi.mocked(flushAnalytics).mockClear();
   });
 
   it('reports a success with the user and client the callback knew', async () => {
@@ -288,14 +330,35 @@ describe('auth_complete_viewed', () => {
         clientApplication: 'cursor',
       },
     });
-    expect(await response.text()).toContain(
-      `<body data-page-view-id="${event.anonymousId}">`,
+    expect(waitUntil).toHaveBeenCalledWith(
+      vi.mocked(flushAnalytics).mock.results[0]!.value,
+    );
+    const html = await response.text();
+    expect(html).toContain(`data-page-view-id="${event.anonymousId}"`);
+    const token = /data-page-view-token="([^"]+)"/.exec(html)?.[1];
+    expect(isIssuedPageView(event.anonymousId!, token ?? '')).toBe(true);
+  });
+
+  it('attributes a client registered as Claude to Claude Desktop', async () => {
+    await presentToBrowser(
+      callbackRequest('', BROWSER_ACCEPT),
+      withCompletionContext(NextResponse.redirect(`${APP_CALLBACK}?code=c`), {
+        clientName: 'Claude',
+      }),
+    );
+
+    expect(track).toHaveBeenCalledWith(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          clientApplication: 'claude-desktop',
+        }),
+      }),
     );
   });
 
   it('reports a browser failure anonymously', async () => {
     await presentToBrowser(
-      callbackRequest('', BROWSER_ACCEPT),
+      callbackRequest('?code=c&state=s', BROWSER_ACCEPT),
       NextResponse.json({ error: 'invalid_request' }, { status: 400 }),
     );
 

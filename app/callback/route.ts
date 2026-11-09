@@ -441,13 +441,22 @@ async function handleCallback(request: NextRequest): Promise<NextResponse> {
             // all of them). See ai-notes/auth-callback-slo.md.
             downstreamRequest: summarizeDownstreamRequest(state, requestParams),
           });
+          // Only names the client for analytics, so a failed lookup must not
+          // stop the relay.
+          const client = await model
+            .getClient(requestParams.clientId, '')
+            .catch(() => undefined);
           return withCompletionContext(
             clearTransactionCookie(
               NextResponse.redirect(redirectUrl.href),
               state,
               request,
             ),
-            { clientId: requestParams.clientId, relayedError: upstreamError },
+            {
+              clientId: requestParams.clientId,
+              clientName: client?.client_name,
+              relayedError: upstreamError,
+            },
           );
         } catch (decodeErr) {
           // State decode failed — fall through to JSON 400 below.

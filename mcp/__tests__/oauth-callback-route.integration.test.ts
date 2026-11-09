@@ -801,6 +801,7 @@ describe('/callback route integration', () => {
           properties: expect.objectContaining({
             outcome: 'cancelled',
             clientId: 'client-123',
+            clientName: 'Callback Test Client',
           }),
         }),
       );
@@ -862,6 +863,21 @@ describe('/callback route integration', () => {
       const html = await failed.text();
       expect(html).toContain('Start again from your app.');
       expect(html).toContain('history.replaceState');
+    });
+
+    it('keeps the plain redirect for a browser returning to a loopback client', async () => {
+      const seeded = await seedApprovedTransaction();
+
+      const response = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+
+      expect(response.status).toBe(307);
+      const location = new URL(response.headers.get('location')!);
+      expect(location.origin).toBe('http://127.0.0.1:55667');
+      expect(location.searchParams.get('code')).toBeTruthy();
+      expect(location.searchParams.get('state')).toBe('client-state');
+      expect(track).not.toHaveBeenCalled();
     });
 
     it('keeps the native app redirect for a non-browser caller', async () => {

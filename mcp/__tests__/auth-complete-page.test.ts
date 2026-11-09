@@ -40,6 +40,7 @@ describe('renderAuthCompleteHtml', () => {
     ['success', 'You’ve approved access to Neon', true],
     ['cancelled', 'Connection cancelled', false],
     ['failed', 'Couldn’t connect to Neon', false],
+    ['none', 'Nothing to finish here', false],
   ] as const)(
     '%s renders its heading and agent tooling only on success',
     (outcome, title, hasOnboard) => {
@@ -105,10 +106,12 @@ describe('renderAuthCompleteHtml', () => {
     );
   });
 
-  it('falls back to manual copy when the clipboard API is missing', () => {
-    expect(render({ outcome: 'success' })).toContain(
-      'if (!navigator.clipboard) {',
+  it('falls back to manual copy when the clipboard cannot start a copy', () => {
+    const html = render({ outcome: 'success' });
+    expect(html).toContain(
+      'copying = navigator.clipboard.writeText(prompt.value);',
     );
+    expect(html).toContain('if (!copying || !copying.then) {');
   });
 });
 
@@ -154,10 +157,13 @@ describe('action beacons', () => {
       outcome: 'success',
       returnUrl: 'cursor://cb',
       pageViewId,
+      pageViewToken: '1700000000000.sig',
     });
-    expect(html).toContain(`<body data-page-view-id="${pageViewId}">`);
     expect(html).toContain(
-      'navigator.sendBeacon("/api/auth-complete/events", JSON.stringify({ pageViewId: pageViewId, action: action }))',
+      `<body data-page-view-id="${pageViewId}" data-page-view-token="1700000000000.sig">`,
+    );
+    expect(html).toContain(
+      'navigator.sendBeacon("/api/auth-complete/events", JSON.stringify({ pageViewId: pageViewId, token: pageViewToken, action: action }))',
     );
     for (const action of [
       'prompt_copied',
@@ -172,17 +178,22 @@ describe('action beacons', () => {
   it('sends nothing without a page view id', () => {
     const html = render({ outcome: 'success' });
     expect(html).toContain('<body>');
-    expect(html).toContain('if (!pageViewId || !navigator.sendBeacon) return;');
+    expect(html).toContain(
+      'if (!pageViewId || !pageViewToken || !navigator.sendBeacon) return;',
+    );
   });
 
   it('keeps the page view id out of the script', () => {
     const html = render({
       outcome: 'success',
       pageViewId: '"></body><script>x',
+      pageViewToken: '"><script>y',
     });
     expect(html).toContain(
       'data-page-view-id="&quot;&gt;&lt;/body&gt;&lt;script&gt;x"',
     );
+    expect(html).toContain('data-page-view-token="&quot;&gt;&lt;script&gt;y"');
     expect(html).not.toContain('"></body><script>x');
+    expect(html).not.toContain('"><script>y');
   });
 });
