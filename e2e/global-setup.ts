@@ -12,6 +12,7 @@ import {
   DOCS_FIXTURE_BASE_URL,
   startDocsFixtureServer,
 } from './docs-fixture.js';
+import { startSentryFixtureServer } from './sentry-fixture.js';
 
 export default async function globalSetup() {
   const connectionString = await ensureOauthDatabaseUrl();
@@ -21,8 +22,10 @@ export default async function globalSetup() {
   console.log(
     `[e2e-setup] Serving the docs fixtures on ${DOCS_FIXTURE_BASE_URL}`,
   );
+  const sentryServer = await startSentryFixtureServer();
 
   return async () => {
     await new Promise<void>((resolve) => docsServer.close(() => resolve()));
+    await new Promise<void>((resolve) => sentryServer.close(() => resolve()));
   };
 }

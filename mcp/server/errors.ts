@@ -67,6 +67,19 @@ function apiErrorReason(body: unknown): string | undefined {
   return typeof body.reason === 'string' ? body.reason : undefined;
 }
 
+/**
+ * Whether a thrown tool error is the server's failure rather than a mistake in
+ * the call (bad input, bad SQL, a 4xx from the Neon API). Only these are
+ * reported to Sentry and mark the tool span as failed.
+ */
+export function isServerError(error: unknown): boolean {
+  return !(
+    error instanceof NeonDbError ||
+    isClientError(error) ||
+    (error instanceof NeonApiError && error.status < 500)
+  );
+}
+
 export function handleToolError(
   error: unknown,
   properties: Record<string, string>,

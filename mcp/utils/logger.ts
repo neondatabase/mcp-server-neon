@@ -1,6 +1,8 @@
+import { createSentryWinstonTransport } from '@sentry/node';
 import winston from 'winston';
+import Transport from 'winston-transport';
 
-const loggerFormat = winston.format.combine(
+const consoleFormat = winston.format.combine(
   winston.format.timestamp(),
   winston.format.simple(),
   winston.format.errors({ stack: true }),
@@ -8,12 +10,14 @@ const loggerFormat = winston.format.combine(
   winston.format.colorize(),
 );
 
+const SentryWinstonTransport = createSentryWinstonTransport(Transport);
+
+// The console format stays on its transport: a logger-level format would
+// reach Sentry too, where `align` prefixes every message with a tab.
 export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL ?? 'info',
-  format: loggerFormat,
   transports: [
-    new winston.transports.Console({
-      format: loggerFormat,
-    }),
+    new winston.transports.Console({ format: consoleFormat }),
+    new SentryWinstonTransport(),
   ],
 });

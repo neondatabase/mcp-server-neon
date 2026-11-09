@@ -7,6 +7,7 @@ init({
   environment: process.env.NODE_ENV,
   release: pkg.version,
   tracesSampleRate: 1.0,
+  enableLogs: true,
 
   // Setting this option to true will send default PII data to Sentry.
   // For example, automatic IP address collection on events
