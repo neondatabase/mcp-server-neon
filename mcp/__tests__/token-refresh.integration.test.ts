@@ -599,6 +599,29 @@ describe('Token refresh flow', () => {
       expect(mockModel.getRefreshResult).toHaveBeenCalledTimes(1);
     });
 
+    it("serves the client's own cached rotation over a cached failure", async () => {
+      mockModel.getRefreshFailure.mockResolvedValue({
+        failedAt: Date.now() - 5_000,
+        oauthError: 'invalid_grant',
+      });
+      mockModel.getRefreshResult.mockResolvedValue({
+        clientId: TEST_CLIENT.id,
+        accessToken: 'cached-access-token',
+        refreshToken: 'cached-refresh-token',
+        expiresAt: Date.now() + 3600_000,
+      });
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.refresh_token).toBe('cached-refresh-token');
+      expect(lastSloLine()).toMatch(
+        /outcome=success .*reason=cache_replay_over_failure/,
+      );
+      expect(mockExchange).not.toHaveBeenCalled();
+    });
+
     it('does not cache failure on transient 5xx', async () => {
       const upstreamError = new Error('Internal Server Error') as Error & {
         status: number;
