@@ -154,7 +154,7 @@ describe('presentToBrowser', () => {
         502,
         '',
         'Couldn’t connect to Neon',
-        'Neon could not finish authorization right now.',
+        'Neon could not finish authorization right now. Start again from your app.',
       ],
       [
         'a cancel without a usable session',
@@ -186,16 +186,19 @@ describe('presentToBrowser', () => {
     it('keeps the query and Retry-After when a reload can retry', async () => {
       const response = await presentToBrowser(
         callbackRequest('?code=c&state=s', BROWSER_ACCEPT),
-        NextResponse.json(
-          { error: 'temporarily_unavailable' },
-          { status: 503, headers: { 'Retry-After': '30' } },
+        withCompletionContext(
+          NextResponse.json(
+            { error: 'temporarily_unavailable' },
+            { status: 503, headers: { 'Retry-After': '30' } },
+          ),
+          { retryable: true },
         ),
       );
 
       expect(response.status).toBe(503);
       expect(response.headers.get('retry-after')).toBe('30');
       const html = await response.text();
-      expect(html).toContain('Neon could not finish authorization right now.');
+      expect(html).toContain('Reload this page in a moment to try again.');
       expect(html).not.toContain('history.replaceState');
     });
 

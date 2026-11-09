@@ -9,17 +9,21 @@ import {
   type AuthCompletePageProps,
 } from './auth-complete-page';
 
-const TEMPORARY_FAILURE_MESSAGE =
-  'Neon could not finish authorization right now. Try again in a moment.';
+const SERVER_FAILURE_MESSAGE =
+  'Neon could not finish authorization right now. Start again from your app.';
+const RETRY_MESSAGE =
+  'Neon could not finish authorization right now. Reload this page in a moment to try again.';
 
 // Relayed OAuth errors that mean the server failed, not the request.
 const TEMPORARY_ERRORS = new Set(['server_error', 'temporarily_unavailable']);
 
-/** Who the page is for, as far as /callback knows, for analytics. */
+/** What /callback knows about the request the page is for. */
 type CompletionContext = {
   userId?: string;
   clientId?: string;
   clientName?: string;
+  /** Failed before the one-time transaction was used up, so a reload can retry. */
+  retryable?: boolean;
 };
 
 const completionContexts = new WeakMap<NextResponse, CompletionContext>();
@@ -56,7 +60,7 @@ export async function presentToBrowser(
       outcome: error ? failureOutcome(error) : 'success',
       message:
         error && TEMPORARY_ERRORS.has(error)
-          ? TEMPORARY_FAILURE_MESSAGE
+          ? SERVER_FAILURE_MESSAGE
           : undefined,
       returnUrl: appRedirect.href,
     });
@@ -76,9 +80,15 @@ export async function presentToBrowser(
     .clone()
     .json()
     .catch(() => ({}));
+  const retryable = completionContexts.get(response)?.retryable === true;
   return completionPage(response, response.status, {
     outcome: failureOutcome(body.error),
-    message: response.status >= 500 ? TEMPORARY_FAILURE_MESSAGE : undefined,
+    message: retryable
+      ? RETRY_MESSAGE
+      : response.status >= 500
+        ? SERVER_FAILURE_MESSAGE
+        : undefined,
+    retryable,
   });
 }
 
@@ -89,7 +99,7 @@ function failureOutcome(error: unknown): AuthCompleteOutcome {
 function completionPage(
   original: NextResponse,
   status: number,
-  props: Omit<AuthCompletePageProps, 'nonce' | 'pageViewId' | 'retryable'>,
+  props: Omit<AuthCompletePageProps, 'nonce' | 'pageViewId'>,
 ): NextResponse {
   const pageViewId = crypto.randomUUID();
   const context = completionContexts.get(original) ?? {};
@@ -110,15 +120,9 @@ function completionPage(
   });
   waitUntil(flushAnalytics());
 
-  // /callback sends Retry-After only when it failed before using up the
-  // one-time transaction, so a reload of the same URL can still succeed.
-  const retryAfter = original.headers.get('retry-after');
-  const { html, headers } = renderAuthCompletePage({
-    ...props,
-    pageViewId,
-    retryable: retryAfter !== null,
-  });
+  const { html, headers } = renderAuthCompletePage({ ...props, pageViewId });
   const page = new NextResponse(html, { status, headers });
+  const retryAfter = original.headers.get('retry-after');
   if (retryAfter !== null) {
     page.headers.set('retry-after', retryAfter);
   }

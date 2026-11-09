@@ -811,6 +811,41 @@ describe('/callback route integration', () => {
       expect(await retried.text()).toContain('You’ve approved access to Neon');
     });
 
+    it('lets a reload retry a server failure before the transaction is used up', async () => {
+      const seeded = await seedApprovedTransaction({ request: appRequest });
+      vi.mocked(model.getClient).mockRejectedValueOnce(
+        new Error('unexpected non-pg failure'),
+      );
+
+      const failed = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+      expect(failed.status).toBe(500);
+      const html = await failed.text();
+      expect(html).toContain('Reload this page in a moment to try again.');
+      expect(html).not.toContain('history.replaceState');
+
+      const retried = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+      expect(retried.status).toBe(200);
+    });
+
+    it('drops the query after a server failure that used up the transaction', async () => {
+      const seeded = await seedApprovedTransaction({ request: appRequest });
+      vi.mocked(model.saveAuthorizationCode).mockRejectedValueOnce(
+        new Error('unexpected non-pg failure'),
+      );
+
+      const failed = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+      expect(failed.status).toBe(500);
+      const html = await failed.text();
+      expect(html).toContain('Start again from your app.');
+      expect(html).toContain('history.replaceState');
+    });
+
     it('keeps the native app redirect for a non-browser caller', async () => {
       const seeded = await seedApprovedTransaction({ request: appRequest });
 

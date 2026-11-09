@@ -365,6 +365,9 @@ async function handleCallback(request: NextRequest): Promise<NextResponse> {
   // /callback failures (e.g. the 2026-05-12 OAUTH_DATABASE_URL compute
   // scale-from-zero blip) can't be correlated to a specific user.
   let clientIdForSlo: string | undefined;
+  // Until the one-time transaction is used up, a server failure leaves this
+  // callback URL valid, so the browser can retry it by reloading.
+  let transactionConsumed = false;
   try {
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
@@ -554,6 +557,7 @@ async function handleCallback(request: NextRequest): Promise<NextResponse> {
       state,
       browserSecret,
     );
+    transactionConsumed = true;
     if (!approved) {
       emitAuthCallbackSlo('state_decode_failed', sloStartMs, {
         reason: 'transaction_not_approved',
@@ -721,7 +725,10 @@ async function handleCallback(request: NextRequest): Promise<NextResponse> {
       clientId: clientIdForSlo,
       reason,
     });
-    return handleOAuthError(error, 'OAuth callback error');
+    const response = handleOAuthError(error, 'OAuth callback error');
+    return transactionConsumed || response.status < 500
+      ? response
+      : withCompletionContext(response, { retryable: true });
   }
 }
 
