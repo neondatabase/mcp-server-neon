@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { Client } from 'oauth2-server';
 import { model } from '../../../mcp/oauth/model';
+import { getOwnedRefreshResult } from '../../../mcp/oauth/refresh-result';
 import {
   exchangeRefreshToken,
   type UpstreamRequestSummary,
@@ -233,9 +234,11 @@ function emitRefreshSlo(
 async function cachePreUpstreamFailure(
   refreshToken: string,
   reason: string,
+  clientId?: string,
 ): Promise<void> {
   await model
     .saveRefreshFailure(refreshToken, {
+      clientId,
       failedAt: Date.now(),
       oauthError: 'invalid_grant',
       oauthErrorDescription: reason,
@@ -290,7 +293,9 @@ async function executeRefresh(
       tokenClientId: oldToken.client.id,
       requestClientId: client.id,
     });
-    await cachePreUpstreamFailure(refreshToken, 'client_mismatch');
+    // The token may still be valid for its owner, so the failure only
+    // rejects this client's retries.
+    await cachePreUpstreamFailure(refreshToken, 'client_mismatch', client.id);
     throw new RefreshError(
       'invalid_grant',
       'Invalid or expired refresh token',
@@ -470,6 +475,7 @@ async function executeRefresh(
   // upstream again and gets `token_inactive`.
   await model
     .saveRefreshResult(refreshToken, {
+      clientId: client.id,
       accessToken: result.access_token,
       refreshToken: result.refresh_token,
       expiresAt,
@@ -790,12 +796,54 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const cachedToResponse = (cached: {
+        accessToken: string;
+        refreshToken: string;
+        expiresAt: number;
+        scope?: string | string[];
+      }): RefreshTokenResult => ({
+        access_token: cached.accessToken,
+        expires_in: toSeconds(cached.expiresAt - Date.now()),
+        token_type: 'bearer' as const,
+        refresh_token: cached.refreshToken,
+        scope: cached.scope,
+      });
+
+      // Used by the outer catch to fold a winning peer's success cache write
+      // into our own response — never throws.
+      const checkSuccessCache = async (): Promise<
+        RefreshTokenResult | undefined
+      > => {
+        const cached = await getOwnedRefreshResult(
+          refreshToken,
+          client.id,
+        ).catch(() => undefined);
+        return cached ? cachedToResponse(cached) : undefined;
+      };
+
+      const getCachedFailure = async () => {
+        const failure = await model
+          .getRefreshFailure(refreshToken)
+          .catch(() => undefined);
+        return failure?.clientId === undefined || failure.clientId === client.id
+          ? failure
+          : undefined;
+      };
+
       // Absorb retry storms: if upstream already rejected this RT recently,
       // skip the singleflight + upstream call and return the cached failure.
-      const cachedFailure = await model
-        .getRefreshFailure(refreshToken)
-        .catch(() => undefined);
+      const cachedFailure = await getCachedFailure();
       if (cachedFailure) {
+        // Another client presenting a rotated token records it as missing.
+        // The owner's replay still gets the cached rotation.
+        const cached = await checkSuccessCache();
+        if (cached) {
+          emitRefreshSlo('success', sloStartMs, {
+            clientId: client.id,
+            reason: 'cache_replay_over_failure',
+          });
+          return NextResponse.json(cached);
+        }
         logger.info('Refresh token in failure cache; rejecting fast', {
           clientId: client.id,
           ageMs: Date.now() - cachedFailure.failedAt,
@@ -815,41 +863,15 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const cachedToResponse = (cached: {
-        accessToken: string;
-        refreshToken: string;
-        expiresAt: number;
-        scope?: string | string[];
-      }): RefreshTokenResult => ({
-        access_token: cached.accessToken,
-        expires_in: toSeconds(cached.expiresAt - Date.now()),
-        token_type: 'bearer' as const,
-        refresh_token: cached.refreshToken,
-        scope: cached.scope,
-      });
-
-      // Used by the outer catch to fold a winning peer's success cache write
-      // into our own response — never throws.
-      const checkSuccessCache = async (): Promise<
-        RefreshTokenResult | undefined
-      > => {
-        const cached = await model
-          .getRefreshResult(refreshToken)
-          .catch(() => undefined);
-        return cached ? cachedToResponse(cached) : undefined;
-      };
-
       // Used by the lock-waiter poll loop. The failure cache wins: if a peer
       // marked this RT dead (either via an upstream 4xx or a pre-upstream
-      // RT-not-found / client-mismatch), throw RefreshError so the waiter
-      // surfaces 400 immediately instead of polling until the lock-wait
-      // timeout and surfacing 503.
+      // RT-not-found), or this client already failed the client check, throw
+      // RefreshError so the waiter surfaces 400 immediately instead of
+      // polling until the lock-wait timeout and surfacing 503.
       const peekResolution = async (): Promise<
         RefreshTokenResult | undefined
       > => {
-        const failure = await model
-          .getRefreshFailure(refreshToken)
-          .catch(() => undefined);
+        const failure = await getCachedFailure();
         if (failure) {
           throw new RefreshError(
             'invalid_grant',
@@ -884,8 +906,9 @@ export async function POST(request: NextRequest) {
         const result = await withRefreshLock(
           refreshToken,
           (hint) =>
-            singleflight(`refresh:${refreshToken}`, () =>
-              executeRefresh(refreshToken, client, hint),
+            singleflight(
+              JSON.stringify(['refresh', client.id, refreshToken]),
+              () => executeRefresh(refreshToken, client, hint),
             ),
           peekResolution,
         );

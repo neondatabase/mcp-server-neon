@@ -591,11 +591,11 @@ describe('Token refresh flow', () => {
       expect(response.status).toBe(400);
       expect(body.error).toBe('invalid_grant');
 
-      // Critical: upstream must not be touched, and we must not even consult
-      // the success cache or refresh-token store.
+      // Critical: upstream and the refresh-token store must not be touched.
+      // Only the success cache is read, for the owner's replay of a rotation.
       expect(mockExchange).not.toHaveBeenCalled();
       expect(mockModel.getRefreshToken).not.toHaveBeenCalled();
-      expect(mockModel.getRefreshResult).not.toHaveBeenCalled();
+      expect(mockModel.getRefreshResult).toHaveBeenCalledTimes(1);
     });
 
     it('does not cache failure on transient 5xx', async () => {
@@ -641,7 +641,7 @@ describe('Token refresh flow', () => {
       expect(mockExchange).not.toHaveBeenCalled();
     });
 
-    it('caches failure when client_id does not match the token', async () => {
+    it('caches a client mismatch for the requesting client only', async () => {
       mockModel.getAccessToken.mockResolvedValue({
         ...TEST_OLD_ACCESS_TOKEN,
         client: { ...TEST_CLIENT, id: 'different-client' },
@@ -653,6 +653,7 @@ describe('Token refresh flow', () => {
       expect(mockModel.saveRefreshFailure).toHaveBeenCalledTimes(1);
       const [, detail] = mockModel.saveRefreshFailure.mock.calls[0];
       expect(detail.oauthErrorDescription).toBe('client_mismatch');
+      expect(detail.clientId).toBe(TEST_CLIENT.id);
       expect(mockExchange).not.toHaveBeenCalled();
     });
   });
