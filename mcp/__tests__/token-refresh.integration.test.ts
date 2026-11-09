@@ -19,6 +19,7 @@ vi.mock('../oauth/model', () => ({
     deleteRefreshToken: vi.fn(),
     saveRefreshResult: vi.fn(),
     getRefreshResult: vi.fn(),
+    attributeRefreshResult: vi.fn().mockResolvedValue(undefined),
     saveRefreshFailure: vi.fn(),
     getRefreshFailure: vi.fn(),
   },
@@ -591,11 +592,34 @@ describe('Token refresh flow', () => {
       expect(response.status).toBe(400);
       expect(body.error).toBe('invalid_grant');
 
-      // Critical: upstream must not be touched, and we must not even consult
-      // the success cache or refresh-token store.
+      // Critical: upstream and the refresh-token store must not be touched.
+      // Only the success cache is read, for the owner's replay of a rotation.
       expect(mockExchange).not.toHaveBeenCalled();
       expect(mockModel.getRefreshToken).not.toHaveBeenCalled();
-      expect(mockModel.getRefreshResult).not.toHaveBeenCalled();
+      expect(mockModel.getRefreshResult).toHaveBeenCalledTimes(1);
+    });
+
+    it("serves the client's own cached rotation over a cached failure", async () => {
+      mockModel.getRefreshFailure.mockResolvedValue({
+        failedAt: Date.now() - 5_000,
+        oauthError: 'invalid_grant',
+      });
+      mockModel.getRefreshResult.mockResolvedValue({
+        clientId: TEST_CLIENT.id,
+        accessToken: 'cached-access-token',
+        refreshToken: 'cached-refresh-token',
+        expiresAt: Date.now() + 3600_000,
+      });
+
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.refresh_token).toBe('cached-refresh-token');
+      expect(lastSloLine()).toMatch(
+        /outcome=success .*reason=cache_replay_over_failure/,
+      );
+      expect(mockExchange).not.toHaveBeenCalled();
     });
 
     it('does not cache failure on transient 5xx', async () => {
@@ -641,7 +665,7 @@ describe('Token refresh flow', () => {
       expect(mockExchange).not.toHaveBeenCalled();
     });
 
-    it('caches failure when client_id does not match the token', async () => {
+    it('caches a client mismatch for the requesting client only', async () => {
       mockModel.getAccessToken.mockResolvedValue({
         ...TEST_OLD_ACCESS_TOKEN,
         client: { ...TEST_CLIENT, id: 'different-client' },
@@ -653,6 +677,7 @@ describe('Token refresh flow', () => {
       expect(mockModel.saveRefreshFailure).toHaveBeenCalledTimes(1);
       const [, detail] = mockModel.saveRefreshFailure.mock.calls[0];
       expect(detail.oauthErrorDescription).toBe('client_mismatch');
+      expect(detail.clientId).toBe(TEST_CLIENT.id);
       expect(mockExchange).not.toHaveBeenCalled();
     });
   });
