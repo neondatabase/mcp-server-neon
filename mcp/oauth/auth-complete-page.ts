@@ -70,8 +70,11 @@ export function renderAuthCompletePage(
   };
 }
 
+// The page follows a sign-in that just connected the Neon MCP server in this
+// app, so the prompt installs only the skills. The full agent-setup.md would
+// configure the MCP server again, replacing that connection or adding a second.
 export const ONBOARD_AGENT_PROMPT =
-  'Set me up for Neon. Fetch https://neon.com/prompts/agent-setup.md and follow it.';
+  'Install the Neon skills. Fetch https://neon.com/prompts/agent-skills-setup.md and follow it.';
 
 // Web schemes keep the plain redirect: the client serves its own landing page.
 // The rest could never be a callback, and /api/register does not reject them,
@@ -150,7 +153,7 @@ function renderAgentTooling(): string {
         <p class="instructions">Paste the prompt into your coding agent.</p>
         <div class="actions">
           <button type="button" class="button button-primary" id="copy-prompt" hidden>Copy prompt</button>
-          <a class="docs-link" id="docs-link" href="https://neon.com/docs/ai/agent-setup" target="_blank" rel="noopener noreferrer"><span>Read the docs</span><span class="sr-only"> (opens in a new tab)</span><span class="arrow" aria-hidden="true"><img src="/images/auth-complete/arrow.svg" alt=""></span></a>
+          <a class="docs-link" id="docs-link" href="https://neon.com/docs/ai/agent-skills" target="_blank" rel="noopener noreferrer"><span>Read the docs</span><span class="sr-only"> (opens in a new tab)</span><span class="arrow" aria-hidden="true"><img src="/images/auth-complete/arrow.svg" alt=""></span></a>
         </div>
         <p id="copy-status" class="copy-status" role="status"></p>
         <div id="manual-copy" class="manual-copy" hidden>
