@@ -94,9 +94,9 @@ describe('NEON_TOOLS definitions', () => {
   });
 
   it('marks private Neon operations closed-world and public-capable ones open-world', () => {
-    expect(NEON_TOOLS).toHaveLength(139);
+    expect(NEON_TOOLS).toHaveLength(140);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');
-    expect(generated).toHaveLength(119);
+    expect(generated).toHaveLength(120);
     expect(
       NEON_TOOLS.filter((tool) => tool.annotations.openWorldHint)
         .map((tool) => tool.name)

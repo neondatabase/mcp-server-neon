@@ -86,6 +86,7 @@ export const PINNED_MCP_NAMES = {
   'auth.plugins.organization.update': 'update_auth_plugins_organization',
   'auth.plugins.phoneNumber.update': 'update_auth_plugins_phone_number',
   'auth.webhooks.update': 'update_auth_webhooks',
+  'auth.logsExport.update': 'update_auth_logs_export',
 
   'postgres.dataApi.get': 'get_data_api',
   'postgres.dataApi.create': 'provision_neon_data_api',

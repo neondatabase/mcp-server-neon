@@ -191,7 +191,7 @@ const HOST_TOOL_DRAFTS = [
     inputSchema: getNeonAuthConfigInputSchema,
     readOnlySafe: true,
     description:
-      'Read Neon Auth config for a branch: trusted origins, localhost access, email and password, OAuth providers, email provider, the organization, magic link, and phone number plugins, and the webhook. OAuth and SMTP secrets are redacted as "***redacted***". Requires provision_neon_auth first.',
+      'Read Neon Auth config for a branch: trusted origins, localhost access, email and password, OAuth providers, email provider, the organization, magic link, and phone number plugins, the webhook, and logs export. OAuth and SMTP secrets are redacted as "***redacted***". Requires provision_neon_auth first.',
     annotations: {
       title: 'Get Neon Auth configuration',
       readOnlyHint: true,

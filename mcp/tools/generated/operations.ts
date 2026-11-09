@@ -86,6 +86,7 @@ export const GENERATED_TOOL_SCOPES = {
   'auth.plugins.organization.update': 'neon_auth',
   'auth.plugins.phoneNumber.update': 'neon_auth',
   'auth.webhooks.update': 'neon_auth',
+  'auth.logsExport.update': 'neon_auth',
 
   'postgres.dataApi.get': 'data_api',
   'postgres.dataApi.create': 'data_api',

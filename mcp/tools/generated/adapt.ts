@@ -129,6 +129,8 @@ const UPDATE_AUTH_PLUGINS_PHONE_NUMBER_DESCRIPTION = `Updates the Neon Auth phon
 
 const UPDATE_AUTH_WEBHOOKS_DESCRIPTION = `Replaces the branch's Neon Auth webhook configuration. Omitted fields reset: \`{ enabled: false }\` alone clears \`webhook_url\` and \`enabled_events\`. Call \`get_neon_auth_config\` first and send every field to keep.`;
 
+const UPDATE_AUTH_LOGS_EXPORT_DESCRIPTION = `Turns the export of the branch's Neon Auth events to Neon Platform logs on or off. A project without logs export accepts only \`enabled: false\`; enabling there returns 404 \`feature not available\`. \`get_neon_auth_config\` reports the current value as \`logs_export\`, or \`null\` where logs export is not available.`;
+
 const LIST_LOG_FIELDS_DESCRIPTION = `Lists the low-cardinality log fields observed on this branch. Call \`list_log_field_values\` with \`field_name\` to list distinct values.`;
 
 const LIST_LOG_FIELD_VALUES_DESCRIPTION = `Lists distinct values for a low-cardinality log field. Call \`list_log_fields\` first for \`field_name\`; a field the branch has never emitted returns \`unknown_field\`. Pass \`since\` or \`start_time\`, not both; default is the previous six hours, max seven days. Private beta.`;
@@ -213,6 +215,7 @@ function createGeneratedNeonTools() {
       'auth.plugins.phoneNumber.update':
         UPDATE_AUTH_PLUGINS_PHONE_NUMBER_DESCRIPTION,
       'auth.webhooks.update': UPDATE_AUTH_WEBHOOKS_DESCRIPTION,
+      'auth.logsExport.update': UPDATE_AUTH_LOGS_EXPORT_DESCRIPTION,
       'realtime.secret': GET_REALTIME_SECRET_DESCRIPTION,
       'realtime.rotateSecret': ROTATE_REALTIME_SECRET_DESCRIPTION,
     },

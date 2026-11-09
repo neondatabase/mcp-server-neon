@@ -915,6 +915,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       expect(readOnlyTools).toContain('get_neon_auth_config');
       expect(readOnlyTools).not.toContain('update_auth_webhooks');
       expect(readOnlyTools).not.toContain('send_auth_test_email');
+      expect(readOnlyTools).not.toContain('update_auth_logs_export');
 
       const branch = z
         .object({ id: z.string() })
@@ -958,6 +959,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
               enabled: z.boolean(),
               webhook_url: z.string().optional(),
             }),
+            logs_export: z.object({ enabled: z.boolean() }).nullable(),
             _errors: z.never().optional(),
           })
           .parse(
@@ -1045,6 +1047,21 @@ describe.sequential('MCP server live Neon lifecycle', () => {
 
       await update('update_auth_webhooks', { enabled: false });
       expect((await readConfig()).webhook.webhook_url).toBeUndefined();
+
+      expect(
+        JSON.parse(await update('update_auth_logs_export', { enabled: false })),
+      ).toEqual({ enabled: false });
+      const logsExport = (await readConfig()).logs_export;
+      // Where logs export is not available, the read omits it and enabling is refused.
+      if (logsExport === null) {
+        const enabled = await callTool('update_auth_logs_export', {
+          ...target,
+          enabled: true,
+        });
+        expect(enabled.isError).toBe(true);
+      } else {
+        expect(logsExport).toEqual({ enabled: false });
+      }
     },
     LIVE_TEST_TIMEOUT_MS,
   );

@@ -377,7 +377,7 @@
   {
     "name": "get_neon_auth_config",
     "title": "Get Neon Auth configuration",
-    "description": "Read Neon Auth config for a branch: trusted origins, localhost access, email and password, OAuth providers, email provider, the organization, magic link, and phone number plugins, and the webhook. OAuth and SMTP secrets are redacted as \"***redacted***\". Requires provision_neon_auth first.",
+    "description": "Read Neon Auth config for a branch: trusted origins, localhost access, email and password, OAuth providers, email provider, the organization, magic link, and phone number plugins, the webhook, and logs export. OAuth and SMTP secrets are redacted as \"***redacted***\". Requires provision_neon_auth first.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2905,7 +2905,7 @@
         },
         "provisioner": {
           "type": "string",
-          "description": "Compute provisioner."
+          "description": "Legacy field; do not send it."
         },
         "settings": {
           "type": "object",
@@ -3661,7 +3661,8 @@
             "github",
             "microsoft",
             "vercel",
-            "apple"
+            "apple",
+            "discord"
           ],
           "description": "OAuth provider to configure for Neon Auth."
         },
@@ -3726,7 +3727,8 @@
             "github",
             "microsoft",
             "vercel",
-            "apple"
+            "apple",
+            "discord"
           ],
           "description": "The OAuth provider ID"
         },
@@ -3791,7 +3793,8 @@
             "github",
             "microsoft",
             "vercel",
-            "apple"
+            "apple",
+            "discord"
           ],
           "description": "The OAuth provider ID"
         }
@@ -4958,6 +4961,44 @@
     },
     "annotations": {
       "title": "Update Neon Auth webhook configuration",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_auth_logs_export",
+    "title": "Update Neon Auth logs export setting",
+    "description": "Turns the export of the branch's Neon Auth events to Neon Platform logs on or off. A project without logs export accepts only `enabled: false`; enabling there returns 404 `feature not available`. `get_neon_auth_config` reports the current value as `logs_export`, or `null` where logs export is not available.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon project ID"
+        },
+        "branch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "The Neon branch ID"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether Neon Auth events are exported to Neon Platform logs."
+        }
+      },
+      "required": [
+        "project_id",
+        "branch_id",
+        "enabled"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Update Neon Auth logs export setting",
       "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": false,

@@ -151,7 +151,51 @@ describe('handleGetNeonAuthConfig', () => {
         enabled_events: [],
         timeout_seconds: 5,
       });
+      expect(body.logs_export).toBeNull();
       expect(body._errors).toBeUndefined();
+    }
+  });
+
+  it('reports logs_export from the plugins response when the project has logs export', async () => {
+    const neonClient = {
+      ...defaultSnapshotMocks(),
+      listProjectBranches: vi.fn().mockResolvedValue({
+        data: { branches: [{ id: 'br-1', default: true }] },
+      }),
+      getNeonAuth: vi.fn().mockResolvedValue({
+        status: 200,
+        data: {
+          auth_provider: NeonAuthSupportedAuthProvider.BetterAuth,
+          branch_id: 'br-1',
+          db_name: 'neondb',
+          jwks_url: 'https://jwks.example/',
+        },
+      }),
+      getProjectBranch: vi.fn().mockResolvedValue({
+        status: 200,
+        data: { branch: { id: 'br-1', name: 'main' } },
+      }),
+      getNeonAuthPluginConfigs: vi.fn().mockResolvedValue({
+        status: 200,
+        data: { ...PLUGIN_DEFAULTS, logs_export: { enabled: true } },
+      }),
+    };
+
+    const result = await handleGetNeonAuthConfig(
+      { projectId: 'p1' },
+      neonClient as never,
+      extra,
+    );
+
+    expect(result.isError).toBeFalsy();
+    if (result.content[0].type === 'text') {
+      const body = parseSettingsJson(result.content[0].text);
+      expect(body.logs_export).toEqual({ enabled: true });
+      expect(body.plugins).toEqual({
+        organization: PLUGIN_DEFAULTS.organization,
+        magic_link: PLUGIN_DEFAULTS.magic_link,
+        phone_number: PLUGIN_DEFAULTS.phone_number,
+      });
     }
   });
 
@@ -572,6 +616,7 @@ describe('handleGetNeonAuthConfig', () => {
       expect(body.allow_localhost).toBe(false);
       expect(body.plugins).toBeNull();
       expect(body.webhook).toBeNull();
+      expect(body.logs_export).toBeNull();
       const errors = body._errors as Record<string, string>;
       expect(errors.plugins).toContain('500');
       expect(errors.webhook).toContain('500');
