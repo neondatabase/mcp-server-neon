@@ -7,12 +7,38 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { SENTRY_FIXTURE_ITEMS_URL } from './sentry-fixture.js';
+import {
+  SENTRY_FIXTURE_ITEMS_URL,
+  type EnvelopeItem,
+} from './sentry-fixture.js';
 
-async function sentryText(): Promise<string> {
+function randomHex(bytes: number): string {
+  return Buffer.from(crypto.getRandomValues(new Uint8Array(bytes))).toString(
+    'hex',
+  );
+}
+
+// The server continues an incoming `sentry-trace`, so each request's
+// transaction can be found by a trace id the test chose.
+function newTrace() {
+  const traceId = randomHex(16);
+  return { traceId, header: `${traceId}-${randomHex(8)}-1` };
+}
+
+function traceIdOf(item: EnvelopeItem): unknown {
+  const payload = item.payload;
+  if (typeof payload !== 'object' || payload === null) return undefined;
+  const contexts = 'contexts' in payload ? payload.contexts : undefined;
+  if (typeof contexts !== 'object' || contexts === null) return undefined;
+  const trace = 'trace' in contexts ? contexts.trace : undefined;
+  if (typeof trace !== 'object' || trace === null) return undefined;
+  return 'trace_id' in trace ? trace.trace_id : undefined;
+}
+
+async function sentryItems(): Promise<EnvelopeItem[]> {
   const response = await fetch(SENTRY_FIXTURE_ITEMS_URL);
   expect(response.ok).toBe(true);
-  return response.text();
+  return (await response.json()) as EnvelopeItem[];
 }
 
 test('OAuth credentials and codes stay out of Sentry', async ({ request }) => {
@@ -25,17 +51,25 @@ test('OAuth credentials and codes stay out of Sentry', async ({ request }) => {
   const verifier = canary('verifier');
   const code = canary('code');
   const state = canary('state');
+  const traces = [newTrace(), newTrace(), newTrace()];
 
-  await request.post('/mcp', {
+  // The docs-only route answers 200 without checking the bearer, so the
+  // request is traced without reaching the Neon API. The SDK drops
+  // transactions for 401 to 404 responses.
+  await request.post('/mcp?category=docs', {
     headers: {
       Authorization: `Bearer ${bearer}`,
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
+      'sentry-trace': traces[0].header,
     },
     data: { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
   });
   await request.post('/api/token', {
-    headers: { Authorization: `Basic ${basic}` },
+    headers: {
+      Authorization: `Basic ${basic}`,
+      'sentry-trace': traces[1].header,
+    },
     form: {
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
@@ -43,16 +77,25 @@ test('OAuth credentials and codes stay out of Sentry', async ({ request }) => {
     },
   });
   await request.get(`/callback?code=${code}&state=${state}`, {
+    headers: { 'sentry-trace': traces[2].header },
     maxRedirects: 0,
   });
 
-  // A transaction for each request has arrived once the callback's has.
   await expect
-    .poll(async () => (await sentryText()).includes('/callback'), {
-      timeout: 20_000,
-    })
+    .poll(
+      async () => {
+        const arrived = new Set(
+          (await sentryItems())
+            .filter((item) => item.type === 'transaction')
+            .map(traceIdOf),
+        );
+        return traces.every(({ traceId }) => arrived.has(traceId));
+      },
+      { timeout: 20_000 },
+    )
     .toBe(true);
-  const sent = await sentryText();
+
+  const sent = JSON.stringify(await sentryItems());
   const secrets = { bearer, basic, refreshToken, verifier, code, state };
   const leaked = Object.entries(secrets)
     .filter(([, secret]) => sent.includes(secret))
