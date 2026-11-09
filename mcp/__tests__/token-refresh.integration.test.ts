@@ -19,6 +19,7 @@ vi.mock('../oauth/model', () => ({
     deleteRefreshToken: vi.fn(),
     saveRefreshResult: vi.fn(),
     getRefreshResult: vi.fn(),
+    attributeRefreshResult: vi.fn().mockResolvedValue(undefined),
     saveRefreshFailure: vi.fn(),
     getRefreshFailure: vi.fn(),
   },

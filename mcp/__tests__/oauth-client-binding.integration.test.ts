@@ -52,6 +52,7 @@ const other: TestClient = { id: `other-${randomUUID()}`, secret: 'other' };
 let tokenRoute: typeof import('../../app/api/token/route');
 let revokeRoute: typeof import('../../app/api/revoke/route');
 let model: typeof import('../oauth/model').model;
+let getRefreshResults: typeof import('../oauth/kv-store').getRefreshResults;
 
 beforeAll(async () => {
   const databaseUrl = await ensureTestOauthDatabase();
@@ -62,6 +63,7 @@ beforeAll(async () => {
     stores.createPostgresRefreshLockStore(databaseUrl),
   ]);
   model = (await import('../oauth/model')).model;
+  getRefreshResults = (await import('../oauth/kv-store')).getRefreshResults;
   tokenRoute = await import('../../app/api/token/route');
   revokeRoute = await import('../../app/api/revoke/route');
   for (const client of [owner, other]) {
@@ -189,10 +191,17 @@ describe('refresh token client binding', () => {
       delete row.clientId;
       await model.saveRefreshResult(key, row);
     }
+    const expiry = async (key: string) =>
+      (await getRefreshResults().get(key, { raw: true }))?.expires;
+    const expiries = [await expiry(first), await expiry(secondToken)];
 
     expectRejected(await refresh(other, first));
-    const replay = await refresh(owner, first);
 
+    for (const key of [first, secondToken]) {
+      expect((await model.getRefreshResult(key))?.clientId).toBe(owner.id);
+    }
+    expect([await expiry(first), await expiry(secondToken)]).toEqual(expiries);
+    const replay = await refresh(owner, first);
     expect(replay.status).toBe(200);
     expect(pair(replay.body)).toEqual(pair(second.body));
     expect(upstream.calls).toBe(2);
