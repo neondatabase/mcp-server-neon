@@ -264,9 +264,9 @@ test.describe('OAuth register and authorize contract', () => {
     const location = response.headers()['location'] ?? '';
     expect(location).toContain('error=access_denied');
     expect(location).toContain('state=e2e-cancel');
-    expect(location).toMatch(
-      new RegExp(`^${VALID_REGISTER_PAYLOAD.redirect_uris[0]}\\?`),
-    );
+    expect(
+      location.startsWith(`${VALID_REGISTER_PAYLOAD.redirect_uris[0]}?`),
+    ).toBe(true);
   });
 
   // Codex's client metadata document registers portless loopback callbacks
@@ -302,7 +302,9 @@ test.describe('OAuth register and authorize contract', () => {
       await page.getByRole('button', { name: 'Cancel' }).click();
       const response = await responsePromise;
       expect(response.status()).toBe(303);
-      const location = new URL(response.headers()['location'] ?? '');
+      const header = response.headers()['location'];
+      expect(header).toBeTruthy();
+      const location = new URL(header ?? '');
       expect(`${location.origin}${location.pathname}`).toBe(redirectUri);
       expect(location.searchParams.get('error')).toBe('access_denied');
     });
