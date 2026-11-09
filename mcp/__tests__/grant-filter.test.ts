@@ -46,8 +46,9 @@ describe('filterToolsForGrant', () => {
       grant({ scopes: ['querying'] }),
     );
     const names = tools.map((t) => t.name);
-    expect(tools).toHaveLength(12);
+    expect(tools).toHaveLength(13);
     expect(names).toContain('run_sql');
+    expect(names).toContain('list_incidents');
     expect(names).toContain('search');
     expect(names).toContain('fetch');
     expect(names).not.toContain('create_project');
@@ -80,6 +81,7 @@ describe('filterToolsForGrant', () => {
     const tools = filterToolsForGrant(NEON_TOOLS, grant({ scopes: [] }));
     expect(tools.map((t) => t.name).sort()).toEqual([
       'fetch',
+      'list_incidents',
       'search',
       'send_feedback',
     ]);
@@ -187,9 +189,10 @@ describe('filterToolsForGrant', () => {
       NEON_TOOLS,
       grant({ projectId: 'proj-123', scopes: ['querying'] }),
     );
-    expect(tools).toHaveLength(10);
+    expect(tools).toHaveLength(11);
     const names = tools.map((t) => t.name);
     expect(names).toContain('run_sql');
+    expect(names).toContain('list_incidents');
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
   });
@@ -198,7 +201,7 @@ describe('filterToolsForGrant', () => {
 describe('getAvailableTools', () => {
   it('applies read-only filter after grant filtering', () => {
     const tools = getAvailableTools(grant({ scopes: ['querying'] }), true);
-    expect(tools).toHaveLength(7);
+    expect(tools).toHaveLength(8);
     expect(tools.map((tool) => tool.name)).not.toContain('run_sql_transaction');
     for (const tool of tools) {
       expect(tool.readOnlySafe).toBe(true);
@@ -320,7 +323,7 @@ describe('getAccessControlNotices', () => {
     );
     expect(instructions).toContain('compute');
     expect(instructions).toContain(
-      'Only the "send_feedback" tool is available',
+      'Only the "send_feedback" and "list_incidents" tools are available',
     );
   });
 });
@@ -332,14 +335,14 @@ describe('getAccessControlWarnings', () => {
     expect(warnings[0]).toContain('No valid scope categories');
   });
 
-  it('warns that only send_feedback remains when project-scoped and scopes are invalid', () => {
+  it('warns that only send_feedback and list_incidents remain when project-scoped and scopes are invalid', () => {
     const warnings = getAccessControlWarnings(
       grant({ projectId: 'proj-123', scopes: [] }),
       false,
     );
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain(
-      'Only the "send_feedback" tool is available.',
+      'Only the "send_feedback" and "list_incidents" tools are available.',
     );
   });
 
@@ -484,6 +487,7 @@ describe('search_docs visibility', () => {
     const docsOnly = NEON_TOOLS.filter(isDocsOnlyTool).map((t) => t.name);
     expect(docsOnly.sort()).toEqual([
       'get_doc',
+      'list_incidents',
       'search_docs',
       'send_feedback',
     ]);

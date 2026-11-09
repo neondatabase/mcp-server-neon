@@ -56,7 +56,7 @@ describe('buildConsentView', () => {
     );
   });
 
-  it('describes an empty category list without a project as search, fetch, and send_feedback only', () => {
+  it('describes an empty category list without a project as search, fetch, send_feedback, and list_incidents only', () => {
     const view = buildConsentView({
       grant: { projectId: null, scopes: [] },
       writeChecked: true,
@@ -65,27 +65,31 @@ describe('buildConsentView', () => {
     expect(view.categories.kind).toBe('none');
     expect(view.tools.map((tool) => tool.name).sort()).toEqual([
       'fetch',
+      'list_incidents',
       'search',
       'send_feedback',
     ]);
   });
 
-  it('describes an empty category list with a project as send_feedback only', () => {
+  it('describes an empty category list with a project as send_feedback and list_incidents only', () => {
     const view = buildConsentView({
       grant: { projectId: 'proj-123', scopes: [] },
       writeChecked: true,
     });
 
-    expect(view.tools.map((tool) => tool.name)).toEqual(['send_feedback']);
+    expect(view.tools.map((tool) => tool.name)).toEqual([
+      'send_feedback',
+      'list_incidents',
+    ]);
   });
 
   it('does not collapse when hidden write tools alone cross the threshold', () => {
     const readView = buildConsentView({
-      grant: { projectId: null, scopes: ['data_api'] },
+      grant: { projectId: 'proj-123', scopes: ['data_api'] },
       writeChecked: false,
     });
     const writeView = buildConsentView({
-      grant: { projectId: null, scopes: ['data_api'] },
+      grant: { projectId: 'proj-123', scopes: ['data_api'] },
       writeChecked: true,
     });
     expect(visibleToolCount(readView)).toBeLessThanOrEqual(COLLAPSE_ABOVE);
@@ -321,7 +325,7 @@ describe('renderConsentHtml', () => {
     });
 
     expect(html).toContain(
-      'var ALWAYS = {"search":true,"fetch":true,"send_feedback":true};',
+      'var ALWAYS = {"search":true,"fetch":true,"send_feedback":true,"list_incidents":true};',
     );
     expect(html).toContain('name="projectMode"');
     expect(html).not.toContain('Next, sign in to Neon');
@@ -344,11 +348,11 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('src="/images/consent/neon.svg"');
     expect(html).toContain('>Included tools</button>');
     expect(html).toContain('is-collapsed');
-    expect(html).toContain('139 tools available');
+    expect(html).toContain('140 tools available');
     expect(html).toContain('data-tool-content');
     expect(html).toContain('data-category-disclosure');
     expect(html).toContain(
-      'data-category-summary>13/13 selected · 139 tools available</span>',
+      'data-category-summary>13/13 selected · 140 tools available</span>',
     );
     expect(html).toContain('choice-categories');
     expect(html).not.toMatch(/\.check-grid\s*\{[^}]*overflow-y/);

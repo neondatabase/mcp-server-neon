@@ -2,6 +2,7 @@ import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import type { ScopeCategory } from '../utils/grant-context';
 import type { ZodTypeAny } from 'zod/v3';
 import { createGeneratedToolDefinitions } from './generated/adapt';
+import { LIST_INCIDENTS_TOOL } from './handlers/incidents';
 import type { NeonTool } from './tool-definition';
 import {
   completeDatabaseMigrationInputSchema,
@@ -24,6 +25,7 @@ import {
   searchDocsInputSchema,
   getDocInputSchema,
   sendFeedbackInputSchema,
+  listIncidentsInputSchema,
 } from './toolsSchema';
 
 type HostToolDraft = {
@@ -346,6 +348,20 @@ const HOST_TOOL_DRAFTS = [
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
+      openWorldHint: true,
+    } satisfies ToolAnnotations,
+  },
+  {
+    name: 'list_incidents' as const,
+    scope: null,
+    description: LIST_INCIDENTS_TOOL.description,
+    inputSchema: listIncidentsInputSchema,
+    readOnlySafe: true,
+    annotations: {
+      title: 'List Neon Incidents',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
       openWorldHint: true,
     } satisfies ToolAnnotations,
   },

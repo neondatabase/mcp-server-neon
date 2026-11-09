@@ -18,6 +18,7 @@ import { NeonApiError } from '@neon/sdk';
 import { NEON_HANDLERS } from '../../../mcp/tools/index';
 import { getDoc, searchDocs } from '../../../mcp/tools/handlers/docs';
 import { sendFeedback } from '../../../mcp/tools/handlers/feedback';
+import { listIncidents } from '../../../mcp/tools/handlers/incidents';
 import { createNeonClient } from '../../../mcp/server/api';
 import pkg from '../../../package.json';
 import { handleToolError } from '../../../mcp/server/errors';
@@ -556,14 +557,15 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 }
 
 // The docs-only handler bypasses OAuth entirely. It only registers the
-// `docs` category tools plus send_feedback. None of them touch the Neon API
-// client: they call neon.com or the feedback service via global fetch. We
+// `docs` category tools plus send_feedback and list_incidents. None of them
+// touch the Neon API client: they call neon.com, the feedback service, or
+// neonstatus.com via global fetch. We
 // deliberately avoid going through `getAvailableTools` / `grant-filter` here
 // so the "always available" search/fetch tools (which require Neon API auth)
 // are not surfaced anonymously.
 const DOCS_ONLY_TOOLS = NEON_TOOLS.filter(isDocsOnlyTool);
 function getDocsOnlyToolDefinition(
-  name: 'search_docs' | 'get_doc' | 'send_feedback',
+  name: 'search_docs' | 'get_doc' | 'send_feedback' | 'list_incidents',
 ) {
   const tool = DOCS_ONLY_TOOLS.find((tool) => tool.name === name);
   assert(tool, `${name} tool definition not found`);
@@ -573,6 +575,7 @@ function getDocsOnlyToolDefinition(
 const searchDocsTool = getDocsOnlyToolDefinition('search_docs');
 const getDocTool = getDocsOnlyToolDefinition('get_doc');
 const sendFeedbackTool = getDocsOnlyToolDefinition('send_feedback');
+const listIncidentsTool = getDocsOnlyToolDefinition('list_incidents');
 
 const ANONYMOUS_DOCS_USER_ID = 'anonymous-docs';
 
@@ -710,6 +713,12 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
             return 'Feedback received. Thank you!';
           });
         },
+      );
+      server.registerTool(
+        listIncidentsTool.name,
+        v2ToolConfig(listIncidentsTool),
+        async () =>
+          runDocsTool(listIncidentsTool.name, userAgent, () => listIncidents()),
       );
     },
     {
