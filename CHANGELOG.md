@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+OAuth sign-in completes for clients whose `redirect_uri` is on `127.0.0.1`, such as Codex CLI (`http://127.0.0.1:<port>/callback`). Before, the server stored that redirect as `http://localhost:<port>/callback`, so the browser returned to `localhost` and the client's token request failed with `invalid_request`.
+
 New tool: `list_incidents` returns open Neon incidents, active and upcoming maintenance, and the components and regions neonstatus.com reports as not operational. It needs no Neon credential and is available on every connection, including the anonymous `?category=docs` endpoint, read-only mode, project-scoped grants, and grants with no valid categories. OAuth consent lists it under Discovery. Requires `@neon/tools` 2.11.0.
 
 Authorizing a client that returns through a custom URL scheme, such as older Cursor installs (`cursor://`), ends on a completion page instead of leaving the consent form on screen. The page opens the app, links back to it if the app did not open, and offers a prompt to install the Neon skills. A cancelled or failed authorization opened in a browser gets a page instead of a JSON body. Clients that return to a web or loopback address still get a plain redirect, and non-browser callers see no change. The page reports that it was shown and which of its buttons and links were used, as described under Telemetry in the README.
