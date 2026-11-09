@@ -300,7 +300,7 @@
   {
     "name": "describe_branch",
     "title": "Describe Branch",
-    "description": "Get a tree view of all objects in a branch, including databases, schemas, tables, views, and functions. Do not use when you only need table names (use `get_database_tables` instead) or column detail (use `describe_table_schema` instead).",
+    "description": "Get a summary of a branch and a tree view of all its objects, including databases, schemas, tables, views, and functions. Connects to the database, so it starts a suspended compute; for the branch record alone, use `get_branch`. Do not use when you only need table names (use `get_database_tables` instead) or column detail (use `describe_table_schema` instead).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2644,7 +2644,7 @@
   {
     "name": "list_postgres_endpoints",
     "title": "List compute endpoints",
-    "description": "Retrieves a list of compute endpoints for the specified project.",
+    "description": "Retrieves the compute endpoints of every branch in the project. For one branch, call `list_branch_computes`.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3449,7 +3449,7 @@
   {
     "name": "get_auth",
     "title": "Retrieve Neon Auth details for the branch",
-    "description": "Retrieves the Neon Auth integration details for the specified branch, including the auth provider type and integration status.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Retrieves the Neon Auth integration record for a branch: provider, base URL, JWKS URL, and database. `get_neon_auth_config` returns these fields plus additional Neon Auth settings; prefer it unless you only need the record.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
