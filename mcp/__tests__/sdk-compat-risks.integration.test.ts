@@ -155,6 +155,67 @@ describe('logging requests that @modelcontextprotocol/server 2.2.0 rejects', () 
     ).toEqual([]);
   });
 
+  it.each([
+    [
+      'a request without jsonrpc',
+      { id: 1, method: 'tools/list' },
+      { 'Mcp-Method': 'tools/list' },
+    ],
+    [
+      'an incomplete 2026-07-28 envelope',
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/list',
+        params: {
+          _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28' },
+        },
+      },
+      { 'Mcp-Method': 'tools/list' },
+    ],
+    [
+      'an Mcp-Method that disagrees with the body',
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/list',
+        params: { _meta: MODERN_META },
+      },
+      { 'Mcp-Method': 'ping' },
+    ],
+  ])(
+    'does not log %s, which 2.0.0 already rejects',
+    async (_case, body, headers) => {
+      const res = await post(body, headers);
+
+      expect(res.status).toBe(400);
+      expect(
+        warnedWith('MCP 2026-07-28 request without MCP-Protocol-Version'),
+      ).toEqual([]);
+    },
+  );
+
+  it.each([
+    ['null elements', Array.from({ length: 101 }, () => null)],
+    [
+      '2026-07-28 messages',
+      Array.from({ length: 101 }, (_, i) => ({
+        jsonrpc: '2.0',
+        id: i + 1,
+        method: 'tools/list',
+        params: { _meta: MODERN_META },
+      })),
+    ],
+  ])(
+    'does not log a 101-message batch of %s, which 2.0.0 already rejects',
+    async (_case, body) => {
+      const res = await post(body);
+
+      expect(res.status).toBe(400);
+      expect(warnedWith('MCP batch over 100 messages')).toEqual([]);
+    },
+  );
+
   it('does not log a 2025-era request without MCP-Protocol-Version', async () => {
     await post({
       jsonrpc: '2.0',

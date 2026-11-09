@@ -27,7 +27,7 @@ import { identifyClient } from '../../../mcp/utils/client-application';
 import { isReadOnly } from '../../../mcp/utils/read-only';
 import type { AuthContext } from '../../../mcp/types/auth';
 import { logger } from '../../../mcp/utils/logger';
-import { logSdkCompatRisks } from '../../../mcp/utils/sdk-compat-risks';
+import { withSdkCompatRiskLog } from '../../../mcp/utils/sdk-compat-risks';
 import { generateTraceId } from '../../../mcp/utils/trace';
 import { waitUntil } from '@vercel/functions';
 import { track, flushAnalytics } from '../../../mcp/analytics/analytics';
@@ -1014,13 +1014,13 @@ function jsonErrorResponse({
 // Wrap with authentication. After auth is resolved, route to a context-scoped
 // MCP handler whose registered tools match the token grant/read-only context.
 const authHandler = withMcpAuth(
-  async (req) => {
-    await logSdkCompatRisks(req);
-    return withMcpSession(
-      req,
-      createContextualMcpHandler(getStaticToolContext(req)),
-    );
-  },
+  async (req) =>
+    withSdkCompatRiskLog(req, () =>
+      withMcpSession(
+        req,
+        createContextualMcpHandler(getStaticToolContext(req)),
+      ),
+    ),
   verifyToken,
   {
     required: true,
@@ -1216,10 +1216,11 @@ const handleRequest = async (req: Request): Promise<Response> => {
   // without an account. Only triggers when the request is exactly
   // ?category=docs (no other categories, no projectId).
   if (isDocsOnlyRequest(url.searchParams)) {
-    await logSdkCompatRisks(normalizedReq);
-    const response = await withMcpSession(
-      normalizedReq,
-      createDocsOnlyMcpHandler(req.headers.get('user-agent') ?? undefined),
+    const response = await withSdkCompatRiskLog(normalizedReq, () =>
+      withMcpSession(
+        normalizedReq,
+        createDocsOnlyMcpHandler(req.headers.get('user-agent') ?? undefined),
+      ),
     );
     return flushAfterResponse(response);
   }
