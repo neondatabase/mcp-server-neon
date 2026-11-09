@@ -20,7 +20,12 @@ export async function getOwnedRefreshResult(
   const result = await model.getRefreshResult(refreshToken);
   if (!result) return undefined;
   const owner = await findOwner(refreshToken, result);
-  return owner === clientId ? result : undefined;
+  if (owner === clientId) return result;
+  logger.warn('Client mismatch for cached refresh result', {
+    tokenClientId: owner,
+    requestClientId: clientId,
+  });
+  return undefined;
 }
 
 async function findOwner(
