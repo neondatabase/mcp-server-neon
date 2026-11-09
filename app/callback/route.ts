@@ -23,6 +23,7 @@ import {
 } from '../../mcp/oauth/browser-binding';
 import { AUTH_RESTART_DESCRIPTION } from '../../mcp/oauth/consent-html-headers';
 import {
+  clientNameForPage,
   presentToBrowser,
   withCompletionContext,
 } from '../../mcp/oauth/auth-complete-response';
@@ -441,11 +442,6 @@ async function handleCallback(request: NextRequest): Promise<NextResponse> {
             // all of them). See ai-notes/auth-callback-slo.md.
             downstreamRequest: summarizeDownstreamRequest(state, requestParams),
           });
-          // Only names the client for analytics, so a failed lookup must not
-          // stop the relay.
-          const client = await model
-            .getClient(requestParams.clientId, '')
-            .catch(() => undefined);
           return withCompletionContext(
             clearTransactionCookie(
               NextResponse.redirect(redirectUrl.href),
@@ -454,7 +450,10 @@ async function handleCallback(request: NextRequest): Promise<NextResponse> {
             ),
             {
               clientId: requestParams.clientId,
-              clientName: client?.client_name,
+              clientName: await clientNameForPage(
+                requestParams.clientId,
+                requestParams.redirectUri,
+              ),
               relayedError: upstreamError,
             },
           );

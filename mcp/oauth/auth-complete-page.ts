@@ -20,8 +20,6 @@ export type AuthCompletePageProps = {
   nonce: string;
   /** Ties the page's action events to its auth_complete_viewed event. */
   pageViewId?: string;
-  /** The server's signature for pageViewId, which the events endpoint checks. */
-  pageViewToken?: string;
   /** The callback can be retried as is, so a reload must keep its query. */
   retryable?: boolean;
 };
@@ -152,7 +150,7 @@ function renderAgentTooling(): string {
         <p class="instructions">Paste the prompt into your coding agent.</p>
         <div class="actions">
           <button type="button" class="button button-primary" id="copy-prompt" hidden>Copy prompt</button>
-          <a class="docs-link" id="docs-link" href="https://neon.com/docs/ai/ai-agents-tools" target="_blank" rel="noopener noreferrer"><span>Read the docs</span><span class="sr-only"> (opens in a new tab)</span><span class="arrow" aria-hidden="true"><img src="/images/auth-complete/arrow.svg" alt=""></span></a>
+          <a class="docs-link" id="docs-link" href="https://neon.com/docs/ai/agent-setup" target="_blank" rel="noopener noreferrer"><span>Read the docs</span><span class="sr-only"> (opens in a new tab)</span><span class="arrow" aria-hidden="true"><img src="/images/auth-complete/arrow.svg" alt=""></span></a>
         </div>
         <p id="copy-status" class="copy-status" role="status"></p>
         <div id="manual-copy" class="manual-copy" hidden>
@@ -178,10 +176,9 @@ function script(
   // sendBeacon still delivers when the click leaves the page or opens the app.
   parts.push(`
     var pageViewId = document.body.dataset.pageViewId;
-    var pageViewToken = document.body.dataset.pageViewToken;
     function trackAction(action) {
-      if (!pageViewId || !pageViewToken || !navigator.sendBeacon) return;
-      navigator.sendBeacon(${JSON.stringify(AUTH_COMPLETE_EVENTS_PATH)}, JSON.stringify({ pageViewId: pageViewId, token: pageViewToken, action: action }));
+      if (!pageViewId || !navigator.sendBeacon) return;
+      navigator.sendBeacon(${JSON.stringify(AUTH_COMPLETE_EVENTS_PATH)}, JSON.stringify({ pageViewId: pageViewId, action: action }));
     }`);
   if (hasReturn) {
     parts.push(`
@@ -247,9 +244,6 @@ export function renderAuthCompleteHtml(props: AuthCompletePageProps): string {
   const pageViewAttribute = props.pageViewId
     ? ` data-page-view-id="${he.escape(props.pageViewId)}"`
     : '';
-  const pageViewTokenAttribute = props.pageViewToken
-    ? ` data-page-view-token="${he.escape(props.pageViewToken)}"`
-    : '';
   const returnHtml = returnUrl
     ? `<p class="return">Didn’t open? <a id="return-link" href="${he.escape(returnUrl)}">Return to your app</a></p>`
     : '';
@@ -304,7 +298,7 @@ export function renderAuthCompleteHtml(props: AuthCompletePageProps): string {
     }
   </style>
 </head>
-<body${pageViewAttribute}${pageViewTokenAttribute}>
+<body${pageViewAttribute}>
   <main>
     <div class="card">
       <header class="complete-header">

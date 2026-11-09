@@ -12,11 +12,6 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.E2E_PORT ?? '3100';
 const BASE_URL = `http://localhost:${PORT}`;
-// e2e/auth-complete.spec.ts signs page views for the dev server to verify, so
-// the test workers (which inherit this process's env) and the server need the
-// same secret, whatever a developer's .env.local holds.
-const E2E_CLIENT_SECRET = 'e2e-client-secret';
-process.env.CLIENT_SECRET = E2E_CLIENT_SECRET;
 
 /**
  * Load env vars from .env.e2e (written by e2e setup).
@@ -59,7 +54,6 @@ export default defineConfig({
       // Load fresh values from .env.e2e for the webServer subprocess.
       ...loadE2eEnv(),
       SERVER_HOST: BASE_URL,
-      CLIENT_SECRET: E2E_CLIENT_SECRET,
       // Serve doc pages from the fixture server that global setup starts, so
       // no merge-gating test depends on neon.com being reachable. Set here and
       // not in global setup: Playwright starts the web server as a plugin task,

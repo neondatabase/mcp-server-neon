@@ -1,14 +1,15 @@
 import { waitUntil } from '@vercel/functions';
 import { NextResponse, type NextRequest } from 'next/server';
+import { isClientIdMetadataUrl } from '../../lib/oauth/client-id-metadata-document';
 import { flushAnalytics, track } from '../analytics/analytics';
 import { identifyClient } from '../utils/client-application';
+import { model } from './model';
 import {
   nativeAppRedirect,
   renderAuthCompletePage,
   type AuthCompleteOutcome,
   type AuthCompletePageProps,
 } from './auth-complete-page';
-import { signPageView } from './auth-complete-page-view';
 
 const SERVER_FAILURE_MESSAGE =
   'Neon could not finish authorization right now. Start again from your app.';
@@ -33,6 +34,23 @@ type CompletionContext = {
 };
 
 const completionContexts = new WeakMap<NextResponse, CompletionContext>();
+
+/**
+ * The client's registered name for the page's analytics, when an error is
+ * relayed to it. Looked up only when the redirect gets a page, and never for a
+ * client ID metadata document, which can take seconds to fetch. A failed
+ * lookup just leaves the name out.
+ */
+export async function clientNameForPage(
+  clientId: string,
+  redirectUri: string,
+): Promise<string | undefined> {
+  if (!nativeAppRedirect(redirectUri) || isClientIdMetadataUrl(clientId)) {
+    return undefined;
+  }
+  const client = await model.getClient(clientId, '').catch(() => undefined);
+  return client?.client_name;
+}
 
 /** Tags a /callback response with the context its completion page reports. */
 export function withCompletionContext(
@@ -109,10 +127,7 @@ function failureOutcome(error: unknown): AuthCompleteOutcome {
   return error === 'access_denied' ? 'cancelled' : 'failed';
 }
 
-type CompletionPageProps = Omit<
-  AuthCompletePageProps,
-  'nonce' | 'pageViewId' | 'pageViewToken'
->;
+type CompletionPageProps = Omit<AuthCompletePageProps, 'nonce' | 'pageViewId'>;
 
 function completionPage(
   original: NextResponse,
@@ -137,7 +152,7 @@ function completionPage(
 function trackView(
   original: NextResponse,
   props: CompletionPageProps,
-): { pageViewId: string; pageViewToken: string } {
+): { pageViewId: string } {
   const pageViewId = crypto.randomUUID();
   const context = completionContexts.get(original) ?? {};
   // anonymousId is the page view so the browser's action events, which only
@@ -154,8 +169,10 @@ function trackView(
       clientName: context.clientName,
       clientApplication: identifyClient(undefined, context.clientName)
         .clientApplication,
+      // A reload of a retryable failure is a new view of the same attempt.
+      retryable: Boolean(props.retryable),
     },
   });
   waitUntil(flushAnalytics());
-  return { pageViewId, pageViewToken: signPageView(pageViewId) };
+  return { pageViewId };
 }

@@ -4,10 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { flushAnalytics, track } from '../analytics/analytics';
 import {
+  clientNameForPage,
   presentToBrowser,
   withCompletionContext,
 } from '../oauth/auth-complete-response';
-import { isIssuedPageView } from '../oauth/auth-complete-page-view';
+import { model } from '../oauth/model';
 
 vi.mock('../analytics/analytics', () => ({
   track: vi.fn(),
@@ -16,6 +17,10 @@ vi.mock('../analytics/analytics', () => ({
 
 vi.mock('@vercel/functions', () => ({
   waitUntil: vi.fn(),
+}));
+
+vi.mock('../oauth/model', () => ({
+  model: { getClient: vi.fn() },
 }));
 
 const APP_CALLBACK = 'cursor://anysphere.cursor-mcp/oauth/callback';
@@ -328,15 +333,34 @@ describe('auth_complete_viewed', () => {
         clientId: 'client-1',
         clientName: 'Cursor',
         clientApplication: 'cursor',
+        retryable: false,
       },
     });
     expect(waitUntil).toHaveBeenCalledWith(
       vi.mocked(flushAnalytics).mock.results[0]!.value,
     );
-    const html = await response.text();
-    expect(html).toContain(`data-page-view-id="${event.anonymousId}"`);
-    const token = /data-page-view-token="([^"]+)"/.exec(html)?.[1];
-    expect(isIssuedPageView(event.anonymousId!, token ?? '')).toBe(true);
+    expect(await response.text()).toContain(
+      `<body data-page-view-id="${event.anonymousId}">`,
+    );
+  });
+
+  it('marks a failure a reload can retry, so its repeat views can be told apart', async () => {
+    await presentToBrowser(
+      callbackRequest('?code=c&state=s', BROWSER_ACCEPT),
+      withCompletionContext(
+        NextResponse.json({ error: 'server_error' }, { status: 500 }),
+        { retryable: true },
+      ),
+    );
+
+    expect(track).toHaveBeenCalledWith(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          outcome: 'failed',
+          retryable: true,
+        }),
+      }),
+    );
   });
 
   it('attributes a client registered as Claude to Claude Desktop', async () => {
@@ -380,5 +404,44 @@ describe('auth_complete_viewed', () => {
       NextResponse.redirect('http://127.0.0.1:55667/callback?code=c'),
     );
     expect(track).not.toHaveBeenCalled();
+  });
+});
+
+describe('clientNameForPage', () => {
+  beforeEach(() => {
+    vi.mocked(model.getClient).mockReset();
+  });
+
+  it('names a registered client whose redirect gets a page', async () => {
+    vi.mocked(model.getClient).mockResolvedValue({
+      client_name: 'Cursor',
+    } as never);
+
+    await expect(clientNameForPage('client-1', APP_CALLBACK)).resolves.toBe(
+      'Cursor',
+    );
+  });
+
+  it.each([
+    ['a web redirect', 'client-1', 'https://chatgpt.com/cb'],
+    ['a loopback redirect', 'client-1', 'http://127.0.0.1:55667/callback'],
+    [
+      'a client ID metadata document',
+      'https://client.example/metadata.json',
+      APP_CALLBACK,
+    ],
+  ])('skips the lookup for %s', async (_label, clientId, redirectUri) => {
+    await expect(
+      clientNameForPage(clientId, redirectUri),
+    ).resolves.toBeUndefined();
+    expect(model.getClient).not.toHaveBeenCalled();
+  });
+
+  it('leaves the name out when the lookup fails', async () => {
+    vi.mocked(model.getClient).mockRejectedValue(new Error('db down'));
+
+    await expect(
+      clientNameForPage('client-1', APP_CALLBACK),
+    ).resolves.toBeUndefined();
   });
 });

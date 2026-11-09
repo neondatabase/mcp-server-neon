@@ -3,7 +3,6 @@ import { NextRequest } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { POST } from '../../app/api/auth-complete/events/route';
 import { flushAnalytics, track } from '../analytics/analytics';
-import { signPageView } from '../oauth/auth-complete-page-view';
 
 vi.mock('../analytics/analytics', () => ({
   track: vi.fn(),
@@ -16,12 +15,10 @@ vi.mock('@vercel/functions', () => ({
 
 const ORIGIN = 'http://localhost';
 const PAGE_VIEW_ID = '3f6a9a3e-2c1b-4d1e-9f5a-0b8c7d6e5f40';
-const OTHER_PAGE_VIEW_ID = '9b1d2c3e-4f5a-4b6c-8d7e-0f1a2b3c4d5e';
 
 function event(fields: Record<string, unknown> = {}): string {
   return JSON.stringify({
     pageViewId: PAGE_VIEW_ID,
-    token: signPageView(PAGE_VIEW_ID),
     action: 'docs_clicked',
     ...fields,
   });
@@ -97,21 +94,6 @@ describe('POST /api/auth-complete/events', () => {
       event({ pageViewId: 'user-1' }),
       ORIGIN,
       400,
-    ],
-    ['no token', event({ token: undefined }), ORIGIN, 400],
-    [
-      'a page view id the server did not issue',
-      event({ token: signPageView(OTHER_PAGE_VIEW_ID) }),
-      ORIGIN,
-      403,
-    ],
-    [
-      'an expired page view',
-      event({
-        token: signPageView(PAGE_VIEW_ID, Date.now() - 2 * 60 * 60 * 1000),
-      }),
-      ORIGIN,
-      403,
     ],
   ])('rejects %s', async (_label, body, origin, status) => {
     const response = await POST(beacon(body, origin));

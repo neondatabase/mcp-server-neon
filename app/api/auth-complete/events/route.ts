@@ -5,7 +5,6 @@ import {
   AUTH_COMPLETE_ACTIONS,
   type AuthCompleteAction,
 } from '../../../../mcp/oauth/auth-complete-page';
-import { isIssuedPageView } from '../../../../mcp/oauth/auth-complete-page-view';
 import { requestPublicOrigin } from '../../../../mcp/oauth/consent-canonical-url';
 
 const MAX_BODY_BYTES = 256;
@@ -41,9 +40,9 @@ async function readBody(
 }
 
 /**
- * Action beacons from the auth completion page. The page holds no identity,
- * only the page view id that joins these events to its auth_complete_viewed
- * event, and the server's signature for it, so forged ids are rejected.
+ * Action beacons from the auth completion page. Unauthenticated by design,
+ * like any client-side analytics beacon: the page holds no identity, only the
+ * page view id that joins these events to its auth_complete_viewed event.
  */
 export async function POST(request: NextRequest) {
   // Firefox sends `Origin: null` under the page's no-referrer policy, so the
@@ -68,17 +67,13 @@ export async function POST(request: NextRequest) {
   if (typeof event !== 'object' || event === null) {
     return new NextResponse(null, { status: 400 });
   }
-  const { pageViewId, token, action } = event as Record<string, unknown>;
+  const { pageViewId, action } = event as Record<string, unknown>;
   if (
     typeof pageViewId !== 'string' ||
     !UUID.test(pageViewId) ||
-    typeof token !== 'string' ||
     !isAction(action)
   ) {
     return new NextResponse(null, { status: 400 });
-  }
-  if (!isIssuedPageView(pageViewId, token)) {
-    return new NextResponse(null, { status: 403 });
   }
 
   track({

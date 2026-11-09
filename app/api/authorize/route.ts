@@ -23,6 +23,11 @@ import {
   type ConsentClientIdentity,
 } from '../../../mcp/oauth/consent-dialog';
 import { isClientIdMetadataUrl } from '../../../lib/oauth/client-id-metadata-document';
+import {
+  clientNameForPage,
+  presentToBrowser,
+  withCompletionContext,
+} from '../../../mcp/oauth/auth-complete-response';
 import { authTransactions } from '../../../mcp/oauth/auth-transaction-store';
 import {
   browserBindingFromCookies,
@@ -377,10 +382,23 @@ export async function POST(request: NextRequest) {
       if (!consumed) {
         return restartError();
       }
-      return clearCookie(
-        cancelRedirect(consumed.request.redirectUri, consumed.request.state),
-        transactionId,
+      const { clientId, redirectUri, state } = consumed.request;
+      // A desktop app gets the same "Connection cancelled" page as a cancel
+      // relayed through /callback, instead of the consent form staying up.
+      return presentToBrowser(
         request,
+        withCompletionContext(
+          clearCookie(
+            cancelRedirect(redirectUri, state),
+            transactionId,
+            request,
+          ),
+          {
+            clientId,
+            clientName: await clientNameForPage(clientId, redirectUri),
+            relayedError: 'access_denied',
+          },
+        ),
       );
     }
 

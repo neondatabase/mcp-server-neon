@@ -3,7 +3,6 @@ import {
   ONBOARD_AGENT_PROMPT,
   renderAuthCompletePage,
 } from '../mcp/oauth/auth-complete-page.js';
-import { signPageView } from '../mcp/oauth/auth-complete-page-view.js';
 
 const PAGE_VIEW_ID = '3f6a9a3e-2c1b-4d1e-9f5a-0b8c7d6e5f40';
 
@@ -30,13 +29,7 @@ async function serveSuccessPage(
     const { html, headers } = renderAuthCompletePage({
       outcome: 'success',
       returnUrl,
-      // Signed with the secret playwright.config.ts gives the dev server.
-      ...(withPageView
-        ? {
-            pageViewId: PAGE_VIEW_ID,
-            pageViewToken: signPageView(PAGE_VIEW_ID),
-          }
-        : {}),
+      ...(withPageView ? { pageViewId: PAGE_VIEW_ID } : {}),
     });
     await route.fulfill({ status: 200, headers, body: html });
   });
@@ -189,7 +182,6 @@ test.describe('auth completion page', () => {
       ]);
       expect(beacon.postDataJSON()).toEqual({
         pageViewId: PAGE_VIEW_ID,
-        token: expect.any(String),
         action,
       });
       expect((await beacon.response())?.status()).toBe(204);
