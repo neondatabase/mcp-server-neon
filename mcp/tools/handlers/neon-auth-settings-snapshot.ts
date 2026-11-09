@@ -3,6 +3,7 @@ import {
   NeonAuthEmailAndPasswordConfig,
   NeonAuthEmailServerConfigResponse,
   NeonAuthEmailVerificationMethod,
+  NeonAuthLogsExportConfig,
   NeonAuthOauthProvider,
   NeonAuthOauthProviderId,
   NeonAuthOauthProviderType,
@@ -98,6 +99,7 @@ type NeonAuthConfigurableSettings = {
   email_provider: EmailProviderSnapshot | null;
   plugins: PluginsSnapshot | null;
   webhook: NeonAuthWebhookConfig | null;
+  logs_export: NeonAuthLogsExportConfig | null;
 };
 
 type NeonAuthConfigurableSettingsErrors = Partial<{
@@ -236,8 +238,11 @@ function buildNeonAuthConfigurableSettingsFromSlices(
   }
 
   let plugins: PluginsSnapshot | null = null;
+  // GET …/auth/plugins omits logs_export on a project without logs export.
+  let logs_export: NeonAuthLogsExportConfig | null = null;
   if (pluginsRes.status === 200 && pluginsRes.data) {
     plugins = pluginsSnapshot(pluginsRes.data);
+    logs_export = pluginsRes.data.logs_export ?? null;
   } else {
     errors.plugins = `${pluginsRes.status} ${pluginsRes.statusText}`;
   }
@@ -258,6 +263,7 @@ function buildNeonAuthConfigurableSettingsFromSlices(
       email_provider,
       plugins,
       webhook,
+      logs_export,
     },
     errors,
   };

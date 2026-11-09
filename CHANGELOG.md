@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+`update_auth_logs_export` turns the export of a branch's Neon Auth events to Neon Platform logs on or off, in the `neon_auth` category and hidden in read-only mode. A project without logs export accepts only `enabled: false`. `get_neon_auth_config` reports the current value as `logs_export`, `null` where logs export is not available. Requires `@neon/tools` 2.12.0.
+
 OAuth sign-in completes for clients whose `redirect_uri` is on `127.0.0.1`, such as Codex CLI (`http://127.0.0.1:<port>/callback`). Before, the server stored that redirect as `http://localhost:<port>/callback`, so the browser returned to `localhost` and the client's token request failed with `invalid_request`.
 
 New tool: `list_incidents` returns open Neon incidents, active and upcoming maintenance, and the components and regions neonstatus.com reports as not operational. It needs no Neon credential and is available on every connection, including the anonymous `?category=docs` endpoint, read-only mode, project-scoped grants, and grants with no valid categories. OAuth consent lists it under Discovery. Requires `@neon/tools` 2.11.0.
