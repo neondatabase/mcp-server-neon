@@ -15,9 +15,9 @@ type SessionAttributes = Partial<
   Record<(typeof SESSION_ATTRIBUTES)[number], string>
 >;
 
-// Kept on the request's root span rather than the isolation scope: the first
-// request after a cold start runs on the default isolation scope, and every
-// later request clones whatever it wrote there.
+// Kept on the request's root span, which belongs to exactly one request.
+// Isolation-scope data outlives its request whenever that request runs on
+// the default scope (see instrumentation.ts).
 function setOnRequest(key: keyof SessionAttributes, value: string): void {
   const active = getActiveSpan();
   if (active) getRootSpan(active).setAttribute(key, value);

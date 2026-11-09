@@ -1,5 +1,3 @@
-// Initialize Sentry (must be first import)
-import '../../../mcp/sentry/instrument';
 import {
   CLIENT_INFO_META_KEY,
   fromJsonSchema,
