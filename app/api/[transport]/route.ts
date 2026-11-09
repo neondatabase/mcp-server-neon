@@ -440,10 +440,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   clientApplication: clientApp,
                 });
                 span.setAttributes(
-                  toolSpanClientAttributes(
-                    { clientName: cName, clientApplication: clientApp },
-                    authMethod,
-                  ),
+                  toolSpanClientAttributes({
+                    clientName: cName,
+                    clientApplication: clientApp,
+                  }),
                 );
 
                 track({
@@ -616,7 +616,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
         const traceId = generateTraceId();
         return await startToolSpan({ toolName, ctx, traceId }, async (span) => {
           span.setAttributes({
-            ...toolSpanClientAttributes(docsAgent, 'anonymous'),
+            ...toolSpanClientAttributes(docsAgent),
             docs_only: true,
           });
           const properties = {

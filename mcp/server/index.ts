@@ -121,10 +121,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
           { toolName: tool.name, ctx, traceId },
           async (span) => {
             span.setAttributes(
-              toolSpanClientAttributes(
-                { clientName, clientApplication },
-                context.authMethod,
-              ),
+              toolSpanClientAttributes({ clientName, clientApplication }),
             );
             const properties = {
               authMethod: context.authMethod,
