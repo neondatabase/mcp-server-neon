@@ -1,4 +1,9 @@
 import he from 'he';
+import {
+  OAUTH_PAGE_BASE_CSS,
+  OAUTH_PAGE_CONNECTION_ICONS,
+  OAUTH_PAGE_FONT_LINKS,
+} from './page-shell';
 import { isLoopbackHost } from '../../lib/oauth/redirect-uri';
 import { SCOPE_DEFINITIONS } from '../utils/read-only';
 import {
@@ -871,38 +876,11 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Connect ${clientName} to Neon</title>
-  <link rel="preload" href="/fonts/inter/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/fonts/inter/inter.css">
-  <style>
-    :root {
-      color-scheme: dark;
-      --text: #e4e5e7;
-      --muted: #94979e;
-      --bg: #000;
-      --card: #0c0d0d;
-      --line: #303236;
-      --green: #34d59a;
-      --danger: #ff7d87;
-    }
-    * { box-sizing: border-box; }
+  ${OAUTH_PAGE_FONT_LINKS}
+  <style>${OAUTH_PAGE_BASE_CSS}
     html, body { height: 100%; overflow: hidden; }
-    body {
-      margin: 0;
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 15px;
-      line-height: 1.375;
-      letter-spacing: -0.02em;
-      color: var(--text);
-      background: var(--bg);
-    }
-    [hidden] { display: none !important; }
-    button, input { font: inherit; letter-spacing: inherit; }
+    body { font-size: 15px; }
     button, summary, label { -webkit-tap-highlight-color: transparent; }
-    button { cursor: pointer; }
-    :is(button, input, summary, a):focus-visible {
-      outline: 2px solid var(--green);
-      outline-offset: 4px;
-    }
     .page {
       display: flex;
       align-items: flex-start;
@@ -920,18 +898,12 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
       max-height: 100%;
       min-height: 0;
       overflow: hidden;
-      background: var(--card);
-      border: 1px solid var(--line);
     }
     .consent-header {
       flex: 0 0 auto;
       padding: 32px 28px 28px;
       border-bottom: 1px solid var(--line);
     }
-    .connection-icons { display: flex; align-items: center; gap: 2.44px; height: 40px; margin-bottom: 16px; }
-    .client-icon { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid #61646b; border-radius: 50%; }
-    .connection-line { display: block; width: 22px; height: 2px; }
-    .brand { width: 40px; height: 40px; }
     h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 0; font-size: 24px; line-height: 1.375; font-weight: 400; letter-spacing: -0.02em; color: #fff; overflow-wrap: anywhere; }
     h2, .app-details-title, .permission-options legend { display: block; margin: 0 0 16px; padding: 0; font-size: 20px; font-weight: 400; }
     h3, .choice legend, .choice-title { margin: 0 0 16px; padding: 0; font-size: 18px; font-weight: 400; }
@@ -1019,14 +991,8 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     .info-button { display: flex; padding: 0; border: 0; background: none; }
     .write-help { position: absolute; z-index: 2; left: -24px; bottom: 28px; width: 309px; max-width: 52vw; padding: 16px; border: 1px solid var(--line); background: #18191b; color: var(--muted); visibility: hidden; }
     .write-info:hover .write-help, .write-info:focus-within .write-help { visibility: visible; }
-    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
     .card-foot { flex: 0 0 auto; padding: 19px 28px; border-top: 1px solid var(--line); background: var(--card); }
     .actions { display: flex; justify-content: flex-end; gap: 12px; }
-    .button { width: 152px; height: 40px; padding: 0 20px; border-radius: 33px; font-size: 16px; line-height: 1; font-weight: 500; }
-    .button-primary { border: 1px solid #fff; background: #fff; color: #000; }
-    .button-primary:hover { background: #e4e5e7; border-color: #e4e5e7; }
-    .button-secondary { border: 1px solid #61646b; background: rgba(255,255,255,0.02); color: #fff; }
-    .button-secondary:hover { border-color: var(--text); }
     @media (max-width: 600px) {
       .page { padding: 56px 16px; }
       .consent-header { padding: 24px 20px; }
@@ -1068,11 +1034,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     <form method="POST" action="/api/authorize" id="authorize-form" class="card">
       <input type="hidden" name="state" value="${he.escape(props.state)}" />
       <header class="consent-header">
-        <div class="connection-icons" aria-hidden="true">
-          <span class="client-icon"><img src="/images/consent/key.svg" alt="" width="18" height="18"></span>
-          <img class="connection-line" src="/images/consent/dash.svg" alt="" width="22" height="2">
-          <img class="brand" src="/images/consent/neon.svg" alt="" width="40" height="40">
-        </div>
+        ${OAUTH_PAGE_CONNECTION_ICONS}
         <h1 title="Connect ${clientName} to Neon">Connect ${clientName} to Neon</h1>
         ${renderClientIdentity(props.identity)}
       </header>
