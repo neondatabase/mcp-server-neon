@@ -11,6 +11,7 @@
  *    `_meta.threadId` lands on the span as `gen_ai.conversation.id`
  */
 
+import { request as httpRequest } from 'node:http';
 import { test, expect } from '@playwright/test';
 import {
   Client,
@@ -163,9 +164,10 @@ test.describe('Session tracing', () => {
         name: 'get_doc',
         arguments: { slug: 'docs/reference/glossary' },
       });
+      const feedbackCanary = `feedback-canary-${crypto.randomUUID()}`;
       await first.client.callTool({
         name: 'send_feedback',
-        arguments: { feedback: 'session tracing e2e' },
+        arguments: { feedback: feedbackCanary },
       });
 
       const chain = await eventually((items) => {
@@ -211,6 +213,9 @@ test.describe('Session tracing', () => {
         ),
       );
       expect(firstLog.attributes['mcp.session.id']).toBe(first.sessionId);
+
+      // Tool arguments stay out of Sentry: the README says traces carry none.
+      expect(JSON.stringify(await sentryItems())).not.toContain(feedbackCanary);
     } finally {
       await first.client.close();
       await second.client.close();
@@ -262,6 +267,37 @@ test.describe('Session tracing', () => {
     } finally {
       await client.close();
     }
+  });
+
+  test('an unauthenticated request is rejected before its body is read', async () => {
+    // Session detection reads the body only after the token check, so a
+    // request without credentials gets its 401 while its body is still open.
+    const status = await new Promise<number | undefined>((resolve, reject) => {
+      const req = httpRequest(
+        `http://localhost:${PORT}/mcp`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json, text/event-stream',
+          },
+        },
+        (res) => {
+          resolve(res.statusCode);
+          res.resume();
+          req.destroy();
+        },
+      );
+      req.on('error', (error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ECONNRESET') reject(error);
+      });
+      req.setTimeout(10_000, () => {
+        req.destroy();
+        resolve(undefined);
+      });
+      req.write('{"jsonrpc":"2.0","id":1,"method":"initialize","params":');
+    });
+    expect(status).toBe(401);
   });
 
   test('a 2026-07-28 request gets no session id but keeps its conversation id', async ({

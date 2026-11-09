@@ -1015,7 +1015,8 @@ function jsonErrorResponse({
 // Wrap with authentication. After auth is resolved, route to a context-scoped
 // MCP handler whose registered tools match the token grant/read-only context.
 const authHandler = withMcpAuth(
-  async (req) => createContextualMcpHandler(getStaticToolContext(req))(req),
+  async (req) =>
+    withMcpSession(req, createContextualMcpHandler(getStaticToolContext(req))),
   verifyToken,
   {
     required: true,
@@ -1105,31 +1106,33 @@ type McpSession = {
   id?: string;
   /** Set when this response must hand the client its new session id. */
   minted?: string;
-  headers: Headers;
-  body: BodyInit | null;
 };
 
 /**
  * The session id the client sent, or a new one when this is a 2025-era
- * `initialize` without one. Reading the body is needed only to recognise
- * `initialize`, so requests that already carry an id keep their stream.
+ * `initialize` without one. Only a request without an id has its body read,
+ * from a clone, to recognise `initialize`.
  */
 async function resolveMcpSession(req: Request): Promise<McpSession> {
   const sent = readSessionId(req.headers);
-  if (sent || req.method !== 'POST') {
-    return { id: sent, headers: req.headers, body: req.body };
-  }
-  const text = await req.text();
-  if (!isInitializeRequest(parseJsonBody(text))) {
-    return { headers: req.headers, body: text };
-  }
+  if (sent || req.method !== 'POST') return { id: sent };
+  if (!isInitializeRequest(parseJsonBody(await req.clone().text()))) return {};
   const id = mintSessionId();
-  const headers = new Headers(req.headers);
-  headers.set(MCP_SESSION_ID_HEADER, id);
-  return { id, minted: id, headers, body: text };
+  return { id, minted: id };
 }
 
-function withSessionId(response: Response, session: McpSession): Response {
+/**
+ * Tags the request's telemetry with its session and hands a new session id
+ * back on the `initialize` response. On the authenticated route this runs
+ * after the token check, so a rejected request's body is never read here.
+ */
+async function withMcpSession(
+  req: Request,
+  serve: (req: Request) => Promise<Response>,
+): Promise<Response> {
+  const session = await resolveMcpSession(req);
+  if (session.id) tagRequestSession(session.id);
+  const response = await serve(req);
   if (!session.minted || !response.ok) return response;
   const headers = new Headers(response.headers);
   headers.set(MCP_SESSION_ID_HEADER, session.minted);
@@ -1179,13 +1182,10 @@ const handleRequest = async (req: Request): Promise<Response> => {
     url.pathname = ROUTE_PATHS.canonicalMcp;
   }
 
-  const session = await resolveMcpSession(req);
-  if (session.id) tagRequestSession(session.id);
-
   const normalizedReq = new Request(url.toString(), {
     method: req.method,
-    headers: session.headers,
-    body: session.body,
+    headers: req.headers,
+    body: req.body,
     signal: req.signal,
     // @ts-expect-error duplex is required for streaming bodies
     duplex: 'half',
@@ -1212,17 +1212,18 @@ const handleRequest = async (req: Request): Promise<Response> => {
   // without an account. Only triggers when the request is exactly
   // ?category=docs (no other categories, no projectId).
   if (isDocsOnlyRequest(url.searchParams)) {
-    const response = await createDocsOnlyMcpHandler(
-      req.headers.get('user-agent') ?? undefined,
-    )(normalizedReq);
-    return flushAfterResponse(withSessionId(response, session));
+    const response = await withMcpSession(
+      normalizedReq,
+      createDocsOnlyMcpHandler(req.headers.get('user-agent') ?? undefined),
+    );
+    return flushAfterResponse(response);
   }
 
   const resolved = await authHandler(normalizedReq);
   const response = tokenStoreUnavailableRequests.has(normalizedReq)
     ? tokenStoreUnavailableResponse()
     : rewriteResourceMetadataHeader(resolved, req);
-  return flushAfterResponse(withSessionId(response, session));
+  return flushAfterResponse(response);
 };
 
 // HEAD is exported explicitly. Next.js would otherwise route it to the GET export,
