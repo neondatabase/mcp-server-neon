@@ -22,7 +22,10 @@ import {
   isAuthTransactionId,
 } from '../../mcp/oauth/browser-binding';
 import { AUTH_RESTART_DESCRIPTION } from '../../mcp/oauth/consent-html-headers';
-import { presentToBrowser } from '../../mcp/oauth/auth-complete-response';
+import {
+  presentToBrowser,
+  withCompletionContext,
+} from '../../mcp/oauth/auth-complete-response';
 import type { DownstreamAuthRequest } from '../../mcp/oauth/downstream-auth-request';
 import type { AuthTransaction } from '../../mcp/oauth/auth-transaction';
 
@@ -435,10 +438,13 @@ async function handleCallback(request: NextRequest): Promise<NextResponse> {
             // all of them). See ai-notes/auth-callback-slo.md.
             downstreamRequest: summarizeDownstreamRequest(state, requestParams),
           });
-          return clearTransactionCookie(
-            NextResponse.redirect(redirectUrl.href),
-            state,
-            request,
+          return withCompletionContext(
+            clearTransactionCookie(
+              NextResponse.redirect(redirectUrl.href),
+              state,
+              request,
+            ),
+            { clientId: requestParams.clientId },
           );
         } catch (decodeErr) {
           // State decode failed — fall through to JSON 400 below.
@@ -692,10 +698,13 @@ async function handleCallback(request: NextRequest): Promise<NextResponse> {
     redirectUrl.searchParams.set('iss', SERVER_HOST);
 
     emitAuthCallbackSlo('success', sloStartMs, { clientId });
-    return clearTransactionCookie(
-      NextResponse.redirect(redirectUrl.href),
-      state,
-      request,
+    return withCompletionContext(
+      clearTransactionCookie(
+        NextResponse.redirect(redirectUrl.href),
+        state,
+        request,
+      ),
+      { userId: userInfo.id, clientId, clientName: client.client_name },
     );
   } catch (error: unknown) {
     // Catch-all for anything not classified above (KV failures, neon API

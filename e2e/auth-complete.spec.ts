@@ -4,6 +4,8 @@ import {
   renderAuthCompletePage,
 } from '../mcp/oauth/auth-complete-page.js';
 
+const PAGE_VIEW_ID = '3f6a9a3e-2c1b-4d1e-9f5a-0b8c7d6e5f40';
+
 function watchCspViolations(page: Page): string[] {
   const violations: string[] = [];
   page.on('console', (message) => {
@@ -23,6 +25,7 @@ async function serveSuccessPage(page: Page, returnUrl?: string) {
     const { html, headers } = renderAuthCompletePage({
       outcome: 'success',
       returnUrl,
+      pageViewId: PAGE_VIEW_ID,
     });
     await route.fulfill({ status: 200, headers, body: html });
   });
@@ -105,5 +108,55 @@ test.describe('auth completion page', () => {
     await page.goto('/callback?code=c&state=s');
 
     await page.waitForURL('**/__app?code=c&state=s');
+  });
+
+  test('reports each action to the events endpoint', async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    // A 204 keeps the page in place, so the hand-off on load and the return
+    // link can both be exercised.
+    await page.route('**/__app?*', (route) => route.fulfill({ status: 204 }));
+    await context.route('https://neon.com/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: 'docs' }),
+    );
+    await serveSuccessPage(page, '/__app?code=c&state=s');
+    // The hand-off starts during load and the 204 cancels it, so the load
+    // event this navigation waits for by default never fires.
+    await page.goto('/callback?code=c&state=s', { waitUntil: 'commit' });
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      'You’ve approved access to Neon',
+    );
+
+    const actions: [string, () => Promise<void>][] = [
+      [
+        'prompt_copied',
+        () => page.getByRole('button', { name: 'Copy prompt' }).click(),
+      ],
+      [
+        'docs_clicked',
+        () => page.getByRole('link', { name: /Read the docs/ }).click(),
+      ],
+      [
+        'return_clicked',
+        () => page.getByRole('link', { name: 'Return to your app' }).click(),
+      ],
+    ];
+    for (const [action, act] of actions) {
+      const [beacon] = await Promise.all([
+        page.waitForRequest(
+          (request) =>
+            request.method() === 'POST' &&
+            request.url().endsWith('/api/auth-complete/events'),
+        ),
+        act(),
+      ]);
+      expect(beacon.postDataJSON()).toEqual({
+        pageViewId: PAGE_VIEW_ID,
+        action,
+      });
+      expect((await beacon.response())?.status()).toBe(204);
+    }
   });
 });

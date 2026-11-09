@@ -1,4 +1,7 @@
+import { waitUntil } from '@vercel/functions';
 import { NextResponse, type NextRequest } from 'next/server';
+import { flushAnalytics, track } from '../analytics/analytics';
+import { detectClientApplication } from '../utils/client-application';
 import {
   nativeAppRedirect,
   renderAuthCompletePage,
@@ -8,6 +11,24 @@ import {
 
 const TEMPORARY_FAILURE_MESSAGE =
   'Neon could not finish authorization right now. Try again in a moment.';
+
+/** Who the page is for, as far as /callback knows, for analytics. */
+type CompletionContext = {
+  userId?: string;
+  clientId?: string;
+  clientName?: string;
+};
+
+const completionContexts = new WeakMap<NextResponse, CompletionContext>();
+
+/** Tags a /callback response with the context its completion page reports. */
+export function withCompletionContext(
+  response: NextResponse,
+  context: CompletionContext,
+): NextResponse {
+  completionContexts.set(response, context);
+  return response;
+}
 
 /**
  * Native-app redirects (cursor://, claude://) and failures shown to a browser
@@ -58,9 +79,28 @@ function failureOutcome(error: unknown): AuthCompleteOutcome {
 function completionPage(
   original: NextResponse,
   status: number,
-  props: Omit<AuthCompletePageProps, 'nonce'>,
+  props: Omit<AuthCompletePageProps, 'nonce' | 'pageViewId'>,
 ): NextResponse {
-  const { html, headers } = renderAuthCompletePage(props);
+  const pageViewId = crypto.randomUUID();
+  const context = completionContexts.get(original) ?? {};
+  // anonymousId is the page view so the browser's action events, which only
+  // know the page view, join to this user without the page holding identity.
+  track({
+    ...(context.userId ? { userId: context.userId } : {}),
+    anonymousId: pageViewId,
+    event: 'auth_complete_viewed',
+    properties: {
+      pageViewId,
+      outcome: props.outcome,
+      opensApp: Boolean(props.returnUrl),
+      clientId: context.clientId,
+      clientName: context.clientName,
+      clientApplication: detectClientApplication(context.clientName),
+    },
+  });
+  waitUntil(flushAnalytics());
+
+  const { html, headers } = renderAuthCompletePage({ ...props, pageViewId });
   const page = new NextResponse(html, { status, headers });
   for (const cookie of original.headers.getSetCookie()) {
     page.headers.append('set-cookie', cookie);

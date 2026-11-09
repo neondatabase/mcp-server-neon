@@ -67,6 +67,9 @@ export default defineConfig({
       // An unset SENTRY_DSN falls back to the production DSN in lib/config.ts,
       // and the suite triggers server errors on purpose.
       SENTRY_DSN: '',
+      // An unset ANALYTICS_WRITE_KEY falls back to the production key, so test
+      // traffic would otherwise land in production analytics.
+      NEON_MCP_DISABLE_ANALYTICS: '1',
     },
   },
 });

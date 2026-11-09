@@ -42,6 +42,15 @@ vi.mock('../server/account', () => ({
   resolveAccountFromAuth: vi.fn(),
 }));
 
+vi.mock('../analytics/analytics', () => ({
+  track: vi.fn(),
+  flushAnalytics: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@vercel/functions', () => ({
+  waitUntil: vi.fn(),
+}));
+
 function buildRequest(state: string, cookie: string): NextRequest {
   const url = `http://localhost/callback?code=upstream-code&state=${encodeURIComponent(state)}`;
   return new NextRequest(url, {

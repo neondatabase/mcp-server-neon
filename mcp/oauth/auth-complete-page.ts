@@ -16,7 +16,21 @@ export type AuthCompletePageProps = {
   message?: string;
   /** Per-response CSP nonce for the inline script and style. */
   nonce: string;
+  /** Ties the page's action events to its auth_complete_viewed event. */
+  pageViewId?: string;
 };
+
+// Served by app/api/auth-complete/events/route.ts.
+const AUTH_COMPLETE_EVENTS_PATH = '/api/auth-complete/events';
+
+export const AUTH_COMPLETE_ACTIONS = [
+  'prompt_copied',
+  'prompt_copy_failed',
+  'docs_clicked',
+  'return_clicked',
+] as const;
+
+export type AuthCompleteAction = (typeof AUTH_COMPLETE_ACTIONS)[number];
 
 /**
  * The page can hold a live authorization code in its return link, so nothing
@@ -29,6 +43,7 @@ export function authCompleteContentSecurityPolicy(nonce: string): string {
     `style-src 'self' 'nonce-${nonce}'`,
     "img-src 'self'",
     "font-src 'self'",
+    "connect-src 'self'",
     "base-uri 'none'",
     "form-action 'none'",
     "frame-ancestors 'none'",
@@ -126,7 +141,7 @@ function renderAgentTooling(): string {
         <p class="instructions">Paste the prompt into your coding agent.</p>
         <div class="actions">
           <button type="button" class="button button-primary" id="copy-prompt" hidden>Copy prompt</button>
-          <a class="docs-link" href="https://neon.com/docs/ai/ai-agents-tools" target="_blank" rel="noopener noreferrer"><span>Read the docs</span><span class="sr-only"> (opens in a new tab)</span><span class="arrow" aria-hidden="true"><img src="/images/auth-complete/arrow.svg" alt=""></span></a>
+          <a class="docs-link" id="docs-link" href="https://neon.com/docs/ai/ai-agents-tools" target="_blank" rel="noopener noreferrer"><span>Read the docs</span><span class="sr-only"> (opens in a new tab)</span><span class="arrow" aria-hidden="true"><img src="/images/auth-complete/arrow.svg" alt=""></span></a>
         </div>
         <p id="copy-status" class="copy-status" role="status"></p>
         <div id="manual-copy" class="manual-copy" hidden>
@@ -136,7 +151,11 @@ function renderAgentTooling(): string {
       </section>`;
 }
 
-function script(hasReturn: boolean, hasTooling: boolean): string {
+function script(
+  hasReturn: boolean,
+  hasTooling: boolean,
+  pageViewId: string | undefined,
+): string {
   // The callback's code and state are single use. Dropping them from the
   // address bar keeps a reload or restored tab from replaying a spent
   // transaction, which would show a failure and count against the auth SLO.
@@ -144,10 +163,22 @@ function script(hasReturn: boolean, hasTooling: boolean): string {
     `
     history.replaceState(null, '', location.pathname);`,
   ];
+  // sendBeacon still delivers when the click leaves the page or opens the app.
+  parts.push(
+    pageViewId
+      ? `
+    function trackAction(action) {
+      if (!navigator.sendBeacon) return;
+      navigator.sendBeacon(${JSON.stringify(AUTH_COMPLETE_EVENTS_PATH)}, JSON.stringify({ pageViewId: ${JSON.stringify(pageViewId)}, action: action }));
+    }`
+      : `
+    function trackAction() {}`,
+  );
   if (hasReturn) {
     parts.push(`
     var returnLink = document.getElementById('return-link');
-    if (returnLink) window.location.href = returnLink.href;`);
+    returnLink.addEventListener('click', function () { trackAction('return_clicked'); });
+    window.location.href = returnLink.href;`);
   }
   if (hasTooling) {
     parts.push(`
@@ -157,7 +188,9 @@ function script(hasReturn: boolean, hasTooling: boolean): string {
     var prompt = document.getElementById('prompt');
     var resetTimer;
     copyButton.hidden = false;
+    document.getElementById('docs-link').addEventListener('click', function () { trackAction('docs_clicked'); });
     function showCopied() {
+      trackAction('prompt_copied');
       manualCopy.hidden = true;
       copyButton.textContent = 'Copied!';
       copyStatus.classList.add('sr-only');
@@ -168,6 +201,7 @@ function script(hasReturn: boolean, hasTooling: boolean): string {
       }, 2000);
     }
     function showManualCopy() {
+      trackAction('prompt_copy_failed');
       copyButton.textContent = 'Copy prompt';
       copyStatus.classList.remove('sr-only');
       copyStatus.textContent = 'Could not copy automatically. Select and copy the prompt below, or read the docs.';
@@ -269,7 +303,7 @@ export function renderAuthCompleteHtml(props: AuthCompletePageProps): string {
     </div>
     <p class="close-hint">You can close this window.</p>
   </main>
-  <script nonce="${nonce}">${script(Boolean(returnUrl), showTooling)}
+  <script nonce="${nonce}">${script(Boolean(returnUrl), showTooling, props.pageViewId)}
   </script>
 </body>
 </html>`;

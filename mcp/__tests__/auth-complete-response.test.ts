@@ -1,7 +1,20 @@
 import he from 'he';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
-import { presentToBrowser } from '../oauth/auth-complete-response';
+import { track } from '../analytics/analytics';
+import {
+  presentToBrowser,
+  withCompletionContext,
+} from '../oauth/auth-complete-response';
+
+vi.mock('../analytics/analytics', () => ({
+  track: vi.fn(),
+  flushAnalytics: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@vercel/functions', () => ({
+  waitUntil: vi.fn(),
+}));
 
 const APP_CALLBACK = 'cursor://anysphere.cursor-mcp/oauth/callback';
 const BROWSER_ACCEPT = 'text/html,application/xhtml+xml';
@@ -18,6 +31,10 @@ function returnLink(html: string): URL | undefined {
 }
 
 describe('presentToBrowser', () => {
+  beforeEach(() => {
+    vi.mocked(track).mockClear();
+  });
+
   describe('native app redirects', () => {
     it.each([
       ['?code=c&state=s', 'You’ve approved access to Neon', true],
@@ -151,5 +168,67 @@ describe('presentToBrowser', () => {
       );
       expect(response).toBe(original);
     });
+  });
+});
+
+describe('auth_complete_viewed', () => {
+  beforeEach(() => {
+    vi.mocked(track).mockClear();
+  });
+
+  it('reports a success with the user and client the callback knew', async () => {
+    const response = await presentToBrowser(
+      callbackRequest(),
+      withCompletionContext(NextResponse.redirect(`${APP_CALLBACK}?code=c`), {
+        userId: 'user-1',
+        clientId: 'client-1',
+        clientName: 'Cursor',
+      }),
+    );
+
+    expect(track).toHaveBeenCalledTimes(1);
+    const event = vi.mocked(track).mock.calls[0]![0];
+    expect(event).toEqual({
+      userId: 'user-1',
+      anonymousId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      event: 'auth_complete_viewed',
+      properties: {
+        pageViewId: event.anonymousId,
+        outcome: 'success',
+        opensApp: true,
+        clientId: 'client-1',
+        clientName: 'Cursor',
+        clientApplication: 'cursor',
+      },
+    });
+    expect(await response.text()).toContain(
+      `pageViewId: ${JSON.stringify(event.anonymousId)}`,
+    );
+  });
+
+  it('reports a browser failure anonymously', async () => {
+    await presentToBrowser(
+      callbackRequest('', BROWSER_ACCEPT),
+      NextResponse.json({ error: 'invalid_request' }, { status: 400 }),
+    );
+
+    expect(track).toHaveBeenCalledWith({
+      anonymousId: expect.any(String),
+      event: 'auth_complete_viewed',
+      properties: expect.objectContaining({
+        outcome: 'failed',
+        opensApp: false,
+        clientApplication: 'unknown',
+      }),
+    });
+    expect(vi.mocked(track).mock.calls[0]![0]).not.toHaveProperty('userId');
+  });
+
+  it('reports nothing when the original response passes through', async () => {
+    await presentToBrowser(
+      callbackRequest(),
+      NextResponse.redirect('http://127.0.0.1:55667/callback?code=c'),
+    );
+    expect(track).not.toHaveBeenCalled();
   });
 });

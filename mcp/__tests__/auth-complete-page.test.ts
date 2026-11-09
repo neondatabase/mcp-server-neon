@@ -115,6 +115,7 @@ describe('authCompleteContentSecurityPolicy', () => {
         "style-src 'self' 'nonce-n0nce'",
         "img-src 'self'",
         "font-src 'self'",
+        "connect-src 'self'",
         "base-uri 'none'",
         "form-action 'none'",
         "frame-ancestors 'none'",
@@ -136,5 +137,34 @@ describe('renderAuthCompletePage', () => {
     expect(nonceOf(second.headers['Content-Security-Policy'])).not.toBe(nonce);
     expect(first.headers['X-Frame-Options']).toBe('DENY');
     expect(first.headers['Cache-Control']).toBe('no-store');
+  });
+});
+
+describe('action beacons', () => {
+  const pageViewId = '3f6a9a3e-2c1b-4d1e-9f5a-0b8c7d6e5f40';
+
+  it('posts the page view id and action when the page has one', () => {
+    const html = render({
+      outcome: 'success',
+      returnUrl: 'cursor://cb',
+      pageViewId,
+    });
+    expect(html).toContain(
+      `navigator.sendBeacon("/api/auth-complete/events", JSON.stringify({ pageViewId: "${pageViewId}", action: action }))`,
+    );
+    for (const action of [
+      'prompt_copied',
+      'prompt_copy_failed',
+      'docs_clicked',
+      'return_clicked',
+    ]) {
+      expect(html).toContain(`trackAction('${action}')`);
+    }
+  });
+
+  it('sends nothing without a page view id', () => {
+    const html = render({ outcome: 'success' });
+    expect(html).not.toContain('sendBeacon');
+    expect(html).toContain('function trackAction() {}');
   });
 });
