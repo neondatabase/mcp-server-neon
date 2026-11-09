@@ -145,12 +145,12 @@ function renderAgentTooling(): string {
   ).join('\n          ');
   return `<section class="tooling" aria-labelledby="tooling-title">
         <div class="tooling-heading">
-          <h2 id="tooling-title">Add Neon agent tooling to your AI agent</h2>
+          <h2 id="tooling-title">Don’t have the Neon skills yet?</h2>
           <div class="agent-icons">
           ${icons}
           </div>
         </div>
-        <p class="instructions">Paste the prompt into your coding agent.</p>
+        <p class="instructions">Install them now: paste the prompt into your coding agent.</p>
         <div class="actions">
           <button type="button" class="button button-primary" id="copy-prompt" hidden>Copy prompt</button>
           <a class="docs-link" id="docs-link" href="https://neon.com/docs/ai/agent-skills" target="_blank" rel="noopener noreferrer"><span>Read the docs</span><span class="sr-only"> (opens in a new tab)</span><span class="arrow" aria-hidden="true"><img src="/images/auth-complete/arrow.svg" alt=""></span></a>

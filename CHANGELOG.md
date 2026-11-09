@@ -2,7 +2,7 @@
 
 # [NEXT]
 
-Authorizing a client that signs in through a desktop app, such as Cursor (`cursor://`) or Claude Desktop (`claude://`), ends on a completion page instead of leaving the consent form on screen. The page opens the app, links back to it if the app did not open, and offers a prompt to set up Neon agent tooling. A cancelled or failed authorization opened in a browser gets a page instead of a JSON body. Clients that return to a web or loopback address still get a plain redirect, and non-browser callers see no change. The page reports that it was shown and which of its buttons and links were used, as described under Telemetry in the README.
+Authorizing a client that signs in through a desktop app, such as Cursor (`cursor://`) or Claude Desktop (`claude://`), ends on a completion page instead of leaving the consent form on screen. The page opens the app, links back to it if the app did not open, and offers a prompt to install the Neon skills. A cancelled or failed authorization opened in a browser gets a page instead of a JSON body. Clients that return to a web or loopback address still get a plain redirect, and non-browser callers see no change. The page reports that it was shown and which of its buttons and links were used, as described under Telemetry in the README.
 
 OAuth sign-in, token refresh, and API-key requests keep working after the OAuth database drops its connections, for example on a compute restart. Before, one dropped connection could leave every token store on a server instance failing with `Cannot use a pool after calling end on the pool`, and an idle dropped connection raised an uncaught exception.
 
