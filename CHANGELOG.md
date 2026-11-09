@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+The `list_auth_oauth_providers`, `add_auth_oauth_provider`, `update_auth_oauth_provider` and `delete_auth_oauth_provider` descriptions name Discord among the social login providers, and `add_auth_oauth_provider` says Discord needs your own `client_id` and `client_secret` because it has no shared app. Accepting `discord` as a provider `id` requires a `@neon/tools` release that includes it.
+
 Authorizing a client that returns through a custom URL scheme, such as older Cursor installs (`cursor://`), ends on a completion page instead of leaving the consent form on screen. The page opens the app, links back to it if the app did not open, and offers a prompt to install the Neon skills. A cancelled or failed authorization opened in a browser gets a page instead of a JSON body. Clients that return to a web or loopback address still get a plain redirect, and non-browser callers see no change. The page reports that it was shown and which of its buttons and links were used, as described under Telemetry in the README.
 
 OAuth sign-in, token refresh, and API-key requests keep working after the OAuth database drops its connections, for example on a compute restart. Before, one dropped connection could leave every token store on a server instance failing with `Cannot use a pool after calling end on the pool`, and an idle dropped connection raised an uncaught exception.
