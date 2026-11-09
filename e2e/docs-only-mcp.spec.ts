@@ -226,6 +226,30 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     }
   });
 
+  // A listen stream the server holds open runs the Vercel function to its
+  // 800-second limit, and nothing is ever published to it.
+  test('ends a 2026-07-28 subscriptions/listen stream after the acknowledgement', async () => {
+    test.setTimeout(10_000);
+    const port = process.env.E2E_PORT ?? '3100';
+    const transport = new StreamableHTTPClientTransport(
+      new URL(`http://localhost:${port}/mcp?category=docs`),
+    );
+    const client = new Client(
+      { name: 'docs-only-listen-e2e', version: '1.0.0' },
+      { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+    );
+
+    try {
+      await client.connect(transport);
+      const subscription = await client.listen({ toolsListChanged: true });
+
+      expect(subscription.honoredFilter).toEqual({});
+      await expect(subscription.closed).resolves.toBe('graceful');
+    } finally {
+      await client.close();
+    }
+  });
+
   test('2025-era SDK client sees no tools.listChanged capability', async () => {
     const port = process.env.E2E_PORT ?? '3100';
     const transport = new LegacyStreamableHTTPClientTransport(
