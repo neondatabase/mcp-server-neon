@@ -22,7 +22,7 @@ export async function getOwnedRefreshResult(
   const owner = await findOwner(refreshToken, result);
   if (owner === clientId) return result;
   logger.warn('Client mismatch for cached refresh result', {
-    tokenClientId: owner,
+    tokenClientId: owner ?? 'unknown',
     requestClientId: clientId,
   });
   return undefined;
