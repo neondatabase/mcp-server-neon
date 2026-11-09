@@ -207,7 +207,7 @@ infrastructure.
 
 - **Session ids**: the route gives a 2025-era client an `Mcp-Session-Id` on its `initialize` response (`mcp/utils/mcp-session.ts`). It is telemetry only: nothing is stored under it and an unknown id is never rejected. Every span, error, and log of a request carries it as `mcp.session.id`, so one query in Sentry returns a connection's whole chain of calls. 2026-07-28 requests have no sessions; a client's `_meta.threadId` (Codex) lands on tool spans as `gen_ai.conversation.id`. Both ids live on the request's root span (`mcp/sentry/session.ts`), not on the Sentry isolation scope.
 
-- **Sentry init**: `instrumentation.ts` initializes Sentry before Next.js serves any request. Importing `mcp/sentry/instrument` from a route instead runs `init` during that route's first request, which then runs on the default isolation scope; every later request on the instance clones what it wrote there, such as `setUser`.
+- **Sentry init**: `instrumentation.ts` initializes Sentry before Next.js serves any request. Importing `mcp/sentry/instrument` from a route instead runs `init` during that route's first request, which then runs on the default isolation scope; every later request on the instance clones what it wrote there, such as `setUser`. `dataCollection` in `mcp/sentry/instrument.ts` keeps request headers, bodies, cookies, and query strings out of Sentry, because the OAuth routes carry client secrets, refresh tokens, PKCE verifiers, and authorization codes there; `e2e/sentry-privacy.spec.ts` checks it.
 
 ## Tool arguments
 
