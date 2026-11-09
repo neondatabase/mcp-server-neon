@@ -137,7 +137,8 @@ infrastructure.
 **E2E tests** use [Playwright](https://playwright.dev/) and live in `e2e/`. Configuration is in `playwright.config.ts`.
 
 - **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com). The connection string is written to `.env.e2e` (gitignored) and passed to the Next.js dev server. It also starts the docs fixture server (see below).
-- **Docs fixture** (`e2e/docs-fixture.ts`): `search_docs`, `get_doc`, and `send_feedback` fetch server-side, so `request.route()` cannot intercept them, and a test calling them would otherwise depend on neon-agent, neon.com, and the feedback service being up — which merge-gating tests must not. Global setup serves canned site search responses (chosen by query), one page (`/docs/reference/glossary.md`), and a feedback endpoint on port `3101` (`E2E_DOCS_PORT` to change it, and it fails loudly if the port is taken). `playwright.config.ts` points the dev server's `NEON_SITE_SEARCH_URL`, `NEON_DOCS_BASE_URL`, and `NEON_FEEDBACK_URL` at it. Those URLs must be set in `webServer.env`, not in global setup: Playwright starts the web server as a plugin task, which runs **before** global setup, so anything global setup adds to `process.env` reaches the dev server too late. `webServer.env` also sets `SENTRY_DSN` to an empty string so the suite's expected server errors don't reach production Sentry.
+- **Docs fixture** (`e2e/docs-fixture.ts`): `search_docs`, `get_doc`, and `send_feedback` fetch server-side, so `request.route()` cannot intercept them, and a test calling them would otherwise depend on neon-agent, neon.com, and the feedback service being up — which merge-gating tests must not. Global setup serves canned site search responses (chosen by query), one page (`/docs/reference/glossary.md`), and a feedback endpoint on port `3101` (`E2E_DOCS_PORT` to change it, and it fails loudly if the port is taken). `playwright.config.ts` points the dev server's `NEON_SITE_SEARCH_URL`, `NEON_DOCS_BASE_URL`, and `NEON_FEEDBACK_URL` at it. Those URLs must be set in `webServer.env`, not in global setup: Playwright starts the web server as a plugin task, which runs **before** global setup, so anything global setup adds to `process.env` reaches the dev server too late.
+- **Sentry fixture** (`e2e/sentry-fixture.ts`): global setup also serves a Sentry ingestion stand-in on port `3102` (`E2E_SENTRY_PORT`), and `webServer.env` points `SENTRY_DSN` at it, so the suite's expected server errors never reach production Sentry. Tests read the spans and logs the server sent from `GET /items` (`e2e/session-tracing.spec.ts`).
 - **No secrets needed**: The e2e infrastructure is fully self-contained. Instagres databases expire after 72 hours; no explicit teardown is required.
 - **Reuse across runs**: If `.env.e2e` already exists, global-setup reuses it instead of re-provisioning. Delete the file to force a fresh database.
 - **CI**: `.github/workflows/pr.yml` runs `lint-build` (version sync, format, lint, knip, build) first. Then `test` (`pnpm test:ci`: unit, integration, MCP e2e) and `e2e-web` (`pnpm test:e2e:web`) run in parallel, then `e2e-live` (`pnpm test:e2e:live`) for same-repo PRs that are not from Dependabot. The required `lint-and-build` check passes only when all of them succeed; fork and Dependabot PRs skip `e2e-live`. Shared setup (JFrog npm mirror, Node, pnpm, install) is the local action `.github/actions/setup`.
@@ -202,7 +203,11 @@ infrastructure.
   - `idempotentHint`: Whether repeated calls produce the same result
   - `openWorldHint`: Whether the tool interacts with external systems
 
-- **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry error reporting.
+- **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry. Each tool call gets one `tools/call <tool>` span (`mcp/sentry/tool-span.ts`) with OpenTelemetry MCP attributes; `tool_name` stays on it because existing Sentry dashboards query it. Only server failures (`isServerError` in `mcp/server/errors.ts`) mark it failed; agent mistakes set `error.type` only. Winston logs go to Sentry Logs too, so never log credentials, SQL, or request bodies.
+
+- **Session ids**: the route gives a 2025-era client an `Mcp-Session-Id` on its `initialize` response (`mcp/utils/mcp-session.ts`). It is telemetry only: nothing is stored under it and an unknown id is never rejected. Every span, error, and log of a request carries it as `mcp.session.id`, so one query in Sentry returns a connection's whole chain of calls. 2026-07-28 requests have no sessions; a client's `_meta.threadId` (Codex) lands on tool spans as `gen_ai.conversation.id`. Both ids live on the request's root span (`mcp/sentry/session.ts`), not on the Sentry isolation scope.
+
+- **Sentry init**: `instrumentation.ts` initializes Sentry before Next.js serves any request. Importing `mcp/sentry/instrument` from a route instead runs `init` during that route's first request, which then runs on the default isolation scope; every later request on the instance clones what it wrote there, such as `setUser`. `dataCollection` in `mcp/sentry/instrument.ts` keeps request headers, bodies, cookies, and query strings out of Sentry, because the OAuth routes carry client secrets, refresh tokens, PKCE verifiers, and authorization codes there; `e2e/sentry-privacy.spec.ts` checks it.
 
 ## Tool arguments
 
@@ -335,7 +340,7 @@ normally provided through `.env.local`. Key variables:
 │   │   └── utils.ts        # Tool utilities
 │   ├── oauth/          # OAuth model and KV store
 │   ├── analytics/      # Segment analytics
-│   ├── sentry/         # Sentry error tracking
+│   ├── sentry/         # Sentry setup, tool spans, session tagging
 │   ├── types/          # Shared TypeScript types
 │   ├── utils/          # Shared utilities
 │   │   ├── read-only.ts          # Read-only mode detection, SUPPORTED_SCOPES

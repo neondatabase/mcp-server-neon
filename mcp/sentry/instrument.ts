@@ -1,12 +1,50 @@
-import { init } from '@sentry/node';
+import {
+  getClient,
+  httpIntegration,
+  init,
+  type NodeOptions,
+} from '@sentry/node';
 import { SENTRY_DSN } from '../constants';
+import { copySessionAttributes, tagEventWithSession } from './session';
 import pkg from '../../package.json';
+
+type SpanJSON = Parameters<NonNullable<NodeOptions['beforeSendSpan']>>[0];
+
+function withoutTargetQuery(span: SpanJSON): SpanJSON {
+  const target = span.data['http.target'];
+  if (typeof target !== 'string' || !target.includes('?')) return span;
+  return {
+    ...span,
+    data: { ...span.data, 'http.target': target.slice(0, target.indexOf('?')) },
+  };
+}
 
 init({
   dsn: SENTRY_DSN,
   environment: process.env.NODE_ENV,
   release: pkg.version,
   tracesSampleRate: 1.0,
+  enableLogs: true,
+  beforeSend: tagEventWithSession,
+
+  // Replaces what sendDefaultPii would collect for HTTP requests. The OAuth
+  // routes carry client credentials in Authorization, refresh tokens and PKCE
+  // verifiers in the body, and authorization codes in the query string.
+  // Request headers are off entirely: events attach every header but cookies
+  // and IP headers, whatever the deny list says.
+  dataCollection: {
+    cookies: false,
+    httpHeaders: { request: false, response: { deny: ['set-cookie'] } },
+    httpBodies: [],
+    urlQueryParams: false,
+  },
+  // Next.js's own spans keep the query in `http.target`.
+  beforeSendSpan: withoutTargetQuery,
+  // The SDK's default also drops 401 to 403 transactions, and expired or
+  // missing tokens are a signal worth keeping.
+  integrations: [
+    httpIntegration({ dropSpansForIncomingRequestStatusCodes: [404] }),
+  ],
 
   // Setting this option to true will send default PII data to Sentry.
   // For example, automatic IP address collection on events
@@ -28,3 +66,5 @@ init({
     /Connection terminated unexpectedly/i,
   ],
 });
+
+getClient()?.on('spanStart', copySessionAttributes);

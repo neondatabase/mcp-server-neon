@@ -67,6 +67,21 @@ function apiErrorReason(body: unknown): string | undefined {
   return typeof body.reason === 'string' ? body.reason : undefined;
 }
 
+/**
+ * Whether a thrown tool error is the server's failure rather than a mistake in
+ * the call (bad input, a statement Postgres rejected, a 4xx from the Neon API).
+ * Only these mark the tool span as failed.
+ */
+export function isServerError(error: unknown): boolean {
+  // The driver copies a SQLSTATE only from Postgres's answer; a NeonDbError
+  // without one is a failure to reach or read from the SQL endpoint.
+  if (error instanceof NeonDbError) return !error.code;
+  return !(
+    isClientError(error) ||
+    (error instanceof NeonApiError && error.status < 500)
+  );
+}
+
 export function handleToolError(
   error: unknown,
   properties: Record<string, string>,

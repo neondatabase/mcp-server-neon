@@ -15,9 +15,14 @@ import { logger } from '../utils/logger';
 import { generateTraceId } from '../utils/trace';
 import { createNeonClient } from './api';
 import { track } from '../analytics/analytics';
-import { captureException, startSpan } from '@sentry/node';
+import { captureException } from '@sentry/node';
 import type { ServerContext as NeonServerContext } from '../types/context';
 import { agentSentryTags, setSentryTags } from '../sentry/utils';
+import {
+  recordToolError,
+  startToolSpan,
+  toolSpanClientAttributes,
+} from '../sentry/tool-span';
 import { ToolHandlerExtraParams } from '../tools/types';
 import { handleToolError } from './errors';
 import { identifyClient } from '../utils/client-application';
@@ -112,15 +117,12 @@ export const createMcpServer = async (context: NeonServerContext) => {
       },
       async (args: unknown, ctx: McpServerContext) => {
         const traceId = generateTraceId();
-        return await startSpan(
-          {
-            name: 'tool_call',
-            attributes: {
-              tool_name: tool.name,
-              trace_id: traceId,
-            },
-          },
+        return await startToolSpan(
+          { toolName: tool.name, ctx, traceId },
           async (span) => {
+            span.setAttributes(
+              toolSpanClientAttributes({ clientName, clientApplication }),
+            );
             const properties = {
               authMethod: context.authMethod,
               toolName: tool.name,
@@ -172,9 +174,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
 
               return result;
             } catch (error) {
-              span.setStatus({
-                code: 2,
-              });
+              recordToolError(span, error);
               return handleToolError(error, properties, traceId, {
                 clientName,
                 clientApplication,

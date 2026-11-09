@@ -1,8 +1,7 @@
-// Initialize Sentry (must be first import)
-import '../../../mcp/sentry/instrument';
 import {
   CLIENT_INFO_META_KEY,
   fromJsonSchema,
+  isInitializeRequest,
   localhostAllowedOrigins,
   McpServer,
   originValidationResponse,
@@ -12,7 +11,7 @@ import type {
   ServerContext as McpServerContext,
 } from '@modelcontextprotocol/server';
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
-import { captureException, startSpan } from '@sentry/node';
+import { captureException } from '@sentry/node';
 import { NeonApiError } from '@neon/sdk';
 
 import { NEON_HANDLERS } from '../../../mcp/tools/index';
@@ -35,6 +34,18 @@ import { resolveAccountFromAuth } from '../../../mcp/server/account';
 import { model } from '../../../mcp/oauth/model';
 import { getApiKeys, type ApiKeyRecord } from '../../../mcp/oauth/kv-store';
 import { agentSentryTags, setSentryTags } from '../../../mcp/sentry/utils';
+import { tagRequestSession } from '../../../mcp/sentry/session';
+import {
+  recordToolError,
+  startToolSpan,
+  toolSpanClientAttributes,
+} from '../../../mcp/sentry/tool-span';
+import { flushAfterResponse } from '../../../mcp/sentry/flush';
+import {
+  MCP_SESSION_ID_HEADER,
+  mintSessionId,
+  readSessionId,
+} from '../../../mcp/utils/mcp-session';
 import type { ServerContext, AppContext } from '../../../mcp/types/context';
 import {
   isDocsOnlyRequest,
@@ -392,14 +403,8 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
           v2ToolConfig(tool),
           async (args: unknown, ctx: McpServerContext) => {
             const traceId = generateTraceId();
-            return await startSpan(
-              {
-                name: 'tool_call',
-                attributes: {
-                  tool_name: tool.name,
-                  trace_id: traceId,
-                },
-              },
+            return await startToolSpan(
+              { toolName: tool.name, ctx, traceId },
               async (span) => {
                 const {
                   account,
@@ -434,6 +439,12 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   clientName: cName,
                   clientApplication: clientApp,
                 });
+                span.setAttributes(
+                  toolSpanClientAttributes({
+                    clientName: cName,
+                    clientApplication: clientApp,
+                  }),
+                );
 
                 track({
                   userId: account.id,
@@ -489,7 +500,7 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
                   return result;
                 } catch (error) {
-                  span.setStatus({ code: 2 });
+                  recordToolError(span, error);
                   const errorResult = handleToolError(
                     error,
                     properties,
@@ -599,79 +610,73 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
     (server: McpServer) => {
       async function runDocsTool(
         toolName: string,
-        userAgent: string | undefined,
+        ctx: McpServerContext,
         call: () => Promise<string>,
       ) {
         const traceId = generateTraceId();
-        return await startSpan(
-          {
-            name: 'tool_call',
-            attributes: {
-              tool_name: toolName,
-              trace_id: traceId,
-              docs_only: true,
-            },
-          },
-          async (span) => {
-            const properties = {
-              authMethod: 'anonymous',
-              toolName: toolName,
-              tool_name: toolName,
-              readOnly: 'true',
-              projectScoped: 'false',
-              customScopes: 'docs',
-              rolePinned: 'false',
-              clientName: docsAgent.clientName,
-              clientApplication: docsAgent.clientApplication,
-              traceId,
-              docsOnly: 'true',
+        return await startToolSpan({ toolName, ctx, traceId }, async (span) => {
+          span.setAttributes({
+            ...toolSpanClientAttributes(docsAgent),
+            docs_only: true,
+          });
+          const properties = {
+            authMethod: 'anonymous',
+            toolName: toolName,
+            tool_name: toolName,
+            readOnly: 'true',
+            projectScoped: 'false',
+            customScopes: 'docs',
+            rolePinned: 'false',
+            clientName: docsAgent.clientName,
+            clientApplication: docsAgent.clientApplication,
+            traceId,
+            docsOnly: 'true',
+          };
+
+          logger.info('tool call (docs-only):', properties);
+
+          track({
+            anonymousId: ANONYMOUS_DOCS_USER_ID,
+            event: 'tool_call',
+            properties,
+            context: { app: docsOnlyAppContext },
+          });
+          waitUntil(flushAnalytics());
+
+          try {
+            const text = await call();
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text,
+                },
+              ],
             };
-
-            logger.info('tool call (docs-only):', properties);
-
-            track({
-              anonymousId: ANONYMOUS_DOCS_USER_ID,
-              event: 'tool_call',
+          } catch (error) {
+            recordToolError(span, error);
+            const errorResult = handleToolError(
+              error,
               properties,
-              context: { app: docsOnlyAppContext },
+              traceId,
+              docsAgent,
+            );
+            logger.warn('tool error response (docs-only):', {
+              ...properties,
+              isError: true,
+              contentLength: errorResult.content?.length,
+              firstContentType: errorResult.content?.[0]?.type,
             });
-            waitUntil(flushAnalytics());
-
-            try {
-              const text = await call();
-              return {
-                content: [
-                  {
-                    type: 'text' as const,
-                    text,
-                  },
-                ],
-              };
-            } catch (error) {
-              span.setStatus({ code: 2 });
-              const errorResult = handleToolError(
-                error,
-                properties,
-                traceId,
-                docsAgent,
-              );
-              logger.warn('tool error response (docs-only):', {
-                ...properties,
-                isError: true,
-                contentLength: errorResult.content?.length,
-                firstContentType: errorResult.content?.[0]?.type,
-              });
-              return errorResult;
-            }
-          },
-        );
+            return errorResult;
+          }
+        });
       }
 
       server.registerTool(
         searchDocsTool.name,
         v2ToolConfig(searchDocsTool),
-        async (args: unknown) =>
-          runDocsTool(searchDocsTool.name, userAgent, () =>
+        async (args: unknown, ctx: McpServerContext) =>
+          runDocsTool(searchDocsTool.name, ctx, () =>
             searchDocs(searchDocsInputSchema.parse(args), {
               userAgent,
               client: docsAgent.clientApplication,
@@ -682,7 +687,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
       server.registerTool(
         getDocTool.name,
         v2ToolConfig(getDocTool),
-        async (args: unknown) => {
+        async (args: unknown, ctx: McpServerContext) => {
           assert(
             !!args &&
               typeof args === 'object' &&
@@ -691,15 +696,13 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
             'get_doc arguments were not validated',
           );
           const { slug } = args;
-          return runDocsTool(getDocTool.name, userAgent, () =>
-            getDoc({ slug }),
-          );
+          return runDocsTool(getDocTool.name, ctx, () => getDoc({ slug }));
         },
       );
       server.registerTool(
         sendFeedbackTool.name,
         v2ToolConfig(sendFeedbackTool),
-        async (args: unknown) => {
+        async (args: unknown, ctx: McpServerContext) => {
           assert(
             !!args &&
               typeof args === 'object' &&
@@ -708,7 +711,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
             'send_feedback arguments were not validated',
           );
           const feedback = args.feedback;
-          return runDocsTool(sendFeedbackTool.name, userAgent, async () => {
+          return runDocsTool(sendFeedbackTool.name, ctx, async () => {
             await sendFeedback({ feedback });
             return 'Feedback received. Thank you!';
           });
@@ -717,8 +720,8 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
       server.registerTool(
         listIncidentsTool.name,
         v2ToolConfig(listIncidentsTool),
-        async () =>
-          runDocsTool(listIncidentsTool.name, userAgent, () => listIncidents()),
+        async (_args: unknown, ctx: McpServerContext) =>
+          runDocsTool(listIncidentsTool.name, ctx, () => listIncidents()),
       );
     },
     {
@@ -822,7 +825,6 @@ const verifyToken = async (
   logger.info('verifyToken called', {
     hasBearerToken: !!bearerToken,
     bearerTokenLength: bearerToken?.length ?? 0,
-    tokenPrefix: bearerToken?.substring(0, 10) ?? 'none',
     userAgent,
   });
 
@@ -905,9 +907,7 @@ const verifyToken = async (
   // PATH 2: Not an OAuth token - try API key
   // (For direct API key usage)
   // ============================================
-  logger.info('Trying API key verification path', {
-    tokenPrefix: bearerToken.substring(0, 10),
-  });
+  logger.info('Trying API key verification path');
 
   const apiKeyRecord = await fetchAccountDetails(bearerToken);
   if (!apiKeyRecord) {
@@ -1013,7 +1013,8 @@ function jsonErrorResponse({
 // Wrap with authentication. After auth is resolved, route to a context-scoped
 // MCP handler whose registered tools match the token grant/read-only context.
 const authHandler = withMcpAuth(
-  async (req) => createContextualMcpHandler(getStaticToolContext(req))(req),
+  async (req) =>
+    withMcpSession(req, createContextualMcpHandler(getStaticToolContext(req))),
   verifyToken,
   {
     required: true,
@@ -1090,9 +1091,59 @@ function retiredTransportResponse(method: string): Response {
   });
 }
 
+function parseJsonBody(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Not JSON: the MCP SDK answers it with a parse error.
+    return undefined;
+  }
+}
+
+type McpSession = {
+  id?: string;
+  /** Set when this response must hand the client its new session id. */
+  minted?: string;
+};
+
+/**
+ * The session id the client sent, or a new one when this is a 2025-era
+ * `initialize` without one. Only a request without an id has its body read,
+ * from a clone, to recognise `initialize`.
+ */
+async function resolveMcpSession(req: Request): Promise<McpSession> {
+  const sent = readSessionId(req.headers);
+  if (sent || req.method !== 'POST') return { id: sent };
+  if (!isInitializeRequest(parseJsonBody(await req.clone().text()))) return {};
+  const id = mintSessionId();
+  return { id, minted: id };
+}
+
+/**
+ * Tags the request's telemetry with its session and hands a new session id
+ * back on the `initialize` response. On the authenticated route this runs
+ * after the token check, so a rejected request's body is never read here.
+ */
+async function withMcpSession(
+  req: Request,
+  serve: (req: Request) => Promise<Response>,
+): Promise<Response> {
+  const session = await resolveMcpSession(req);
+  if (session.id) tagRequestSession(session.id);
+  const response = await serve(req);
+  if (!session.minted || !response.ok) return response;
+  const headers = new Headers(response.headers);
+  headers.set(MCP_SESSION_ID_HEADER, session.minted);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 // Normalize the public /mcp rewrite to its internal App Router path so OAuth
 // resource metadata and transport handling use one canonical URL.
-const handleRequest = (req: Request) => {
+const handleRequest = async (req: Request): Promise<Response> => {
   const url = new URL(req.url);
 
   if (RETIRED_TRANSPORT_PATHS.has(url.pathname)) {
@@ -1159,16 +1210,18 @@ const handleRequest = (req: Request) => {
   // without an account. Only triggers when the request is exactly
   // ?category=docs (no other categories, no projectId).
   if (isDocsOnlyRequest(url.searchParams)) {
-    return createDocsOnlyMcpHandler(req.headers.get('user-agent') ?? undefined)(
+    const response = await withMcpSession(
       normalizedReq,
+      createDocsOnlyMcpHandler(req.headers.get('user-agent') ?? undefined),
     );
+    return flushAfterResponse(response);
   }
 
-  return Promise.resolve(authHandler(normalizedReq)).then((resolved) =>
-    tokenStoreUnavailableRequests.has(normalizedReq)
-      ? tokenStoreUnavailableResponse()
-      : rewriteResourceMetadataHeader(resolved, req),
-  );
+  const resolved = await authHandler(normalizedReq);
+  const response = tokenStoreUnavailableRequests.has(normalizedReq)
+    ? tokenStoreUnavailableResponse()
+    : rewriteResourceMetadataHeader(resolved, req);
+  return flushAfterResponse(response);
 };
 
 // HEAD is exported explicitly. Next.js would otherwise route it to the GET export,
