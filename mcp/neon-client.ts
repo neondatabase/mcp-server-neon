@@ -62,14 +62,6 @@ type ApiResponse<T> = {
   statusText: string;
 };
 
-const endpointType = {
-  ReadOnly: 'read_only',
-  ReadWrite: 'read_write',
-} as const;
-
-export const EndpointType = endpointType;
-export type EndpointType = (typeof endpointType)[keyof typeof endpointType];
-
 const neonAuthSupportedAuthProvider = {
   BetterAuth: 'better_auth',
   Mock: 'mock',

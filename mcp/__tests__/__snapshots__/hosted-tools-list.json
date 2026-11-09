@@ -25,7 +25,7 @@
   {
     "name": "run_sql",
     "title": "Run SQL",
-    "description": "Execute one SQL statement on a Neon database. If a prior step created a temporary branch, pass that branch_id. NEVER run destructive SQL autonomously; always ask the user first.",
+    "description": "Execute one SQL statement on a Neon database. To try a risky change first, run it on a branch from create_branch by passing branch_id. NEVER run destructive SQL autonomously; always ask the user first.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -79,7 +79,7 @@
   {
     "name": "run_sql_transaction",
     "title": "Run SQL Transaction",
-    "description": "Execute multiple SQL statements as one transaction. If a prior step created a temporary branch, pass that branch_id. NEVER run destructive SQL autonomously; always ask the user first.",
+    "description": "Execute multiple SQL statements as one transaction, one statement per array item. For a schema migration or other risky change, create_branch from the target branch, run the statements there with its branch_id, verify the result with run_sql, ask the user, then run them on the target branch, and delete_branch the test branch either way. NEVER run destructive SQL autonomously; always ask the user first.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -203,97 +203,6 @@
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": false
-    }
-  },
-  {
-    "name": "prepare_database_migration",
-    "title": "Prepare Database Migration",
-    "description": "Apply a schema change on a temporary branch and return a migration_id. Test with run_sql on that branch, ask the user, then complete_database_migration — even if they reject, so the temporary branch is deleted. Pass every field from the prepare response.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "migration_sql": {
-          "type": "string",
-          "description": "The SQL to execute to create the migration"
-        },
-        "project_id": {
-          "type": "string",
-          "description": "The ID of the project to execute the query against"
-        },
-        "database_name": {
-          "type": "string",
-          "description": "The name of the database. If not provided, the default neondb or first available database is used."
-        }
-      },
-      "required": [
-        "migration_sql",
-        "project_id"
-      ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "title": "Prepare Database Migration",
-      "readOnlyHint": false,
-      "destructiveHint": false,
-      "idempotentHint": false,
-      "openWorldHint": false
-    }
-  },
-  {
-    "name": "complete_database_migration",
-    "title": "Complete Database Migration",
-    "description": "Apply or discard a prepared migration and delete the temporary branch. NEVER run autonomously; always ask the user first. Pass migration_id, migration_sql, database_name, project_id, temporary_branch_id, and parent_branch_id from prepare_database_migration. Set apply_changes false to discard; omitting it applies the migration.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "migration_id": {
-          "type": "string",
-          "description": "The migration ID from prepare_database_migration."
-        },
-        "migration_sql": {
-          "type": "string",
-          "description": "The SQL statements to apply. Pass the exact value from prepare_database_migration."
-        },
-        "database_name": {
-          "type": "string",
-          "description": "The database name. Pass the exact value from prepare_database_migration."
-        },
-        "project_id": {
-          "type": "string",
-          "description": "The project ID. Pass the exact value from prepare_database_migration."
-        },
-        "temporary_branch_id": {
-          "type": "string",
-          "description": "The temporary branch ID to delete after migration."
-        },
-        "parent_branch_id": {
-          "type": "string",
-          "description": "The parent branch ID where migration will be applied."
-        },
-        "apply_changes": {
-          "type": "boolean",
-          "default": true,
-          "description": "Whether to apply the migration. Set to false to just delete the temp branch without applying."
-        }
-      },
-      "required": [
-        "migration_id",
-        "migration_sql",
-        "database_name",
-        "project_id",
-        "temporary_branch_id",
-        "parent_branch_id"
-      ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "title": "Complete Database Migration",
-      "readOnlyHint": false,
-      "destructiveHint": true,
-      "idempotentHint": false,
       "openWorldHint": false
     }
   },
@@ -449,113 +358,6 @@
     }
   },
   {
-    "name": "prepare_query_tuning",
-    "title": "Prepare Query Tuning",
-    "description": "Analyze a slow query on a temporary branch and return a tuning_id. Apply suggested SQL with run_sql on that branch, re-run explain_sql_statement there, then complete_query_tuning with the tuning_id (not the branch id) — apply_changes true if they accept, omit it or pass false if they reject, so the temporary branch is deleted. Do not use prepare_database_migration.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "sql": {
-          "type": "string",
-          "description": "The SQL statement to analyze and tune"
-        },
-        "database_name": {
-          "type": "string",
-          "description": "The name of the database to execute the query against"
-        },
-        "project_id": {
-          "type": "string",
-          "description": "The ID of the project to execute the query against"
-        },
-        "role_name": {
-          "type": "string",
-          "description": "The name of the role to connect with. If not provided, the default role (usually \"neondb_owner\") will be used."
-        }
-      },
-      "required": [
-        "sql",
-        "database_name",
-        "project_id"
-      ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "title": "Prepare Query Tuning",
-      "readOnlyHint": false,
-      "destructiveHint": false,
-      "idempotentHint": false,
-      "openWorldHint": false
-    }
-  },
-  {
-    "name": "complete_query_tuning",
-    "title": "Complete Query Tuning",
-    "description": "Apply or discard query-tuning changes and delete the temporary branch. NEVER run autonomously. Before calling, apply suggested SQL with run_sql on the temporary branch and re-run explain_sql_statement. Pass the tuning_id from prepare_query_tuning, not the branch id, plus temporary_branch_id. Set apply_changes true to apply; omitting it discards. Call this even when the user rejects the changes. Do not use prepare_database_migration.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "suggested_sql_statements": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "The SQL DDL statements to execute to improve performance. These statements are the result of the prior steps, for example creating additional indexes."
-        },
-        "apply_changes": {
-          "type": "boolean",
-          "default": false,
-          "description": "Whether to apply the suggested changes to the main branch"
-        },
-        "tuning_id": {
-          "type": "string",
-          "description": "The ID of the tuning to complete. This is NOT the branch ID. Remember this ID from the prior step using tool prepare_query_tuning."
-        },
-        "database_name": {
-          "type": "string",
-          "description": "The name of the database to execute the query against"
-        },
-        "project_id": {
-          "type": "string",
-          "description": "The ID of the project to execute the query against"
-        },
-        "role_name": {
-          "type": "string",
-          "description": "The name of the role to connect with. If you have used a specific role in prepare_query_tuning you MUST pass the same role again to this tool. If not provided, the default role (usually \"neondb_owner\") will be used."
-        },
-        "should_delete_temporary_branch": {
-          "type": "boolean",
-          "default": true,
-          "description": "Whether to delete the temporary branch after tuning"
-        },
-        "temporary_branch_id": {
-          "type": "string",
-          "description": "The ID of the temporary branch that needs to be deleted after tuning."
-        },
-        "branch_id": {
-          "type": "string",
-          "description": "The ID or name of the branch that receives the changes. If not provided, the default (main) branch will be used."
-        }
-      },
-      "required": [
-        "suggested_sql_statements",
-        "tuning_id",
-        "database_name",
-        "project_id",
-        "temporary_branch_id"
-      ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "annotations": {
-      "title": "Complete Query Tuning",
-      "readOnlyHint": false,
-      "destructiveHint": true,
-      "idempotentHint": false,
-      "openWorldHint": false
-    }
-  },
-  {
     "name": "list_slow_queries",
     "title": "List Slow Queries",
     "description": "List queries from pg_stat_statements by execution time, slowest first. For sizes, indexes, locks, cache, bloat, or replication use inspect_database.",
@@ -606,7 +408,7 @@
   {
     "name": "inspect_database",
     "title": "Inspect Database",
-    "description": "Run one read-only neon inspect db check (pick `check` from the input schema). Not for arbitrary SQL (`run_sql`), one statement's plan (`explain_sql_statement`), or applying indexes (`prepare_query_tuning`). Omit `database_name` to cover every database; some checks are compute-wide. If a check needs an extension, the tool names `CREATE EXTENSION`; ask before running it.",
+    "description": "Run one read-only neon inspect db check (pick `check` from the input schema). Not for arbitrary SQL (`run_sql`), one statement's plan (`explain_sql_statement`), or creating indexes (`run_sql`). Omit `database_name` to cover every database; some checks are compute-wide. If a check needs an extension, the tool names `CREATE EXTENSION`; ask before running it.",
     "inputSchema": {
       "type": "object",
       "properties": {

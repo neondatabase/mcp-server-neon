@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+**Breaking:** `prepare_database_migration`, `complete_database_migration`, `prepare_query_tuning`, and `complete_query_tuning` are removed. To test a schema change, `create_branch` from the target branch, run the statements with `run_sql_transaction` and that `branch_id`, then run them on the target branch and `delete_branch` the test branch; the `run_sql_transaction` description says so. `run_sql_transaction` takes one statement per array item, so semicolons inside strings, function bodies, and comments no longer break a migration (#201). The next release is 3.0.0.
+
 Authorizing a client that returns through a custom URL scheme, such as older Cursor installs (`cursor://`), ends on a completion page instead of leaving the consent form on screen. The page opens the app, links back to it if the app did not open, and offers a prompt to install the Neon skills. A cancelled or failed authorization opened in a browser gets a page instead of a JSON body. Clients that return to a web or loopback address still get a plain redirect, and non-browser callers see no change. The page reports that it was shown and which of its buttons and links were used, as described under Telemetry in the README.
 
 OAuth sign-in, token refresh, and API-key requests keep working after the OAuth database drops its connections, for example on a compute restart. Before, one dropped connection could leave every token store on a server instance failing with `Cannot use a pool after calling end on the pool`, and an idle dropped connection raised an uncaught exception.

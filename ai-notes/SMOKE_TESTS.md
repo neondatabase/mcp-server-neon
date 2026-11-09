@@ -92,7 +92,7 @@ Follow these phases in order. Each phase builds on the previous one.
 
 1. Call `neon-preview.list_projects` (or any read-safe tool) to confirm auth works.
 2. Verify the tool surface matches expectations from Phase 1:
-   - If `readonly=true`: confirm write tools (e.g. `create_project`, `create_branch`, `prepare_database_migration`) and `get_connection_string` are NOT available.
+   - If `readonly=true`: confirm write tools (e.g. `create_project`, `create_branch`, `run_sql_transaction`) and `get_connection_string` are NOT available.
    - If `category` is set: confirm only tools in those categories are available.
    - If `projectId` is set: confirm `list_projects`, `create_project`, `delete_project`, `list_organizations`, `search`, and `fetch` are NOT available.
    - If no params: confirm the full tool list from `/api/list-tools` is available.
@@ -123,14 +123,10 @@ Run through the applicable subset of these tests based on the current config. Sk
 - `neon-preview.describe_table_schema`
 - `neon-preview.explain_sql_statement`
 
-**Migration Flow** (skip if read-only):
-- `neon-preview.prepare_database_migration`
-- Validate in temporary branch with `neon-preview.run_sql`
-- `neon-preview.complete_database_migration` (apply or discard)
-
-**Query Tuning Flow** (skip if read-only):
-- `neon-preview.prepare_query_tuning`
-- `neon-preview.complete_query_tuning` (usually discard for smoke tests)
+**Branch-first Migration** (skip if read-only):
+- `neon-preview.create_branch` from the target branch
+- `neon-preview.run_sql_transaction` with that `branch_id`, then validate with `neon-preview.run_sql`
+- `neon-preview.run_sql_transaction` on the target branch, then `neon-preview.delete_branch` for the test branch
 
 **Discovery + Docs Tools:**
 - `neon-preview.search`

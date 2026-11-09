@@ -81,7 +81,7 @@ describe('/api/list-tools endpoint', () => {
   it('filters by scopes when category param is present', async () => {
     const body = await callListTools({ category: 'querying' });
     expect(body.grant.scopes).toEqual(['querying']);
-    expect(body.tools).toHaveLength(12);
+    expect(body.tools).toHaveLength(8);
   });
 
   it('returns only always-available tools when scopes are all invalid', async () => {

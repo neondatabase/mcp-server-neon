@@ -741,6 +741,106 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   );
 
   it(
+    'tests a migration on a branch, then applies it to the target branch, as run_sql_transaction describes',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      if (!client) throw new Error('MCP client is not connected.');
+      const names = (await client.listTools()).tools.map((tool) => tool.name);
+      for (const removed of [
+        'prepare_database_migration',
+        'complete_database_migration',
+        'prepare_query_tuning',
+        'complete_query_tuning',
+      ]) {
+        expect(names).not.toContain(removed);
+      }
+
+      const statements = [
+        'CREATE TABLE mcp_branch_notes (id serial PRIMARY KEY, body text, updated_at timestamptz)',
+        "INSERT INTO mcp_branch_notes (body) VALUES ('Ship it; then celebrate')",
+        'CREATE FUNCTION mcp_branch_touch() RETURNS trigger AS $$ BEGIN NEW.updated_at := now(); RETURN NEW; END; $$ LANGUAGE plpgsql',
+        'CREATE TRIGGER mcp_branch_touch BEFORE UPDATE ON mcp_branch_notes FOR EACH ROW EXECUTE FUNCTION mcp_branch_touch()',
+      ];
+      const check =
+        'UPDATE mcp_branch_notes SET body = body RETURNING body, updated_at IS NOT NULL AS touched';
+      const tableOn = async (branchId?: string) =>
+        JSON.parse(
+          assertToolSucceeded(
+            'run_sql',
+            await callTool('run_sql', {
+              project_id: projectId,
+              ...(branchId && { branch_id: branchId }),
+              sql: "SELECT to_regclass('mcp_branch_notes') IS NOT NULL AS exists",
+            }),
+          ),
+        );
+
+      const created = await callTool('create_branch', {
+        project_id: projectId,
+        name: `mcp-migrate-${randomUUID().slice(0, 8)}`,
+      });
+      const branchId = z
+        .object({ id: z.string() })
+        .parse(JSON.parse(assertToolSucceeded('create_branch', created))).id;
+      try {
+        assertToolSucceeded(
+          'run_sql_transaction',
+          await callTool('run_sql_transaction', {
+            project_id: projectId,
+            branch_id: branchId,
+            sql_statements: statements,
+          }),
+        );
+        expect(
+          JSON.parse(
+            assertToolSucceeded(
+              'run_sql',
+              await callTool('run_sql', {
+                project_id: projectId,
+                branch_id: branchId,
+                sql: check,
+              }),
+            ),
+          ),
+        ).toEqual([{ body: 'Ship it; then celebrate', touched: true }]);
+        expect(await tableOn()).toEqual([{ exists: false }]);
+
+        assertToolSucceeded(
+          'run_sql_transaction',
+          await callTool('run_sql_transaction', {
+            project_id: projectId,
+            sql_statements: statements,
+          }),
+        );
+        expect(
+          JSON.parse(
+            assertToolSucceeded(
+              'run_sql',
+              await callTool('run_sql', { project_id: projectId, sql: check }),
+            ),
+          ),
+        ).toEqual([{ body: 'Ship it; then celebrate', touched: true }]);
+      } finally {
+        assertToolSucceeded(
+          'delete_branch',
+          await callTool('delete_branch', {
+            project_id: projectId,
+            branch_id: branchId,
+          }),
+        );
+        await callTool('run_sql_transaction', {
+          project_id: projectId,
+          sql_statements: [
+            'DROP TABLE IF EXISTS mcp_branch_notes',
+            'DROP FUNCTION IF EXISTS mcp_branch_touch()',
+          ],
+        });
+      }
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'compares a child branch schema, then resets it from parent',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
