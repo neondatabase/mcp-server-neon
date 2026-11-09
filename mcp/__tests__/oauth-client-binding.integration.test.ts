@@ -207,6 +207,27 @@ describe('refresh token client binding', () => {
     expect(upstream.calls).toBe(2);
   });
 
+  it('rejects an ownerless cached chain from the failure cache without walking it again', async () => {
+    const first = await seedRefreshToken();
+    const second = (await refresh(owner, first)).body.refresh_token!;
+    const third = (await refresh(owner, second)).body;
+    expect(await revoke(owner, third.refresh_token!)).toBe(200);
+    for (const key of [first, second]) {
+      const row = (await model.getRefreshResult(key))!;
+      delete row.clientId;
+      await model.saveRefreshResult(key, row);
+    }
+
+    expectRejected(await refresh(owner, first));
+    const lookups = vi.spyOn(model, 'getAccessToken');
+    try {
+      expectRejected(await refresh(owner, first));
+      expect(lookups).not.toHaveBeenCalled();
+    } finally {
+      lookups.mockRestore();
+    }
+  });
+
   it('attributes a cached rotation without a client whose new pair was never persisted', async () => {
     const rotated = await seedRefreshToken();
     const cached = {

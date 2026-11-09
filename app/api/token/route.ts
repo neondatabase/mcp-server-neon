@@ -835,14 +835,18 @@ export async function POST(request: NextRequest) {
       const cachedFailure = await getCachedFailure();
       if (cachedFailure) {
         // Another client presenting a rotated token records it as missing.
-        // The owner's replay still gets the cached rotation.
-        const cached = await checkSuccessCache();
-        if (cached) {
+        // The owner's replay still gets the cached rotation. Rows without a
+        // client are not attributed here, so a cached failure keeps absorbing
+        // retries instead of walking their rotation chain each time.
+        const cached = await model
+          .getRefreshResult(refreshToken)
+          .catch(() => undefined);
+        if (cached?.clientId === client.id) {
           emitRefreshSlo('success', sloStartMs, {
             clientId: client.id,
             reason: 'cache_replay_over_failure',
           });
-          return NextResponse.json(cached);
+          return NextResponse.json(cachedToResponse(cached));
         }
         logger.info('Refresh token in failure cache; rejecting fast', {
           clientId: client.id,
