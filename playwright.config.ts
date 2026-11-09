@@ -45,7 +45,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `pnpm exec next dev --port ${PORT}`,
+    // Production's request URL host is mcp.neon.tech. A loopback hostname
+    // here would absorb NextRequest's one loopback-to-localhost rewrite and
+    // hide what it does to a loopback redirect_uri (see next.config.ts).
+    command: `pnpm exec next dev --hostname 0.0.0.0 --port ${PORT}`,
     url: BASE_URL,
     // The suite owns this server so webServer.env always reaches it.
     reuseExistingServer: false,

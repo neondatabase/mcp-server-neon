@@ -205,16 +205,18 @@ function htmlConsent(
 
 export async function GET(request: NextRequest) {
   try {
+    // `request.nextUrl` rewrites a loopback redirect_uri; see next.config.ts.
+    const requestUrl = new URL(request.url);
     const canonical = consentCanonicalLocation(
       requestPublicOrigin(request),
-      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+      `${requestUrl.pathname}${requestUrl.search}`,
       SERVER_HOST,
     );
     if (canonical) {
       return NextResponse.redirect(canonical, 302);
     }
 
-    const searchParams = request.nextUrl.searchParams;
+    const searchParams = requestUrl.searchParams;
     const requestParams = parseAuthRequest(searchParams);
     let resourceGrant: GrantContext = { ...DEFAULT_GRANT };
     try {
