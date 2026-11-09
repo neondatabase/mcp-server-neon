@@ -99,6 +99,12 @@ describe('renderAuthCompleteHtml', () => {
     }
   });
 
+  it('keeps the callback query when a reload can retry it', () => {
+    expect(render({ outcome: 'failed', retryable: true })).not.toContain(
+      'history.replaceState',
+    );
+  });
+
   it('falls back to manual copy when the clipboard API is missing', () => {
     expect(render({ outcome: 'success' })).toContain(
       'if (!navigator.clipboard) {',

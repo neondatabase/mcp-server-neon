@@ -20,10 +20,20 @@ function isAction(value: unknown): value is AuthCompleteAction {
  * to its auth_complete_viewed event.
  */
 export async function POST(request: NextRequest) {
-  if (request.headers.get('origin') !== requestPublicOrigin(request)) {
+  // Firefox sends `Origin: null` under the page's no-referrer policy, so the
+  // browser's own Sec-Fetch-Site also counts as proof of a same-origin page.
+  const sameOrigin =
+    request.headers.get('origin') === requestPublicOrigin(request) ||
+    request.headers.get('sec-fetch-site') === 'same-origin';
+  if (!sameOrigin) {
     return new NextResponse(null, { status: 403 });
   }
 
+  // Checked before reading so an oversized body is never buffered. The
+  // length check after reading covers a body sent without Content-Length.
+  if (Number(request.headers.get('content-length')) > MAX_BODY_LENGTH) {
+    return new NextResponse(null, { status: 413 });
+  }
   const body = await request.text();
   if (body.length > MAX_BODY_LENGTH) {
     return new NextResponse(null, { status: 413 });

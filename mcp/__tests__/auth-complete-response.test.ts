@@ -45,7 +45,7 @@ describe('presentToBrowser', () => {
       async (query, title, hasOnboard) => {
         const location = `${APP_CALLBACK}${query}`;
         const response = await presentToBrowser(
-          callbackRequest(),
+          callbackRequest('', BROWSER_ACCEPT),
           NextResponse.redirect(location),
         );
 
@@ -62,7 +62,7 @@ describe('presentToBrowser', () => {
 
     it('relays the error_description to the app without showing it', async () => {
       const response = await presentToBrowser(
-        callbackRequest(),
+        callbackRequest('', BROWSER_ACCEPT),
         NextResponse.redirect(
           `${APP_CALLBACK}?error=server_error&error_description=Call%20evil.example`,
         ),
@@ -78,11 +78,36 @@ describe('presentToBrowser', () => {
       const original = NextResponse.redirect(`${APP_CALLBACK}?code=c`);
       original.cookies.set('mcp-consent-abc', '', { maxAge: 0 });
 
-      const response = await presentToBrowser(callbackRequest(), original);
+      const response = await presentToBrowser(
+        callbackRequest('', BROWSER_ACCEPT),
+        original,
+      );
 
       expect(response.headers.getSetCookie()).toEqual(
         original.headers.getSetCookie(),
       );
+    });
+
+    it.each([
+      ['server_error', true],
+      ['temporarily_unavailable', true],
+      ['invalid_scope', false],
+    ])('explains a relayed %s with fixed text', async (error, isTemporary) => {
+      const response = await presentToBrowser(
+        callbackRequest('', BROWSER_ACCEPT),
+        NextResponse.redirect(`${APP_CALLBACK}?error=${error}&state=s`),
+      );
+      const html = await response.text();
+      expect(
+        html.includes('Neon could not finish authorization right now.'),
+      ).toBe(isTemporary);
+      expect(html.includes('This request expired')).toBe(!isTemporary);
+    });
+
+    it('keeps the redirect for a non-browser caller', async () => {
+      const original = NextResponse.redirect(`${APP_CALLBACK}?code=c`);
+      const response = await presentToBrowser(callbackRequest(), original);
+      expect(response).toBe(original);
     });
   });
 
@@ -92,7 +117,10 @@ describe('presentToBrowser', () => {
     'javascript:alert(1)',
   ])('keeps the plain redirect to %s', async (location) => {
     const original = NextResponse.redirect(location);
-    const response = await presentToBrowser(callbackRequest(), original);
+    const response = await presentToBrowser(
+      callbackRequest('', BROWSER_ACCEPT),
+      original,
+    );
     expect(response).toBe(original);
   });
 
@@ -151,8 +179,25 @@ describe('presentToBrowser', () => {
         expect(html).toContain(text);
         expect(html).not.toContain(body.error_description);
         expect(html).not.toContain('return-link');
+        expect(html).toContain('history.replaceState');
       },
     );
+
+    it('keeps the query and Retry-After when a reload can retry', async () => {
+      const response = await presentToBrowser(
+        callbackRequest('?code=c&state=s', BROWSER_ACCEPT),
+        NextResponse.json(
+          { error: 'temporarily_unavailable' },
+          { status: 503, headers: { 'Retry-After': '30' } },
+        ),
+      );
+
+      expect(response.status).toBe(503);
+      expect(response.headers.get('retry-after')).toBe('30');
+      const html = await response.text();
+      expect(html).toContain('Neon could not finish authorization right now.');
+      expect(html).not.toContain('history.replaceState');
+    });
 
     it.each([
       ['a non-browser caller', undefined, 400],
@@ -178,7 +223,7 @@ describe('auth_complete_viewed', () => {
 
   it('reports a success with the user and client the callback knew', async () => {
     const response = await presentToBrowser(
-      callbackRequest(),
+      callbackRequest('', BROWSER_ACCEPT),
       withCompletionContext(NextResponse.redirect(`${APP_CALLBACK}?code=c`), {
         userId: 'user-1',
         clientId: 'client-1',
@@ -226,7 +271,7 @@ describe('auth_complete_viewed', () => {
 
   it('reports nothing when the original response passes through', async () => {
     await presentToBrowser(
-      callbackRequest(),
+      callbackRequest('', BROWSER_ACCEPT),
       NextResponse.redirect('http://127.0.0.1:55667/callback?code=c'),
     );
     expect(track).not.toHaveBeenCalled();

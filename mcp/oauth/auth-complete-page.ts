@@ -18,6 +18,8 @@ export type AuthCompletePageProps = {
   nonce: string;
   /** Ties the page's action events to its auth_complete_viewed event. */
   pageViewId?: string;
+  /** The callback can be retried as is, so a reload must keep its query. */
+  retryable?: boolean;
 };
 
 // Served by app/api/auth-complete/events/route.ts.
@@ -151,14 +153,19 @@ function renderAgentTooling(): string {
       </section>`;
 }
 
-function script(hasReturn: boolean, hasTooling: boolean): string {
+function script(
+  hasReturn: boolean,
+  hasTooling: boolean,
+  retryable: boolean,
+): string {
+  const parts: string[] = [];
   // The callback's code and state are single use. Dropping them from the
   // address bar keeps a reload or restored tab from replaying a spent
   // transaction, which would show a failure and count against the auth SLO.
-  const parts = [
-    `
-    history.replaceState(null, '', location.pathname);`,
-  ];
+  if (!retryable) {
+    parts.push(`
+    history.replaceState(null, '', location.pathname);`);
+  }
   // sendBeacon still delivers when the click leaves the page or opens the app.
   parts.push(`
     var pageViewId = document.body.dataset.pageViewId;
@@ -292,7 +299,7 @@ export function renderAuthCompleteHtml(props: AuthCompletePageProps): string {
     </div>
     <p class="close-hint">You can close this window.</p>
   </main>
-  <script nonce="${nonce}">${script(Boolean(returnUrl), showTooling)}
+  <script nonce="${nonce}">${script(Boolean(returnUrl), showTooling, Boolean(props.retryable))}
   </script>
 </body>
 </html>`;

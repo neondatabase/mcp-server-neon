@@ -723,10 +723,18 @@ describe('/callback route integration', () => {
       return new URL(he.decode(href!));
     }
 
+    // The page is only for browsers, which send this on every navigation.
+    function fromBrowser(request: NextRequest): NextRequest {
+      request.headers.set('accept', 'text/html,application/xhtml+xml');
+      return request;
+    }
+
     it('renders the success page for a native app redirect and hands it the code', async () => {
       const seeded = await seedApprovedTransaction({ request: appRequest });
 
-      const response = await GET(buildRequest(seeded.id, seeded.cookie));
+      const response = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
 
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('text/html');
@@ -759,7 +767,9 @@ describe('/callback route integration', () => {
       const seeded = await seedApprovedTransaction({ request: appRequest });
 
       const response = await GET(
-        buildErrorRequest(seeded.id, seeded.cookie, 'access_denied'),
+        fromBrowser(
+          buildErrorRequest(seeded.id, seeded.cookie, 'access_denied'),
+        ),
       );
 
       expect(response.status).toBe(200);
@@ -779,6 +789,35 @@ describe('/callback route integration', () => {
       expect(vi.mocked(track).mock.calls.at(-1)![0]).not.toHaveProperty(
         'userId',
       );
+    });
+
+    it('keeps the query on a retryable failure so a reload completes it', async () => {
+      const seeded = await seedApprovedTransaction({ request: appRequest });
+      vi.mocked(model.getClient).mockRejectedValueOnce(
+        new ClientMetadataUnavailableError('answered 502'),
+      );
+
+      const failed = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+      expect(failed.status).toBe(503);
+      expect(failed.headers.get('retry-after')).toBe('30');
+      expect(await failed.text()).not.toContain('history.replaceState');
+
+      const retried = await GET(
+        fromBrowser(buildRequest(seeded.id, seeded.cookie)),
+      );
+      expect(retried.status).toBe(200);
+      expect(await retried.text()).toContain('You’ve approved access to Neon');
+    });
+
+    it('keeps the native app redirect for a non-browser caller', async () => {
+      const seeded = await seedApprovedTransaction({ request: appRequest });
+
+      const response = await GET(buildRequest(seeded.id, seeded.cookie));
+
+      expect(response.status).toBe(307);
+      expect(response.headers.get('location')).toMatch(/^cursor:/);
     });
   });
 
