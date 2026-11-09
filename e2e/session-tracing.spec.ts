@@ -300,6 +300,28 @@ test.describe('Session tracing', () => {
     expect(status).toBe(401);
   });
 
+  test('a 401 response is still traced', async ({ request }) => {
+    const traceId = crypto.randomUUID().replaceAll('-', '');
+    const response = await request.post('/mcp', {
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        'sentry-trace': `${traceId}-${traceId.slice(0, 16)}-1`,
+      },
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+    });
+    expect(response.status()).toBe(401);
+    const transaction = await eventually((items) =>
+      items.find(
+        (item) =>
+          item.type === 'transaction' &&
+          record(record(record(item.payload).contexts).trace).trace_id ===
+            traceId,
+      ),
+    );
+    expect(transaction.type).toBe('transaction');
+  });
+
   test('a 2026-07-28 request gets no session id but keeps its conversation id', async ({
     request,
   }) => {

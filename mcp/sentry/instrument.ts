@@ -1,4 +1,9 @@
-import { getClient, init, type NodeOptions } from '@sentry/node';
+import {
+  getClient,
+  httpIntegration,
+  init,
+  type NodeOptions,
+} from '@sentry/node';
 import { SENTRY_DSN } from '../constants';
 import { copySessionAttributes, tagEventWithSession } from './session';
 import pkg from '../../package.json';
@@ -35,6 +40,11 @@ init({
   },
   // Next.js's own spans keep the query in `http.target`.
   beforeSendSpan: withoutTargetQuery,
+  // The SDK's default also drops 401 to 403 transactions, and expired or
+  // missing tokens are a signal worth keeping.
+  integrations: [
+    httpIntegration({ dropSpansForIncomingRequestStatusCodes: [404] }),
+  ],
 
   // Setting this option to true will send default PII data to Sentry.
   // For example, automatic IP address collection on events

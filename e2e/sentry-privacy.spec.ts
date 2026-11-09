@@ -54,8 +54,7 @@ test('OAuth credentials and codes stay out of Sentry', async ({ request }) => {
   const traces = [newTrace(), newTrace(), newTrace()];
 
   // The docs-only route answers 200 without checking the bearer, so the
-  // request is traced without reaching the Neon API. The SDK drops
-  // transactions for 401 to 404 responses.
+  // request is traced without reaching the Neon API.
   await request.post('/mcp?category=docs', {
     headers: {
       Authorization: `Bearer ${bearer}`,
