@@ -35,11 +35,8 @@ import { track, flushAnalytics } from '../../../mcp/analytics/analytics';
 import { resolveAccountFromAuth } from '../../../mcp/server/account';
 import { model } from '../../../mcp/oauth/model';
 import { getApiKeys, type ApiKeyRecord } from '../../../mcp/oauth/kv-store';
-import {
-  agentSentryTags,
-  setSentryTags,
-  tagRequestSession,
-} from '../../../mcp/sentry/utils';
+import { agentSentryTags, setSentryTags } from '../../../mcp/sentry/utils';
+import { tagRequestSession } from '../../../mcp/sentry/session';
 import {
   recordToolError,
   startToolSpan,

@@ -5,7 +5,8 @@
  *  - A 2025-era client gets an `Mcp-Session-Id` on `initialize` and sends it
  *    back, so every tool call of that connection carries one `mcp.session.id`
  *  - Two concurrent sessions keep their own ids on spans and logs
- *  - An agent mistake leaves the span ok; a server failure marks it failed
+ *  - An agent mistake leaves the span ok; a server failure marks it failed,
+ *    and its error event carries the session id
  *  - A 2026-07-28 request is never given a session id, and a client's
  *    `_meta.threadId` lands on the span as `gen_ai.conversation.id`
  */
@@ -185,6 +186,17 @@ test.describe('Session tracing', () => {
         expect(span?.data['mcp.tool.name']).toBe(span?.data.tool_name);
       }
 
+      // get_doc fetches the page from the docs fixture: the outgoing request is
+      // a child span of the tool call and must carry the session too.
+      const fetchSpan = await eventually((items) =>
+        spansFrom(items).find(
+          (span) =>
+            span.op === 'http.client' &&
+            span.data['mcp.session.id'] === first.sessionId,
+        ),
+      );
+      expect(fetchSpan.data['mcp.session.id']).toBe(first.sessionId);
+
       const secondSpan = await eventually((items) =>
         toolSpan(spansFrom(items), 'search_docs', second.sessionId),
       );
@@ -238,6 +250,15 @@ test.describe('Session tracing', () => {
         'error.type': 'Error',
         'mcp.tool.result.is_error': true,
       });
+
+      const errorEvent = await eventually((items) =>
+        items.find(
+          (item) =>
+            item.type === 'event' &&
+            record(record(item.payload).tags)['mcp.session.id'] === sessionId,
+        ),
+      );
+      expect(errorEvent.type).toBe('event');
     } finally {
       await client.close();
     }
@@ -280,5 +301,14 @@ test.describe('Session tracing', () => {
       ),
     );
     expect(modernSpan.data['mcp.session.id']).toBeUndefined();
+
+    // Sessions from earlier requests on this server must not leak onto a
+    // request that has none.
+    const modernLog = await eventually((items) =>
+      logsFrom(items).find(
+        (log) => log.attributes['gen_ai.conversation.id'] === threadId,
+      ),
+    );
+    expect(modernLog.attributes['mcp.session.id']).toBeUndefined();
   });
 });

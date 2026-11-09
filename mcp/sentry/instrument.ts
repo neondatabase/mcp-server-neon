@@ -1,5 +1,6 @@
-import { init } from '@sentry/node';
+import { getClient, init } from '@sentry/node';
 import { SENTRY_DSN } from '../constants';
+import { copySessionAttributes, tagEventWithSession } from './session';
 import pkg from '../../package.json';
 
 init({
@@ -8,6 +9,7 @@ init({
   release: pkg.version,
   tracesSampleRate: 1.0,
   enableLogs: true,
+  beforeSend: tagEventWithSession,
 
   // Setting this option to true will send default PII data to Sentry.
   // For example, automatic IP address collection on events
@@ -29,3 +31,5 @@ init({
     /Connection terminated unexpectedly/i,
   ],
 });
+
+getClient()?.on('spanStart', copySessionAttributes);

@@ -1,27 +1,14 @@
-import { getIsolationScope, startSpan, type Span } from '@sentry/node';
+import { startSpan, type Span } from '@sentry/node';
 import type {
   CallToolResult,
   ServerContext as McpServerContext,
 } from '@modelcontextprotocol/server';
 import { isServerError } from '../server/errors';
 import type { IdentifiedClient } from '../utils/client-application';
-import { conversationIdFromMeta, readSessionId } from '../utils/mcp-session';
+import { conversationIdFromMeta } from '../utils/mcp-session';
+import { tagRequestConversation } from './session';
 
 const SPAN_STATUS_ERROR = 2;
-
-type SessionAttributes = {
-  'mcp.session.id'?: string;
-  'gen_ai.conversation.id'?: string;
-};
-
-function sessionAttributes(ctx: McpServerContext): SessionAttributes {
-  const sessionId = readSessionId(ctx.http?.req?.headers);
-  const conversationId = conversationIdFromMeta(ctx.mcpReq._meta);
-  return {
-    ...(sessionId && { 'mcp.session.id': sessionId }),
-    ...(conversationId && { 'gen_ai.conversation.id': conversationId }),
-  };
-}
 
 // The client name is whatever the client sent; Sentry caps tags at 200 but
 // not span attributes.
@@ -53,8 +40,8 @@ export function startToolSpan(
   { toolName, ctx, traceId }: ToolSpanOptions,
   run: (span: Span) => Promise<CallToolResult>,
 ): Promise<CallToolResult> {
-  const session = sessionAttributes(ctx);
-  getIsolationScope().setAttributes(session);
+  const conversationId = conversationIdFromMeta(ctx.mcpReq._meta);
+  if (conversationId) tagRequestConversation(conversationId);
   return startSpan(
     {
       name: `tools/call ${toolName}`,
@@ -64,7 +51,7 @@ export function startToolSpan(
         'mcp.tool.name': toolName,
         tool_name: toolName,
         trace_id: traceId,
-        ...session,
+        ...(conversationId && { 'gen_ai.conversation.id': conversationId }),
       },
     },
     async (span) => {
