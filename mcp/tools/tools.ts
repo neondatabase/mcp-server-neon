@@ -9,6 +9,7 @@ import { handleSearch } from './handlers/search';
 import { handleFetch } from './handlers/fetch';
 import { getDoc, searchDocs } from './handlers/docs';
 import { sendFeedback } from './handlers/feedback';
+import { listIncidents } from './handlers/incidents';
 
 import { getDefaultDatabase, splitSqlStatements } from './utils';
 import { capStatementRows, sqlRowsContent } from './sql-rows';
@@ -40,6 +41,7 @@ import {
   runSqlTransactionInputSchema,
   searchInputSchema,
   sendFeedbackInputSchema,
+  listIncidentsInputSchema,
 } from './toolsSchema';
 import { handleListOrganizations } from './handlers/list-orgs';
 import { handleGetConnectionString } from './handlers/connection-string';
@@ -1428,6 +1430,13 @@ You MUST follow these steps:
     await sendFeedback({ feedback: params.feedback });
     return {
       content: [{ type: 'text', text: 'Feedback received. Thank you!' }],
+    };
+  },
+
+  list_incidents: async (args) => {
+    parseHost(listIncidentsInputSchema, args?.params);
+    return {
+      content: [{ type: 'text', text: await listIncidents() }],
     };
   },
 };

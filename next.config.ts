@@ -1,6 +1,13 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // NextRequest rewrites the first 127.x.x.x, [::1], or localhost anywhere in
+  // the URL to `localhost`, query string included. With this set,
+  // `request.url` keeps the raw URL, so OAuth can store a loopback
+  // `redirect_uri` exactly as the client sent it (RFC 6749 §4.1.3).
+  // `request.nextUrl` is rewritten either way; don't read it for query values.
+  skipProxyUrlNormalize: true,
+
   // Serverless deployment on Vercel - do not use 'export' mode
   // API routes require dynamic server-side rendering
 

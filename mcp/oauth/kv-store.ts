@@ -199,6 +199,8 @@ export const getClientRegisterHeaders =
 
 /** Cached outcome of a refresh token exchange for cross-instance deduplication. */
 export type RefreshResult = {
+  /** Client that rotated the token. Missing on rows written before it was stored. */
+  clientId?: string;
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
@@ -217,6 +219,8 @@ export const getRefreshResults = createLazyKeyv<RefreshResult>(
  * time.
  */
 export type RefreshFailure = {
+  /** Set when the failure rejects only this client, such as a client mismatch. */
+  clientId?: string;
   failedAt: number;
   oauthError?: string;
   oauthErrorDescription?: string;
