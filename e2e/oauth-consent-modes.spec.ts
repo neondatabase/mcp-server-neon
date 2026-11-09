@@ -650,6 +650,8 @@ test.describe('OAuth consent modes', () => {
 
   test('T1 collapse uses visible tools only', async ({ page, request }) => {
     await openAuthorize(page, request);
+    await page.getByText('One project', { exact: true }).click();
+    await page.locator('input[name="projectId"]').fill('proj-example');
     await openCategoryDisclosure(page);
     const categories = page.locator('input[name="category"]');
     const count = await categories.count();

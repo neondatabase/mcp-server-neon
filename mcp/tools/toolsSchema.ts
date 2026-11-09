@@ -447,6 +447,8 @@ export const sendFeedbackInputSchema = z
   })
   .strict();
 
+export const listIncidentsInputSchema = z.object({}).strict();
+
 export const getDocInputSchema = z
   .object({
     slug: z

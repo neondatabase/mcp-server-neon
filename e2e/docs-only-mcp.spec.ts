@@ -7,7 +7,7 @@
  * and assert that:
  *  - No WWW-Authenticate header is returned
  *  - The MCP initialize handshake succeeds without an Authorization header
- *  - tools/list returns search_docs, get_doc, and send_feedback
+ *  - tools/list returns search_docs, get_doc, send_feedback, and list_incidents
  *  - tools/call search_docs returns hits and reports upstream failures
  *  - tools/call get_doc reads the page for a returned slug
  *  - tools/call send_feedback works without auth
@@ -204,6 +204,7 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
       });
       expect(result.tools.map((tool) => tool.name).sort()).toEqual([
         'get_doc',
+        'list_incidents',
         'search_docs',
         'send_feedback',
       ]);
@@ -211,6 +212,7 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
         Object.fromEntries(result.tools.map((tool) => [tool.name, tool.title])),
       ).toEqual({
         get_doc: 'Get Documentation Page',
+        list_incidents: 'List Neon Incidents',
         search_docs: 'Search Documentation',
         send_feedback: 'Send Feedback',
       });
@@ -244,6 +246,7 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
       });
       expect(result.tools.map((tool) => tool.name).sort()).toEqual([
         'get_doc',
+        'list_incidents',
         'search_docs',
         'send_feedback',
       ]);
@@ -252,7 +255,7 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     }
   });
 
-  test('tools/list returns the docs tools and send_feedback', async ({
+  test('tools/list returns the docs tools, send_feedback, and list_incidents', async ({
     request,
   }) => {
     const response = await request.post('/mcp?category=docs', {
@@ -274,7 +277,12 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     expect(listResult?.result?.tools).toBeDefined();
 
     const toolNames = listResult!.result!.tools!.map((t) => t.name).sort();
-    expect(toolNames).toEqual(['get_doc', 'search_docs', 'send_feedback']);
+    expect(toolNames).toEqual([
+      'get_doc',
+      'list_incidents',
+      'search_docs',
+      'send_feedback',
+    ]);
   });
 
   // Posts to the site search stand-in that `playwright.config.ts` points
