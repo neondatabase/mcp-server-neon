@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { assert } from '../../lib/assert';
 import { NEON_HANDLERS } from '../tools/tools';
 
 type ToolResult = { content: Array<{ type: string; text: string }> };
@@ -52,9 +53,10 @@ describe('list_incidents handler', () => {
       maintenance: [],
       affected_components: [],
     });
-    const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
-    expect(String(url)).toBe(STATUS_URL);
-    expect(new Headers(init?.headers).has('authorization')).toBe(false);
+    const [request] = vi.mocked(globalThis.fetch).mock.calls[0];
+    assert(request instanceof Request, 'fetch was not called with a Request');
+    expect(request.url).toBe(STATUS_URL);
+    expect(request.headers.has('authorization')).toBe(false);
   });
 
   it('rejects arguments', async () => {

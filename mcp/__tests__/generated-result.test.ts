@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizeGeneratedResult } from '../tools/generated/sanitize';
+import { sanitizeGeneratedResult } from '../tools/sanitize';
 
 describe('sanitizeGeneratedResult', () => {
   it('strips connectionString and leftover credentials from create results', () => {

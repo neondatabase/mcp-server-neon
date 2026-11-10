@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { z } from 'zod/v3';
+import * as z from 'zod';
 import {
   filterToolsForGrant,
   getAvailableTools,
@@ -15,15 +15,8 @@ import type { GrantContext } from '../utils/grant-context';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
 import { NEON_TOOLS } from '../tools/definitions';
 
-function isZod4Object(
-  schema: unknown,
-): schema is { shape: Record<string, unknown> } {
-  return (
-    typeof schema === 'object' &&
-    schema !== null &&
-    '_zod' in schema &&
-    'shape' in schema
-  );
+function isZod4Object(schema: unknown): schema is z.ZodObject {
+  return schema instanceof z.ZodObject;
 }
 
 function grant(overrides: Partial<GrantContext> = {}): GrantContext {
@@ -110,22 +103,22 @@ describe('filterToolsForGrant', () => {
     expect(names).toContain('list_project_members');
   });
 
-  it('keeps optional host and generated project_id in published schemas', () => {
+  it('keeps optional custom and generated project_id in published schemas', () => {
     const tools = filterToolsForGrant(
       NEON_TOOLS,
       grant({ projectId: 'proj-123' }),
     );
 
     const runSql = tools.find((tool) => tool.name === 'run_sql');
-    expect(runSql).toBeDefined();
-    expect(runSql?.inputSchema instanceof z.ZodObject).toBe(true);
-    if (!(runSql?.inputSchema instanceof z.ZodObject)) {
-      throw new Error('run_sql must keep a Zod 3 object schema');
+    expect(runSql && isZod4Object(runSql.inputSchema)).toBe(true);
+    if (!runSql || !isZod4Object(runSql.inputSchema)) {
+      throw new Error('run_sql must keep a Zod 4 object schema');
     }
     expect('project_id' in runSql.inputSchema.shape).toBe(true);
-    expect(runSql.inputSchema.shape.project_id.description).toBe(
-      'The ID of the project to execute the query against. Required for an unscoped connection. ' +
-        'May be omitted when the connection is scoped to one project; if provided, it must match that project.',
+    expect(
+      z.globalRegistry.get(runSql.inputSchema.shape.project_id)?.description,
+    ).toMatch(
+      / Required for an unscoped connection\. May be omitted when the connection is scoped to one project; if provided, it must match that project\.$/,
     );
     expect('sql' in runSql.inputSchema.shape).toBe(true);
     expect(runSql.inputSchema.safeParse({ sql: 'select 1' }).success).toBe(
@@ -367,7 +360,7 @@ describe('injectProjectId', () => {
     ).toThrow(`does not match this connection's project "proj-123"`);
   });
 
-  it('injects project_id for host and generated tools when grant is project-scoped', () => {
+  it('injects project_id when grant is project-scoped', () => {
     const args = { branch_id: 'br-1' };
     const scoped = grant({ projectId: 'proj-123' });
     expect(injectProjectId(args, scoped)).toEqual({
@@ -376,7 +369,6 @@ describe('injectProjectId', () => {
     });
     expect(
       injectProjectId(args, scoped, {
-        kind: 'generated',
         projectScoped: true,
       }),
     ).toEqual({
@@ -385,7 +377,6 @@ describe('injectProjectId', () => {
     });
     expect(
       injectProjectId({ sql: 'select 1' }, scoped, {
-        kind: 'host',
         projectScoped: true,
       }),
     ).toEqual({

@@ -2,6 +2,17 @@
 
 # [NEXT]
 
+Every tool now comes from `@neon/tools` 2.14.2. Tool names, input fields, required fields, and which grants list each tool are unchanged; descriptions are the package's, shorter, with this server's tool names in cross-references. Results that change:
+
+- `search` returns `{ "results": [{ "id", "title", "url" }] }` as `structuredContent` and as JSON text, the OpenAI search shape, instead of an array with a `type` field. It also finds shared projects, compute endpoints, and snapshots.
+- `fetch` returns `{ "id", "title", "text", "url", "metadata" }` as `structuredContent` and as JSON text instead of markdown alone; `text` holds the markdown.
+- `get_neon_auth_config` returns plain JSON, without the `Neon Auth configuration:` line and code fence.
+- `describe_branch` returns one JSON object, `{ "branch", "console_url", "text", "database_structure" }`. When the structure cannot be read, `database_structure` is `null` and `database_structure_error` says why.
+- `prepare_query_tuning` returns the `EXPLAIN` rows in `execution_plan` instead of an MCP content object, and includes `role_name` when one was passed.
+- `get_connection_string` called without `branch_id` says `Using default branch` instead of naming the branch it resolved.
+- A missing table, doc slug that fails validation, missing extension, and a `role_name` the pinned role refuses report `NeonClientError` instead of `NotFoundError` or `InvalidArgumentError`; the message is unchanged.
+- Four titles follow the package: `Search Neon resources`, `List organizations for the current user`, `Get connection string`, and `List Neon incidents`.
+
 2025-era Streamable HTTP clients receive an `Mcp-Session-Id` on the `initialize` response and send it on later requests. The server stores nothing under it and never rejects an unknown one; it groups a connection's requests in Sentry, which now also receives the server's logs. Clients that answer a session id with a `GET` stream or a `DELETE` on exit get `405`. 2026-07-28 clients see no change.
 
 `update_auth_logs_export` turns the export of a branch's Neon Auth events to Neon Platform logs on or off, in the `neon_auth` category and hidden in read-only mode. A project without logs export accepts only `enabled: false`. `get_neon_auth_config` reports the current value as `logs_export`, `null` where logs export is not available. Requires `@neon/tools` 2.12.0.

@@ -1,1447 +1,362 @@
-import { Api, Branch, EndpointType } from '../neon-client';
-import { neon } from '@neondatabase/serverless';
-import crypto from 'crypto';
-import { NotFoundError } from '../server/errors';
-
-import { describeTable, formatTableDescription } from '../describeUtils';
-import { handleGetNeonAuthConfig } from './handlers/neon-auth-get-config';
-import { handleSearch } from './handlers/search';
-import { handleFetch } from './handlers/fetch';
-import { getDoc, searchDocs } from './handlers/docs';
-import { sendFeedback } from './handlers/feedback';
-import { listIncidents } from './handlers/incidents';
-
-import { getDefaultDatabase, splitSqlStatements } from './utils';
-import { capStatementRows, sqlRowsContent } from './sql-rows';
-import { startSpan } from '@sentry/node';
-import type { z } from 'zod/v3';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { NeonToolExecutionContext } from '@neon/tools';
+import * as z from 'zod';
+import { NeonClientError } from '@neon/sdk';
+import { InvalidArgumentError, NotFoundError } from '../server/errors';
 import {
+  GET_CONNECTION_STRING_INPUT_SCHEMA,
+  NEON_TOOLS,
+  PACKAGE_TOOLS,
+} from './definitions';
+import { isGeneratedToolId, type ToolId } from './operations';
+import { sanitizeGeneratedResult } from './sanitize';
+import type { NeonTool } from './tool-definition';
+import type {
   ToolHandlerExtended,
   ToolHandlerExtraParams,
   ToolHandlers,
 } from './types';
-import {
-  completeDatabaseMigrationInputSchema,
-  completeQueryTuningInputSchema,
-  describeBranchInputSchema,
-  describeTableSchemaInputSchema,
-  explainSqlStatementInputSchema,
-  fetchInputSchema,
-  getConnectionStringInputSchema,
-  getDatabaseTablesInputSchema,
-  getDocInputSchema,
-  searchDocsInputSchema,
-  getNeonAuthConfigInputSchema,
-  inspectDatabaseInputSchema,
-  listOrganizationsInputSchema,
-  listSlowQueriesInputSchema,
-  prepareDatabaseMigrationInputSchema,
-  prepareQueryTuningInputSchema,
-  runSqlInputSchema,
-  runSqlTransactionInputSchema,
-  searchInputSchema,
-  sendFeedbackInputSchema,
-  listIncidentsInputSchema,
-} from './toolsSchema';
-import { handleListOrganizations } from './handlers/list-orgs';
-import { handleGetConnectionString } from './handlers/connection-string';
-import { handleInspectDatabase } from './handlers/inspect-database';
-import { handleDescribeBranch } from './handlers/describe-branch';
-import { createGeneratedToolHandlers } from './generated/adapt';
+import { getOrgByOrgIdOrDefault } from './utils';
 
-/**
- * Generates a unique, identifiable branch name for migrations.
- * Format: mcp-migration-YYYY-MM-DDTHH-mm-ss
- * This makes orphaned branches easy to identify and clean up.
- */
-function generateMigrationBranchName(): string {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  return `mcp-migration-${timestamp}`;
-}
+const TOOLS_REQUIRING_ORG_ID = new Set<ToolId>([
+  'projects.list',
+  'projects.count',
+  'projects.create',
+]);
 
-async function handleRunSql(
-  {
-    sql,
-    databaseName,
-    projectId,
-    branchId,
-    roleName,
-    computeId,
-  }: {
-    sql: string;
-    databaseName?: string;
-    projectId: string;
-    branchId?: string;
-    roleName?: string;
-    computeId?: string;
-  },
-  neonClient: Api<unknown>,
-  extra: ToolHandlerExtraParams,
-) {
-  return await startSpan({ name: 'run_sql' }, async () => {
-    const connectionString = await handleGetConnectionString(
-      {
-        projectId,
-        branchId,
-        databaseName,
-        roleName,
-        computeId,
-      },
-      neonClient,
-      extra,
-    );
-    const runQuery = neon(connectionString.uri);
-
-    // If in read-only mode, use transaction with readOnly option
-    if (extra.readOnly) {
-      const response = await runQuery.transaction([runQuery.query(sql)], {
-        readOnly: true,
-      });
-      // Return the first result (the actual query result)
-      return response[0];
-    }
-
-    const response = await runQuery.query(sql);
-
-    return response;
-  });
-}
-
-async function handleRunSqlTransaction(
-  {
-    sqlStatements,
-    databaseName,
-    projectId,
-    branchId,
-    roleName,
-    computeId,
-  }: {
-    sqlStatements: string[];
-    databaseName?: string;
-    projectId: string;
-    branchId?: string;
-    roleName?: string;
-    computeId?: string;
-  },
-  neonClient: Api<unknown>,
-  extra: ToolHandlerExtraParams,
-) {
-  const connectionString = await handleGetConnectionString(
-    {
-      projectId,
-      branchId,
-      databaseName,
-      roleName,
-      computeId,
-    },
-    neonClient,
-    extra,
-  );
-  const runQuery = neon(connectionString.uri);
-
-  // Use transaction with readOnly option when in read-only mode
-  const response = await runQuery.transaction(
-    sqlStatements.map((sql) => runQuery.query(sql)),
-    extra.readOnly ? { readOnly: true } : undefined,
-  );
-
-  return response;
-}
-
-async function handleGetDatabaseTables(
-  {
-    projectId,
-    databaseName,
-    branchId,
-  }: {
-    projectId: string;
-    databaseName?: string;
-    branchId?: string;
-  },
-  neonClient: Api<unknown>,
-  extra: ToolHandlerExtraParams,
-) {
-  const connectionString = await handleGetConnectionString(
-    {
-      projectId,
-      branchId,
-      databaseName,
-    },
-    neonClient,
-    extra,
-  );
-  const runQuery = neon(connectionString.uri);
-  const query = `
-    SELECT 
-      table_schema,
-      table_name,
-      table_type
-    FROM information_schema.tables 
-    WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
-    ORDER BY table_schema, table_name;
-  `;
-
-  const tables = await runQuery.query(query);
-  return tables;
-}
-
-async function handleDescribeTableSchema(
-  {
-    projectId,
-    databaseName,
-    branchId,
-    tableName,
-  }: {
-    projectId: string;
-    databaseName?: string;
-    branchId?: string;
-    tableName: string;
-  },
-  neonClient: Api<unknown>,
-  extra: ToolHandlerExtraParams,
-) {
-  const connectionString = await handleGetConnectionString(
-    {
-      projectId,
-      branchId,
-      databaseName,
-    },
-    neonClient,
-    extra,
-  );
-
-  const description = await describeTable(connectionString.uri, tableName);
-  if (!description) {
-    throw new NotFoundError(`Table not found: ${tableName}`);
-  }
+function executionContext(
+  extra: ToolHandlerExtraParams | undefined,
+): NeonToolExecutionContext {
   return {
-    raw: description,
-    formatted: formatTableDescription(description),
+    apiKey: extra?.apiKey,
+    signal: extra?.signal,
+    readOnly: extra?.readOnly,
+    postgresRole: extra?.pinnedRoleName,
+    caller: {
+      source: 'mcp',
+      userAgent: extra?.userAgent,
+      client: extra?.clientApplication,
+    },
   };
 }
 
-async function handleCreateBranch(
-  {
-    projectId,
-    branchName,
-    parentId,
-    expiresAt,
-  }: {
-    projectId: string;
-    branchName?: string;
-    parentId?: string;
-    expiresAt?: string;
-  },
-  neonClient: Api<unknown>,
-) {
-  const response = await neonClient.createProjectBranch(projectId, {
-    branch: {
-      name: branchName,
-      parent_id: parentId,
-      expires_at: expiresAt,
-    },
-    endpoints: [
-      {
-        type: EndpointType.ReadWrite,
-        autoscaling_limit_min_cu: 0.25,
-        autoscaling_limit_max_cu: 0.25,
-      },
-    ],
-  });
-
-  if (response.status !== 201) {
-    throw new Error(`Failed to create branch: ${response.statusText}`);
+/**
+ * A scoped `create_postgres_role` runs its SQL as the database owner, and a pinned
+ * connection promises that every SQL the server runs logs in as the pinned role.
+ */
+function assertRoleCreateAllowed(
+  parsed: unknown,
+  pinnedRoleName: string | undefined,
+): void {
+  if (pinnedRoleName === undefined) return;
+  if (typeof parsed !== 'object' || parsed === null || !('access' in parsed)) {
+    return;
   }
-
-  return response.data;
+  if (parsed.access === 'read_only' || parsed.access === 'read_write') {
+    throw new InvalidArgumentError(
+      `This connection is pinned to Postgres role "${pinnedRoleName}", so its SQL runs only as that role. access ${parsed.access} creates the role with SQL as the database owner, which this connection does not allow. Connect without roleName to create a ${parsed.access} role.`,
+    );
+  }
 }
 
-async function handleDeleteBranch(
-  {
-    projectId,
-    branchId,
-  }: {
-    projectId: string;
-    branchId: string;
-  },
-  neonClient: Api<unknown>,
-) {
-  const response = await neonClient.deleteProjectBranch(projectId, branchId);
-  return response.data;
-}
-
-async function handleSchemaMigration(
-  {
-    migrationSql,
-    databaseName,
-    projectId,
-  }: {
-    databaseName?: string;
-    projectId: string;
-    migrationSql: string;
-  },
-  neonClient: Api<unknown>,
-  extra: ToolHandlerExtraParams,
-) {
-  return await startSpan({ name: 'prepare_schema_migration' }, async (span) => {
-    let newBranch: { branch: Branch } | undefined;
-
-    try {
-      // Create branch with identifiable name for easy orphan cleanup
-      const branchName = generateMigrationBranchName();
-      const createdBranch = await handleCreateBranch(
-        { projectId, branchName },
-        neonClient,
-      );
-      newBranch = createdBranch;
-
-      let resolvedDatabaseName = databaseName;
-      if (!resolvedDatabaseName) {
-        const dbObject = await getDefaultDatabase(
-          {
-            projectId,
-            branchId: createdBranch.branch.id,
-            databaseName,
-          },
-          neonClient,
-        );
-        resolvedDatabaseName = dbObject.name;
-      }
-
-      const result = await handleRunSqlTransaction(
-        {
-          sqlStatements: splitSqlStatements(migrationSql),
-          databaseName: resolvedDatabaseName,
-          projectId,
-          branchId: createdBranch.branch.id,
-        },
-        neonClient,
-        extra,
-      );
-
-      const migrationId = crypto.randomUUID();
-      span.setAttributes({
-        projectId,
-        migrationId,
-      });
-
-      // Return all context needed for completion (stateless approach)
-      // No in-memory state storage - LLM will pass these back
-      return {
-        migrationId,
-        migrationSql,
-        databaseName: resolvedDatabaseName,
-        projectId,
-        branch: createdBranch.branch,
-        parentBranchId: createdBranch.branch.parent_id,
-        migrationResult: result,
-      };
-    } catch (error) {
-      // Clean up orphaned branch if it was created
-      if (newBranch) {
-        try {
-          await handleDeleteBranch(
-            { projectId, branchId: newBranch.branch.id },
-            neonClient,
-          );
-        } catch {
-          // Ignore cleanup errors - branch naming makes orphans identifiable
-        }
-      }
-      throw error;
+async function withOrgId(
+  parsed: unknown,
+  neonClient: Parameters<ToolHandlerExtended>[1],
+  extra: ToolHandlerExtraParams | undefined,
+): Promise<object> {
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error('Tool input must be an object');
+  }
+  if (!neonClient || !extra?.account) {
+    throw new Error('Resolving org_id requires an authenticated Neon client');
+  }
+  let orgId: string | undefined;
+  if ('org_id' in parsed && parsed.org_id !== undefined) {
+    if (typeof parsed.org_id !== 'string') {
+      throw new Error('org_id must be a string');
     }
-  });
-}
-
-async function handleCommitMigration(
-  {
-    migrationId,
-    migrationSql,
-    databaseName,
-    projectId,
-    temporaryBranchId,
-    parentBranchId,
-    applyChanges,
-  }: {
-    migrationId: string;
-    migrationSql: string;
-    databaseName: string;
-    projectId: string;
-    temporaryBranchId: string;
-    parentBranchId: string;
-    applyChanges: boolean;
-  },
-  neonClient: Api<unknown>,
-  extra: ToolHandlerExtraParams,
-) {
-  return await startSpan({ name: 'commit_schema_migration' }, async (span) => {
-    span.setAttributes({
-      migrationId,
-      projectId,
-    });
-
-    let migrationResult;
-    if (applyChanges) {
-      // Apply migration to parent branch
-      migrationResult = await handleRunSqlTransaction(
-        {
-          sqlStatements: splitSqlStatements(migrationSql),
-          databaseName,
-          projectId,
-          branchId: parentBranchId,
-        },
-        neonClient,
-        extra,
-      );
-    }
-
-    // Always clean up temporary branch
-    let branchDeleted = true;
-    let cleanupError: string | undefined;
-    try {
-      await handleDeleteBranch(
-        {
-          projectId,
-          branchId: temporaryBranchId,
-        },
-        neonClient,
-      );
-    } catch (error) {
-      branchDeleted = false;
-      cleanupError = (error as Error).message;
-    }
-
-    return {
-      applied: applyChanges,
-      deletedBranchId: branchDeleted ? temporaryBranchId : undefined,
-      cleanupError,
-      migrationResult,
-    };
-  });
-}
-
-async function handleExplainSqlStatement(
-  {
-    params,
-  }: {
-    params: {
-      sql: string;
-      databaseName?: string;
-      projectId: string;
-      branchId?: string;
-      analyze: boolean;
-    };
-  },
-  neonClient: Api<unknown>,
-  extra: ToolHandlerExtraParams,
-) {
-  const explainPrefix = params.analyze
-    ? 'EXPLAIN (ANALYZE, VERBOSE, BUFFERS, FILECACHE, FORMAT JSON)'
-    : 'EXPLAIN (VERBOSE, FORMAT JSON)';
-
-  const explainSql = `${explainPrefix} ${params.sql}`;
-
-  const result = await handleRunSql(
-    {
-      sql: explainSql,
-      databaseName: params.databaseName,
-      projectId: params.projectId,
-      branchId: params.branchId,
-    },
+    orgId = parsed.org_id;
+  }
+  const organization = await getOrgByOrgIdOrDefault(
+    { org_id: orgId },
     neonClient,
-    extra,
+    extra.account,
   );
+  return { ...parsed, org_id: organization.id };
+}
 
+function packageInput(tool: NeonTool, params: Record<string, unknown>) {
+  if (tool.id === 'postgres.connectionString') {
+    const { compute_id, ...target } =
+      GET_CONNECTION_STRING_INPUT_SCHEMA.parse(params);
+    return { ...target, endpoint_id: compute_id };
+  }
+  return tool.inputSchema.parse(params);
+}
+
+const PACKAGE_DOC_NOT_FOUND =
+  /^Doc page not found: "(.+)"\. Pass the slug of a docs search hit\.$/;
+
+// The package's message cannot name search_docs, which is the MCP name.
+function docNotFoundError(error: unknown): unknown {
+  if (!(error instanceof NeonClientError)) return error;
+  const slug = PACKAGE_DOC_NOT_FOUND.exec(error.message)?.[1];
+  if (slug === undefined) return error;
+  return new NotFoundError(
+    `Doc page not found: "${slug}". Pass a slug returned by search_docs.`,
+  );
+}
+
+function jsonText(data: unknown) {
+  return { type: 'text' as const, text: JSON.stringify(data, null, 2) };
+}
+
+const statementSchema = z.object({
+  rows: z.array(z.unknown()),
+  totalRowCount: z.number(),
+  truncated: z.boolean(),
+  note: z.string().optional(),
+});
+
+type Statement = z.infer<typeof statementSchema>;
+
+function statementSummary({ totalRowCount, truncated, note }: Statement) {
+  return note === undefined
+    ? { totalRowCount, truncated }
+    : { totalRowCount, truncated, note };
+}
+
+// A result that fits keeps the bare rows clients already parse; the summary
+// block appears only when a statement was cut at `max_rows`.
+function sqlRunResult(data: unknown): CallToolResult {
+  const statement = statementSchema.parse(data);
+  return {
+    content: statement.truncated
+      ? [jsonText(statement.rows), jsonText(statementSummary(statement))]
+      : [jsonText(statement.rows)],
+  };
+}
+
+function sqlTransactionResult(data: unknown): CallToolResult {
+  const statements = z.array(statementSchema).parse(data);
+  const rows = statements.map((statement) => statement.rows);
+  return {
+    content: statements.some((statement) => statement.truncated)
+      ? [jsonText(rows), jsonText(statements.map(statementSummary))]
+      : [jsonText(rows)],
+  };
+}
+
+// The OpenAI search and fetch connector contract reads `structuredContent`.
+function structuredResult(data: unknown): CallToolResult {
+  const structuredContent = z.record(z.string(), z.unknown()).parse(data);
+  return { content: [jsonText(structuredContent)], structuredContent };
+}
+
+const preparedMigrationSchema = z.object({
+  complete: z.object({
+    migration_id: z.string(),
+    migration_sql: z.string(),
+    database_name: z.string(),
+    project_id: z.string(),
+    temporary_branch_id: z.string(),
+    parent_branch_id: z.string(),
+  }),
+  temporary_branch: z.object({
+    id: z.string(),
+    name: z.string(),
+    parent_id: z.string(),
+  }),
+  migration_result: z.unknown(),
+});
+
+function preparedMigrationResult(data: unknown): CallToolResult {
+  const { complete, temporary_branch, migration_result } =
+    preparedMigrationSchema.parse(data);
   return {
     content: [
       {
-        type: 'text' as const,
-        text: JSON.stringify(result, null, 2),
-      },
-    ],
-  };
-}
-
-async function createTemporaryBranch(
-  projectId: string,
-  neonClient: Api<unknown>,
-): Promise<{ branch: Branch }> {
-  const result = await handleCreateBranch({ projectId }, neonClient);
-  if (!result?.branch) {
-    throw new Error('Failed to create temporary branch');
-  }
-  return result;
-}
-
-type QueryTuningParams = {
-  sql: string;
-  databaseName: string;
-  projectId: string;
-};
-
-type CompleteTuningParams = {
-  suggestedSqlStatements?: string[];
-  applyChanges?: boolean;
-  tuningId: string;
-  databaseName: string;
-  projectId: string;
-  temporaryBranch: Branch;
-  shouldDeleteTemporaryBranch?: boolean;
-  branch?: Branch;
-};
-
-type QueryTuningResult = {
-  tuningId: string;
-  databaseName: string;
-  projectId: string;
-  temporaryBranch: Branch;
-  originalPlan: any;
-  tableSchemas: any[];
-  sql: string;
-  baselineMetrics: QueryMetrics;
-};
-
-type CompleteTuningResult = {
-  appliedChanges?: string[];
-  results?: any;
-  deletedBranches?: string[];
-  message: string;
-};
-
-async function handleQueryTuning(
-  params: QueryTuningParams,
-  neonClient: Api<unknown>,
-  extra: ToolHandlerExtraParams,
-): Promise<QueryTuningResult> {
-  let tempBranch: Branch | undefined;
-  const tuningId = crypto.randomUUID();
-
-  try {
-    // Create temporary branch
-    const newBranch = await createTemporaryBranch(params.projectId, neonClient);
-    if (!newBranch.branch) {
-      throw new Error('Failed to create temporary branch: branch is undefined');
-    }
-    tempBranch = newBranch.branch;
-
-    // Ensure all operations use the temporary branch
-    const branchParams = {
-      ...params,
-      branchId: tempBranch.id,
-    };
-
-    // First, get the execution plan with table information
-    const executionPlan = await handleExplainSqlStatement(
-      {
-        params: {
-          sql: branchParams.sql,
-          databaseName: branchParams.databaseName,
-          projectId: branchParams.projectId,
-          branchId: tempBranch.id,
-          analyze: true,
-        },
-      },
-      neonClient,
-      extra,
-    );
-
-    // Extract table names from the plan
-    const tableNames = extractTableNamesFromPlan(executionPlan);
-
-    if (tableNames.length === 0) {
-      throw new NotFoundError(
-        'No tables found in execution plan. Cannot proceed with optimization.',
-      );
-    }
-
-    // Get schema information for all referenced tables in parallel
-    const tableSchemas = await Promise.all(
-      tableNames.map(async (tableName) => {
-        try {
-          const schema = await handleDescribeTableSchema(
-            {
-              tableName,
-              databaseName: branchParams.databaseName,
-              projectId: branchParams.projectId,
-              branchId: newBranch.branch.id,
-            },
-            neonClient,
-            extra,
-          );
-          return {
-            tableName,
-            schema: schema.raw,
-            formatted: schema.formatted,
-          };
-        } catch (error) {
-          throw new Error(
-            `Failed to get schema for table ${tableName}: ${
-              (error as Error).message
-            }`,
-          );
-        }
-      }),
-    );
-
-    // Get the baseline execution metrics
-    const baselineMetrics = extractExecutionMetrics(executionPlan);
-
-    // Return the information for analysis
-    const result: QueryTuningResult = {
-      tuningId,
-      databaseName: params.databaseName,
-      projectId: params.projectId,
-      temporaryBranch: tempBranch,
-      originalPlan: executionPlan,
-      tableSchemas,
-      sql: params.sql,
-      baselineMetrics,
-    };
-
-    return result;
-  } catch (error) {
-    // Always attempt to clean up the temporary branch if it was created
-    if (tempBranch) {
-      try {
-        await handleDeleteBranch(
-          {
-            projectId: params.projectId,
-            branchId: tempBranch.id,
-          },
-          neonClient,
-        );
-      } catch {
-        // No need to handle cleanup error
-      }
-    }
-
-    throw error;
-  }
-}
-
-// Helper function to extract execution metrics from EXPLAIN output
-function extractExecutionMetrics(plan: any): QueryMetrics {
-  try {
-    const planJson =
-      typeof plan.content?.[0]?.text === 'string'
-        ? JSON.parse(plan.content[0].text)
-        : plan;
-
-    const metrics: QueryMetrics = {
-      executionTime: 0,
-      planningTime: 0,
-      totalCost: 0,
-      actualRows: 0,
-      bufferUsage: {
-        shared: { hit: 0, read: 0, written: 0, dirtied: 0 },
-        local: { hit: 0, read: 0, written: 0, dirtied: 0 },
-      },
-    };
-
-    // Extract planning and execution time if available
-    if (planJson?.[0]?.['Planning Time']) {
-      metrics.planningTime = planJson[0]['Planning Time'];
-    }
-    if (planJson?.[0]?.['Execution Time']) {
-      metrics.executionTime = planJson[0]['Execution Time'];
-    }
-
-    // Recursively process plan nodes to accumulate costs and buffer usage
-    function processNode(node: any) {
-      if (!node || typeof node !== 'object') return;
-
-      // Accumulate costs
-      if (node['Total Cost']) {
-        metrics.totalCost = Math.max(metrics.totalCost, node['Total Cost']);
-      }
-      if (node['Actual Rows']) {
-        metrics.actualRows += node['Actual Rows'];
-      }
-
-      if (node['Shared Hit Blocks'])
-        metrics.bufferUsage.shared.hit += node['Shared Hit Blocks'];
-      if (node['Shared Read Blocks'])
-        metrics.bufferUsage.shared.read += node['Shared Read Blocks'];
-      if (node['Shared Written Blocks'])
-        metrics.bufferUsage.shared.written += node['Shared Written Blocks'];
-      if (node['Shared Dirtied Blocks'])
-        metrics.bufferUsage.shared.dirtied += node['Shared Dirtied Blocks'];
-
-      if (node['Local Hit Blocks'])
-        metrics.bufferUsage.local.hit += node['Local Hit Blocks'];
-      if (node['Local Read Blocks'])
-        metrics.bufferUsage.local.read += node['Local Read Blocks'];
-      if (node['Local Written Blocks'])
-        metrics.bufferUsage.local.written += node['Local Written Blocks'];
-      if (node['Local Dirtied Blocks'])
-        metrics.bufferUsage.local.dirtied += node['Local Dirtied Blocks'];
-
-      // Process child nodes
-      if (Array.isArray(node.Plans)) {
-        node.Plans.forEach(processNode);
-      }
-    }
-
-    if (planJson?.[0]?.Plan) {
-      processNode(planJson[0].Plan);
-    }
-
-    return metrics;
-  } catch {
-    return {
-      executionTime: 0,
-      planningTime: 0,
-      totalCost: 0,
-      actualRows: 0,
-      bufferUsage: {
-        shared: { hit: 0, read: 0, written: 0, dirtied: 0 },
-        local: { hit: 0, read: 0, written: 0, dirtied: 0 },
-      },
-    };
-  }
-}
-
-// Types for query metrics
-type BufferMetrics = {
-  hit: number;
-  read: number;
-  written: number;
-  dirtied: number;
-};
-
-type QueryMetrics = {
-  executionTime: number;
-  planningTime: number;
-  totalCost: number;
-  actualRows: number;
-  bufferUsage: {
-    shared: BufferMetrics;
-    local: BufferMetrics;
-  };
-};
-
-// Function to extract table names from an execution plan
-function extractTableNamesFromPlan(planResult: any): string[] {
-  const tableNames = new Set<string>();
-
-  function recursivelyExtractFromNode(node: any) {
-    if (!node || typeof node !== 'object') return;
-
-    // Check if current node has relation information
-    if (node['Relation Name'] && node.Schema) {
-      const tableName = `${node.Schema}.${node['Relation Name']}`;
-      tableNames.add(tableName);
-    }
-
-    // Recursively process all object properties and array elements
-    if (Array.isArray(node)) {
-      node.forEach((item) => {
-        recursivelyExtractFromNode(item);
-      });
-    } else {
-      Object.values(node).forEach((value) => {
-        recursivelyExtractFromNode(value);
-      });
-    }
-  }
-
-  try {
-    // Start with the raw plan result
-    recursivelyExtractFromNode(planResult);
-
-    // If we have content[0].text, also parse and process that
-    if (planResult?.content?.[0]?.text) {
-      try {
-        const parsedContent = JSON.parse(planResult.content[0].text);
-        recursivelyExtractFromNode(parsedContent);
-      } catch {
-        // No need to handle parse error
-      }
-    }
-  } catch {
-    // No need to handle extraction error
-  }
-
-  const result = Array.from(tableNames);
-  return result;
-}
-
-async function handleCompleteTuning(
-  params: CompleteTuningParams,
-  neonClient: Api<unknown>,
-  extra: ToolHandlerExtraParams,
-): Promise<CompleteTuningResult> {
-  let results;
-  const operationLog: string[] = [];
-
-  try {
-    // Validate branch information
-    if (!params.temporaryBranch) {
-      throw new Error(
-        'Branch information is required for completing query tuning',
-      );
-    }
-
-    // Only proceed with changes if we have both suggestedChanges and branch
-    if (
-      params.applyChanges &&
-      params.suggestedSqlStatements &&
-      params.suggestedSqlStatements.length > 0
-    ) {
-      operationLog.push('Applying optimizations to main branch...');
-
-      results = await handleRunSqlTransaction(
-        {
-          sqlStatements: params.suggestedSqlStatements,
-          databaseName: params.databaseName,
-          projectId: params.projectId,
-          branchId: params.branch?.id,
-        },
-        neonClient,
-        extra,
-      );
-
-      operationLog.push('Successfully applied optimizations to main branch.');
-    } else {
-      operationLog.push(
-        'No changes were applied (either none suggested or changes were discarded).',
-      );
-    }
-
-    // Only delete branch if shouldDeleteTemporaryBranch is true
-    if (params.shouldDeleteTemporaryBranch && params.temporaryBranch) {
-      operationLog.push('Cleaning up temporary branch...');
-
-      await handleDeleteBranch(
-        {
-          projectId: params.projectId,
-          branchId: params.temporaryBranch.id,
-        },
-        neonClient,
-      );
-
-      operationLog.push('Successfully cleaned up temporary branch.');
-    }
-
-    const result: CompleteTuningResult = {
-      appliedChanges:
-        params.applyChanges && params.suggestedSqlStatements
-          ? params.suggestedSqlStatements
-          : undefined,
-      results,
-      deletedBranches:
-        params.shouldDeleteTemporaryBranch && params.temporaryBranch
-          ? [params.temporaryBranch.id]
-          : undefined,
-      message: operationLog.join('\n'),
-    };
-
-    return result;
-  } catch (error) {
-    throw new Error(
-      `Failed to complete query tuning: ${(error as Error).message}`,
-    );
-  }
-}
-
-async function handleListSlowQueries(
-  {
-    projectId,
-    branchId,
-    databaseName,
-    computeId,
-    limit = 10,
-  }: {
-    projectId: string;
-    branchId?: string;
-    databaseName?: string;
-    computeId?: string;
-    limit?: number;
-  },
-  neonClient: Api<unknown>,
-  extra: ToolHandlerExtraParams,
-) {
-  // Get connection string
-  const connectionString = await handleGetConnectionString(
-    {
-      projectId,
-      branchId,
-      computeId,
-      databaseName,
-    },
-    neonClient,
-    extra,
-  );
-
-  // Connect to the database
-  const sql = neon(connectionString.uri);
-
-  // First, check if pg_stat_statements extension is installed
-  const checkExtensionQuery = `
-    SELECT EXISTS (
-      SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'
-    ) as extension_exists;
-  `;
-
-  const extensionCheck = await sql.query(checkExtensionQuery);
-  const extensionExists = extensionCheck[0]?.extension_exists;
-
-  if (!extensionExists) {
-    throw new NotFoundError(
-      `pg_stat_statements extension is not installed on the database. Please install it using the following command: CREATE EXTENSION pg_stat_statements;`,
-    );
-  }
-
-  // Query to get slow queries
-  const slowQueriesQuery = `
-    SELECT 
-      query,
-      calls,
-      total_exec_time,
-      mean_exec_time,
-      rows,
-      shared_blks_hit,
-      shared_blks_read,
-      shared_blks_written,
-      shared_blks_dirtied,
-      temp_blks_read,
-      temp_blks_written,
-      wal_records,
-      wal_fpi,
-      wal_bytes
-    FROM pg_stat_statements
-    WHERE query NOT LIKE '%pg_stat_statements%'
-    AND query NOT LIKE '%EXPLAIN%'
-    ORDER BY mean_exec_time DESC
-    LIMIT $1;
-  `;
-
-  const slowQueries = await sql.query(slowQueriesQuery, [limit]);
-
-  // Format the results
-  const formattedQueries = slowQueries.map((query: any) => {
-    return {
-      query: query.query,
-      calls: query.calls,
-      total_exec_time_ms: query.total_exec_time,
-      mean_exec_time_ms: query.mean_exec_time,
-      rows: query.rows,
-      shared_blocks: {
-        hit: query.shared_blks_hit,
-        read: query.shared_blks_read,
-        written: query.shared_blks_written,
-        dirtied: query.shared_blks_dirtied,
-      },
-      temp_blocks: {
-        read: query.temp_blks_read,
-        written: query.temp_blks_written,
-      },
-      io_time: {
-        read_ms: query.blk_read_time,
-        write_ms: query.blk_write_time,
-      },
-      wal: {
-        records: query.wal_records,
-        full_page_images: query.wal_fpi,
-        bytes: query.wal_bytes,
-      },
-    };
-  });
-
-  return {
-    slow_queries: formattedQueries,
-    total_queries_found: formattedQueries.length,
-  };
-}
-
-function parseHost<T extends z.ZodTypeAny>(
-  schema: T,
-  params: Record<string, unknown> | undefined,
-): z.infer<T> {
-  return schema.parse(params ?? {});
-}
-
-function requireExtra(
-  extra: ToolHandlerExtraParams | undefined,
-): ToolHandlerExtraParams {
-  if (!extra) {
-    throw new Error('Tool requires request context');
-  }
-  return extra;
-}
-
-function requireClient(neonClient: Api<unknown> | undefined): Api<unknown> {
-  if (!neonClient) {
-    throw new Error('Tool requires a Neon client');
-  }
-  return neonClient;
-}
-
-function host<S extends z.ZodTypeAny>(
-  schema: S,
-  fn: (
-    params: z.infer<S>,
-    neonClient: Api<unknown>,
-    extra: ToolHandlerExtraParams,
-  ) => ReturnType<ToolHandlerExtended>,
-): ToolHandlerExtended {
-  return async (args, neonClient, extra) =>
-    fn(
-      parseHost(schema, args?.params),
-      requireClient(neonClient),
-      requireExtra(extra),
-    );
-}
-
-const HOST_HANDLERS: ToolHandlers = {
-  run_sql: host(runSqlInputSchema, async (params, neonClient, extra) => {
-    const result = await handleRunSql(
-      {
-        sql: params.sql,
-        databaseName: params.database_name,
-        projectId: params.project_id,
-        branchId: params.branch_id,
-        roleName: params.role_name,
-        computeId: params.compute_id,
-      },
-      neonClient,
-      extra,
-    );
-    const { rows, summaries } = capStatementRows([result], params.max_rows);
-    return { content: sqlRowsContent(rows[0], summaries?.[0]) };
-  }),
-
-  run_sql_transaction: host(
-    runSqlTransactionInputSchema,
-    async (params, neonClient, extra) => {
-      const result = await handleRunSqlTransaction(
-        {
-          sqlStatements: params.sql_statements,
-          databaseName: params.database_name,
-          projectId: params.project_id,
-          branchId: params.branch_id,
-          roleName: params.role_name,
-          computeId: params.compute_id,
-        },
-        neonClient,
-        extra,
-      );
-      const { rows, summaries } = capStatementRows(result, params.max_rows);
-      return { content: sqlRowsContent(rows, summaries) };
-    },
-  ),
-
-  describe_table_schema: host(
-    describeTableSchemaInputSchema,
-    async (params, neonClient, extra) => {
-      const result = await handleDescribeTableSchema(
-        {
-          tableName: params.table_name,
-          databaseName: params.database_name,
-          projectId: params.project_id,
-          branchId: params.branch_id,
-        },
-        neonClient,
-        extra,
-      );
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
-    },
-  ),
-
-  get_database_tables: host(
-    getDatabaseTablesInputSchema,
-    async (params, neonClient, extra) => {
-      const result = await handleGetDatabaseTables(
-        {
-          projectId: params.project_id,
-          branchId: params.branch_id,
-          databaseName: params.database_name,
-        },
-        neonClient,
-        extra,
-      );
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
-    },
-  ),
-
-  prepare_database_migration: host(
-    prepareDatabaseMigrationInputSchema,
-    async (params, neonClient, extra) => {
-      const result = await handleSchemaMigration(
-        {
-          migrationSql: params.migration_sql,
-          databaseName: params.database_name,
-          projectId: params.project_id,
-        },
-        neonClient,
-        extra,
-      );
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `
+        type: 'text',
+        text: `
 <status>Migration created successfully in temporary branch</status>
 
 <migration_context>
 You MUST pass ALL these values to complete_database_migration:
-- migration_id: ${result.migrationId}
-- migration_sql: ${result.migrationSql}
-- database_name: ${result.databaseName}
-- project_id: ${result.projectId}
-- temporary_branch_id: ${result.branch.id}
-- parent_branch_id: ${result.parentBranchId}
+- migration_id: ${complete.migration_id}
+- migration_sql: ${complete.migration_sql}
+- database_name: ${complete.database_name}
+- project_id: ${complete.project_id}
+- temporary_branch_id: ${complete.temporary_branch_id}
+- parent_branch_id: ${complete.parent_branch_id}
 </migration_context>
 
 <temporary_branch>
-- Name: ${result.branch.name}
-- ID: ${result.branch.id}
-- Parent Branch ID: ${result.parentBranchId}
+- Name: ${temporary_branch.name}
+- ID: ${temporary_branch.id}
+- Parent Branch ID: ${temporary_branch.parent_id}
 </temporary_branch>
 
-<execution_result>${JSON.stringify(
-              result.migrationResult,
-              null,
-              2,
-            )}</execution_result>
+<execution_result>${JSON.stringify(migration_result, null, 2)}</execution_result>
 
 <next_actions>
 You MUST follow these steps:
-1. Test this migration using \`run_sql\` tool on branch \`${
-              result.branch.name
-            }\` (branch ID: ${result.branch.id})
+1. Test this migration using \`run_sql\` tool on branch \`${temporary_branch.name}\` (branch ID: ${temporary_branch.id})
 2. Verify the changes meet your requirements
 3. If satisfied, use \`complete_database_migration\` with ALL the values from migration_context above
 4. If not satisfied, use \`complete_database_migration\` with apply_changes: false to cancel and cleanup
 </next_actions>
             `,
-          },
-        ],
-      };
-    },
-  ),
+      },
+    ],
+  };
+}
 
-  complete_database_migration: host(
-    completeDatabaseMigrationInputSchema,
-    async (params, neonClient, extra) => {
-      const result = await handleCommitMigration(
-        {
-          migrationId: params.migration_id,
-          migrationSql: params.migration_sql,
-          databaseName: params.database_name,
-          projectId: params.project_id,
-          temporaryBranchId: params.temporary_branch_id,
-          parentBranchId: params.parent_branch_id,
-          applyChanges: params.apply_changes,
-        },
-        neonClient,
-        extra,
-      );
-      let message: string;
-      if (result.applied) {
-        message = result.deletedBranchId
-          ? `Migration applied successfully to parent branch. Temporary branch ${result.deletedBranchId} deleted.\n\nResult: ${JSON.stringify(result.migrationResult, null, 2)}`
-          : `Migration applied successfully to parent branch.\n\n⚠️ Warning: Failed to delete temporary branch. Manual cleanup may be required. Error: ${result.cleanupError}\n\nResult: ${JSON.stringify(result.migrationResult, null, 2)}`;
-      } else {
-        message = result.deletedBranchId
-          ? `Migration cancelled. Temporary branch ${result.deletedBranchId} deleted without applying changes.`
-          : `Migration cancelled.\n\n⚠️ Warning: Failed to delete temporary branch. Manual cleanup may be required. Error: ${result.cleanupError}`;
-      }
-
-      return {
-        content: [{ type: 'text', text: message }],
-      };
-    },
-  ),
-
-  describe_branch: host(
-    describeBranchInputSchema,
-    async (params, neonClient, extra) => {
-      return await handleDescribeBranch(
-        {
-          projectId: params.project_id,
-          branchId: params.branch_id,
-          databaseName: params.database_name,
-        },
-        neonClient,
-        extra,
-      );
-    },
-  ),
-
-  get_connection_string: host(
-    getConnectionStringInputSchema,
-    async (params, neonClient, extra) => {
-      const result = await handleGetConnectionString(
-        {
-          projectId: params.project_id,
-          branchId: params.branch_id,
-          computeId: params.compute_id,
-          databaseName: params.database_name,
-          roleName: params.role_name,
-        },
-        neonClient,
-        extra,
-      );
-      return {
-        content: [
-          {
-            type: 'text',
-            text: [
-              'Connection string details:',
-              `URI: ${result.uri}`,
-              `Project ID: ${result.projectId}`,
-              `Database: ${result.databaseName}`,
-              `Role: ${result.roleName}`,
-              result.branchId
-                ? `Branch ID: ${result.branchId}`
-                : 'Using default branch',
-              result.computeId
-                ? `Compute ID: ${result.computeId}`
-                : 'Using default compute',
-              '',
-              'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
-            ].join('\n'),
-          },
-        ],
-      };
-    },
-  ),
-
-  get_neon_auth_config: host(
-    getNeonAuthConfigInputSchema,
-    async (params, neonClient, extra) => {
-      return handleGetNeonAuthConfig(
-        {
-          projectId: params.project_id,
-          branchId: params.branch_id,
-        },
-        neonClient,
-        extra,
-      );
-    },
-  ),
-
-  explain_sql_statement: host(
-    explainSqlStatementInputSchema,
-    async (params, neonClient, extra) => {
-      const result = await handleExplainSqlStatement(
-        {
-          params: {
-            sql: params.sql,
-            databaseName: params.database_name,
-            projectId: params.project_id,
-            branchId: params.branch_id,
-            analyze: params.analyze,
-          },
-        },
-        neonClient,
-        extra,
-      );
-      return result;
-    },
-  ),
-
-  prepare_query_tuning: host(
-    prepareQueryTuningInputSchema,
-    async (params, neonClient, extra) => {
-      const result = await handleQueryTuning(
-        {
-          sql: params.sql,
-          databaseName: params.database_name,
-          projectId: params.project_id,
-        },
-        neonClient,
-        extra,
-      );
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                tuning_id: result.tuningId,
-                database_name: result.databaseName,
-                project_id: result.projectId,
-                temporary_branch_id: result.temporaryBranch.id,
-                execution_plan: result.originalPlan,
-                table_schemas: result.tableSchemas,
-                sql: result.sql,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
-  ),
-
-  complete_query_tuning: host(
-    completeQueryTuningInputSchema,
-    async (params, neonClient, extra) => {
-      const result = await handleCompleteTuning(
-        {
-          suggestedSqlStatements: params.suggested_sql_statements,
-          applyChanges: params.apply_changes,
-          tuningId: params.tuning_id,
-          databaseName: params.database_name,
-          projectId: params.project_id,
-          temporaryBranch: {
-            id: params.temporary_branch_id,
-            project_id: params.project_id,
-          } as Branch,
-          shouldDeleteTemporaryBranch: params.should_delete_temporary_branch,
-          branch: params.branch_id
-            ? ({
-                id: params.branch_id,
-                project_id: params.project_id,
-              } as Branch)
-            : undefined,
-        },
-        neonClient,
-        extra,
-      );
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
-    },
-  ),
-
-  list_slow_queries: host(
-    listSlowQueriesInputSchema,
-    async (params, neonClient, extra) => {
-      const result = await handleListSlowQueries(
-        {
-          projectId: params.project_id,
-          branchId: params.branch_id,
-          databaseName: params.database_name,
-          computeId: params.compute_id,
-          limit: params.limit,
-        },
-        neonClient,
-        extra,
-      );
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
-    },
-  ),
-
-  inspect_database: host(
-    inspectDatabaseInputSchema,
-    async (params, neonClient, extra) => {
-      const result = await handleInspectDatabase(
-        {
-          check: params.check,
-          projectId: params.project_id,
-          branchId: params.branch_id,
-          databaseName: params.database_name,
-          computeId: params.compute_id,
-          limit: params.limit,
-        },
-        neonClient,
-        extra,
-      );
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
-    },
-  ),
-
-  list_organizations: host(
-    listOrganizationsInputSchema,
-    async (params, neonClient, extra) => {
-      const organizations = await handleListOrganizations(
-        neonClient,
-        extra.account,
-        params.search,
-      );
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(organizations, null, 2),
-          },
-        ],
-      };
-    },
-  ),
-
-  search: host(searchInputSchema, async (params, neonClient, extra) => {
-    return await handleSearch(params, neonClient, extra);
+const preparedTuningSchema = z.object({
+  complete: z.object({
+    tuning_id: z.string(),
+    database_name: z.string(),
+    project_id: z.string(),
+    temporary_branch_id: z.string(),
+    role_name: z.string().optional(),
   }),
+  execution_plan: z.unknown(),
+  table_schemas: z.unknown(),
+  sql: z.string(),
+});
 
-  fetch: host(fetchInputSchema, async (params, neonClient, extra) => {
-    return await handleFetch(params, neonClient, extra);
-  }),
+function preparedTuningResult(data: unknown): CallToolResult {
+  const { complete, execution_plan, table_schemas, sql } =
+    preparedTuningSchema.parse(data);
+  return {
+    content: [jsonText({ ...complete, execution_plan, table_schemas, sql })],
+  };
+}
 
-  search_docs: async (args, _neonClient, extra) => {
-    const params = parseHost(searchDocsInputSchema, args?.params);
-    const content = await searchDocs(params, {
-      userAgent: extra?.userAgent,
-      client: extra?.clientApplication,
-    });
-    return {
-      content: [
-        {
-          type: 'text',
-          text: content,
-        },
-      ],
-    };
-  },
+function connectionStringResult(
+  data: unknown,
+  params: Record<string, unknown>,
+): CallToolResult {
+  const uri = z.string().parse(data);
+  const input = GET_CONNECTION_STRING_INPUT_SCHEMA.parse(params);
+  // The URI names the database and role the package resolved.
+  const url = new URL(uri);
+  const text = [
+    'Connection string details:',
+    `URI: ${uri}`,
+    `Project ID: ${input.project_id}`,
+    `Database: ${decodeURIComponent(url.pathname.slice(1))}`,
+    `Role: ${decodeURIComponent(url.username)}`,
+    input.branch_id ? `Branch ID: ${input.branch_id}` : 'Using default branch',
+    input.compute_id
+      ? `Compute ID: ${input.compute_id}`
+      : 'Using default compute',
+    '',
+    'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
+  ].join('\n');
+  return { content: [{ type: 'text', text }] };
+}
 
-  get_doc: async (args) => {
-    const params = parseHost(getDocInputSchema, args?.params);
-    const content = await getDoc({ slug: params.slug });
-    return {
-      content: [
-        {
-          type: 'text',
-          text: content,
-        },
-      ],
-    };
-  },
+function docResult(data: unknown): CallToolResult {
+  const { markdown } = z.object({ markdown: z.string() }).parse(data);
+  return { content: [{ type: 'text', text: markdown }] };
+}
 
-  send_feedback: async (args) => {
-    const params = parseHost(sendFeedbackInputSchema, args?.params);
-    await sendFeedback({ feedback: params.feedback });
-    return {
-      content: [{ type: 'text', text: 'Feedback received. Thank you!' }],
-    };
-  },
+function feedbackResult(data: unknown): CallToolResult {
+  const { message } = z.object({ message: z.string() }).parse(data);
+  return { content: [{ type: 'text', text: message }] };
+}
 
-  list_incidents: async (args) => {
-    parseHost(listIncidentsInputSchema, args?.params);
-    return {
-      content: [{ type: 'text', text: await listIncidents() }],
-    };
-  },
+const completedMigrationSchema = z.object({
+  applied: z.boolean(),
+  deletedBranchId: z.string().optional(),
+  cleanupError: z.string().optional(),
+  migrationResult: z.unknown().optional(),
+});
+
+function completedMigrationResult(data: unknown): CallToolResult {
+  const { applied, deletedBranchId, cleanupError, migrationResult } =
+    completedMigrationSchema.parse(data);
+  const result = JSON.stringify(migrationResult, null, 2);
+  const cleanupWarning = `⚠️ Warning: Failed to delete temporary branch. Manual cleanup may be required. Error: ${cleanupError}`;
+  let text: string;
+  if (applied) {
+    text = deletedBranchId
+      ? `Migration applied successfully to parent branch. Temporary branch ${deletedBranchId} deleted.\n\nResult: ${result}`
+      : `Migration applied successfully to parent branch.\n\n${cleanupWarning}\n\nResult: ${result}`;
+  } else {
+    text = deletedBranchId
+      ? `Migration cancelled. Temporary branch ${deletedBranchId} deleted without applying changes.`
+      : `Migration cancelled.\n\n${cleanupWarning}`;
+  }
+  return { content: [{ type: 'text', text }] };
+}
+
+const RESULT_RENDERERS: Partial<
+  Record<
+    ToolId,
+    (data: unknown, params: Record<string, unknown>) => CallToolResult
+  >
+> = {
+  'sql.run': sqlRunResult,
+  'sql.runTransaction': sqlTransactionResult,
+  'resources.search': structuredResult,
+  'resources.fetch': structuredResult,
+  'migrations.prepare': preparedMigrationResult,
+  'queryTuning.prepare': preparedTuningResult,
+  'migrations.complete': completedMigrationResult,
+  'postgres.connectionString': connectionStringResult,
+  'docs.get': docResult,
+  'feedback.send': feedbackResult,
 };
 
-export const NEON_HANDLERS: ToolHandlers = {
-  ...HOST_HANDLERS,
-  ...createGeneratedToolHandlers(),
-};
+function toolResult(
+  toolId: ToolId,
+  data: unknown,
+  params: Record<string, unknown>,
+): CallToolResult {
+  const render = RESULT_RENDERERS[toolId];
+  if (render) {
+    return render(data, params);
+  }
+  return {
+    content: [
+      jsonText(
+        isGeneratedToolId(toolId)
+          ? sanitizeGeneratedResult(toolId, data)
+          : data,
+      ),
+    ],
+  };
+}
+
+function toolHandler(tool: NeonTool): ToolHandlerExtended {
+  const packageTool = PACKAGE_TOOLS[tool.id];
+  return async (args, neonClient, extra) => {
+    const params = args?.params ?? {};
+    const parsed = packageInput(tool, params);
+    if (tool.id === 'postgres.roles.create') {
+      assertRoleCreateAllowed(parsed, extra?.pinnedRoleName);
+    }
+    const input = TOOLS_REQUIRING_ORG_ID.has(tool.id)
+      ? await withOrgId(parsed, neonClient, extra)
+      : parsed;
+    const { data } = await packageTool
+      .execute(input, executionContext(extra))
+      .catch((error: unknown) => {
+        if (tool.id === 'docs.get') throw docNotFoundError(error);
+        // A failed completion can leave the temporary branch behind, so it is
+        // reported as a server error that reaches Sentry rather than as caller input.
+        if (tool.id === 'queryTuning.complete') {
+          throw new Error(
+            `Failed to complete query tuning: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+        throw error;
+      });
+    return toolResult(tool.id, data, params);
+  };
+}
+
+export const NEON_HANDLERS: ToolHandlers = Object.fromEntries(
+  NEON_TOOLS.map((tool) => [tool.name, toolHandler(tool)]),
+);

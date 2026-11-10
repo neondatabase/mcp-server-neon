@@ -6,16 +6,21 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { NEON_HANDLERS } from '../tools/tools';
+import { NeonClientError } from '@neon/sdk';
+import * as z from 'zod';
+import { assert } from '../../lib/assert';
 import { NEON_DOCS_BASE_URL } from '../../lib/config';
-import { InvalidArgumentError, NotFoundError } from '../server/errors';
-
-type ToolResult = {
-  content: Array<{ type: string; text: string }>;
-  isError?: boolean;
-};
+import { NEON_HANDLERS } from '../tools/tools';
+import { NotFoundError } from '../server/errors';
+import { jsonContent, textContent } from './helpers/tool-result';
 
 const originalFetch = globalThis.fetch;
+
+function fetchedUrl(index: number): string {
+  const [request] = vi.mocked(globalThis.fetch).mock.calls[index] ?? [];
+  assert(request instanceof Request, 'fetch was not called with a Request');
+  return request.url;
+}
 
 describe('docs tools integration contracts (no external network)', () => {
   beforeEach(() => {
@@ -51,23 +56,21 @@ describe('docs tools integration contracts (no external network)', () => {
         }),
       );
 
-    const searchResult = (await NEON_HANDLERS.search_docs({
+    const searchResult = await NEON_HANDLERS.search_docs({
       params: { query: 'ai concepts' },
-    })) as ToolResult;
-    const { hits } = JSON.parse(searchResult.content[0].text) as {
-      hits: Array<{ slug: string }>;
-    };
+    });
+    const { hits } = z
+      .object({ hits: z.array(z.object({ slug: z.string() })) })
+      .parse(jsonContent(searchResult));
 
-    const docResult = (await NEON_HANDLERS.get_doc({
+    const docResult = await NEON_HANDLERS.get_doc({
       params: { slug: hits[0].slug },
-    })) as ToolResult;
+    });
 
-    expect(vi.mocked(globalThis.fetch)).toHaveBeenNthCalledWith(
-      2,
-      `${NEON_DOCS_BASE_URL}/docs/ai/ai-concepts.md`,
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    expect(fetchedUrl(1)).toBe(`${NEON_DOCS_BASE_URL}/docs/ai/ai-concepts.md`);
+    expect(textContent(docResult)).toBe(
+      '# AI Concepts\n\nThis page explains AI concepts.',
     );
-    expect(docResult.content[0].text).toContain('AI Concepts');
   });
 
   it('appends .md when slug is provided without extension', async () => {
@@ -79,9 +82,8 @@ describe('docs tools integration contracts (no external network)', () => {
       params: { slug: 'docs/get-started/signing-up' },
     });
 
-    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
+    expect(fetchedUrl(0)).toBe(
       `${NEON_DOCS_BASE_URL}/docs/get-started/signing-up.md`,
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -102,7 +104,7 @@ describe('docs tools integration contracts (no external network)', () => {
       NEON_HANDLERS.get_doc({
         params: { slug: 'https://evil.example/payload' },
       }),
-    ).rejects.toThrow(InvalidArgumentError);
+    ).rejects.toThrow(NeonClientError);
 
     expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
   });

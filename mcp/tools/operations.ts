@@ -1,5 +1,103 @@
 import type { NeonToolId } from '@neon/tools';
-import type { ScopeCategory } from '../../utils/grant-context';
+import type { ScopeCategory } from '../utils/grant-context';
+
+type CustomToolGrant = {
+  scope: ScopeCategory | null;
+  readOnlySafe: boolean;
+  projectScoped: boolean;
+};
+
+/**
+ * The tools this server used to implement itself. Their grant flags are stated
+ * per tool: SQL tools report `metadata.method: "SQL"` whether or not the caller's
+ * SQL can write, and the docs, feedback, and incidents tools have no project in
+ * their path but stay visible on project-scoped connections.
+ *
+ * `readOnlySafe` on a tool that runs caller SQL means it runs exactly one
+ * statement in its own `READ ONLY` transaction, as `sql.run` does.
+ * `sql.runTransaction` is not: a `COMMIT` or `SET TRANSACTION READ WRITE`
+ * statement can leave the read-only transaction. `postgres.connectionString`
+ * mutates nothing, but its URI carries a privileged role password that works
+ * against the read-write compute.
+ */
+export const CUSTOM_TOOL_GRANTS = {
+  'user.organizations': {
+    scope: 'projects',
+    readOnlySafe: true,
+    projectScoped: false,
+  },
+  'sql.run': { scope: 'querying', readOnlySafe: true, projectScoped: true },
+  'sql.runTransaction': {
+    scope: 'querying',
+    readOnlySafe: false,
+    projectScoped: true,
+  },
+  'schema.describeTable': {
+    scope: 'schema',
+    readOnlySafe: true,
+    projectScoped: true,
+  },
+  'schema.listTables': {
+    scope: 'schema',
+    readOnlySafe: true,
+    projectScoped: true,
+  },
+  'migrations.prepare': {
+    scope: 'querying',
+    readOnlySafe: false,
+    projectScoped: true,
+  },
+  'migrations.complete': {
+    scope: 'querying',
+    readOnlySafe: false,
+    projectScoped: true,
+  },
+  'branches.describe': {
+    scope: 'branches',
+    readOnlySafe: true,
+    projectScoped: true,
+  },
+  'postgres.connectionString': {
+    scope: 'branches',
+    readOnlySafe: false,
+    projectScoped: true,
+  },
+  'auth.getConfig': {
+    scope: 'neon_auth',
+    readOnlySafe: true,
+    projectScoped: true,
+  },
+  'sql.explain': { scope: 'querying', readOnlySafe: true, projectScoped: true },
+  'queryTuning.prepare': {
+    scope: 'querying',
+    readOnlySafe: false,
+    projectScoped: true,
+  },
+  'queryTuning.complete': {
+    scope: 'querying',
+    readOnlySafe: false,
+    projectScoped: true,
+  },
+  'queries.listSlow': {
+    scope: 'querying',
+    readOnlySafe: true,
+    projectScoped: true,
+  },
+  'database.inspect': {
+    scope: 'querying',
+    readOnlySafe: true,
+    projectScoped: true,
+  },
+  'resources.search': { scope: null, readOnlySafe: true, projectScoped: false },
+  'resources.fetch': { scope: null, readOnlySafe: true, projectScoped: false },
+  'docs.search': { scope: 'docs', readOnlySafe: true, projectScoped: true },
+  'docs.get': { scope: 'docs', readOnlySafe: true, projectScoped: true },
+  // Changes no Neon resource, so it stays available in read-only mode.
+  'feedback.send': { scope: null, readOnlySafe: true, projectScoped: true },
+  'incidents.list': { scope: null, readOnlySafe: true, projectScoped: true },
+} as const satisfies Partial<Record<NeonToolId, CustomToolGrant>>;
+
+export type CustomToolId = keyof typeof CUSTOM_TOOL_GRANTS;
 
 export const GENERATED_TOOL_SCOPES = {
   'projects.list': 'projects',
@@ -137,9 +235,31 @@ export const GENERATED_TOOL_SCOPES = {
 
 export type GeneratedToolId = keyof typeof GENERATED_TOOL_SCOPES;
 
-export const GENERATED_TOOL_IDS = Object.keys(
-  GENERATED_TOOL_SCOPES,
-) as GeneratedToolId[];
+export type ToolId = CustomToolId | GeneratedToolId;
+
+function isKeyOf<T extends object>(
+  record: T,
+  key: string,
+): key is Extract<keyof T, string> {
+  return Object.hasOwn(record, key);
+}
+
+export function isCustomToolId(id: string): id is CustomToolId {
+  return isKeyOf(CUSTOM_TOOL_GRANTS, id);
+}
+
+export function isGeneratedToolId(id: string): id is GeneratedToolId {
+  return isKeyOf(GENERATED_TOOL_SCOPES, id);
+}
+
+export function isToolId(id: string): id is ToolId {
+  return isCustomToolId(id) || isGeneratedToolId(id);
+}
+
+export const TOOL_IDS: ToolId[] = [
+  ...Object.keys(CUSTOM_TOOL_GRANTS).filter(isCustomToolId),
+  ...Object.keys(GENERATED_TOOL_SCOPES).filter(isGeneratedToolId),
+];
 
 export const READ_ONLY_SAFE_TOOL_OVERRIDES = new Set<GeneratedToolId>([
   'logs.query',

@@ -15,9 +15,6 @@ import { captureException } from '@sentry/node';
 import { NeonApiError } from '@neon/sdk';
 
 import { NEON_HANDLERS } from '../../../mcp/tools/index';
-import { getDoc, searchDocs } from '../../../mcp/tools/handlers/docs';
-import { sendFeedback } from '../../../mcp/tools/handlers/feedback';
-import { listIncidents } from '../../../mcp/tools/handlers/incidents';
 import { createNeonClient } from '../../../mcp/server/api';
 import pkg from '../../../package.json';
 import { handleToolError } from '../../../mcp/server/errors';
@@ -72,7 +69,6 @@ import {
 } from '../../../mcp/tools/registration';
 import { toListedInputSchema } from '../../../mcp/tools/listed-schema';
 import { NEON_TOOLS } from '../../../mcp/tools/definitions';
-import { searchDocsInputSchema } from '../../../mcp/tools/toolsSchema';
 import type { NeonTool } from '../../../mcp/tools/tool-definition';
 import { assert } from '../../../lib/assert';
 import { SERVER_HOST } from '../../../lib/config';
@@ -570,24 +566,12 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
 // The docs-only handler bypasses OAuth entirely. It only registers the
 // `docs` category tools plus send_feedback and list_incidents. None of them
-// touch the Neon API client: they call neon.com, the feedback service, or
-// neonstatus.com via global fetch. We
-// deliberately avoid going through `getAvailableTools` / `grant-filter` here
-// so the "always available" search/fetch tools (which require Neon API auth)
-// are not surfaced anonymously.
+// touch the Neon API: they call neon.com, the feedback service, or
+// neonstatus.com, and run with no credential. We deliberately avoid going
+// through `getAvailableTools` / `grant-filter` here so the "always available"
+// search/fetch tools (which require Neon API auth) are not surfaced
+// anonymously.
 const DOCS_ONLY_TOOLS = NEON_TOOLS.filter(isDocsOnlyTool);
-function getDocsOnlyToolDefinition(
-  name: 'search_docs' | 'get_doc' | 'send_feedback' | 'list_incidents',
-) {
-  const tool = DOCS_ONLY_TOOLS.find((tool) => tool.name === name);
-  assert(tool, `${name} tool definition not found`);
-  return tool;
-}
-
-const searchDocsTool = getDocsOnlyToolDefinition('search_docs');
-const getDocTool = getDocsOnlyToolDefinition('get_doc');
-const sendFeedbackTool = getDocsOnlyToolDefinition('send_feedback');
-const listIncidentsTool = getDocsOnlyToolDefinition('list_incidents');
 
 const ANONYMOUS_DOCS_USER_ID = 'anonymous-docs';
 
@@ -610,10 +594,11 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
   const handler = createMcpHandler(
     (server: McpServer) => {
       async function runDocsTool(
-        toolName: string,
+        tool: NeonTool,
+        args: unknown,
         ctx: McpServerContext,
-        call: () => Promise<string>,
       ) {
+        const toolName = tool.name;
         const traceId = generateTraceId();
         return await startToolSpan({ toolName, ctx, traceId }, async (span) => {
           span.setAttributes({
@@ -644,16 +629,19 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
           });
           waitUntil(flushAnalytics());
 
+          const handler = NEON_HANDLERS[toolName];
+          assert(handler, `Handler for tool ${toolName} not found`);
+          assert(
+            typeof args === 'object' && args !== null,
+            `${toolName} arguments were not validated`,
+          );
           try {
-            const text = await call();
-            return {
-              content: [
-                {
-                  type: 'text' as const,
-                  text,
-                },
-              ],
-            };
+            return await handler({ params: { ...args } }, undefined, {
+              readOnly: true,
+              clientApplication: docsAgent.clientApplication,
+              userAgent,
+              signal: toolCallSignal(ctx),
+            });
           } catch (error) {
             recordToolError(span, error);
             const errorResult = handleToolError(
@@ -673,57 +661,14 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
         });
       }
 
-      server.registerTool(
-        searchDocsTool.name,
-        v2ToolConfig(searchDocsTool),
-        async (args: unknown, ctx: McpServerContext) =>
-          runDocsTool(searchDocsTool.name, ctx, () =>
-            searchDocs(searchDocsInputSchema.parse(args), {
-              userAgent,
-              client: docsAgent.clientApplication,
-            }),
-          ),
-      );
-
-      server.registerTool(
-        getDocTool.name,
-        v2ToolConfig(getDocTool),
-        async (args: unknown, ctx: McpServerContext) => {
-          assert(
-            !!args &&
-              typeof args === 'object' &&
-              'slug' in args &&
-              typeof args.slug === 'string',
-            'get_doc arguments were not validated',
-          );
-          const { slug } = args;
-          return runDocsTool(getDocTool.name, ctx, () => getDoc({ slug }));
-        },
-      );
-      server.registerTool(
-        sendFeedbackTool.name,
-        v2ToolConfig(sendFeedbackTool),
-        async (args: unknown, ctx: McpServerContext) => {
-          assert(
-            !!args &&
-              typeof args === 'object' &&
-              'feedback' in args &&
-              typeof args.feedback === 'string',
-            'send_feedback arguments were not validated',
-          );
-          const feedback = args.feedback;
-          return runDocsTool(sendFeedbackTool.name, ctx, async () => {
-            await sendFeedback({ feedback });
-            return 'Feedback received. Thank you!';
-          });
-        },
-      );
-      server.registerTool(
-        listIncidentsTool.name,
-        v2ToolConfig(listIncidentsTool),
-        async (_args: unknown, ctx: McpServerContext) =>
-          runDocsTool(listIncidentsTool.name, ctx, () => listIncidents()),
-      );
+      for (const tool of DOCS_ONLY_TOOLS) {
+        server.registerTool(
+          tool.name,
+          v2ToolConfig(tool),
+          async (args: unknown, ctx: McpServerContext) =>
+            runDocsTool(tool, args, ctx),
+        );
+      }
     },
     {
       serverInfo: SERVER_INFO,

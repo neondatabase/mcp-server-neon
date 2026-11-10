@@ -32,7 +32,7 @@
     "@modelcontextprotocol/sdk": "1.25.3",
     "@modelcontextprotocol/server": "2.0.0",
     "@neon/sdk": "7.13.0",
-    "@neon/tools": "2.12.0",
+    "@neon/tools": "2.14.2",
     "@neondatabase/serverless": "1.0.0",
     "@segment/analytics-node": "2.2.1",
     "@sentry/node": "10.78.0",

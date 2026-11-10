@@ -373,7 +373,9 @@ test.describe('OAuth consent modes', () => {
         'With all projects selected, Search and Fetch remain available.',
       ),
     ).toHaveCount(0);
-    await expect(page.getByText('Search', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('Search Neon resources', { exact: true }),
+    ).toBeVisible();
     await clearScreenshotInteractionState(page);
     await capture(page, 'B5-no-categories-all-projects');
     await page.getByText('One project', { exact: true }).click();
@@ -381,7 +383,9 @@ test.describe('OAuth consent modes', () => {
     await expect(
       page.getByText('Send Feedback', { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText('Search', { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByText('Search Neon resources', { exact: true }),
+    ).toHaveCount(0);
     await clearScreenshotInteractionState(page);
     await capture(page, 'B5-no-categories-one-project');
   });
@@ -502,11 +506,11 @@ test.describe('OAuth consent modes', () => {
     await expect(roleInput).toHaveValue('');
     await expect(roleInput).toHaveAttribute('placeholder', 'Database owner');
     const tools = page.locator('[data-tool-content]');
-    await expect(tools).toContainText('Get Connection String');
+    await expect(tools).toContainText('Get connection string');
 
     await roleInput.fill('app_reader');
     await expect(roleSummary).toHaveText('app_reader');
-    await expect(tools).not.toContainText('Get Connection String');
+    await expect(tools).not.toContainText('Get connection string');
     await expect(tools).toContainText('Run SQL');
     await page.getByRole('radio', { name: 'Read only', exact: true }).check();
     await clearScreenshotInteractionState(page);
@@ -518,7 +522,7 @@ test.describe('OAuth consent modes', () => {
     await capture(page, 'B8-editable-role-read-write');
 
     await roleInput.fill('');
-    await expect(tools).toContainText('Get Connection String');
+    await expect(tools).toContainText('Get connection string');
     await roleInput.fill('app_reader');
     const posted = await page.locator('#authorize-form').evaluate((form) => {
       if (!(form instanceof HTMLFormElement)) {

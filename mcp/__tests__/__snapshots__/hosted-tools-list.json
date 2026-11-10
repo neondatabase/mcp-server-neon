@@ -1,21 +1,21 @@
 [
   {
     "name": "list_organizations",
-    "title": "List Organizations",
-    "description": "List all organizations the current user belongs to. Supports optional `search` parameter to filter by name or ID.",
+    "title": "List organizations for the current user",
+    "description": "Lists the organizations the user belongs to; an organization API key gets its own organization. search filters by name or id.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "search": {
           "type": "string",
-          "description": "Search organizations by name or ID. You can specify partial name or ID values to filter results."
+          "description": "Part of an organization name or id, ignoring case."
         }
       },
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
-      "title": "List Organizations",
+      "title": "List organizations for the current user",
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
@@ -25,48 +25,48 @@
   {
     "name": "run_sql",
     "title": "Run SQL",
-    "description": "Execute one SQL statement on a Neon database. If a prior step created a temporary branch, pass that branch_id. NEVER run destructive SQL autonomously; always ask the user first.",
+    "description": "Runs one SQL statement on a branch's database and returns its rows. After a prepare step, pass its temporary branch_id. NEVER run destructive SQL autonomously; always ask the user first.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "sql": {
           "type": "string",
-          "description": "The SQL query to execute"
+          "description": "The SQL statement to run."
         },
         "project_id": {
           "type": "string",
-          "description": "The ID of the project to execute the query against"
+          "description": "Project id."
         },
         "branch_id": {
-          "type": "string",
-          "description": "An optional ID of the branch to execute the query against. If not provided the default branch is used."
+          "description": "A br-... id, not a name. Omit it for the default branch.",
+          "type": "string"
         },
         "database_name": {
-          "type": "string",
-          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+          "description": "Database name. Omit for neondb, else the first database.",
+          "type": "string"
         },
         "role_name": {
-          "type": "string",
-          "description": "An optional Postgres role to log in as. The server resolves its credentials internally and never returns them. If not provided, the database owner is used. On a connection pinned to a role, omit this or pass that role."
+          "description": "Postgres role to log in as. Omit for the database owner.",
+          "type": "string"
         },
         "compute_id": {
-          "type": "string",
-          "description": "An optional ID of the compute/endpoint to run on. If not provided, the read-write compute of the branch is used."
+          "description": "Compute endpoint id (ep-...). Omit for the read-write compute.",
+          "type": "string"
         },
         "max_rows": {
+          "default": 100,
+          "description": "Rows to return per statement. Raise it only when a result has truncated: true.",
           "type": "integer",
           "minimum": 1,
-          "maximum": 10000,
-          "default": 100,
-          "description": "Maximum number of rows to return per statement. When a statement returns more, the response adds a second block with `totalRowCount` and `truncated: true`; raise this only then."
+          "maximum": 10000
         }
       },
       "required": [
         "sql",
         "project_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Run SQL",
@@ -79,8 +79,9 @@
   {
     "name": "run_sql_transaction",
     "title": "Run SQL Transaction",
-    "description": "Execute multiple SQL statements as one transaction. If a prior step created a temporary branch, pass that branch_id. NEVER run destructive SQL autonomously; always ask the user first.",
+    "description": "Runs several SQL statements in one transaction and returns each one's rows. After a prepare step, pass its temporary branch_id. NEVER run destructive SQL autonomously; always ask the user first.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "sql_statements": {
@@ -88,42 +89,41 @@
           "items": {
             "type": "string"
           },
-          "description": "The SQL statements to execute"
+          "description": "The SQL statements to run, in order."
         },
         "project_id": {
           "type": "string",
-          "description": "The ID of the project to execute the query against"
+          "description": "Project id."
         },
         "branch_id": {
-          "type": "string",
-          "description": "An optional ID of the branch to execute the query against. If not provided the default branch is used."
+          "description": "A br-... id, not a name. Omit it for the default branch.",
+          "type": "string"
         },
         "database_name": {
-          "type": "string",
-          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+          "description": "Database name. Omit for neondb, else the first database.",
+          "type": "string"
         },
         "role_name": {
-          "type": "string",
-          "description": "An optional Postgres role to log in as. The server resolves its credentials internally and never returns them. If not provided, the database owner is used. On a connection pinned to a role, omit this or pass that role."
+          "description": "Postgres role to log in as. Omit for the database owner.",
+          "type": "string"
         },
         "compute_id": {
-          "type": "string",
-          "description": "An optional ID of the compute/endpoint to run on. If not provided, the read-write compute of the branch is used."
+          "description": "Compute endpoint id (ep-...). Omit for the read-write compute.",
+          "type": "string"
         },
         "max_rows": {
+          "default": 100,
+          "description": "Rows to return per statement. Raise it only when a result has truncated: true.",
           "type": "integer",
           "minimum": 1,
-          "maximum": 10000,
-          "default": 100,
-          "description": "Maximum number of rows to return per statement. When a statement returns more, the response adds a second block with `totalRowCount` and `truncated: true`; raise this only then."
+          "maximum": 10000
         }
       },
       "required": [
         "sql_statements",
         "project_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Run SQL Transaction",
@@ -136,8 +136,9 @@
   {
     "name": "describe_table_schema",
     "title": "Describe Table Schema",
-    "description": "Get column definitions, data types, and constraints for a specific table. Do not use when you need all tables in a database (use `get_database_tables` instead).",
+    "description": "Returns a table's columns, indexes, constraints, and sizes. For every table, use get_database_tables.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "table_name": {
@@ -146,23 +147,22 @@
         },
         "project_id": {
           "type": "string",
-          "description": "The ID of the project to execute the query against"
+          "description": "Project id."
         },
         "branch_id": {
-          "type": "string",
-          "description": "An optional ID of the branch to execute the query against. If not provided the default branch is used."
+          "description": "A br-... id, not a name. Omit it for the default branch.",
+          "type": "string"
         },
         "database_name": {
-          "type": "string",
-          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+          "description": "Database name. Omit for neondb, else the first database.",
+          "type": "string"
         }
       },
       "required": [
         "table_name",
         "project_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Describe Table Schema",
@@ -175,28 +175,28 @@
   {
     "name": "get_database_tables",
     "title": "Get Database Tables",
-    "description": "List all tables in a Neon database. Do not use when you need column-level detail for a specific table (use `describe_table_schema` instead).",
+    "description": "Lists a database's tables and views outside the system schemas. For one table's columns, use describe_table_schema.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
           "type": "string",
-          "description": "The ID of the project"
+          "description": "Project id."
         },
         "branch_id": {
-          "type": "string",
-          "description": "An optional ID of the branch. If not provided the default branch is used."
+          "description": "A br-... id, not a name. Omit it for the default branch.",
+          "type": "string"
         },
         "database_name": {
-          "type": "string",
-          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+          "description": "Database name. Omit for neondb, else the first database.",
+          "type": "string"
         }
       },
       "required": [
         "project_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Get Database Tables",
@@ -209,29 +209,29 @@
   {
     "name": "prepare_database_migration",
     "title": "Prepare Database Migration",
-    "description": "Apply a schema change on a temporary branch and return a migration_id. Test with run_sql on that branch, ask the user, then complete_database_migration — even if they reject, so the temporary branch is deleted. Pass every field from the prepare response.",
+    "description": "Applies a schema change on a new temporary branch and returns a migration_id. Test it there with run_sql, ask the user, then always call complete_database_migration with the response's complete object so the branch is deleted.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "migration_sql": {
           "type": "string",
-          "description": "The SQL to execute to create the migration"
+          "description": "The migration SQL. It is split on every semicolon, including one inside a string or function body."
         },
         "project_id": {
           "type": "string",
-          "description": "The ID of the project to execute the query against"
+          "description": "Project id."
         },
         "database_name": {
-          "type": "string",
-          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+          "description": "Database name. Omit for neondb, else the first database.",
+          "type": "string"
         }
       },
       "required": [
         "migration_sql",
         "project_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Prepare Database Migration",
@@ -244,38 +244,39 @@
   {
     "name": "complete_database_migration",
     "title": "Complete Database Migration",
-    "description": "Apply or discard a prepared migration and delete the temporary branch. NEVER run autonomously; always ask the user first. Pass migration_id, migration_sql, database_name, project_id, temporary_branch_id, and parent_branch_id from prepare_database_migration. Set apply_changes false to discard; omitting it applies the migration.",
+    "description": "Applies or discards a prepared migration and deletes the temporary branch. NEVER run autonomously; always ask the user first. Pass the complete object from prepare_database_migration; apply_changes false discards.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "migration_id": {
           "type": "string",
-          "description": "The migration ID from prepare_database_migration."
+          "description": "The migration_id from prepare_database_migration."
         },
         "migration_sql": {
           "type": "string",
-          "description": "The SQL statements to apply. Pass the exact value from prepare_database_migration."
+          "description": "The exact migration_sql from prepare_database_migration."
         },
         "database_name": {
           "type": "string",
-          "description": "The database name. Pass the exact value from prepare_database_migration."
+          "description": "The exact database_name from prepare_database_migration."
         },
         "project_id": {
           "type": "string",
-          "description": "The project ID. Pass the exact value from prepare_database_migration."
+          "description": "The exact project_id from prepare_database_migration."
         },
         "temporary_branch_id": {
           "type": "string",
-          "description": "The temporary branch ID to delete after migration."
+          "description": "The temporary branch to delete."
         },
         "parent_branch_id": {
           "type": "string",
-          "description": "The parent branch ID where migration will be applied."
+          "description": "The branch the migration is applied to."
         },
         "apply_changes": {
-          "type": "boolean",
           "default": true,
-          "description": "Whether to apply the migration. Set to false to just delete the temp branch without applying."
+          "description": "Apply the migration to the parent branch. false only deletes the temporary branch.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -286,8 +287,7 @@
         "temporary_branch_id",
         "parent_branch_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Complete Database Migration",
@@ -300,29 +300,29 @@
   {
     "name": "describe_branch",
     "title": "Describe Branch",
-    "description": "Get a tree view of all objects in a branch, including databases, schemas, tables, views, and functions. Do not use when you only need table names (use `get_database_tables` instead) or column detail (use `describe_table_schema` instead).",
+    "description": "Returns a branch summary, its database names, and a tree of one database's schemas, tables, views, indexes, sequences, and functions. Starts a suspended compute. Branch record only: get_branch; table names: get_database_tables; columns: describe_table_schema.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
           "type": "string",
-          "description": "The ID of the project"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
-          "description": "An ID of the branch to describe"
+          "description": "A br-... id, not a name."
         },
         "database_name": {
-          "type": "string",
-          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+          "description": "Database name. Omit for neondb, else the first database.",
+          "type": "string"
         }
       },
       "required": [
         "project_id",
         "branch_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Describe Branch",
@@ -334,40 +334,43 @@
   },
   {
     "name": "get_connection_string",
-    "title": "Get Connection String",
-    "description": "Get a PostgreSQL connection string for a Neon database. The branch must have a compute endpoint. `create_project` and `create_branch` do not return one; call this after they succeed. Branch, compute, and database are optional and resolved automatically if not specified; `project_id` follows the connection scope. Requires write access: the connection string carries a privileged role password, so it is unavailable in read-only mode. A read-only caller who needs a DATABASE_URL must copy it from https://console.neon.tech manually.",
+    "title": "Get connection string",
+    "description": "Returns a Postgres connection string with a role password; the branch needs a compute. Omitted inputs resolve like the SQL tools: default branch, neondb or the first database, and its owner. Call it after create_project or create_branch, which return none. `project_id` follows the connection scope. Requires write access: the connection string carries a privileged role password, so it is unavailable in read-only mode. A read-only caller who needs a DATABASE_URL must copy it from https://console.neon.tech manually.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
           "type": "string",
-          "description": "The ID of the project."
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "Project id."
         },
         "branch_id": {
+          "description": "A br-... id, not a name. Omit it for the default branch.",
           "type": "string",
-          "description": "The ID or name of the branch. If not provided, the default branch will be used."
+          "pattern": "^[a-z0-9-]{1,60}$"
         },
         "compute_id": {
+          "description": "Compute endpoint id (ep-...). Omit for the read-write compute.",
           "type": "string",
-          "description": "The ID of the compute/endpoint. If not provided, the read-write compute associated with the branch will be used."
+          "pattern": "^[a-z0-9-]{1,60}$"
         },
         "database_name": {
-          "type": "string",
-          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+          "description": "Database name. Omit for neondb, else the first database.",
+          "type": "string"
         },
         "role_name": {
-          "type": "string",
-          "description": "The name of the role to connect with. If not provided, the database owner name will be used."
+          "description": "Postgres role to log in as. Omit for the database owner.",
+          "type": "string"
         }
       },
       "required": [
         "project_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
-      "title": "Get Connection String",
+      "title": "Get connection string",
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
@@ -377,24 +380,26 @@
   {
     "name": "get_neon_auth_config",
     "title": "Get Neon Auth configuration",
-    "description": "Read Neon Auth config for a branch: trusted origins, localhost access, email and password, OAuth providers, email provider, the organization, magic link, and phone number plugins, the webhook, and logs export. OAuth and SMTP secrets are redacted as \"***redacted***\". Requires provision_neon_auth first.",
+    "description": "Returns a branch's Neon Auth integration and settings: trusted origins, localhost, email and password, OAuth and email providers, plugins, webhook, and logs export, with secrets redacted. Needs Neon Auth on the branch (provision_neon_auth).",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
           "type": "string",
-          "description": "Neon project ID"
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
-          "description": "Branch ID. If omitted, the project default branch is used (same as provision_neon_auth)."
+          "pattern": "^[a-z0-9-]{1,60}$",
+          "description": "A br-... id, not a name. Omit it for the project's default branch."
         }
       },
       "required": [
         "project_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Get Neon Auth configuration",
@@ -407,38 +412,38 @@
   {
     "name": "explain_sql_statement",
     "title": "Explain SQL Statement",
-    "description": "Generate the execution plan for a SQL statement. When `analyze` is true, PostgreSQL executes the statement and any side effects. Use `analyze: false` to inspect a statement without executing it. Never analyze potentially destructive SQL autonomously. Do not use when you need query results (use `run_sql` instead).",
+    "description": "Returns a statement's execution plan as JSON. analyze true executes it, side effects included, so never analyze potentially destructive SQL autonomously. For rows, use run_sql.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "sql": {
           "type": "string",
-          "description": "The SQL statement to analyze"
+          "description": "The SQL statement to explain."
         },
         "project_id": {
           "type": "string",
-          "description": "The ID of the project to execute the query against"
+          "description": "Project id."
         },
         "branch_id": {
-          "type": "string",
-          "description": "An optional ID of the branch to execute the query against. If not provided the default branch is used."
+          "description": "A br-... id, not a name. Omit it for the default branch.",
+          "type": "string"
         },
         "database_name": {
-          "type": "string",
-          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+          "description": "Database name. Omit for neondb, else the first database.",
+          "type": "string"
         },
         "analyze": {
-          "type": "boolean",
           "default": false,
-          "description": "Whether to execute the statement with EXPLAIN ANALYZE. Defaults to false because execution may cause side effects."
+          "description": "Run EXPLAIN ANALYZE, which executes the statement and its side effects.",
+          "type": "boolean"
         }
       },
       "required": [
         "sql",
         "project_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Explain SQL Statement",
@@ -451,25 +456,26 @@
   {
     "name": "prepare_query_tuning",
     "title": "Prepare Query Tuning",
-    "description": "Analyze a slow query on a temporary branch and return a tuning_id. Apply suggested SQL with run_sql on that branch, re-run explain_sql_statement there, then complete_query_tuning with the tuning_id (not the branch id) — apply_changes true if they accept, omit it or pass false if they reject, so the temporary branch is deleted. Do not use prepare_database_migration.",
+    "description": "Runs EXPLAIN ANALYZE for a slow query on a new temporary branch; returns the plan, table schemas, and a tuning_id. Try changes there with run_sql and explain_sql_statement, then always call complete_query_tuning with the complete object so the branch is deleted. Not prepare_database_migration.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "sql": {
           "type": "string",
-          "description": "The SQL statement to analyze and tune"
+          "description": "The slow SQL statement to analyze."
         },
         "database_name": {
           "type": "string",
-          "description": "The name of the database to execute the query against"
+          "description": "The database the statement runs in."
         },
         "project_id": {
           "type": "string",
-          "description": "The ID of the project to execute the query against"
+          "description": "Project id."
         },
         "role_name": {
-          "type": "string",
-          "description": "The name of the role to connect with. If not provided, the default role (usually \"neondb_owner\") will be used."
+          "description": "Postgres role to connect as. Omit for the database owner.",
+          "type": "string"
         }
       },
       "required": [
@@ -477,8 +483,7 @@
         "database_name",
         "project_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Prepare Query Tuning",
@@ -491,8 +496,9 @@
   {
     "name": "complete_query_tuning",
     "title": "Complete Query Tuning",
-    "description": "Apply or discard query-tuning changes and delete the temporary branch. NEVER run autonomously. Before calling, apply suggested SQL with run_sql on the temporary branch and re-run explain_sql_statement. Pass the tuning_id from prepare_query_tuning, not the branch id, plus temporary_branch_id. Set apply_changes true to apply; omitting it discards. Call this even when the user rejects the changes. Do not use prepare_database_migration.",
+    "description": "Applies or discards query-tuning changes and deletes the temporary branch. NEVER run autonomously. Pass the complete object from prepare_query_tuning and suggested_sql_statements; apply_changes true applies, omitted discards. Call it even when the user rejects.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "suggested_sql_statements": {
@@ -500,41 +506,41 @@
           "items": {
             "type": "string"
           },
-          "description": "The SQL DDL statements to execute to improve performance. These statements are the result of the prior steps, for example creating additional indexes."
+          "description": "The DDL statements that improved the plan on the temporary branch, for example CREATE INDEX."
         },
         "apply_changes": {
-          "type": "boolean",
           "default": false,
-          "description": "Whether to apply the suggested changes to the main branch"
+          "description": "Apply suggested_sql_statements to branch_id.",
+          "type": "boolean"
         },
         "tuning_id": {
           "type": "string",
-          "description": "The ID of the tuning to complete. This is NOT the branch ID. Remember this ID from the prior step using tool prepare_query_tuning."
+          "description": "The tuning_id from prepare_query_tuning, not a branch id."
         },
         "database_name": {
           "type": "string",
-          "description": "The name of the database to execute the query against"
+          "description": "The database_name from prepare_query_tuning."
         },
         "project_id": {
           "type": "string",
-          "description": "The ID of the project to execute the query against"
+          "description": "Project id."
         },
         "role_name": {
-          "type": "string",
-          "description": "The name of the role to connect with. If you have used a specific role in prepare_query_tuning you MUST pass the same role again to this tool. If not provided, the default role (usually \"neondb_owner\") will be used."
+          "description": "The role_name passed to prepare_query_tuning, if any. Omit for the database owner.",
+          "type": "string"
         },
         "should_delete_temporary_branch": {
-          "type": "boolean",
           "default": true,
-          "description": "Whether to delete the temporary branch after tuning"
+          "description": "Delete the temporary branch.",
+          "type": "boolean"
         },
         "temporary_branch_id": {
           "type": "string",
-          "description": "The ID of the temporary branch that needs to be deleted after tuning."
+          "description": "The temporary_branch_id from prepare_query_tuning."
         },
         "branch_id": {
-          "type": "string",
-          "description": "The ID or name of the branch that receives the changes. If not provided, the default (main) branch will be used."
+          "description": "A br-... id, not a name. The branch that receives the changes; omit it for the default branch.",
+          "type": "string"
         }
       },
       "required": [
@@ -544,8 +550,7 @@
         "project_id",
         "temporary_branch_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Complete Query Tuning",
@@ -558,42 +563,42 @@
   {
     "name": "list_slow_queries",
     "title": "List Slow Queries",
-    "description": "List queries from pg_stat_statements by execution time, slowest first. For sizes, indexes, locks, cache, bloat, or replication use inspect_database.",
+    "description": "Lists queries from pg_stat_statements, slowest mean execution time first. For sizes, indexes, locks, cache, bloat, or replication, use inspect_database.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "project_id": {
           "type": "string",
-          "description": "The ID of the project to list slow queries from"
+          "description": "Project id."
         },
         "branch_id": {
-          "type": "string",
-          "description": "An optional ID of the branch. If not provided the default branch is used."
+          "description": "A br-... id, not a name. Omit it for the default branch.",
+          "type": "string"
         },
         "database_name": {
-          "type": "string",
-          "description": "The name of the database. If not provided, the default neondb or first available database is used."
+          "description": "Database name. Omit for neondb, else the first database.",
+          "type": "string"
         },
         "compute_id": {
-          "type": "string",
-          "description": "The ID of the compute/endpoint. If not provided, the read-write compute associated with the branch will be used."
+          "description": "Compute endpoint id (ep-...). Omit for the read-write compute.",
+          "type": "string"
         },
         "limit": {
-          "type": "number",
           "default": 10,
-          "description": "Maximum number of slow queries to return"
+          "description": "Maximum number of queries to return.",
+          "type": "number"
         },
         "min_execution_time": {
-          "type": "number",
           "default": 1000,
-          "description": "Minimum execution time in milliseconds to consider a query as slow"
+          "description": "Ignored; results are not filtered by time.",
+          "type": "number"
         }
       },
       "required": [
         "project_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "List Slow Queries",
@@ -606,8 +611,9 @@
   {
     "name": "inspect_database",
     "title": "Inspect Database",
-    "description": "Run one read-only neon inspect db check (pick `check` from the input schema). Not for arbitrary SQL (`run_sql`), one statement's plan (`explain_sql_statement`), or applying indexes (`prepare_query_tuning`). Omit `database_name` to cover every database; some checks are compute-wide. If a check needs an extension, the tool names `CREATE EXTENSION`; ask before running it.",
+    "description": "Runs one read-only neon inspect db check; some are compute-wide. outliers ranks queries by total time and calls by count, both via pg_stat_statements; lfc-hit-rate and working-set need the neon extension. If one is missing, the error gives the CREATE EXTENSION; ask before running it. Other SQL: run_sql; one plan: explain_sql_statement; new indexes: prepare_query_tuning.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "check": {
@@ -629,39 +635,38 @@
             "replication-slots",
             "subscriptions"
           ],
-          "description": "Which diagnostic to run:\n`table-sizes`: Size of each table (including TOAST), largest first (pg_table_size)\n`index-sizes`: Size of each index, largest first (pg_relation_size)\n`unused-indexes`: Non-unique indexes with fewer than 50 scans — candidates for removal (pg_stat_user_indexes)\n`seq-scans`: Number of sequential scans recorded against each table (pg_stat_user_tables)\n`long-running-queries`: Queries running longer than 5 minutes (pg_stat_activity)\n`stalled-queries`: Active queries running longer than 30 seconds with parallel-worker grouping, waits, and blockers, oldest query group first (compute-wide)\n`locks`: Locks held with the acquiring query and its age (pg_locks + pg_stat_activity)\n`outliers`: The 25 queries with the highest cumulative execution time since statistics were last reset (needs pg_stat_statements)\n`calls`: The 25 most frequently executed queries since statistics were last reset (needs pg_stat_statements)\n`lfc-hit-rate`: Local File Cache hit rate (compute-wide, needs neon extension)\n`working-set`: Estimated working set vs LFC size (compute-wide, needs neon extension)\n`vacuum-stats`: Autovacuum status per table: last (auto)vacuum, dead tuples, threshold\n`bloat`: Estimated bloat for the 25 most bloated tables (statistical estimate, no extension needed)\n`replication-slots`: Replication slots (compute-wide): kind, status, client, restart/confirmed-flush LSNs, and lag (pg_replication_slots + pg_stat_replication)\n`subscriptions`: Per-table logical replication progress on this subscriber (pg_subscription_rel)"
+          "description": "The diagnostic to run."
         },
         "project_id": {
           "type": "string",
-          "description": "The ID of the project to inspect"
+          "description": "Project id."
         },
         "branch_id": {
-          "type": "string",
-          "description": "An optional ID of the branch. If not provided the default branch is used."
+          "description": "A br-... id, not a name. Omit it for the default branch.",
+          "type": "string"
         },
         "database_name": {
+          "description": "Database to inspect, or to connect through for a compute-wide check. Omit for every database; one failure fails the run.",
           "type": "string",
-          "minLength": 1,
-          "description": "For a database-scoped check, the database to inspect. Omit to cover every database on the branch. Ranking and SQL row limits stay per database. One failing database fails the whole run. For a compute-wide check, the database to connect through; the check still runs once for the whole compute and the result does not include `databaseName`. The response `limit` applies to the combined rows after that."
+          "minLength": 1
         },
         "compute_id": {
-          "type": "string",
-          "description": "The ID of the compute/endpoint. If not provided, the read-write compute associated with the branch will be used."
+          "description": "Compute endpoint id (ep-...). Omit for the read-write compute.",
+          "type": "string"
         },
         "limit": {
+          "default": 50,
+          "description": "Rows to return. Raise it only when truncated is true.",
           "type": "integer",
           "minimum": 1,
-          "maximum": 1000,
-          "default": 50,
-          "description": "Maximum number of rows to return from the combined result. Per-database ranking and SQL caps are applied first. The response reports how many rows the check produced and whether they were truncated, so raise this only when `truncated` is true. A few checks are capped in SQL and say so in their description."
+          "maximum": 1000
         }
       },
       "required": [
         "check",
         "project_id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Inspect Database",
@@ -673,25 +678,25 @@
   },
   {
     "name": "search",
-    "title": "Search",
-    "description": "Search across all organizations, projects, and branches by keyword. Returns matching items with id, title, and URL. Query must be at least 3 characters. Do not use when you need all projects (use `list_projects` instead) or to search Neon documentation (use `search_docs`).",
+    "title": "Search Neon resources",
+    "description": "Finds organizations, projects (including shared ones), branches, computes, and snapshots whose name or id contains query, with ids for fetch. To list projects, use list_projects; for docs, search_docs.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "query": {
           "type": "string",
           "minLength": 3,
-          "description": "The search query to find matching organizations, projects, or branches"
+          "description": "Part of a name or id, or a compute endpoint host from a connection string."
         }
       },
       "required": [
         "query"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
-      "title": "Search",
+      "title": "Search Neon resources",
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
@@ -701,21 +706,21 @@
   {
     "name": "fetch",
     "title": "Fetch",
-    "description": "Fetch detailed information about a specific organization, project, or branch using the ID returned by the `search` tool.",
+    "description": "Returns an organization, project, branch, compute, or snapshot by an id from search: markdown text, console URL, and records in metadata.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "The ID returned by the search tool to fetch detailed information about the entity"
+          "description": "An id from search, such as project:<project_id>."
         }
       },
       "required": [
         "id"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Fetch",
@@ -728,8 +733,9 @@
   {
     "name": "search_docs",
     "title": "Search Documentation",
-    "description": "Search neon.com: docs, API reference, PostgreSQL tutorial, guides, FAQs, changelog, and blog. Returns ranked pages with title, URL, the matching section, and a slug; read a full page with get_doc.",
+    "description": "Searches neon.com docs, API reference, PostgreSQL tutorial, guides, FAQs, changelog, and blog for ranked pages with the slug get_doc reads.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "query": {
@@ -739,6 +745,9 @@
           "description": "What to search for, in words, e.g. \"reset a branch\" or \"connection pooling\"."
         },
         "categories": {
+          "description": "Only these categories; api is the API reference, postgresql the PostgreSQL tutorial.",
+          "minItems": 1,
+          "maxItems": 7,
           "type": "array",
           "items": {
             "type": "string",
@@ -751,24 +760,20 @@
               "blog",
               "changelog"
             ]
-          },
-          "minItems": 1,
-          "maxItems": 7,
-          "description": "Only return pages in these categories: docs, api (API reference), postgresql (PostgreSQL tutorial), guides, faqs, blog, changelog. Omit to search everything."
+          }
         },
         "limit": {
+          "default": 10,
+          "description": "Maximum number of pages to return.",
           "type": "integer",
           "minimum": 1,
-          "maximum": 40,
-          "default": 10,
-          "description": "Maximum number of pages to return (1-40)."
+          "maximum": 40
         }
       },
       "required": [
         "query"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Search Documentation",
@@ -781,20 +786,20 @@
   {
     "name": "get_doc",
     "title": "Get Documentation Page",
-    "description": "Fetch one neon.com page as markdown. Pass the slug of a search_docs hit (for example docs/guides/prisma).",
+    "description": "Returns one neon.com page as markdown, by the slug of a search_docs hit.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "slug": {
           "type": "string",
-          "description": "The slug of a hit returned by search_docs, e.g. 'docs/guides/prisma' or 'postgresql/tutorial/inner-join'."
+          "description": "The slug of a search_docs hit, e.g. 'docs/guides/prisma' or 'postgresql/tutorial/inner-join'."
         }
       },
       "required": [
         "slug"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Get Documentation Page",
@@ -807,8 +812,9 @@
   {
     "name": "send_feedback",
     "title": "Send Feedback",
-    "description": "Send anonymous feedback about Neon or this MCP server to the Neon team. Only call this when the user asks to give feedback. Sends only the feedback text, not account, project, or connection details.",
+    "description": "Sends anonymous feedback text to the Neon team, with no account, project, or connection details. Only call it when the user asks to give feedback.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "feedback": {
@@ -821,8 +827,7 @@
       "required": [
         "feedback"
       ],
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
       "title": "Send Feedback",
@@ -834,16 +839,16 @@
   },
   {
     "name": "list_incidents",
-    "title": "List Neon Incidents",
-    "description": "List open Neon incidents and maintenance from neonstatus.com, and which components and regions are not operational. Needs no credentials. Call it when Neon requests fail unexpectedly or the user asks whether Neon is down. Incident names can be ticket ids; latest_update carries the details.",
+    "title": "List Neon incidents",
+    "description": "Lists open Neon incidents and maintenance from neonstatus.com and the affected components and regions. Needs no credentials. Call it when Neon requests fail unexpectedly or the user asks whether Neon is down.",
     "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {},
-      "additionalProperties": false,
-      "$schema": "http://json-schema.org/draft-07/schema#"
+      "additionalProperties": false
     },
     "annotations": {
-      "title": "List Neon Incidents",
+      "title": "List Neon incidents",
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
@@ -853,7 +858,7 @@
   {
     "name": "list_projects",
     "title": "List projects",
-    "description": "List Neon projects you own. Returns every page. Pass limit to cap how many. There is no `cursor` argument. `org_id` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from.",
+    "description": "Lists the projects in an organization; search filters by name or id. To also find branches, computes, or snapshots, use search. Returns every page. Pass limit to cap how many. `org_id` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -869,9 +874,9 @@
           "description": "Search by project `name` or `id`."
         },
         "org_id": {
+          "description": "Organization id from list_organizations; required with a personal API key.",
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "Search for projects by `org_id`."
+          "pattern": "^[a-z0-9-]{1,60}$"
         },
         "timeout": {
           "type": "integer",
@@ -897,15 +902,15 @@
   {
     "name": "count_projects",
     "title": "Retrieve projects count",
-    "description": "Returns the number of active projects you can access in an organization, without listing them. `org_id` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from.",
+    "description": "Counts an organization's active projects without listing them; ones being created or deleted are not counted. `org_id` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "org_id": {
+          "description": "Organization id from list_organizations; required with a personal API key.",
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "Count projects in the organization with this `org_id`."
+          "pattern": "^[a-z0-9-]{1,60}$"
         }
       },
       "additionalProperties": false
@@ -921,7 +926,7 @@
   {
     "name": "describe_project",
     "title": "Retrieve project details",
-    "description": "Retrieves the project record (settings, compute, usage). Call `list_branches` for branches.",
+    "description": "Gets a project's settings, owner, and usage. For branches, use list_branches.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -929,7 +934,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         }
       },
       "required": [
@@ -948,7 +953,7 @@
   {
     "name": "create_project",
     "title": "Create project",
-    "description": "Creates a Neon project and waits until the default compute is ready. `org_id` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from. Does not return a connection string; call `get_connection_string` with the project id.",
+    "description": "Creates a project with a default branch and read-write compute and waits until it is ready. Returns no connection string; use get_connection_string. `org_id` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1237,7 +1242,7 @@
   {
     "name": "update_project",
     "title": "Update project",
-    "description": "Updates the specified project.",
+    "description": "Updates a project's name, settings, default compute settings, or history retention.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1245,7 +1250,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "settings": {
           "type": "object",
@@ -1452,7 +1457,7 @@
   {
     "name": "delete_project",
     "title": "Delete project",
-    "description": "Delete a Neon project and all its data. NEVER run autonomously; always ask the user first. For a single branch, use `delete_branch`.",
+    "description": "Deletes a project with all its branches, computes, databases, and roles. NEVER run autonomously; always ask the user first. recover_project undoes it within 7 days. For one branch, use delete_branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1460,7 +1465,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         }
       },
       "required": [
@@ -1479,7 +1484,7 @@
   {
     "name": "recover_project",
     "title": "Recover a deleted project",
-    "description": "Recovers a deleted project within the 7-day deletion recovery period.",
+    "description": "Recovers a project deleted in the last 7 days; list_projects with recoverable true finds them. Some integrations need setting up again.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1487,7 +1492,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         }
       },
       "required": [
@@ -1506,7 +1511,7 @@
   {
     "name": "list_project_permissions",
     "title": "List project access",
-    "description": "Retrieves details about users who have access to the project, including the permission `id`, the granted-to email address, and the date project access was granted.",
+    "description": "Lists who has access to a project: each permission id, email, and grant date.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1514,7 +1519,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         }
       },
       "required": [
@@ -1533,7 +1538,7 @@
   {
     "name": "list_project_members",
     "title": "List org members and their project roles",
-    "description": "Lists organization members and their per-project roles for an org-owned project. Returns every page. Pass limit to cap how many.",
+    "description": "Lists organization members and their roles on an org-owned project; 404 when the project is not org-owned or per-project roles are off. Returns every page. Pass limit to cap how many.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1541,7 +1546,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "limit": {
           "type": "integer",
@@ -1566,7 +1571,7 @@
   {
     "name": "list_regions",
     "title": "List regions",
-    "description": "Lists Neon regions available to the authenticated account.",
+    "description": "Lists the regions you can create projects in. An organization API key gets 404.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1584,7 +1589,7 @@
   {
     "name": "list_operations",
     "title": "List operations",
-    "description": "Lists operations for a project. Omitting `limit` returns every remaining page. There is no `cursor` argument.",
+    "description": "Lists a project's operations; ones older than six months may be gone. Returns every page. Pass limit to cap how many.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1592,7 +1597,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "limit": {
           "type": "integer",
@@ -1617,7 +1622,7 @@
   {
     "name": "get_operation",
     "title": "Retrieve operation details",
-    "description": "Retrieves details for the specified operation.",
+    "description": "Gets one operation and its status.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1625,7 +1630,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "operation_id": {
           "type": "string",
@@ -1651,7 +1656,7 @@
   {
     "name": "get_project_consumption",
     "title": "Retrieve project consumption metrics",
-    "description": "Returns consumption metrics per project in an organization, grouped by billing period. Omitting `project_ids` returns every project with history in the organization, including deleted ones; pass `project_ids` to narrow it. Requires a Launch, Scale, Agent, Business, or Enterprise plan; other plans return HTTP 403. `metrics` is required, one or more of `compute_unit_seconds`, `root_branch_bytes_month`, `child_branch_bytes_month`, `instant_restore_bytes_month`, `public_network_transfer_bytes`, `private_network_transfer_bytes`, `functions_active_capacity_microseconds`, `functions_waiting_capacity_microseconds`, `functions_invocations`, `functions_egress_bytes`, `extra_branches_month`, `snapshot_storage_bytes_month`; unknown names return no data instead of an error. `org_id` is required; call `list_organizations` for it. `from` and `to` are UTC date-times rounded to `granularity`: `hourly` reaches back 168 hours, `daily` 60 days, `monthly` one year. Returns every page. Pass `limit` to cap how many. There is no `cursor` argument. For per-branch numbers, call `get_branch_consumption`.",
+    "description": "Returns per-project consumption in an organization. metrics: every name get_branch_consumption takes, plus extra_branches_month and snapshot_storage_bytes_month. Launch, Scale, Agent, Business, or Enterprise plans; others get 403. Returns every page. Pass limit to cap how many.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1663,26 +1668,26 @@
           "description": "Maximum number of projects per page."
         },
         "project_ids": {
+          "description": "Up to 100 project ids. Omit for every project with history in the organization, including deleted ones.",
           "minItems": 0,
           "maxItems": 100,
           "type": "array",
           "items": {
             "type": "string",
             "pattern": "^([a-z0-9-]{1,60}(,[a-z0-9-]{1,60}){0,99})?$"
-          },
-          "description": "Optional project IDs to filter the response (up to 100)."
+          }
         },
         "from": {
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
-          "description": "Specify the start `date-time` for the consumption period."
+          "description": "Period start, rounded to granularity."
         },
         "to": {
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
-          "description": "Specify the end `date-time` for the consumption period."
+          "description": "Period end, rounded to granularity."
         },
         "granularity": {
           "type": "string",
@@ -1691,19 +1696,19 @@
             "daily",
             "monthly"
           ],
-          "description": "Specify the granularity of consumption metrics."
+          "description": "hourly reaches back 168 hours, daily 60 days, monthly one year."
         },
         "org_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "Organization ID."
+          "description": "Organization id from list_organizations."
         },
         "metrics": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "Required. List the metrics to return."
+          "description": "Metric names from the tool description. An unknown name returns no data rather than an error."
         }
       },
       "required": [
@@ -1726,7 +1731,7 @@
   {
     "name": "get_branch_consumption",
     "title": "Retrieve branch consumption metrics",
-    "description": "Returns consumption metrics per branch for the 1 to 100 projects in `project_ids`, grouped by billing period. Pass `branch_ids` to narrow it. Requires a usage-based Launch, Scale, Agent, or Enterprise plan; other plans return HTTP 403. `metrics` is required, one or more of `compute_unit_seconds`, `root_branch_bytes_month`, `child_branch_bytes_month`, `instant_restore_bytes_month`, `public_network_transfer_bytes`, `private_network_transfer_bytes`, `functions_active_capacity_microseconds`, `functions_waiting_capacity_microseconds`, `functions_invocations`, `functions_egress_bytes`; any other name returns HTTP 400. `extra_branches_month`, `snapshot_storage_bytes_month` are per-project only, on `get_project_consumption`. `org_id` is required; call `list_organizations` for it. `from` and `to` are UTC date-times rounded to `granularity`: `hourly` reaches back 168 hours, `daily` 60 days, `monthly` one year. Returns every page. Pass `limit` to cap how many. There is no `cursor` argument.",
+    "description": "Returns per-branch consumption for project_ids. metrics: compute_unit_seconds, root_branch_bytes_month, child_branch_bytes_month, instant_restore_bytes_month, public_network_transfer_bytes, private_network_transfer_bytes, functions_active_capacity_microseconds, functions_waiting_capacity_microseconds, functions_invocations, functions_egress_bytes. Usage-based Launch, Scale, Agent, or Enterprise plans only. Returns every page. Pass limit to cap how many.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1761,13 +1766,13 @@
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
-          "description": "Specify the start `date-time` for the consumption period."
+          "description": "Period start, rounded to granularity."
         },
         "to": {
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
-          "description": "Specify the end `date-time` for the consumption period."
+          "description": "Period end, rounded to granularity."
         },
         "granularity": {
           "type": "string",
@@ -1776,19 +1781,19 @@
             "daily",
             "monthly"
           ],
-          "description": "Specify the granularity of consumption metrics."
+          "description": "hourly reaches back 168 hours, daily 60 days, monthly one year."
         },
         "org_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "Organization ID."
+          "description": "Organization id from list_organizations."
         },
         "metrics": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "Required. List the metrics to return."
+          "description": "Metric names from the tool description; any other returns HTTP 400. extra_branches_month and snapshot_storage_bytes_month are only on get_project_consumption."
         }
       },
       "required": [
@@ -1812,7 +1817,7 @@
   {
     "name": "list_branches",
     "title": "List branches",
-    "description": "Retrieves a list of branches for the specified project. Returns every page. Pass limit to cap how many.",
+    "description": "Lists a project's branches with id (br-...), name, parent, and default flag; search finds a branch's id by name. Returns every page. Pass limit to cap how many.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1820,7 +1825,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "search": {
           "type": "string",
@@ -1870,7 +1875,7 @@
   {
     "name": "get_branch",
     "title": "Retrieve branch details",
-    "description": "Retrieves information about the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Gets a branch record: name, parent, state, protection, size, and timestamps. For its databases and tables, use describe_branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1878,12 +1883,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -1903,7 +1908,7 @@
   {
     "name": "create_branch",
     "title": "Create branch",
-    "description": "Creates a branch with a read-write compute and waits until it is ready. Pass `no_compute: true` to skip the endpoint. Does not return a connection string; call `get_connection_string` with the project and branch id. Copies the parent at HEAD; point-in-time restore is `restore_snapshot`.",
+    "description": "Creates a branch from its parent's current data, with a read-write compute unless no_compute, and waits until it is ready. Returns no connection string; use get_connection_string.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1911,7 +1916,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "name": {
           "type": "string",
@@ -1920,9 +1925,9 @@
           "description": "The branch name"
         },
         "parent_id": {
+          "description": "Parent branch id (br-...). Omit for the project's default branch.",
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The `branch_id` of the parent branch."
+          "pattern": "^[a-z0-9-]{1,60}$"
         },
         "compute": {
           "type": "object",
@@ -1966,7 +1971,7 @@
   {
     "name": "update_branch",
     "title": "Update branch",
-    "description": "Updates the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Renames a branch, protects or unprotects it, or sets when it expires.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1974,12 +1979,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "name": {
           "type": "string",
@@ -2022,7 +2027,7 @@
   {
     "name": "delete_branch",
     "title": "Delete branch",
-    "description": "Delete a branch and all its data. NEVER run autonomously; always ask the user first. For the whole project, use `delete_project`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deletes a branch with all its data and disconnects its clients. NEVER run autonomously; always ask the user first. The root, the default, and a branch with children cannot be deleted. For the whole project, use delete_project.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2030,12 +2035,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -2055,7 +2060,7 @@
   {
     "name": "get_default_branch",
     "title": "Get default branch",
-    "description": "Resolve the project's default branch by the default flag, not by name.",
+    "description": "Gets the project's default branch by its default flag, not its name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2063,7 +2068,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         }
       },
       "required": [
@@ -2082,7 +2087,7 @@
   {
     "name": "set_default_branch",
     "title": "Set branch as default",
-    "description": "Sets the specified branch as the project's default branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Makes a branch the project's default; the previous default loses the flag.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2090,12 +2095,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -2115,7 +2120,7 @@
   {
     "name": "reset_from_parent",
     "title": "Reset branch from parent",
-    "description": "Reset a branch to its parent's current HEAD. Discards every change the branch has written since it diverged. NEVER run autonomously; always ask the user first. `preserve_under_name` saves the current state first and is required when the branch has children; those children move to the new branch. Point-in-time restore is `restore_snapshot`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Resets a branch to its parent's current state, discarding the branch's own changes. NEVER run autonomously; always ask the user first. preserve_under_name first saves the current state as a new branch. To restore a snapshot, use restore_snapshot.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2123,12 +2128,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "preserve_under_name": {
           "description": "Name under which to save the current branch before the reset. Required when the branch has children; those children move to the new branch.",
@@ -2152,7 +2157,7 @@
   {
     "name": "compare_database_schema",
     "title": "Compare database schema",
-    "description": "Compare one database's SQL schema on a branch to another. `database_name` is required. Omit `base_branch_id` to compare against the parent; it is a branch id (`br-...`), not a name. Pass `lsn`, `timestamp`, `base_lsn`, or `base_timestamp` only for a point-in-time comparison.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Diffs one database's SQL schema on a branch against another branch, by default its parent. lsn, timestamp, base_lsn, and base_timestamp are only for point-in-time comparisons.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2160,21 +2165,21 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "database_name": {
           "type": "string",
           "description": "Name of the database for which the schema is retrieved"
         },
         "base_branch_id": {
+          "description": "Branch id (br-...) to compare against, not its name. Omit for the parent branch.",
           "type": "string",
-          "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID to compare the schema with"
+          "pattern": "^[a-z0-9-]{1,60}$"
         },
         "lsn": {
           "type": "string",
@@ -2215,7 +2220,7 @@
   {
     "name": "finalize_branch_restore",
     "title": "Finalize branch restore from snapshot",
-    "description": "Finalize a branch created with `restore_snapshot` and `finalize: false`: reassign computes (this restarts them) and swap names so it replaces the original branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Finalizes a branch restored with finalize false: moves the original branch's computes onto it, restarting them, and takes over its name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2223,12 +2228,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "name": {
           "type": "string",
@@ -2252,7 +2257,7 @@
   {
     "name": "list_postgres_roles",
     "title": "List roles",
-    "description": "Retrieves a list of Postgres roles from the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists a branch's Postgres roles.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2260,12 +2265,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -2285,7 +2290,7 @@
   {
     "name": "get_postgres_role",
     "title": "Retrieve role details",
-    "description": "Retrieves details about the specified role.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Gets a Postgres role on a branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2293,12 +2298,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "role_name": {
           "type": "string",
@@ -2323,7 +2328,7 @@
   {
     "name": "create_postgres_role",
     "title": "Create role",
-    "description": "Create a Postgres role on a branch and return it with its password. access defaults to admin: the role joins neon_superuser, so it can read and write every database, create databases and roles, and bypass row-level security, and it cannot be narrowed later. For a least-privilege credential pass access read_only or read_write, scoped to database_name and schemas. Scoped roles are created with SQL as the database owner and cover tables that owner owns, now and later.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Creates a Postgres role on a branch and returns its password. The default access, admin, joins neon_superuser: every database, creating databases and roles, bypassing row-level security, and it cannot be narrowed later. For least privilege pass read_only or read_write with database_name and schemas, covering the tables the database owner owns, now and later.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2331,12 +2336,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "name": {
           "type": "string",
@@ -2353,7 +2358,7 @@
             "read_only",
             "read_write"
           ],
-          "description": "What the role may do. Default admin: the role joins neon_superuser. read_only: SELECT. read_write: SELECT, INSERT, UPDATE, DELETE and sequence use. Scoped roles get these grants on top of whatever PUBLIC already has in the database."
+          "description": "read_only grants SELECT; read_write adds INSERT, UPDATE, DELETE, and sequences, on top of what PUBLIC has. Default admin joins neon_superuser."
         },
         "database_name": {
           "type": "string",
@@ -2388,7 +2393,7 @@
   {
     "name": "delete_postgres_role",
     "title": "Delete role",
-    "description": "Deletes the specified Postgres role from the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deletes a Postgres role from a branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2396,12 +2401,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "role_name": {
           "type": "string",
@@ -2426,7 +2431,7 @@
   {
     "name": "reset_postgres_role_password",
     "title": "Reset role password",
-    "description": "Resets the password for the specified Postgres role.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Sets a new random password for a Postgres role and returns it. Drops the compute's connections.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2434,12 +2439,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "role_name": {
           "type": "string",
@@ -2464,7 +2469,7 @@
   {
     "name": "list_postgres_databases",
     "title": "List databases",
-    "description": "Retrieves a list of databases for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists a branch's databases and their owners.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2472,12 +2477,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -2497,7 +2502,7 @@
   {
     "name": "get_postgres_database",
     "title": "Retrieve database details",
-    "description": "Retrieves information about the specified database.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Gets a database on a branch and its owner.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2505,12 +2510,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "database_name": {
           "type": "string",
@@ -2535,7 +2540,7 @@
   {
     "name": "create_postgres_database",
     "title": "Create database",
-    "description": "Creates a database in the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Creates a database on a branch, owned by owner_name.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2543,12 +2548,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "name": {
           "type": "string",
@@ -2578,7 +2583,7 @@
   {
     "name": "update_postgres_database",
     "title": "Update database",
-    "description": "Updates the specified database in the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Renames a database or changes its owner.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2586,20 +2591,20 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "database_name": {
           "type": "string",
           "description": "The database name"
         },
         "name": {
-          "type": "string",
-          "description": "Name of the database to update."
+          "description": "New name for the database.",
+          "type": "string"
         },
         "owner_name": {
           "type": "string",
@@ -2624,7 +2629,7 @@
   {
     "name": "delete_postgres_database",
     "title": "Delete database",
-    "description": "Deletes the specified database from the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deletes a database and its data from a branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2632,12 +2637,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "database_name": {
           "type": "string",
@@ -2662,7 +2667,7 @@
   {
     "name": "list_postgres_endpoints",
     "title": "List compute endpoints",
-    "description": "Retrieves a list of compute endpoints for the specified project.",
+    "description": "Lists the compute endpoints of every branch in a project. For one branch, use list_branch_computes.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2670,7 +2675,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         }
       },
       "required": [
@@ -2689,7 +2694,7 @@
   {
     "name": "list_branch_computes",
     "title": "List branch endpoints",
-    "description": "Retrieves a list of compute endpoints for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists a branch's compute endpoints. For every branch in the project, use list_postgres_endpoints.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2697,12 +2702,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -2722,7 +2727,7 @@
   {
     "name": "get_postgres_endpoint",
     "title": "Retrieve compute endpoint details",
-    "description": "Retrieves information about the specified compute endpoint.",
+    "description": "Gets a compute endpoint (ep-...), including its host and state.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2730,7 +2735,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "endpoint_id": {
           "type": "string",
@@ -2755,7 +2760,7 @@
   {
     "name": "create_postgres_endpoint",
     "title": "Create compute endpoint",
-    "description": "Creates a compute endpoint on a branch. Does not return a connection string; call `get_connection_string`.",
+    "description": "Creates a compute endpoint on a branch; a branch takes one read-write endpoint and any number of read-only. Returns no connection string; use get_connection_string.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2763,7 +2768,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
@@ -2891,7 +2896,7 @@
   {
     "name": "update_postgres_endpoint",
     "title": "Update compute endpoint",
-    "description": "Updates the specified compute endpoint.",
+    "description": "Updates a compute endpoint's settings.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2899,7 +2904,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "endpoint_id": {
           "type": "string",
@@ -3019,7 +3024,7 @@
   {
     "name": "delete_postgres_endpoint",
     "title": "Delete compute endpoint",
-    "description": "Deletes the specified compute endpoint.",
+    "description": "Deletes a compute endpoint and drops its connections.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3027,7 +3032,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "endpoint_id": {
           "type": "string",
@@ -3052,7 +3057,7 @@
   {
     "name": "start_postgres_endpoint",
     "title": "Start compute endpoint",
-    "description": "Starts a compute endpoint.",
+    "description": "Starts a suspended compute endpoint.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3060,7 +3065,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "endpoint_id": {
           "type": "string",
@@ -3085,7 +3090,7 @@
   {
     "name": "suspend_postgres_endpoint",
     "title": "Suspend compute endpoint",
-    "description": "Suspends the specified compute endpoint.",
+    "description": "Suspends a compute endpoint, dropping its connections.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3093,7 +3098,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "endpoint_id": {
           "type": "string",
@@ -3118,7 +3123,7 @@
   {
     "name": "restart_postgres_endpoint",
     "title": "Restart compute endpoint",
-    "description": "Restarts the specified compute endpoint by immediately suspending it and then starting it again.",
+    "description": "Restarts a compute endpoint by suspending and starting it, dropping its connections.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3126,7 +3131,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "endpoint_id": {
           "type": "string",
@@ -3151,7 +3156,7 @@
   {
     "name": "list_snapshots",
     "title": "List project snapshots",
-    "description": "Lists the snapshots for the specified project.",
+    "description": "Lists a project's snapshots.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3159,7 +3164,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         }
       },
       "required": [
@@ -3178,7 +3183,7 @@
   {
     "name": "get_snapshot_schedule",
     "title": "Retrieve backup schedule",
-    "description": "Returns the backup schedule for the specified branch, including the configured snapshot frequencies.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Gets a branch's automatic snapshot schedule.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3186,12 +3191,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -3211,7 +3216,7 @@
   {
     "name": "set_snapshot_schedule",
     "title": "Set snapshot schedule",
-    "description": "Replace a branch's automatic snapshot schedule. Frequency must be daily, weekly, or monthly.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Replaces a branch's automatic snapshot schedule.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3219,12 +3224,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "schedule": {
           "type": "array",
@@ -3290,7 +3295,7 @@
   {
     "name": "create_snapshot",
     "title": "Create snapshot",
-    "description": "Creates a snapshot from the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Creates a snapshot of a branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3298,12 +3303,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "lsn": {
           "type": "string",
@@ -3339,7 +3344,7 @@
   {
     "name": "update_snapshot",
     "title": "Update snapshot",
-    "description": "Updates the specified snapshot.",
+    "description": "Renames a snapshot or changes when it expires.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3347,7 +3352,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "snapshot_id": {
           "type": "string",
@@ -3389,7 +3394,7 @@
   {
     "name": "delete_snapshot",
     "title": "Delete snapshot",
-    "description": "Deletes the specified snapshot.",
+    "description": "Deletes a snapshot.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3397,7 +3402,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "snapshot_id": {
           "type": "string",
@@ -3422,7 +3427,7 @@
   {
     "name": "restore_snapshot",
     "title": "Restore snapshot",
-    "description": "Restore a snapshot onto a new or existing branch. The call waits until the branch is ready. Pass `target_branch_id` to restore onto an existing branch; omit it to create one. Pass `finalize: false` then call `finalize_branch_restore` to swap names later.",
+    "description": "Restores a snapshot onto a new branch or onto target_branch_id and waits until it is ready. With finalize false, swap it in later with finalize_branch_restore.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3430,7 +3435,7 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "snapshot_id": {
           "type": "string",
@@ -3447,7 +3452,7 @@
         },
         "finalize": {
           "type": "boolean",
-          "description": "Finalize immediately (move computes onto the restored branch). Defaults to true when restoring as a new branch and false when restoring onto an existing branch."
+          "description": "Move computes onto the restored branch now. Default true for a new branch, false onto an existing one."
         }
       },
       "required": [
@@ -3467,7 +3472,7 @@
   {
     "name": "get_auth",
     "title": "Retrieve Neon Auth details for the branch",
-    "description": "Retrieves the Neon Auth integration details for the specified branch, including the auth provider type and integration status.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Gets a branch's Neon Auth integration record: provider, base URL, JWKS URL, and database. Prefer get_neon_auth_config, which adds the auth settings, unless you only need the record.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3475,12 +3480,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -3500,7 +3505,7 @@
   {
     "name": "provision_neon_auth",
     "title": "Enable Neon Auth for the branch",
-    "description": "Enables Neon Auth for the specified branch by connecting it to an authentication provider.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Enables Neon Auth on a branch and creates the neon_auth schema in its database.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3508,12 +3513,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "auth_provider": {
           "type": "string",
@@ -3547,7 +3552,7 @@
   {
     "name": "disable_auth",
     "title": "Disable Neon Auth for the branch",
-    "description": "Disables the Neon Auth integration for the specified branch, removing the connection to the authentication provider.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Disables Neon Auth on a branch. delete_data also drops the neon_auth schema and its tables.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3555,12 +3560,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "delete_data": {
           "type": "boolean",
@@ -3584,7 +3589,7 @@
   {
     "name": "update_auth_config",
     "title": "Update auth configuration",
-    "description": "Updates the auth configuration for the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Sets the application name Neon Auth uses in its emails.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3592,12 +3597,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "name": {
           "type": "string",
@@ -3624,7 +3629,7 @@
   {
     "name": "list_auth_oauth_providers",
     "title": "List OAuth providers for the branch",
-    "description": "Lists the social login providers (Google, GitHub, Microsoft, Vercel, Apple) configured for the branch's Neon Auth integration, which users sign in with. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists the social login providers (Google, GitHub, Microsoft, Vercel, Apple) of a branch's Neon Auth. For Neon Auth as an OAuth server, use get_auth_oauth_server.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3632,12 +3637,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -3657,7 +3662,7 @@
   {
     "name": "add_auth_oauth_provider",
     "title": "Add an OAuth provider",
-    "description": "Adds a social login provider (Google, GitHub, Microsoft, Vercel, Apple) that users sign in with to the branch's Neon Auth integration. Takes the provider `id` and optionally `client_id`, `client_secret` and, for Microsoft, `microsoft_tenant_id`. Microsoft and Apple have no shared app, so they need your own credentials; for Apple, `client_id` is the Services ID, `client_secret` is the `.p8` private key, and `apple_team_id` and `apple_key_id` are required. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Adds a social login provider to a branch's Neon Auth. Microsoft and Apple need your own client_id and client_secret; for Apple these are the Services ID and .p8 key, plus apple_team_id and apple_key_id.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3665,12 +3670,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "id": {
           "type": "string",
@@ -3723,7 +3728,7 @@
   {
     "name": "update_auth_oauth_provider",
     "title": "Update OAuth provider",
-    "description": "Updates a social login provider (Google, GitHub, Microsoft, Vercel, Apple) that users sign in with on the branch's Neon Auth integration. For Apple, a new `client_secret` (`.p8` key) must be sent with its `apple_key_id`. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Updates a social login provider on a branch's Neon Auth. For Apple, send a new client_secret (.p8 key) together with its apple_key_id.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3731,12 +3736,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "oauth_provider_id": {
           "type": "string",
@@ -3789,7 +3794,7 @@
   {
     "name": "delete_auth_oauth_provider",
     "title": "Delete OAuth provider",
-    "description": "Deletes a social login provider (Google, GitHub, Microsoft, Vercel, Apple) from the branch's Neon Auth integration. This is not the OAuth Provider plugin that makes Neon Auth an OAuth 2.1 authorization server; for that use `get_auth_oauth_server` and `update_auth_oauth_server`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Removes a social login provider from a branch's Neon Auth.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3797,12 +3802,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "oauth_provider_id": {
           "type": "string",
@@ -3835,7 +3840,7 @@
   {
     "name": "list_auth_trusted_domains",
     "title": "List domains in redirect_uri whitelist",
-    "description": "Lists the trusted domains in the redirect URI whitelist for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists the domains a branch's Neon Auth may redirect to after sign-in.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3843,12 +3848,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -3868,7 +3873,7 @@
   {
     "name": "add_auth_trusted_domain",
     "title": "Add domain to redirect_uri whitelist",
-    "description": "Adds a domain to the redirect URI whitelist for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Adds a domain a branch's Neon Auth may redirect to after sign-in.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3876,12 +3881,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "domain": {
           "type": "string",
@@ -3917,7 +3922,7 @@
   {
     "name": "delete_auth_trusted_domain",
     "title": "Delete domain from redirect_uri whitelist",
-    "description": "Removes a domain from the redirect URI whitelist for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Removes a domain from the ones a branch's Neon Auth may redirect to.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3925,12 +3930,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "auth_provider": {
           "type": "string",
@@ -3979,7 +3984,7 @@
   {
     "name": "create_auth_user",
     "title": "Create new auth user",
-    "description": "Creates a new user in the Neon Auth user directory for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Creates a Neon Auth user on a branch who can sign in right away.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3987,12 +3992,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "email": {
           "type": "string",
@@ -4027,7 +4032,7 @@
   {
     "name": "delete_auth_user",
     "title": "Delete auth user",
-    "description": "Deletes the specified user from the Neon Auth user directory for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deletes a Neon Auth user from a branch. Irreversible.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4035,12 +4040,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "auth_user_id": {
           "type": "string",
@@ -4065,7 +4070,7 @@
   {
     "name": "update_auth_user_role",
     "title": "Update auth user role",
-    "description": "Updates the role of a user in the Neon Auth user directory for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Sets the roles of a Neon Auth user on a branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4073,12 +4078,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "auth_user_id": {
           "type": "string",
@@ -4112,7 +4117,7 @@
   {
     "name": "get_auth_oauth_server",
     "title": "Retrieve OAuth provider plugin configuration",
-    "description": "Retrieves how Neon Auth acts as an OAuth 2.1 authorization server for the branch, including for MCP servers. This is Better Auth's OAuth Provider plugin (API plugin `oauth_provider`), not social login; for providers such as GitHub or Google call `list_auth_oauth_providers`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Gets a branch's Neon Auth OAuth 2.1 server settings (oauth_provider plugin), for example for MCP clients. For social login, use list_auth_oauth_providers.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4120,12 +4125,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -4145,7 +4150,7 @@
   {
     "name": "update_auth_oauth_server",
     "title": "Update OAuth provider plugin configuration",
-    "description": "Configures Neon Auth as an OAuth 2.1 authorization server for the branch, including for MCP servers. This is Better Auth's OAuth Provider plugin (API plugin `oauth_provider`), not social login; for providers such as GitHub or Google see `list_auth_oauth_providers`. Enabling requires `login_page`, `consent_page` and at least one resource (or an MCP resource). `resources` replaces the stored list: call `get_auth_oauth_server` first and send the full list to add or remove one. `mcp.resource` is required whenever `mcp` is sent; omitted `mcp` booleans keep their stored value, and `mcp.resource: \"\"` removes the MCP configuration. Prefer `client_id_metadata_documents` over the deprecated `dynamic_registration`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Configures a branch's Neon Auth as an OAuth 2.1 server (oauth_provider plugin); root branch only. Enabling needs login_page, consent_page, and a resource or MCP resource. resources replaces the stored list, so send the full list from get_auth_oauth_server.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4153,12 +4158,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "enabled": {
           "type": "boolean",
@@ -4173,6 +4178,7 @@
           "description": "URL of the page that authorization requests redirect to for consent."
         },
         "mcp": {
+          "description": "Needs resource; resource \"\" removes the MCP configuration. Omitted booleans keep their value. Prefer client_id_metadata_documents over the deprecated dynamic_registration.",
           "type": "object",
           "properties": {
             "resource": {
@@ -4191,8 +4197,7 @@
           "required": [
             "resource"
           ],
-          "additionalProperties": false,
-          "description": "MCP resource configuration."
+          "additionalProperties": false
         },
         "resources": {
           "type": "array",
@@ -4229,7 +4234,7 @@
   {
     "name": "list_auth_oauth_clients",
     "title": "List OAuth clients",
-    "description": "Lists the OAuth clients registered with the branch's Neon Auth OAuth server (apps and MCP clients that users authorize). Not social login providers.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists the OAuth clients (apps, MCP clients) of a branch's Neon Auth OAuth server, without secrets; not social login providers.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4237,12 +4242,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -4262,7 +4267,7 @@
   {
     "name": "get_auth_oauth_client",
     "title": "Retrieve an OAuth client",
-    "description": "Returns an OAuth client registered with the branch's Neon Auth OAuth server. Not a social login provider.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Gets an OAuth client of a branch's Neon Auth OAuth server, without its secret.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4270,12 +4275,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "client_id": {
           "type": "string",
@@ -4302,7 +4307,7 @@
   {
     "name": "create_auth_oauth_client",
     "title": "Create an OAuth client",
-    "description": "Registers an OAuth client with the branch's Neon Auth OAuth server. A confidential client returns `client_secret` only once: show it to the user and tell them to store it. Every entry in `resources` must already be configured on the OAuth server (see `get_auth_oauth_server`) or be its MCP resource. `type` cannot be changed later.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Registers an OAuth client with a branch's Neon Auth OAuth server. A confidential client's client_secret is returned once: show it to the user and tell them to store it. resources must already be on the server, or be its MCP resource (get_auth_oauth_server). type is permanent.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4310,12 +4315,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "name": {
           "type": "string",
@@ -4375,7 +4380,7 @@
   {
     "name": "update_auth_oauth_client",
     "title": "Update an OAuth client",
-    "description": "Updates an OAuth client of the Neon Auth OAuth server. `redirect_uris` and `resources` replace the stored lists, so send the full list. At least one resource is required. `type` cannot be changed.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Updates an OAuth client of Neon Auth's OAuth server; redirect_uris and resources replace the stored lists, and type cannot change.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4383,12 +4388,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "client_id": {
           "type": "string",
@@ -4445,7 +4450,7 @@
   {
     "name": "delete_auth_oauth_client",
     "title": "Delete an OAuth client",
-    "description": "Deletes an OAuth client from the Neon Auth OAuth server. Irreversible. Tokens already issued to the client are not revoked.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deletes an OAuth client from Neon Auth's OAuth server, irreversibly; tokens already issued stay valid.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4453,12 +4458,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "client_id": {
           "type": "string",
@@ -4485,7 +4490,7 @@
   {
     "name": "rotate_auth_oauth_client_secret",
     "title": "Rotate an OAuth client secret",
-    "description": "Generates a new secret for a confidential client of the Neon Auth OAuth server. The old secret stops working immediately. The new `client_secret` is shown only once: show it to the user and tell them to store it.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Issues a new secret for a confidential OAuth client; the old one stops working at once. The new client_secret is returned once: show it to the user and tell them to store it.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4493,12 +4498,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "client_id": {
           "type": "string",
@@ -4525,7 +4530,7 @@
   {
     "name": "update_auth_allow_localhost",
     "title": "Update localhost allow setting",
-    "description": "Sets whether the branch's Neon Auth accepts requests from localhost origins. Turn it off for production. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Sets whether a branch's Neon Auth accepts localhost origins; turn it off for production. Current value: get_neon_auth_config.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4533,12 +4538,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "allow_localhost": {
           "type": "boolean",
@@ -4563,7 +4568,7 @@
   {
     "name": "update_auth_email_and_password",
     "title": "Update email and password configuration",
-    "description": "Updates email and password sign-in for the branch's Neon Auth: whether it is enabled, sign-up, email verification, and whether a password reset revokes the user's sessions. Omitted fields keep their value. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Updates a branch's Neon Auth email and password sign-in; omitted fields keep their value. Current values: get_neon_auth_config.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4571,12 +4576,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "enabled": {
           "type": "boolean",
@@ -4632,7 +4637,7 @@
   {
     "name": "update_auth_email_provider",
     "title": "Update email provider configuration",
-    "description": "Sets the email provider Neon Auth sends verification, reset, and invitation emails with. Pass `body.type: \"shared\"` for Neon's sender, or `body.type: \"standard\"` with `host`, `port`, `username`, `password`, `sender_email`, and `sender_name` for your own SMTP server. The response omits `password`. Check the server with `send_auth_test_email`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Sets the email provider for Neon Auth's emails: body.type \"shared\" for Neon's sender, or \"standard\" with your SMTP details. Test it with send_auth_test_email.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4640,12 +4645,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "body": {
           "oneOf": [
@@ -4731,7 +4736,7 @@
   {
     "name": "send_auth_test_email",
     "title": "Send test email using the saved email provider",
-    "description": "Sends a test email through the branch's saved SMTP provider (`type: \"standard\"`) to `recipient_email`. Only send to an address the user gave you. A failed send returns `success: false` with `error_message`, not a tool error.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Sends a test email through the branch's saved standard SMTP provider to recipient_email. Only send to an address the user gave you. A failed send returns success false with error_message, not an error.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4739,12 +4744,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "recipient_email": {
           "type": "string",
@@ -4773,7 +4778,7 @@
   {
     "name": "update_auth_plugins_magic_link",
     "title": "Update magic link plugin configuration",
-    "description": "Updates the Neon Auth magic link plugin: whether it is enabled, how many minutes a link is valid (`expires_in`), and whether it can sign up new users. Omitted fields keep their value. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Updates the Neon Auth magic link plugin; omitted fields keep their value. Current values: get_neon_auth_config.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4781,12 +4786,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "enabled": {
           "type": "boolean",
@@ -4820,7 +4825,7 @@
   {
     "name": "update_auth_plugins_organization",
     "title": "Update organization plugin configuration",
-    "description": "Updates the Neon Auth organization plugin, which lets your app's users create and join organizations. These are not Neon organizations. Omitted fields keep their value. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Updates the Neon Auth organization plugin, which lets your app's users form organizations (not Neon organizations). Omitted fields keep their value. Current values: get_neon_auth_config.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4828,12 +4833,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "enabled": {
           "type": "boolean",
@@ -4881,7 +4886,7 @@
   {
     "name": "update_auth_plugins_phone_number",
     "title": "Update phone number plugin configuration",
-    "description": "Updates the Neon Auth phone number (SMS OTP) plugin: whether it is enabled and how many seconds an OTP is valid (`otp_expires_in`). Omitted fields keep their value. Call `get_neon_auth_config` to read the current value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Updates the Neon Auth SMS OTP plugin; omitted fields keep their value. SMS needs a webhook with the send.otp event (update_auth_webhooks). Current values: get_neon_auth_config.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4889,12 +4894,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "enabled": {
           "type": "boolean",
@@ -4924,7 +4929,7 @@
   {
     "name": "update_auth_webhooks",
     "title": "Update Neon Auth webhook configuration",
-    "description": "Replaces the branch's Neon Auth webhook configuration. Omitted fields reset: `{ enabled: false }` alone clears `webhook_url` and `enabled_events`. Call `get_neon_auth_config` first and send every field to keep.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Replaces a branch's Neon Auth webhook configuration; omitted fields reset, so { enabled: false } alone clears webhook_url and enabled_events. Send every field to keep, read from get_neon_auth_config.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4932,12 +4937,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "enabled": {
           "type": "boolean",
@@ -4988,7 +4993,7 @@
   {
     "name": "update_auth_logs_export",
     "title": "Update Neon Auth logs export setting",
-    "description": "Turns the export of the branch's Neon Auth events to Neon Platform logs on or off. A project without logs export accepts only `enabled: false`; enabling there returns 404 `feature not available`. `get_neon_auth_config` reports the current value as `logs_export`, or `null` where logs export is not available.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Turns the export of a branch's Neon Auth events to Neon Platform logs on or off. A project without logs export accepts only enabled: false; enabling there returns 404 feature not available. get_neon_auth_config reports the current value as logs_export, or null where logs export is not available.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4996,12 +5001,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "enabled": {
           "type": "boolean",
@@ -5026,7 +5031,7 @@
   {
     "name": "get_data_api",
     "title": "Retrieve Neon Data API configuration",
-    "description": "Retrieves the Neon Data API configuration for the specified branch, including endpoint URL, enabled state, and database settings.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Gets the Neon Data API configuration for one database on a branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5034,12 +5039,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "database_name": {
           "type": "string",
@@ -5064,7 +5069,7 @@
   {
     "name": "provision_neon_data_api",
     "title": "Create Neon Data API",
-    "description": "Creates a new instance of Neon Data API in the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Creates the Neon Data API, a REST interface over database_name, on a branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5072,12 +5077,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "database_name": {
           "type": "string",
@@ -5185,7 +5190,7 @@
   {
     "name": "update_data_api",
     "title": "Update Neon Data API",
-    "description": "Updates the Neon Data API configuration for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Updates the Neon Data API settings for a database and refreshes its schema cache.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5193,12 +5198,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "database_name": {
           "type": "string",
@@ -5270,7 +5275,7 @@
   {
     "name": "delete_data_api",
     "title": "Delete Neon Data API",
-    "description": "Deletes the Neon Data API for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deletes the Neon Data API for a database; requests to its endpoint start failing.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5278,12 +5283,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "database_name": {
           "type": "string",
@@ -5308,7 +5313,7 @@
   {
     "name": "query_logs",
     "title": "Query branch logs",
-    "description": "Returns logs for a branch. Pass `limit` to cap how many. There is no `cursor` argument. Filters combine with AND. Pass `logql` instead of structured filters, not with them. Give the window as `since` or `start_time`, not both; default is the previous hour, max seven days; `end_time` is exclusive. Private beta; a branch without logs access returns HTTP 404 with reason \"telemetry_not_enabled\".\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Returns a branch's log records. Filters combine with AND; pass logql or structured filters, not both. Pass since or start_time, not both; default last hour, max seven days. Private beta: a branch without logs returns 404 telemetry_not_enabled. Stream labels: query_loki_logs. Returns every page. Pass limit to cap how many.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5316,12 +5321,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "since": {
           "type": "string",
@@ -5423,7 +5428,7 @@
   {
     "name": "list_log_fields",
     "title": "List branch log fields",
-    "description": "Lists the low-cardinality log fields observed on this branch. Call `list_log_field_values` with `field_name` to list distinct values.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists the low-cardinality log fields seen on a branch, for list_log_field_values.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5431,12 +5436,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -5456,7 +5461,7 @@
   {
     "name": "list_log_field_values",
     "title": "List branch log field values",
-    "description": "Lists distinct values for a low-cardinality log field. Call `list_log_fields` first for `field_name`; a field the branch has never emitted returns `unknown_field`. Pass `since` or `start_time`, not both; default is the previous six hours, max seven days. Private beta.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists the distinct values of one log field; a field the branch never emitted returns unknown_field. Pass since or start_time, not both; default last six hours, max seven days.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5464,17 +5469,17 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "field_name": {
           "type": "string",
           "minLength": 1,
-          "description": "The log field whose distinct values should be returned."
+          "description": "A field name from list_log_fields."
         },
         "since": {
           "type": "string",
@@ -5527,7 +5532,7 @@
   {
     "name": "query_loki_logs",
     "title": "Query branch logs (Loki)",
-    "description": "Runs a LogQL range query on the branch's Loki-compatible read API and returns Loki's response: `data.result` groups lines by stream labels, and each value is `[nanosecond timestamp string, line]`. Use it for sub-second ordering or stream labels; use `query_logs` for structured filters and one record per line. The source label is `entity_type`; `list_log_fields` and `list_log_field_values` list labels and values. There is no cursor: a result with `limit` lines, or 10,000 (the server's cap, which adds no warning), may be incomplete, so narrow `since` or the selector. Max seven days.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Runs a LogQL range query on a branch's logs and returns Loki's response: data.result groups lines by stream label as [nanosecond timestamp, line]. query_logs has structured filters; list_log_fields and list_log_field_values list labels. No cursor: limit lines, or the silent 10,000 cap, may mean more exist; narrow the window.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5535,12 +5540,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "query": {
           "type": "string",
@@ -5592,7 +5597,7 @@
   {
     "name": "get_ai_gateway",
     "title": "Get branch AI Gateway endpoint",
-    "description": "Returns the AI Gateway endpoint host for the specified branch, used to render code-snippet base URLs.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Gets a branch's AI Gateway host; a 404 says why it is unavailable.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5600,12 +5605,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -5625,7 +5630,7 @@
   {
     "name": "list_functions",
     "title": "List functions on the branch",
-    "description": "Lists functions on the specified branch. Returns every page. Pass limit to cap how many.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists the functions on a branch. Returns every page. Pass limit to cap how many.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5633,12 +5638,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "limit": {
           "type": "integer",
@@ -5664,7 +5669,7 @@
   {
     "name": "get_function",
     "title": "Get function details",
-    "description": "Returns the function identified by its slug.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Gets a function on a branch by slug.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5672,12 +5677,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "slug": {
           "type": "string",
@@ -5703,7 +5708,7 @@
   {
     "name": "update_function",
     "title": "Update a function",
-    "description": "Updates the function's mutable metadata — currently only the display `name`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Sets a function's display name; null resets it to the slug. Only the branch that owns the function can rename it.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5711,12 +5716,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "slug": {
           "type": "string",
@@ -5756,7 +5761,7 @@
   {
     "name": "delete_function",
     "title": "Delete a function on the branch",
-    "description": "Deletes the function identified by its slug.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deletes a function from a branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5764,12 +5769,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "slug": {
           "type": "string",
@@ -5795,7 +5800,7 @@
   {
     "name": "deploy_function",
     "title": "Deploy code to a function",
-    "description": "Creates a deployment for the function. Supply at least one of `zip`, `environment`, or `runtime`; omitted fields inherit the latest version. The first deployment must include `zip`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deploys a function version from any of zip, environment, and runtime; omitted ones keep the latest value, and the first deployment needs zip. It can return while still pending.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5803,12 +5808,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "slug": {
           "type": "string",
@@ -5852,7 +5857,7 @@
   {
     "name": "list_functions_custom_domains",
     "title": "List the custom domains on a branch",
-    "description": "Lists all custom domains registered on the branch, across every target entity. Returns every page. Pass limit to cap how many.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists a branch's custom domains and their targets. Returns every page. Pass limit to cap how many.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5860,12 +5865,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "limit": {
           "type": "integer",
@@ -5891,7 +5896,7 @@
   {
     "name": "register_functions_custom_domain",
     "title": "Register a custom domain on a branch",
-    "description": "Registers a hostname on the branch and routes it to a function. Pass `entity_type: \"function\"` and `entity_id` as the slug from `list_functions`. Point a CNAME at the returned `cname_target`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Routes a domain you own to a function: entity_type function, entity_id the slug from list_functions. It goes live once a CNAME to the returned cname_target resolves.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5899,12 +5904,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "domain": {
           "type": "string",
@@ -5922,7 +5927,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 255,
-          "description": "The target entity's identifier within the branch."
+          "description": "The function slug from list_functions."
         }
       },
       "required": [
@@ -5945,7 +5950,7 @@
   {
     "name": "delete_functions_custom_domain",
     "title": "Delete a custom domain from a branch",
-    "description": "Removes a custom domain registered on the branch and stops routing it.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Removes a custom domain from a branch and stops routing it.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5953,12 +5958,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "domain": {
           "type": "string",
@@ -5986,7 +5991,7 @@
   {
     "name": "list_triggers",
     "title": "List triggers on the branch",
-    "description": "Lists the complete project-bounded set of triggers visible on the branch, ordered by `trigger_id`.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists a branch's function triggers, including inherited ones, which stay disabled on this branch until enabled.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5994,12 +5999,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -6019,7 +6024,7 @@
   {
     "name": "get_trigger",
     "title": "Get a trigger",
-    "description": "Returns the trigger visible on the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Gets a function trigger on a branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6027,12 +6032,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "trigger_id": {
           "type": "string",
@@ -6060,7 +6065,7 @@
   {
     "name": "create_trigger",
     "title": "Create a trigger",
-    "description": "Creates a trigger for a Function visible on the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Creates a trigger that calls a function on a five-field UTC cron schedule, or after an upload to one bucket, optionally under a key prefix. Names are unique on the branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6068,12 +6073,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "body": {
           "oneOf": [
@@ -6212,7 +6217,7 @@
   {
     "name": "update_trigger",
     "title": "Update a trigger",
-    "description": "Applies a partial update.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Updates a function trigger; body.type must match its kind. Editing an inherited trigger makes a local copy, disabled unless this request enables it.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6220,12 +6225,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "trigger_id": {
           "type": "string",
@@ -6362,7 +6367,7 @@
   {
     "name": "delete_trigger",
     "title": "Delete a trigger",
-    "description": "Deletes a branch-local trigger or writes a branch-local tombstone for an inherited trigger so it does not reappear.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deletes a function trigger, or hides an inherited one on this branch. Invocations already queued still run.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6370,12 +6375,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "trigger_id": {
           "type": "string",
@@ -6403,7 +6408,7 @@
   {
     "name": "list_credentials",
     "title": "List credentials on the branch",
-    "description": "Returns metadata for customer-issued credentials on the branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists the scoped credentials issued on a branch, without secrets.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6411,12 +6416,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -6436,7 +6441,7 @@
   {
     "name": "create_credential",
     "title": "Issue a scoped credential on the branch",
-    "description": "Issues a new scoped service credential anchored to the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Issues a scoped credential on a branch. api_token and s3_secret_access_key are returned once: show them to the user and tell them to store them.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6444,12 +6449,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "name": {
           "type": "string",
@@ -6499,7 +6504,7 @@
   {
     "name": "revoke_credential",
     "title": "Revoke a credential",
-    "description": "Soft-deletes the credential.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Revokes a scoped credential. Idempotent.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6507,12 +6512,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "token_id": {
           "type": "string",
@@ -6537,7 +6542,7 @@
   {
     "name": "rotate_credential",
     "title": "Rotate a credential's secrets",
-    "description": "Replaces the secret material on an existing scoped credential in place.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Replaces a scoped credential's secrets in place and returns them once; token_id stays. Not idempotent: if the response is lost, create a new credential (create_credential) and revoke this one instead of retrying.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6545,12 +6550,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "token_id": {
           "type": "string",
@@ -6575,7 +6580,7 @@
   {
     "name": "get_storage",
     "title": "Get branch object storage state",
-    "description": "Returns whether branchable object storage is usable for the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Checks whether object storage is available on a branch; a 404 says why not.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6583,12 +6588,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -6608,7 +6613,7 @@
   {
     "name": "list_storage_buckets",
     "title": "List buckets on the branch",
-    "description": "Lists branchable object storage buckets visible on the specified branch, including those inherited from ancestor branches.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists a branch's object storage buckets, inherited ones included.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6616,12 +6621,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -6641,7 +6646,7 @@
   {
     "name": "create_storage_bucket",
     "title": "Create a bucket on the branch",
-    "description": "Creates a new branchable object storage bucket on the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Creates an object storage bucket on a branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6649,12 +6654,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "name": {
           "type": "string",
@@ -6689,7 +6694,7 @@
   {
     "name": "delete_storage_bucket",
     "title": "Delete a bucket on the branch",
-    "description": "Deletes the named bucket from the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deletes a bucket from a branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6697,12 +6702,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "bucket_name": {
           "type": "string",
@@ -6729,7 +6734,7 @@
   {
     "name": "list_storage_objects",
     "title": "List objects in a bucket",
-    "description": "Lists objects visible in the named bucket on the specified branch, including those inherited from ancestor branches. Returns every page. Pass limit to cap how many.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Lists a bucket's objects on a branch, inherited ones included. Returns every page. Pass limit to cap how many.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6737,12 +6742,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "bucket_name": {
           "type": "string",
@@ -6755,8 +6760,8 @@
           "description": "Only list objects whose key starts with this prefix."
         },
         "delimiter": {
-          "type": "string",
-          "description": "Collapse keys sharing a common prefix up to the first occurrence of this delimiter (typically `/`) into the `folders` array."
+          "description": "Groups keys up to this delimiter, usually /, into folders.",
+          "type": "string"
         },
         "limit": {
           "type": "integer",
@@ -6783,7 +6788,7 @@
   {
     "name": "delete_storage_object",
     "title": "Delete an object in a bucket",
-    "description": "Deletes the named object from the bucket on the specified branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Deletes one object from a bucket on a branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6791,12 +6796,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "bucket_name": {
           "type": "string",
@@ -6830,7 +6835,7 @@
   {
     "name": "delete_storage_objects_by_prefix",
     "title": "Delete every object under a key prefix (folder) in a bucket",
-    "description": "Soft-deletes every object on the specified branch whose key starts with `prefix`, in a single call.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Soft-deletes every object on this branch whose key starts with prefix and returns the count; inherited objects stay.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6838,12 +6843,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "bucket_name": {
           "type": "string",
@@ -6855,7 +6860,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 1024,
-          "description": "The key prefix (folder) to delete."
+          "description": "Key prefix to delete, ending in / (for example app/avatars/)."
         }
       },
       "required": [
@@ -6877,7 +6882,7 @@
   {
     "name": "presign_storage_object",
     "title": "Presign an upload or download for an object in a bucket",
-    "description": "Returns a presigned URL that transfers bytes directly to or from the object's bucket on the specified branch, without the caller ever handling S3 credentials.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Returns a short-lived presigned PUT or GET URL for one object, with the headers to send; no S3 credentials needed.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6885,12 +6890,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The Neon branch ID"
+          "description": "A br-... id, not a name."
         },
         "bucket_name": {
           "type": "string",
@@ -6943,7 +6948,7 @@
   {
     "name": "get_realtime",
     "title": "Retrieve Realtime state",
-    "description": "Retrieves whether Realtime is enabled for the branch, whether a change is still being applied, and, once provisioned, its invocation URL and allowed origins.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Gets a branch's Realtime state, URL, and allowed origins; the secret comes from get_realtime_secret.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6951,12 +6956,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -6976,7 +6981,7 @@
   {
     "name": "enable_realtime",
     "title": "Enable Realtime",
-    "description": "Enables Realtime for the branch, or applies new options to an enabled branch.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Enables Realtime on a branch, or changes its allowed origins, and waits until it is applied.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6984,12 +6989,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         },
         "allowed_origins": {
           "maxItems": 16,
@@ -7020,7 +7025,7 @@
   {
     "name": "disable_realtime",
     "title": "Disable Realtime",
-    "description": "Disables Realtime for the branch and discards its shared secret.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Disables Realtime on a branch, discarding its secret, and waits until it is applied.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -7028,12 +7033,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -7053,7 +7058,7 @@
   {
     "name": "get_realtime_secret",
     "title": "Retrieve the Realtime shared secret",
-    "description": "Retrieves the secret the application backend issues Realtime tokens with. Requires write access: the secret lets its holder issue Realtime tokens for the branch, so it is unavailable in read-only mode. Call `enable_realtime` first.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Gets the secret the application backend issues Realtime tokens with; 404 until enable_realtime has run. Requires write access: the secret lets its holder issue Realtime tokens for the branch, so it is unavailable in read-only mode.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -7061,12 +7066,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [
@@ -7086,7 +7091,7 @@
   {
     "name": "rotate_realtime_secret",
     "title": "Rotate the Realtime shared secret",
-    "description": "Replaces the branch's Realtime shared secret and waits until the change is applied. NEVER run autonomously; always ask the user first. Call `get_realtime_secret` afterwards and update the application backend with the new value.\n\nbranch_id is a branch id (br-...), not a branch name. Call list_branches to resolve a name.",
+    "description": "Replaces a branch's Realtime secret and waits until the old one stops working. NEVER run autonomously; always ask the user first. Then update the application backend from get_realtime_secret.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -7094,12 +7099,12 @@
         "project_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The project ID"
+          "description": "Project id."
         },
         "branch_id": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,60}$",
-          "description": "The branch ID"
+          "description": "A br-... id, not a name."
         }
       },
       "required": [

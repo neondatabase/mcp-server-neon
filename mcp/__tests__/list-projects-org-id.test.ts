@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NotFoundError } from '../server/errors';
-import { handleListProjects } from '../tools/handlers/list-projects';
 import { NEON_HANDLERS } from '../tools/tools';
 import type { ToolHandlerExtraParams } from '../tools/types';
 import { getOrgByOrgIdOrDefault } from '../tools/utils';
@@ -11,16 +10,14 @@ const consoleOrg = {
   managed_by: 'console' as const,
 };
 
-function extra(
-  account: ToolHandlerExtraParams['account'] = {
-    id: 'user-1',
-    name: 'Ada',
-  },
-): ToolHandlerExtraParams {
+const USER = { id: 'user-1', name: 'Ada' };
+
+function extra(): ToolHandlerExtraParams {
   return {
-    account,
+    account: USER,
+    clientApplication: 'unknown',
     apiKey: 'napi_test',
-  } as ToolHandlerExtraParams;
+  };
 }
 
 function billedUserClient(organizations = [consoleOrg]) {
@@ -49,7 +46,7 @@ describe('getOrgByOrgIdOrDefault', () => {
     const neonClient = billedUserClient();
 
     await expect(
-      getOrgByOrgIdOrDefault({}, neonClient as never, extra()),
+      getOrgByOrgIdOrDefault({}, neonClient as never, USER),
     ).resolves.toMatchObject({ id: 'org-console' });
     expect(neonClient.getCurrentUserOrganizations).toHaveBeenCalledOnce();
   });
@@ -61,10 +58,10 @@ describe('getOrgByOrgIdOrDefault', () => {
     ]);
 
     await expect(
-      getOrgByOrgIdOrDefault({}, neonClient as never, extra()),
+      getOrgByOrgIdOrDefault({}, neonClient as never, USER),
     ).rejects.toThrow(NotFoundError);
     await expect(
-      getOrgByOrgIdOrDefault({}, neonClient as never, extra()),
+      getOrgByOrgIdOrDefault({}, neonClient as never, USER),
     ).rejects.toThrow(/org-console/);
   });
 
@@ -75,7 +72,7 @@ describe('getOrgByOrgIdOrDefault', () => {
       getOrgByOrgIdOrDefault(
         { org_id: 'org-explicit' },
         neonClient as never,
-        extra(),
+        USER,
       ),
     ).resolves.toEqual({ id: 'org-explicit' });
     expect(neonClient.getCurrentUserOrganizations).not.toHaveBeenCalled();
@@ -85,25 +82,13 @@ describe('getOrgByOrgIdOrDefault', () => {
     const neonClient = billedUserClient();
 
     await expect(
-      getOrgByOrgIdOrDefault(
-        {},
-        neonClient as never,
-        extra({ id: 'org-from-key', name: 'Org Key', isOrg: true }),
-      ),
+      getOrgByOrgIdOrDefault({}, neonClient as never, {
+        id: 'org-from-key',
+        name: 'Org Key',
+        isOrg: true,
+      }),
     ).resolves.toEqual({ id: 'org-from-key' });
     expect(neonClient.getCurrentUserOrganizations).not.toHaveBeenCalled();
-  });
-});
-
-describe('handleListProjects', () => {
-  it('sends org_id for a billed personal key', async () => {
-    const neonClient = billedUserClient();
-
-    await handleListProjects({}, neonClient as never, extra());
-
-    expect(neonClient.listProjects).toHaveBeenCalledWith(
-      expect.objectContaining({ org_id: 'org-console' }),
-    );
   });
 });
 

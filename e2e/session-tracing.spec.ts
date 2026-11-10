@@ -243,7 +243,7 @@ test.describe('Session tracing', () => {
       );
       expect(mistakeSpan.status).toBe('ok');
       expect(mistakeSpan.data).toMatchObject({
-        'error.type': 'InvalidArgumentError',
+        'error.type': 'NeonClientError',
         'mcp.tool.result.is_error': true,
       });
 

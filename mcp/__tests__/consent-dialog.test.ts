@@ -18,7 +18,9 @@ describe('buildConsentView', () => {
     expect(view.project.kind).toBe('all');
     expect(view.categories.kind).toBe('all');
     expect(view.writeChecked).toBe(true);
-    expect(view.tools.some((tool) => tool.title === 'Search')).toBe(true);
+    expect(
+      view.tools.some((tool) => tool.title === 'Search Neon resources'),
+    ).toBe(true);
     expect(view.tools.some((tool) => tool.title === 'Create project')).toBe(
       true,
     );
@@ -38,7 +40,9 @@ describe('buildConsentView', () => {
       kind: 'subset',
       labels: ['Querying', 'Schema'],
     });
-    expect(view.tools.some((tool) => tool.title === 'Search')).toBe(false);
+    expect(
+      view.tools.some((tool) => tool.title === 'Search Neon resources'),
+    ).toBe(false);
     expect(
       view.tools.some((tool) => tool.title === 'Get Database Tables'),
     ).toBe(true);
@@ -274,11 +278,11 @@ describe('renderConsentHtml', () => {
     const pinned = render('mcp_pinned_reader');
     expect(pinned).toContain('<dt>Postgres role:</dt>');
     expect(pinned).toContain('mcp_pinned_reader');
-    expect(pinned).not.toContain('Get Connection String');
+    expect(pinned).not.toContain('Get connection string');
 
     const unpinned = render();
     expect(unpinned).not.toContain('Postgres role:');
-    expect(unpinned).toContain('Get Connection String');
+    expect(unpinned).toContain('Get connection string');
   });
 
   it('renders confirmation without editors, including for a writable URL', () => {
@@ -479,7 +483,7 @@ describe('renderConsentHtml', () => {
       /<details class="choice choice-role" data-role-disclosure>/,
     );
     expect(html).toContain('data-role-summary>Database owner<');
-    expect(html).toContain('Get Connection String');
+    expect(html).toContain('Get connection string');
   });
 
   it('omits the Postgres role field on a confirmation', () => {
@@ -529,7 +533,7 @@ describe('renderConsentHtml', () => {
     expect(html).not.toContain('<script>x</script>');
   });
 
-  it('drops Get Connection String from the preview when a role is entered', () => {
+  it('drops Get connection string from the preview when a role is entered', () => {
     const render = (roleName: string) =>
       renderConsentHtml({
         client,
@@ -551,8 +555,8 @@ describe('renderConsentHtml', () => {
     const tools = (html: string) =>
       html.match(/data-tool-content>([\s\S]*?)<\/section>/)?.[1] ?? '';
 
-    expect(tools(render(''))).toContain('Get Connection String');
-    expect(tools(render('app_reader'))).not.toContain('Get Connection String');
+    expect(tools(render(''))).toContain('Get connection string');
+    expect(tools(render('app_reader'))).not.toContain('Get connection string');
     expect(tools(render('app_reader'))).toContain('Run SQL');
   });
 });

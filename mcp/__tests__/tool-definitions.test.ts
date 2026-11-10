@@ -7,18 +7,18 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { z } from 'zod/v3';
 import { publishedId } from '@neon/tools';
-import { HOST_TOOLS, NEON_TOOLS } from '../tools/definitions';
+import * as z from 'zod';
+import { NEON_TOOLS, PACKAGE_TOOLS } from '../tools/definitions';
 import { toListedTool } from '../tools/listed-schema';
-import { generatedToolPathHas } from '../tools/generated/adapt';
-import { PINNED_MCP_NAMES, TOOL_NAMES } from '../tools/generated/names';
-import { GENERATED_TOOL_IDS } from '../tools/generated/operations';
+import MCP_TOOL_NAMES from '../tools/mcp-tool-names.json';
+import { GENERATED_TOOL_SCOPES, TOOL_IDS } from '../tools/operations';
 import { NEON_HANDLERS } from '../tools/tools';
-import { explainSqlStatementInputSchema } from '../tools/toolsSchema';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
 
-const HOST_READ_ONLY_TOOLS = [
+const CUSTOM_TOOLS = NEON_TOOLS.filter((tool) => tool.kind === 'custom');
+
+const CUSTOM_READ_ONLY_TOOLS = [
   'describe_branch',
   'describe_table_schema',
   'explain_sql_statement',
@@ -62,7 +62,7 @@ describe('NEON_TOOLS definitions', () => {
         tool.scope === null || SCOPE_CATEGORIES.includes(tool.scope),
         `${tool.name} has invalid scope: ${String(tool.scope)}`,
       ).toBe(true);
-      expect(tool.kind === 'host' || tool.kind === 'generated').toBe(true);
+      expect(tool.kind === 'custom' || tool.kind === 'generated').toBe(true);
       expect(typeof tool.projectScoped).toBe('boolean');
       expect(typeof tool.readOnlySafe).toBe('boolean');
     }
@@ -161,13 +161,13 @@ describe('docs tools definitions', () => {
 });
 
 describe('read-only tool surface', () => {
-  it('keeps the host read-only allowlist', () => {
-    const hostReadOnlyNames = HOST_TOOLS.filter((t) => t.readOnlySafe).map(
+  it('keeps the read-only allowlist of the custom tools', () => {
+    const customReadOnlyNames = CUSTOM_TOOLS.filter((t) => t.readOnlySafe).map(
       (t) => t.name,
     );
 
-    expect([...hostReadOnlyNames].sort()).toEqual(
-      [...HOST_READ_ONLY_TOOLS].sort(),
+    expect([...customReadOnlyNames].sort()).toEqual(
+      [...CUSTOM_READ_ONLY_TOOLS].sort(),
     );
   });
 
@@ -202,11 +202,11 @@ describe('read-only tool surface', () => {
     expect(tool!.annotations.destructiveHint).toBe(true);
     expect(tool!.annotations.idempotentHint).toBe(false);
     expect(
-      explainSqlStatementInputSchema.parse({
+      tool!.inputSchema.parse({
         sql: 'select 1',
         project_id: 'proj-1',
-      }).analyze,
-    ).toBe(false);
+      }),
+    ).toMatchObject({ analyze: false });
   });
 
   it('publishes every tool argument in snake_case', () => {
@@ -235,11 +235,11 @@ describe('read-only tool surface', () => {
     expect(undocumented).toEqual([]);
   });
 
-  it('rejects camelCase aliases on host tool schemas', () => {
-    const runSql = HOST_TOOLS.find((tool) => tool.name === 'run_sql');
+  it('rejects camelCase aliases on custom tool schemas', () => {
+    const runSql = CUSTOM_TOOLS.find((tool) => tool.name === 'run_sql');
     expect(runSql).toBeDefined();
     if (!(runSql?.inputSchema instanceof z.ZodObject)) {
-      throw new Error('run_sql must keep a Zod 3 object schema');
+      throw new Error('run_sql must keep a Zod object schema');
     }
     expect(
       runSql.inputSchema.safeParse({
@@ -344,183 +344,226 @@ function toolShape(tool: (typeof NEON_TOOLS)[number]): Record<string, unknown> {
   return schema.shape as Record<string, unknown>;
 }
 
-describe('generated tool interface', () => {
-  it('pins every generated MCP name', () => {
-    expect(Object.keys(PINNED_MCP_NAMES).sort()).toEqual(
-      [...GENERATED_TOOL_IDS].sort(),
-    );
-    expect(PINNED_MCP_NAMES['projects.list']).toBe('list_projects');
-    expect(PINNED_MCP_NAMES['projects.get']).toBe('describe_project');
-    expect(PINNED_MCP_NAMES['projects.create']).toBe('create_project');
-    expect(PINNED_MCP_NAMES['projects.delete']).toBe('delete_project');
-    expect(PINNED_MCP_NAMES['branches.create']).toBe('create_branch');
-    expect(PINNED_MCP_NAMES['branches.resetFromParent']).toBe(
-      'reset_from_parent',
-    );
-    expect(PINNED_MCP_NAMES['branches.compareSchema']).toBe(
-      'compare_database_schema',
-    );
-    expect(PINNED_MCP_NAMES['branches.delete']).toBe('delete_branch');
-    expect(PINNED_MCP_NAMES['postgres.endpoints.listByBranch']).toBe(
-      'list_branch_computes',
-    );
-    expect(PINNED_MCP_NAMES['auth.create']).toBe('provision_neon_auth');
-    expect(PINNED_MCP_NAMES['postgres.dataApi.create']).toBe(
-      'provision_neon_data_api',
-    );
-    expect(PINNED_MCP_NAMES['logs.query']).toBe('query_logs');
-    expect(PINNED_MCP_NAMES['logs.fields']).toBe('list_log_fields');
-    expect(PINNED_MCP_NAMES['logs.fieldValues']).toBe('list_log_field_values');
-    expect(PINNED_MCP_NAMES['functions.customDomains.list']).toBe(
-      'list_functions_custom_domains',
-    );
-    expect(PINNED_MCP_NAMES['functions.customDomains.register']).toBe(
-      'register_functions_custom_domain',
-    );
-    expect(PINNED_MCP_NAMES['functions.customDomains.delete']).toBe(
-      'delete_functions_custom_domain',
-    );
-    expect(PINNED_MCP_NAMES['triggers.list']).toBe('list_triggers');
-    expect(PINNED_MCP_NAMES['triggers.get']).toBe('get_trigger');
-    expect(PINNED_MCP_NAMES['credentials.list']).toBe('list_credentials');
-    expect(PINNED_MCP_NAMES['credentials.rotate']).toBe('rotate_credential');
-  });
+function byName(name: string) {
+  const tool = NEON_TOOLS.find((candidate) => candidate.name === name);
+  if (!tool) throw new Error(`No tool named ${name}`);
+  return tool;
+}
 
-  it('overrides only names that differ from @neon/tools', () => {
-    for (const id of GENERATED_TOOL_IDS) {
-      const pinned = PINNED_MCP_NAMES[id];
-      if (publishedId(id) === pinned) {
-        expect(TOOL_NAMES).not.toHaveProperty(id);
-      } else {
-        expect(TOOL_NAMES[id]).toBe(pinned);
-      }
+describe('published tool names', () => {
+  it('publishes every name in mcp-tool-names.json under its selector', () => {
+    expect(NEON_TOOLS.map((tool) => tool.name).sort()).toEqual(
+      Object.keys(MCP_TOOL_NAMES).sort(),
+    );
+    for (const [name, id] of Object.entries(MCP_TOOL_NAMES)) {
+      expect(byName(name).id, name).toBe(id);
     }
   });
 
-  it('does not tell the agent to pass a cursor on query_logs', () => {
-    const tool = NEON_TOOLS.find((t) => t.name === 'query_logs');
-    expect(tool).toBeDefined();
-    expect(generatedShape(tool!)).not.toHaveProperty('cursor');
-    expect(tool!.description).toContain('There is no `cursor` argument');
-    expect(tool!.description).not.toMatch(/add the `cursor` value/i);
-    expect(tool!.description).not.toMatch(/pass the returned `next_cursor`/i);
+  it('pins the names that differ from the package defaults', () => {
+    expect(byName('describe_project').id).toBe('projects.get');
+    expect(byName('reset_from_parent').id).toBe('branches.resetFromParent');
+    expect(byName('compare_database_schema').id).toBe('branches.compareSchema');
+    expect(byName('list_branch_computes').id).toBe(
+      'postgres.endpoints.listByBranch',
+    );
+    expect(byName('provision_neon_auth').id).toBe('auth.create');
+    expect(byName('get_connection_string').id).toBe(
+      'postgres.connectionString',
+    );
+    expect(byName('run_sql_transaction').id).toBe('sql.runTransaction');
+    expect(byName('search').id).toBe('resources.search');
+    expect(byName('fetch').id).toBe('resources.fetch');
+    expect(byName('get_doc').id).toBe('docs.get');
+  });
+
+  it('resolves every cross-reference to the name the tool publishes', () => {
+    const defaultIds = TOOL_IDS.map((id) => publishedId(id)).filter(
+      (id) => !NEON_TOOLS.some((tool) => tool.name === id),
+    );
+    expect(defaultIds.length).toBeGreaterThan(0);
+    for (const tool of NEON_TOOLS) {
+      expect(tool.description, tool.name).not.toContain('{{');
+      const schema = JSON.stringify(toListedTool(tool).inputSchema);
+      expect(schema, tool.name).not.toContain('{{');
+      for (const id of defaultIds) {
+        expect(tool.description, tool.name).not.toMatch(
+          new RegExp(`\\b${id}\\b`),
+        );
+      }
+    }
+    expect(byName('create_branch').description).toContain(
+      'get_connection_string',
+    );
+    expect(byName('prepare_database_migration').description).toContain(
+      'complete_database_migration',
+    );
+    expect(byName('explain_sql_statement').description).toContain('run_sql');
+  });
+});
+
+describe('MCP description notes', () => {
+  it.each(['list_projects', 'count_projects', 'create_project'])(
+    '%s says org_id is optional and auto-selected',
+    (name) => {
+      const { description } = byName(name);
+      expect(description).toContain('`org_id` is optional');
+      expect(description).toContain('auto-select when unambiguous');
+    },
+  );
+
+  it('says get_connection_string follows the connection scope and is withheld in read-only mode', () => {
+    const { description } = byName('get_connection_string');
+    expect(description).toContain('`project_id` follows the connection scope');
+    expect(description).toContain('unavailable in read-only mode');
+    expect(description).toContain('https://console.neon.tech');
+  });
+
+  it('says get_realtime_secret is withheld in read-only mode', () => {
+    expect(byName('get_realtime_secret').description).toContain(
+      'unavailable in read-only mode',
+    );
+  });
+
+  it('adds no notes to other tools', () => {
+    for (const tool of NEON_TOOLS) {
+      if (
+        [
+          'list_projects',
+          'count_projects',
+          'create_project',
+          'get_connection_string',
+          'get_realtime_secret',
+        ].includes(tool.name)
+      ) {
+        continue;
+      }
+      expect(tool.description, tool.name).toBe(
+        PACKAGE_TOOLS[tool.id].description,
+      );
+    }
+  });
+});
+
+describe('generated tool interface', () => {
+  it('does not take a cursor on paginated lists', () => {
+    for (const name of [
+      'query_logs',
+      'list_operations',
+      'list_projects',
+      'list_functions_custom_domains',
+      'get_project_consumption',
+      'get_branch_consumption',
+    ]) {
+      expect(generatedShape(byName(name)), name).not.toHaveProperty('cursor');
+      expect(byName(name).description, name).toContain('Returns every page');
+    }
   });
 
   it('keeps query_logs filter and time-window constraints', () => {
-    const tool = NEON_TOOLS.find((t) => t.name === 'query_logs');
-    expect(tool!.description).toContain('logql');
-    expect(tool!.description).toContain('since');
-    expect(tool!.description).toContain('start_time');
-    expect(tool!.description).toContain('not both');
+    const { description } = byName('query_logs');
+    expect(description).toContain('logql');
+    expect(description).toContain('since');
+    expect(description).toContain('start_time');
+    expect(description).toContain('not both');
   });
 
   it('names list_log_field_values on list_log_fields', () => {
-    const tool = NEON_TOOLS.find((t) => t.name === 'list_log_fields');
-    expect(tool!.description).toContain('list_log_field_values');
-    expect(tool!.description).toContain('field_name');
-    expect(tool!.description).not.toContain('field-values endpoint');
+    const { description } = byName('list_log_fields');
+    expect(description).toContain('list_log_field_values');
+    expect(description).not.toContain('field-values endpoint');
   });
 
-  it('keeps list_log_field_values window and field-discovery constraints', () => {
-    const tool = NEON_TOOLS.find((t) => t.name === 'list_log_field_values');
-    expect(tool!.description).toContain('list_log_fields');
-    expect(tool!.description).toContain('unknown_field');
-    expect(tool!.description).toContain('six hours');
-    expect(tool!.description).not.toContain('previous hour');
+  it('keeps list_log_field_values window constraints', () => {
+    const { description } = byName('list_log_field_values');
+    expect(description).toContain('unknown_field');
+    expect(description).toContain('six hours');
+    expect(description).not.toContain('previous hour');
   });
 
   it('exposes query_loki_logs as a read-only observability tool that points at the log discovery tools', () => {
-    const tool = NEON_TOOLS.find((t) => t.name === 'query_loki_logs');
-    expect(tool?.scope).toBe('observability');
-    expect(tool?.readOnlySafe).toBe(true);
-    expect(tool?.annotations.destructiveHint).toBe(false);
-    expect(tool!.description).toContain('query_logs');
-    expect(tool!.description).toContain('list_log_fields');
-    expect(tool!.description).toContain('no cursor');
+    const tool = byName('query_loki_logs');
+    expect(tool.scope).toBe('observability');
+    expect(tool.readOnlySafe).toBe(true);
+    expect(tool.annotations.destructiveHint).toBe(false);
+    expect(tool.description).toContain('query_logs');
+    expect(tool.description).toContain('list_log_fields');
+    expect(tool.description).toMatch(/no cursor/i);
     expect(
       NEON_TOOLS.some((t) => /labels?_.*loki|loki.*labels?/.test(t.name)),
     ).toBe(false);
   });
 
-  it('keeps deploy_function zip and at-least-one-field constraints', () => {
-    const tool = NEON_TOOLS.find((t) => t.name === 'deploy_function');
-    expect(tool!.description).toContain('zip');
-    expect(tool!.description).toContain('at least one');
-    expect(tool!.description).toContain('first deployment');
+  it('keeps deploy_function zip and first-deployment constraints', () => {
+    const { description } = byName('deploy_function');
+    expect(description).toContain('zip');
+    expect(description).toContain('first deployment');
   });
 
   it('exposes functions custom-domain tools under the functions category', () => {
-    const list = NEON_TOOLS.find(
-      (tool) => tool.name === 'list_functions_custom_domains',
-    );
-    const register = NEON_TOOLS.find(
-      (tool) => tool.name === 'register_functions_custom_domain',
-    );
-    const remove = NEON_TOOLS.find(
-      (tool) => tool.name === 'delete_functions_custom_domain',
-    );
-    expect(list?.scope).toBe('functions');
-    expect(register?.scope).toBe('functions');
-    expect(remove?.scope).toBe('functions');
-    expect(generatedShape(list!)).not.toHaveProperty('cursor');
-    expect(generatedShape(register!)).toHaveProperty('entity_type');
-    expect(generatedShape(register!)).toHaveProperty('entity_id');
-    expect(generatedShape(register!)).toHaveProperty('domain');
-    expect(generatedShape(remove!)).toHaveProperty('domain');
+    const list = byName('list_functions_custom_domains');
+    const register = byName('register_functions_custom_domain');
+    const remove = byName('delete_functions_custom_domain');
+    expect(list.scope).toBe('functions');
+    expect(register.scope).toBe('functions');
+    expect(remove.scope).toBe('functions');
+    expect(generatedShape(register)).toHaveProperty('entity_type');
+    expect(generatedShape(register)).toHaveProperty('entity_id');
+    expect(generatedShape(register)).toHaveProperty('domain');
+    expect(generatedShape(remove)).toHaveProperty('domain');
+    expect(register.description).toContain('list_functions');
+    expect(register.description).toContain('cname_target');
   });
 
   it('exposes trigger tools under the functions category', () => {
-    const list = NEON_TOOLS.find((tool) => tool.name === 'list_triggers');
-    const create = NEON_TOOLS.find((tool) => tool.name === 'create_trigger');
-    const update = NEON_TOOLS.find((tool) => tool.name === 'update_trigger');
-    const remove = NEON_TOOLS.find((tool) => tool.name === 'delete_trigger');
-    expect(list?.scope).toBe('functions');
-    expect(create?.scope).toBe('functions');
-    expect(update?.scope).toBe('functions');
-    expect(remove?.scope).toBe('functions');
+    for (const name of [
+      'list_triggers',
+      'create_trigger',
+      'update_trigger',
+      'delete_trigger',
+    ]) {
+      expect(byName(name).scope, name).toBe('functions');
+    }
     expect(NEON_TOOLS.some((tool) => tool.name === 'reveal_credentials')).toBe(
       false,
     );
   });
 
   it('exposes credential tools under the branches category and hides reveal', () => {
-    const list = NEON_TOOLS.find((tool) => tool.name === 'list_credentials');
-    const create = NEON_TOOLS.find((tool) => tool.name === 'create_credential');
-    const revoke = NEON_TOOLS.find((tool) => tool.name === 'revoke_credential');
-    const rotate = NEON_TOOLS.find((tool) => tool.name === 'rotate_credential');
-    expect(list?.scope).toBe('branches');
-    expect(create?.scope).toBe('branches');
-    expect(revoke?.scope).toBe('branches');
-    expect(rotate?.scope).toBe('branches');
-    expect(rotate?.annotations.destructiveHint).toBe(true);
-    expect(rotate?.annotations.idempotentHint).toBe(false);
-    expect(rotate?.readOnlySafe).toBe(false);
+    for (const name of [
+      'list_credentials',
+      'create_credential',
+      'revoke_credential',
+      'rotate_credential',
+    ]) {
+      expect(byName(name).scope, name).toBe('branches');
+    }
+    const rotate = byName('rotate_credential');
+    expect(rotate.annotations.destructiveHint).toBe(true);
+    expect(rotate.annotations.idempotentHint).toBe(false);
+    expect(rotate.readOnlySafe).toBe(false);
   });
 
   it('exposes Realtime tools under the realtime category and keeps the secret out of read-only mode', () => {
-    const byName = (name: string) =>
-      NEON_TOOLS.find((tool) => tool.name === name);
     const get = byName('get_realtime');
     const enable = byName('enable_realtime');
     const disable = byName('disable_realtime');
     const secret = byName('get_realtime_secret');
     const rotate = byName('rotate_realtime_secret');
     for (const tool of [get, enable, disable, secret, rotate]) {
-      expect(tool?.scope).toBe('realtime');
+      expect(tool.scope).toBe('realtime');
     }
-    expect(get?.readOnlySafe).toBe(true);
-    expect(enable?.readOnlySafe).toBe(false);
-    expect(disable?.annotations.destructiveHint).toBe(true);
-    expect(secret?.readOnlySafe).toBe(false);
-    expect(secret?.annotations.readOnlyHint).toBe(true);
-    expect(rotate?.readOnlySafe).toBe(false);
-    expect(rotate?.annotations.destructiveHint).toBe(true);
-    expect(rotate?.annotations.idempotentHint).toBe(false);
+    expect(get.readOnlySafe).toBe(true);
+    expect(enable.readOnlySafe).toBe(false);
+    expect(disable.annotations.destructiveHint).toBe(true);
+    expect(secret.readOnlySafe).toBe(false);
+    expect(secret.annotations.readOnlyHint).toBe(true);
+    expect(rotate.readOnlySafe).toBe(false);
+    expect(rotate.annotations.destructiveHint).toBe(true);
+    expect(rotate.annotations.idempotentHint).toBe(false);
   });
 
   it('exposes the Neon Auth OAuth server and client tools under neon_auth', () => {
-    const byName = (name: string) =>
-      NEON_TOOLS.find((tool) => tool.name === name);
     const reads = [
       'get_auth_oauth_server',
       'list_auth_oauth_clients',
@@ -534,18 +577,17 @@ describe('generated tool interface', () => {
       'rotate_auth_oauth_client_secret',
     ];
     for (const name of [...reads, ...writes]) {
-      const tool = byName(name);
-      expect(tool?.scope, name).toBe('neon_auth');
-      expect(tool?.projectScoped, name).toBe(true);
+      expect(byName(name).scope, name).toBe('neon_auth');
+      expect(byName(name).projectScoped, name).toBe(true);
     }
     for (const name of reads) {
-      expect(byName(name)?.readOnlySafe, name).toBe(true);
-      expect(byName(name)?.annotations.readOnlyHint, name).toBe(true);
-      expect(byName(name)?.annotations.destructiveHint, name).toBe(false);
+      expect(byName(name).readOnlySafe, name).toBe(true);
+      expect(byName(name).annotations.readOnlyHint, name).toBe(true);
+      expect(byName(name).annotations.destructiveHint, name).toBe(false);
     }
     for (const name of writes) {
-      expect(byName(name)?.readOnlySafe, name).toBe(false);
-      expect(byName(name)?.annotations.readOnlyHint, name).toBe(false);
+      expect(byName(name).readOnlySafe, name).toBe(false);
+      expect(byName(name).annotations.readOnlyHint, name).toBe(false);
     }
     for (const name of [
       'update_auth_oauth_server',
@@ -553,64 +595,23 @@ describe('generated tool interface', () => {
       'delete_auth_oauth_client',
       'rotate_auth_oauth_client_secret',
     ]) {
-      expect(byName(name)?.annotations.destructiveHint, name).toBe(true);
+      expect(byName(name).annotations.destructiveHint, name).toBe(true);
     }
-    expect(
-      byName('rotate_auth_oauth_client_secret')?.annotations,
-    ).toMatchObject({ idempotentHint: false });
+    expect(byName('rotate_auth_oauth_client_secret').annotations).toMatchObject(
+      { idempotentHint: false },
+    );
   });
 
   it('tells the agent how the OAuth server tools differ from social login', () => {
-    const byName = (name: string) =>
-      NEON_TOOLS.find((tool) => tool.name === name);
-    for (const name of ['get_auth_oauth_server', 'update_auth_oauth_server']) {
-      expect(byName(name)?.description, name).toContain(
-        'list_auth_oauth_providers',
-      );
-    }
-    expect(byName('update_auth_oauth_server')?.description).toContain(
-      'client_id_metadata_documents',
+    expect(byName('get_auth_oauth_server').description).toContain(
+      'list_auth_oauth_providers',
     );
-    expect(byName('create_auth_oauth_client')?.description).toContain(
+    expect(byName('create_auth_oauth_client').description).toContain(
       'client_secret',
     );
-    expect(byName('rotate_auth_oauth_client_secret')?.description).toContain(
-      'old secret stops working',
-    );
-    expect(byName('delete_auth_oauth_client')?.description).toContain(
-      'not revoked',
-    );
-  });
-
-  it('tells the agent what to pass on register_functions_custom_domain', () => {
-    const tool = NEON_TOOLS.find(
-      (t) => t.name === 'register_functions_custom_domain',
-    );
-    expect(tool!.description).toContain('entity_type: "function"');
-    expect(tool!.description).toContain('list_functions');
-    expect(tool!.description).toContain('cname_target');
-  });
-
-  it('does not tell the agent to pass a cursor on list_operations', () => {
-    const tool = NEON_TOOLS.find((t) => t.name === 'list_operations');
-    expect(tool).toBeDefined();
-    expect(generatedShape(tool!)).not.toHaveProperty('cursor');
-    expect(tool!.description).toContain('There is no `cursor` argument');
-    expect(tool!.description).not.toMatch(/add the `cursor` value/i);
-  });
-
-  it('says list_projects walks every page and has no cursor argument', () => {
-    const tool = NEON_TOOLS.find((t) => t.name === 'list_projects');
-    expect(tool!.description).toContain('Returns every page');
-    expect(tool!.description).toContain('There is no `cursor` argument');
-    expect(tool!.description).toContain('`org_id` is optional');
-    expect(tool!.description).toContain('auto-select when unambiguous');
-    expect(generatedShape(tool!)).not.toHaveProperty('cursor');
   });
 
   it('publishes count and v2 consumption as read-only org-level project tools', () => {
-    const byName = (name: string) =>
-      NEON_TOOLS.find((tool) => tool.name === name);
     for (const name of [
       'count_projects',
       'get_project_consumption',
@@ -623,179 +624,130 @@ describe('generated tool interface', () => {
         annotations: { readOnlyHint: true, destructiveHint: false },
       });
     }
-    expect(byName('count_projects')?.description).toContain(
-      'auto-select when unambiguous',
-    );
-    for (const name of ['get_project_consumption', 'get_branch_consumption']) {
-      const description = byName(name)?.description;
-      expect(description, name).toContain('`compute_unit_seconds`');
-      expect(description, name).toContain('list_organizations');
-      expect(description, name).toContain('There is no `cursor` argument');
-      expect(generatedShape(byName(name)!), name).not.toHaveProperty('cursor');
-    }
-    const project = byName('get_project_consumption')?.description;
-    const branch = byName('get_branch_consumption')?.description;
+    const project = byName('get_project_consumption').description;
+    const branch = byName('get_branch_consumption').description;
     expect(project).toContain('Business');
-    expect(project).toContain('`snapshot_storage_bytes_month`');
-    expect(project).toContain('unknown names return no data');
+    expect(project).toContain('snapshot_storage_bytes_month');
+    expect(project).toContain('get_branch_consumption');
+    expect(branch).toContain('compute_unit_seconds');
     expect(branch).not.toContain('Business');
-    expect(branch).toContain('any other name returns HTTP 400');
-    expect(branch).toContain(
-      '`extra_branches_month`, `snapshot_storage_bytes_month` are per-project only',
-    );
   });
 
   it('does not publish the legacy-plan consumption endpoint', () => {
-    expect(GENERATED_TOOL_IDS).not.toContain('consumption.perProject');
+    expect(Object.keys(GENERATED_TOOL_SCOPES)).not.toContain(
+      'consumption.perProject',
+    );
     expect(
       NEON_TOOLS.some((tool) => tool.name === 'per_project_consumption'),
     ).toBe(false);
   });
 
-  it('says describe_project returns the project record only', () => {
-    const tool = NEON_TOOLS.find((t) => t.name === 'describe_project');
-    expect(tool!.description).toContain('Call `list_branches` for branches');
+  it('points describe_project at list_branches', () => {
+    expect(byName('describe_project').description).toContain('list_branches');
   });
 
-  it('names restore_snapshot on finalize_branch_restore', () => {
-    const restore = NEON_TOOLS.find((t) => t.name === 'restore_snapshot');
-    expect(generatedShape(restore!)).toHaveProperty('finalize');
-    expect(generatedShape(restore!)).not.toHaveProperty('finalize_restore');
-    expect(restore!.description).toContain('target_branch_id');
-    expect(restore!.description).toContain('finalize: false');
-    expect(restore!.description).toContain('finalize_branch_restore');
-    expect(restore!.description).not.toContain('preview callbacks');
+  it('names finalize_branch_restore on restore_snapshot', () => {
+    const restore = byName('restore_snapshot');
+    expect(generatedShape(restore)).toHaveProperty('finalize');
+    expect(generatedShape(restore)).not.toHaveProperty('finalize_restore');
+    expect(restore.description).toContain('target_branch_id');
+    expect(restore.description).toContain('finalize_branch_restore');
+    expect(restore.description).not.toContain('preview callbacks');
 
-    const tool = NEON_TOOLS.find((t) => t.name === 'finalize_branch_restore');
-    expect(tool!.description).toContain('restore_snapshot');
-    expect(tool!.description).toContain('finalize: false');
-    expect(tool!.description).toContain('restarts');
-    expect(tool!.description).not.toContain('restoreSnapshot');
-    expect(tool!.description).not.toContain('finalize_restore');
+    const finalize = byName('finalize_branch_restore');
+    expect(finalize.description).toContain('finalize false');
+    expect(finalize.description).toContain('restarting');
+    expect(finalize.description).not.toContain('restoreSnapshot');
+    expect(finalize.description).not.toContain('finalize_restore');
   });
 
   it('exposes flat arguments on the project list, create, and delete tools', () => {
-    const listProjects = NEON_TOOLS.find(
-      (tool) => tool.name === 'list_projects',
-    );
-    const createProject = NEON_TOOLS.find(
-      (tool) => tool.name === 'create_project',
-    );
-    const deleteProject = NEON_TOOLS.find(
-      (tool) => tool.name === 'delete_project',
-    );
+    const listProjects = byName('list_projects');
+    const createProject = byName('create_project');
+    const deleteProject = byName('delete_project');
 
-    expect(generatedShape(listProjects!)).toHaveProperty('limit');
-    expect(generatedShape(createProject!)).toHaveProperty('name');
-    expect(generatedShape(createProject!)).toHaveProperty('org_id');
-    expect(generatedShape(createProject!)).not.toHaveProperty('pooled');
-    expect(createProject?.description).toContain('`org_id` is optional');
-    expect(createProject?.description).toContain(
-      'auto-select when unambiguous',
-    );
-    expect(createProject?.description).toContain('get_connection_string');
-    expect(createProject?.description).not.toContain(
+    expect(generatedShape(listProjects)).toHaveProperty('limit');
+    expect(generatedShape(createProject)).toHaveProperty('name');
+    expect(generatedShape(createProject)).toHaveProperty('org_id');
+    expect(generatedShape(createProject)).not.toHaveProperty('pooled');
+    expect(createProject.description).toContain('get_connection_string');
+    expect(createProject.description).not.toContain(
       'returns a connection string',
     );
-    expect(generatedShape(deleteProject!)).toHaveProperty('project_id');
-    expect(generatedShape(listProjects!)).not.toHaveProperty('query');
-    expect(generatedShape(createProject!)).not.toHaveProperty('body');
-    expect(generatedShape(deleteProject!)).not.toHaveProperty('path');
+    expect(generatedShape(deleteProject)).toHaveProperty('project_id');
+    expect(generatedShape(listProjects)).not.toHaveProperty('query');
+    expect(generatedShape(createProject)).not.toHaveProperty('body');
+    expect(generatedShape(deleteProject)).not.toHaveProperty('path');
   });
 
   it('marks additive creates as non-destructive and deletes as destructive', () => {
-    const createProject = NEON_TOOLS.find(
-      (tool) => tool.name === 'create_project',
+    expect(byName('create_project').annotations.destructiveHint).toBe(false);
+    expect(byName('create_branch').annotations.destructiveHint).toBe(false);
+    expect(byName('delete_project').annotations.destructiveHint).toBe(true);
+    expect(byName('finalize_branch_restore').annotations.destructiveHint).toBe(
+      true,
     );
-    const createBranch = NEON_TOOLS.find(
-      (tool) => tool.name === 'create_branch',
-    );
-    const deleteProject = NEON_TOOLS.find(
-      (tool) => tool.name === 'delete_project',
-    );
-    expect(createProject?.annotations.destructiveHint).toBe(false);
-    expect(createBranch?.annotations.destructiveHint).toBe(false);
-    expect(deleteProject?.annotations.destructiveHint).toBe(true);
-    expect(
-      NEON_TOOLS.find((tool) => tool.name === 'finalize_branch_restore')
-        ?.annotations.destructiveHint,
-    ).toBe(true);
-    expect(
-      NEON_TOOLS.find((tool) => tool.name === 'set_default_branch')?.annotations
-        .destructiveHint,
-    ).toBe(true);
+    expect(byName('set_default_branch').annotations.destructiveHint).toBe(true);
   });
 
   it('describes create_branch as a compute workflow without a connection string', () => {
-    const createBranch = NEON_TOOLS.find(
-      (tool) => tool.name === 'create_branch',
-    );
-    const shape = generatedShape(createBranch!);
+    const createBranch = byName('create_branch');
+    const shape = generatedShape(createBranch);
     expect(shape).toHaveProperty('project_id');
     expect(shape).toHaveProperty('name');
     expect(shape).toHaveProperty('no_compute');
     expect(shape).not.toHaveProperty('pooled');
     expect(shape).not.toHaveProperty('branch');
     expect(shape).not.toHaveProperty('endpoints');
-    expect(createBranch?.description).toContain('get_connection_string');
-    expect(createBranch?.description).toContain('restore_snapshot');
-    expect(createBranch?.description).not.toContain(
+    expect(createBranch.description).toContain('get_connection_string');
+    expect(createBranch.description).not.toContain(
       'returns a connection string',
     );
   });
 
   it('pins reset_from_parent and compare_database_schema', () => {
-    const reset = NEON_TOOLS.find((tool) => tool.name === 'reset_from_parent');
-    expect(reset?.scope).toBe('branches');
-    expect(reset?.readOnlySafe).toBe(false);
-    expect(reset?.annotations.destructiveHint).toBe(true);
-    expect(reset?.description).toContain('NEVER run autonomously');
-    expect(reset?.description).toContain(
-      'those children move to the new branch',
-    );
-    expect(reset?.description).toContain(
-      'Discards every change the branch has written since it diverged',
-    );
-    expect(reset?.description).toContain('restore_snapshot');
-    expect(generatedShape(reset!)).toHaveProperty('preserve_under_name');
-    expect(generatedShape(reset!)).not.toHaveProperty('preserveUnderName');
+    const reset = byName('reset_from_parent');
+    expect(reset.scope).toBe('branches');
+    expect(reset.readOnlySafe).toBe(false);
+    expect(reset.annotations.destructiveHint).toBe(true);
+    expect(reset.description).toContain('NEVER run autonomously');
+    expect(reset.description).toContain('restore_snapshot');
+    expect(generatedShape(reset)).toHaveProperty('preserve_under_name');
+    expect(generatedShape(reset)).not.toHaveProperty('preserveUnderName');
     expect(
-      reset?.inputSchema.safeParse({
+      reset.inputSchema.safeParse({
         project_id: 'proj',
         branch_id: 'br-1',
       }).success,
     ).toBe(true);
     expect(
-      reset?.inputSchema.safeParse({
+      reset.inputSchema.safeParse({
         project_id: 'proj',
         branch_id: 'br-1',
         preserveUnderName: 'old',
       }).success,
     ).toBe(false);
 
-    const compare = NEON_TOOLS.find(
-      (tool) => tool.name === 'compare_database_schema',
-    );
-    expect(compare?.scope).toBe('schema');
-    expect(compare?.readOnlySafe).toBe(true);
-    expect(compare?.annotations.readOnlyHint).toBe(true);
-    expect(generatedShape(compare!)).toHaveProperty('database_name');
-    expect(generatedShape(compare!)).toHaveProperty('base_branch_id');
-    expect(generatedShape(compare!)).toHaveProperty('lsn');
-    expect(generatedShape(compare!)).not.toHaveProperty('db_name');
-    expect(compare?.description).not.toContain('run_sql');
-    expect(compare?.description).toContain('base_branch_id');
-    expect(compare?.description).toContain('parent');
-    expect(compare?.description).toContain('point-in-time');
+    const compare = byName('compare_database_schema');
+    expect(compare.scope).toBe('schema');
+    expect(compare.readOnlySafe).toBe(true);
+    expect(compare.annotations.readOnlyHint).toBe(true);
+    expect(generatedShape(compare)).toHaveProperty('database_name');
+    expect(generatedShape(compare)).toHaveProperty('base_branch_id');
+    expect(generatedShape(compare)).toHaveProperty('lsn');
+    expect(generatedShape(compare)).not.toHaveProperty('db_name');
+    expect(compare.description).not.toContain('run_sql');
+    expect(compare.description).toContain('parent');
+    expect(compare.description).toContain('point-in-time');
     expect(
-      compare?.inputSchema.safeParse({
+      compare.inputSchema.safeParse({
         project_id: 'proj',
         branch_id: 'br-1',
         database_name: 'neondb',
       }).success,
     ).toBe(true);
     expect(
-      compare?.inputSchema.safeParse({
+      compare.inputSchema.safeParse({
         project_id: 'proj',
         branch_id: 'br-1',
         db_name: 'neondb',
@@ -804,74 +756,59 @@ describe('generated tool interface', () => {
   });
 
   it('keeps the never-run-autonomously text on delete_branch and delete_project', () => {
-    const deleteBranch = NEON_TOOLS.find(
-      (tool) => tool.name === 'delete_branch',
-    );
-    const deleteProject = NEON_TOOLS.find(
-      (tool) => tool.name === 'delete_project',
-    );
-    expect(deleteBranch?.description).toContain('NEVER run autonomously');
-    expect(deleteBranch?.description).toContain('delete_project');
-    expect(deleteProject?.description).toContain('NEVER run autonomously');
-    expect(deleteProject?.description).toContain('delete_branch');
+    const deleteBranch = byName('delete_branch');
+    const deleteProject = byName('delete_project');
+    expect(deleteBranch.description).toContain('NEVER run autonomously');
+    expect(deleteBranch.description).toContain('delete_project');
+    expect(deleteProject.description).toContain('NEVER run autonomously');
+    expect(deleteProject.description).toContain('delete_branch');
   });
 
-  it('keeps host workflow constraints in the short descriptions', () => {
-    const prepareMigration = NEON_TOOLS.find(
-      (tool) => tool.name === 'prepare_database_migration',
-    );
-    const completeMigration = NEON_TOOLS.find(
-      (tool) => tool.name === 'complete_database_migration',
-    );
-    const prepareTuning = NEON_TOOLS.find(
-      (tool) => tool.name === 'prepare_query_tuning',
-    );
-    const completeTuning = NEON_TOOLS.find(
-      (tool) => tool.name === 'complete_query_tuning',
-    );
-    const authConfig = NEON_TOOLS.find(
-      (tool) => tool.name === 'get_neon_auth_config',
-    );
-    const inspect = NEON_TOOLS.find((tool) => tool.name === 'inspect_database');
-    const runSql = NEON_TOOLS.find((tool) => tool.name === 'run_sql');
-
-    expect(prepareMigration?.description).toContain(
+  it('keeps workflow constraints in the custom tool descriptions', () => {
+    expect(byName('prepare_database_migration').description).toContain(
       'complete_database_migration',
     );
-    expect(completeMigration?.description).toContain(
+    const completeMigration = byName('complete_database_migration');
+    expect(completeMigration.description).toContain(
       'prepare_database_migration',
     );
-    expect(completeMigration?.description).toContain(
-      'Set apply_changes false to discard',
+    expect(completeMigration.description).toContain(
+      'apply_changes false discards',
     );
-    expect(completeMigration?.description).not.toContain(
-      'apply_changes from prepare_database_migration',
-    );
-    expect(prepareTuning?.description).toContain('tuning_id');
-    expect(prepareTuning?.description).toContain('explain_sql_statement');
-    expect(prepareTuning?.description).toContain('apply_changes true');
-    expect(prepareTuning?.description).toContain('prepare_database_migration');
-    expect(completeTuning?.description).toContain('even when the user rejects');
-    expect(completeTuning?.description).toContain('explain_sql_statement');
-    expect(completeTuning?.description).toContain(
-      'Set apply_changes true to apply',
-    );
-    expect(authConfig?.description).toContain('redacted');
-    expect(runSql?.description).toContain('temporary branch');
-    expect(inspect?.description).toContain('CREATE EXTENSION');
-    expect(inspect?.description).toContain('ask before');
+    const prepareTuning = byName('prepare_query_tuning');
+    expect(prepareTuning.description).toContain('tuning_id');
+    expect(prepareTuning.description).toContain('explain_sql_statement');
+    expect(prepareTuning.description).toContain('complete_query_tuning');
+    expect(prepareTuning.description).toContain('prepare_database_migration');
+    const completeTuning = byName('complete_query_tuning');
+    expect(completeTuning.description).toContain('even when the user rejects');
+    expect(completeTuning.description).toContain('apply_changes true applies');
+    expect(byName('get_neon_auth_config').description).toContain('redacted');
+    expect(byName('run_sql').description).toContain('temporary branch');
+    const inspect = byName('inspect_database');
+    expect(inspect.description).toContain('CREATE EXTENSION');
+    expect(inspect.description).toContain('ask before');
   });
 
-  it('notes branch id on generated tools that take a path branch_id', () => {
-    const note = 'branch_id is a branch id (br-...), not a branch name';
+  it('describes branch_id as an id, not a name, on tools that take a path branch_id', () => {
+    let checked = 0;
     for (const tool of NEON_TOOLS.filter(
       (candidate) => candidate.kind === 'generated',
     )) {
-      if (generatedToolPathHas(tool.name, 'branch_id')) {
-        expect(tool.description, tool.name).toContain(note);
-      } else {
-        expect(tool.description, tool.name).not.toContain(note);
+      if (!PACKAGE_TOOLS[tool.id].metadata.path.includes('{branch_id}')) {
+        continue;
       }
+      checked += 1;
+      const branchId = generatedShape(tool).branch_id;
+      expect(branchId, tool.name).toBeInstanceOf(z.ZodType);
+      if (!(branchId instanceof z.ZodType)) continue;
+      expect(z.globalRegistry.get(branchId)?.description, tool.name).toContain(
+        'not a name',
+      );
+      expect(tool.description, tool.name).not.toContain(
+        'branch_id is a branch id (br-...), not a branch name',
+      );
     }
+    expect(checked).toBeGreaterThan(50);
   });
 });

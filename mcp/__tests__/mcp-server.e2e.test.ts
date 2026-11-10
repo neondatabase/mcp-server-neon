@@ -18,9 +18,21 @@ vi.mock('../analytics/analytics', () => ({
 
 const { createMcpServer } = await import('../server/index');
 import type { ServerContext } from '../types/context';
-import { INSPECT_CHECKS, INSPECT_CHECK_LIST } from '../inspect/queries';
+import { assert } from '../../lib/assert';
+import { PACKAGE_TOOLS } from '../tools/definitions';
+import MCP_TOOL_NAMES from '../tools/mcp-tool-names.json';
 
 const originalFetch = globalThis.fetch;
+
+function fetchedRequest(index = 0): Request {
+  const [request] = vi.mocked(globalThis.fetch).mock.calls[index] ?? [];
+  assert(request instanceof Request, 'fetch was not called with a Request');
+  return request;
+}
+
+const packageCheckSchema = z.object({
+  properties: z.object({ check: z.object({ enum: z.array(z.string()) }) }),
+});
 
 const listedInspectSchema = z.object({
   properties: z.object({
@@ -81,6 +93,15 @@ describe('MCP server e2e tool calls', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+  });
+
+  it('lists every published tool name through MCP listTools', async () => {
+    await withConnectedClient(createTestContext(), async (client) => {
+      const result = await client.listTools();
+      expect(result.tools.map((tool) => tool.name).sort()).toEqual(
+        Object.keys(MCP_TOOL_NAMES).sort(),
+      );
+    });
   });
 
   it('lists docs tools through MCP listTools', async () => {
@@ -156,13 +177,13 @@ describe('MCP server e2e tool calls', () => {
 
       expect(inspectTool?.annotations?.readOnlyHint).toBe(true);
       const schema = listedInspectSchema.parse(inspectTool?.inputSchema);
-      expect(schema.properties.check.enum).toEqual([...INSPECT_CHECKS]);
-      expect(schema.properties.check.description).toContain(INSPECT_CHECK_LIST);
+      const packageChecks = packageCheckSchema.parse(
+        z.toJSONSchema(PACKAGE_TOOLS['database.inspect'].inputSchema),
+      ).properties.check.enum;
+      expect(packageChecks.length).toBeGreaterThan(10);
+      expect(schema.properties.check.enum).toEqual(packageChecks);
       expect(schema.required).toContain('check');
       expect(schema.properties.database_name?.description).toContain('Omit');
-      expect(schema.properties.database_name?.description).toContain(
-        'does not include `databaseName`',
-      );
     });
   });
 
@@ -207,10 +228,10 @@ describe('MCP server e2e tool calls', () => {
       const content = result.content as Array<{ type: string; text?: string }>;
 
       expect(result.isError).not.toBe(true);
-      const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
-      expect(url).toMatch(/\/site-search$/);
-      expect(new Headers(init?.headers).get('x-caller-source')).toBe('mcp');
-      expect(JSON.parse(String(init?.body))).toEqual({
+      const request = fetchedRequest();
+      expect(request.url).toMatch(/\/site-search$/);
+      expect(request.headers.get('x-caller-source')).toBe('mcp');
+      expect(await request.json()).toEqual({
         query: 'inner join',
         categories: ['postgresql'],
         limit: 10,
@@ -269,11 +290,11 @@ describe('MCP server e2e tool calls', () => {
       const content = result.content as Array<{ type: string; text?: string }>;
 
       expect(result.isError).not.toBe(true);
-      expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
+      expect(fetchedRequest().url).toBe(
         'https://neon.com/docs/guides/prisma.md',
-        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
       expect(content[0].type).toBe('text');
+      expect(content[0].text).toBe('# Prisma Guide\n\nUse Prisma with Neon.');
     });
   });
 

@@ -242,7 +242,7 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 <details>
 <summary><strong>Tools available in read-only mode</strong></summary>
 
-Host tools: `list_organizations`, `describe_branch`, `run_sql`, `get_database_tables`, `describe_table_schema`, `list_slow_queries`, `explain_sql_statement`, `inspect_database`, `get_neon_auth_config`, `search`, `fetch`, `search_docs`, `get_doc`, `send_feedback`.
+Custom tools: `list_organizations`, `describe_branch`, `run_sql`, `get_database_tables`, `describe_table_schema`, `list_slow_queries`, `explain_sql_statement`, `inspect_database`, `get_neon_auth_config`, `search`, `fetch`, `search_docs`, `get_doc`, `send_feedback`, `list_incidents`.
 
 Generated Management API tools that are GET and do not return secrets, plus `query_logs` (POST, read-only). Preview the exact set with `/api/list-tools?readonly=true`.
 
@@ -340,7 +340,7 @@ Notes:
 - Management API tools come from `@neon/tools`. Selectors are SDK paths (`projects.list`); published MCP names are verb-first (`list_projects`, `delete_project`, `query_logs`). Historical names stay where they already existed (`describe_project`, `create_branch`, `reset_from_parent`, `compare_database_schema`, `provision_neon_auth`, `provision_neon_data_api`, `list_branch_computes`).
 - `?category=branches` includes branch, role, and database tools (`list_postgres_roles`, `create_postgres_database`, …). A token already issued for `branches` gains those writes. Compute listing is `?category=endpoints`. Snapshot restore is `?category=snapshots`.
 - Project member and permission writes are not published. `list_project_members` and `list_project_permissions` are reads.
-- Schema tools (`?category=schema`) are the host tools `get_database_tables` and `describe_table_schema`, plus generated `compare_database_schema`.
+- Schema tools (`?category=schema`) are `get_database_tables` and `describe_table_schema`, plus generated `compare_database_schema`.
 - Read-only enforcement still relies on `readOnlySafe` and server-side read-only logic; `scope` is category metadata, not a standalone read/write switch.
 - In project-scoped mode (`?projectId=...`), tools without a project path (`list_projects`, `count_projects`, `create_project`, `get_project_consumption`, `get_branch_consumption`, `list_organizations`, `list_regions`, `search`, `fetch`, …) are hidden. `delete_project` is also hidden.
 
@@ -402,7 +402,7 @@ Notes:
 **Neon Auth** (`?category=neon_auth`):
 
 - **`provision_neon_auth`**, **`get_auth`**, **`disable_auth`**, **`update_auth_config`**
-- **`get_neon_auth_config`**: host tool; secrets redacted. Reads trusted origins, localhost access, email and password, OAuth providers, the email provider, the organization, magic link, and phone number plugins, the webhook, and logs export.
+- **`get_neon_auth_config`**: Secrets redacted. Reads trusted origins, localhost access, email and password, OAuth providers, the email provider, the organization, magic link, and phone number plugins, the webhook, and logs export.
 - **`update_auth_allow_localhost`**, **`update_auth_email_and_password`**, **`update_auth_email_provider`**, **`send_auth_test_email`**, **`update_auth_plugins_organization`**, **`update_auth_plugins_magic_link`**, **`update_auth_plugins_phone_number`**, **`update_auth_webhooks`**, **`update_auth_logs_export`**: Change those settings. `update_auth_webhooks` replaces the whole webhook configuration. `update_auth_logs_export` turns the export of Neon Auth events to Neon Platform logs on or off; a project without logs export accepts only `enabled: false`.
 - **`list_auth_oauth_providers`**, **`add_auth_oauth_provider`**, **`update_auth_oauth_provider`**, **`delete_auth_oauth_provider`**
 - **`get_auth_oauth_server`**, **`update_auth_oauth_server`**: Configure Neon Auth as an OAuth 2.1 authorization server (including for MCP servers). Separate from the social login providers above.
