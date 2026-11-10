@@ -407,6 +407,7 @@ describe('transport dynamic tool composition', () => {
       '',
       undefined,
       {
+        'MCP-Protocol-Version': '2026-07-28',
         'Mcp-Method': 'tools/call',
         'Mcp-Name': 'run_sql',
       },
@@ -580,6 +581,7 @@ describe('transport dynamic tool composition', () => {
       '',
       'Anthropic/ClaudeAI',
       {
+        'MCP-Protocol-Version': '2026-07-28',
         'Mcp-Method': 'tools/call',
         'Mcp-Name': 'run_sql',
       },
