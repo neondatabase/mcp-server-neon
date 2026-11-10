@@ -18,8 +18,8 @@ importers:
         specifier: 7.13.0
         version: 7.13.0
       '@neon/tools':
-        specifier: 2.12.0
-        version: 2.12.0
+        specifier: 2.14.2
+        version: 2.14.2
       '@neondatabase/serverless':
         specifier: 1.0.0
         version: 1.0.0
@@ -821,8 +821,8 @@ packages:
     resolution: {integrity: sha512-jJji3C+yJAOSMdK2trYnxhg2Zqh8J4FjUgiBK8B4pjVnhTfygIDjGw2JjxEbhO7hc9KfN/iMwhkO0WwmfH4H+Q==}
     engines: {node: '>=20.19.0'}
 
-  '@neon/tools@2.12.0':
-    resolution: {integrity: sha512-xHOs8hagH/qFvKHGGT77ZEUdoZ2KOfUEhP4UvqzZjokYP1vb1bCZLJ7vFEK69jMeLzc3HbhWANIS64J50NVuEg==}
+  '@neon/tools@2.14.2':
+    resolution: {integrity: sha512-j+FPZh6AI2aHo4BAP2XyJrrXxcaWf0znXJh/b2aaV/ZaF/hpK9JlB4nnSckXf/j0bUogivE7CACUQU0VV6zvUg==}
     engines: {node: '>=20.19.0'}
 
   '@neondatabase/serverless@1.0.0':
@@ -4175,9 +4175,10 @@ snapshots:
 
   '@neon/sdk@7.13.0': {}
 
-  '@neon/tools@2.12.0':
+  '@neon/tools@2.14.2':
     dependencies:
       '@neon/sdk': 7.13.0
+      '@neondatabase/serverless': 1.0.0
       zod: 4.6.5
 
   '@neondatabase/serverless@1.0.0':

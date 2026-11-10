@@ -5,11 +5,12 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { NEON_HANDLERS } from '../tools/tools';
+import { assert } from '../../lib/assert';
 import { NEON_FEEDBACK_URL } from '../../lib/config';
-import { MAX_FEEDBACK_LENGTH } from '../tools/toolsSchema';
+import { NEON_HANDLERS } from '../tools/tools';
+import { textContent } from './helpers/tool-result';
 
-type ToolResult = { content: Array<{ type: string; text: string }> };
+const MAX_FEEDBACK_LENGTH = 10_000;
 
 const originalFetch = globalThis.fetch;
 
@@ -22,28 +23,27 @@ describe('send_feedback handler', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('posts only the trimmed feedback and source', async () => {
+  it('posts only the trimmed feedback and the neon_mcp source', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(null, { status: 204 }),
     );
 
-    const result = (await NEON_HANDLERS.send_feedback({
+    const result = await NEON_HANDLERS.send_feedback({
       params: { feedback: '  The branch docs were unclear  ' },
-    })) as ToolResult;
+    });
 
-    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
-      NEON_FEEDBACK_URL,
-      expect.objectContaining({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          feedback: 'The branch docs were unclear',
-          source: 'neon_mcp',
-        }),
-        signal: expect.any(AbortSignal),
-      }),
-    );
-    expect(result.content[0].text).toBe('Feedback received. Thank you!');
+    const [request] = vi.mocked(globalThis.fetch).mock.calls[0] ?? [];
+    assert(request instanceof Request, 'fetch was not called with a Request');
+    expect(request.url).toBe(NEON_FEEDBACK_URL);
+    expect(request.method).toBe('POST');
+    expect(request.headers.get('content-type')).toBe('application/json');
+    expect(request.headers.has('authorization')).toBe(false);
+    expect(await request.json()).toEqual({
+      feedback: 'The branch docs were unclear',
+      source: 'neon_mcp',
+    });
+    expect(result.content).toHaveLength(1);
+    expect(textContent(result)).toBe('Feedback received. Thank you!');
   });
 
   it('rejects blank or too-long feedback without calling the service', async () => {

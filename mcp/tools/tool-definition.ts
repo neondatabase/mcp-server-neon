@@ -1,12 +1,13 @@
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
-import type { ZodTypeAny as Zod3Type } from 'zod/v3';
-import type { ZodType as Zod4Type } from 'zod';
+import type * as z from 'zod';
 import type { ScopeCategory } from '../utils/grant-context';
+import type { ToolId } from './operations';
 
-export type ToolInputSchema = Zod3Type | Zod4Type;
+export type ToolInputSchema = z.ZodType;
 
 export type NeonTool = {
-  kind: 'host' | 'generated';
+  kind: 'custom' | 'generated';
+  id: ToolId;
   name: string;
   scope: ScopeCategory | null;
   description: string;

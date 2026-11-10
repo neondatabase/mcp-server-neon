@@ -50,7 +50,10 @@ vi.mock('../server/api', () => ({
 vi.mock('../tools/tools', async () => {
   const actual =
     await vi.importActual<typeof import('../tools/tools')>('../tools/tools');
-  const { runSqlInputSchema } = await import('../tools/toolsSchema');
+  const { NEON_TOOLS } = await import('../tools/definitions');
+  const z = await import('zod');
+  const runSqlTool = NEON_TOOLS.find((tool) => tool.name === 'run_sql');
+  if (!runSqlTool) throw new Error('run_sql is not defined');
   return {
     ...actual,
     NEON_HANDLERS: {
@@ -58,7 +61,9 @@ vi.mock('../tools/tools', async () => {
       // Preserve the real handler's required-ID validation after grant injection.
       // The shared published schema now permits an omitted project_id.
       run_sql: (...args: Parameters<typeof actual.NEON_HANDLERS.run_sql>) => {
-        const params = runSqlInputSchema.parse(args[0]?.params ?? {});
+        const params = z
+          .record(z.string(), z.unknown())
+          .parse(runSqlTool.inputSchema.parse(args[0]?.params ?? {}));
         return runSqlSpy({ params }, args[1], args[2]);
       },
     },
@@ -930,13 +935,11 @@ describe('transport dynamic tool composition', () => {
     expect(JSON.stringify(inspect?.inputSchema)).toContain('table-sizes');
     expect(JSON.stringify(inspect?.inputSchema)).toContain('stalled-queries');
     expect(JSON.stringify(inspect?.inputSchema)).toContain(
-      'Which diagnostic to run',
+      'The diagnostic to run',
     );
 
     const branchIdNotes = tools.filter((tool) =>
-      tool.description?.includes(
-        'branch_id is a branch id (br-...), not a branch name',
-      ),
+      JSON.stringify(tool.inputSchema).includes('A br-... id, not a name.'),
     );
     expect(branchIdNotes.length).toBeGreaterThan(40);
   });

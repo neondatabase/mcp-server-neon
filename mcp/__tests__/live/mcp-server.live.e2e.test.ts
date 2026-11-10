@@ -5,15 +5,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { neon } from '@neondatabase/serverless';
+import { inspectChecks } from '@neon/tools';
 import { z } from 'zod';
 import type { NeonApiClient } from '../../neon-client';
-import { REDACTED_SECRET } from '../../tools/handlers/neon-auth-settings-snapshot';
 import type { ServerContext } from '../../types/context';
-import {
-  INSPECT_CHECKS,
-  INSPECT_QUERIES,
-  type InspectCheck,
-} from '../../inspect/queries';
 import { LIVE_TEST_REGION } from './live-test-region';
 
 loadEnv({ path: '.env.test', quiet: true });
@@ -30,6 +25,15 @@ const OTHER_LOCK_TABLE = 'mcp_scope_other_lock';
 const DEFAULT_LOCK_MARKER = 'mcp_scope_default_session';
 const OTHER_LOCK_MARKER = 'mcp_scope_other_session';
 const LOCK_HOLD_SECONDS = 15;
+const REDACTED_SECRET = '***redacted***';
+
+const INSPECT_CHECKS = inspectChecks.map((check) => check.id);
+
+type InspectCheck = (typeof INSPECT_CHECKS)[number];
+
+const INSPECT_QUERIES = Object.fromEntries(
+  inspectChecks.map((check) => [check.id, check]),
+);
 
 const toolResultSchema = z.object({
   content: z.array(z.unknown()),
@@ -77,6 +81,19 @@ const inspectResultSchema = z.object({
   rows: z.array(z.record(z.string(), z.unknown())),
   truncated: z.boolean(),
   note: z.string().optional(),
+});
+
+const describedBranchSchema = z.object({
+  branch: z.object({ id: z.string() }),
+  console_url: z.string(),
+  text: z.string(),
+  database_structure: z
+    .tuple([
+      z.array(z.unknown()),
+      z.array(z.object({ tree_structure: z.string() })),
+    ])
+    .nullable(),
+  database_structure_error: z.string().optional(),
 });
 
 const lockResultSchema = inspectResultSchema.extend({
@@ -388,22 +405,45 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     'finds the project once with search and fetches it by the returned id',
     async () => {
       if (!projectId) throw new Error('Test project was not created.');
-      const searchText = assertToolSucceeded(
-        'search',
-        await callTool('search', { query: projectName }),
-      );
-      const results = z
-        .array(z.object({ id: z.string(), type: z.string() }))
-        .parse(JSON.parse(searchText));
+      const searchResult = await callTool('search', { query: projectName });
+      const searchText = assertToolSucceeded('search', searchResult);
+      const { results } = z
+        .object({
+          results: z.array(
+            z.object({ id: z.string(), title: z.string(), url: z.string() }),
+          ),
+        })
+        .parse(searchResult.structuredContent);
+      expect(JSON.parse(searchText)).toEqual(searchResult.structuredContent);
       expect(
         results.filter((result) => result.id === `project:${projectId}`),
-      ).toEqual([{ id: `project:${projectId}`, type: 'project' }]);
+      ).toEqual([
+        {
+          id: `project:${projectId}`,
+          title: projectName,
+          url: expect.stringContaining(`/projects/${projectId}`),
+        },
+      ]);
 
-      const fetchText = assertToolSucceeded(
-        'fetch',
-        await callTool('fetch', { id: `project:${projectId}` }),
-      );
-      expect(fetchText).toContain(projectId);
+      const fetchResult = await callTool('fetch', {
+        id: `project:${projectId}`,
+      });
+      const fetchText = assertToolSucceeded('fetch', fetchResult);
+      const fetched = z
+        .object({
+          id: z.string(),
+          title: z.string(),
+          text: z.string(),
+          url: z.string(),
+          metadata: z.record(z.string(), z.unknown()),
+        })
+        .parse(fetchResult.structuredContent);
+      expect(JSON.parse(fetchText)).toEqual(fetchResult.structuredContent);
+      expect(fetched).toMatchObject({
+        id: `project:${projectId}`,
+        title: projectName,
+      });
+      expect(fetched.text).toContain(projectId);
     },
     LIVE_TEST_TIMEOUT_MS,
   );
@@ -522,6 +562,14 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       expect(raised).toHaveLength(1);
       expect(raised[0]).toHaveLength(150);
 
+      const [bytea] = jsonBlocks(
+        'run_sql',
+        await runSql({ sql: "SELECT '\\xdeadbeef'::bytea AS payload" }),
+      );
+      expect(bytea).toEqual([
+        { payload: { type: 'Buffer', data: [222, 173, 190, 239] } },
+      ]);
+
       const [writeRows, writeSummaries] = jsonBlocks(
         'run_sql_transaction',
         await callTool('run_sql_transaction', {
@@ -589,19 +637,12 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         }),
       );
       expect(result.isError).toBeFalsy();
-      const structureText = result.content
-        .map((item) => textContentSchema.safeParse(item))
-        .flatMap((parsed) => (parsed.success ? [parsed.data.text] : []))
-        .find((text) => text.startsWith('Database Structure:'));
-      if (!structureText) {
+      const { database_structure: structure } = describedBranchSchema.parse(
+        JSON.parse(textContent(result)),
+      );
+      if (!structure) {
         throw new Error('describe_branch returned no database structure.');
       }
-      const structure = z
-        .tuple([
-          z.array(z.unknown()),
-          z.array(z.object({ tree_structure: z.string() })),
-        ])
-        .parse(JSON.parse(structureText.slice('Database Structure:'.length)));
       expect(
         structure[1].some((row) =>
           row.tree_structure.includes('property_options'),
@@ -681,12 +722,11 @@ describe.sequential('MCP server live Neon lifecycle', () => {
           }),
         );
         expect(result.isError).toBeFalsy();
-        const texts = result.content
-          .map((item) => textContentSchema.safeParse(item))
-          .flatMap((parsed) => (parsed.success ? [parsed.data.text] : []));
-        expect(
-          texts.some((text) => text.startsWith('Database Structure:')),
-        ).toBe(true);
+        const described = describedBranchSchema.parse(
+          JSON.parse(textContent(result)),
+        );
+        expect(described.database_structure).not.toBeNull();
+        expect(described.text).toContain('Database Structure:');
 
         const after = await callTool('run_sql', {
           project_id: projectId,
@@ -725,17 +765,15 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         }),
       );
       expect(result.isError).toBeFalsy();
-      const texts = result.content
-        .map((item) => textContentSchema.safeParse(item))
-        .flatMap((parsed) => (parsed.success ? [parsed.data.text] : []));
-      expect(texts.some((text) => text.startsWith('Branch Details:'))).toBe(
-        true,
+      const described = describedBranchSchema.parse(
+        JSON.parse(textContent(result)),
       );
-      expect(
-        texts.some((text) =>
-          text.startsWith('Database structure unavailable: '),
-        ),
-      ).toBe(true);
+      expect(described.branch.id).toBe(defaultBranch.id);
+      expect(described.text).toContain('Branch Details:');
+      expect(described.database_structure).toBeNull();
+      expect(described.database_structure_error).toMatch(
+        /^Database structure unavailable: /,
+      );
     },
     LIVE_TEST_TIMEOUT_MS,
   );
@@ -824,6 +862,155 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         await callTool('delete_branch', {
           project_id: projectId,
           branch_id: branchId,
+        }),
+      );
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'returns the pooled URI of the compute passed as compute_id',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const branch = z
+        .object({ id: z.string() })
+        .parse(
+          JSON.parse(
+            assertToolSucceeded(
+              'get_default_branch',
+              await callTool('get_default_branch', { project_id: projectId }),
+            ),
+          ),
+        );
+      const computes = z
+        .array(z.object({ id: z.string(), host: z.string(), type: z.string() }))
+        .parse(
+          JSON.parse(
+            assertToolSucceeded(
+              'list_branch_computes',
+              await callTool('list_branch_computes', {
+                project_id: projectId,
+                branch_id: branch.id,
+              }),
+            ),
+          ),
+        );
+      const compute = computes.find(
+        (candidate) => candidate.type === 'read_write',
+      );
+      if (!compute) throw new Error('The branch has no read-write compute.');
+
+      const details = assertToolSucceeded(
+        'get_connection_string',
+        await callTool('get_connection_string', {
+          project_id: projectId,
+          branch_id: branch.id,
+          compute_id: compute.id,
+          database_name: 'neondb',
+        }),
+      );
+      const uri = z.string().parse(/^URI: (.+)$/m.exec(details)?.[1]);
+      const url = new URL(uri);
+      expect(url.hostname).toContain('-pooler');
+      expect(url.hostname).toBe(
+        compute.host.replace(compute.id, `${compute.id}-pooler`),
+      );
+      expect(url.pathname).toBe('/neondb');
+      expect(details).toBe(
+        [
+          'Connection string details:',
+          `URI: ${uri}`,
+          `Project ID: ${projectId}`,
+          'Database: neondb',
+          `Role: ${decodeURIComponent(url.username)}`,
+          `Branch ID: ${branch.id}`,
+          `Compute ID: ${compute.id}`,
+          '',
+          'You can use this connection string with any PostgreSQL client to connect to your Neon database.',
+        ].join('\n'),
+      );
+      expect(await neon(uri).query('SELECT 1 AS ok')).toEqual([{ ok: 1 }]);
+
+      const renamed = await callTool('get_connection_string', {
+        project_id: projectId,
+        endpoint_id: compute.id,
+      });
+      expect(toolResultSchema.parse(renamed).isError).toBe(true);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'prepares a migration on a temporary branch and completes it on the parent',
+    async () => {
+      if (!projectId) throw new Error('Test project was not created.');
+      const table = `mcp_migration_${randomUUID().slice(0, 8)}`;
+      const present = async (branchId?: string) =>
+        z.array(z.object({ present: z.boolean() })).parse(
+          JSON.parse(
+            assertToolSucceeded(
+              'run_sql',
+              await callTool('run_sql', {
+                project_id: projectId,
+                ...(branchId === undefined ? {} : { branch_id: branchId }),
+                sql: `SELECT to_regclass('public.${table}') IS NOT NULL AS present`,
+              }),
+            ),
+          ),
+        )[0]?.present;
+
+      const prepared = assertToolSucceeded(
+        'prepare_database_migration',
+        await callTool('prepare_database_migration', {
+          project_id: projectId,
+          migration_sql: `CREATE TABLE ${table} (id int)`,
+        }),
+      );
+      expect(prepared).toContain('<migration_context>');
+      expect(prepared).toContain('<next_actions>');
+      const contextValue = (name: string) =>
+        z
+          .string()
+          .parse(new RegExp(`^- ${name}: (.+)$`, 'm').exec(prepared)?.[1]);
+      const complete = {
+        migration_id: contextValue('migration_id'),
+        migration_sql: contextValue('migration_sql'),
+        database_name: contextValue('database_name'),
+        project_id: contextValue('project_id'),
+        temporary_branch_id: contextValue('temporary_branch_id'),
+        parent_branch_id: contextValue('parent_branch_id'),
+      };
+      expect(complete).toMatchObject({
+        migration_sql: `CREATE TABLE ${table} (id int)`,
+        database_name: 'neondb',
+        project_id: projectId,
+      });
+
+      expect(await present(complete.temporary_branch_id)).toBe(true);
+      expect(await present()).toBe(false);
+
+      const completed = assertToolSucceeded(
+        'complete_database_migration',
+        await callTool('complete_database_migration', complete),
+      );
+      expect(completed).toMatch(
+        new RegExp(
+          `^Migration applied successfully to parent branch\\. Temporary branch ${complete.temporary_branch_id} deleted\\.\\n\\nResult: `,
+        ),
+      );
+      expect(await present()).toBe(true);
+
+      const deleted = await callTool('get_branch', {
+        project_id: projectId,
+        branch_id: complete.temporary_branch_id,
+      });
+      expect(toolResultSchema.parse(deleted).isError).toBe(true);
+
+      assertToolSucceeded(
+        'run_sql',
+        await callTool('run_sql', {
+          project_id: projectId,
+          sql: `DROP TABLE ${table}`,
         }),
       );
     },
@@ -962,11 +1149,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
             logs_export: z.object({ enabled: z.boolean() }).nullable(),
             _errors: z.never().optional(),
           })
-          .parse(
-            JSON.parse(
-              text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1),
-            ),
-          );
+          .parse(JSON.parse(text));
       };
       const update = async (name: string, args: Record<string, unknown>) =>
         assertToolSucceeded(name, await callTool(name, { ...target, ...args }));
@@ -1149,7 +1332,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
 
       expect(parsedResult.isError).toBe(true);
       expect(text).toContain(
-        'NotFoundError: Table not found: crm.missing_property_options',
+        'NeonClientError: Table not found: crm.missing_property_options',
       );
       expect(text).not.toContain('relation');
     },
@@ -1499,7 +1682,7 @@ describe.sequential('MCP server live Neon lifecycle', () => {
           expect(Object.keys(row).sort()).toEqual([...report.fields].sort());
         }
         if (report.totalRowCount === 0) {
-          expect(report.note).toBe(INSPECT_QUERIES[check].emptyMessage);
+          expect(report.note).toBe(INSPECT_QUERIES[check].emptyNote);
         }
         expectSqlCapDisclosed(check, report);
       }

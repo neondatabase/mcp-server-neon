@@ -1,11 +1,16 @@
 /**
  * The pinned Postgres role end to end through the deployed route: a grant from
  * an OAuth token or from API-key URL params reaches the real tool handlers, and
- * the connection is resolved for that role. The Neon API client and the
- * Postgres driver are fakes that record which role was requested.
+ * the connection is resolved for that role. A stubbed `fetch` answers the Neon
+ * API and the SQL endpoint and records which role was requested.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GrantContext } from '../utils/grant-context';
+import {
+  FAKE_PASSWORD,
+  stubFakeNeon,
+  type FakeNeon,
+} from './helpers/fake-neon';
 
 process.env.ANALYTICS_WRITE_KEY = '';
 process.env.SENTRY_DSN = '';
@@ -15,26 +20,11 @@ const BRANCH_ID = 'br-example-123';
 const DATABASE = 'app_db';
 const OWNER = 'app_db_owner';
 const PINNED = 'mcp_pinned_reader';
-const PASSWORD = 'FAKE_TEST_PASSWORD_123';
+const PASSWORD = FAKE_PASSWORD;
 const API_KEY = 'fake-api-key-for-tests';
 
 const mocks = vi.hoisted(() => {
-  const querySpy = vi.fn(async () => [{ session_user: 'mcp_pinned_reader' }]);
-  const transactionSpy = vi.fn<
-    (queries: unknown[], options?: { readOnly?: boolean }) => Promise<unknown>
-  >(async (queries) =>
-    queries.map(() => [{ session_user: 'mcp_pinned_reader' }]),
-  );
   return {
-    querySpy,
-    transactionSpy,
-    neonSpy: vi.fn((uri: string) => ({
-      uri,
-      query: querySpy,
-      transaction: transactionSpy,
-    })),
-    getConnectionUri: vi.fn(),
-    getProjectBranchDatabase: vi.fn(),
     getAuthDetails: vi.fn(),
     apiKeysGet: vi.fn(),
     trackSpy: vi.fn(),
@@ -49,23 +39,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@neondatabase/serverless', async () => {
-  const actual = await vi.importActual<
-    typeof import('@neondatabase/serverless')
-  >('@neondatabase/serverless');
-  return { ...actual, neon: mocks.neonSpy };
-});
-
 vi.mock('../server/api', () => ({
   createNeonClient: () => ({
-    listProjectBranches: async () => ({
-      data: { branches: [{ id: BRANCH_ID, default: true }] },
-    }),
-    listProjectBranchDatabases: async () => ({
-      data: { databases: [{ name: DATABASE, owner_name: OWNER }] },
-    }),
-    getProjectBranchDatabase: mocks.getProjectBranchDatabase,
-    getConnectionUri: mocks.getConnectionUri,
     getAuthDetails: mocks.getAuthDetails,
   }),
 }));
@@ -170,11 +145,7 @@ async function listToolNames(bearerToken: string, queryString = '') {
   return body.result.tools.map((tool) => tool.name);
 }
 
-function requestedRoles(): string[] {
-  return mocks.getConnectionUri.mock.calls.map(
-    (call) => (call[0] as { role_name: string }).role_name,
-  );
-}
+let neon: FakeNeon;
 
 function everythingRecorded(): string {
   return JSON.stringify([
@@ -188,21 +159,22 @@ function everythingRecorded(): string {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getConnectionUri.mockImplementation(
-    async ({ role_name }: { role_name: string }) => ({
-      data: {
-        uri: `postgresql://${role_name}:${PASSWORD}@ep-example-123.example.test/${DATABASE}`,
-      },
-    }),
-  );
-  mocks.getProjectBranchDatabase.mockResolvedValue({
-    data: { database: { name: DATABASE, owner_name: OWNER } },
+  neon = stubFakeNeon({
+    projectId: PROJECT_ID,
+    branchId: BRANCH_ID,
+    database: DATABASE,
+    owner: OWNER,
+    rows: () => [{ session_user: PINNED }],
   });
   mocks.apiKeysGet.mockResolvedValue({
     apiKey: API_KEY,
     authMethod: 'api_key_user',
     account: { id: 'user-1', name: 'User' },
   });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('pinned role through the MCP route', () => {
@@ -222,12 +194,16 @@ describe('pinned role through the MCP route', () => {
 
       expect(status).toBe(200);
       expect(body.result?.isError).toBeFalsy();
-      expect(requestedRoles()).toEqual([PINNED]);
-      expect(mocks.getProjectBranchDatabase).not.toHaveBeenCalled();
+      expect(neon.requestedRoles()).toEqual([PINNED]);
+      expect(neon.ownerLookups()).toEqual([]);
       // Read-only token: the pinned query is still in a read-only transaction.
-      expect(mocks.transactionSpy).toHaveBeenCalledWith(expect.any(Array), {
-        readOnly: true,
-      });
+      expect(neon.sql).toEqual([
+        expect.objectContaining({
+          role: PINNED,
+          transaction: true,
+          readOnly: true,
+        }),
+      ]);
       expect(raw).not.toContain(PASSWORD);
       expect(raw).not.toMatch(/postgres(ql)?:\/\//);
       expect(everythingRecorded()).not.toContain(PASSWORD);
@@ -244,7 +220,7 @@ describe('pinned role through the MCP route', () => {
 
       await runSql('oauth-pinned', { sql: 'SELECT 1' }, `?roleName=${OWNER}`);
 
-      expect(requestedRoles()).toEqual([PINNED]);
+      expect(neon.requestedRoles()).toEqual([PINNED]);
     });
 
     it('rejects a role_name argument that differs from the pin', async () => {
@@ -263,8 +239,8 @@ describe('pinned role through the MCP route', () => {
 
       expect(body.result?.isError).toBe(true);
       expect(raw).toContain('pinned to Postgres role');
-      expect(mocks.getConnectionUri).not.toHaveBeenCalled();
-      expect(mocks.neonSpy).not.toHaveBeenCalled();
+      expect(neon.connectionUriRequests()).toEqual([]);
+      expect(neon.sql).toEqual([]);
     });
 
     it('does not list get_connection_string on a pinned token', async () => {
@@ -297,7 +273,7 @@ describe('pinned role through the MCP route', () => {
 
       await runSql('oauth-legacy', { sql: 'SELECT 1' });
 
-      expect(requestedRoles()).toEqual([OWNER]);
+      expect(neon.requestedRoles()).toEqual([OWNER]);
     });
 
     it('refuses a token whose stored roleName is invalid instead of falling back to the API-key path', async () => {
@@ -314,7 +290,7 @@ describe('pinned role through the MCP route', () => {
       expect(status).toBe(401);
       expect(mocks.apiKeysGet).not.toHaveBeenCalled();
       expect(mocks.getAuthDetails).not.toHaveBeenCalled();
-      expect(mocks.getConnectionUri).not.toHaveBeenCalled();
+      expect(neon.connectionUriRequests()).toEqual([]);
     });
   });
 
@@ -330,17 +306,21 @@ describe('pinned role through the MCP route', () => {
         `?readonly=true&roleName=${PINNED}`,
       );
 
-      expect(requestedRoles()).toEqual([PINNED]);
-      expect(mocks.transactionSpy).toHaveBeenCalledWith(expect.any(Array), {
-        readOnly: true,
-      });
+      expect(neon.requestedRoles()).toEqual([PINNED]);
+      expect(neon.sql).toEqual([
+        expect.objectContaining({
+          role: PINNED,
+          transaction: true,
+          readOnly: true,
+        }),
+      ]);
       expect(raw).not.toContain(PASSWORD);
       expect(everythingRecorded()).not.toContain(PASSWORD);
     });
 
     it('uses the database owner without ?roleName', async () => {
       await runSql(API_KEY, { sql: 'SELECT 1' }, '?readonly=true');
-      expect(requestedRoles()).toEqual([OWNER]);
+      expect(neon.requestedRoles()).toEqual([OWNER]);
     });
 
     it.each(['roleName=', 'roleName=a-b', 'roleName=a&roleName=b'])(
@@ -357,7 +337,7 @@ describe('pinned role through the MCP route', () => {
           expect.objectContaining({ error: 'invalid_request' }),
         );
         expect(mocks.apiKeysGet).not.toHaveBeenCalled();
-        expect(mocks.getConnectionUri).not.toHaveBeenCalled();
+        expect(neon.connectionUriRequests()).toEqual([]);
       },
     );
   });

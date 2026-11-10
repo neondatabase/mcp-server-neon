@@ -212,7 +212,7 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
         Object.fromEntries(result.tools.map((tool) => [tool.name, tool.title])),
       ).toEqual({
         get_doc: 'Get Documentation Page',
-        list_incidents: 'List Neon Incidents',
+        list_incidents: 'List Neon incidents',
         search_docs: 'Search Documentation',
         send_feedback: 'Send Feedback',
       });

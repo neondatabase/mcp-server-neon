@@ -4,7 +4,8 @@ import type { AuthContext } from '../types/auth';
 import type { ClientApplication } from '../utils/client-application';
 
 export type ToolHandlerExtraParams = {
-  account: AuthContext['extra']['account'];
+  /** Absent on the anonymous `?category=docs` endpoint. */
+  account?: AuthContext['extra']['account'];
   readOnly?: AuthContext['extra']['readOnly'];
   clientApplication: ClientApplication;
   apiKey?: string;

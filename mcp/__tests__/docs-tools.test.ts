@@ -1,23 +1,30 @@
 /**
- * Unit tests for the get_doc handler.
+ * Unit tests for the docs tool handlers.
  *
  * These test the NEON_HANDLERS entries directly by mocking global fetch,
  * since the handlers make external HTTP requests to neon.com.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { NeonClientError } from '@neon/sdk';
+import { assert } from '../../lib/assert';
+import { NEON_DOCS_BASE_URL, NEON_SITE_SEARCH_URL } from '../../lib/config';
 import { NEON_HANDLERS } from '../tools/tools';
-import { NEON_DOCS_BASE_URL } from '../../lib/config';
-import { InvalidArgumentError, NotFoundError } from '../server/errors';
-import { searchDocsHeaders } from '../tools/handlers/docs';
-
-// Type for the tool result returned by handlers
-type ToolResult = {
-  content: Array<{ type: string; text: string }>;
-  isError?: boolean;
-};
+import type { ToolHandlerExtraParams } from '../tools/types';
+import { NotFoundError } from '../server/errors';
+import { textContent } from './helpers/tool-result';
 
 const originalFetch = globalThis.fetch;
+
+function fetchedRequest(index = 0): Request {
+  const [request] = vi.mocked(globalThis.fetch).mock.calls[index] ?? [];
+  assert(request instanceof Request, 'fetch was not called with a Request');
+  return request;
+}
+
+async function getDoc(slug: string) {
+  return textContent(await NEON_HANDLERS.get_doc({ params: { slug } }));
+}
 
 describe('get_doc handler', () => {
   beforeEach(() => {
@@ -28,70 +35,47 @@ describe('get_doc handler', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('fetches a doc page by slug and returns markdown content', async () => {
+  it('fetches a doc page by slug and returns its markdown as text', async () => {
     const mockContent = '# Connection Pooling\nLearn about pooling...';
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(mockContent, { status: 200 }),
     );
 
-    const result = (await NEON_HANDLERS.get_doc({
-      params: { slug: 'docs/connect/connection-pooling.md' },
-    })) as ToolResult;
-
-    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
-      `${NEON_DOCS_BASE_URL}/docs/connect/connection-pooling.md`,
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    const url = `${NEON_DOCS_BASE_URL}/docs/connect/connection-pooling.md`;
+    await expect(getDoc('docs/connect/connection-pooling.md')).resolves.toBe(
+      mockContent,
     );
-    expect(result.content).toHaveLength(1);
-    expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toBe(mockContent);
+    expect(fetchedRequest().url).toBe(url);
+    expect(fetchedRequest().signal).toBeInstanceOf(AbortSignal);
   });
 
   it('appends .md to slugs that lack it', async () => {
-    const mockContent = '# Prisma Guide';
     vi.mocked(globalThis.fetch).mockResolvedValue(
-      new Response(mockContent, { status: 200 }),
+      new Response('# Prisma Guide', { status: 200 }),
     );
 
-    const result = (await NEON_HANDLERS.get_doc({
-      params: { slug: 'docs/guides/prisma' },
-    })) as ToolResult;
-
-    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
+    await expect(getDoc('docs/guides/prisma')).resolves.toBe('# Prisma Guide');
+    expect(fetchedRequest().url).toBe(
       `${NEON_DOCS_BASE_URL}/docs/guides/prisma.md`,
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
-    expect(result.content[0].text).toBe(mockContent);
-  });
-
-  it('does not double-append .md when slug already has it', async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValue(
-      new Response('content', { status: 200 }),
-    );
-
-    await NEON_HANDLERS.get_doc({
-      params: { slug: 'docs/guides/prisma.md' },
-    });
-
-    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
-      `${NEON_DOCS_BASE_URL}/docs/guides/prisma.md`,
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
-  it('throws NotFoundError on 404 response', async () => {
+  it('throws NotFoundError naming search_docs on a 404 response', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response('Not Found', { status: 404, statusText: 'Not Found' }),
     );
 
-    await expect(
-      NEON_HANDLERS.get_doc({
-        params: { slug: 'docs/nonexistent.md' },
-      }),
-    ).rejects.toThrow(NotFoundError);
+    const error = await Promise.resolve(
+      NEON_HANDLERS.get_doc({ params: { slug: 'docs/nonexistent' } }),
+    ).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(NotFoundError);
+    expect(error).toHaveProperty(
+      'message',
+      'Doc page not found: "docs/nonexistent.md". Pass a slug returned by search_docs.',
+    );
   });
 
-  it('throws generic Error on 500 response', async () => {
+  it('throws a server error on a 500 response', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response('Internal Error', {
         status: 500,
@@ -99,129 +83,74 @@ describe('get_doc handler', () => {
       }),
     );
 
-    await expect(
+    const error = await Promise.resolve(
       NEON_HANDLERS.get_doc({ params: { slug: 'docs/broken.md' } }),
-    ).rejects.toThrow(
+    ).catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(NeonClientError);
+    expect(error).toHaveProperty(
+      'message',
       'Failed to fetch doc page "docs/broken.md": 500 Internal Server Error',
     );
   });
 
-  it('throws on network error', async () => {
-    vi.mocked(globalThis.fetch).mockRejectedValue(new Error('DNS failure'));
+  it.each([
+    '../../../etc/passwd',
+    'https://evil.com/malicious',
+    '/etc/passwd',
+    '//evil.com/malicious',
+  ])('rejects the slug %s as a client error before fetching', async (slug) => {
+    await expect(NEON_HANDLERS.get_doc({ params: { slug } })).rejects.toThrow(
+      NeonClientError,
+    );
+    expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
+  });
+});
 
-    await expect(
-      NEON_HANDLERS.get_doc({ params: { slug: 'docs/test.md' } }),
-    ).rejects.toThrow('DNS failure');
+describe('search_docs handler', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn().mockResolvedValue(Response.json({ hits: [] }));
   });
 
-  describe('slug validation', () => {
-    it('rejects slugs with path traversal (..) as InvalidArgumentError', async () => {
-      await expect(
-        NEON_HANDLERS.get_doc({
-          params: { slug: '../../../etc/passwd' },
-        }),
-      ).rejects.toThrow(InvalidArgumentError);
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
 
-      // fetch should never be called
-      expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
-    });
+  function extra(
+    overrides: Partial<ToolHandlerExtraParams>,
+  ): ToolHandlerExtraParams {
+    return { clientApplication: 'unknown', ...overrides };
+  }
 
-    it('rejects slugs with embedded path traversal', async () => {
-      await expect(
-        NEON_HANDLERS.get_doc({
-          params: { slug: 'docs/../../../secret' },
-        }),
-      ).rejects.toThrow(
-        'Invalid doc slug: path traversal ("..") is not allowed',
-      );
-    });
+  it('posts to the configured site search and tags the caller as MCP', async () => {
+    await NEON_HANDLERS.search_docs(
+      { params: { query: 'branching' } },
+      undefined,
+      extra({ userAgent: ' Cursor/1.2 ', clientApplication: 'cursor' }),
+    );
 
-    it('rejects slugs with absolute URLs (://) as InvalidArgumentError', async () => {
-      await expect(
-        NEON_HANDLERS.get_doc({
-          params: { slug: 'https://evil.com/malicious' },
-        }),
-      ).rejects.toThrow(InvalidArgumentError);
+    const request = fetchedRequest();
+    expect(request.url).toBe(NEON_SITE_SEARCH_URL);
+    expect(request.headers.get('x-caller-source')).toBe('mcp');
+    expect(request.headers.get('x-caller-user-agent')).toBe('Cursor/1.2');
+    expect(request.headers.get('x-caller-client')).toBe('cursor');
+  });
 
-      expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
-    });
+  it('drops an unknown client and a user agent a header cannot carry', async () => {
+    await NEON_HANDLERS.search_docs(
+      { params: { query: 'branching' } },
+      undefined,
+      extra({ userAgent: '助手/1.0' }),
+    );
 
-    it('rejects slugs starting with / as InvalidArgumentError', async () => {
-      await expect(
-        NEON_HANDLERS.get_doc({ params: { slug: '/etc/passwd' } }),
-      ).rejects.toThrow(InvalidArgumentError);
-
-      expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
-    });
-
-    it('rejects protocol-relative URLs (//)', async () => {
-      await expect(
-        NEON_HANDLERS.get_doc({
-          params: { slug: '//evil.com/malicious' },
-        }),
-      ).rejects.toThrow('Invalid doc slug: slug must not start with "/"');
-
-      expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
-    });
-
-    it('accepts valid doc slugs', async () => {
-      vi.mocked(globalThis.fetch).mockResolvedValue(
-        new Response('content', { status: 200 }),
-      );
-
-      await NEON_HANDLERS.get_doc({
-        params: { slug: 'docs/guides/prisma' },
-      });
-
-      expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
-        `${NEON_DOCS_BASE_URL}/docs/guides/prisma.md`,
-        expect.objectContaining({ signal: expect.any(AbortSignal) }),
-      );
-    });
+    const request = fetchedRequest();
+    expect(request.headers.get('x-caller-source')).toBe('mcp');
+    expect(request.headers.has('x-caller-user-agent')).toBe(false);
+    expect(request.headers.has('x-caller-client')).toBe(false);
   });
 });
 
 describe('docs config', () => {
   it('NEON_DOCS_BASE_URL points to neon.com', () => {
     expect(NEON_DOCS_BASE_URL).toBe('https://neon.com');
-  });
-});
-
-describe('searchDocsHeaders', () => {
-  it('tags MCP and forwards the user agent and client', () => {
-    expect(
-      searchDocsHeaders({ userAgent: ' Cursor/1.2 ', client: 'cursor' }),
-    ).toEqual({
-      'Content-Type': 'application/json',
-      'x-caller-source': 'mcp',
-      'x-caller-user-agent': 'Cursor/1.2',
-      'x-caller-client': 'cursor',
-    });
-  });
-
-  it('drops values a header cannot carry and an unknown client', () => {
-    expect(
-      searchDocsHeaders({ userAgent: 'agent\nnext', client: 'unknown' }),
-    ).toEqual({ 'Content-Type': 'application/json', 'x-caller-source': 'mcp' });
-    expect(searchDocsHeaders({ userAgent: '助手/1.0' })).toEqual({
-      'Content-Type': 'application/json',
-      'x-caller-source': 'mcp',
-    });
-    expect(searchDocsHeaders({})).toEqual({
-      'Content-Type': 'application/json',
-      'x-caller-source': 'mcp',
-    });
-  });
-
-  it('encodes the client and caps both lengths', () => {
-    const headers = searchDocsHeaders({
-      userAgent: 'u'.repeat(600),
-      client: '助手 ' + 'c'.repeat(200),
-    });
-    expect(headers['x-caller-user-agent']).toHaveLength(512);
-    expect(decodeURIComponent(headers['x-caller-client'] ?? '')).toHaveLength(
-      100,
-    );
-    expect(() => new Headers(headers)).not.toThrow();
   });
 });

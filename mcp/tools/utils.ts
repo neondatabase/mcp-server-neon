@@ -1,139 +1,6 @@
-import { NEON_DEFAULT_DATABASE_NAME } from '../constants';
-import { Api, Organization } from '../neon-client';
-import { ToolHandlerExtraParams } from './types';
+import { Api } from '../neon-client';
 import { NotFoundError } from '../server/errors';
-
-export const splitSqlStatements = (sql: string) => {
-  return sql.split(';').filter(Boolean);
-};
-
-// One read-only SELECT over the system catalogs: all databases, then the
-// current database's schemas and objects as an indented tree. It returns the
-// rows the former `show_db_tree()` helper did, less the helper's own entry, but
-// creates nothing: it runs in a READ ONLY transaction, needs no CREATE
-// privilege, and leaves any user function of that name alone.
-export const DESCRIBE_DATABASE_QUERY = `
-WITH RECURSIVE 
-    -- Get schemas
-    schemas AS (
-        SELECT 
-            n.nspname AS object_name,
-            1 AS level,
-            n.nspname AS path,
-            'SCHEMA' AS object_type
-        FROM pg_namespace n
-        WHERE n.nspname NOT LIKE 'pg_%' 
-        AND n.nspname != 'information_schema'
-    ),
-
-    -- Get all objects (tables, views, functions, etc.)
-    objects AS (
-        SELECT 
-            c.relname AS object_name,
-            2 AS level,
-            s.path || ' → ' || c.relname AS path,
-            CASE c.relkind
-                WHEN 'r' THEN 'TABLE'
-                WHEN 'v' THEN 'VIEW'
-                WHEN 'm' THEN 'MATERIALIZED VIEW'
-                WHEN 'i' THEN 'INDEX'
-                WHEN 'S' THEN 'SEQUENCE'
-                WHEN 'f' THEN 'FOREIGN TABLE'
-            END AS object_type
-        FROM pg_class c
-        JOIN pg_namespace n ON n.oid = c.relnamespace
-        JOIN schemas s ON n.nspname = s.object_name
-        WHERE c.relkind IN ('r','v','m','i','S','f')
-
-        UNION ALL
-
-        SELECT 
-            p.proname AS object_name,
-            2 AS level,
-            s.path || ' → ' || p.proname AS path,
-            'FUNCTION' AS object_type
-        FROM pg_proc p
-        JOIN pg_namespace n ON n.oid = p.pronamespace
-        JOIN schemas s ON n.nspname = s.object_name
-    ),
-
-    -- Combine schemas and objects
-    combined AS (
-        SELECT * FROM schemas
-        UNION ALL
-        SELECT * FROM objects
-    )
-
-SELECT tree_structure FROM (
-    -- First show all databases
-    SELECT 0 AS part, NULL::text AS path, ':file_folder: ' || datname || ' (DATABASE)' AS tree_structure
-    FROM pg_database
-    WHERE datistemplate = false
-
-    UNION ALL
-
-    -- Then show current database structure, with tree-like formatting
-    SELECT 1 AS part, path,
-        REPEAT('    ', level) || 
-        CASE 
-            WHEN level = 1 THEN '└── :open_file_folder: '
-            ELSE '    └── ' || 
-                CASE object_type
-                    WHEN 'TABLE' THEN ':bar_chart: '
-                    WHEN 'VIEW' THEN ':eye: '
-                    WHEN 'MATERIALIZED VIEW' THEN ':newspaper: '
-                    WHEN 'FUNCTION' THEN ':zap: '
-                    WHEN 'INDEX' THEN ':mag: '
-                    WHEN 'SEQUENCE' THEN ':1234: '
-                    WHEN 'FOREIGN TABLE' THEN ':globe_with_meridians: '
-                    ELSE ''
-                END
-        END || object_name || ' (' || object_type || ')' AS tree_structure
-    FROM combined
-) tree
-ORDER BY part, path;
-`;
-
-/**
- * Returns the default database for a project branch
- * If a database name is provided, it fetches and returns that database
- * Otherwise, it looks for a database named 'neondb' and returns that
- * If 'neondb' doesn't exist, it returns the first available database
- * Throws an error if no databases are found
- */
-export async function getDefaultDatabase(
-  {
-    projectId,
-    branchId,
-    databaseName,
-  }: {
-    projectId: string;
-    branchId: string;
-    databaseName?: string;
-  },
-  neonClient: Api<unknown>,
-) {
-  const { data } = await neonClient.listProjectBranchDatabases(
-    projectId,
-    branchId,
-  );
-  const databases = data.databases;
-  if (databases.length === 0) {
-    throw new NotFoundError('No databases found in your project branch');
-  }
-
-  if (databaseName) {
-    const requestedDatabase = databases.find((db) => db.name === databaseName);
-    if (requestedDatabase) {
-      return requestedDatabase;
-    }
-  }
-
-  const defaultDatabase = databases.find(
-    (db) => db.name === NEON_DEFAULT_DATABASE_NAME,
-  );
-  return defaultDatabase || databases[0];
-}
+import type { AuthContext } from '../types/auth';
 
 /**
  * The projects API requires org_id. Take it from the argument, an org API key,
@@ -142,13 +9,13 @@ export async function getDefaultDatabase(
 export async function getOrgByOrgIdOrDefault(
   params: { org_id?: string },
   neonClient: Api<unknown>,
-  extra: ToolHandlerExtraParams,
+  account: AuthContext['extra']['account'],
 ): Promise<{ id: string }> {
   if (params.org_id) {
     return { id: params.org_id };
   }
-  if (extra.account.isOrg) {
-    return { id: extra.account.id };
+  if (account.isOrg) {
+    return { id: account.id };
   }
 
   const { data: response } = await neonClient.getCurrentUserOrganizations();
@@ -181,20 +48,5 @@ export async function getOrgByOrgIdOrDefault(
     .join('\n');
   throw new NotFoundError(
     `Multiple organizations found. Please specify the org_id parameter with one of the following organization IDs:\n${orgList}`,
-  );
-}
-
-export function filterOrganizations(
-  organizations: Organization[],
-  search?: string,
-) {
-  if (!search) {
-    return organizations;
-  }
-  const searchLower = search.toLowerCase();
-  return organizations.filter(
-    (org) =>
-      org.name.toLowerCase().includes(searchLower) ||
-      org.id.toLowerCase().includes(searchLower),
   );
 }

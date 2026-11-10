@@ -1,110 +1,21 @@
 import {
   createNeonClient as createSdkClient,
   raw,
-  type AuthCreateParams,
   type AuthDetailsResponse,
-  type Branch,
   type ListProjectsData,
-  type ListSharedProjectsData,
-  type LogFieldValuesQuery,
-  type LogQueryInput,
-  type MemberWithUser,
-  type NeonAuthAddOAuthProviderRequest,
-  type NeonAuthEmailAndPasswordConfig,
-  type NeonAuthEmailVerificationMethod as SdkNeonAuthEmailVerificationMethod,
-  type NeonAuthEmailServerConfigResponse,
-  type NeonAuthIntegration,
-  type NeonAuthLogsExportConfig,
-  type NeonAuthOauthProviderId as SdkNeonAuthOauthProviderId,
-  type NeonAuthOauthProvider,
-  type NeonAuthOauthProviderType,
-  type NeonAuthPluginConfigs,
-  type NeonAuthUpdateOAuthProviderRequest,
-  type NeonAuthWebhookConfig,
-  type Organization,
-  type ProjectBranchLogsQueryResponse,
-  type ProjectCreateRequest,
-  type ProjectListItem,
 } from '@neon/sdk';
 import { NEON_API_HOST } from './constants';
 import pkg from '../package.json';
 
-export type {
-  AuthDetailsResponse,
-  Branch,
-  MemberWithUser,
-  NeonAuthEmailAndPasswordConfig,
-  NeonAuthEmailServerConfigResponse,
-  NeonAuthIntegration,
-  NeonAuthLogsExportConfig,
-  NeonAuthOauthProvider,
-  NeonAuthOauthProviderType,
-  NeonAuthPluginConfigs,
-  NeonAuthWebhookConfig,
-  Organization,
-  ProjectListItem,
-};
+export type { AuthDetailsResponse };
 
-export type NeonAuthEmailVerificationMethod =
-  SdkNeonAuthEmailVerificationMethod;
-export type NeonAuthOauthProviderId = SdkNeonAuthOauthProviderId;
-
-export type ListProjectsParams = NonNullable<ListProjectsData['query']>;
-type ListSharedProjectsParams = NonNullable<ListSharedProjectsData['query']>;
-
-type GetProjectBranchSchemaComparisonParams = {
-  projectId: string;
-  branchId: string;
-  db_name: string;
-};
+type ListProjectsParams = NonNullable<ListProjectsData['query']>;
 
 type ApiResponse<T> = {
   data: T;
   status: number;
   statusText: string;
 };
-
-const endpointType = {
-  ReadOnly: 'read_only',
-  ReadWrite: 'read_write',
-} as const;
-
-export const EndpointType = endpointType;
-export type EndpointType = (typeof endpointType)[keyof typeof endpointType];
-
-const neonAuthSupportedAuthProvider = {
-  BetterAuth: 'better_auth',
-  Mock: 'mock',
-  Stack: 'stack',
-} as const;
-
-export const NeonAuthSupportedAuthProvider = neonAuthSupportedAuthProvider;
-
-const neonAuthProviderProjectOwnedBy = {
-  Neon: 'neon',
-  User: 'user',
-} as const;
-
-export const NeonAuthProviderProjectOwnedBy = neonAuthProviderProjectOwnedBy;
-
-const neonAuthEmailVerificationMethod = {
-  Link: 'link',
-  Otp: 'otp',
-} as const;
-
-export const NeonAuthEmailVerificationMethod = neonAuthEmailVerificationMethod;
-
-type ProjectBranchCreateRequest = NonNullable<
-  Parameters<typeof raw.createProjectBranch>[0]
->['body'];
-
-type RestoreProjectBranchRequest = NonNullable<
-  Parameters<typeof raw.restoreProjectBranch>[0]
->['body'];
-
-type DataApiCreateRequest = NonNullable<
-  Parameters<typeof raw.createProjectBranchDataApi>[0]
->['body'];
 
 type ConnectionUriParams = {
   projectId: string;
@@ -140,10 +51,9 @@ export const fetchAsMcpServer: typeof fetch = (input, init) => {
 };
 
 /**
- * Compatibility facade used while MCP handlers are migrated. Every Neon request
- * the server makes runs through `@neon/sdk`: ergonomic resources are preferred,
- * while `raw` is limited to endpoints without an ergonomic equivalent or where
- * the MCP response needs the endpoint's full payload.
+ * The Neon API calls the server makes outside the tools: account resolution,
+ * org selection for the project tools, and the live suites' setup and cleanup.
+ * Tools call the API through `@neon/tools`.
  */
 export function createNeonClient(apiKey: string) {
   const neon = createSdkClient({
@@ -154,15 +64,6 @@ export function createNeonClient(apiKey: string) {
   });
 
   return {
-    async createProject(params: ProjectCreateRequest) {
-      const data = await raw.createProject({
-        client: neon.client,
-        body: params,
-        throwOnError: true,
-      });
-      return success(data, 201);
-    },
-
     async deleteProject(projectId: string) {
       const data = await neon.projects.delete({ projectId });
       return success(data);
@@ -182,29 +83,6 @@ export function createNeonClient(apiKey: string) {
       });
     },
 
-    async createProjectBranch(
-      projectId: string,
-      request: ProjectBranchCreateRequest,
-    ) {
-      const data = await raw.createProjectBranch({
-        client: neon.client,
-        path: { project_id: projectId },
-        body: request,
-        throwOnError: true,
-      });
-      return success(data, 201);
-    },
-
-    async deleteProjectBranch(projectId: string, branchId: string) {
-      await neon.branches.delete({ projectId, branchId });
-      return success(undefined);
-    },
-
-    async getProjectBranch(projectId: string, branchId: string) {
-      const branch = await neon.branches.get({ projectId, branchId });
-      return success({ branch });
-    },
-
     async listProjectBranches({
       projectId,
       cursor,
@@ -219,52 +97,12 @@ export function createNeonClient(apiKey: string) {
       });
     },
 
-    async restoreProjectBranch(
-      projectId: string,
-      branchId: string,
-      request: RestoreProjectBranchRequest,
-    ) {
-      const data = await raw.restoreProjectBranch({
-        client: neon.client,
-        path: { project_id: projectId, branch_id: branchId },
-        body: request,
-        throwOnError: true,
-      });
-      return success(data);
-    },
-
-    async listProjectEndpoints(projectId: string) {
-      const endpoints = await neon.postgres.endpoints.list({ projectId });
-      return success({ endpoints });
-    },
-
-    async listProjectBranchEndpoints(projectId: string, branchId: string) {
-      const endpoints = await neon.postgres.endpoints.listByBranch({
-        projectId,
-        branchId,
-      });
-      return success({ endpoints });
-    },
-
     async listProjectBranchDatabases(projectId: string, branchId: string) {
       const databases = await neon.postgres.databases.list({
         projectId,
         branchId,
       });
       return success({ databases });
-    },
-
-    async getProjectBranchDatabase(
-      projectId: string,
-      branchId: string,
-      databaseName: string,
-    ) {
-      const database = await neon.postgres.databases.get({
-        projectId,
-        branchId,
-        databaseName,
-      });
-      return success({ database });
     },
 
     async getConnectionUri(params: ConnectionUriParams) {
@@ -302,240 +140,9 @@ export function createNeonClient(apiKey: string) {
       });
       return success(data);
     },
-
-    async getOrganizationMembers(orgId: string) {
-      const data = await raw.getOrganizationMembers({
-        client: neon.client,
-        path: { org_id: orgId },
-        throwOnError: true,
-      });
-      return success(data);
-    },
-
-    async listSharedProjects(params: ListSharedProjectsParams = {}) {
-      const data = await raw.listSharedProjects({
-        client: neon.client,
-        query: params,
-        throwOnError: true,
-      });
-      return success(data);
-    },
-
-    async getProjectBranchSchemaComparison(
-      params: GetProjectBranchSchemaComparisonParams,
-    ) {
-      const data = await raw.getProjectBranchSchemaComparison({
-        client: neon.client,
-        path: {
-          project_id: params.projectId,
-          branch_id: params.branchId,
-        },
-        query: { db_name: params.db_name },
-        throwOnError: true,
-      });
-      return success(data);
-    },
-
-    async getNeonAuth(projectId: string, branchId: string) {
-      return success(await neon.auth.get({ projectId, branchId }));
-    },
-
-    async createNeonAuth(
-      projectId: string,
-      branchId: string,
-      request: Omit<AuthCreateParams, 'projectId' | 'branchId'>,
-    ) {
-      return success(
-        await neon.auth.create({ projectId, branchId, ...request }),
-        201,
-      );
-    },
-
-    async listBranchNeonAuthTrustedDomains(
-      projectId: string,
-      branchId: string,
-    ) {
-      return success({
-        domains: await neon.auth.trustedDomains.list({ projectId, branchId }),
-      });
-    },
-
-    async addBranchNeonAuthTrustedDomain(
-      projectId: string,
-      branchId: string,
-      request: {
-        domain: string;
-        auth_provider: 'better_auth';
-      },
-    ) {
-      await neon.auth.trustedDomains.add({ projectId, branchId, ...request });
-      return success(undefined, 201);
-    },
-
-    async deleteBranchNeonAuthTrustedDomain(
-      projectId: string,
-      branchId: string,
-      request: {
-        auth_provider: 'better_auth';
-        domains: { domain: string }[];
-      },
-    ) {
-      await neon.auth.trustedDomains.delete({
-        projectId,
-        branchId,
-        ...request,
-      });
-      return success(undefined);
-    },
-
-    async listBranchNeonAuthOauthProviders(
-      projectId: string,
-      branchId: string,
-    ) {
-      return success({
-        providers: await neon.auth.oauthProviders.list({ projectId, branchId }),
-      });
-    },
-
-    async addBranchNeonAuthOauthProvider(
-      projectId: string,
-      branchId: string,
-      request: NeonAuthAddOAuthProviderRequest,
-    ) {
-      return success(
-        await neon.auth.oauthProviders.add({ projectId, branchId, ...request }),
-        201,
-      );
-    },
-
-    async updateBranchNeonAuthOauthProvider(
-      projectId: string,
-      branchId: string,
-      providerId: NeonAuthOauthProviderId,
-      request: NeonAuthUpdateOAuthProviderRequest,
-    ) {
-      return success(
-        await neon.auth.oauthProviders.update({
-          projectId,
-          branchId,
-          providerId,
-          ...request,
-        }),
-      );
-    },
-
-    async deleteBranchNeonAuthOauthProvider(
-      projectId: string,
-      branchId: string,
-      providerId: NeonAuthOauthProviderId,
-    ) {
-      await neon.auth.oauthProviders.delete({
-        projectId,
-        branchId,
-        providerId,
-      });
-      return success(undefined);
-    },
-
-    async getNeonAuthAllowLocalhost(projectId: string, branchId: string) {
-      return success(
-        await neon.auth.allowLocalhost.get({ projectId, branchId }),
-      );
-    },
-
-    async getNeonAuthEmailAndPasswordConfig(
-      projectId: string,
-      branchId: string,
-    ) {
-      return success(
-        await neon.auth.emailAndPassword.get({ projectId, branchId }),
-      );
-    },
-
-    async getNeonAuthEmailProvider(projectId: string, branchId: string) {
-      return success(
-        await neon.auth.emailProvider.get({ projectId, branchId }),
-      );
-    },
-
-    async getNeonAuthPluginConfigs(projectId: string, branchId: string) {
-      return success(await neon.auth.plugins.get({ projectId, branchId }));
-    },
-
-    async getNeonAuthWebhookConfig(projectId: string, branchId: string) {
-      return success(await neon.auth.webhooks.get({ projectId, branchId }));
-    },
-
-    async getProjectBranchDataApi(
-      projectId: string,
-      branchId: string,
-      databaseName: string,
-    ) {
-      return success(
-        await neon.postgres.dataApi.get({ projectId, branchId, databaseName }),
-      );
-    },
-
-    async createProjectBranchDataApi(
-      projectId: string,
-      branchId: string,
-      databaseName: string,
-      request: DataApiCreateRequest,
-    ) {
-      return success(
-        await neon.postgres.dataApi.create({
-          projectId,
-          branchId,
-          databaseName,
-          ...request,
-        }),
-        201,
-      );
-    },
-
-    /**
-     * One page of branch logs. An MCP tool call answers with a bounded result and
-     * reports whether more matched, including the API's terminal partial-page
-     * state where truncation has no resumable cursor.
-     */
-    async queryLogs(
-      projectId: string,
-      branchId: string,
-      input: LogQueryInput,
-    ): Promise<ProjectBranchLogsQueryResponse> {
-      return raw.queryProjectBranchLogs({
-        client: neon.client,
-        path: { project_id: projectId, branch_id: branchId },
-        body: input,
-        throwOnError: true,
-      });
-    },
-
-    async listLogFields(projectId: string, branchId: string) {
-      return neon.logs.fields({ projectId, branchId });
-    },
-
-    async listLogFieldValues(
-      projectId: string,
-      branchId: string,
-      fieldName: string,
-      query?: LogFieldValuesQuery,
-    ) {
-      return neon.logs.fieldValues({
-        projectId,
-        branchId,
-        fieldName,
-        ...query,
-      });
-    },
-
-    get apiKey() {
-      return apiKey;
-    },
   };
 }
 
 export type NeonApiClient = ReturnType<typeof createNeonClient>;
-// Compatibility with handlers that previously used `Api<unknown>`.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export type Api<_Unused = unknown> = NeonApiClient;
