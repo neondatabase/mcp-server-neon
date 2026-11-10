@@ -1,5 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["vercel.ts"],
   "project": ["**/*.{ts,tsx}", "!**/*.d.ts"],
   "ignore": [".next/**", "dist/**", "build/**", "out/**"],
   "ignoreDependencies": ["tailwindcss", "postcss", "tsx"],

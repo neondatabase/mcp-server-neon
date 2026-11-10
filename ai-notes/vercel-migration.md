@@ -449,7 +449,7 @@ complete_database_migration({
 
 ### Vercel-Specific Considerations
 
-- **Fluid Compute**: Enable with `"fluid": true` in `vercel.json` for SSE/streaming support up to 800s
+- **Fluid Compute**: Enabled with `fluid: true` in `vercel.ts` for SSE/streaming support up to 800s
 - **Function Duration**: Set `maxDuration: 800` for API routes that handle long-lived connections
 - **`waitUntil`**: Use `@vercel/functions` `waitUntil()` for background tasks (analytics, logging) that should complete after response is sent
 - **Environment Variables**: `VERCEL_URL` is auto-provided; set `SERVER_HOST` explicitly in production for stable OAuth callbacks
