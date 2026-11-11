@@ -6,6 +6,18 @@
       "sourceType": "github",
       "skillPath": "skills/claimable-postgres/SKILL.md",
       "computedHash": "1ad33258166b0d2edb02cd6134c7cac66d6e04207fb0767255dcc521a795e0a4"
+    },
+    "working-with-effect": {
+      "source": "andrelandgraf/brain",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/working-with-effect/SKILL.md",
+      "computedHash": "3911876bda9c49e4bf241b360d032db229613a5879c2c8cb01d25dedb53d7a49"
+    },
+    "working-with-oxlint": {
+      "source": "andrelandgraf/brain",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/working-with-oxlint/SKILL.md",
+      "computedHash": "1b2eb571bc044d1425705a7a66be338d402d8d6656c865af4c8a21073ca37fef"
     }
   }
 }
