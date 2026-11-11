@@ -11,7 +11,7 @@ description: >-
 
 # Working with Oxlint
 
-Sources and licenses are in [ATTRIBUTION.md](ATTRIBUTION.md). Effect coding rules are `working-with-effect`; this skill covers the linter that enforces them.
+This repo lints with ESLint today (`pnpm lint`); this skill applies when moving it to Oxlint. Sources and licenses are in [ATTRIBUTION.md](ATTRIBUTION.md). Effect coding rules are `working-with-effect`; this skill covers the linter that enforces them.
 
 ## Install and run
 

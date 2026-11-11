@@ -347,7 +347,7 @@ Code comments reference these files by path (e.g. `ai-notes/refresh-slo.md`).
 
 - **Migration Pattern**: Tools like `prepare_database_migration` and `prepare_query_tuning` create temporary branches and return all context (branch IDs, SQL, database name, etc.) in the response. The LLM must pass this context back to subsequent `complete_*` tools. No state is stored server-side, enabling serverless deployment.
 
-- **Effect and Oxlint**: Code written with Effect follows [`.agents/skills/working-with-effect`](.agents/skills/working-with-effect/SKILL.md), and Oxlint setup follows [`.agents/skills/working-with-oxlint`](.agents/skills/working-with-oxlint/SKILL.md). Both are installed with the skills CLI (`skills-lock.json`); refresh them by re-installing, not by editing the copies.
+- **Effect and Oxlint**: Code written with Effect follows [`.agents/skills/working-with-effect`](.agents/skills/working-with-effect/SKILL.md), and Oxlint setup follows [`.agents/skills/working-with-oxlint`](.agents/skills/working-with-oxlint/SKILL.md). Both skills belong to this repo; edit them in place.
 
 - **Neon API Client**: Tools call the Neon API through `@neon/tools` with `fetchAsMcpServer` from `mcp/neon-client.ts`, which sets the server's `User-Agent`. `createNeonClient` in the same file covers the calls outside tools: account resolution, `org_id` selection, and the live suites' setup and cleanup.
 

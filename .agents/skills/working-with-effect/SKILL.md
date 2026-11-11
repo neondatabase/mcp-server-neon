@@ -10,7 +10,7 @@ description: >-
 
 # Working with Effect
 
-These rules combine four sources (see [ATTRIBUTION.md](ATTRIBUTION.md)). A repo's own `AGENTS.md` and established Effect conventions take precedence unless the task is changing them. Linting that enforces much of this is `working-with-oxlint`.
+These rules combine four sources (see [ATTRIBUTION.md](ATTRIBUTION.md)), adapted to this repo. `AGENTS.md` and established conventions in this repo take precedence unless the task is changing them. Linting that enforces much of this is `working-with-oxlint`.
 
 ## Source rule
 
@@ -46,7 +46,7 @@ Read only the matching files; read all of them when work crosses concerns. Some 
 5. **Parse, don't validate.** Decode at trust boundaries (non-Effect callers, databases, networks) with Schema.
 6. **Use Effect platform services.** Application code uses Effect's `FileSystem`, `Path`, `Crypto`, HTTP, process, and socket services. Native Node APIs belong only in runtime adapters.
 
-HumanLayer also captures every error to Sentry where it surfaces. Follow the repo's reporting policy instead where one exists: mcp-server-neon keeps client errors and `NeonDbError` out of Sentry (`mcp/server/errors.ts`).
+Sentry gets server failures only. Client errors, `NeonDbError`, and Neon API 4xx responses are mistakes in the call and stay out of Sentry; `handleToolError` in `mcp/server/errors.ts` holds that rule, and Effect code keeps it.
 
 ## Core defaults
 
