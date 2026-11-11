@@ -25,7 +25,7 @@ The references were reviewed against Effect 4.0.0. The installed version wins: p
 
 ## References
 
-Read only the matching files; read all of them when work crosses concerns.
+Read only the matching files; read all of them when work crosses concerns. Some reference examples take positional arguments, such as `get(id: UserId)`; the named-input-object rule in Core defaults governs new code.
 
 - Creating or changing a service or layer: [DEEP_MODULES.md](references/DEEP_MODULES.md), then [SERVICES_LAYERS.md](references/SERVICES_LAYERS.md)
 - Auditing a codebase, package, or diff for service and layer problems: [SERVICE_AUDIT.md](references/SERVICE_AUDIT.md)
@@ -52,7 +52,7 @@ HumanLayer also captures every error to Sentry where it surfaces. Follow the rep
 
 - Compose workflows with `Effect.gen(function* () { ... })`.
 - Define public and non-trivial internal service methods with `Effect.fn("Domain.operation")`. Use `Effect.fnUntraced` only for internal helpers that intentionally skip span metadata.
-- Define services with `Context.Service`, build them with `Layer.effect(Service, Effect.gen(...))` (or `Layer.scoped` for acquisition), and return `Service.of({ ... })`.
+- Define services with `Context.Service`, build them with `Layer.effect(Service, Effect.gen(...))`, which also handles scoped acquisition, and return `Service.of({ ... })`.
 - Model records with `Schema.Struct(...)` plus a same-name `interface`. Use `Data.TaggedEnum` for trusted internal control flow and Schema tagged variants or unions for encoded boundaries.
 - Use a named input object for every operation, even with one argument, so same-typed positional arguments can't be swapped.
 - Decode unknown wire input with `Schema.decodeUnknownEffect(...)`; use `schema.makeEffect(...)` for typed input that needs validation. Reserve throwing `schema.make(...)` for trusted construction.

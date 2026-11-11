@@ -41,7 +41,7 @@ Violations that existed when the config landed are counted per file and rule in 
 
 - A new violation fails, whether a count goes up or a file or rule appears that the baseline lacks. Fix it; never raise the baseline.
 - Disable comments (`eslint-disable`, `oxlint-disable`, `@ts-ignore`, `@ts-expect-error`, `@effect-diagnostics`) fail outside a reviewed allowlist.
-- The config never grows a per-file override.
+- The config never grows a per-file override beyond the entry-point one below.
 - Pay debt one rule or one file per PR; an `oxlint --fix` sweep of one rule across the repo is fine.
 
 A new file has no baseline, so it meets every cap at zero. The caps a new sandcastle `src/` file hits first are `import/max-dependencies` 10, `max-lines` 300, `max-lines-per-function` 50, `max-statements` 20, and `complexity` 15.
@@ -56,7 +56,16 @@ Sandcastle restricts running effects to entry points with `eslint/no-restricted-
 }]
 ```
 
-Entry-point files are the exemption, kept in the reviewed ratchet config rather than as per-file overrides.
+Entry-point files get the rule turned off in one `overrides` entry, the only override the config allows. The ratchet keeps that file list in sync with its reviewed `ENTRY_POINTS`:
+
+```json
+"overrides": [
+  {
+    "files": ["src/main.ts", "src/run.ts"],
+    "rules": { "eslint/no-restricted-properties": "off" }
+  }
+]
+```
 
 ## Effect rules: @effect/tsgo
 
@@ -77,7 +86,7 @@ Presets ship as `antipattern`, `correctness`, `effect-native`, `maintainers`, `r
 }
 ```
 
-HumanLayer instead lists `effecttsgo` in `plugins` and sets 59 `effecttsgo/*` rules to `error` individually.
+HumanLayer instead lists `effecttsgo` in `plugins` and sets each `effecttsgo/*` rule individually.
 
 ## anti-slop
 
@@ -107,4 +116,4 @@ Its Effect rules are a separate opt-in plugin:
 
 Add `tools/oxlint/anti-slop/**` and the agent directories (`.agents/**`, `.cursor/**`, `.claude/**`) to `ignorePatterns`. The rules are syntactic: they use Oxlint's ESTree and scope APIs, don't resolve imported types, and recognize `Effect.catch*` and `Match.when` only under those exact identifiers. To update, ask the skill to update while preserving local customizations; it doesn't force-replace the vendored copy.
 
-HumanLayer combines all three: `typeAware`, plugins `typescript`, `react`, `oxc`, `vitest`, and `effecttsgo`, vendored anti-slop, and type-aware rules including `typescript/no-explicit-any`, `no-floating-promises`, `no-misused-promises`, `no-non-null-assertion`, and `oxc/no-barrel-file` as errors.
+HumanLayer combines all three: `typeAware`, plugins `typescript`, `react`, `oxc`, `vitest`, and `effecttsgo`, vendored anti-slop, the type-aware `typescript/no-floating-promises` and `no-misused-promises`, and the syntactic `typescript/no-explicit-any`, `no-non-null-assertion`, and `oxc/no-barrel-file`, all as errors.

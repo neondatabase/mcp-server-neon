@@ -11,13 +11,13 @@
       "source": "andrelandgraf/brain",
       "sourceType": "github",
       "skillPath": ".agents/skills/working-with-effect/SKILL.md",
-      "computedHash": "3911876bda9c49e4bf241b360d032db229613a5879c2c8cb01d25dedb53d7a49"
+      "computedHash": "443638612018f554550ba79db40249b7468bb27f2ba1802ce91e54636ad3acf9"
     },
     "working-with-oxlint": {
       "source": "andrelandgraf/brain",
       "sourceType": "github",
       "skillPath": ".agents/skills/working-with-oxlint/SKILL.md",
-      "computedHash": "1b2eb571bc044d1425705a7a66be338d402d8d6656c865af4c8a21073ca37fef"
+      "computedHash": "be8d9556136a8556402823643bd9929a1b086d2805e3764e5dfcb27a0ce265b8"
     }
   }
 }
