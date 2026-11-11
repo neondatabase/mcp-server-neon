@@ -72,7 +72,18 @@ const UNUSED_DIRECTIVE = /^Unused \S+ directive/u;
 const collectOxlint = (): Violation[] => {
   const out = run(
     path.join(ROOT, 'node_modules', '.bin', 'effect-tsgo'),
-    ['oxlint', '--type-aware', '--format', 'json'],
+    // Only the root config and its reviewed ignorePatterns apply: nested
+    // .oxlintrc.json files and .eslintignore would skip the checks below.
+    [
+      'oxlint',
+      '--type-aware',
+      '--config',
+      '.oxlintrc.json',
+      '--disable-nested-config',
+      '--no-ignore',
+      '--format',
+      'json',
+    ],
     OXLINT_ENV,
   );
 
@@ -102,7 +113,9 @@ const SCANNED_EXTENSIONS = new Set([
   '.mts',
   '.cts',
   '.js',
+  '.jsx',
   '.mjs',
+  '.cjs',
 ]);
 
 const lines = (out: string): string[] =>
