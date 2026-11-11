@@ -22,4 +22,5 @@ const routes = Layer.mergeAll(
 // Built once per instance; Next.js route handlers forward their requests here.
 export const app = HttpRouter.toWebHandler(
   routes.pipe(Layer.provide(HttpServer.layerServices)),
+  { disableLogger: true },
 );

@@ -57,7 +57,7 @@
     "zod-to-json-schema": "3.25.2"
   },
   "devDependencies": {
-    "@effect/tsgo": "0.67.4",
+    "@effect/tsgo": "0.67.1",
     "@modelcontextprotocol/client": "2.0.0",
     "@oxlint/plugins": "1.91.0",
     "@playwright/test": "1.58.2",
@@ -71,7 +71,7 @@
     "dotenv": "17.2.4",
     "knip": "5.83.1",
     "oxlint": "1.91.0",
-    "oxlint-tsgolint": "7.0.2006",
+    "oxlint-tsgolint": "7.0.2005",
     "prettier": "3.8.1",
     "tailwindcss": "4.1.7",
     "tsx": "4.21.0",
