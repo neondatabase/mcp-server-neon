@@ -62,6 +62,15 @@ export const shrink = (found: Counts, baseline: Counts): Counts =>
     ),
   );
 
+// A directive opens a line comment, a block or JSDoc comment (`/*`, `/**`),
+// or a continuation line inside one (` * @ts-ignore`).
+const DIRECTIVE =
+  /(?:\/\/|\/\*+|^[ \t]*\*)[ \t]*(?:eslint-disable|eslint-enable|oxlint-disable|oxlint-enable|@ts-ignore|@ts-nocheck|@ts-expect-error|@effect-diagnostics)[^\n]*/gmu;
+
+/** Each lint or type-check suppression in `source`, as its trimmed comment text. */
+export const disableComments = (source: string): string[] =>
+  [...source.matchAll(DIRECTIVE)].map((match) => match[0].trim());
+
 const top = (totals: Record<string, number>, limit: number): string[] =>
   Object.entries(totals)
     .toSorted(([, a], [, b]) => b - a)

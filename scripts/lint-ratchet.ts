@@ -17,7 +17,13 @@ import { access, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import type { Counts, Violation } from './lint-ratchet-core';
-import { countViolations, grown, report, shrink } from './lint-ratchet-core';
+import {
+  countViolations,
+  disableComments,
+  grown,
+  report,
+  shrink,
+} from './lint-ratchet-core';
 import { unreviewedConfig } from './lint-ratchet-config';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -25,6 +31,9 @@ const BASELINE = 'scripts/lint-baseline.json';
 const MAX_BUFFER = 256 * 1024 * 1024;
 
 const VENDORED = ['tools/oxlint/anti-slop/', '.agents/'];
+
+// Its fixtures are directive comments written as strings.
+const DIRECTIVE_FIXTURES = 'scripts/lint-ratchet-core.test.ts';
 
 // Oxlint loads the vendored anti-slop plugins from .ts files, which Node 22
 // before 22.18 only runs with type stripping enabled.
@@ -104,9 +113,6 @@ const collectOxlint = (): Violation[] => {
   });
 };
 
-const DIRECTIVE =
-  /(?:\/\/|\/\*)\s*(?:eslint-disable|eslint-enable|oxlint-disable|oxlint-enable|@ts-ignore|@ts-nocheck|@ts-expect-error|@effect-diagnostics)[^\n]*/gu;
-
 const SCANNED_EXTENSIONS = new Set([
   '.ts',
   '.tsx',
@@ -129,6 +135,7 @@ const collectDirectives = async (): Promise<Violation[]> => {
   ).filter(
     (file) =>
       !deleted.has(file) &&
+      file !== DIRECTIVE_FIXTURES &&
       SCANNED_EXTENSIONS.has(path.extname(file)) &&
       !VENDORED.some((prefix) => file.startsWith(prefix)),
   );
@@ -139,9 +146,9 @@ const collectDirectives = async (): Promise<Violation[]> => {
     files.map(async (file) => {
       const source = await readFile(path.join(ROOT, file), 'utf8');
 
-      return [...source.matchAll(DIRECTIVE)].map((match) => ({
+      return disableComments(source).map((comment) => ({
         file,
-        rule: `ratchet/disable-comment ${match[0].trim()}`,
+        rule: `ratchet/disable-comment ${comment}`,
       }));
     }),
   );
