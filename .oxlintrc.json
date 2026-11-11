@@ -3,9 +3,9 @@
 
   // Every category below is an error. Violations that existed when Oxlint
   // landed sit in scripts/lint-baseline.json, which scripts/lint-ratchet.ts
-  // keeps shrink-only. Never add a per-file override outside the reviewed
-  // groups in scripts/lint-ratchet.ts and never write a disable comment:
-  // fix the code or lower the baseline instead.
+  // keeps shrink-only. Never add an override or ignore pattern outside the
+  // reviewed ones in scripts/lint-ratchet-config.ts and never write a disable
+  // comment: fix the code or lower the baseline instead.
   //
   // Categories left off:
   // - restriction: bans ordinary language features (optional chaining,
@@ -277,7 +277,7 @@
 
   "overrides": [
     {
-      // Tests. Keep in sync with TEST_FILES in scripts/lint-ratchet.ts (it checks).
+      // Tests. Keep in sync with TEST_FILES in scripts/lint-ratchet-config.ts (it checks).
       "files": ["**/*.test.ts", "e2e/**/*.ts"],
       "rules": {
         // Tests run Effects; that is how they observe them.
@@ -295,7 +295,7 @@
     },
     {
       // One-shot tooling. Keep in sync with TOOLING_SCRIPTS in
-      // scripts/lint-ratchet.ts (it checks).
+      // scripts/lint-ratchet-config.ts (it checks).
       "files": ["scripts/**"],
       "rules": {
         // A script that reads a file and exits has nothing to run concurrently.

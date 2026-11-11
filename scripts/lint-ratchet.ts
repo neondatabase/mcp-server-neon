@@ -1,7 +1,8 @@
 // Holds Oxlint violations, per file and rule, to scripts/lint-baseline.json.
 // Fails when a count rises, when a file or rule appears that the baseline
 // lacks, when the baseline grew against origin/main, when a disable comment
-// appears, or when .oxlintrc.json gains an override outside the reviewed groups.
+// appears or changes, when Oxlint reports a parse error, or when
+// .oxlintrc.json gains an override or ignore pattern outside the reviewed ones.
 //
 //   pnpm lint          check
 //   pnpm lint:shrink   lower the baseline to what is found (never raises it)
@@ -17,14 +18,11 @@ import path from 'node:path';
 import { z } from 'zod';
 import type { Counts, Violation } from './lint-ratchet-core';
 import { countViolations, grown, report, shrink } from './lint-ratchet-core';
+import { unreviewedConfig } from './lint-ratchet-config';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const BASELINE = 'scripts/lint-baseline.json';
 const MAX_BUFFER = 256 * 1024 * 1024;
-
-const TEST_FILES = ['**/*.test.ts', 'e2e/**/*.ts'];
-const TOOLING_SCRIPTS = ['scripts/**'];
-const REVIEWED_OVERRIDES = [TEST_FILES, TOOLING_SCRIPTS];
 
 const VENDORED = ['tools/oxlint/anti-slop/', '.agents/'];
 
@@ -62,12 +60,14 @@ const run = (
 const OxlintOutput = z.object({
   diagnostics: z.array(
     z.object({
-      // Absent on an unused disable directive.
-      code: z.string().default('oxlint(unused-disable-directive)'),
+      code: z.string().optional(),
+      message: z.string(),
       filename: z.string(),
     }),
   ),
 });
+
+const UNUSED_DIRECTIVE = /^Unused \S+ directive/u;
 
 const collectOxlint = (): Violation[] => {
   const out = run(
@@ -78,11 +78,23 @@ const collectOxlint = (): Violation[] => {
 
   const { diagnostics } = OxlintOutput.parse(JSON.parse(out));
 
-  return diagnostics.map((d) => ({ file: d.filename, rule: d.code }));
+  return diagnostics.map((d) => {
+    if (d.code !== undefined) {
+      return { file: d.filename, rule: d.code };
+    }
+
+    // Oxlint omits `code` on unused disable directives and on parse errors;
+    // a parse error must fail outright, whatever the baseline holds.
+    if (!UNUSED_DIRECTIVE.test(d.message)) {
+      throw new Error(`${d.filename}: ${d.message}`);
+    }
+
+    return { file: d.filename, rule: 'oxlint(unused-disable-directive)' };
+  });
 };
 
 const DIRECTIVE =
-  /(?:\/\/|\/\*)\s*(?:eslint-disable|eslint-enable|oxlint-disable|oxlint-enable|@ts-ignore|@ts-nocheck|@ts-expect-error|@effect-diagnostics)/gu;
+  /(?:\/\/|\/\*)\s*(?:eslint-disable|eslint-enable|oxlint-disable|oxlint-enable|@ts-ignore|@ts-nocheck|@ts-expect-error|@effect-diagnostics)[^\n]*/gu;
 
 const SCANNED_EXTENSIONS = new Set([
   '.ts',
@@ -93,29 +105,30 @@ const SCANNED_EXTENSIONS = new Set([
   '.mjs',
 ]);
 
+const lines = (out: string): string[] =>
+  out.split('\n').filter((line) => line !== '');
+
 const collectDirectives = async (): Promise<Violation[]> => {
-  const listed = run('git', [
-    'ls-files',
-    '--cached',
-    '--others',
-    '--exclude-standard',
-  ]);
+  const deleted = new Set(lines(run('git', ['ls-files', '--deleted'])));
 
-  const files = listed
-    .split('\n')
-    .filter(
-      (file) =>
-        SCANNED_EXTENSIONS.has(path.extname(file)) &&
-        !VENDORED.some((prefix) => file.startsWith(prefix)),
-    );
+  const files = lines(
+    run('git', ['ls-files', '--cached', '--others', '--exclude-standard']),
+  ).filter(
+    (file) =>
+      !deleted.has(file) &&
+      SCANNED_EXTENSIONS.has(path.extname(file)) &&
+      !VENDORED.some((prefix) => file.startsWith(prefix)),
+  );
 
+  // The rule names the whole comment, so widening an allowed directive (a
+  // file-wide disable, more rules) counts as a new one.
   const perFile = await Promise.all(
     files.map(async (file) => {
       const source = await readFile(path.join(ROOT, file), 'utf8');
 
-      return [...source.matchAll(DIRECTIVE)].map(() => ({
+      return [...source.matchAll(DIRECTIVE)].map((match) => ({
         file,
-        rule: 'ratchet/disable-comment',
+        rule: `ratchet/disable-comment ${match[0].trim()}`,
       }));
     }),
   );
@@ -138,28 +151,6 @@ const writeBaseline = async (counts: Counts): Promise<void> => {
   );
 };
 
-const OxlintConfig = z.object({
-  overrides: z.array(z.object({ files: z.array(z.string()) })).default([]),
-});
-
-const sameList = (a: readonly string[], b: readonly string[]): boolean =>
-  a.length === b.length && a.every((item, i) => item === b[i]);
-
-const unreviewedOverrides = async (): Promise<string[]> => {
-  const source = await readFile(path.join(ROOT, '.oxlintrc.json'), 'utf8');
-
-  const config = OxlintConfig.parse(
-    JSON.parse(source.replaceAll(/^\s*\/\/.*$/gmu, '')),
-  );
-
-  return config.overrides
-    .filter((o) => !REVIEWED_OVERRIDES.some((r) => sameList(o.files, r)))
-    .map(
-      (o) =>
-        `.oxlintrc.json: the override for ${o.files.join(', ')} is not a reviewed group (tests, tooling scripts). Lower the baseline instead of turning a rule off.`,
-    );
-};
-
 /** Growth against origin/main; undefined when main has no baseline to compare with. */
 const growthAgainstMain = (baseline: Counts): string[] | undefined => {
   const listed = run('git', [
@@ -180,10 +171,10 @@ const growthAgainstMain = (baseline: Counts): string[] | undefined => {
   return grown(baseline, main);
 };
 
-const section = (title: string, lines: readonly string[]): string =>
-  lines.length === 0
+const section = (title: string, entries: readonly string[]): string =>
+  entries.length === 0
     ? ''
-    : `\n${title}\n${lines.map((l) => `  ${l}`).join('\n')}\n`;
+    : `\n${title}\n${entries.map((l) => `  ${l}`).join('\n')}\n`;
 
 const verify = async (shrinkFirst: boolean): Promise<void> => {
   const found = await collect();
@@ -210,7 +201,7 @@ const verify = async (shrinkFirst: boolean): Promise<void> => {
       `${BASELINE} grew against origin/main. It only shrinks:`,
       growth ?? [],
     ),
-    section('Config:', await unreviewedOverrides()),
+    section('Config:', await unreviewedConfig(ROOT)),
   ].join('');
 
   if (failures !== '') {
