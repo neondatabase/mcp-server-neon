@@ -69,10 +69,10 @@ Entry-point files, and tests, get the rule turned off in their reviewed `overrid
 
 ## Effect rules: @effect/tsgo
 
-`@effect/tsgo` (the Effect Language Service for TypeScript-Go) adds the type-aware `effecttsgo` plugin, with rules such as `floating-effect`, `missing-effect-error`, `missing-layer-context`, `outdated-api`, and `global-timers-in-effect`. Stock `oxlint` rejects it with `Unknown plugin: 'effecttsgo'`, so run Oxlint through the package's launcher:
+`@effect/tsgo` (the Effect Language Service for TypeScript-Go) adds the type-aware `effecttsgo` plugin, with rules such as `floating-effect`, `missing-effect-error`, `missing-layer-context`, `outdated-api`, and `global-timers-in-effect`. Stock `oxlint` rejects it with `Unknown plugin: 'effecttsgo'`, so install `@effect/tsgo` as an exact-pinned dev dependency and run Oxlint through its local launcher. Without the local install, a bare `npx effect-tsgo` resolves the unscoped npm package `effect-tsgo` instead, so keep `--no-install` (or use `pnpm exec`):
 
 ```bash
-npx effect-tsgo oxlint --type-aware
+npx --no-install effect-tsgo oxlint --type-aware
 ```
 
 `effect-tsgo patch` patches `node_modules` instead, and only `patch` adds the `effecttsgo` types to `oxlint.config.ts`. Each release supports specific Oxlint and `oxlint-tsgolint` versions: 0.67.4 supports Oxlint 1.88.0–1.91.0 and tsgolint 7.0.2004–7.0.2006, while Oxlint `latest` is 1.92.0. Check the `@effect/tsgo` README table before bumping either.
