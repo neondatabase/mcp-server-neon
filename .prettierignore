@@ -20,3 +20,4 @@ CHANGELOG.md
 LICENSE
 skills-lock.json
 mcp/tools/mcp-tool-names.json
+tools/oxlint/anti-slop/

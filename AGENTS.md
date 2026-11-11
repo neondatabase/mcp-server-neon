@@ -32,8 +32,15 @@ pnpm fmt:check
 # Auto-fix formatting
 pnpm fmt
 
-# Lint
+# Lint: Oxlint (type-aware, with Effect and anti-slop rules) held to the
+# shrink-only baseline in scripts/lint-baseline.json; fails on any new violation
 pnpm lint
+
+# Lower the baseline after fixing violations (never raises a count)
+pnpm lint:shrink
+
+# Totals, worst rules, and worst files
+pnpm lint:report
 
 # Auto-fix lint + formatting together
 pnpm lint:fix
@@ -282,6 +289,7 @@ normally provided through `.env.local`. Key variables:
 │   ├── assert.ts       # Type-narrowing assertion helper
 │   ├── config.ts       # Centralized configuration
 │   ├── errors.ts       # OAuth-aware HTTP error mapping for route handlers
+│   ├── http/app.ts     # Effect HttpRouter web handler (serves /api/health and /health)
 │   └── oauth/          # OAuth utilities for Next.js
 ├── mcp/            # MCP server source code
 │   ├── __tests__/      # Vitest unit/integration/MCP e2e tests
@@ -318,6 +326,8 @@ normally provided through `.env.local`. Key variables:
 │   │   └── logger.ts             # Logging utilities
 │   └── constants.ts    # Shared constants
 ├── public/             # Static assets (favicons, OG image, llms.txt)
+├── scripts/lint-ratchet.ts # pnpm lint: Oxlint held to scripts/lint-baseline.json
+├── tools/oxlint/anti-slop/ # Vendored anti-slop Oxlint rules (see UPSTREAM.md)
 ├── .prettierrc         # Prettier config (singleQuote: true)
 ├── .prettierignore     # Prettier ignore patterns
 ├── vitest.config.ts    # Vitest configuration

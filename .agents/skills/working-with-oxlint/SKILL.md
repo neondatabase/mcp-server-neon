@@ -11,7 +11,7 @@ description: >-
 
 # Working with Oxlint
 
-This repo lints with ESLint today (`pnpm lint`); this skill applies when moving it to Oxlint. Sources and licenses are in [ATTRIBUTION.md](ATTRIBUTION.md). Effect coding rules are `working-with-effect`; this skill covers the linter that enforces them.
+This repo's setup: `.oxlintrc.json` (every category but `restriction` and `nursery`, the `@effect/tsgo` recommended preset, and anti-slop vendored in `tools/oxlint/anti-slop/`), and `pnpm lint` runs `scripts/lint-ratchet.ts`, which holds violations to the shrink-only `scripts/lint-baseline.json`. Sources and licenses are in [ATTRIBUTION.md](ATTRIBUTION.md). Effect coding rules are `working-with-effect`; this skill covers the linter that enforces them.
 
 ## Install and run
 

@@ -53,7 +53,7 @@ Sentry gets server failures only. Client errors, `NeonDbError`, and Neon API 4xx
 - Compose workflows with `Effect.gen(function* () { ... })`.
 - Define public and non-trivial internal service methods with `Effect.fn("Domain.operation")`. Use `Effect.fnUntraced` only for internal helpers that intentionally skip span metadata.
 - Define services with `Context.Service`, build them with `Layer.effect(Service, Effect.gen(...))`, which also handles scoped acquisition, and return `Service.of({ ... })`.
-- Model records with `Schema.Struct(...)` plus a same-name `interface`. Use `Data.TaggedEnum` for trusted internal control flow and Schema tagged variants or unions for encoded boundaries.
+- Model records with `Schema.Struct(...)` plus a same-name `type`, such as `type User = typeof User.Type`. This repo uses type aliases (`typescript/consistent-type-definitions`), so reference examples written with `interface` become `type` here. Use `Data.TaggedEnum` for trusted internal control flow and Schema tagged variants or unions for encoded boundaries.
 - Use a named input object for every operation, even with one argument, so same-typed positional arguments can't be swapped.
 - Decode unknown wire input with `Schema.decodeUnknownEffect(...)`; use `schema.makeEffect(...)` for typed input that needs validation. Reserve throwing `schema.make(...)` for trusted construction.
 - Prefer `Predicate` refinements over ad hoc `typeof`, `instanceof`, nullish, and property-presence checks on trusted values, and exhaustive `Match` for multi-branch dispatch.
@@ -75,7 +75,7 @@ Use an existing Effect service (`Clock`, `Crypto`, `Random`, `Config`, `HttpClie
 Module shape, following the project's established equivalent:
 
 ```ts
-export interface Interface {
+export type Interface = {
   readonly operation: (input: Input) => Effect.Effect<Output, OperationError>
 }
 
@@ -131,7 +131,7 @@ Run effects only at entry points: the public promise API, the CLI, or the transp
 
 ## Testing
 
-- Use `@effect/vitest` `it.effect`; use `it.live` only when live runtime behavior is under test.
+- Use `@effect/vitest` `it.effect`; use `it.live` only when live runtime behavior is under test. `@effect/vitest` 4.x needs vitest 5 and this repo is on vitest 4, so until that upgrade, cover Effect code through the end-to-end suites.
 - Use `TestClock`, `Deferred`, `Queue`, `Latch`, and `Ref` instead of sleeps and timing races.
 - Use a real ephemeral database for SQL, constraints, transactions, and state transitions.
 - Substitute layers at real seams. Test services and recording fakes live only in test files or test utilities.
