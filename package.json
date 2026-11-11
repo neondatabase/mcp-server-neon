@@ -31,11 +31,11 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.25.3",
     "@modelcontextprotocol/server": "2.0.0",
-    "@neon/sdk": "7.11.0",
-    "@neon/tools": "2.10.0",
+    "@neon/sdk": "7.13.0",
+    "@neon/tools": "2.14.2",
     "@neondatabase/serverless": "1.0.0",
     "@segment/analytics-node": "2.2.1",
-    "@sentry/node": "9.19.0",
+    "@sentry/node": "10.78.0",
     "@vercel/functions": "3.3.4",
     "he": "1.2.0",
     "jose": "6.2.2",
@@ -49,6 +49,7 @@
     "react-dom": "19.2.3",
     "redis": "4.6.0",
     "winston": "3.17.0",
+    "winston-transport": "4.9.0",
     "zod": "4.6.5",
     "zod-to-json-schema": "3.25.2"
   },

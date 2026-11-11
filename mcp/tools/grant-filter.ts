@@ -1,5 +1,4 @@
-import { z } from 'zod/v3';
-import { z as z4 } from 'zod';
+import * as z from 'zod';
 import { InvalidArgumentError } from '../server/errors';
 import {
   SCOPE_CATEGORIES,
@@ -11,13 +10,15 @@ import type { NeonTool } from './tool-definition';
 
 /**
  * Tools that are always available regardless of scope categories.
- * These are discovery/navigation tools the LLM needs to function, plus
- * send_feedback so users can always reach the Neon team.
+ * These are discovery/navigation tools the LLM needs to function,
+ * send_feedback so users can always reach the Neon team, and list_incidents
+ * so an agent can tell a Neon incident from its own mistake.
  */
 export const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
   'search',
   'fetch',
   'send_feedback',
+  'list_incidents',
 ]);
 
 /**
@@ -25,7 +26,11 @@ export const ALWAYS_AVAILABLE_TOOLS: ReadonlySet<string> = new Set([
  * the Neon API client, so they are safe to call anonymously.
  */
 export function isDocsOnlyTool(tool: Pick<NeonTool, 'name' | 'scope'>) {
-  return tool.scope === 'docs' || tool.name === 'send_feedback';
+  return (
+    tool.scope === 'docs' ||
+    tool.name === 'send_feedback' ||
+    tool.name === 'list_incidents'
+  );
 }
 
 // Hosts may cache this schema and its instructions independently of the grant.
@@ -37,15 +42,6 @@ function withProjectIdGuidance(description: string | undefined): string {
   const base = description?.trim();
   if (!base) return PROJECT_ID_GUIDANCE;
   return `${/[.!?]$/.test(base) ? base : `${base}.`} ${PROJECT_ID_GUIDANCE}`;
-}
-
-function isZod4Object(schema: unknown): schema is z4.ZodObject<z4.ZodRawShape> {
-  return (
-    typeof schema === 'object' &&
-    schema !== null &&
-    '_zod' in schema &&
-    'shape' in schema
-  );
 }
 
 /**
@@ -107,52 +103,26 @@ function applyProjectScopeFilter(
   return tools.filter((tool) => tool.projectScoped);
 }
 
-function optionalHostProjectId(tool: NeonTool): NeonTool | null {
+function optionalProjectIdSchema(tool: NeonTool): NeonTool | null {
+  if (!tool.projectScoped) return null;
   const schema = tool.inputSchema;
   if (!(schema instanceof z.ZodObject)) return null;
-
-  const shape = schema.shape as Record<string, z.ZodTypeAny>;
-  if (!('project_id' in shape)) return null;
-
-  return {
-    ...tool,
-    inputSchema: schema
-      .extend({
-        project_id: shape.project_id
-          .optional()
-          .describe(withProjectIdGuidance(shape.project_id.description)),
-      })
-      .strict(),
-  };
-}
-
-function optionalGeneratedProjectId(tool: NeonTool): NeonTool | null {
-  const schema = tool.inputSchema;
-  if (!isZod4Object(schema)) return null;
   if (!('project_id' in schema.shape)) return null;
   const projectIdSchema = schema.shape.project_id;
 
   return {
     ...tool,
-    inputSchema: z4.strictObject({
+    inputSchema: z.strictObject({
       ...schema.shape,
-      project_id: z4
+      project_id: z
         .optional(projectIdSchema)
         .describe(
           withProjectIdGuidance(
-            z4.globalRegistry.get(projectIdSchema)?.description,
+            z.globalRegistry.get(projectIdSchema)?.description,
           ),
         ),
     }),
   };
-}
-
-function optionalProjectIdSchema(tool: NeonTool): NeonTool | null {
-  if (!tool.projectScoped) return null;
-  if (tool.kind === 'generated') {
-    return optionalGeneratedProjectId(tool);
-  }
-  return optionalHostProjectId(tool);
 }
 
 /**
@@ -277,8 +247,8 @@ export function getAccessControlWarnings(
 
   if (grant.scopes !== null && grant.scopes.length === 0) {
     const discoveryToolsText = grant.projectId
-      ? 'Only the "send_feedback" tool is available.'
-      : 'Only the "search", "fetch", and "send_feedback" tools are available.';
+      ? 'Only the "send_feedback" and "list_incidents" tools are available.'
+      : 'Only the "search", "fetch", "send_feedback", and "list_incidents" tools are available.';
     warnings.push(
       '⚠️ Warning: No valid scope categories are set. ' +
         `${discoveryToolsText} ` +
@@ -291,19 +261,13 @@ export function getAccessControlWarnings(
 }
 
 function schemaHasProjectId(schema: NeonTool['inputSchema']): boolean {
-  if (schema instanceof z.ZodObject) {
-    return 'project_id' in schema.shape;
-  }
-  if (isZod4Object(schema)) {
-    return 'project_id' in schema.shape;
-  }
-  return false;
+  return schema instanceof z.ZodObject && 'project_id' in schema.shape;
 }
 
 export function injectProjectId(
   args: Record<string, unknown>,
   grant: GrantContext,
-  tool?: Pick<NeonTool, 'kind' | 'projectScoped'> & {
+  tool?: Pick<NeonTool, 'projectScoped'> & {
     inputSchema?: NeonTool['inputSchema'];
   },
 ): Record<string, unknown> {

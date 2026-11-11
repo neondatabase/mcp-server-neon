@@ -145,6 +145,22 @@ class Model implements AuthorizationCodeModel {
     return getRefreshResults().get(oldRefreshToken);
   };
 
+  /** Records the owning client on a cached result without extending its expiry. */
+  attributeRefreshResult: (
+    oldRefreshToken: string,
+    clientId: string,
+  ) => Promise<void> = async (oldRefreshToken, clientId) => {
+    const raw = await getRefreshResults().get(oldRefreshToken, { raw: true });
+    if (!raw?.value || typeof raw.expires !== 'number') return;
+    const ttl = raw.expires - Date.now();
+    if (ttl <= 0) return;
+    await getRefreshResults().set(
+      oldRefreshToken,
+      { ...raw.value, clientId },
+      ttl,
+    );
+  };
+
   // 4xx rejections won't recover — upstream has invalidated the token.
   // 10 min is plenty to absorb retry storms without keeping stale entries
   // around if a misbehaving client genuinely re-auths and starts over.

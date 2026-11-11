@@ -18,7 +18,9 @@ describe('buildConsentView', () => {
     expect(view.project.kind).toBe('all');
     expect(view.categories.kind).toBe('all');
     expect(view.writeChecked).toBe(true);
-    expect(view.tools.some((tool) => tool.title === 'Search')).toBe(true);
+    expect(
+      view.tools.some((tool) => tool.title === 'Search Neon resources'),
+    ).toBe(true);
     expect(view.tools.some((tool) => tool.title === 'Create project')).toBe(
       true,
     );
@@ -38,7 +40,9 @@ describe('buildConsentView', () => {
       kind: 'subset',
       labels: ['Querying', 'Schema'],
     });
-    expect(view.tools.some((tool) => tool.title === 'Search')).toBe(false);
+    expect(
+      view.tools.some((tool) => tool.title === 'Search Neon resources'),
+    ).toBe(false);
     expect(
       view.tools.some((tool) => tool.title === 'Get Database Tables'),
     ).toBe(true);
@@ -56,7 +60,7 @@ describe('buildConsentView', () => {
     );
   });
 
-  it('describes an empty category list without a project as search, fetch, and send_feedback only', () => {
+  it('describes an empty category list without a project as search, fetch, send_feedback, and list_incidents only', () => {
     const view = buildConsentView({
       grant: { projectId: null, scopes: [] },
       writeChecked: true,
@@ -65,27 +69,31 @@ describe('buildConsentView', () => {
     expect(view.categories.kind).toBe('none');
     expect(view.tools.map((tool) => tool.name).sort()).toEqual([
       'fetch',
+      'list_incidents',
       'search',
       'send_feedback',
     ]);
   });
 
-  it('describes an empty category list with a project as send_feedback only', () => {
+  it('describes an empty category list with a project as send_feedback and list_incidents only', () => {
     const view = buildConsentView({
       grant: { projectId: 'proj-123', scopes: [] },
       writeChecked: true,
     });
 
-    expect(view.tools.map((tool) => tool.name)).toEqual(['send_feedback']);
+    expect(view.tools.map((tool) => tool.name)).toEqual([
+      'send_feedback',
+      'list_incidents',
+    ]);
   });
 
   it('does not collapse when hidden write tools alone cross the threshold', () => {
     const readView = buildConsentView({
-      grant: { projectId: null, scopes: ['data_api'] },
+      grant: { projectId: 'proj-123', scopes: ['data_api'] },
       writeChecked: false,
     });
     const writeView = buildConsentView({
-      grant: { projectId: null, scopes: ['data_api'] },
+      grant: { projectId: 'proj-123', scopes: ['data_api'] },
       writeChecked: true,
     });
     expect(visibleToolCount(readView)).toBeLessThanOrEqual(COLLAPSE_ABOVE);
@@ -270,11 +278,11 @@ describe('renderConsentHtml', () => {
     const pinned = render('mcp_pinned_reader');
     expect(pinned).toContain('<dt>Postgres role:</dt>');
     expect(pinned).toContain('mcp_pinned_reader');
-    expect(pinned).not.toContain('Get Connection String');
+    expect(pinned).not.toContain('Get connection string');
 
     const unpinned = render();
     expect(unpinned).not.toContain('Postgres role:');
-    expect(unpinned).toContain('Get Connection String');
+    expect(unpinned).toContain('Get connection string');
   });
 
   it('renders confirmation without editors, including for a writable URL', () => {
@@ -321,7 +329,7 @@ describe('renderConsentHtml', () => {
     });
 
     expect(html).toContain(
-      'var ALWAYS = {"search":true,"fetch":true,"send_feedback":true};',
+      'var ALWAYS = {"search":true,"fetch":true,"send_feedback":true,"list_incidents":true};',
     );
     expect(html).toContain('name="projectMode"');
     expect(html).not.toContain('Next, sign in to Neon');
@@ -344,11 +352,11 @@ describe('renderConsentHtml', () => {
     expect(html).toContain('src="/images/consent/neon.svg"');
     expect(html).toContain('>Included tools</button>');
     expect(html).toContain('is-collapsed');
-    expect(html).toContain('139 tools available');
+    expect(html).toContain('141 tools available');
     expect(html).toContain('data-tool-content');
     expect(html).toContain('data-category-disclosure');
     expect(html).toContain(
-      'data-category-summary>13/13 selected · 139 tools available</span>',
+      'data-category-summary>13/13 selected · 141 tools available</span>',
     );
     expect(html).toContain('choice-categories');
     expect(html).not.toMatch(/\.check-grid\s*\{[^}]*overflow-y/);
@@ -475,7 +483,7 @@ describe('renderConsentHtml', () => {
       /<details class="choice choice-role" data-role-disclosure>/,
     );
     expect(html).toContain('data-role-summary>Database owner<');
-    expect(html).toContain('Get Connection String');
+    expect(html).toContain('Get connection string');
   });
 
   it('omits the Postgres role field on a confirmation', () => {
@@ -525,7 +533,7 @@ describe('renderConsentHtml', () => {
     expect(html).not.toContain('<script>x</script>');
   });
 
-  it('drops Get Connection String from the preview when a role is entered', () => {
+  it('drops Get connection string from the preview when a role is entered', () => {
     const render = (roleName: string) =>
       renderConsentHtml({
         client,
@@ -547,8 +555,8 @@ describe('renderConsentHtml', () => {
     const tools = (html: string) =>
       html.match(/data-tool-content>([\s\S]*?)<\/section>/)?.[1] ?? '';
 
-    expect(tools(render(''))).toContain('Get Connection String');
-    expect(tools(render('app_reader'))).not.toContain('Get Connection String');
+    expect(tools(render(''))).toContain('Get connection string');
+    expect(tools(render('app_reader'))).not.toContain('Get connection string');
     expect(tools(render('app_reader'))).toContain('Run SQL');
   });
 });

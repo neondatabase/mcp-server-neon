@@ -2,9 +2,30 @@
 
 # [NEXT]
 
-The `list_auth_oauth_providers`, `add_auth_oauth_provider`, `update_auth_oauth_provider` and `delete_auth_oauth_provider` descriptions name Discord among the social login providers, and `add_auth_oauth_provider` says Discord needs your own `client_id` and `client_secret` because it has no shared app, and that Apple and Discord work only on Better Auth projects, not legacy Stack Auth. Accepting `discord` as a provider `id` requires a `@neon/tools` release that includes it.
+Every tool now comes from `@neon/tools` 2.14.2. Tool names, input fields, required fields, and which grants list each tool are unchanged; descriptions are the package's, shorter, with this server's tool names in cross-references. Results that change:
+
+- `search` returns `{ "results": [{ "id", "title", "url" }] }` as `structuredContent` and as JSON text, the OpenAI search shape, instead of an array with a `type` field. It also finds shared projects, compute endpoints, and snapshots.
+- `fetch` returns `{ "id", "title", "text", "url", "metadata" }` as `structuredContent` and as JSON text instead of markdown alone; `text` holds the markdown.
+- `get_neon_auth_config` returns plain JSON, without the `Neon Auth configuration:` line and code fence.
+- `describe_branch` returns one JSON object, `{ "branch", "console_url", "text", "database_structure" }`. When the structure cannot be read, `database_structure` is `null` and `database_structure_error` says why.
+- `prepare_query_tuning` returns the `EXPLAIN` rows in `execution_plan` instead of an MCP content object, and includes `role_name` when one was passed.
+- `get_connection_string` called without `branch_id` says `Using default branch` instead of naming the branch it resolved.
+- A missing table, doc slug that fails validation, missing extension, and a `role_name` the pinned role refuses report `NeonClientError` instead of `NotFoundError` or `InvalidArgumentError`; the message is unchanged.
+- Four titles follow the package: `Search Neon resources`, `List organizations for the current user`, `Get connection string`, and `List Neon incidents`.
+
+2025-era Streamable HTTP clients receive an `Mcp-Session-Id` on the `initialize` response and send it on later requests. The server stores nothing under it and never rejects an unknown one; it groups a connection's requests in Sentry, which now also receives the server's logs. Clients that answer a session id with a `GET` stream or a `DELETE` on exit get `405`. 2026-07-28 clients see no change.
+
+`update_auth_logs_export` turns the export of a branch's Neon Auth events to Neon Platform logs on or off, in the `neon_auth` category and hidden in read-only mode. A project without logs export accepts only `enabled: false`. `get_neon_auth_config` reports the current value as `logs_export`, `null` where logs export is not available. Requires `@neon/tools` 2.12.0.
+
+OAuth sign-in completes for clients whose `redirect_uri` is on `127.0.0.1`, such as Codex CLI (`http://127.0.0.1:<port>/callback`). Before, the server stored that redirect as `http://localhost:<port>/callback`, so the browser returned to `localhost` and the client's token request failed with `invalid_request`.
+
+New tool: `list_incidents` returns open Neon incidents, active and upcoming maintenance, and the components and regions neonstatus.com reports as not operational. It needs no Neon credential and is available on every connection, including the anonymous `?category=docs` endpoint, read-only mode, project-scoped grants, and grants with no valid categories. OAuth consent lists it under Discovery. Requires `@neon/tools` 2.11.0.
+
+The `list_auth_oauth_providers`, `add_auth_oauth_provider`, `update_auth_oauth_provider` and `delete_auth_oauth_provider` descriptions name Discord among the social login providers. `add_auth_oauth_provider` says Discord needs your own `client_id` and `client_secret` because it has no shared app, and that Apple and Discord work only on Better Auth projects, not legacy Stack Auth.
 
 Authorizing a client that returns through a custom URL scheme, such as older Cursor installs (`cursor://`), ends on a completion page instead of leaving the consent form on screen. The page opens the app, links back to it if the app did not open, and offers a prompt to install the Neon skills. A cancelled or failed authorization opened in a browser gets a page instead of a JSON body. Clients that return to a web or loopback address still get a plain redirect, and non-browser callers see no change. The page reports that it was shown and which of its buttons and links were used, as described under Telemetry in the README.
+
+A refresh token is accepted and revoked only for the OAuth client it was issued to. Before, another client presenting it could receive a cached rotation result, block the owner's next refresh for 10 minutes, or delete it through `/api/revoke`. The owning client's refreshes and replays are unchanged.
 
 OAuth sign-in, token refresh, and API-key requests keep working after the OAuth database drops its connections, for example on a compute restart. Before, one dropped connection could leave every token store on a server instance failing with `Cannot use a pool after calling end on the pool`, and an idle dropped connection raised an uncaught exception.
 

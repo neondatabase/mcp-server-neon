@@ -70,9 +70,9 @@ export async function POST(request: NextRequest) {
         );
         if (accessToken && accessToken.client.id === client.id) {
           await model.deleteToken(accessToken);
+          await model.deleteRefreshToken(refreshToken);
+          logger.info('Token revoked', { clientId, type: 'refresh_token' });
         }
-        await model.deleteRefreshToken(refreshToken);
-        logger.info('Token revoked', { clientId, type: 'refresh_token' });
         return new NextResponse(null, { status: 200 });
       }
     }

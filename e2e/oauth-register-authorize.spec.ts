@@ -264,7 +264,51 @@ test.describe('OAuth register and authorize contract', () => {
     const location = response.headers()['location'] ?? '';
     expect(location).toContain('error=access_denied');
     expect(location).toContain('state=e2e-cancel');
+    expect(
+      location.startsWith(`${VALID_REGISTER_PAYLOAD.redirect_uris[0]}?`),
+    ).toBe(true);
   });
+
+  // Codex's client metadata document registers portless loopback callbacks
+  // and authorizes with the port its listener got, on IPv4 or IPv6.
+  for (const host of ['127.0.0.1', '[::1]']) {
+    test(`ephemeral-port redirect on ${host} comes back unchanged`, async ({
+      page,
+      request,
+    }) => {
+      const client = await registerClient(
+        request,
+        {},
+        {
+          ...VALID_REGISTER_PAYLOAD,
+          redirect_uris: [
+            'http://127.0.0.1/callback',
+            'http://localhost/callback',
+          ],
+        },
+      );
+      const redirectUri = `http://${host}:61678/callback`;
+      await page.goto(
+        authorizePath(client, {
+          state: 'e2e-ephemeral',
+          redirect_uri: redirectUri,
+        }),
+      );
+      const responsePromise = page.waitForResponse(
+        (res) =>
+          res.request().method() === 'POST' &&
+          res.url().includes('/api/authorize'),
+      );
+      await page.getByRole('button', { name: 'Cancel' }).click();
+      const response = await responsePromise;
+      expect(response.status()).toBe(303);
+      const header = response.headers()['location'];
+      expect(header).toBeTruthy();
+      const location = new URL(header ?? '');
+      expect(`${location.origin}${location.pathname}`).toBe(redirectUri);
+      expect(location.searchParams.get('error')).toBe('access_denied');
+    });
+  }
 
   test('Cancel from an empty one-project form still redirects', async ({
     page,
@@ -414,6 +458,9 @@ test.describe('OAuth register and authorize contract', () => {
     expect(location.origin).toBe(`http://localhost:${port}`);
     expect(location.pathname).toBe('/api/authorize');
     expect(location.searchParams.get('state')).toBe('e2e-host');
+    expect(location.searchParams.get('redirect_uri')).toBe(
+      VALID_REGISTER_PAYLOAD.redirect_uris[0],
+    );
     expect(response.headers()['set-cookie'] ?? '').not.toContain(
       'neon_mcp_at_',
     );

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NeonApiError, NeonClientError, NeonError } from '@neon/sdk';
-import { createNeonTools } from '@neon/tools';
+import { createNeonTools, InspectDiagnosticError } from '@neon/tools';
 import { NeonDbError } from '@neondatabase/serverless';
 import { InvalidArgumentError } from '../server/errors';
 
@@ -142,6 +142,22 @@ describe('handleToolError', () => {
     );
 
     expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it('captures a diagnostic query Postgres rejected, which is a package bug', () => {
+    const cause = Object.assign(new NeonDbError('column "x" does not exist'), {
+      code: '42703',
+    });
+    const error = new InspectDiagnosticError(
+      'The "table-sizes" diagnostic failed against Postgres: column "x" does not exist',
+      'table-sizes',
+      cause,
+    );
+
+    const result = handleToolError(error, properties, 'trace-1', agent);
+
+    expect(result.isError).toBe(true);
+    expect(captureException).toHaveBeenCalledWith(error, expect.anything());
   });
 
   it('captures Neon SDK errors of other kinds', () => {

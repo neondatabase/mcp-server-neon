@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { z } from 'zod/v3';
-import { z as z4 } from 'zod';
+import * as z from 'zod';
 import { filterToolsForGrant, injectProjectId } from '../tools/grant-filter';
 import { toListedInputSchema } from '../tools/listed-schema';
 import type { NeonTool } from '../tools/tool-definition';
 import type { GrantContext } from '../utils/grant-context';
 
-// These tests pass their own host/generated Zod tools to the real filter.
+// These tests pass their own custom/generated Zod tools to the real filter.
 // Avoid initializing the unrelated Neon SDK catalog and its handlers.
 vi.mock('../tools/definitions', () => ({ NEON_TOOLS: [] }));
 
@@ -15,25 +14,28 @@ const scoped: GrantContext = { projectId: 'project-a', scopes: null };
 
 const fixtures: NeonTool[] = [
   {
-    kind: 'host',
-    name: 'host_query',
+    kind: 'custom',
+    id: 'sql.run',
+    name: 'custom_query',
     scope: 'querying',
-    description: 'Host query fixture',
-    inputSchema: z
-      .object({ project_id: z.string(), sql: z.string().min(1) })
-      .strict(),
+    description: 'Custom query fixture',
+    inputSchema: z.strictObject({
+      project_id: z.string(),
+      sql: z.string().min(1),
+    }),
     readOnlySafe: true,
     projectScoped: true,
     annotations: {},
   },
   {
     kind: 'generated',
+    id: 'branches.get',
     name: 'generated_branch',
     scope: 'branches',
     description: 'Generated branch fixture',
-    inputSchema: z4.strictObject({
-      project_id: z4.string(),
-      branch_id: z4.string().min(1),
+    inputSchema: z.strictObject({
+      project_id: z.string(),
+      branch_id: z.string().min(1),
     }),
     readOnlySafe: true,
     projectScoped: true,
@@ -42,7 +44,16 @@ const fixtures: NeonTool[] = [
 ];
 
 function argumentsFor(tool: NeonTool): Record<string, unknown> {
-  return tool.kind === 'host' ? { sql: 'SELECT 1' } : { branch_id: 'branch-a' };
+  return tool.kind === 'custom'
+    ? { sql: 'SELECT 1' }
+    : { branch_id: 'branch-a' };
+}
+
+function parseArgs(
+  schema: NeonTool['inputSchema'],
+  args: unknown,
+): Record<string, unknown> {
+  return z.record(z.string(), z.unknown()).parse(schema.parse(args));
 }
 
 function published(tool: NeonTool, grant: GrantContext): NeonTool {
@@ -79,13 +90,16 @@ describe.each(fixtures)('$kind stable project schema', (tool) => {
 
   it('requires an explicit ID for an unscoped full handler', () => {
     const args = argumentsFor(tool);
-    const wireArgs = published(tool, unscoped).inputSchema.parse(args);
+    const wireArgs = parseArgs(published(tool, unscoped).inputSchema, args);
     expect(() => injectProjectId(wireArgs, unscoped, tool)).toThrow(
       'project_id is required because this connection is not scoped to a project',
     );
 
     const explicit = { ...args, project_id: 'project-b' };
-    const explicitWire = published(tool, unscoped).inputSchema.parse(explicit);
+    const explicitWire = parseArgs(
+      published(tool, unscoped).inputSchema,
+      explicit,
+    );
     expect(
       tool.inputSchema.parse(injectProjectId(explicitWire, unscoped, tool)),
     ).toEqual(explicit);
@@ -98,7 +112,7 @@ describe.each(fixtures)('$kind stable project schema', (tool) => {
         ...argumentsFor(tool),
         ...(projectId === undefined ? {} : { project_id: projectId }),
       };
-      const wireArgs = published(tool, scoped).inputSchema.parse(args);
+      const wireArgs = parseArgs(published(tool, scoped).inputSchema, args);
       const effective = injectProjectId(wireArgs, scoped, tool);
       expect(tool.inputSchema.parse(effective)).toEqual({
         ...argumentsFor(tool),
@@ -113,7 +127,7 @@ describe.each(fixtures)('$kind stable project schema', (tool) => {
 
   it('rejects a conflicting ID before invoking a scoped handler', () => {
     const args = { ...argumentsFor(tool), project_id: 'project-b' };
-    const wireArgs = published(tool, scoped).inputSchema.parse(args);
+    const wireArgs = parseArgs(published(tool, scoped).inputSchema, args);
     expect(() => injectProjectId(wireArgs, scoped, tool)).toThrow(
       `does not match this connection's project "project-a"`,
     );
@@ -149,19 +163,19 @@ describe('unchanged tool visibility and tools without a project ID', () => {
     ...fixtures[0],
     name: 'docs',
     scope: 'docs',
-    inputSchema: z.object({ slug: z.string() }).strict(),
+    inputSchema: z.strictObject({ slug: z.string() }),
   };
 
   it('retains project/category filtering and global full schemas', () => {
     const tools = [...fixtures, globalTool, docsTool];
     expect(filterToolsForGrant(tools, scoped).map((tool) => tool.name)).toEqual(
-      ['host_query', 'generated_branch', 'docs'],
+      ['custom_query', 'generated_branch', 'docs'],
     );
     expect(
       filterToolsForGrant(tools, { ...scoped, scopes: ['querying'] }).map(
         (tool) => tool.name,
       ),
-    ).toEqual(['host_query']);
+    ).toEqual(['custom_query']);
     expect(published(globalTool, unscoped).inputSchema).toBe(
       globalTool.inputSchema,
     );

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { z } from 'zod/v3';
+import * as z from 'zod';
 import {
   filterToolsForGrant,
   getAvailableTools,
@@ -15,15 +15,8 @@ import type { GrantContext } from '../utils/grant-context';
 import { SCOPE_CATEGORIES } from '../utils/grant-context';
 import { NEON_TOOLS } from '../tools/definitions';
 
-function isZod4Object(
-  schema: unknown,
-): schema is { shape: Record<string, unknown> } {
-  return (
-    typeof schema === 'object' &&
-    schema !== null &&
-    '_zod' in schema &&
-    'shape' in schema
-  );
+function isZod4Object(schema: unknown): schema is z.ZodObject {
+  return schema instanceof z.ZodObject;
 }
 
 function grant(overrides: Partial<GrantContext> = {}): GrantContext {
@@ -46,8 +39,9 @@ describe('filterToolsForGrant', () => {
       grant({ scopes: ['querying'] }),
     );
     const names = tools.map((t) => t.name);
-    expect(tools).toHaveLength(12);
+    expect(tools).toHaveLength(13);
     expect(names).toContain('run_sql');
+    expect(names).toContain('list_incidents');
     expect(names).toContain('search');
     expect(names).toContain('fetch');
     expect(names).not.toContain('create_project');
@@ -80,6 +74,7 @@ describe('filterToolsForGrant', () => {
     const tools = filterToolsForGrant(NEON_TOOLS, grant({ scopes: [] }));
     expect(tools.map((t) => t.name).sort()).toEqual([
       'fetch',
+      'list_incidents',
       'search',
       'send_feedback',
     ]);
@@ -108,22 +103,22 @@ describe('filterToolsForGrant', () => {
     expect(names).toContain('list_project_members');
   });
 
-  it('keeps optional host and generated project_id in published schemas', () => {
+  it('keeps optional custom and generated project_id in published schemas', () => {
     const tools = filterToolsForGrant(
       NEON_TOOLS,
       grant({ projectId: 'proj-123' }),
     );
 
     const runSql = tools.find((tool) => tool.name === 'run_sql');
-    expect(runSql).toBeDefined();
-    expect(runSql?.inputSchema instanceof z.ZodObject).toBe(true);
-    if (!(runSql?.inputSchema instanceof z.ZodObject)) {
-      throw new Error('run_sql must keep a Zod 3 object schema');
+    expect(runSql && isZod4Object(runSql.inputSchema)).toBe(true);
+    if (!runSql || !isZod4Object(runSql.inputSchema)) {
+      throw new Error('run_sql must keep a Zod 4 object schema');
     }
     expect('project_id' in runSql.inputSchema.shape).toBe(true);
-    expect(runSql.inputSchema.shape.project_id.description).toBe(
-      'The ID of the project to execute the query against. Required for an unscoped connection. ' +
-        'May be omitted when the connection is scoped to one project; if provided, it must match that project.',
+    expect(
+      z.globalRegistry.get(runSql.inputSchema.shape.project_id)?.description,
+    ).toMatch(
+      / Required for an unscoped connection\. May be omitted when the connection is scoped to one project; if provided, it must match that project\.$/,
     );
     expect('sql' in runSql.inputSchema.shape).toBe(true);
     expect(runSql.inputSchema.safeParse({ sql: 'select 1' }).success).toBe(
@@ -187,9 +182,10 @@ describe('filterToolsForGrant', () => {
       NEON_TOOLS,
       grant({ projectId: 'proj-123', scopes: ['querying'] }),
     );
-    expect(tools).toHaveLength(10);
+    expect(tools).toHaveLength(11);
     const names = tools.map((t) => t.name);
     expect(names).toContain('run_sql');
+    expect(names).toContain('list_incidents');
     expect(names).not.toContain('search');
     expect(names).not.toContain('fetch');
   });
@@ -198,7 +194,7 @@ describe('filterToolsForGrant', () => {
 describe('getAvailableTools', () => {
   it('applies read-only filter after grant filtering', () => {
     const tools = getAvailableTools(grant({ scopes: ['querying'] }), true);
-    expect(tools).toHaveLength(7);
+    expect(tools).toHaveLength(8);
     expect(tools.map((tool) => tool.name)).not.toContain('run_sql_transaction');
     for (const tool of tools) {
       expect(tool.readOnlySafe).toBe(true);
@@ -320,7 +316,7 @@ describe('getAccessControlNotices', () => {
     );
     expect(instructions).toContain('compute');
     expect(instructions).toContain(
-      'Only the "send_feedback" tool is available',
+      'Only the "send_feedback" and "list_incidents" tools are available',
     );
   });
 });
@@ -332,14 +328,14 @@ describe('getAccessControlWarnings', () => {
     expect(warnings[0]).toContain('No valid scope categories');
   });
 
-  it('warns that only send_feedback remains when project-scoped and scopes are invalid', () => {
+  it('warns that only send_feedback and list_incidents remain when project-scoped and scopes are invalid', () => {
     const warnings = getAccessControlWarnings(
       grant({ projectId: 'proj-123', scopes: [] }),
       false,
     );
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain(
-      'Only the "send_feedback" tool is available.',
+      'Only the "send_feedback" and "list_incidents" tools are available.',
     );
   });
 
@@ -364,7 +360,7 @@ describe('injectProjectId', () => {
     ).toThrow(`does not match this connection's project "proj-123"`);
   });
 
-  it('injects project_id for host and generated tools when grant is project-scoped', () => {
+  it('injects project_id when grant is project-scoped', () => {
     const args = { branch_id: 'br-1' };
     const scoped = grant({ projectId: 'proj-123' });
     expect(injectProjectId(args, scoped)).toEqual({
@@ -373,7 +369,6 @@ describe('injectProjectId', () => {
     });
     expect(
       injectProjectId(args, scoped, {
-        kind: 'generated',
         projectScoped: true,
       }),
     ).toEqual({
@@ -382,7 +377,6 @@ describe('injectProjectId', () => {
     });
     expect(
       injectProjectId({ sql: 'select 1' }, scoped, {
-        kind: 'host',
         projectScoped: true,
       }),
     ).toEqual({
@@ -484,6 +478,7 @@ describe('search_docs visibility', () => {
     const docsOnly = NEON_TOOLS.filter(isDocsOnlyTool).map((t) => t.name);
     expect(docsOnly.sort()).toEqual([
       'get_doc',
+      'list_incidents',
       'search_docs',
       'send_feedback',
     ]);

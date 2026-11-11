@@ -8,6 +8,7 @@ import {
   FEEDBACK_FIXTURE_URL,
   SITE_SEARCH_FIXTURE_URL,
 } from './e2e/docs-fixture.js';
+import { SENTRY_FIXTURE_DSN } from './e2e/sentry-fixture.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.E2E_PORT ?? '3100';
@@ -45,7 +46,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `pnpm exec next dev --port ${PORT}`,
+    // Production's request URL host is mcp.neon.tech. A loopback hostname
+    // here would absorb NextRequest's one loopback-to-localhost rewrite and
+    // hide what it does to a loopback redirect_uri (see next.config.ts).
+    command: `pnpm exec next dev --hostname 0.0.0.0 --port ${PORT}`,
     url: BASE_URL,
     // The suite owns this server so webServer.env always reaches it.
     reuseExistingServer: false,
@@ -65,8 +69,9 @@ export default defineConfig({
       // Same fixture server for search_docs, so no test depends on neon-agent.
       NEON_SITE_SEARCH_URL: SITE_SEARCH_FIXTURE_URL,
       // An unset SENTRY_DSN falls back to the production DSN in lib/config.ts,
-      // and the suite triggers server errors on purpose.
-      SENTRY_DSN: '',
+      // and the suite triggers server errors on purpose. The fixture also
+      // lets tests read the spans and logs the server sends.
+      SENTRY_DSN: SENTRY_FIXTURE_DSN,
       // An unset ANALYTICS_WRITE_KEY falls back to the production key, so test
       // traffic would otherwise land in production analytics.
       NEON_MCP_DISABLE_ANALYTICS: '1',

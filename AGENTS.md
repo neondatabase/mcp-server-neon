@@ -137,7 +137,8 @@ infrastructure.
 **E2E tests** use [Playwright](https://playwright.dev/) and live in `e2e/`. Configuration is in `playwright.config.ts`.
 
 - **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com). The connection string is written to `.env.e2e` (gitignored) and passed to the Next.js dev server. It also starts the docs fixture server (see below).
-- **Docs fixture** (`e2e/docs-fixture.ts`): `search_docs`, `get_doc`, and `send_feedback` fetch server-side, so `request.route()` cannot intercept them, and a test calling them would otherwise depend on neon-agent, neon.com, and the feedback service being up — which merge-gating tests must not. Global setup serves canned site search responses (chosen by query), one page (`/docs/reference/glossary.md`), and a feedback endpoint on port `3101` (`E2E_DOCS_PORT` to change it, and it fails loudly if the port is taken). `playwright.config.ts` points the dev server's `NEON_SITE_SEARCH_URL`, `NEON_DOCS_BASE_URL`, and `NEON_FEEDBACK_URL` at it. Those URLs must be set in `webServer.env`, not in global setup: Playwright starts the web server as a plugin task, which runs **before** global setup, so anything global setup adds to `process.env` reaches the dev server too late. `webServer.env` also sets `SENTRY_DSN` to an empty string so the suite's expected server errors don't reach production Sentry.
+- **Docs fixture** (`e2e/docs-fixture.ts`): `search_docs`, `get_doc`, and `send_feedback` fetch server-side, so `request.route()` cannot intercept them, and a test calling them would otherwise depend on neon-agent, neon.com, and the feedback service being up — which merge-gating tests must not. Global setup serves canned site search responses (chosen by query), one page (`/docs/reference/glossary.md`), and a feedback endpoint on port `3101` (`E2E_DOCS_PORT` to change it, and it fails loudly if the port is taken). `playwright.config.ts` points the dev server's `NEON_SITE_SEARCH_URL`, `NEON_DOCS_BASE_URL`, and `NEON_FEEDBACK_URL` at it. Those URLs must be set in `webServer.env`, not in global setup: Playwright starts the web server as a plugin task, which runs **before** global setup, so anything global setup adds to `process.env` reaches the dev server too late.
+- **Sentry fixture** (`e2e/sentry-fixture.ts`): global setup also serves a Sentry ingestion stand-in on port `3102` (`E2E_SENTRY_PORT`), and `webServer.env` points `SENTRY_DSN` at it, so the suite's expected server errors never reach production Sentry. Tests read the spans and logs the server sent from `GET /items` (`e2e/session-tracing.spec.ts`).
 - **No secrets needed**: The e2e infrastructure is fully self-contained. Instagres databases expire after 72 hours; no explicit teardown is required.
 - **Reuse across runs**: If `.env.e2e` already exists, global-setup reuses it instead of re-provisioning. Delete the file to force a fresh database.
 - **CI**: `.github/workflows/pr.yml` runs `lint-build` (version sync, format, lint, knip, build) first. Then `test` (`pnpm test:ci`: unit, integration, MCP e2e) and `e2e-web` (`pnpm test:e2e:web`) run in parallel, then `e2e-live` (`pnpm test:e2e:live`) for same-repo PRs that are not from Dependabot. The required `lint-and-build` check passes only when all of them succeed; fork and Dependabot PRs skip `e2e-live`. Shared setup (JFrog npm mirror, Node, pnpm, install) is the local action `.github/actions/setup`.
@@ -158,10 +159,12 @@ infrastructure.
    - Falls back gracefully when project-scoped keys cannot access account-level endpoints
 
 2. **Tools System (`mcp/tools/`)**
-   - `definitions.ts`: Exports `NEON_TOOLS` array defining all available tools with their schemas
-   - `tools.ts`: Exports `NEON_HANDLERS` object mapping tool names to handler functions
-   - `toolsSchema.ts`: Zod schemas for tool input validation
-   - `handlers/`: Individual tool handler implementations organized by feature
+   - Every tool comes from [`@neon/tools`](https://www.npmjs.com/package/@neon/tools): its implementation, input schema, safety annotations, and description. This server keeps only what is MCP-specific.
+   - `operations.ts`: the selected selectors and their grant metadata. `CUSTOM_TOOL_GRANTS` states scope, `readOnlySafe`, and `projectScoped` for the tools this server used to implement itself; `GENERATED_TOOL_SCOPES` gives the scope of every generated tool, whose `readOnlySafe` and `projectScoped` derive from method and path.
+   - `mcp-tool-names.json`: the published MCP name of every selector. It is a copy of `packages/tools/scripts/mcp-tool-names.json` in neondatabase/neon-pkgs and must stay identical to it.
+   - `neon-tools.ts`: the one `createNeonTools` call, with the pinned names, the MCP-only description notes, and the docs, feedback, and API endpoints from `lib/config.ts`
+   - `definitions.ts`: `NEON_TOOLS`, each package tool with its MCP name, grant flags, and annotations
+   - `tools.ts`: `NEON_HANDLERS`, which validate input, resolve `org_id`, pass the execution context (`apiKey`, `signal`, `readOnly`, `postgresRole`, `caller`), and render the package result as MCP content
 
 3. **Remote Transport (`app/api/[transport]/route.ts`)**
    - Next.js API route handling stateless Streamable HTTP
@@ -193,7 +196,9 @@ infrastructure.
 
   A `readOnlySafe` tool that runs caller-supplied SQL must run exactly one caller-supplied statement, as a prepared query, in its own `READ ONLY` transaction, as `run_sql` does. `run_sql_transaction` is not `readOnlySafe` because its statements share one transaction, so a `COMMIT` or `SET TRANSACTION READ WRITE` statement can end the transaction or switch it to read-write.
 
-  `describe_branch` follows the same rule for its fixed structure query: one `SELECT` over the system catalogs (`DESCRIBE_DATABASE_QUERY` in `mcp/tools/utils.ts`) in a `READ ONLY` transaction. Do not create helper objects to serve a read.
+  `describe_branch` follows the same rule for its fixed structure query: one `SELECT` over the system catalogs in a `READ ONLY` transaction, in `@neon/tools`. Do not create helper objects to serve a read.
+
+  SQL tools report `metadata.method: "SQL"` whether or not they can write, so `readOnlySafe` for them is stated per tool in `CUSTOM_TOOL_GRANTS`, never derived from the method.
 
 - **MCP Tool Annotations**: All tools include MCP-standard annotations for client hints:
   - `title`: Human-readable tool name
@@ -202,76 +207,41 @@ infrastructure.
   - `idempotentHint`: Whether repeated calls produce the same result
   - `openWorldHint`: Whether the tool interacts with external systems
 
-- **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry error reporting.
+- **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry. Each tool call gets one `tools/call <tool>` span (`mcp/sentry/tool-span.ts`) with OpenTelemetry MCP attributes; `tool_name` stays on it because existing Sentry dashboards query it. Only server failures (`isServerError` in `mcp/server/errors.ts`) mark it failed; agent mistakes set `error.type` only. Winston logs go to Sentry Logs too, so never log credentials, SQL, or request bodies.
+
+- **Session ids**: the route gives a 2025-era client an `Mcp-Session-Id` on its `initialize` response (`mcp/utils/mcp-session.ts`). It is telemetry only: nothing is stored under it and an unknown id is never rejected. Every span, error, and log of a request carries it as `mcp.session.id`, so one query in Sentry returns a connection's whole chain of calls. 2026-07-28 requests have no sessions; a client's `_meta.threadId` (Codex) lands on tool spans as `gen_ai.conversation.id`. Both ids live on the request's root span (`mcp/sentry/session.ts`), not on the Sentry isolation scope.
+
+- **Sentry init**: `instrumentation.ts` initializes Sentry before Next.js serves any request. Importing `mcp/sentry/instrument` from a route instead runs `init` during that route's first request, which then runs on the default isolation scope; every later request on the instance clones what it wrote there, such as `setUser`. `dataCollection` in `mcp/sentry/instrument.ts` keeps request headers, bodies, cookies, and query strings out of Sentry, because the OAuth routes carry client secrets, refresh tokens, PKCE verifiers, and authorization codes there; `e2e/sentry-privacy.spec.ts` checks it.
 
 ## Tool arguments
 
-Every MCP tool argument is `snake_case` — host tools (`run_sql`, `inspect_database`, …) and generated Management API tools. Published schemas reject unknown keys: a camelCase alias (`projectId`) fails validation. URL grant query params stay camelCase (`?projectId=`, `?category=`, `?readonly=`) because those strings are already in issued OAuth grants and installed MCP URLs. Internal TypeScript helpers stay camelCase; `HOST_HANDLERS` maps wire keys at the boundary.
+Every MCP tool argument is `snake_case`, as `@neon/tools` publishes it. Published schemas reject unknown keys: a camelCase alias (`projectId`) fails validation. URL grant query params stay camelCase (`?projectId=`, `?category=`, `?readonly=`) because those strings are already in issued OAuth grants and installed MCP URLs.
 
-## Adding New Tools
+A published name, field, or required set never changes for an existing tool. Where the package differs, the MCP boundary keeps the old shape: `get_connection_string` takes `compute_id` (sent as `endpoint_id`) and no `pooled`, so it returns the SDK's default pooled URI (`GET_CONNECTION_STRING_INPUT_SCHEMA` in `definitions.ts`).
 
-1. Define the tool schema in `mcp/tools/toolsSchema.ts`:
+## Adding or Overriding a Tool
 
-```typescript
-export const myNewToolInputSchema = z
-  .object({
-    project_id: z.string().describe('The Neon project ID'),
-    // ... other fields
-  })
-  .strict();
-```
+Tools are implemented in `@neon/tools` (neondatabase/neon-pkgs, `packages/tools`). A new tool, a fixed description, or a changed result shape belongs there; bump `@neon/tools` here to pick it up.
 
-2. Add the tool definition to `NEON_TOOLS` array in `mcp/tools/definitions.ts`:
+To publish a package tool on this server:
+
+1. Add its selector to `operations.ts`. A generated Management API tool goes in `GENERATED_TOOL_SCOPES` with its scope category. A tool whose method or path does not say whether it is read-only safe or which project it touches (SQL, docs, anything without a Neon API path) goes in `CUSTOM_TOOL_GRANTS` with `scope`, `readOnlySafe`, and `projectScoped`:
 
 ```typescript
-{
-  name: 'my_new_tool' as const,
-  description: 'Description of what this tool does',
-  inputSchema: myNewToolInputSchema,
-  readOnlySafe: true, // Set to true if tool only reads data (for read-only mode filtering)
-  annotations: {
-    title: 'My New Tool',
-    readOnlyHint: true,      // Does it only read data?
-    destructiveHint: false,  // Can it cause irreversible changes?
-    idempotentHint: true,    // Do repeated calls produce same result?
-    openWorldHint: false,    // Does it interact with external systems?
-  } satisfies ToolAnnotations,
-}
-```
-
-3. Create a handler in `mcp/tools/handlers/my-new-tool.ts`:
-
-```typescript
-import { ToolHandler } from '../types';
-import { myNewToolInputSchema } from '../toolsSchema';
-
-export const myNewToolHandler: ToolHandler<'my_new_tool'> = async (
-  args,
-  neonClient,
-  extra,
-) => {
-  // Implementation
-  return {
-    content: [
-      {
-        type: 'text',
-        text: 'Result message',
-      },
-    ],
-  };
+export const CUSTOM_TOOL_GRANTS = {
+  'sql.run': { scope: 'querying', readOnlySafe: true, projectScoped: true },
+  // ...
 };
 ```
 
-4. Register the handler in `mcp/tools/tools.ts`:
+2. If the name the tool publishes under is not its package default (`publishedId(selector)`), add it to `mcp-tool-names.json` in neon-pkgs first and copy the file here unchanged.
+3. Update the snapshots (`pnpm vitest run mcp/__tests__/hosted-tools-list.snapshot.test.ts -u`) and review the diff.
 
-```typescript
-import { myNewToolHandler } from './handlers/my-new-tool';
+Overrides stay MCP-specific:
 
-export const NEON_HANDLERS = {
-  // ... existing handlers
-  my_new_tool: myNewToolHandler,
-};
-```
+- Description text that only holds on this server (`org_id` auto-selection, read-only mode, connection scope) goes in `MCP_DESCRIPTION_NOTES` in `neon-tools.ts`, appended to the package text. Name other tools with `{{selector}}` so the reference resolves to their MCP name.
+- A result that MCP clients already parse in a shape the package does not return gets a renderer in `RESULT_RENDERERS` in `tools.ts`. Every other result is JSON text; generated results also pass through `sanitize.ts`.
+- `kind: 'custom'` tools take annotations from the package; generated tools derive them in `definitions.ts`.
 
 ## Environment Configuration
 
@@ -324,18 +294,20 @@ normally provided through `.env.local`. Key variables:
 │   │   ├── api.ts            # Neon API client factory
 │   │   ├── account.ts        # Account resolution (user/org/project-scoped)
 │   │   ├── errors.ts         # Error handling utilities
-│   ├── tools/          # Tool definitions and handlers
-│   │   ├── index.ts        # Re-exports definitions and handlers
+│   ├── tools/          # MCP layer over @neon/tools
+│   │   ├── index.ts        # Re-exports handlers
+│   │   ├── operations.ts   # Selected selectors, scope categories, grant flags
+│   │   ├── mcp-tool-names.json # Published MCP name per selector (copy from neon-pkgs)
+│   │   ├── neon-tools.ts   # createNeonTools call, MCP description notes
 │   │   ├── definitions.ts  # Tool definitions (NEON_TOOLS) with annotations
-│   │   ├── tools.ts        # Tool handlers mapping (NEON_HANDLERS)
-│   │   ├── toolsSchema.ts  # Zod schemas for tool inputs
+│   │   ├── tools.ts        # Tool handlers (NEON_HANDLERS) and result rendering
+│   │   ├── sanitize.ts     # Credential stripping for generated results
 │   │   ├── grant-filter.ts # Filter NEON_TOOLS by grant context (scope categories, project scoping)
-│   │   ├── handlers/       # Individual tool implementations
 │   │   ├── types.ts        # TypeScript types
-│   │   └── utils.ts        # Tool utilities
+│   │   └── utils.ts        # org_id selection
 │   ├── oauth/          # OAuth model and KV store
 │   ├── analytics/      # Segment analytics
-│   ├── sentry/         # Sentry error tracking
+│   ├── sentry/         # Sentry setup, tool spans, session tagging
 │   ├── types/          # Shared TypeScript types
 │   ├── utils/          # Shared utilities
 │   │   ├── read-only.ts          # Read-only mode detection, SUPPORTED_SCOPES
@@ -344,7 +316,6 @@ normally provided through `.env.local`. Key variables:
 │   │   ├── trace.ts              # TraceId generation for request correlation
 │   │   ├── client-application.ts # Client application utilities
 │   │   └── logger.ts             # Logging utilities
-│   ├── describeUtils.ts # Postgres \d-style describe helpers (derived from @neondatabase/psql-describe)
 │   └── constants.ts    # Shared constants
 ├── public/             # Static assets (favicons, OG image, llms.txt)
 ├── .prettierrc         # Prettier config (singleQuote: true)
@@ -376,7 +347,7 @@ Code comments reference these files by path (e.g. `ai-notes/refresh-slo.md`).
 
 - **Migration Pattern**: Tools like `prepare_database_migration` and `prepare_query_tuning` create temporary branches and return all context (branch IDs, SQL, database name, etc.) in the response. The LLM must pass this context back to subsequent `complete_*` tools. No state is stored server-side, enabling serverless deployment.
 
-- **Neon API Client**: Created in `mcp/neon-client.ts` on top of `@neon/sdk`. Every Neon request a tool makes goes through it — there is no raw-HTTP escape hatch — and all tool handlers receive a pre-configured `neonClient` instance.
+- **Neon API Client**: Tools call the Neon API through `@neon/tools` with `fetchAsMcpServer` from `mcp/neon-client.ts`, which sets the server's `User-Agent`. `createNeonClient` in the same file covers the calls outside tools: account resolution, `org_id` selection, and the live suites' setup and cleanup.
 
 ## Remote MCP Server (Vercel)
 
