@@ -41,7 +41,7 @@ Violations that existed when the config landed are counted per file and rule in 
 
 - A new violation fails, whether a count goes up or a file or rule appears that the baseline lacks. Fix it; never raise the baseline.
 - Disable comments (`eslint-disable`, `oxlint-disable`, `@ts-ignore`, `@ts-expect-error`, `@effect-diagnostics`) fail outside a reviewed allowlist.
-- The config never grows a per-file override beyond the entry-point one below.
+- The config may loosen rules only in reviewed override groups (sandcastle has five: entry points, tests, tooling scripts, `src/`, and templates), and the ratchet rejects any other override.
 - Pay debt one rule or one file per PR; an `oxlint --fix` sweep of one rule across the repo is fine.
 
 A new file has no baseline, so it meets every cap at zero. The caps a new sandcastle `src/` file hits first are `import/max-dependencies` 10, `max-lines` 300, `max-lines-per-function` 50, `max-statements` 20, and `complexity` 15.
@@ -56,7 +56,7 @@ Sandcastle restricts running effects to entry points with `eslint/no-restricted-
 }]
 ```
 
-Entry-point files get the rule turned off in one `overrides` entry, the only override the config allows. The ratchet keeps that file list in sync with its reviewed `ENTRY_POINTS`:
+Entry-point files, and tests, get the rule turned off in their reviewed `overrides` groups. The ratchet keeps the entry-point file list in sync with its `ENTRY_POINTS`:
 
 ```json
 "overrides": [
