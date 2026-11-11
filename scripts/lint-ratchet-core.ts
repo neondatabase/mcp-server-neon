@@ -1,6 +1,8 @@
 // Adapted from mattpocock/sandcastle scripts/lint-ratchet-core.ts under the
 // MIT License; see scripts/LICENSE.sandcastle.
 
+import ts from 'typescript';
+
 export type Violation = {
   readonly file: string;
   readonly rule: string;
@@ -62,14 +64,60 @@ export const shrink = (found: Counts, baseline: Counts): Counts =>
     ),
   );
 
-// A directive opens a line comment, a block or JSDoc comment (`/*`, `/**`),
-// or a continuation line inside one (` * @ts-ignore`).
-const DIRECTIVE =
-  /(?:\/\/|\/\*+|^[ \t]*\*)[ \t]*(?:eslint-disable|eslint-enable|oxlint-disable|oxlint-enable|@ts-ignore|@ts-nocheck|@ts-expect-error|@effect-diagnostics)[^\n]*/gmu;
+const DIRECTIVES = [
+  'eslint-disable',
+  'eslint-enable',
+  'oxlint-disable',
+  'oxlint-enable',
+  '@ts-ignore',
+  '@ts-nocheck',
+  '@ts-expect-error',
+  '@effect-diagnostics',
+];
 
-/** Each lint or type-check suppression in `source`, as its trimmed comment text. */
-export const disableComments = (source: string): string[] =>
-  [...source.matchAll(DIRECTIVE)].map((match) => match[0].trim());
+// Any line of the comment counts, since TypeScript honors a directive on a
+// later line of a block comment.
+const isDirective = (comment: string): boolean =>
+  comment
+    .replaceAll(/^\/\/|^\/\*+|\*\/$/gu, '')
+    .split('\n')
+    .map((line) => line.replace(/^[\s*]*/u, ''))
+    .some((line) => DIRECTIVES.some((name) => line.startsWith(name)));
+
+/**
+ * Each lint or type-check suppression in `source`, as its trimmed comment
+ * text. Comments come from the TypeScript parser, so strings and template
+ * literals that look like comments don't count.
+ */
+export const disableComments = (fileName: string, source: string): string[] => {
+  const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest);
+  const comments = new Map<number, string>();
+
+  const visit = (node: ts.Node): void => {
+    const ranges = [
+      ...(ts.getLeadingCommentRanges(source, node.pos) ?? []),
+      ...(ts.getTrailingCommentRanges(source, node.end) ?? []),
+    ];
+
+    for (const range of ranges) {
+      comments.set(range.pos, source.slice(range.pos, range.end));
+    }
+
+    for (const child of node.getChildren(file)) {
+      visit(child);
+    }
+  };
+
+  visit(file);
+
+  return [...comments.entries()]
+    .toSorted(([a], [b]) => a - b)
+    .flatMap(([, comment]) => {
+      const text = comment.trim();
+
+      return isDirective(text) ? [text] : [];
+    });
+};
 
 const top = (totals: Record<string, number>, limit: number): string[] =>
   Object.entries(totals)

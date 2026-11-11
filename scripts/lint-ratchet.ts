@@ -32,9 +32,6 @@ const MAX_BUFFER = 256 * 1024 * 1024;
 
 const VENDORED = ['tools/oxlint/anti-slop/', '.agents/'];
 
-// Its fixtures are directive comments written as strings.
-const DIRECTIVE_FIXTURES = 'scripts/lint-ratchet-core.test.ts';
-
 // Oxlint loads the vendored anti-slop plugins from .ts files, which Node 22
 // before 22.18 only runs with type stripping enabled.
 const OXLINT_ENV = {
@@ -135,7 +132,6 @@ const collectDirectives = async (): Promise<Violation[]> => {
   ).filter(
     (file) =>
       !deleted.has(file) &&
-      file !== DIRECTIVE_FIXTURES &&
       SCANNED_EXTENSIONS.has(path.extname(file)) &&
       !VENDORED.some((prefix) => file.startsWith(prefix)),
   );
@@ -146,7 +142,7 @@ const collectDirectives = async (): Promise<Violation[]> => {
     files.map(async (file) => {
       const source = await readFile(path.join(ROOT, file), 'utf8');
 
-      return disableComments(source).map((comment) => ({
+      return disableComments(file, source).map((comment) => ({
         file,
         rule: `ratchet/disable-comment ${comment}`,
       }));
