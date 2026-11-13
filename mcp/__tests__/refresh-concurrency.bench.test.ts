@@ -176,6 +176,7 @@ vi.mock('../oauth/model', () => ({
     // Every rotation in this suite is replayed within the grace period.
     getRefreshRotation: async (rt: string) => {
       const result = state.refreshResults.get(rt);
+
       return result && { result, rotatedAt: Date.now() };
     },
     saveRefreshFailure: async (

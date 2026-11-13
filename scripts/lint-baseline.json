@@ -1339,7 +1339,7 @@
     "vitest(prefer-expect-type-of)": 1,
     "vitest(prefer-import-in-mock)": 8,
     "vitest(prefer-strict-equal)": 1,
-    "vitest(require-mock-type-parameters)": 25
+    "vitest(require-mock-type-parameters)": 24
   },
   "mcp/__tests__/tool-call-user-agent.integration.test.ts": {
     "anti-slop(no-known-value-widening)": 1,
@@ -1666,8 +1666,8 @@
     "unicorn(numeric-separators-style)": 3
   },
   "mcp/oauth/refresh-result.ts": {
-    "anti-slop(require-readable-spacing)": 12,
-    "eslint(curly)": 3,
+    "anti-slop(require-readable-spacing)": 9,
+    "eslint(curly)": 1,
     "eslint(func-style)": 4,
     "eslint(no-await-in-loop)": 6,
     "typescript(no-unsafe-assignment)": 1,

@@ -1,5 +1,6 @@
 import type { RefreshResult } from './kv-store';
-import { model, type RefreshRotation } from './model';
+import type { RefreshRotation } from './model';
+import { model } from './model';
 import { logger } from '../utils/logger';
 
 /**
@@ -21,6 +22,30 @@ export type ReplayNext = 'live' | 'rotated' | 'gone';
 
 export type RefreshReplay = { ageMs: number; next: ReplayNext };
 
+const getOwnedRotation = async (
+  refreshToken: string,
+  clientId: string,
+): Promise<RefreshRotation | undefined> => {
+  const rotation = await model.getRefreshRotation(refreshToken);
+
+  if (rotation === undefined) {
+    return undefined;
+  }
+
+  const owner = await findOwner(refreshToken, rotation.result);
+
+  if (owner === clientId) {
+    return rotation;
+  }
+
+  logger.warn('Client mismatch for cached refresh result', {
+    tokenClientId: owner ?? 'unknown',
+    requestClientId: clientId,
+  });
+
+  return undefined;
+};
+
 /**
  * The cached rotation of `refreshToken`, if `clientId` owns it and it is
  * within the grace period.
@@ -30,57 +55,53 @@ export async function getOwnedRefreshResult(
   clientId: string,
 ): Promise<RefreshResult | undefined> {
   const rotation = await getOwnedRotation(refreshToken, clientId);
+
   return rotation && isWithinReplayGrace(rotation.rotatedAt)
     ? rotation.result
     : undefined;
 }
 
-/**
- * `clientId`'s own rotated `refreshToken` presented after the grace period.
- * A row whose refresh token is the presented one records a refresh that
- * upstream did not rotate, so that token is still current.
- */
-export async function findRefreshReplay(
-  refreshToken: string,
-  clientId: string,
-): Promise<RefreshReplay | undefined> {
-  const rotation = await getOwnedRotation(refreshToken, clientId);
-  return rotation && describeReplay(refreshToken, rotation);
-}
+const nextTokenState = async (refreshToken: string): Promise<ReplayNext> => {
+  const rotated = await model.getRefreshResult(refreshToken);
 
-export async function describeReplay(
+  if (rotated !== undefined) {
+    return 'rotated';
+  }
+
+  const live = await model.getRefreshToken(refreshToken);
+
+  return live === undefined ? 'gone' : 'live';
+};
+
+/**
+ * The replay of a rotated `refreshToken` after the grace period. A row whose
+ * refresh token is the presented one records a refresh that upstream did not
+ * rotate, so that token is still current.
+ */
+export const describeReplay = async (
   refreshToken: string,
   { result, rotatedAt }: RefreshRotation,
-): Promise<RefreshReplay | undefined> {
+): Promise<RefreshReplay | undefined> => {
   if (result.refreshToken === refreshToken || isWithinReplayGrace(rotatedAt)) {
     return undefined;
   }
-  return {
-    ageMs: Date.now() - rotatedAt,
-    next: await nextTokenState(result.refreshToken),
-  };
-}
 
-async function nextTokenState(refreshToken: string): Promise<ReplayNext> {
-  if (await model.getRefreshResult(refreshToken)) return 'rotated';
-  if (await model.getRefreshToken(refreshToken)) return 'live';
-  return 'gone';
-}
+  const next = await nextTokenState(result.refreshToken);
 
-async function getOwnedRotation(
+  return { ageMs: Date.now() - rotatedAt, next };
+};
+
+/** `clientId`'s own rotated `refreshToken` presented after the grace period. */
+export const findRefreshReplay = async (
   refreshToken: string,
   clientId: string,
-): Promise<RefreshRotation | undefined> {
-  const rotation = await model.getRefreshRotation(refreshToken);
-  if (!rotation) return undefined;
-  const owner = await findOwner(refreshToken, rotation.result);
-  if (owner === clientId) return rotation;
-  logger.warn('Client mismatch for cached refresh result', {
-    tokenClientId: owner ?? 'unknown',
-    requestClientId: clientId,
-  });
-  return undefined;
-}
+): Promise<RefreshReplay | undefined> => {
+  const rotation = await getOwnedRotation(refreshToken, clientId);
+
+  return rotation === undefined
+    ? undefined
+    : describeReplay(refreshToken, rotation);
+};
 
 /**
  * Rows written before `clientId` was stored are attributed to the client of

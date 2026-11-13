@@ -149,10 +149,15 @@ class Model implements AuthorizationCodeModel {
     oldRefreshToken: string,
   ) => Promise<RefreshRotation | undefined> = async (oldRefreshToken) => {
     const raw = await getRefreshResults().get(oldRefreshToken, { raw: true });
-    if (!raw?.value) return undefined;
-    if (typeof raw.expires !== 'number') {
+
+    if (raw?.value === undefined) {
+      return undefined;
+    }
+
+    if (raw.expires === undefined || raw.expires === null) {
       throw new Error('Cached refresh result has no expiry');
     }
+
     return {
       result: raw.value,
       rotatedAt: raw.expires - Model.REFRESH_RESULT_TTL_MS,

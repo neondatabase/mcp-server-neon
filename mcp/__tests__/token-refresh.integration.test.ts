@@ -7,9 +7,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { RefreshResult } from '../oauth/kv-store';
+import type { RefreshRotation } from '../oauth/model';
 
 vi.mock('../oauth/model', () => {
-  const getRefreshResult = vi.fn();
+  const getRefreshResult =
+    vi.fn<(key: string) => Promise<RefreshResult | undefined>>();
+
   return {
     model: {
       getClient: vi.fn(),
@@ -23,9 +27,14 @@ vi.mock('../oauth/model', () => {
       getRefreshResult,
       // Every cached rotation in this suite is replayed within the grace
       // period; refresh-replay-grace.integration.test.ts covers the rest.
-      getRefreshRotation: vi.fn(async (key: string) => {
+      getRefreshRotation: vi.fn<
+        (key: string) => Promise<RefreshRotation | undefined>
+      >(async (key) => {
         const result = await getRefreshResult(key);
-        return result && { result, rotatedAt: Date.now() };
+
+        return result === undefined
+          ? undefined
+          : { result, rotatedAt: Date.now() };
       }),
       attributeRefreshResult: vi.fn().mockResolvedValue(undefined),
       saveRefreshFailure: vi.fn(),
