@@ -31,11 +31,13 @@
     "test:e2e": "pnpm test:e2e:mcp && pnpm test:e2e:web"
   },
   "dependencies": {
+    "@effect/opentelemetry": "4.1.2",
     "@modelcontextprotocol/sdk": "1.25.3",
     "@modelcontextprotocol/server": "2.0.0",
     "@neon/sdk": "7.13.0",
     "@neon/tools": "2.14.2",
     "@neondatabase/serverless": "1.0.0",
+    "@opentelemetry/api": "1.9.1",
     "@segment/analytics-node": "2.2.1",
     "@sentry/node": "10.78.0",
     "@vercel/functions": "3.3.4",

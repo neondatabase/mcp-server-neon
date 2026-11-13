@@ -1797,7 +1797,7 @@
   },
   "mcp/tools/neon-tools.ts": {
     "anti-slop(no-known-value-widening)": 1,
-    "anti-slop(require-readable-spacing)": 4,
+    "anti-slop(require-readable-spacing)": 3,
     "eslint(func-style)": 2,
     "import(consistent-type-specifier-style)": 2
   },

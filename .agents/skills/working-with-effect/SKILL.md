@@ -48,6 +48,8 @@ Read only the matching files; read all of them when work crosses concerns. Some 
 
 Sentry gets server failures only. Client errors, `NeonDbError`, and Neon API 4xx responses are mistakes in the call and stay out of Sentry; `handleToolError` in `mcp/server/errors.ts` holds that rule, and Effect code keeps it.
 
+Effect code reaches Sentry through `SentryLayer` in `mcp/sentry/effect.ts`, merged into the layer an entry point runs (see `lib/http/app.ts`). It installs `OtelTracer.layerGlobal`, so `Effect.fn` and `Effect.withSpan` spans become Sentry spans under the request span, and an `ErrorReporter` that sends each reported error to `captureException`. Effect code doesn't call Sentry directly. `effect/http` reports every unhandled failure, so an error that is the caller's mistake sets `[ErrorReporter.ignore] = true`. `RouteNotFound` already does; `RequestParseError` (400) doesn't, so a route that decodes a body maps it to an ignored error.
+
 ## Core defaults
 
 - Compose workflows with `Effect.gen(function* () { ... })`.

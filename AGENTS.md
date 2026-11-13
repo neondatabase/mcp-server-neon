@@ -214,7 +214,7 @@ infrastructure.
   - `idempotentHint`: Whether repeated calls produce the same result
   - `openWorldHint`: Whether the tool interacts with external systems
 
-- **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry. Each tool call gets one `tools/call <tool>` span (`mcp/sentry/tool-span.ts`) with OpenTelemetry MCP attributes; `tool_name` stays on it because existing Sentry dashboards query it. Only server failures (`isServerError` in `mcp/server/errors.ts`) mark it failed; agent mistakes set `error.type` only. Winston logs go to Sentry Logs too, so never log credentials, SQL, or request bodies.
+- **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry. Each tool call gets one `tools/call <tool>` span (`mcp/sentry/tool-span.ts`) with OpenTelemetry MCP attributes; `tool_name` stays on it because existing Sentry dashboards query it. Only server failures (`isServerError` in `mcp/server/errors.ts`) mark it failed; agent mistakes set `error.type` only. Winston logs go to Sentry Logs too, so never log credentials, SQL, or request bodies. Effect routes (`lib/http/app.ts`) run with `SentryLayer` (`mcp/sentry/effect.ts`): their Effect spans nest under the request span, and unhandled failures reach Sentry through Effect's `ErrorReporter`.
 
 - **Session ids**: the route gives a 2025-era client an `Mcp-Session-Id` on its `initialize` response (`mcp/utils/mcp-session.ts`). It is telemetry only: nothing is stored under it and an unknown id is never rejected. Every span, error, and log of a request carries it as `mcp.session.id`, so one query in Sentry returns a connection's whole chain of calls. 2026-07-28 requests have no sessions; a client's `_meta.threadId` (Codex) lands on tool spans as `gen_ai.conversation.id`. Both ids live on the request's root span (`mcp/sentry/session.ts`), not on the Sentry isolation scope.
 
@@ -315,7 +315,7 @@ normally provided through `.env.local`. Key variables:
 │   │   └── utils.ts        # org_id selection
 │   ├── oauth/          # OAuth model and KV store
 │   ├── analytics/      # Segment analytics
-│   ├── sentry/         # Sentry setup, tool spans, session tagging
+│   ├── sentry/         # Sentry setup, tool spans, session tagging, Effect layer
 │   ├── types/          # Shared TypeScript types
 │   ├── utils/          # Shared utilities
 │   │   ├── read-only.ts          # Read-only mode detection, SUPPORTED_SCOPES
