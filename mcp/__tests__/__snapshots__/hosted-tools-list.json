@@ -3629,7 +3629,7 @@
   {
     "name": "list_auth_oauth_providers",
     "title": "List OAuth providers for the branch",
-    "description": "Lists the social login providers (Google, GitHub, Microsoft, Vercel, Apple) of a branch's Neon Auth. For Neon Auth as an OAuth server, use get_auth_oauth_server.",
+    "description": "Lists the social login providers (Google, GitHub, Microsoft, Vercel, Apple, Discord) of a branch's Neon Auth. For Neon Auth as an OAuth server, use get_auth_oauth_server.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3662,7 +3662,7 @@
   {
     "name": "add_auth_oauth_provider",
     "title": "Add an OAuth provider",
-    "description": "Adds a social login provider to a branch's Neon Auth. Microsoft and Apple need your own client_id and client_secret; for Apple these are the Services ID and .p8 key, plus apple_team_id and apple_key_id.",
+    "description": "Adds a social login provider (Google, GitHub, Microsoft, Vercel, Apple, Discord) to a branch's Neon Auth. Microsoft, Apple, and Discord have no shared app, so they need your own `client_id` and `client_secret`. Apple and Discord work only on Better Auth projects, not legacy Stack Auth. For Apple, `client_id` is the Services ID, `client_secret` is the `.p8` private key, and `apple_team_id` and `apple_key_id` are required. For Neon Auth as an OAuth server, use update_auth_oauth_server.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3728,7 +3728,7 @@
   {
     "name": "update_auth_oauth_provider",
     "title": "Update OAuth provider",
-    "description": "Updates a social login provider on a branch's Neon Auth. For Apple, send a new client_secret (.p8 key) together with its apple_key_id.",
+    "description": "Updates a social login provider (Google, GitHub, Microsoft, Vercel, Apple, Discord) on a branch's Neon Auth. For Apple, a new `client_secret` (`.p8` key) must be sent with its `apple_key_id`. For Neon Auth as an OAuth server, use update_auth_oauth_server.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3794,7 +3794,7 @@
   {
     "name": "delete_auth_oauth_provider",
     "title": "Delete OAuth provider",
-    "description": "Removes a social login provider from a branch's Neon Auth.",
+    "description": "Deletes a social login provider (Google, GitHub, Microsoft, Vercel, Apple, Discord) from a branch's Neon Auth. For Neon Auth as an OAuth server, use update_auth_oauth_server.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
