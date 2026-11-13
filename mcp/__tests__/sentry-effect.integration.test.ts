@@ -110,7 +110,7 @@ describe('SentryLayer', () => {
     );
 
     expect(event?.level).toBe('error');
-    expect(span?.status).not.toBe('ok');
+    expect(span?.status).toBe('internal_error');
     expect(event?.contexts.trace.trace_id).toBe(
       transaction?.contexts.trace.trace_id,
     );
