@@ -26,7 +26,7 @@ vi.mock('../oauth/model', () => {
       saveRefreshResult: vi.fn(),
       getRefreshResult,
       // Every cached rotation in this suite is replayed within the grace
-      // period; refresh-replay-grace.integration.test.ts covers the rest.
+      // period; oauth-client-binding.integration.test.ts covers the rest.
       getRefreshRotation: vi.fn<
         (key: string) => Promise<RefreshRotation | undefined>
       >(async (key) => {
