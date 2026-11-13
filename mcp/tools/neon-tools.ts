@@ -37,6 +37,17 @@ function pinnedNames(): Record<string, string> {
 const ORG_ID_AUTO_SELECTION =
   '`org_id` is optional: organization API keys use their organization; personal API keys auto-select when unambiguous and otherwise return the IDs to choose from.';
 
+const OAUTH_PROVIDER_DESCRIPTIONS: Partial<Record<ToolId, string>> = {
+  'auth.oauthProviders.list':
+    "Lists the social login providers (Google, GitHub, Microsoft, Vercel, Apple, Discord) of a branch's Neon Auth. For Neon Auth as an OAuth server, use get_auth_oauth_server.",
+  'auth.oauthProviders.add':
+    "Adds a social login provider (Google, GitHub, Microsoft, Vercel, Apple, Discord) to a branch's Neon Auth. Microsoft, Apple, and Discord have no shared app, so they need your own `client_id` and `client_secret`. Apple and Discord work only on Better Auth projects, not legacy Stack Auth. For Apple, `client_id` is the Services ID, `client_secret` is the `.p8` private key, and `apple_team_id` and `apple_key_id` are required. For Neon Auth as an OAuth server, use update_auth_oauth_server.",
+  'auth.oauthProviders.update':
+    "Updates a social login provider (Google, GitHub, Microsoft, Vercel, Apple, Discord) on a branch's Neon Auth. For Apple, a new `client_secret` (`.p8` key) must be sent with its `apple_key_id`. For Neon Auth as an OAuth server, use update_auth_oauth_server.",
+  'auth.oauthProviders.delete':
+    "Deletes a social login provider (Google, GitHub, Microsoft, Vercel, Apple, Discord) from a branch's Neon Auth. For Neon Auth as an OAuth server, use update_auth_oauth_server.",
+};
+
 const MCP_DESCRIPTION_NOTES: Partial<Record<ToolId, string>> = {
   'projects.list': ORG_ID_AUTO_SELECTION,
   'projects.count': ORG_ID_AUTO_SELECTION,
@@ -48,6 +59,9 @@ const MCP_DESCRIPTION_NOTES: Partial<Record<ToolId, string>> = {
 };
 
 function withMcpNotes({ operationId, description }: NeonToolDescriptionSource) {
+  if (isToolId(operationId) && OAUTH_PROVIDER_DESCRIPTIONS[operationId]) {
+    return OAUTH_PROVIDER_DESCRIPTIONS[operationId];
+  }
   const note = isToolId(operationId)
     ? MCP_DESCRIPTION_NOTES[operationId]
     : undefined;
