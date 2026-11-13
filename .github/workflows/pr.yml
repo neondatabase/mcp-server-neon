@@ -27,6 +27,8 @@ jobs:
           node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const server=JSON.parse(fs.readFileSync('server.json','utf8')); if (pkg.version !== server.version) { console.error('Version mismatch: package.json=' + pkg.version + ' server.json=' + server.version); process.exit(1); }"
       - name: Format check
         run: pnpm fmt:check
+      - name: Fetch main for the lint baseline check
+        run: git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main
       - name: Lint
         run: pnpm lint
       - name: Check unused code and dependencies

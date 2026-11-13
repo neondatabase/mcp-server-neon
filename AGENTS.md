@@ -32,8 +32,15 @@ pnpm fmt:check
 # Auto-fix formatting
 pnpm fmt
 
-# Lint
+# Lint: Oxlint (type-aware, with Effect and anti-slop rules) held to the
+# shrink-only baseline in scripts/lint-baseline.json; fails on any new violation
 pnpm lint
+
+# Lower the baseline after fixing violations (never raises a count)
+pnpm lint:shrink
+
+# Totals, worst rules, and worst files
+pnpm lint:report
 
 # Auto-fix lint + formatting together
 pnpm lint:fix
@@ -207,7 +214,7 @@ infrastructure.
   - `idempotentHint`: Whether repeated calls produce the same result
   - `openWorldHint`: Whether the tool interacts with external systems
 
-- **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry. Each tool call gets one `tools/call <tool>` span (`mcp/sentry/tool-span.ts`) with OpenTelemetry MCP attributes; `tool_name` stays on it because existing Sentry dashboards query it. Only server failures (`isServerError` in `mcp/server/errors.ts`) mark it failed; agent mistakes set `error.type` only. Winston logs go to Sentry Logs too, so never log credentials, SQL, or request bodies.
+- **Analytics & Observability**: Every tool call, resource access, and error is tracked through Segment analytics and Sentry. Each tool call gets one `tools/call <tool>` span (`mcp/sentry/tool-span.ts`) with OpenTelemetry MCP attributes; `tool_name` stays on it because existing Sentry dashboards query it. Only server failures (`isServerError` in `mcp/server/errors.ts`) mark it failed; agent mistakes set `error.type` only. Winston logs go to Sentry Logs too, so never log credentials, SQL, or request bodies. Effect routes (`lib/http/app.ts`) run with `SentryLayer` (`mcp/sentry/effect.ts`): their Effect spans nest under the request span, and unhandled failures reach Sentry through Effect's `ErrorReporter`.
 
 - **Session ids**: the route gives a 2025-era client an `Mcp-Session-Id` on its `initialize` response (`mcp/utils/mcp-session.ts`). It is telemetry only: nothing is stored under it and an unknown id is never rejected. Every span, error, and log of a request carries it as `mcp.session.id`, so one query in Sentry returns a connection's whole chain of calls. 2026-07-28 requests have no sessions; a client's `_meta.threadId` (Codex) lands on tool spans as `gen_ai.conversation.id`. Both ids live on the request's root span (`mcp/sentry/session.ts`), not on the Sentry isolation scope.
 
@@ -282,6 +289,7 @@ normally provided through `.env.local`. Key variables:
 │   ├── assert.ts       # Type-narrowing assertion helper
 │   ├── config.ts       # Centralized configuration
 │   ├── errors.ts       # OAuth-aware HTTP error mapping for route handlers
+│   ├── http/app.ts     # Effect HttpRouter web handler (serves /api/health and /health)
 │   └── oauth/          # OAuth utilities for Next.js
 ├── mcp/            # MCP server source code
 │   ├── __tests__/      # Vitest unit/integration/MCP e2e tests
@@ -307,7 +315,7 @@ normally provided through `.env.local`. Key variables:
 │   │   └── utils.ts        # org_id selection
 │   ├── oauth/          # OAuth model and KV store
 │   ├── analytics/      # Segment analytics
-│   ├── sentry/         # Sentry setup, tool spans, session tagging
+│   ├── sentry/         # Sentry setup, tool spans, session tagging, Effect layer
 │   ├── types/          # Shared TypeScript types
 │   ├── utils/          # Shared utilities
 │   │   ├── read-only.ts          # Read-only mode detection, SUPPORTED_SCOPES
@@ -318,6 +326,8 @@ normally provided through `.env.local`. Key variables:
 │   │   └── logger.ts             # Logging utilities
 │   └── constants.ts    # Shared constants
 ├── public/             # Static assets (favicons, OG image, llms.txt)
+├── scripts/lint-ratchet.ts # pnpm lint: Oxlint held to scripts/lint-baseline.json
+├── tools/oxlint/anti-slop/ # Vendored anti-slop Oxlint rules (see UPSTREAM.md)
 ├── .prettierrc         # Prettier config (singleQuote: true)
 ├── .prettierignore     # Prettier ignore patterns
 ├── vitest.config.ts    # Vitest configuration
@@ -346,6 +356,8 @@ Code comments reference these files by path (e.g. `ai-notes/refresh-slo.md`).
 - **Server metadata**: `server.json` `title`, `description`, `websiteUrl`, and `icons` are also the `serverInfo` sent on `initialize` and `server/discover`, and the Server Card fields (`lib/server-metadata.ts`). Edit them there only.
 
 - **Migration Pattern**: Tools like `prepare_database_migration` and `prepare_query_tuning` create temporary branches and return all context (branch IDs, SQL, database name, etc.) in the response. The LLM must pass this context back to subsequent `complete_*` tools. No state is stored server-side, enabling serverless deployment.
+
+- **Effect and Oxlint**: Code written with Effect follows [`.agents/skills/working-with-effect`](.agents/skills/working-with-effect/SKILL.md), and Oxlint setup follows [`.agents/skills/working-with-oxlint`](.agents/skills/working-with-oxlint/SKILL.md). Both skills belong to this repo; edit them in place.
 
 - **Neon API Client**: Tools call the Neon API through `@neon/tools` with `fetchAsMcpServer` from `mcp/neon-client.ts`, which sets the server's `User-Agent`. `createNeonClient` in the same file covers the calls outside tools: account resolution, `org_id` selection, and the live suites' setup and cleanup.
 

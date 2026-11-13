@@ -59,12 +59,18 @@ const MCP_DESCRIPTION_NOTES: Partial<Record<ToolId, string>> = {
 };
 
 function withMcpNotes({ operationId, description }: NeonToolDescriptionSource) {
-  if (isToolId(operationId) && OAUTH_PROVIDER_DESCRIPTIONS[operationId]) {
-    return OAUTH_PROVIDER_DESCRIPTIONS[operationId];
+  const override = isToolId(operationId)
+    ? OAUTH_PROVIDER_DESCRIPTIONS[operationId]
+    : undefined;
+
+  if (override !== undefined) {
+    return override;
   }
+
   const note = isToolId(operationId)
     ? MCP_DESCRIPTION_NOTES[operationId]
     : undefined;
+
   return note === undefined ? description : `${description} ${note}`;
 }
 

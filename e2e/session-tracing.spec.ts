@@ -9,10 +9,12 @@
  *    and its error event carries the session id
  *  - A 2026-07-28 request is never given a session id, and a client's
  *    `_meta.threadId` lands on the span as `gen_ai.conversation.id`
+ *  - Spans from Effect routes nest under the request's HTTP server span
  */
 
 import { request as httpRequest } from 'node:http';
 import { test, expect } from '@playwright/test';
+import { z } from 'zod';
 import {
   Client,
   StreamableHTTPClientTransport,
@@ -129,6 +131,23 @@ function toolSpan(
       span.data['mcp.session.id'] === sessionId,
   );
 }
+
+const HealthCheckTransaction = z.object({
+  type: z.literal('transaction'),
+  contexts: z.object({
+    trace: z.object({ trace_id: z.string(), op: z.string() }),
+  }),
+  spans: z.array(z.object({ description: z.string().optional() })),
+});
+
+const healthCheckTransaction = (items: EnvelopeItem[], traceId: string) =>
+  items
+    .map((item) => HealthCheckTransaction.safeParse(item.payload).data)
+    .find(
+      (payload) =>
+        payload?.contexts.trace.trace_id === traceId &&
+        payload.spans.some(({ description }) => description === 'Health.check'),
+    );
 
 async function connectLegacyClient(name: string) {
   const transport = new LegacyStreamableHTTPClientTransport(DOCS_URL);
@@ -320,6 +339,24 @@ test.describe('Session tracing', () => {
       ),
     );
     expect(transaction.type).toBe('transaction');
+  });
+
+  test('an Effect route span is a child of the request span', async ({
+    request,
+  }) => {
+    const traceId = crypto.randomUUID().replaceAll('-', '');
+
+    const response = await request.get('/api/health', {
+      headers: { 'sentry-trace': `${traceId}-${traceId.slice(0, 16)}-1` },
+    });
+
+    expect(response.status()).toBe(200);
+
+    const transaction = await eventually((items) =>
+      healthCheckTransaction(items, traceId),
+    );
+
+    expect(transaction.contexts.trace.op).toBe('http.server');
   });
 
   test('a 2026-07-28 request gets no session id but keeps its conversation id', async ({
