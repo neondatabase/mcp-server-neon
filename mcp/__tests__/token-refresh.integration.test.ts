@@ -8,22 +8,31 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../oauth/model', () => ({
-  model: {
-    getClient: vi.fn(),
-    getRefreshToken: vi.fn(),
-    getAccessToken: vi.fn(),
-    saveToken: vi.fn(),
-    saveRefreshToken: vi.fn(),
-    deleteToken: vi.fn(),
-    deleteRefreshToken: vi.fn(),
-    saveRefreshResult: vi.fn(),
-    getRefreshResult: vi.fn(),
-    attributeRefreshResult: vi.fn().mockResolvedValue(undefined),
-    saveRefreshFailure: vi.fn(),
-    getRefreshFailure: vi.fn(),
-  },
-}));
+vi.mock('../oauth/model', () => {
+  const getRefreshResult = vi.fn();
+  return {
+    model: {
+      getClient: vi.fn(),
+      getRefreshToken: vi.fn(),
+      getAccessToken: vi.fn(),
+      saveToken: vi.fn(),
+      saveRefreshToken: vi.fn(),
+      deleteToken: vi.fn(),
+      deleteRefreshToken: vi.fn(),
+      saveRefreshResult: vi.fn(),
+      getRefreshResult,
+      // Every cached rotation in this suite is replayed within the grace
+      // period; refresh-replay-grace.integration.test.ts covers the rest.
+      getRefreshRotation: vi.fn(async (key: string) => {
+        const result = await getRefreshResult(key);
+        return result && { result, rotatedAt: Date.now() };
+      }),
+      attributeRefreshResult: vi.fn().mockResolvedValue(undefined),
+      saveRefreshFailure: vi.fn(),
+      getRefreshFailure: vi.fn(),
+    },
+  };
+});
 
 vi.mock('../../lib/oauth/client', () => ({
   exchangeRefreshToken: vi.fn(),

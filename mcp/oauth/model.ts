@@ -23,6 +23,8 @@ import {
   resolveClientIdMetadataDocument,
 } from '../../lib/oauth/client-id-metadata-document';
 
+export type RefreshRotation = { result: RefreshResult; rotatedAt: number };
+
 class Model implements AuthorizationCodeModel {
   getClient: (
     clientId: string,
@@ -114,18 +116,15 @@ class Model implements AuthorizationCodeModel {
   // errors are triggered by *refresh-token-reuse detection* — once Hydra sees
   // the same RT twice (laptop wake, multiple Cursor windows, network blip
   // mid-rotation) it revokes the entire chain and the user must re-auth.
-  // Returning the cached new pair instead of forwarding the stale RT upstream
-  // is the only thing keeping these clients from being kicked.
+  // A stale RT is therefore never forwarded upstream: within
+  // REFRESH_REPLAY_GRACE_MS of the rotation (refresh-result.ts) it gets the
+  // cached new pair, and after that `invalid_grant`.
   //
-  // 7 days catches the long-tail of "user opens Cursor after a multi-day
-  // pause" scenarios — post-deploy logs of #234 still showed ~30/hr cliffs
-  // dominated by clients presenting RTs from beyond the previous 24h
-  // window. Hydra's own RT lifespan is 30d; 7d sits comfortably inside
-  // that and bounds storage growth (one entry per rotation × 7d ≈ ~50MB
-  // at current traffic). The cached access token still carries its own
-  // 1h `expires_at`, so a late cache hit returns an AT the client will
-  // need to refresh again with the cached new RT — the chain holds
-  // forward without re-auth.
+  // A row is kept for 7 days so a later replay is recognized as one: its
+  // owner is attributed and the rejection logged as `replay_after_grace`.
+  // Every row is written once with this TTL and
+  // `attributeRefreshResult` keeps its expiry, which is what makes
+  // `getRefreshRotation` exact.
   private static REFRESH_RESULT_TTL_MS = 7 * 24 * 60 * 60_000;
 
   saveRefreshResult: (
@@ -143,6 +142,21 @@ class Model implements AuthorizationCodeModel {
     oldRefreshToken: string,
   ) => Promise<RefreshResult | undefined> = async (oldRefreshToken) => {
     return getRefreshResults().get(oldRefreshToken);
+  };
+
+  /** The cached rotation of `oldRefreshToken` and when it was rotated. */
+  getRefreshRotation: (
+    oldRefreshToken: string,
+  ) => Promise<RefreshRotation | undefined> = async (oldRefreshToken) => {
+    const raw = await getRefreshResults().get(oldRefreshToken, { raw: true });
+    if (!raw?.value) return undefined;
+    if (typeof raw.expires !== 'number') {
+      throw new Error('Cached refresh result has no expiry');
+    }
+    return {
+      result: raw.value,
+      rotatedAt: raw.expires - Model.REFRESH_RESULT_TTL_MS,
+    };
   };
 
   /** Records the owning client on a cached result without extending its expiry. */
