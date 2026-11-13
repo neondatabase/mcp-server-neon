@@ -324,7 +324,7 @@ normally provided through `.env.local`. Key variables:
 ├── playwright.config.ts # Playwright E2E configuration
 ├── package.json        # Package configuration
 ├── tsconfig.json       # TypeScript config (bundler resolution)
-└── vercel.json         # Vercel deployment config
+└── vercel.ts           # Vercel deployment config (region, Fluid compute, function duration)
 
 ai-notes/               # Docs, developer notes, and solution write-ups (see below)
 ├── SMOKE_TESTS.md      # Manual smoke-test checklist

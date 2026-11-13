@@ -63,6 +63,7 @@
     "@types/pg": "8.20.0",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.1.5",
+    "@vercel/config": "0.14.1",
     "dotenv": "17.2.4",
     "eslint": "9.27.0",
     "eslint-config-next": "16.1.1",
