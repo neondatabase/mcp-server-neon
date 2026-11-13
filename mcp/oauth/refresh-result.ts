@@ -15,8 +15,7 @@ export const isWithinReplayGrace = (rotatedAt: number): boolean =>
 /**
  * State of the refresh token a replayed rotation issued: `rotated` when it
  * was itself rotated (another copy of the chain moved on), `live` when it is
- * still the current token (the client lost the response), `gone` when it was
- * revoked or never persisted.
+ * still unused, `gone` when it was revoked or never persisted.
  */
 export type ReplayNext = 'live' | 'rotated' | 'gone';
 

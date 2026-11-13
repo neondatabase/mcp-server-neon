@@ -103,9 +103,11 @@ A rotated refresh token returns the pair its rotation issued for 5 minutes (`REF
 
 | `replayNext` | Meaning |
 |---|---|
-| `live` | Still the current token, unused since the rotation. Usually the client lost the rotation response. |
+| `live` | Still the current token, unused since the rotation. |
 | `rotated` | Rotated again since: another copy of the chain (another process, or whoever holds a leaked token) moved on. |
 | `gone` | Revoked, expired, or never persisted. |
+
+`replayNext` is read when the replay is rejected. Another copy of the chain refreshes only when its 1-hour access token expires, so before that its new token is still unused: `live` points to a lost response only when `replayAgeMs` is over about an hour. Break the counts down by age (under 1h, 1h to 24h, over 24h) as well as by `replayNext`.
 
 Retries count as separate lines. The impact is the number of distinct clients, which approximates the installations that had to sign in again. The line carries `clientId`, `replayAgeMs`, `replayNext`, and `clientApplication` as Sentry Logs attributes, so in Sentry Explore > Logs:
 
