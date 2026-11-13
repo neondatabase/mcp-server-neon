@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { Client } from 'oauth2-server';
-import { model } from '../../../mcp/oauth/model';
+import { model, type RefreshRotation } from '../../../mcp/oauth/model';
 import {
   describeReplay,
   findRefreshReplay,
@@ -875,19 +875,27 @@ export async function POST(request: NextRequest) {
           : undefined;
       };
 
+      // Another client presenting a rotated token records it as missing, so
+      // a cached failure can belong to the owner's own rotation. Rows without
+      // a client are not attributed here, so a cached failure keeps absorbing
+      // retries instead of walking their rotation chain each time.
+      const getOwnedRotation = async () => {
+        const rotation = await model
+          .getRefreshRotation(refreshToken)
+          .catch(() => undefined);
+        return rotation?.result.clientId === client.id ? rotation : undefined;
+      };
+      const replayOf = (rotation: RefreshRotation) =>
+        describeReplay(refreshToken, rotation).catch((err) => {
+          logger.warn('Failed to describe a rejected refresh replay', { err });
+          return undefined;
+        });
+
       // Absorb retry storms: if upstream already rejected this RT recently,
       // skip the singleflight + upstream call and return the cached failure.
       const cachedFailure = await getCachedFailure();
       if (cachedFailure) {
-        // Another client presenting a rotated token records it as missing.
-        // The owner's replay still gets the cached rotation. Rows without a
-        // client are not attributed here, so a cached failure keeps absorbing
-        // retries instead of walking their rotation chain each time.
-        const rotation = await model
-          .getRefreshRotation(refreshToken)
-          .catch(() => undefined);
-        const owned =
-          rotation?.result.clientId === client.id ? rotation : undefined;
+        const owned = await getOwnedRotation();
         if (owned && isWithinReplayGrace(owned.rotatedAt)) {
           emitRefreshSlo('success', sloStartMs, {
             clientId: client.id,
@@ -895,14 +903,7 @@ export async function POST(request: NextRequest) {
           });
           return NextResponse.json(cachedToResponse(owned.result));
         }
-        const replay =
-          owned &&
-          (await describeReplay(refreshToken, owned).catch((err) => {
-            logger.warn('Failed to describe a rejected refresh replay', {
-              err,
-            });
-            return undefined;
-          }));
+        const replay = owned && (await replayOf(owned));
         logger.info('Refresh token in failure cache; rejecting fast', {
           clientId: client.id,
           ageMs: Date.now() - cachedFailure.failedAt,
@@ -933,11 +934,14 @@ export async function POST(request: NextRequest) {
       > => {
         const failure = await getCachedFailure();
         if (failure) {
+          const owned = await getOwnedRotation();
           throw new RefreshError(
             'invalid_grant',
             'Invalid or expired refresh token',
             400,
             'correct_invalid_grant',
+            undefined,
+            owned && (await replayOf(owned)),
           );
         }
         // Holder may have hit upstream 5xx and signalled "don't wait, retry

@@ -244,6 +244,23 @@ describe('refresh token replay grace period', () => {
     expect(upstream.calls).toBe(1);
   });
 
+  it('logs every one of concurrent rejected replays', async () => {
+    const { refreshToken } = await seedRefreshToken();
+    expect((await refresh(owner, refreshToken)).status).toBe(200);
+    advance(GRACE_MS);
+    vi.mocked(logger.info).mockClear();
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => refresh(owner, refreshToken)),
+    );
+
+    results.forEach(expectRejected);
+    expect(sloLines().map((line) => replayFields(line).reason)).toEqual(
+      Array(5).fill('replay_after_grace'),
+    );
+    expect(upstream.calls).toBe(1);
+  });
+
   it('rejects a token two rotations back and keeps the live token working', async () => {
     const { refreshToken: first } = await seedRefreshToken();
     const second = (await refresh(owner, first)).body.refresh_token!;
