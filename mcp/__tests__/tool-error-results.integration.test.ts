@@ -11,7 +11,14 @@ import { once } from 'node:events';
 import { text } from 'node:stream/consumers';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { neonConfig } from '@neondatabase/serverless';
-import { flush, getActiveSpan, init, startSpan } from '@sentry/node';
+import {
+  flush,
+  getActiveSpan,
+  getClient,
+  init,
+  spanToJSON,
+  startSpan,
+} from '@sentry/node';
 import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { ServerContext } from '../types/context';
@@ -23,7 +30,11 @@ const PROJECT = {
   network: 'proj-network',
   sql: 'proj-sql',
   tuning: 'proj-tuning',
+  cancelled: 'proj-cancelled',
 } as const;
+
+// The cancelled call's upstream request is never answered; it arrives here.
+const cancelledRequest = Promise.withResolvers<true>();
 
 const BRANCH_ID = 'br-main-123';
 const DATABASE = 'neondb';
@@ -93,6 +104,12 @@ const answerApi = (req: IncomingMessage, res: ServerResponse) => {
     return;
   }
 
+  if (path.startsWith(`/projects/${PROJECT.cancelled}`)) {
+    cancelledRequest.resolve(true);
+
+    return;
+  }
+
   if (path.startsWith(`/projects/${PROJECT.network}`)) {
     req.socket.destroy();
 
@@ -154,6 +171,8 @@ const answerSql = async (req: IncomingMessage, res: ServerResponse) => {
     code: '42703',
     position: '8',
     hint: 'Perhaps you meant to reference the column "t.column".',
+    detail: 'There is a column named "column" in table "t".',
+    where: 'PL/pgSQL function report() line 3 at RETURN',
     severity: 'ERROR',
   });
 };
@@ -328,6 +347,54 @@ const call = async (testCase: Case) =>
     return { traceId, response: await response(testCase) };
   });
 
+const toolSpanEnded = async (toolName: string) => {
+  const { promise, resolve } = Promise.withResolvers<true>();
+
+  const unsubscribe = getClient()?.on('spanEnd', (span) => {
+    if (spanToJSON(span).description === `tools/call ${toolName}`) {
+      unsubscribe?.();
+      resolve(true);
+    }
+  });
+
+  return promise;
+};
+
+const CANCELLED = {
+  client: unscoped,
+  name: 'list_branches',
+  arguments: { project_id: PROJECT.cancelled },
+} satisfies Case;
+
+// The client gets no result for a cancelled call, so the case waits for the
+// server's tool span to end before its trace is read.
+const cancelledCall = async () =>
+  startSpan({ name: 'tool error case', op: 'test' }, async () => {
+    const traceId = getActiveSpan()?.spanContext().traceId;
+    const ended = toolSpanEnded(CANCELLED.name);
+    const controller = new AbortController();
+
+    const settled = CANCELLED.client
+      .callTool(
+        { name: CANCELLED.name, arguments: CANCELLED.arguments },
+        { signal: controller.signal },
+      )
+      .then(
+        () => 'resolved',
+        () => 'rejected',
+      );
+
+    await cancelledRequest.promise;
+
+    controller.abort();
+
+    const client = await settled;
+
+    await ended;
+
+    return { traceId, response: { cancelledByClient: client } };
+  });
+
 const Trace = z.object({
   trace_id: z.string(),
   status: z.string().optional(),
@@ -380,13 +447,18 @@ const errorEventCount = (items: SentryItems, traceId: string | undefined) =>
   ).length;
 
 const goldenEntries = async () => {
-  const outcomes = await Promise.all(
-    Object.entries(CASES).map(async ([caseName, testCase]) => ({
+  const outcomes = await Promise.all([
+    ...Object.entries(CASES).map(async ([caseName, testCase]) => ({
       caseName,
       testCase,
       outcome: await call(testCase),
     })),
-  );
+    cancelledCall().then((outcome) => ({
+      caseName: 'client cancels the call',
+      testCase: CANCELLED,
+      outcome,
+    })),
+  ]);
 
   const items = await sentryItems();
 

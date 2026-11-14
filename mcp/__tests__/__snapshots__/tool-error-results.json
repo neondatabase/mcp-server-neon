@@ -202,7 +202,7 @@
       "content": [
         {
           "type": "text",
-          "text": "NeonDbError: column \"missing_column\" does not exist\nSQLSTATE: 42703\nPOSITION: 8\nHINT: Perhaps you meant to reference the column \"t.column\"."
+          "text": "NeonDbError: column \"missing_column\" does not exist\nSQLSTATE: 42703\nPOSITION: 8\nDETAIL: There is a column named \"column\" in table \"t\".\nHINT: Perhaps you meant to reference the column \"t.column\".\nCONTEXT: PL/pgSQL function report() line 3 at RETURN"
         }
       ],
       "isError": true
@@ -247,6 +247,17 @@
         }
       ],
       "isError": true
+    },
+    "sentryErrorEvents": 1,
+    "toolSpan": "internal_error"
+  },
+  "client cancels the call": {
+    "tool": "list_branches",
+    "arguments": {
+      "project_id": "proj-cancelled"
+    },
+    "response": {
+      "cancelledByClient": "rejected"
     },
     "sentryErrorEvents": 1,
     "toolSpan": "internal_error"
