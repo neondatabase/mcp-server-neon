@@ -141,6 +141,8 @@ infrastructure.
 
 **Unit and integration tests** use [Vitest](https://vitest.dev/) and live in `mcp/__tests__/`. Configuration is in `vitest.config.ts`.
 
+`mcp/__tests__/tool-error-results.integration.test.ts` records every failing tool call's client response, Sentry error-event count, and tool span status in `__snapshots__/tool-error-results.json`, against a local Neon API, SQL endpoint, and Sentry stand-in. A change to the tool-call pipeline keeps that file unchanged; update it with `vitest -u` only when a client-visible change is the intent, and say so in the PR.
+
 **E2E tests** use [Playwright](https://playwright.dev/) and live in `e2e/`. Configuration is in `playwright.config.ts`.
 
 - **Global setup** (`e2e/global-setup.ts`): Provisions an ephemeral Postgres database via [Instagres](https://instagres.com). The connection string is written to `.env.e2e` (gitignored) and passed to the Next.js dev server. It also starts the docs fixture server (see below).

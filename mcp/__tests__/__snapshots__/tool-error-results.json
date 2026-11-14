@@ -1,0 +1,254 @@
+{
+  "unknown tool": {
+    "tool": "no_such_tool",
+    "arguments": {},
+    "response": {
+      "rejected": {
+        "code": -32602,
+        "message": "Tool no_such_tool not found"
+      }
+    },
+    "sentryErrorEvents": 0,
+    "toolSpan": "absent"
+  },
+  "input fails the listed schema": {
+    "tool": "describe_project",
+    "arguments": {
+      "project_id": 123
+    },
+    "response": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Input validation error: Invalid arguments for tool describe_project: data/project_id must be string"
+        }
+      ],
+      "isError": true
+    },
+    "sentryErrorEvents": 0,
+    "toolSpan": "absent"
+  },
+  "project_id does not match a scoped connection": {
+    "tool": "describe_project",
+    "arguments": {
+      "project_id": "proj-other"
+    },
+    "response": {
+      "content": [
+        {
+          "type": "text",
+          "text": "InvalidArgumentError: project_id \"proj-other\" does not match this connection's project \"proj-sql\". Omit project_id to use that project. To work on another project, reconnect with access to it."
+        }
+      ],
+      "isError": true
+    },
+    "sentryErrorEvents": 0,
+    "toolSpan": "ok"
+  },
+  "project_id missing on an unscoped connection": {
+    "tool": "describe_branch",
+    "arguments": {
+      "branch_id": "br-main-123"
+    },
+    "response": {
+      "content": [
+        {
+          "type": "text",
+          "text": "InvalidArgumentError: project_id is required because this connection is not scoped to a project. Pass the target project ID, for example one returned by list_projects."
+        }
+      ],
+      "isError": true
+    },
+    "sentryErrorEvents": 0,
+    "toolSpan": "ok"
+  },
+  "no organizations": {
+    "tool": "list_projects",
+    "arguments": {},
+    "response": {
+      "content": [
+        {
+          "type": "text",
+          "text": "NotFoundError: No organizations found for this user"
+        }
+      ],
+      "isError": true
+    },
+    "sentryErrorEvents": 0,
+    "toolSpan": "ok"
+  },
+  "input fails a refinement the listed schema omits": {
+    "tool": "search_docs",
+    "arguments": {
+      "query": "branching",
+      "categories": [
+        "docs",
+        "docs"
+      ]
+    },
+    "response": {
+      "content": [
+        {
+          "type": "text",
+          "text": "ZodError: [\n  {\n    \"code\": \"custom\",\n    \"path\": [\n      \"categories\"\n    ],\n    \"message\": \"categories must not repeat a value\"\n  }\n]"
+        }
+      ],
+      "isError": true
+    },
+    "sentryErrorEvents": 0,
+    "toolSpan": "ok"
+  },
+  "SDK rejects a path parameter": {
+    "tool": "run_sql",
+    "arguments": {
+      "project_id": ".",
+      "sql": "select 1"
+    },
+    "response": {
+      "content": [
+        {
+          "type": "text",
+          "text": "NeonClientError: Path parameter project_id cannot be \".\"."
+        }
+      ],
+      "isError": true
+    },
+    "sentryErrorEvents": 0,
+    "toolSpan": "ok"
+  },
+  "Neon API 404": {
+    "tool": "describe_project",
+    "arguments": {
+      "project_id": "proj-not-found"
+    },
+    "response": {
+      "content": [
+        {
+          "type": "text",
+          "text": "project not found"
+        },
+        {
+          "type": "text",
+          "text": "[HTTP 404] project not found"
+        }
+      ],
+      "isError": true
+    },
+    "sentryErrorEvents": 0,
+    "toolSpan": "ok"
+  },
+  "Neon API 403 with a reason": {
+    "tool": "describe_project",
+    "arguments": {
+      "project_id": "proj-forbidden"
+    },
+    "response": {
+      "content": [
+        {
+          "type": "text",
+          "text": "This feature is not available on your plan"
+        },
+        {
+          "type": "text",
+          "text": "[HTTP 403] This feature is not available on your plan (reason: plan_limit)"
+        }
+      ],
+      "isError": true
+    },
+    "sentryErrorEvents": 0,
+    "toolSpan": "ok"
+  },
+  "Neon API 500": {
+    "tool": "describe_project",
+    "arguments": {
+      "project_id": "proj-server-error"
+    },
+    "response": {
+      "content": [
+        {
+          "type": "text",
+          "text": "NeonApiError: internal server error"
+        }
+      ],
+      "isError": true
+    },
+    "sentryErrorEvents": 1,
+    "toolSpan": "internal_error"
+  },
+  "network failure": {
+    "tool": "describe_project",
+    "arguments": {
+      "project_id": "proj-network"
+    },
+    "response": {
+      "content": [
+        {
+          "type": "text",
+          "text": "NeonNetworkError: Network error: no response received from the Neon API (UND_ERR_SOCKET)."
+        }
+      ],
+      "isError": true
+    },
+    "sentryErrorEvents": 1,
+    "toolSpan": "internal_error"
+  },
+  "Postgres rejects the statement": {
+    "tool": "run_sql",
+    "arguments": {
+      "project_id": "proj-sql",
+      "sql": "select missing_column"
+    },
+    "response": {
+      "content": [
+        {
+          "type": "text",
+          "text": "NeonDbError: column \"missing_column\" does not exist\nSQLSTATE: 42703\nPOSITION: 8\nHINT: Perhaps you meant to reference the column \"t.column\"."
+        }
+      ],
+      "isError": true
+    },
+    "sentryErrorEvents": 0,
+    "toolSpan": "ok"
+  },
+  "SQL endpoint fails": {
+    "tool": "run_sql",
+    "arguments": {
+      "project_id": "proj-sql",
+      "sql": "select 1 /* endpoint down */"
+    },
+    "response": {
+      "content": [
+        {
+          "type": "text",
+          "text": "NeonDbError: Server error (HTTP status 500): upstream connect error"
+        }
+      ],
+      "isError": true
+    },
+    "sentryErrorEvents": 0,
+    "toolSpan": "internal_error"
+  },
+  "query tuning completion fails": {
+    "tool": "complete_query_tuning",
+    "arguments": {
+      "project_id": "proj-tuning",
+      "tuning_id": "tuning-123",
+      "database_name": "neondb",
+      "temporary_branch_id": "br-temp-123",
+      "suggested_sql_statements": [
+        "create index on t (c)"
+      ]
+    },
+    "response": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Error: Failed to complete query tuning: internal server error"
+        }
+      ],
+      "isError": true
+    },
+    "sentryErrorEvents": 1,
+    "toolSpan": "internal_error"
+  }
+}
