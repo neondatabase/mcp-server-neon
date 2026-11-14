@@ -91,6 +91,32 @@ Aggregate the per-bucket JSONL into:
 
 The denominator query (`outcome=success`) is also subject to the cap — sample a known time slice (e.g. a 5-min window via `--since`/`--until`) to estimate the rate-per-minute, then project to the full window. Recent good-event rate has been ~22 events/min.
 
+### Replays after the grace period
+
+A rotated refresh token returns the pair its rotation issued for 5 minutes (`REFRESH_REPLAY_GRACE_MS` in `mcp/oauth/refresh-result.ts`). After that its owner gets `400 invalid_grant` and must sign in again, and every rejected attempt logs:
+
+```
+[SLO] refresh outcome=correct_invalid_grant elapsedMs=41 clientId=EADFzgU3 reason=replay_after_grace replayAgeMs=86400000 replayNext=live clientApplication=cursor
+```
+
+`replayAgeMs` is the time since the rotation. `replayNext` is the state of the refresh token that rotation issued:
+
+| `replayNext` | Meaning |
+|---|---|
+| `live` | Still the current token, unused since the rotation. |
+| `rotated` | Rotated again since: another copy of the chain (another process, or whoever holds a leaked token) moved on. |
+| `gone` | Revoked, expired, or never persisted. |
+
+`replayNext` is read when the replay is rejected. Another copy of the chain refreshes only when its 1-hour access token expires, so before that its new token is still unused: `live` points to a lost response only when `replayAgeMs` is over about an hour. Break the counts down by age (under 1h, 1h to 24h, over 24h) as well as by `replayNext`.
+
+Retries count as separate lines. The impact is the number of distinct clients, which approximates the installations that had to sign in again. The line carries `clientId`, `replayAgeMs`, `replayNext`, and `clientApplication` as Sentry Logs attributes, so in Sentry Explore > Logs:
+
+```
+message:"*reason=replay_after_grace*"
+group by clientApplication, replayNext
+count_unique(clientId), count(), p50(replayAgeMs)
+```
+
 ### 3. Alerting (later)
 
 Once the metric stabilises we can add a Vercel log drain → metrics platform (Datadog, Honeycomb, Grafana Cloud) and alert when `bad / classified > 0.5%` over 1 hour (10× the SLO target — tightening over time as we validate the floor).
