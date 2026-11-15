@@ -1,6 +1,6 @@
 const SERVER_NAME = 'neon';
 
-export type InstallTargets = {
+type InstallTargets = {
   claudeCode: string;
   cursor: string;
   vscode: string;
