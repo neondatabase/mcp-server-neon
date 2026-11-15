@@ -131,8 +131,6 @@ export const revokeOwnedRotation = async (
     return false;
   }
 
-  await model.deleteRefreshResult(refreshToken);
-
   const issued = await model.getRefreshToken(rotation.result.refreshToken);
 
   if (issued !== undefined) {
@@ -144,6 +142,10 @@ export const revokeOwnedRotation = async (
 
     await model.deleteRefreshToken(issued);
   }
+
+  // Last, so a revocation that fails partway still finds the issued pair
+  // when it is retried.
+  await model.deleteRefreshResult(refreshToken);
 
   return true;
 };

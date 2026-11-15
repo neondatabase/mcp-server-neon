@@ -705,6 +705,27 @@ describe('refresh token replay grace period', () => {
     expect(upstream.calls).toBe(1);
   });
 
+  it('completes the revocation of a rotated token when a failed attempt is retried', async () => {
+    const rotated = await seedRefreshToken();
+    const issued = await rotate(rotated);
+
+    const deleteToken = vi
+      .spyOn(model, 'deleteToken')
+      .mockRejectedValueOnce(new Error('connection reset'));
+
+    advance(DAY_MS);
+
+    try {
+      await expect(revoke(owner, rotated)).resolves.not.toBe(200);
+    } finally {
+      deleteToken.mockRestore();
+    }
+
+    await expect(revoke(owner, rotated)).resolves.toBe(200);
+    expectRejected(await refresh(owner, rotated));
+    expectRejected(await refresh(owner, issued));
+  });
+
   it('ignores another client revoking a rotated token', async () => {
     const rotated = await seedRefreshToken();
     const issued = await rotate(rotated);
