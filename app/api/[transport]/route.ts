@@ -75,6 +75,10 @@ import { SERVER_HOST } from '../../../lib/config';
 import { SERVER_INFO } from '../../../lib/server-metadata';
 import { isWellFormedOrigin } from '../../../lib/origin';
 import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
+import {
+  isLandingPageRequest,
+  landingPageResponse,
+} from '../../../lib/landing';
 
 const ROUTE_PATHS = {
   canonicalMcp: '/api/mcp',
@@ -1125,6 +1129,10 @@ const handleRequest = async (req: Request): Promise<Response> => {
       );
     }
     throw error;
+  }
+
+  if (isLandingPageRequest(req)) {
+    return landingPageResponse(req);
   }
 
   if (url.pathname === ROUTE_PATHS.legacyMcp) {

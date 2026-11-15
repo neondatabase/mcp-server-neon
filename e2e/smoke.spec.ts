@@ -161,6 +161,29 @@ test.describe('Smoke tests', () => {
     );
   });
 
+  test('browser GET /mcp returns the landing page', async ({ request }) => {
+    const response = await request.get('/mcp', {
+      headers: { Accept: 'text/html' },
+    });
+
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('text/html');
+    await expect(response.text()).resolves.toContain('Installation guide');
+  });
+
+  test('non-browser GET /mcp keeps the OAuth challenge', async ({
+    request,
+  }) => {
+    const response = await request.get('/mcp', {
+      headers: { Accept: '*/*' },
+    });
+
+    expect(response.status()).toBe(401);
+    expect(response.headers()['www-authenticate']).toContain(
+      'resource_metadata=',
+    );
+  });
+
   test('GET /sse returns 410 through the rewrite', async ({ request }) => {
     const response = await request.get('/sse');
     expect(response.status()).toBe(410);

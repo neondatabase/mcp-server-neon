@@ -387,6 +387,7 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 | `/api/list-tools`                         | Stateless preview of available tools for a given grant (no auth)                  |
 | `/.well-known/oauth-authorization-server` | OAuth server metadata (includes `scopes_supported` and `x-neon-scope-categories`) |
 | `/.well-known/oauth-protected-resource`   | OAuth protected resource metadata                                                 |
+| `/mcp.md`                                 | Landing page as Markdown (also `GET /mcp` with `Accept: text/markdown`)           |
 | `/mcp/server-card`                        | MCP Server Card (public, built from `server.json`)                                |
 | `/.well-known/ai-catalog.json`            | AI Catalog pointing at the Server Card                                            |
 | `/.well-known/mcp.json`                   | Same Server Card at the SEP-1649 path that directory scanners probe               |
