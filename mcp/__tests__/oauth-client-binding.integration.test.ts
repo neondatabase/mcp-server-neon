@@ -693,6 +693,41 @@ describe('refresh token replay grace period', () => {
     expect(after?.expires).toBe(before?.expires);
   });
 
+  it('revokes a rotated token for its owner, with the unused token it issued', async () => {
+    const rotated = await seedRefreshToken();
+    const issued = await rotate(rotated);
+
+    advance(DAY_MS);
+    await expect(revoke(owner, rotated)).resolves.toBe(200);
+    expectRejected(await refresh(owner, rotated));
+    expectRejected(await refresh(owner, issued));
+
+    expect(upstream.calls).toBe(1);
+  });
+
+  it('ignores another client revoking a rotated token', async () => {
+    const rotated = await seedRefreshToken();
+    const issued = await rotate(rotated);
+
+    advance(DAY_MS);
+    await expect(revoke(other, rotated)).resolves.toBe(200);
+
+    const replay = await refresh(owner, rotated);
+
+    expect(replay.body.refresh_token).toBe(issued);
+  });
+
+  it('revokes a rotated token whose old records survived cleanup', async () => {
+    const old = await seedRefreshToken();
+    const { current, restore } = await seedRetained(old);
+
+    await restore();
+    advance(DAY_MS);
+    await expect(revoke(owner, old)).resolves.toBe(200);
+    expectRejected(await refresh(owner, old));
+    expectRejected(await refresh(owner, current));
+  });
+
   it('stops serving a live rotation once its cached row expires', async () => {
     const rotated = await seedRefreshToken();
 

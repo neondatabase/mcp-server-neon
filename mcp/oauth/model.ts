@@ -143,6 +143,10 @@ class Model implements AuthorizationCodeModel {
     return getRefreshResults().get(oldRefreshToken);
   };
 
+  deleteRefreshResult: (oldRefreshToken: string) => Promise<boolean> = async (
+    oldRefreshToken,
+  ) => getRefreshResults().delete(oldRefreshToken);
+
   /** The cached rotation of `oldRefreshToken` and when it was rotated. */
   getRefreshRotation: (
     oldRefreshToken: string,

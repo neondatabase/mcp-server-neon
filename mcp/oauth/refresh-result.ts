@@ -116,6 +116,38 @@ export const resolveOwnedRotation = async (
     : resolveRotation(refreshToken, clientId, rotation);
 };
 
+/**
+ * Revokes `clientId`'s own cached rotation of `refreshToken`, so the token
+ * stops returning a pair: deletes the cached row, and the refresh token it
+ * issued while that is still stored. Resolves whether there was a rotation.
+ */
+export const revokeOwnedRotation = async (
+  refreshToken: string,
+  clientId: string,
+): Promise<boolean> => {
+  const rotation = await getOwnedRotation(refreshToken, clientId);
+
+  if (rotation === undefined) {
+    return false;
+  }
+
+  await model.deleteRefreshResult(refreshToken);
+
+  const issued = await model.getRefreshToken(rotation.result.refreshToken);
+
+  if (issued !== undefined) {
+    const access = await model.getAccessToken(issued.accessToken);
+
+    if (access !== undefined) {
+      await model.deleteToken(access);
+    }
+
+    await model.deleteRefreshToken(issued);
+  }
+
+  return true;
+};
+
 /** The cached pair `clientId`'s own rotation of `refreshToken` serves. */
 export async function getOwnedRefreshResult(
   refreshToken: string,
