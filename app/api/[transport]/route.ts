@@ -17,7 +17,7 @@ import { NeonApiError } from '@neon/sdk';
 import { NEON_HANDLERS } from '../../../mcp/tools/index';
 import { createNeonClient } from '../../../mcp/server/api';
 import pkg from '../../../package.json';
-import { handleToolError } from '../../../mcp/server/errors';
+import { asCancellation, handleToolError } from '../../../mcp/server/errors';
 import { createSdkErrorReporter } from '../../../mcp/server/sdk-errors';
 import type { ToolHandlerExtraParams } from '../../../mcp/tools/types';
 import { identifyClient } from '../../../mcp/utils/client-application';
@@ -501,9 +501,10 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
 
                   return result;
                 } catch (error) {
-                  recordToolError(span, error);
+                  const toolError = asCancellation(extraArgs.signal) ?? error;
+                  recordToolError(span, toolError);
                   const errorResult = handleToolError(
-                    error,
+                    toolError,
                     properties,
                     traceId,
                     { clientName: cName, clientApplication: clientApp },
@@ -639,17 +640,19 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
             typeof args === 'object' && args !== null,
             `${toolName} arguments were not validated`,
           );
+          const signal = toolCallSignal(ctx);
           try {
             return await handler({ params: { ...args } }, undefined, {
               readOnly: true,
               clientApplication: docsAgent.clientApplication,
               userAgent,
-              signal: toolCallSignal(ctx),
+              signal,
             });
           } catch (error) {
-            recordToolError(span, error);
+            const toolError = asCancellation(signal) ?? error;
+            recordToolError(span, toolError);
             const errorResult = handleToolError(
-              error,
+              toolError,
               properties,
               traceId,
               docsAgent,
