@@ -1,15 +1,27 @@
 import { test, expect } from '@playwright/test';
 import serverJson from '../server.json' with { type: 'json' };
+import { z } from 'zod';
+
+const HealthBody = z.strictObject({
+  status: z.literal('ok'),
+  version: z.string(),
+  timestamp: z.iso.datetime(),
+});
 
 test.describe('Smoke tests', () => {
   test('GET /api/health returns status ok', async ({ request }) => {
     const response = await request.get('/api/health');
     expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('application/json');
 
-    const body = await response.json();
-    expect(body.status).toBe('ok');
-    expect(body.version).toBeDefined();
-    expect(body.timestamp).toBeDefined();
+    const body = HealthBody.parse(await response.json());
+    expect(body.version).toBe(serverJson.version);
+  });
+
+  test('GET /health is an alias for /api/health', async ({ request }) => {
+    const response = await request.get('/health');
+    expect(response.status()).toBe(200);
+    expect(HealthBody.parse(await response.json()).status).toBe('ok');
   });
 
   test('GET /.well-known/oauth-authorization-server returns discovery metadata', async ({

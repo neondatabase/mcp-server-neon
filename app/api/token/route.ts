@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { Client } from 'oauth2-server';
 import { model } from '../../../mcp/oauth/model';
-import { getOwnedRefreshResult } from '../../../mcp/oauth/refresh-result';
+import type { RefreshRotation } from '../../../mcp/oauth/model';
+import {
+  describeReplay,
+  findRefreshReplay,
+  getOwnedRefreshResult,
+  isWithinReplayGrace,
+} from '../../../mcp/oauth/refresh-result';
+import type { RefreshReplay } from '../../../mcp/oauth/refresh-result';
+import { detectClientApplication } from '../../../mcp/utils/client-application';
+import type { ClientApplication } from '../../../mcp/utils/client-application';
 import {
   exchangeRefreshToken,
   type UpstreamRequestSummary,
@@ -197,11 +206,28 @@ class RefreshError extends Error {
     // sibling log lines. Plumbing added so the dashboard's bad-bucket drill-
     // down can be a single grep | sort | uniq -c.
     public readonly upstreamOauthError?: string,
+    replay?: RefreshReplay,
   ) {
     super(description);
     this.name = 'RefreshError';
+    this.replay = replay;
   }
+
+  readonly replay?: RefreshReplay;
 }
+
+type LoggedReplay = RefreshReplay & { clientApplication: ClientApplication };
+
+const loggedReplay = (
+  replay: RefreshReplay | undefined,
+  client: Client,
+): LoggedReplay | undefined =>
+  replay === undefined
+    ? undefined
+    : {
+        ...replay,
+        clientApplication: detectClientApplication(client.client_name),
+      };
 
 // Stable, greppable SLO metric line. Aggregator scripts parse the
 // `outcome=<bucket>` token; other fields are diagnostic context.
@@ -212,15 +238,43 @@ function emitRefreshSlo(
     clientId?: string;
     reason?: string;
     upstreamOauthError?: string;
+    replay?: LoggedReplay;
   } = {},
 ): void {
   const elapsedMs = Date.now() - startMs;
   const fields = [`outcome=${outcome}`, `elapsedMs=${elapsedMs}`];
+  const { replay } = context;
   if (context.clientId) fields.push(`clientId=${context.clientId}`);
-  if (context.reason) fields.push(`reason=${context.reason}`);
+  if (replay === undefined && context.reason)
+    fields.push(`reason=${context.reason}`);
+
+  if (replay !== undefined) {
+    fields.push(
+      'reason=replay_after_grace',
+      `replayAgeMs=${replay.ageMs}`,
+      `replayNext=${replay.next}`,
+      `clientApplication=${replay.clientApplication}`,
+    );
+  }
+
   if (context.upstreamOauthError)
     fields.push(`upstreamOauthError=${context.upstreamOauthError}`);
-  logger.info(`[SLO] refresh ${fields.join(' ')}`);
+  const line = `[SLO] refresh ${fields.join(' ')}`;
+
+  if (replay === undefined) {
+    logger.info(line);
+
+    return;
+  }
+
+  // Sentry Logs attributes, so replays can be counted per client and app.
+  // Names containing "auth" or "token" are scrubbed to [Filtered].
+  logger.info(line, {
+    clientId: context.clientId,
+    replayAgeMs: replay.ageMs,
+    replayNext: replay.next,
+    clientApplication: replay.clientApplication,
+  });
 }
 
 // `extractUpstreamErrorDetails` was lifted to `lib/oauth/upstream-error.ts`
@@ -256,6 +310,22 @@ async function executeRefresh(
   client: Client,
   hint: ReleaseHint,
 ): Promise<RefreshTokenResult> {
+  // Before the storage lookup: a failed cleanup after the rotation leaves the
+  // old token's records in place, and sending that token upstream would make
+  // Hydra revoke the chain it rotated into.
+  const replay = await findRefreshReplay(refreshToken, client.id);
+  if (replay) {
+    await cachePreUpstreamFailure(refreshToken, 'replay_after_grace');
+    throw new RefreshError(
+      'invalid_grant',
+      'Invalid or expired refresh token',
+      400,
+      'correct_invalid_grant',
+      undefined,
+      replay,
+    );
+  }
+
   const providedRefreshToken = await model.getRefreshToken(refreshToken);
   if (!providedRefreshToken) {
     // info, not warn: this is the canonical happy path for
@@ -830,24 +900,51 @@ export async function POST(request: NextRequest) {
           : undefined;
       };
 
+      // Another client presenting a rotated token records it as missing, so
+      // a cached failure can belong to the owner's own rotation. Rows without
+      // a client are not attributed here, so a cached failure keeps absorbing
+      // retries instead of walking their rotation chain each time.
+      const getOwnedRotation = async (): Promise<
+        RefreshRotation | undefined
+      > => {
+        const rotation = await model
+          .getRefreshRotation(refreshToken)
+          .catch(() => undefined);
+
+        return rotation?.result.clientId === client.id ? rotation : undefined;
+      };
+
+      const replayOf = async (
+        rotation: RefreshRotation | undefined,
+      ): Promise<RefreshReplay | undefined> => {
+        if (rotation === undefined) {
+          return undefined;
+        }
+
+        try {
+          return await describeReplay(refreshToken, rotation);
+        } catch (describeError) {
+          logger.warn('Failed to describe a rejected refresh replay', {
+            error: describeError,
+          });
+
+          return undefined;
+        }
+      };
+
       // Absorb retry storms: if upstream already rejected this RT recently,
       // skip the singleflight + upstream call and return the cached failure.
       const cachedFailure = await getCachedFailure();
       if (cachedFailure) {
-        // Another client presenting a rotated token records it as missing.
-        // The owner's replay still gets the cached rotation. Rows without a
-        // client are not attributed here, so a cached failure keeps absorbing
-        // retries instead of walking their rotation chain each time.
-        const cached = await model
-          .getRefreshResult(refreshToken)
-          .catch(() => undefined);
-        if (cached?.clientId === client.id) {
+        const owned = await getOwnedRotation();
+        if (owned && isWithinReplayGrace(owned.rotatedAt)) {
           emitRefreshSlo('success', sloStartMs, {
             clientId: client.id,
             reason: 'cache_replay_over_failure',
           });
-          return NextResponse.json(cachedToResponse(cached));
+          return NextResponse.json(cachedToResponse(owned.result));
         }
+        const replay = await replayOf(owned);
         logger.info('Refresh token in failure cache; rejecting fast', {
           clientId: client.id,
           ageMs: Date.now() - cachedFailure.failedAt,
@@ -857,6 +954,7 @@ export async function POST(request: NextRequest) {
           clientId: client.id,
           reason: 'failure_cache_hit',
           upstreamOauthError: cachedFailure.oauthError,
+          replay: loggedReplay(replay, client),
         });
         return NextResponse.json(
           {
@@ -877,11 +975,15 @@ export async function POST(request: NextRequest) {
       > => {
         const failure = await getCachedFailure();
         if (failure) {
+          const replay = await replayOf(await getOwnedRotation());
+
           throw new RefreshError(
             'invalid_grant',
             'Invalid or expired refresh token',
             400,
             'correct_invalid_grant',
+            undefined,
+            replay,
           );
         }
         // Holder may have hit upstream 5xx and signalled "don't wait, retry
@@ -957,6 +1059,7 @@ export async function POST(request: NextRequest) {
           emitRefreshSlo(error.sloOutcome, sloStartMs, {
             clientId: client.id,
             upstreamOauthError: error.upstreamOauthError,
+            replay: loggedReplay(error.replay, client),
           });
           return NextResponse.json(
             {

@@ -1,17 +1,28 @@
 /**
  * A refresh token is usable and revocable only by the client it was issued
  * to, including through the refresh result cache, the failure cache, and the
- * lock waiters. Runs the /api/token and /api/revoke routes against the real
- * OAuth Postgres database (tokens, both caches, the Postgres lock); only
- * upstream Hydra is replaced.
+ * lock waiters, and a rotated one is replayable only within the grace period.
+ * Runs the /api/token and /api/revoke routes against the real OAuth Postgres
+ * database (tokens, both caches, the Postgres lock); only upstream Hydra is
+ * replaced.
  */
 
 import { randomUUID } from 'node:crypto';
 import { NextRequest } from 'next/server';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+import { z } from 'zod';
 import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
+import { logger } from '../utils/logger';
 
-const upstream = { calls: 0, latencyMs: 0 };
+const upstream = { calls: 0, latencyMs: 0, rotate: true };
 
 vi.mock('../../lib/oauth/client', () => ({
   exchangeRefreshToken: async () => {
@@ -19,7 +30,7 @@ vi.mock('../../lib/oauth/client', () => ({
     await new Promise((r) => setTimeout(r, upstream.latencyMs));
     return {
       access_token: `at-${randomUUID()}`,
-      refresh_token: `rt-${randomUUID()}`,
+      refresh_token: upstream.rotate ? `rt-${randomUUID()}` : undefined,
       expiresIn: () => 3600,
       scope: 'read write',
     };
@@ -73,6 +84,7 @@ beforeAll(async () => {
       grants: ['authorization_code', 'refresh_token'],
       redirect_uris: ['http://localhost/callback'],
       tokenEndpointAuthMethod: 'client_secret_post',
+      client_name: 'Cursor',
     });
   }
 }, 60_000);
@@ -80,6 +92,7 @@ beforeAll(async () => {
 beforeEach(() => {
   upstream.calls = 0;
   upstream.latencyMs = 0;
+  upstream.rotate = true;
 });
 
 async function seedRefreshToken(): Promise<string> {
@@ -268,5 +281,280 @@ describe('refresh token revocation client binding', () => {
     expect(await model.getRefreshToken(refreshToken)).toBeUndefined();
     expectRejected(await refresh(owner, refreshToken));
     expect(upstream.calls).toBe(0);
+  });
+});
+
+const GRACE_MS = 5 * 60_000;
+
+const ReplayAttributes = z.object({
+  clientId: z.string(),
+  replayAgeMs: z.number(),
+  replayNext: z.enum(['live', 'rotated', 'gone']),
+  clientApplication: z.string(),
+});
+
+type SloCall = {
+  message: string;
+  replay: z.infer<typeof ReplayAttributes> | undefined;
+};
+
+const sloCalls = (): SloCall[] => {
+  const calls: unknown[][] = vi.mocked(logger.info).mock.calls;
+
+  return calls.flatMap(([message, attributes]) => {
+    const line = z.string().startsWith('[SLO] refresh ').safeParse(message);
+
+    if (!line.success) {
+      return [];
+    }
+
+    const replay = ReplayAttributes.safeParse(attributes);
+
+    return [
+      { message: line.data, replay: replay.success ? replay.data : undefined },
+    ];
+  });
+};
+
+const lastSlo = (): SloCall => {
+  const call = sloCalls().at(-1);
+
+  if (call === undefined) {
+    throw new Error('No [SLO] refresh line was logged');
+  }
+
+  return call;
+};
+
+const replayNexts = (): (string | undefined)[] =>
+  sloCalls().map(({ replay }) => replay?.replayNext);
+
+const required = <T>(value: T | undefined, what: string): T => {
+  if (value === undefined) {
+    throw new Error(`Missing ${what}`);
+  }
+
+  return value;
+};
+
+const rotate = async (refreshToken: string): Promise<string> => {
+  const { status, body } = await refresh(owner, refreshToken);
+
+  if (status !== 200) {
+    throw new Error(`Refresh returned ${status}`);
+  }
+
+  return required(body.refresh_token, 'refresh_token');
+};
+
+const advance = (ms: number): void => {
+  vi.setSystemTime(Date.now() + ms);
+};
+
+describe('refresh token replay grace period', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date());
+    vi.mocked(logger.info).mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('serves the replay until the grace period ends and rejects it from then on', async () => {
+    const rotated = await seedRefreshToken();
+    const first = await refresh(owner, rotated);
+
+    advance(GRACE_MS - 1);
+
+    const inGrace = await refresh(owner, rotated);
+
+    expect(inGrace.status).toBe(200);
+    expect(pair(inGrace.body)).toStrictEqual(pair(first.body));
+
+    advance(1);
+    expectRejected(await refresh(owner, rotated));
+    expect(upstream.calls).toBe(1);
+    expect(lastSlo().message).toContain('outcome=correct_invalid_grant');
+    expect(lastSlo().message).toContain('reason=replay_after_grace');
+    expect(lastSlo().replay).toStrictEqual({
+      clientId: owner.id,
+      replayAgeMs: GRACE_MS,
+      replayNext: 'live',
+      clientApplication: 'cursor',
+    });
+
+    await rotate(required(first.body.refresh_token, 'refresh_token'));
+
+    expect(upstream.calls).toBe(2);
+  });
+
+  it('logs every rejected replay, including retries served from the failure cache', async () => {
+    const rotated = await seedRefreshToken();
+
+    await rotate(rotated);
+    advance(GRACE_MS + 60_000);
+    vi.mocked(logger.info).mockClear();
+    expectRejected(await refresh(owner, rotated));
+    expectRejected(await refresh(owner, rotated));
+
+    expect(sloCalls().map(({ replay }) => replay?.replayAgeMs)).toStrictEqual([
+      GRACE_MS + 60_000,
+      GRACE_MS + 60_000,
+    ]);
+    expect(upstream.calls).toBe(1);
+  });
+
+  it('logs every one of concurrent rejected replays', async () => {
+    const rotated = await seedRefreshToken();
+
+    await rotate(rotated);
+    advance(GRACE_MS);
+    vi.mocked(logger.info).mockClear();
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, async () => refresh(owner, rotated)),
+    );
+
+    for (const result of results) {
+      expectRejected(result);
+    }
+
+    expect(replayNexts()).toStrictEqual(
+      Array.from({ length: 5 }, () => 'live'),
+    );
+    expect(upstream.calls).toBe(1);
+  });
+
+  it('rejects a token two rotations back and keeps the live token working', async () => {
+    const first = await seedRefreshToken();
+    const second = await rotate(first);
+    const third = await rotate(second);
+
+    advance(GRACE_MS);
+    vi.mocked(logger.info).mockClear();
+    expectRejected(await refresh(owner, first));
+    expectRejected(await refresh(owner, second));
+
+    expect(replayNexts()).toStrictEqual(['rotated', 'live']);
+
+    await rotate(third);
+
+    expect(upstream.calls).toBe(3);
+  });
+
+  it('reports a replay whose chain was revoked', async () => {
+    const rotated = await seedRefreshToken();
+    const current = await rotate(rotated);
+
+    await expect(revoke(owner, current)).resolves.toBe(200);
+    advance(GRACE_MS);
+    expectRejected(await refresh(owner, rotated));
+
+    expect(lastSlo().replay?.replayNext).toBe('gone');
+  });
+
+  it('rejects the owner after the grace period when another client presented the token first', async () => {
+    const rotated = await seedRefreshToken();
+
+    await rotate(rotated);
+    advance(GRACE_MS);
+    expectRejected(await refresh(other, rotated));
+
+    expect(lastSlo().replay).toBeUndefined();
+
+    expectRejected(await refresh(owner, rotated));
+
+    expect(lastSlo().replay?.clientId).toBe(owner.id);
+    expect(upstream.calls).toBe(1);
+  });
+
+  it('rejects a rotated token whose old records survived cleanup without calling upstream', async () => {
+    const old = await seedRefreshToken();
+
+    const oldRecord = required(
+      await model.getRefreshToken(old),
+      'refresh token record',
+    );
+
+    const oldToken = required(
+      await model.getAccessToken(oldRecord.accessToken),
+      'access token',
+    );
+
+    const current = await rotate(old);
+
+    await model.saveToken(oldToken);
+    await model.saveRefreshToken(oldRecord);
+    advance(GRACE_MS);
+    expectRejected(await refresh(owner, old));
+
+    expect(upstream.calls).toBe(1);
+    expect(lastSlo().replay?.replayNext).toBe('live');
+
+    await rotate(current);
+
+    expect(upstream.calls).toBe(2);
+  });
+
+  it('rejects a rotated token whose new pair was never persisted without calling upstream', async () => {
+    const old = await seedRefreshToken();
+
+    await model.saveRefreshResult(old, {
+      clientId: owner.id,
+      accessToken: `at-${randomUUID()}`,
+      refreshToken: `rt-${randomUUID()}`,
+      expiresAt: Date.now() + 3_600_000,
+      scope: 'read write',
+    });
+    advance(GRACE_MS);
+    expectRejected(await refresh(owner, old));
+
+    expect(upstream.calls).toBe(0);
+    expect(lastSlo().replay?.replayNext).toBe('gone');
+  });
+
+  it('keeps refreshing a token that upstream did not rotate', async () => {
+    upstream.rotate = false;
+
+    const refreshToken = await seedRefreshToken();
+
+    await expect(rotate(refreshToken)).resolves.toBe(refreshToken);
+    advance(GRACE_MS + 60_000);
+    await expect(rotate(refreshToken)).resolves.toBe(refreshToken);
+
+    expect(upstream.calls).toBe(2);
+  });
+
+  it('measures the grace period of a row written without a client from its first write', async () => {
+    const first = await seedRefreshToken();
+    const second = await rotate(first);
+    const row = required(await model.getRefreshResult(first), 'cached row');
+
+    await getRefreshResults().set(
+      first,
+      { ...row, clientId: undefined },
+      7 * 24 * 60 * 60_000,
+    );
+
+    const before = await getRefreshResults().get(first, { raw: true });
+
+    advance(GRACE_MS + 60_000);
+    expectRejected(await refresh(owner, first));
+
+    expect(lastSlo().replay).toStrictEqual({
+      clientId: owner.id,
+      replayAgeMs: GRACE_MS + 60_000,
+      replayNext: 'live',
+      clientApplication: 'cursor',
+    });
+
+    const after = await getRefreshResults().get(first, { raw: true });
+
+    expect(after?.value?.clientId).toBe(owner.id);
+    expect(after?.expires).toBe(before?.expires);
+
+    await rotate(second);
   });
 });

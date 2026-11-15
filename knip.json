@@ -1,7 +1,20 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "project": ["**/*.{ts,tsx}", "!**/*.d.ts"],
-  "ignore": [".next/**", "dist/**", "build/**", "out/**"],
-  "ignoreDependencies": ["tailwindcss", "postcss", "tsx"],
+  "ignore": [
+    ".next/**",
+    "dist/**",
+    "build/**",
+    "out/**",
+    "tools/oxlint/anti-slop/**"
+  ],
+  "ignoreDependencies": [
+    "tailwindcss",
+    "postcss",
+    "tsx",
+    "oxlint",
+    "oxlint-tsgolint",
+    "@oxlint/plugins"
+  ],
   "ignoreBinaries": ["tsx"]
 }
