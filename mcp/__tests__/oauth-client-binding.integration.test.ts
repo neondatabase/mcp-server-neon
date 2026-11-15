@@ -552,12 +552,14 @@ describe('refresh token replay grace period', () => {
     const rotated = await seedRefreshToken();
     const issued = await rotate(rotated);
 
+    advance(DAY_MS);
     await model.saveRefreshFailure(rotated, {
       failedAt: Date.now(),
       oauthError: 'invalid_grant',
       oauthErrorDescription: 'replay_after_grace',
     });
-    advance(DAY_MS);
+    await expect(model.getRefreshFailure(rotated)).resolves.toBeDefined();
+    vi.mocked(logger.info).mockClear();
 
     const results = await Promise.all(
       Array.from({ length: 3 }, async () => refresh(owner, rotated)),
@@ -568,6 +570,11 @@ describe('refresh token replay grace period', () => {
       issued,
       issued,
     ]);
+    expect(
+      sloCalls().map(({ message }) =>
+        message.includes('reason=cache_replay_over_failure'),
+      ),
+    ).toStrictEqual([true, true, true]);
     expectRejected(await refresh(other, rotated));
   });
 
