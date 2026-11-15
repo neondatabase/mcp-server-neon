@@ -21,6 +21,7 @@ import {
 import { z } from 'zod';
 import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
 import { logger } from '../utils/logger';
+import type { RefreshLockStore } from '../oauth/refresh-lock-store';
 
 const upstream = { calls: 0, latencyMs: 0, rotate: true };
 
@@ -54,6 +55,7 @@ type TestClient = { id: string; secret: string };
 type TokenBody = {
   access_token?: string;
   refresh_token?: string;
+  expires_in?: number;
   error?: string;
 };
 
@@ -351,6 +353,54 @@ const advance = (ms: number): void => {
   vi.setSystemTime(Date.now() + ms);
 };
 
+const DAY_MS = 24 * 60 * 60_000;
+
+const lateServes = (): number => {
+  const calls: unknown[][] = vi.mocked(logger.info).mock.calls;
+
+  return calls.filter(
+    ([message]) =>
+      z.literal('Served a late replay of a live rotation').safeParse(message)
+        .success,
+  ).length;
+};
+
+const unavailableLock = {
+  name: 'postgres',
+  tryAcquire: async () => {
+    throw new Error('lock store unavailable');
+  },
+  isHeld: async () => false,
+  extend: async () => undefined,
+  release: async () => undefined,
+  markTransient: async () => undefined,
+  hasTransient: async () => false,
+} satisfies RefreshLockStore;
+
+const seedRetained = async (
+  old: string,
+): Promise<{ current: string; restore: () => Promise<void> }> => {
+  const oldRecord = required(
+    await model.getRefreshToken(old),
+    'refresh token record',
+  );
+
+  const oldToken = required(
+    await model.getAccessToken(oldRecord.accessToken),
+    'access token',
+  );
+
+  const current = await rotate(old);
+
+  return {
+    current,
+    restore: async () => {
+      await model.saveToken(oldToken);
+      await model.saveRefreshToken(oldRecord);
+    },
+  };
+};
+
 describe('refresh token replay grace period', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -362,54 +412,106 @@ describe('refresh token replay grace period', () => {
     vi.useRealTimers();
   });
 
-  it('serves the replay until the grace period ends and rejects it from then on', async () => {
+  it('serves a late replay while the issued token is unused, with the remaining lifetime', async () => {
     const rotated = await seedRefreshToken();
     const first = await refresh(owner, rotated);
 
+    advance(GRACE_MS + 60_000);
+
+    const late = await refresh(owner, rotated);
+
+    expect(late.status).toBe(200);
+    expect(pair(late.body)).toStrictEqual(pair(first.body));
+    expect(late.body.expires_in).toBe(3600 - (GRACE_MS + 60_000) / 1000);
+    expect(lateServes()).toBe(1);
+    expect(upstream.calls).toBe(1);
+  });
+
+  it('serves a replay days after the rotation with expires_in 0, and the returned token refreshes', async () => {
+    const rotated = await seedRefreshToken();
+    const first = await refresh(owner, rotated);
+
+    advance(2 * DAY_MS);
+
+    const late = await refresh(owner, rotated);
+
+    expect(late.status).toBe(200);
+    expect(pair(late.body)).toStrictEqual(pair(first.body));
+    expect(late.body.expires_in).toBe(0);
+
+    await rotate(required(late.body.refresh_token, 'refresh_token'));
+
+    expect(upstream.calls).toBe(2);
+  });
+
+  it('keeps expires_in within the grace period', async () => {
+    const rotated = await seedRefreshToken();
+
+    await rotate(rotated);
+    advance(60_000);
+
+    const replay = await refresh(owner, rotated);
+
+    expect(replay.body.expires_in).toBe(3600 - 60);
+  });
+
+  it('serves a replay within the grace period even after the issued token was rotated', async () => {
+    const rotated = await seedRefreshToken();
+    const second = await rotate(rotated);
+
+    await rotate(second);
     advance(GRACE_MS - 1);
 
-    const inGrace = await refresh(owner, rotated);
+    const replay = await refresh(owner, rotated);
 
-    expect(inGrace.status).toBe(200);
-    expect(pair(inGrace.body)).toStrictEqual(pair(first.body));
+    expect(replay.status).toBe(200);
+    expect(replay.body.refresh_token).toBe(second);
+  });
 
-    advance(1);
-    expectRejected(await refresh(owner, rotated));
-    expect(upstream.calls).toBe(1);
-    expect(lastSlo().message).toContain('outcome=correct_invalid_grant');
+  it('rejects a replay after the grace period once the issued token was rotated again', async () => {
+    const first = await seedRefreshToken();
+    const second = await rotate(first);
+    const third = await rotate(second);
+
+    advance(GRACE_MS);
+    vi.mocked(logger.info).mockClear();
+    expectRejected(await refresh(owner, first));
+
     expect(lastSlo().message).toContain('reason=replay_after_grace');
     expect(lastSlo().replay).toStrictEqual({
       clientId: owner.id,
       replayAgeMs: GRACE_MS,
-      replayNext: 'live',
+      replayNext: 'rotated',
       clientApplication: 'cursor',
     });
 
-    await rotate(required(first.body.refresh_token, 'refresh_token'));
+    const latest = await refresh(owner, second);
 
-    expect(upstream.calls).toBe(2);
+    expect(latest.status).toBe(200);
+    expect(latest.body.refresh_token).toBe(third);
+
+    await rotate(third);
+
+    expect(upstream.calls).toBe(3);
   });
 
   it('logs every rejected replay, including retries served from the failure cache', async () => {
     const rotated = await seedRefreshToken();
 
-    await rotate(rotated);
+    await rotate(await rotate(rotated));
     advance(GRACE_MS + 60_000);
     vi.mocked(logger.info).mockClear();
     expectRejected(await refresh(owner, rotated));
     expectRejected(await refresh(owner, rotated));
 
-    expect(sloCalls().map(({ replay }) => replay?.replayAgeMs)).toStrictEqual([
-      GRACE_MS + 60_000,
-      GRACE_MS + 60_000,
-    ]);
-    expect(upstream.calls).toBe(1);
+    expect(replayNexts()).toStrictEqual(['rotated', 'rotated']);
+    expect(upstream.calls).toBe(2);
   });
 
   it('logs every one of concurrent rejected replays', async () => {
     const rotated = await seedRefreshToken();
 
-    await rotate(rotated);
+    await rotate(await rotate(rotated));
     advance(GRACE_MS);
     vi.mocked(logger.info).mockClear();
 
@@ -422,26 +524,51 @@ describe('refresh token replay grace period', () => {
     }
 
     expect(replayNexts()).toStrictEqual(
-      Array.from({ length: 5 }, () => 'live'),
+      Array.from({ length: 5 }, () => 'rotated'),
     );
+    expect(upstream.calls).toBe(2);
+  });
+
+  it('serves every one of concurrent late replays of a live rotation', async () => {
+    const rotated = await seedRefreshToken();
+    const issued = await rotate(rotated);
+
+    advance(DAY_MS);
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, async () => refresh(owner, rotated)),
+    );
+
+    expect(results.map(({ status }) => status)).toStrictEqual(
+      Array.from({ length: 5 }, () => 200),
+    );
+    expect(
+      new Set(results.map(({ body }) => body.refresh_token)),
+    ).toStrictEqual(new Set([issued]));
     expect(upstream.calls).toBe(1);
   });
 
-  it('rejects a token two rotations back and keeps the live token working', async () => {
-    const first = await seedRefreshToken();
-    const second = await rotate(first);
-    const third = await rotate(second);
+  it('recovers a client whose late replay was rejected and cached as a failure', async () => {
+    const rotated = await seedRefreshToken();
+    const issued = await rotate(rotated);
 
-    advance(GRACE_MS);
-    vi.mocked(logger.info).mockClear();
-    expectRejected(await refresh(owner, first));
-    expectRejected(await refresh(owner, second));
+    await model.saveRefreshFailure(rotated, {
+      failedAt: Date.now(),
+      oauthError: 'invalid_grant',
+      oauthErrorDescription: 'replay_after_grace',
+    });
+    advance(DAY_MS);
 
-    expect(replayNexts()).toStrictEqual(['rotated', 'live']);
+    const results = await Promise.all(
+      Array.from({ length: 3 }, async () => refresh(owner, rotated)),
+    );
 
-    await rotate(third);
-
-    expect(upstream.calls).toBe(3);
+    expect(results.map(({ body }) => body.refresh_token)).toStrictEqual([
+      issued,
+      issued,
+      issued,
+    ]);
+    expectRejected(await refresh(other, rotated));
   });
 
   it('reports a replay whose chain was revoked', async () => {
@@ -455,47 +582,53 @@ describe('refresh token replay grace period', () => {
     expect(lastSlo().replay?.replayNext).toBe('gone');
   });
 
-  it('rejects the owner after the grace period when another client presented the token first', async () => {
+  it('serves the owner after the grace period when another client presented the token first', async () => {
     const rotated = await seedRefreshToken();
+    const issued = await rotate(rotated);
 
-    await rotate(rotated);
     advance(GRACE_MS);
     expectRejected(await refresh(other, rotated));
 
-    expect(lastSlo().replay).toBeUndefined();
+    const replay = await refresh(owner, rotated);
 
-    expectRejected(await refresh(owner, rotated));
-
-    expect(lastSlo().replay?.clientId).toBe(owner.id);
+    expect(replay.body.refresh_token).toBe(issued);
     expect(upstream.calls).toBe(1);
   });
 
-  it('rejects a rotated token whose old records survived cleanup without calling upstream', async () => {
+  it('serves a late replay whose old records survived cleanup without calling upstream', async () => {
     const old = await seedRefreshToken();
+    const { current, restore } = await seedRetained(old);
 
-    const oldRecord = required(
-      await model.getRefreshToken(old),
-      'refresh token record',
-    );
-
-    const oldToken = required(
-      await model.getAccessToken(oldRecord.accessToken),
-      'access token',
-    );
-
-    const current = await rotate(old);
-
-    await model.saveToken(oldToken);
-    await model.saveRefreshToken(oldRecord);
+    await restore();
     advance(GRACE_MS);
-    expectRejected(await refresh(owner, old));
 
+    const replay = await refresh(owner, old);
+
+    expect(replay.body.refresh_token).toBe(current);
     expect(upstream.calls).toBe(1);
-    expect(lastSlo().replay?.replayNext).toBe('live');
+  });
 
-    await rotate(current);
+  it('serves a late replay without calling upstream when the refresh lock is unavailable', async () => {
+    const old = await seedRefreshToken();
+    const { current, restore } = await seedRetained(old);
+    const lock = await import('../oauth/refresh-lock');
+    const stores = await import('../oauth/refresh-lock-store');
+    const databaseUrl = await ensureTestOauthDatabase();
 
-    expect(upstream.calls).toBe(2);
+    await restore();
+    advance(GRACE_MS);
+    lock.__setRefreshLockStoresForTests([unavailableLock]);
+
+    try {
+      const replay = await refresh(owner, old);
+
+      expect(replay.body.refresh_token).toBe(current);
+      expect(upstream.calls).toBe(1);
+    } finally {
+      lock.__setRefreshLockStoresForTests([
+        stores.createPostgresRefreshLockStore(databaseUrl),
+      ]);
+    }
   });
 
   it('rejects a rotated token whose new pair was never persisted without calling upstream', async () => {
@@ -527,7 +660,7 @@ describe('refresh token replay grace period', () => {
     expect(upstream.calls).toBe(2);
   });
 
-  it('measures the grace period of a row written without a client from its first write', async () => {
+  it('serves a row written without a client from its first write and keeps its expiry', async () => {
     const first = await seedRefreshToken();
     const second = await rotate(first);
     const row = required(await model.getRefreshResult(first), 'cached row');
@@ -535,26 +668,31 @@ describe('refresh token replay grace period', () => {
     await getRefreshResults().set(
       first,
       { ...row, clientId: undefined },
-      7 * 24 * 60 * 60_000,
+      7 * DAY_MS,
     );
 
     const before = await getRefreshResults().get(first, { raw: true });
 
-    advance(GRACE_MS + 60_000);
-    expectRejected(await refresh(owner, first));
+    advance(DAY_MS);
 
-    expect(lastSlo().replay).toStrictEqual({
-      clientId: owner.id,
-      replayAgeMs: GRACE_MS + 60_000,
-      replayNext: 'live',
-      clientApplication: 'cursor',
-    });
+    const replay = await refresh(owner, first);
+
+    expect(replay.body.refresh_token).toBe(second);
+    expectRejected(await refresh(other, first));
 
     const after = await getRefreshResults().get(first, { raw: true });
 
     expect(after?.value?.clientId).toBe(owner.id);
     expect(after?.expires).toBe(before?.expires);
+  });
 
-    await rotate(second);
+  it('stops serving a live rotation once its cached row expires', async () => {
+    const rotated = await seedRefreshToken();
+
+    await rotate(rotated);
+    advance(7 * DAY_MS + 60_000);
+    expectRejected(await refresh(owner, rotated));
+
+    expect(upstream.calls).toBe(1);
   });
 });

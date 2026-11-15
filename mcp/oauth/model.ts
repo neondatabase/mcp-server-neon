@@ -116,13 +116,12 @@ class Model implements AuthorizationCodeModel {
   // errors are triggered by *refresh-token-reuse detection* — once Hydra sees
   // the same RT twice (laptop wake, multiple Cursor windows, network blip
   // mid-rotation) it revokes the entire chain and the user must re-auth.
-  // A stale RT is therefore never forwarded upstream: within
-  // REFRESH_REPLAY_GRACE_MS of the rotation (refresh-result.ts) it gets the
-  // cached new pair, and after that `invalid_grant`.
+  // A stale RT is therefore never forwarded upstream: it gets the cached new
+  // pair, or `invalid_grant` once that pair's refresh token was rotated again
+  // after the grace period (`resolveRotation` in refresh-result.ts).
   //
-  // A row is kept for 7 days so a later replay is recognized as one: its
-  // owner is attributed and the rejection logged as `replay_after_grace`.
-  // Every row is written once with this TTL and
+  // A row is kept for 7 days, so a client that never stored the cached pair
+  // can still pick it up that long. Every row is written once with this TTL and
   // `attributeRefreshResult` keeps its expiry, which is what makes
   // `getRefreshRotation` exact.
   private static REFRESH_RESULT_TTL_MS = 7 * 24 * 60 * 60_000;

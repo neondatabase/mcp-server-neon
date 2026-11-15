@@ -117,6 +117,12 @@ import { exchangeRefreshToken } from '../../lib/oauth/client';
 import { NextRequest } from 'next/server';
 
 const mockModel = vi.mocked(model);
+
+// The cached rotation exists only once executeRefresh has written it.
+const cachedOnceSaved =
+  (row: RefreshResult) => async (): Promise<RefreshResult | undefined> =>
+    mockModel.saveRefreshResult.mock.calls.length > 0 ? row : undefined;
+
 const mockExchange = vi.mocked(exchangeRefreshToken);
 
 const TEST_CLIENT = {
@@ -826,12 +832,14 @@ describe('Token refresh flow', () => {
       mockModel.saveToken.mockRejectedValue(new Error('postgres down'));
       // The success cache lookup in the route's outer catch finds the
       // entry executeRefresh wrote BEFORE the persist phase.
-      mockModel.getRefreshResult.mockResolvedValue({
-        accessToken: 'new-access-token',
-        refreshToken: 'new-refresh-token',
-        expiresAt: Date.now() + 3600_000,
-        scope: 'read write',
-      });
+      mockModel.getRefreshResult.mockImplementation(
+        cachedOnceSaved({
+          accessToken: 'new-access-token',
+          refreshToken: 'new-refresh-token',
+          expiresAt: Date.now() + 3600_000,
+          scope: 'read write',
+        }),
+      );
 
       const response = await POST(makeTokenRequest('old-refresh-token'));
       const body = await response.json();

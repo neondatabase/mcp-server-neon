@@ -4,13 +4,13 @@ import { model } from './model';
 import { logger } from '../utils/logger';
 
 /**
- * How long a rotated refresh token still returns the pair its rotation
- * issued: long enough for concurrent refreshes and a client's retry after a
- * lost response. Afterwards the token is dead, as RFC 9700 §4.14.2 requires.
+ * How long a rotated refresh token returns the pair its rotation issued even
+ * after that pair's refresh token was used: long enough for concurrent
+ * refreshes and a client's retry after a lost response.
  */
 const REFRESH_REPLAY_GRACE_MS = 5 * 60_000;
 
-export const isWithinReplayGrace = (rotatedAt: number): boolean =>
+const isWithinReplayGrace = (rotatedAt: number): boolean =>
   Date.now() - rotatedAt < REFRESH_REPLAY_GRACE_MS;
 
 /**
@@ -21,6 +21,64 @@ export const isWithinReplayGrace = (rotatedAt: number): boolean =>
 export type ReplayNext = 'live' | 'rotated' | 'gone';
 
 export type RefreshReplay = { ageMs: number; next: ReplayNext };
+
+/**
+ * What a cached rotation answers. Its pair is served within the grace period,
+ * and afterwards while the refresh token it issued is unused: the client never
+ * received or never stored that pair. Once that token was rotated again or
+ * revoked, the replay is rejected, so an old token cannot walk the chain to
+ * the live pair.
+ */
+export type RotationOutcome =
+  | { kind: 'serve'; result: RefreshResult }
+  | { kind: 'reject'; replay: RefreshReplay };
+
+const nextTokenState = async (refreshToken: string): Promise<ReplayNext> => {
+  const rotated = await model.getRefreshResult(refreshToken);
+
+  if (rotated !== undefined) {
+    return 'rotated';
+  }
+
+  const live = await model.getRefreshToken(refreshToken);
+
+  return live === undefined ? 'gone' : 'live';
+};
+
+/**
+ * Undefined for a row whose refresh token is the presented one after the grace
+ * period: upstream did not rotate it, so the token is still current and is
+ * refreshed upstream.
+ */
+export const resolveRotation = async (
+  refreshToken: string,
+  clientId: string,
+  { result, rotatedAt }: RefreshRotation,
+): Promise<RotationOutcome | undefined> => {
+  if (isWithinReplayGrace(rotatedAt)) {
+    return { kind: 'serve', result };
+  }
+
+  if (result.refreshToken === refreshToken) {
+    return undefined;
+  }
+
+  const replay = {
+    ageMs: Date.now() - rotatedAt,
+    next: await nextTokenState(result.refreshToken),
+  };
+
+  if (replay.next !== 'live') {
+    return { kind: 'reject', replay };
+  }
+
+  logger.info('Served a late replay of a live rotation', {
+    clientId,
+    replayAgeMs: replay.ageMs,
+  });
+
+  return { kind: 'serve', result };
+};
 
 const getOwnedRotation = async (
   refreshToken: string,
@@ -46,62 +104,27 @@ const getOwnedRotation = async (
   return undefined;
 };
 
-/**
- * The cached rotation of `refreshToken`, if `clientId` owns it and it is
- * within the grace period.
- */
-export async function getOwnedRefreshResult(
+/** The outcome of `clientId`'s own cached rotation of `refreshToken`. */
+export const resolveOwnedRotation = async (
   refreshToken: string,
   clientId: string,
-): Promise<RefreshResult | undefined> {
-  const rotation = await getOwnedRotation(refreshToken, clientId);
-
-  return rotation && isWithinReplayGrace(rotation.rotatedAt)
-    ? rotation.result
-    : undefined;
-}
-
-const nextTokenState = async (refreshToken: string): Promise<ReplayNext> => {
-  const rotated = await model.getRefreshResult(refreshToken);
-
-  if (rotated !== undefined) {
-    return 'rotated';
-  }
-
-  const live = await model.getRefreshToken(refreshToken);
-
-  return live === undefined ? 'gone' : 'live';
-};
-
-/**
- * The replay of a rotated `refreshToken` after the grace period. A row whose
- * refresh token is the presented one records a refresh that upstream did not
- * rotate, so that token is still current.
- */
-export const describeReplay = async (
-  refreshToken: string,
-  { result, rotatedAt }: RefreshRotation,
-): Promise<RefreshReplay | undefined> => {
-  if (result.refreshToken === refreshToken || isWithinReplayGrace(rotatedAt)) {
-    return undefined;
-  }
-
-  const next = await nextTokenState(result.refreshToken);
-
-  return { ageMs: Date.now() - rotatedAt, next };
-};
-
-/** `clientId`'s own rotated `refreshToken` presented after the grace period. */
-export const findRefreshReplay = async (
-  refreshToken: string,
-  clientId: string,
-): Promise<RefreshReplay | undefined> => {
+): Promise<RotationOutcome | undefined> => {
   const rotation = await getOwnedRotation(refreshToken, clientId);
 
   return rotation === undefined
     ? undefined
-    : describeReplay(refreshToken, rotation);
+    : resolveRotation(refreshToken, clientId, rotation);
 };
+
+/** The cached pair `clientId`'s own rotation of `refreshToken` serves. */
+export async function getOwnedRefreshResult(
+  refreshToken: string,
+  clientId: string,
+): Promise<RefreshResult | undefined> {
+  const outcome = await resolveOwnedRotation(refreshToken, clientId);
+
+  return outcome?.kind === 'serve' ? outcome.result : undefined;
+}
 
 /**
  * Rows written before `clientId` was stored are attributed to the client of
