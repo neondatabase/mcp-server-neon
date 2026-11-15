@@ -355,14 +355,15 @@ const advance = (ms: number): void => {
 
 const DAY_MS = 24 * 60 * 60_000;
 
-const lateServes = (): number => {
+const lateServes = (): unknown[] => {
   const calls: unknown[][] = vi.mocked(logger.info).mock.calls;
 
-  return calls.filter(
-    ([message]) =>
-      z.literal('Served a late replay of a live rotation').safeParse(message)
-        .success,
-  ).length;
+  return calls.flatMap(([message, attributes]) =>
+    z.literal('Served a late replay of a live rotation').safeParse(message)
+      .success
+      ? [attributes]
+      : [],
+  );
 };
 
 const unavailableLock = {
@@ -423,7 +424,13 @@ describe('refresh token replay grace period', () => {
     expect(late.status).toBe(200);
     expect(pair(late.body)).toStrictEqual(pair(first.body));
     expect(late.body.expires_in).toBe(3600 - (GRACE_MS + 60_000) / 1000);
-    expect(lateServes()).toBe(1);
+    expect(lateServes()).toStrictEqual([
+      {
+        clientId: owner.id,
+        replayAgeMs: GRACE_MS + 60_000,
+        clientApplication: 'cursor',
+      },
+    ]);
     expect(upstream.calls).toBe(1);
   });
 
@@ -534,6 +541,7 @@ describe('refresh token replay grace period', () => {
     const issued = await rotate(rotated);
 
     advance(DAY_MS);
+    vi.mocked(logger.info).mockClear();
 
     const results = await Promise.all(
       Array.from({ length: 5 }, async () => refresh(owner, rotated)),
@@ -542,6 +550,7 @@ describe('refresh token replay grace period', () => {
     expect(results.map(({ status }) => status)).toStrictEqual(
       Array.from({ length: 5 }, () => 200),
     );
+    expect(lateServes()).toHaveLength(5);
     expect(
       new Set(results.map(({ body }) => body.refresh_token)),
     ).toStrictEqual(new Set([issued]));

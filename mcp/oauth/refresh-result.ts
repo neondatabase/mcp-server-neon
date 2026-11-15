@@ -1,7 +1,9 @@
+import type { Client } from 'oauth2-server';
 import type { RefreshResult } from './kv-store';
 import type { RefreshRotation } from './model';
 import { model } from './model';
 import { logger } from '../utils/logger';
+import { detectClientApplication } from '../utils/client-application';
 
 /**
  * How long a rotated refresh token returns the pair its rotation issued even
@@ -52,7 +54,7 @@ const nextTokenState = async (refreshToken: string): Promise<ReplayNext> => {
  */
 export const resolveRotation = async (
   refreshToken: string,
-  clientId: string,
+  client: Client,
   { result, rotatedAt }: RefreshRotation,
 ): Promise<RotationOutcome | undefined> => {
   if (isWithinReplayGrace(rotatedAt)) {
@@ -73,8 +75,9 @@ export const resolveRotation = async (
   }
 
   logger.info('Served a late replay of a live rotation', {
-    clientId,
+    clientId: client.id,
     replayAgeMs: replay.ageMs,
+    clientApplication: detectClientApplication(client.client_name),
   });
 
   return { kind: 'serve', result };
@@ -104,16 +107,16 @@ const getOwnedRotation = async (
   return undefined;
 };
 
-/** The outcome of `clientId`'s own cached rotation of `refreshToken`. */
+/** The outcome of `client`'s own cached rotation of `refreshToken`. */
 export const resolveOwnedRotation = async (
   refreshToken: string,
-  clientId: string,
+  client: Client,
 ): Promise<RotationOutcome | undefined> => {
-  const rotation = await getOwnedRotation(refreshToken, clientId);
+  const rotation = await getOwnedRotation(refreshToken, client.id);
 
   return rotation === undefined
     ? undefined
-    : resolveRotation(refreshToken, clientId, rotation);
+    : resolveRotation(refreshToken, client, rotation);
 };
 
 /**
@@ -150,12 +153,12 @@ export const revokeOwnedRotation = async (
   return true;
 };
 
-/** The cached pair `clientId`'s own rotation of `refreshToken` serves. */
+/** The cached pair `client`'s own rotation of `refreshToken` serves. */
 export async function getOwnedRefreshResult(
   refreshToken: string,
-  clientId: string,
+  client: Client,
 ): Promise<RefreshResult | undefined> {
-  const outcome = await resolveOwnedRotation(refreshToken, clientId);
+  const outcome = await resolveOwnedRotation(refreshToken, client);
 
   return outcome?.kind === 'serve' ? outcome.result : undefined;
 }

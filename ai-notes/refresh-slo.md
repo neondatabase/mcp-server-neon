@@ -93,7 +93,7 @@ The denominator query (`outcome=success`) is also subject to the cap — sample 
 
 ### Replays after the grace period
 
-A rotated refresh token returns the pair its rotation issued for 5 minutes (`REFRESH_REPLAY_GRACE_MS` in `mcp/oauth/refresh-result.ts`), and after that for as long as the refresh token in that pair is unused and the cached row exists (7 days). The served `expires_in` is never negative: clients built on oauth2-rs, such as Codex, reject a negative value and never store the pair. Each late serve logs `Served a late replay of a live rotation` with `clientId` and `replayAgeMs`.
+A rotated refresh token returns the pair its rotation issued for 5 minutes (`REFRESH_REPLAY_GRACE_MS` in `mcp/oauth/refresh-result.ts`), and after that for as long as the refresh token in that pair is unused and the cached row exists (7 days). The served `expires_in` is never negative: clients built on oauth2-rs, such as Codex, reject a negative value and never store the pair. Each late serve logs `Served a late replay of a live rotation` with `clientId`, `replayAgeMs`, and `clientApplication`.
 
 Once the issued refresh token was rotated again or revoked, a replay after the grace period gets `400 invalid_grant` and the client must sign in again. Every rejected attempt logs:
 

@@ -333,7 +333,7 @@ async function executeRefresh(
   // old token's records in place, and sending that token upstream would make
   // Hydra revoke the chain it rotated into. This also runs when the refresh
   // lock is unavailable and no peek happened.
-  const outcome = await resolveOwnedRotation(refreshToken, client.id);
+  const outcome = await resolveOwnedRotation(refreshToken, client);
 
   if (outcome?.kind === 'serve') {
     return cachedToResponse(outcome.result);
@@ -896,10 +896,9 @@ export async function POST(request: NextRequest) {
       const checkSuccessCache = async (): Promise<
         RefreshTokenResult | undefined
       > => {
-        const cached = await getOwnedRefreshResult(
-          refreshToken,
-          client.id,
-        ).catch(() => undefined);
+        const cached = await getOwnedRefreshResult(refreshToken, client).catch(
+          () => undefined,
+        );
         return cached ? cachedToResponse(cached) : undefined;
       };
 
@@ -928,7 +927,7 @@ export async function POST(request: NextRequest) {
         }
 
         try {
-          return await resolveRotation(refreshToken, client.id, rotation);
+          return await resolveRotation(refreshToken, client, rotation);
         } catch (resolveError) {
           logger.warn('Failed to resolve a cached refresh rotation', {
             error: resolveError,
