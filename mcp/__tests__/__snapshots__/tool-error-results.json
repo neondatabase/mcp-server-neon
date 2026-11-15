@@ -440,7 +440,7 @@
           "content": [
             {
               "type": "text",
-              "text": "Error: Failed to complete query tuning: internal server error"
+              "text": "Error: Failed to complete query tuning: branch not found"
             }
           ],
           "isError": true,

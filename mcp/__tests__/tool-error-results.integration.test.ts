@@ -114,7 +114,9 @@ const FAILING_PROJECTS = new Map<string, { status: number; body: Json }>([
     PROJECT.serverError,
     { status: 500, body: { message: 'internal server error' } },
   ],
-  [PROJECT.tuning, { status: 500, body: { message: 'internal server error' } }],
+  // A 4xx, so the case shows the completion wrapper turning a client-level
+  // cleanup failure into a server failure.
+  [PROJECT.tuning, { status: 404, body: { message: 'branch not found' } }],
 ]);
 
 const answerApi = (req: IncomingMessage, res: ServerResponse) => {
