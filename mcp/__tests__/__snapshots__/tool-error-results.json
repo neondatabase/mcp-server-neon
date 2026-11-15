@@ -15,7 +15,7 @@
       }
     },
     "sentryErrorEvents": 0,
-    "toolSpan": "absent"
+    "toolSpan": null
   },
   "input fails the listed schema": {
     "tool": "describe_project",
@@ -42,7 +42,7 @@
       }
     },
     "sentryErrorEvents": 0,
-    "toolSpan": "absent"
+    "toolSpan": null
   },
   "project_id does not match a scoped connection": {
     "tool": "describe_project",
@@ -69,7 +69,10 @@
       }
     },
     "sentryErrorEvents": 0,
-    "toolSpan": "ok"
+    "toolSpan": {
+      "status": "ok",
+      "errorType": "InvalidArgumentError"
+    }
   },
   "project_id missing on an unscoped connection": {
     "tool": "describe_branch",
@@ -96,7 +99,10 @@
       }
     },
     "sentryErrorEvents": 0,
-    "toolSpan": "ok"
+    "toolSpan": {
+      "status": "ok",
+      "errorType": "InvalidArgumentError"
+    }
   },
   "no organizations": {
     "tool": "list_projects",
@@ -121,7 +127,10 @@
       }
     },
     "sentryErrorEvents": 0,
-    "toolSpan": "ok"
+    "toolSpan": {
+      "status": "ok",
+      "errorType": "NotFoundError"
+    }
   },
   "input fails a refinement the listed schema omits": {
     "tool": "search_docs",
@@ -152,7 +161,10 @@
       }
     },
     "sentryErrorEvents": 0,
-    "toolSpan": "ok"
+    "toolSpan": {
+      "status": "ok",
+      "errorType": "ZodError"
+    }
   },
   "docs-only connection, input fails a refinement": {
     "tool": "search_docs",
@@ -183,7 +195,10 @@
       }
     },
     "sentryErrorEvents": 0,
-    "toolSpan": "ok"
+    "toolSpan": {
+      "status": "ok",
+      "errorType": "ZodError"
+    }
   },
   "SDK rejects a path parameter": {
     "tool": "run_sql",
@@ -211,7 +226,10 @@
       }
     },
     "sentryErrorEvents": 0,
-    "toolSpan": "ok"
+    "toolSpan": {
+      "status": "ok",
+      "errorType": "NeonClientError"
+    }
   },
   "Neon API 404": {
     "tool": "describe_project",
@@ -242,7 +260,10 @@
       }
     },
     "sentryErrorEvents": 0,
-    "toolSpan": "ok"
+    "toolSpan": {
+      "status": "ok",
+      "errorType": "NeonNotFoundError"
+    }
   },
   "Neon API 403 with a reason": {
     "tool": "describe_project",
@@ -273,7 +294,10 @@
       }
     },
     "sentryErrorEvents": 0,
-    "toolSpan": "ok"
+    "toolSpan": {
+      "status": "ok",
+      "errorType": "NeonAuthError"
+    }
   },
   "Neon API 500": {
     "tool": "describe_project",
@@ -300,7 +324,10 @@
       }
     },
     "sentryErrorEvents": 1,
-    "toolSpan": "internal_error"
+    "toolSpan": {
+      "status": "internal_error",
+      "errorType": "NeonApiError"
+    }
   },
   "network failure": {
     "tool": "describe_project",
@@ -327,7 +354,10 @@
       }
     },
     "sentryErrorEvents": 1,
-    "toolSpan": "internal_error"
+    "toolSpan": {
+      "status": "internal_error",
+      "errorType": "NeonNetworkError"
+    }
   },
   "Postgres rejects the statement": {
     "tool": "run_sql",
@@ -355,7 +385,10 @@
       }
     },
     "sentryErrorEvents": 0,
-    "toolSpan": "ok"
+    "toolSpan": {
+      "status": "ok",
+      "errorType": "NeonDbError"
+    }
   },
   "SQL endpoint fails": {
     "tool": "run_sql",
@@ -383,7 +416,10 @@
       }
     },
     "sentryErrorEvents": 0,
-    "toolSpan": "internal_error"
+    "toolSpan": {
+      "status": "internal_error",
+      "errorType": "NeonDbError"
+    }
   },
   "query tuning completion fails": {
     "tool": "complete_query_tuning",
@@ -416,7 +452,10 @@
       }
     },
     "sentryErrorEvents": 1,
-    "toolSpan": "internal_error"
+    "toolSpan": {
+      "status": "internal_error",
+      "errorType": "Error"
+    }
   },
   "client cancels the call": {
     "tool": "list_branches",
@@ -429,7 +468,10 @@
       "status": 499
     },
     "sentryErrorEvents": 1,
-    "toolSpan": "internal_error"
+    "toolSpan": {
+      "status": "internal_error",
+      "errorType": "NeonAbortError"
+    }
   },
   "client cancels run_sql while the query runs": {
     "tool": "run_sql",
@@ -443,7 +485,10 @@
       "status": 499
     },
     "sentryErrorEvents": 0,
-    "toolSpan": "internal_error"
+    "toolSpan": {
+      "status": "internal_error",
+      "errorType": "NeonDbError"
+    }
   },
   "docs-only client cancels search_docs": {
     "tool": "search_docs",
@@ -456,6 +501,9 @@
       "status": 499
     },
     "sentryErrorEvents": 1,
-    "toolSpan": "internal_error"
+    "toolSpan": {
+      "status": "internal_error",
+      "errorType": "AbortError"
+    }
   }
 }

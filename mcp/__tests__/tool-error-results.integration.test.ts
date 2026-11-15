@@ -241,7 +241,7 @@ init({
 // Tool span status by trace, read when the server ends the span: the exporter
 // sends transactions on a timer of its own, and a cancelled request's
 // transaction may never be sent.
-const toolSpanStatus = new Map<string, string>();
+const toolSpans = new Map<string, { status: string; errorType: Json }>();
 const toolSpanWaiters = new Map<string, (ended: true) => void>();
 
 const toolSpanEnded = async (traceId: string) => {
@@ -253,12 +253,18 @@ const toolSpanEnded = async (traceId: string) => {
 };
 
 getClient()?.on('spanEnd', (span) => {
-  const { description, status } = spanToJSON(span);
+  const { description, status, data } = spanToJSON(span);
 
   if (description?.startsWith('tools/call ') === true) {
     const { traceId } = span.spanContext();
 
-    toolSpanStatus.set(traceId, status ?? 'unset');
+    toolSpans.set(traceId, {
+      status: status ?? 'unset',
+      errorType: z
+        .string()
+        .nullable()
+        .parse(data['error.type'] ?? null),
+    });
     toolSpanWaiters.get(traceId)?.(true);
   }
 });
@@ -535,7 +541,7 @@ const goldenEntries = async () => {
         arguments: testCase.arguments,
         response: outcome.response,
         sentryErrorEvents: errorEventCount(items, outcome.traceId),
-        toolSpan: toolSpanStatus.get(outcome.traceId ?? '') ?? 'absent',
+        toolSpan: toolSpans.get(outcome.traceId ?? '') ?? null,
       },
     ]),
   );
