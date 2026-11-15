@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { model } from '../../../mcp/oauth/model';
+import { revokeOwnedRotation } from '../../../mcp/oauth/refresh-result';
 import { handleOAuthError } from '../../../lib/errors';
 import { logger } from '../../../mcp/utils/logger';
 import {
@@ -62,6 +63,15 @@ export async function POST(request: NextRequest) {
 
     // Try to revoke based on hint (optimization) or try both
     if (tokenTypeHint === 'refresh_token' || !tokenTypeHint) {
+      // A rotated refresh token still returns its cached pair while that
+      // pair is unused, so revoking it must end the cached rotation too.
+      if (await revokeOwnedRotation(token, client.id)) {
+        logger.info('Token revoked', {
+          clientId,
+          type: 'rotated_refresh_token',
+        });
+      }
+
       const refreshToken = await model.getRefreshToken(token);
       if (refreshToken) {
         // Delete both refresh token and associated access token

@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { Client } from 'oauth2-server';
 import { model } from '../../../mcp/oauth/model';
-import type { RefreshRotation } from '../../../mcp/oauth/model';
 import {
-  describeReplay,
-  findRefreshReplay,
   getOwnedRefreshResult,
-  isWithinReplayGrace,
+  resolveOwnedRotation,
+  resolveRotation,
 } from '../../../mcp/oauth/refresh-result';
-import type { RefreshReplay } from '../../../mcp/oauth/refresh-result';
+import type {
+  RefreshReplay,
+  RotationOutcome,
+} from '../../../mcp/oauth/refresh-result';
+import type { RefreshResult } from '../../../mcp/oauth/kv-store';
 import { detectClientApplication } from '../../../mcp/utils/client-application';
 import type { ClientApplication } from '../../../mcp/utils/client-application';
 import {
@@ -100,6 +102,23 @@ type RefreshTokenResult = {
   refresh_token: string;
   scope?: string | string[];
 };
+
+// A cached pair served an hour after its rotation carries an expired access
+// token. RFC 6749 `expires_in` is a non-negative count of seconds, and clients
+// such as Codex (oauth2-rs) reject the whole response when it is negative, so
+// they never store the cached refresh token and retry the old one.
+const cachedToResponse = (cached: RefreshResult): RefreshTokenResult => ({
+  access_token: cached.accessToken,
+  expires_in: Math.max(0, toSeconds(cached.expiresAt - Date.now())),
+  token_type: 'bearer' as const,
+  refresh_token: cached.refreshToken,
+  scope: cached.scope,
+});
+
+const rejectedReplay = (
+  outcome: RotationOutcome | undefined,
+): RefreshReplay | undefined =>
+  outcome?.kind === 'reject' ? outcome.replay : undefined;
 
 /**
  * Outcome bucket for the refresh-token SLO. See ai-notes/refresh-slo.md.
@@ -312,9 +331,15 @@ async function executeRefresh(
 ): Promise<RefreshTokenResult> {
   // Before the storage lookup: a failed cleanup after the rotation leaves the
   // old token's records in place, and sending that token upstream would make
-  // Hydra revoke the chain it rotated into.
-  const replay = await findRefreshReplay(refreshToken, client.id);
-  if (replay) {
+  // Hydra revoke the chain it rotated into. This also runs when the refresh
+  // lock is unavailable and no peek happened.
+  const outcome = await resolveOwnedRotation(refreshToken, client);
+
+  if (outcome?.kind === 'serve') {
+    return cachedToResponse(outcome.result);
+  }
+
+  if (outcome?.kind === 'reject') {
     await cachePreUpstreamFailure(refreshToken, 'replay_after_grace');
     throw new RefreshError(
       'invalid_grant',
@@ -322,7 +347,7 @@ async function executeRefresh(
       400,
       'correct_invalid_grant',
       undefined,
-      replay,
+      outcome.replay,
     );
   }
 
@@ -866,28 +891,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const cachedToResponse = (cached: {
-        accessToken: string;
-        refreshToken: string;
-        expiresAt: number;
-        scope?: string | string[];
-      }): RefreshTokenResult => ({
-        access_token: cached.accessToken,
-        expires_in: toSeconds(cached.expiresAt - Date.now()),
-        token_type: 'bearer' as const,
-        refresh_token: cached.refreshToken,
-        scope: cached.scope,
-      });
-
       // Used by the outer catch to fold a winning peer's success cache write
       // into our own response — never throws.
       const checkSuccessCache = async (): Promise<
         RefreshTokenResult | undefined
       > => {
-        const cached = await getOwnedRefreshResult(
-          refreshToken,
-          client.id,
-        ).catch(() => undefined);
+        const cached = await getOwnedRefreshResult(refreshToken, client).catch(
+          () => undefined,
+        );
         return cached ? cachedToResponse(cached) : undefined;
       };
 
@@ -904,28 +915,22 @@ export async function POST(request: NextRequest) {
       // a cached failure can belong to the owner's own rotation. Rows without
       // a client are not attributed here, so a cached failure keeps absorbing
       // retries instead of walking their rotation chain each time.
-      const getOwnedRotation = async (): Promise<
-        RefreshRotation | undefined
+      const getOwnedOutcome = async (): Promise<
+        RotationOutcome | undefined
       > => {
         const rotation = await model
           .getRefreshRotation(refreshToken)
           .catch(() => undefined);
 
-        return rotation?.result.clientId === client.id ? rotation : undefined;
-      };
-
-      const replayOf = async (
-        rotation: RefreshRotation | undefined,
-      ): Promise<RefreshReplay | undefined> => {
-        if (rotation === undefined) {
+        if (rotation?.result.clientId !== client.id) {
           return undefined;
         }
 
         try {
-          return await describeReplay(refreshToken, rotation);
-        } catch (describeError) {
-          logger.warn('Failed to describe a rejected refresh replay', {
-            error: describeError,
+          return await resolveRotation(refreshToken, client, rotation);
+        } catch (resolveError) {
+          logger.warn('Failed to resolve a cached refresh rotation', {
+            error: resolveError,
           });
 
           return undefined;
@@ -936,15 +941,15 @@ export async function POST(request: NextRequest) {
       // skip the singleflight + upstream call and return the cached failure.
       const cachedFailure = await getCachedFailure();
       if (cachedFailure) {
-        const owned = await getOwnedRotation();
-        if (owned && isWithinReplayGrace(owned.rotatedAt)) {
+        const owned = await getOwnedOutcome();
+        if (owned?.kind === 'serve') {
           emitRefreshSlo('success', sloStartMs, {
             clientId: client.id,
             reason: 'cache_replay_over_failure',
           });
           return NextResponse.json(cachedToResponse(owned.result));
         }
-        const replay = await replayOf(owned);
+        const replay = rejectedReplay(owned);
         logger.info('Refresh token in failure cache; rejecting fast', {
           clientId: client.id,
           ageMs: Date.now() - cachedFailure.failedAt,
@@ -975,7 +980,11 @@ export async function POST(request: NextRequest) {
       > => {
         const failure = await getCachedFailure();
         if (failure) {
-          const replay = await replayOf(await getOwnedRotation());
+          const owned = await getOwnedOutcome();
+
+          if (owned?.kind === 'serve') {
+            return cachedToResponse(owned.result);
+          }
 
           throw new RefreshError(
             'invalid_grant',
@@ -983,7 +992,7 @@ export async function POST(request: NextRequest) {
             400,
             'correct_invalid_grant',
             undefined,
-            replay,
+            rejectedReplay(owned),
           );
         }
         // Holder may have hit upstream 5xx and signalled "don't wait, retry
