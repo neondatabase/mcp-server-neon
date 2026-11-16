@@ -19,6 +19,7 @@ The Neon MCP Server enables Large Language Models to manage Lakebase Postgres da
 
 ## Documentation
 
+- Setup guide and tool list (Markdown): https://mcp.neon.tech/mcp.md
 - Neon MCP Docs: https://neon.com/docs/ai/neon-mcp-server
 - MCP Protocol: https://modelcontextprotocol.io
 

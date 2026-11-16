@@ -23,7 +23,7 @@ import {
   type ConsentToolMeta,
 } from './consent-tools';
 
-const SCOPE_CATEGORY_LABELS: Record<ScopeCategory, string> = {
+export const SCOPE_CATEGORY_LABELS: Record<ScopeCategory, string> = {
   projects: 'Projects',
   branches: 'Branches',
   endpoints: 'Endpoints',
@@ -39,7 +39,7 @@ const SCOPE_CATEGORY_LABELS: Record<ScopeCategory, string> = {
   realtime: 'Realtime',
 };
 
-const DISCOVERY_LABEL = 'Discovery';
+export const DISCOVERY_LABEL = 'Discovery';
 export const COLLAPSE_ABOVE = 4;
 
 type ConsentTool = {
