@@ -1,4 +1,4 @@
-import { Duration, Effect, Ref, Schedule, Schema } from 'effect';
+import { Duration, Effect, Exit, Ref, Schedule, Schema } from 'effect';
 import { mcpRuntime } from '../../lib/effect/runtime';
 import { logger } from './logger';
 
@@ -34,17 +34,24 @@ const retrying = <T>(fn: () => Promise<T>, options: RetryOptions) =>
     const { attempts, delaysMs, op } = options;
     const attempt = yield* Ref.make(0);
 
-    return yield* Effect.tryPromise({
-      try: fn,
-      catch: (error) =>
-        AttemptFailed.make({
-          error,
-          retryable:
-            options.shouldRetry === undefined || options.shouldRetry(error),
+    const once = Ref.updateAndGet(attempt, (n) => n + 1).pipe(
+      Effect.flatMap((n) => Effect.annotateCurrentSpan('retry.attempts', n)),
+      Effect.andThen(
+        Effect.tryPromise({
+          try: fn,
+          catch: (error) =>
+            AttemptFailed.make({
+              error,
+              retryable:
+                options.shouldRetry === undefined || options.shouldRetry(error),
+            }),
         }),
-    }).pipe(
+      ),
+    );
+
+    return yield* once.pipe(
       Effect.tapError((failure) =>
-        Ref.updateAndGet(attempt, (n) => n + 1).pipe(
+        Ref.get(attempt).pipe(
           Effect.tap((n) =>
             Effect.sync(() => {
               logger.warn(`retryAsync ${op} attempt ${n}/${attempts} failed`, {
@@ -67,6 +74,23 @@ const retrying = <T>(fn: () => Promise<T>, options: RetryOptions) =>
     );
   });
 
+// The span records the attempts and the outcome but does not fail itself:
+// whether a final failure is the server's is the caller's to decide.
+const traced = <T>(fn: () => Promise<T>, options: RetryOptions) =>
+  retrying(fn, options).pipe(
+    Effect.exit,
+    Effect.tap((exit) =>
+      Effect.annotateCurrentSpan(
+        'retry.outcome',
+        Exit.isSuccess(exit) ? 'success' : 'failure',
+      ),
+    ),
+    Effect.withSpan(`retryAsync ${options.op}`, {
+      attributes: { 'retry.op': options.op },
+    }),
+    Effect.flatten,
+  );
+
 /**
  * Retry an async operation with explicit per-attempt delays. Stops on first
  * success; throws the last error on final failure.
@@ -87,5 +111,5 @@ export async function retryAsync<T>(
     );
   }
 
-  return mcpRuntime.runPromise(retrying(fn, opts));
+  return mcpRuntime.runPromise(traced(fn, opts));
 }
