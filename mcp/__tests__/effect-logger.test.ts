@@ -1,6 +1,7 @@
 import { Writable } from 'node:stream';
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 import winston from 'winston';
+import { z } from 'zod';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WinstonLoggerLayer } from '../../lib/effect/logger';
 import { logger } from '../utils/logger';
@@ -59,5 +60,26 @@ describe('WinstonLoggerLayer', () => {
     );
 
     expect(lines).toStrictEqual([]);
+  });
+
+  it('passes a logged cause and structured values to winston', async () => {
+    const lines = captureAt('info');
+
+    await Effect.runPromise(
+      Effect.logError(
+        'failed operation',
+        { phase: 'store' },
+        Cause.fail(new Error('diagnostic detail')),
+      ).pipe(Effect.provide(WinstonLoggerLayer)),
+    );
+
+    expect(lines).toHaveLength(1);
+
+    const entry = z
+      .object({ message: z.string(), cause: z.string() })
+      .parse(JSON.parse(lines.join('')));
+
+    expect(entry.message).toBe('failed operation {"phase":"store"}');
+    expect(entry.cause).toContain('diagnostic detail');
   });
 });

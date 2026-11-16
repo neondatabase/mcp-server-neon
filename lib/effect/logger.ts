@@ -1,4 +1,11 @@
-import { Layer, Logger, References } from 'effect';
+import {
+  Cause,
+  Inspectable,
+  Layer,
+  Logger,
+  Predicate,
+  References,
+} from 'effect';
 import type { LogLevel } from 'effect';
 import { logger } from '../../mcp/utils/logger';
 
@@ -16,17 +23,31 @@ const WINSTON_LEVELS: Record<LogLevel.LogLevel, string> = {
 /**
  * Effect logs go to the winston logger, so they keep its console format and
  * reach Sentry Logs with the request's session attributes like every other log.
- * Log annotations become the winston metadata. Winston's `LOG_LEVEL` decides
- * what is printed, so Effect passes every level through.
+ * Log annotations become the winston metadata, and a logged cause its
+ * `cause` field. Winston's `LOG_LEVEL` decides what is printed, so Effect
+ * passes every level through.
  */
-const winstonLogger = Logger.make(({ logLevel, message, fiber }) => {
-  const text = Array.isArray(message)
-    ? message.map(String).join(' ')
-    : String(message);
+const winstonLogger = Logger.make(({ logLevel, message, cause, fiber }) => {
+  const parts: readonly unknown[] = Array.isArray(message)
+    ? message
+    : [message];
 
-  logger.log(WINSTON_LEVELS[logLevel], text, {
-    ...fiber.getRef(References.CurrentLogAnnotations),
-  });
+  const text = parts
+    .map((part) =>
+      Predicate.isString(part) ? part : Inspectable.toStringUnknown(part, 0),
+    )
+    .join(' ');
+
+  const annotations = fiber.getRef(References.CurrentLogAnnotations);
+  const level = WINSTON_LEVELS[logLevel];
+
+  if (cause.reasons.length === 0) {
+    logger.log(level, text, annotations);
+
+    return;
+  }
+
+  logger.log(level, text, { ...annotations, cause: Cause.pretty(cause) });
 });
 
 export const WinstonLoggerLayer = Layer.merge(
