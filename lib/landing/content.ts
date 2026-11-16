@@ -22,8 +22,14 @@ const fence = (language: string, code: string): string =>
 
 const install = getInstallTargets(MCP_URL);
 
-const deeplink = (client: string, href: string): string =>
-  `[Open in ${client}](${href})\n\nOr add it manually: Settings → MCP → Add server, then paste the MCP server URL.`;
+const CURSOR_MANUAL =
+  'Settings → MCP → Add server, then paste the MCP server URL.';
+
+const VSCODE_MANUAL =
+  'run **Chat: Open Customizations**, select **MCP Servers** → **Add Server**, choose **HTTP**, paste the MCP server URL, and enter `neon` as the server ID.';
+
+const deeplink = (client: string, href: string, manual: string): string =>
+  `[Open in ${client}](${href})\n\nOr add it manually: ${manual}`;
 
 export const INSTALL_SECTION: Section = {
   id: 'install',
@@ -38,12 +44,20 @@ export const INSTALL_TABS: readonly InstallTab[] = [
     label: 'Claude Code',
     body: `Run this command in your terminal:\n\n${fence('bash', install.claudeCode)}\n\nThen start Claude Code, run \`/mcp\`, select \`neon\`, and authenticate.`,
   },
-  { id: 'cursor', label: 'Cursor', body: deeplink('Cursor', install.cursor) },
-  { id: 'vscode', label: 'VS Code', body: deeplink('VS Code', install.vscode) },
+  {
+    id: 'cursor',
+    label: 'Cursor',
+    body: deeplink('Cursor', install.cursor, CURSOR_MANUAL),
+  },
+  {
+    id: 'vscode',
+    label: 'VS Code',
+    body: deeplink('VS Code', install.vscode, VSCODE_MANUAL),
+  },
   {
     id: 'vscode-insiders',
     label: 'VS Code Insiders',
-    body: deeplink('VS Code Insiders', install.vscodeInsiders),
+    body: deeplink('VS Code Insiders', install.vscodeInsiders, VSCODE_MANUAL),
   },
   {
     id: 'chatgpt',
