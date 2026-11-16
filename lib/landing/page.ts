@@ -3,13 +3,15 @@ import { Marked } from 'marked';
 import { OAUTH_PAGE_FONT_LINKS } from '../../mcp/oauth/page-shell';
 import { SERVER_INFO } from '../server-metadata';
 import {
-  BLOCKS,
+  ACCESS_BLOCK,
+  ACCESS_NOTES,
+  ACCESS_PARAMS,
+  API_KEY_BLOCK,
   INSTALL_SECTION,
   INSTALL_TABS,
   TOOLS_SECTION,
 } from './content';
-import { HERO_VIDEO_HTML, HERO_VIDEO_SCRIPT } from './hero-video';
-import { COPY_ICON, INTERACTION_SCRIPT } from './interactions';
+import { COPY_ICONS, INTERACTION_SCRIPT } from './interactions';
 import {
   DOCS_URL,
   MARKDOWN_PATH,
@@ -21,16 +23,19 @@ import {
 import { LANDING_PAGE_CSS } from './styles';
 import { TOOL_GROUPS_HTML } from './tools';
 
-const LINE_INTERSECTION_PATH =
-  'M10.5 4C10.5 7.31371 7.81371 10 4.5 10H0.5V11H4.5C7.81371 11 10.5 13.6863 10.5 17V21H11.5V17C11.5 13.6863 14.1863 11 17.5 11H21.5V10H17.5C14.1863 10 11.5 7.31371 11.5 4V0H10.5V4Z';
-
 const APP_LINK = /^(?:cursor|vscode|vscode-insiders):/u;
+
+const LABEL_ARROW =
+  '<svg viewBox="0 0 12 14" width="12" height="14" aria-hidden="true"><path d="M12 7L3 12.1962L3 1.80385L12 7Z" fill="currentColor"/></svg>';
+
+const ARROW_RIGHT =
+  '<svg viewBox="0 0 16 12" width="16" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="square" aria-hidden="true"><path d="M11.108 10.921L15 7.03l-3.892-3.892"/><path d="M0.938 7.032h12.728"/></svg>';
 
 const external = (href: string): string =>
   `href="${he.escape(href)}" target="_blank" rel="noopener noreferrer"`;
 
 const copyButton = (text: string, label = 'Copy'): string =>
-  `<button type="button" class="copy-btn" data-copy="${he.escape(text)}" aria-label="${label}">${COPY_ICON}</button>`;
+  `<button type="button" class="copy-btn copy-square" data-copy="${he.escape(text)}" aria-label="${label}" title="${label}">${COPY_ICONS}</button>`;
 
 const keepFlagsWhole = (html: string): string =>
   html.replaceAll(
@@ -40,8 +45,8 @@ const keepFlagsWhole = (html: string): string =>
 
 const markdown = new Marked({
   renderer: {
-    code: ({ text }) =>
-      `<div class="code-block"><pre><code>${keepFlagsWhole(he.escape(text))}</code></pre>${copyButton(text)}</div>`,
+    code: ({ text, lang }) =>
+      `<div class="code-block" data-lang="${he.escape(lang ?? 'text')}"><pre><code>${keepFlagsWhole(he.escape(text))}</code></pre>${copyButton(text)}</div>`,
     link: ({ href, text }) =>
       APP_LINK.test(href)
         ? `<a class="btn btn-primary" href="${he.escape(href)}">${he.escape(text)}</a>`
@@ -53,40 +58,75 @@ const markdown = new Marked({
 const prose = (source: string): string =>
   `<div class="prose">${markdown.parse(source, { async: false })}</div>`;
 
-const corner = (position: string): string =>
-  `<svg class="corner corner-${position}" viewBox="0 0 22 21" fill="none" aria-hidden="true"><path d="${LINE_INTERSECTION_PATH}" fill="currentColor"/></svg>`;
+const inline = (source: string): string =>
+  markdown.parseInline(source, { async: false });
 
-const FRAME = `<div class="rail rail-left"></div><div class="rail rail-right"></div><div class="rail rail-top"></div><div class="rail rail-bottom"></div>
-  ${['tl', 'tr', 'bl', 'br'].map((position) => corner(position)).join('')}`;
-
-type CardCopy = {
+type SectionCopy = {
   id: string;
   title: string;
   description: string;
 };
 
-const card = (copy: CardCopy, content: string): string => `
-  <section class="card" aria-labelledby="${copy.id}-title">
-    <div class="card-header">
-      <h2 class="card-title" id="${copy.id}-title">${copy.title}</h2>
-      <p class="card-desc">${copy.description}</p>
-    </div>
-    <div class="card-content">${content}</div>
-  </section>`;
+type PageSection = SectionCopy & { nav: string };
 
-const HERO = `
-  <header class="card">
-    <div class="hero-media">
-      ${HERO_VIDEO_HTML}
-      <div class="hero-inner">
-        <a class="hero-logo" ${external('https://neon.com')}><img src="/images/landing/neon-logo.svg" alt="Neon" width="102" height="28"></a>
-        <h1 id="hero-title">Neon MCP Server <span class="version">v${he.escape(SERVER_INFO.version)}</span></h1>
-        <p class="hero-description">${he.escape(SERVER_INFO.description ?? '')}</p>
-        <div class="url-pill"><code>${he.escape(MCP_URL)}</code>${copyButton(MCP_URL, 'Copy MCP server URL')}</div>
-        <a class="btn btn-primary" ${external(DOCS_URL)}>Read the docs</a>
+const INSTALL: PageSection = { ...INSTALL_SECTION, nav: 'Install' };
+const API_KEY: PageSection = { ...API_KEY_BLOCK, nav: 'API key' };
+const ACCESS: PageSection = { ...ACCESS_BLOCK, nav: 'Limit access' };
+const TOOLS: PageSection = { ...TOOLS_SECTION, nav: 'Tools' };
+
+/** The sections in page order; a section's number is its place in this list. */
+const SECTIONS: readonly PageSection[] = [INSTALL, API_KEY, ACCESS, TOOLS];
+
+const sectionNumber = (id: string): string =>
+  String(SECTIONS.findIndex((section) => section.id === id) + 1).padStart(
+    2,
+    '0',
+  );
+
+/** One ledger row: the section's number and short name in the margin, its content beside it. */
+const sheet = (
+  { id, title, description, nav }: PageSection,
+  content: string,
+): string => `
+    <section class="sheet" id="${id}" aria-labelledby="${id}-title">
+      <p class="margin" aria-hidden="true"><span class="margin-label"><span class="num">${sectionNumber(id)}</span><span>${nav}</span></span></p>
+      <div class="sheet-body">
+        <h2 id="${id}-title">${title}</h2>
+        <p class="sheet-desc">${description}</p>
+        ${content}
       </div>
+    </section>`;
+
+const HEADER = `
+  <header class="site-header frame">
+    <div class="header-inner">
+      <a class="logo" ${external('https://neon.com')}><img src="/images/landing/neon-logo.svg" alt="Neon" width="88" height="24"></a>
+      <span class="product-tag">MCP</span>
+      <nav class="site-nav" aria-label="Sections">
+        ${SECTIONS.map(({ id, nav }) => `<a href="#${id}">${nav}</a>`).join('')}
+      </nav>
+      <a class="header-link" ${external(DOCS_URL)}>Docs</a>
+      <button type="button" class="btn btn-primary btn-sm copy-btn" data-copy="${he.escape(MCP_URL)}" aria-label="Copy MCP server URL">${COPY_ICONS}<span class="copy-label">Copy URL</span></button>
     </div>
   </header>`;
+
+const HERO = `
+    <section class="sheet hero" aria-labelledby="hero-title">
+      <div class="margin hero-hatch" aria-hidden="true"></div>
+      <div class="sheet-body">
+        <p class="label">${LABEL_ARROW}<span>Model Context Protocol</span></p>
+        <h1 id="hero-title">Neon MCP Server <span class="version">v${he.escape(SERVER_INFO.version)}</span></h1>
+        <p class="hero-description">${he.escape(SERVER_INFO.description ?? '')}</p>
+        <div class="hero-connect">
+          <p class="field-label" id="url-label">MCP server URL</p>
+          <a class="docs-link" ${external(DOCS_URL)}>Read the docs${ARROW_RIGHT}</a>
+          <div class="url-field" role="group" aria-labelledby="url-label">
+            <code>${he.escape(MCP_URL)}</code>
+            <button type="button" class="copy-btn copy-square" data-copy="${he.escape(MCP_URL)}" data-top-task aria-label="Copy MCP server URL" title="Copy MCP server URL">${COPY_ICONS}</button>
+          </div>
+        </div>
+      </div>
+    </section>`;
 
 const tabsHtml = INSTALL_TABS.map(
   ({ id, label }, index) =>
@@ -95,25 +135,33 @@ const tabsHtml = INSTALL_TABS.map(
 
 const panelsHtml = INSTALL_TABS.map(
   ({ id, body }, index) =>
-    `<div role="tabpanel" id="panel-${id}" aria-labelledby="tab-${id}"${index === 0 ? '' : ' hidden'}>${prose(body)}</div>`,
+    `<div class="tab-panel" role="tabpanel" id="panel-${id}" aria-labelledby="tab-${id}"${index === 0 ? '' : ' hidden'}>${prose(body)}</div>`,
 ).join('');
 
-const FOOTER = `
-  <footer class="footer">
-    <a ${external('https://neon.com')}><img src="/images/landing/neon-logo.svg" alt="Neon" width="88" height="24"></a>
-    <nav class="footer-links" aria-label="Resources">
-      <a ${external(DOCS_URL)}>Docs</a>
-      <a ${external(REPOSITORY_URL)}>GitHub</a>
-      <a ${external(STATUS_URL)}>Status</a>
-    </nav>
-  </footer>`;
+const accessParams = `<dl class="params">${ACCESS_PARAMS.map(
+  ({ param, effect }) =>
+    `<div class="param"><dt><code>${he.escape(param)}</code></dt><dd>${inline(effect)}</dd></div>`,
+).join('')}</dl>`;
 
-const BODY = `<div class="layout">
-  ${FRAME}
-  ${HERO}
-  ${card(INSTALL_SECTION, `<div class="tabs-row" role="tablist" aria-label="MCP clients">${tabsHtml}</div>${panelsHtml}`)}
-  ${BLOCKS.map((block) => card(block, prose(block.body))).join('')}
-  ${card(TOOLS_SECTION, TOOL_GROUPS_HTML)}
+const FOOTER = `
+    <footer class="footer">
+      <a class="logo" ${external('https://neon.com')}><img src="/images/landing/neon-logo.svg" alt="Neon" width="88" height="24"></a>
+      <nav class="footer-links" aria-label="Resources">
+        <a ${external(DOCS_URL)}>Docs</a>
+        <a ${external(REPOSITORY_URL)}>GitHub</a>
+        <a ${external(STATUS_URL)}>Status</a>
+      </nav>
+    </footer>`;
+
+const BODY = `${HEADER}
+<div class="frame page">
+  <main>
+    ${HERO}
+    ${sheet(INSTALL, `<div class="tabs-row" role="tablist" aria-label="MCP clients">${tabsHtml}</div>${panelsHtml}`)}
+    ${sheet(API_KEY, prose(API_KEY_BLOCK.body))}
+    ${sheet(ACCESS, `${accessParams}${prose(ACCESS_NOTES)}`)}
+    ${sheet(TOOLS, `<div class="tool-groups">${TOOL_GROUPS_HTML}</div>`)}
+  </main>
   ${FOOTER}
 </div>`;
 
@@ -135,7 +183,8 @@ const HEAD = `<meta charset="utf-8">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-${OAUTH_PAGE_FONT_LINKS}`;
+${OAUTH_PAGE_FONT_LINKS}
+<link rel="stylesheet" href="/fonts/geist-mono/geist-mono.css">`;
 
 export const renderLandingPage = (nonce: string): string => `<!DOCTYPE html>
 <html lang="en">
@@ -145,7 +194,6 @@ ${HEAD}
 </head>
 <body>
 ${BODY}
-<script nonce="${nonce}">${HERO_VIDEO_SCRIPT}</script>
 <script nonce="${nonce}">${INTERACTION_SCRIPT}</script>
 </body>
 </html>`;

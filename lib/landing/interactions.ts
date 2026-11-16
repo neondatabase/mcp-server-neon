@@ -1,8 +1,12 @@
-export const COPY_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+/** The copy and check marks as neon.com draws them: square corners, 1px line. */
+const COPY_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" fill="none" stroke="currentColor" aria-hidden="true"><path d="M4.2 13H13V4.2H4.2V13Z"/><path d="M2.6 9.8H1V1h8.8v1.6"/></svg>';
 
 const CHECK_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 6l4.286 5L13 2"/></svg>';
+
+/** Both states of a copy button; CSS shows the check while it has `.copied`. */
+export const COPY_ICONS = `<span class="copy-icon">${COPY_ICON}${CHECK_ICON}</span>`;
 
 export const INTERACTION_SCRIPT = `(function(){
 var tabs=Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
@@ -19,19 +23,31 @@ function select(tab){
 tabs.forEach(function(tab,i){
   tab.addEventListener('click',function(){select(tab);});
   tab.addEventListener('keydown',function(e){
-    var next={ArrowRight:i+1,ArrowLeft:i-1,Home:0,End:tabs.length-1}[e.key];
+    var next={ArrowRight:i+1,ArrowDown:i+1,ArrowLeft:i-1,ArrowUp:i-1,Home:0,End:tabs.length-1}[e.key];
     if(next===undefined)return;
     e.preventDefault();
     select(tabs[(next+tabs.length)%tabs.length]);
   });
 });
-var copyIcon=${JSON.stringify(COPY_ICON)},checkIcon=${JSON.stringify(CHECK_ICON)};
 document.addEventListener('click',function(e){
   var btn=e.target.closest('.copy-btn');
   if(!btn||!navigator.clipboard)return;
   navigator.clipboard.writeText(btn.getAttribute('data-copy')).then(function(){
-    btn.classList.add('copied');btn.innerHTML=checkIcon;
-    setTimeout(function(){btn.classList.remove('copied');btn.innerHTML=copyIcon;},2000);
+    var label=btn.querySelector('.copy-label');
+    if(!btn.classList.contains('copied')){
+      btn.setAttribute('data-name',btn.getAttribute('aria-label'));
+      if(label){label.setAttribute('data-label',label.textContent);label.textContent='Copied';}
+    }
+    btn.classList.add('copied');
+    btn.setAttribute('aria-label','Copied');
+    btn.title='Copied';
+    clearTimeout(btn.copyTimer);
+    btn.copyTimer=setTimeout(function(){
+      btn.classList.remove('copied');
+      btn.setAttribute('aria-label',btn.getAttribute('data-name'));
+      btn.title=btn.getAttribute('data-name');
+      if(label)label.textContent=label.getAttribute('data-label');
+    },2000);
   });
 });
 })();`;

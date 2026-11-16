@@ -52,7 +52,7 @@ describe('landing page at the MCP URL', () => {
     );
 
     expect(csp).toContain("default-src 'none'");
-    expect(tags).toHaveLength(3);
+    expect(tags).toHaveLength(2);
     expect(nonces.size).toBe(1);
     expect(csp).toContain(`'nonce-${[...nonces].join('')}'`);
   });

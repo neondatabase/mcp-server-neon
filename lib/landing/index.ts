@@ -1,4 +1,3 @@
-import { HERO_VIDEO_ORIGIN } from './hero-video';
 import { MARKDOWN_PATH } from './links';
 import { renderLandingMarkdown } from './markdown';
 import { renderLandingPage } from './page';
@@ -13,7 +12,6 @@ const contentSecurityPolicy = (nonce: string): string =>
     `style-src 'self' 'nonce-${nonce}'`,
     "img-src 'self'",
     "font-src 'self'",
-    `media-src ${HERO_VIDEO_ORIGIN}`,
     "base-uri 'none'",
     "form-action 'none'",
     "frame-ancestors 'none'",

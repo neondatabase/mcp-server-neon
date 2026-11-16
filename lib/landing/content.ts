@@ -83,29 +83,49 @@ export const INSTALL_TABS: readonly InstallTab[] = [
   },
 ];
 
-export const BLOCKS: readonly Block[] = [
+type AccessParam = {
+  param: string;
+  effect: string;
+};
+
+export const ACCESS_PARAMS: readonly AccessParam[] = [
+  { param: 'readonly=true', effect: 'publishes only read-only tools.' },
   {
-    id: 'api-key',
-    title: 'Connect with a Neon API key',
-    description: 'For remote agents and clients without OAuth.',
-    body: `[Create an API key](${API_KEY_URL}) in the Neon Console and send it as a bearer token:\n\n${fence('bash', install.addMcpWithApiKey)}`,
+    param: 'projectId=<id>',
+    effect: 'limits the connection to one Neon project.',
   },
   {
-    id: 'access',
-    title: 'Limit access',
-    description: 'Add query parameters to the MCP server URL.',
-    body: [
-      [
-        '- `readonly=true`: publishes only read-only tools.',
-        '- `projectId=<id>`: limits the connection to one Neon project.',
-        `- \`category=<name>\`: repeat to publish only those tool categories: ${SCOPE_CATEGORIES.map((category) => `\`${category}\``).join(', ')}.`,
-      ].join('\n'),
-      'Use only the documentation tools, with no account or sign-in:',
-      fence('text', `${MCP_URL}?category=docs`),
-      `Preview the tools a URL publishes at <${LIST_TOOLS_URL}> with the same query parameters.`,
-    ].join('\n\n'),
+    param: 'category=<name>',
+    effect: `repeat to publish only those tool categories: ${SCOPE_CATEGORIES.map((category) => `\`${category}\``).join(', ')}.`,
   },
 ];
+
+export const ACCESS_NOTES = [
+  'Use only the documentation tools, with no account or sign-in:',
+  fence('text', `${MCP_URL}?category=docs`),
+  `Preview the tools a URL publishes at <${LIST_TOOLS_URL}> with the same query parameters.`,
+].join('\n\n');
+
+export const API_KEY_BLOCK: Block = {
+  id: 'api-key',
+  title: 'Connect with a Neon API key',
+  description: 'For remote agents and clients without OAuth.',
+  body: `[Create an API key](${API_KEY_URL}) in the Neon Console and send it as a bearer token:\n\n${fence('bash', install.addMcpWithApiKey)}`,
+};
+
+export const ACCESS_BLOCK: Block = {
+  id: 'access',
+  title: 'Limit access',
+  description: 'Add query parameters to the MCP server URL.',
+  body: [
+    ACCESS_PARAMS.map(({ param, effect }) => `- \`${param}\`: ${effect}`).join(
+      '\n',
+    ),
+    ACCESS_NOTES,
+  ].join('\n\n'),
+};
+
+export const BLOCKS: readonly Block[] = [API_KEY_BLOCK, ACCESS_BLOCK];
 
 export const TOOLS_SECTION: Section = {
   id: 'tools',
