@@ -33,19 +33,18 @@ export const SERVER_HOST = resolveServerHost({
 export class ServerConfig extends Context.Service<
   ServerConfig,
   { readonly serverHost: string }
->()('@neondatabase/mcp-server-neon/lib/config/ServerConfig') {}
-
-export const ServerConfigLayer = Layer.effect(
-  ServerConfig,
-  Effect.gen(function* () {
+>()('@neondatabase/mcp-server-neon/lib/config/ServerConfig', {
+  make: Effect.gen(function* () {
     const env = yield* Config.all({
       serverHost: Config.option(Config.String('SERVER_HOST')),
       vercelUrl: Config.option(Config.String('VERCEL_URL')),
     });
 
-    return ServerConfig.of({ serverHost: resolveServerHost(env) });
+    return { serverHost: resolveServerHost(env) };
   }),
-);
+}) {
+  static readonly layer = Layer.effect(this, this.make);
+}
 
 // OAuth configuration
 export const UPSTREAM_OAUTH_HOST =

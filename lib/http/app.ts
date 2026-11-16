@@ -1,7 +1,7 @@
 import { Layer } from 'effect';
 import { HttpMiddleware, HttpRouter, HttpServer } from 'effect/http';
 import { SentryLayer } from '../../mcp/sentry/effect';
-import { ServerConfigLayer } from '../config';
+import { ServerConfig } from '../config';
 import { WinstonLoggerLayer } from '../effect/logger';
 import { DiscoveryRoutes } from './routes/discovery';
 import { HealthRoutes } from './routes/health';
@@ -23,7 +23,7 @@ const withoutServerSpan = Layer.succeed(HttpMiddleware.TracerDisabledWhen)(
 export const app = HttpRouter.toWebHandler(
   Layer.mergeAll(
     Routes,
-    ServerConfigLayer,
+    ServerConfig.layer,
     SentryLayer,
     WinstonLoggerLayer,
     withoutServerSpan,
