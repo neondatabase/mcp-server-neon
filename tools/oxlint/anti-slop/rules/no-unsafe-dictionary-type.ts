@@ -68,7 +68,7 @@ function isInsideTypeAliasDeclaration(node: ESTree.Node): boolean {
 }
 
 function isPlainAliasConsumerUse(node: ESTree.TSType, environment: TypeEnvironment): boolean {
-	if (node.type !== "TSTypeReference" || node.typeArguments?.params.length) return false;
+	if (node.type !== "TSTypeReference" || (node.typeArguments?.params.length ?? 0) > 0) return false;
 	const name = typeReferenceName(node);
 	return (
 		name !== null &&

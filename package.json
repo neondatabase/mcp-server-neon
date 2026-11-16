@@ -14,6 +14,7 @@
     "start": "next start",
     "lint": "tsx scripts/lint-ratchet.ts",
     "lint:shrink": "tsx scripts/lint-ratchet.ts --shrink",
+    "lint:adopt": "tsx scripts/lint-ratchet.ts --adopt",
     "lint:report": "tsx scripts/lint-ratchet.ts --report",
     "lint:fix": "NODE_OPTIONS=--experimental-strip-types effect-tsgo oxlint --type-aware --fix && prettier -w .",
     "typecheck": "tsc --noEmit",

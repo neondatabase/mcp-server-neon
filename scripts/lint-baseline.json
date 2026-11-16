@@ -18,6 +18,9 @@
     "eslint(func-style)": 2
   },
   "app/api/[transport]/route.ts": {
+    "anti-slop-martinfowler(long-function)": 2,
+    "anti-slop-martinfowler(repeated-switches)": 2,
+    "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-runtime-typeof)": 6,
     "anti-slop(no-unknown-parameters)": 4,
     "anti-slop(no-unknown-returns)": 1,
@@ -77,6 +80,8 @@
     "typescript(no-unsafe-type-assertion)": 2
   },
   "app/api/authorize/route.ts": {
+    "anti-slop-martinfowler(long-function)": 2,
+    "anti-slop-martinfowler(long-parameter-list)": 1,
     "anti-slop(no-known-value-widening)": 1,
     "anti-slop(no-object-parameters)": 1,
     "anti-slop(no-runtime-typeof)": 3,
@@ -100,7 +105,7 @@
     "typescript(strict-boolean-expressions)": 12
   },
   "app/api/list-tools/route.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 2,
+    "anti-slop(no-conditional-spread)": 2,
     "anti-slop(require-readable-spacing)": 3,
     "eslint(func-style)": 2,
     "eslint(max-lines-per-function)": 1,
@@ -108,6 +113,7 @@
     "eslint(prefer-destructuring)": 1
   },
   "app/api/register/route.ts": {
+    "anti-slop-martinfowler(long-function)": 1,
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(require-readable-spacing)": 7,
     "anti-slop(require-safety-comment-for-type-assertion)": 1,
@@ -124,6 +130,7 @@
     "unicorn(prefer-set-has)": 2
   },
   "app/api/revoke/route.ts": {
+    "anti-slop-martinfowler(long-function)": 1,
     "anti-slop(require-readable-spacing)": 8,
     "eslint(complexity)": 1,
     "eslint(func-style)": 2,
@@ -133,9 +140,11 @@
     "typescript(strict-boolean-expressions)": 5
   },
   "app/api/token/route.ts": {
+    "anti-slop-martinfowler(long-function)": 2,
+    "anti-slop-martinfowler(long-parameter-list)": 1,
     "anti-slop(no-runtime-typeof)": 4,
     "anti-slop(no-unknown-parameters)": 2,
-    "anti-slop(require-readable-spacing)": 74,
+    "anti-slop(require-readable-spacing)": 73,
     "anti-slop(require-safety-comment-for-type-assertion)": 3,
     "eslint(complexity)": 2,
     "eslint(curly)": 9,
@@ -171,6 +180,7 @@
     "unicorn(numeric-separators-style)": 1
   },
   "app/callback/route.ts": {
+    "anti-slop-martinfowler(long-function)": 1,
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(require-readable-spacing)": 61,
     "eslint(complexity)": 1,
@@ -199,12 +209,15 @@
   "app/layout.tsx": {
     "import(no-unassigned-import)": 1
   },
+  "app/mcp.md/route.ts": {
+    "anti-slop-martinfowler(mysterious-name)": 1
+  },
   "app/mcp/server-card/route.ts": {
     "eslint(func-style)": 1,
     "unicorn(prefer-export-from)": 1
   },
   "e2e/auth-complete.spec.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 1,
+    "anti-slop(no-conditional-spread)": 1,
     "anti-slop(require-readable-spacing)": 5,
     "eslint(func-style)": 2,
     "eslint(no-await-in-loop)": 2,
@@ -321,6 +334,7 @@
     "unicorn(text-encoding-identifier-case)": 1
   },
   "e2e/sentry-fixture.ts": {
+    "anti-slop-martinfowler(loops)": 1,
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(require-readable-spacing)": 12,
     "eslint(func-style)": 2,
@@ -388,6 +402,7 @@
     "typescript(strict-boolean-expressions)": 2
   },
   "lib/errors.ts": {
+    "anti-slop-martinfowler(long-function)": 1,
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(no-unknown-parameters)": 1,
     "anti-slop(require-readable-spacing)": 16,
@@ -400,6 +415,7 @@
     "typescript(strict-boolean-expressions)": 2
   },
   "lib/oauth/client-assertion.ts": {
+    "anti-slop-martinfowler(long-function)": 1,
     "anti-slop(no-runtime-typeof)": 3,
     "anti-slop(require-readable-spacing)": 20,
     "eslint(complexity)": 1,
@@ -420,6 +436,7 @@
     "typescript(strict-boolean-expressions)": 3
   },
   "lib/oauth/client-id-metadata-document.ts": {
+    "anti-slop-martinfowler(long-function)": 1,
     "anti-slop(no-runtime-typeof)": 7,
     "anti-slop(no-unknown-parameters)": 3,
     "anti-slop(no-unknown-returns)": 2,
@@ -452,7 +469,10 @@
     "unicorn(prefer-string-replace-all)": 1
   },
   "lib/oauth/client.ts": {
+    "anti-slop-martinfowler(loops)": 1,
+    "anti-slop-martinfowler(mutable-data)": 2,
     "anti-slop(no-chained-type-assertions)": 2,
+    "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(require-readable-spacing)": 21,
     "anti-slop(require-safety-comment-for-type-assertion)": 4,
@@ -518,7 +538,7 @@
     "vitest(require-mock-type-parameters)": 4
   },
   "mcp/__tests__/auth-complete-events-route.test.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 3,
+    "anti-slop(no-conditional-spread)": 3,
     "anti-slop(no-module-mocking)": 2,
     "anti-slop(no-unsafe-dictionary-type)": 1,
     "anti-slop(require-readable-spacing)": 1,
@@ -612,7 +632,7 @@
     "vitest(no-conditional-in-test)": 3
   },
   "mcp/__tests__/consent-dialog.test.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 1,
+    "anti-slop(no-conditional-spread)": 1,
     "anti-slop(require-readable-spacing)": 9,
     "eslint(no-script-url)": 2,
     "eslint(prefer-named-capture-group)": 1,
@@ -807,7 +827,7 @@
     "vitest(prefer-strict-equal)": 6
   },
   "mcp/__tests__/live/mcp-server.live.e2e.test.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 1,
+    "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-unknown-parameters)": 4,
     "anti-slop(no-unsafe-dictionary-type)": 4,
     "anti-slop(require-readable-spacing)": 172,
@@ -890,7 +910,7 @@
     "vitest(require-top-level-describe)": 1
   },
   "mcp/__tests__/oauth-api-key-fallback.integration.test.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 1,
+    "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-module-mocking)": 5,
     "anti-slop(no-unknown-parameters)": 3,
     "anti-slop(require-readable-spacing)": 7,
@@ -911,7 +931,7 @@
   },
   "mcp/__tests__/oauth-authorize-route.integration.test.ts": {
     "anti-slop(no-chained-type-assertions)": 5,
-    "anti-slop(no-conditional-empty-object-spread)": 1,
+    "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-module-mocking)": 4,
     "anti-slop(require-readable-spacing)": 107,
     "anti-slop(require-safety-comment-for-type-assertion)": 10,
@@ -1229,7 +1249,7 @@
     "vitest(require-mock-type-parameters)": 5
   },
   "mcp/__tests__/route-transport-security.integration.test.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 1,
+    "anti-slop(no-conditional-spread)": 1,
     "eslint(func-style)": 1,
     "typescript(strict-boolean-expressions)": 1,
     "unicorn(numeric-separators-style)": 2,
@@ -1295,7 +1315,7 @@
     "vitest(require-mock-type-parameters)": 7
   },
   "mcp/__tests__/stable-project-schema.test.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 2,
+    "anti-slop(no-conditional-spread)": 2,
     "anti-slop(no-module-mocking)": 1,
     "anti-slop(no-unknown-parameters)": 1,
     "anti-slop(no-unsafe-dictionary-type)": 2,
@@ -1424,7 +1444,7 @@
     "vitest(require-top-level-describe)": 2
   },
   "mcp/__tests__/transport-dynamic-tools.integration.test.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 4,
+    "anti-slop(no-conditional-spread)": 4,
     "anti-slop(no-module-mocking)": 6,
     "anti-slop(no-shape-in-symbol-names)": 2,
     "anti-slop(no-unknown-parameters)": 2,
@@ -1469,6 +1489,7 @@
     "unicorn(prefer-export-from)": 1
   },
   "mcp/oauth/auth-complete-page.ts": {
+    "anti-slop-martinfowler(long-function)": 1,
     "anti-slop(no-known-value-widening)": 1,
     "anti-slop(require-readable-spacing)": 12,
     "eslint(curly)": 1,
@@ -1480,7 +1501,7 @@
     "typescript(strict-boolean-expressions)": 4
   },
   "mcp/oauth/auth-complete-response.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 1,
+    "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-known-value-widening)": 1,
     "anti-slop(no-unknown-parameters)": 1,
     "anti-slop(require-readable-spacing)": 15,
@@ -1494,6 +1515,7 @@
     "typescript(strict-boolean-expressions)": 5
   },
   "mcp/oauth/auth-transaction-store.ts": {
+    "anti-slop-martinfowler(mutable-data)": 1,
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(no-unknown-parameters)": 1,
     "anti-slop(no-unsafe-dictionary-type)": 1,
@@ -1510,7 +1532,8 @@
     "unicorn(catch-error-name)": 1
   },
   "mcp/oauth/auth-transaction.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 2,
+    "anti-slop-martinfowler(long-function)": 1,
+    "anti-slop(no-conditional-spread)": 2,
     "anti-slop(no-runtime-typeof)": 13,
     "anti-slop(no-unknown-parameters)": 6,
     "anti-slop(no-unsafe-dictionary-type)": 1,
@@ -1530,7 +1553,8 @@
     "eslint(require-unicode-regexp)": 2
   },
   "mcp/oauth/consent-approval.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 1,
+    "anti-slop-martinfowler(long-function)": 1,
+    "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-runtime-typeof)": 3,
     "anti-slop(require-readable-spacing)": 39,
     "eslint(complexity)": 1,
@@ -1552,7 +1576,9 @@
     "typescript(strict-boolean-expressions)": 1
   },
   "mcp/oauth/consent-dialog.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 2,
+    "anti-slop-martinfowler(long-function)": 3,
+    "anti-slop-martinfowler(loops)": 1,
+    "anti-slop(no-conditional-spread)": 2,
     "anti-slop(require-readable-spacing)": 42,
     "eslint(func-style)": 25,
     "eslint(init-declarations)": 1,
@@ -1581,7 +1607,7 @@
     "typescript(strict-boolean-expressions)": 1
   },
   "mcp/oauth/downstream-auth-request.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 3,
+    "anti-slop(no-conditional-spread)": 3,
     "anti-slop(no-runtime-typeof)": 7,
     "anti-slop(no-unknown-parameters)": 3,
     "anti-slop(no-unsafe-dictionary-type)": 1,
@@ -1596,6 +1622,7 @@
     "eslint(func-style)": 3
   },
   "mcp/oauth/kv-store.ts": {
+    "anti-slop-martinfowler(mutable-data)": 1,
     "anti-slop(no-runtime-typeof)": 2,
     "anti-slop(no-unknown-parameters)": 3,
     "anti-slop(require-readable-spacing)": 8,
@@ -1643,6 +1670,9 @@
     "unicorn(numeric-separators-style)": 2
   },
   "mcp/oauth/refresh-lock.ts": {
+    "anti-slop-martinfowler(long-function)": 1,
+    "anti-slop-martinfowler(long-parameter-list)": 2,
+    "anti-slop-martinfowler(mutable-data)": 2,
     "anti-slop(require-readable-spacing)": 26,
     "eslint(curly)": 7,
     "eslint(func-style)": 8,
@@ -1697,6 +1727,7 @@
     "unicorn(no-zero-fractions)": 1
   },
   "mcp/sentry/session.ts": {
+    "anti-slop-martinfowler(loops)": 1,
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(require-readable-spacing)": 6,
     "eslint(curly)": 4,
@@ -1705,6 +1736,7 @@
     "import(consistent-type-specifier-style)": 2
   },
   "mcp/sentry/tool-span.ts": {
+    "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(no-unknown-parameters)": 1,
     "anti-slop(require-readable-spacing)": 4,
@@ -1732,6 +1764,8 @@
     "typescript(strict-boolean-expressions)": 2
   },
   "mcp/server/errors.ts": {
+    "anti-slop-martinfowler(loops)": 1,
+    "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-runtime-typeof)": 2,
     "anti-slop(no-unknown-parameters)": 6,
     "anti-slop(require-readable-spacing)": 8,
@@ -1743,8 +1777,9 @@
     "typescript(strict-boolean-expressions)": 4
   },
   "mcp/server/index.ts": {
+    "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-unknown-parameters)": 2,
-    "anti-slop(require-readable-spacing)": 10,
+    "anti-slop(require-readable-spacing)": 9,
     "effecttsgo(missed-pipeable-opportunity)": 1,
     "eslint(max-lines-per-function)": 4,
     "eslint(object-shorthand)": 1,
@@ -1796,6 +1831,7 @@
     "eslint(func-style)": 2
   },
   "mcp/tools/neon-tools.ts": {
+    "anti-slop-martinfowler(loops)": 1,
     "anti-slop(no-known-value-widening)": 1,
     "anti-slop(require-readable-spacing)": 3,
     "eslint(func-style)": 2,
@@ -1806,6 +1842,7 @@
     "unicorn(no-array-callback-reference)": 2
   },
   "mcp/tools/registration.ts": {
+    "anti-slop-martinfowler(long-parameter-list)": 1,
     "anti-slop(no-known-value-widening)": 1,
     "anti-slop(no-unknown-parameters)": 1,
     "anti-slop(no-unsafe-dictionary-type)": 1,
@@ -1818,6 +1855,7 @@
     "typescript(strict-boolean-expressions)": 1
   },
   "mcp/tools/sanitize.ts": {
+    "anti-slop-martinfowler(loops)": 2,
     "anti-slop(no-known-value-widening)": 2,
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(no-unknown-parameters)": 3,
@@ -1870,6 +1908,7 @@
     "typescript(consistent-type-imports)": 2
   },
   "mcp/utils/client-application.ts": {
+    "anti-slop-martinfowler(long-function)": 1,
     "anti-slop(no-runtime-typeof)": 3,
     "anti-slop(no-unknown-parameters)": 3,
     "anti-slop(require-readable-spacing)": 40,
@@ -1880,7 +1919,7 @@
     "eslint(max-statements)": 1
   },
   "mcp/utils/grant-context.ts": {
-    "anti-slop(no-conditional-empty-object-spread)": 4,
+    "anti-slop(no-conditional-spread)": 4,
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(require-readable-spacing)": 14,
     "anti-slop(require-safety-comment-for-type-assertion)": 1,
@@ -1948,6 +1987,13 @@
     "typescript(no-unsafe-type-assertion)": 1,
     "typescript(strict-boolean-expressions)": 3,
     "unicorn(prefer-import-meta-properties)": 1
+  },
+  "scripts/lint-ratchet-core.ts": {
+    "anti-slop-martinfowler(loops)": 2,
+    "anti-slop(no-conditional-spread)": 2
+  },
+  "scripts/lint-ratchet.ts": {
+    "anti-slop-martinfowler(mysterious-name)": 1
   },
   "vitest.config.ts": {
     "unicorn(prefer-module)": 1
