@@ -2220,7 +2220,7 @@
   {
     "name": "finalize_branch_restore",
     "title": "Finalize branch restore from snapshot",
-    "description": "Finalizes a branch restored with finalize false: moves the original branch's computes onto it, restarting them, and takes over its name.",
+    "description": "Finalizes a branch restored with finalize false: moves the original branch's computes onto it, restarting them, and takes over its name. NEVER run autonomously; always ask the user first.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3427,7 +3427,7 @@
   {
     "name": "restore_snapshot",
     "title": "Restore snapshot",
-    "description": "Restores a snapshot onto a new branch or onto target_branch_id and waits until it is ready. With finalize false, swap it in later with finalize_branch_restore.",
+    "description": "Restores a snapshot into a new branch and waits until it is ready. finalize true replaces target_branch_id (default: the snapshot's source branch) with it. NEVER finalize autonomously; ask the user first. Swap in later with finalize_branch_restore.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3447,12 +3447,12 @@
           "description": "A name for the newly restored branch."
         },
         "target_branch_id": {
-          "type": "string",
-          "description": "ID of the branch to restore the snapshot into."
+          "description": "Branch that finalize replaces. Defaults to the snapshot's source branch.",
+          "type": "string"
         },
         "finalize": {
           "type": "boolean",
-          "description": "Move computes onto the restored branch now. Default true for a new branch, false onto an existing one."
+          "description": "Replace the target branch with the restored data now. Default false."
         }
       },
       "required": [

@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+`restore_snapshot` no longer finalizes by default. Without `target_branch_id`, the API restores onto the snapshot's source branch, so the old default replaced that branch, often production, with the snapshot's data. A restore now stays a separate branch unless the call passes `finalize: true`. The `restore_snapshot` and `finalize_branch_restore` descriptions say that finalize replaces the target branch and tell agents to ask the user first. Requires `@neon/tools` 2.14.3 and `@neon/sdk` 7.13.1.
+
 Every tool now comes from `@neon/tools` 2.14.2. Tool names, input fields, required fields, and which grants list each tool are unchanged; descriptions are the package's, shorter, with this server's tool names in cross-references. Results that change:
 
 - `search` returns `{ "results": [{ "id", "title", "url" }] }` as `structuredContent` and as JSON text, the OpenAI search shape, instead of an array with a `type` field. It also finds shared projects, compute endpoints, and snapshots.
