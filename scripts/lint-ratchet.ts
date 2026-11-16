@@ -23,6 +23,7 @@ import type { Counts, Violation } from './lint-ratchet-core';
 import {
   adopt,
   countViolations,
+  onlyRules,
   disableComments,
   grown,
   report,
@@ -214,6 +215,10 @@ const verify = async (mode: Mode): Promise<void> => {
     section(
       `${BASELINE} grew against origin/main. It only shrinks:`,
       growth ?? [],
+    ),
+    section(
+      `${BASELINE} holds more for a newly enabled rule than was found (file: rule found -> baseline). Run pnpm lint:adopt:`,
+      grown(onlyRules(baseline, adopted), onlyRules(found, adopted)),
     ),
     section('Config:', await unreviewedConfig(ROOT)),
   ].join('');

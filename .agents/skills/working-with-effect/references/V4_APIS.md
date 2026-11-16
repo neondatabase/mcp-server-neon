@@ -50,8 +50,8 @@ const wrapped = constructed.pipe(
 )
 ```
 
-See `SCHEMA.md` for constructor defaults, wire decoding, and error handling;
-`CONFIG.md` for provider-based configuration; and `TESTING.md` for virtual time.
+See [SCHEMA_DATA_MODELING.md](../../effect-program-design/references/SCHEMA_DATA_MODELING.md) for constructor defaults, wire decoding, and error handling;
+[CONFIG_SECRETS.md](../../effect-program-design/references/CONFIG_SECRETS.md) for provider-based configuration; and [TESTING.md](../../effect-program-design/references/TESTING.md) for virtual time.
 
 ## Upstream Sources
 

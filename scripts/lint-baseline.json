@@ -334,6 +334,7 @@
     "unicorn(text-encoding-identifier-case)": 1
   },
   "e2e/sentry-fixture.ts": {
+    "anti-slop-martinfowler(loops)": 1,
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(require-readable-spacing)": 12,
     "eslint(func-style)": 2,
@@ -468,6 +469,7 @@
     "unicorn(prefer-string-replace-all)": 1
   },
   "lib/oauth/client.ts": {
+    "anti-slop-martinfowler(loops)": 1,
     "anti-slop-martinfowler(mutable-data)": 2,
     "anti-slop(no-chained-type-assertions)": 2,
     "anti-slop(no-conditional-spread)": 1,
@@ -1575,6 +1577,7 @@
   },
   "mcp/oauth/consent-dialog.ts": {
     "anti-slop-martinfowler(long-function)": 3,
+    "anti-slop-martinfowler(loops)": 1,
     "anti-slop(no-conditional-spread)": 2,
     "anti-slop(require-readable-spacing)": 42,
     "eslint(func-style)": 25,
@@ -1724,6 +1727,7 @@
     "unicorn(no-zero-fractions)": 1
   },
   "mcp/sentry/session.ts": {
+    "anti-slop-martinfowler(loops)": 1,
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(require-readable-spacing)": 6,
     "eslint(curly)": 4,
@@ -1760,6 +1764,7 @@
     "typescript(strict-boolean-expressions)": 2
   },
   "mcp/server/errors.ts": {
+    "anti-slop-martinfowler(loops)": 1,
     "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-runtime-typeof)": 2,
     "anti-slop(no-unknown-parameters)": 6,
@@ -1826,6 +1831,7 @@
     "eslint(func-style)": 2
   },
   "mcp/tools/neon-tools.ts": {
+    "anti-slop-martinfowler(loops)": 1,
     "anti-slop(no-known-value-widening)": 1,
     "anti-slop(require-readable-spacing)": 3,
     "eslint(func-style)": 2,
@@ -1849,6 +1855,7 @@
     "typescript(strict-boolean-expressions)": 1
   },
   "mcp/tools/sanitize.ts": {
+    "anti-slop-martinfowler(loops)": 2,
     "anti-slop(no-known-value-widening)": 2,
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(no-unknown-parameters)": 3,
@@ -1982,6 +1989,7 @@
     "unicorn(prefer-import-meta-properties)": 1
   },
   "scripts/lint-ratchet-core.ts": {
+    "anti-slop-martinfowler(loops)": 2,
     "anti-slop(no-conditional-spread)": 2
   },
   "scripts/lint-ratchet.ts": {

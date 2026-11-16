@@ -1,6 +1,6 @@
 # Attribution
 
-The general Effect guidance lives in the vendored [`effect-program-design`](../effect-program-design/SKILL.md) skill (K-Mistele/anti-slop, MIT). This skill keeps the sources below. Files under `references/` are copied unmodified, except that `AUDIT.md` was renamed to `SERVICE_AUDIT.md`. License texts are in `licenses/`.
+The general Effect guidance lives in the vendored [`effect-program-design`](../effect-program-design/SKILL.md) skill (K-Mistele/anti-slop, MIT). This skill keeps the sources below. Files under `references/` are copied unmodified, except that `AUDIT.md` was renamed to `SERVICE_AUDIT.md`, its target module shape follows the `make` and `static layer` service pattern, and `V4_APIS.md` links the effect-program-design references that replaced Kit Langton's. License texts are in `licenses/`.
 
 | Source | Commit | License | Used for |
 |---|---|---|---|

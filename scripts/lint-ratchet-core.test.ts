@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { adopt, disableComments, withoutRules } from './lint-ratchet-core';
+import {
+  adopt,
+  disableComments,
+  grown,
+  onlyRules,
+  withoutRules,
+} from './lint-ratchet-core';
 
 describe('disableComments', () => {
   it('finds a directive in every comment form', () => {
@@ -76,5 +82,16 @@ describe('adopt', () => {
     expect(withoutRules(baseline, adopted)).toStrictEqual({
       'a.ts': { 'eslint(curly)': 2 },
     });
+  });
+
+  it('reports adopted entries above what was found', () => {
+    const padded = {
+      ...adopt(found, baseline, adopted),
+      'future.ts': { 'anti-slop(new-rule)': 999 },
+    };
+
+    expect(
+      grown(onlyRules(padded, adopted), onlyRules(found, adopted)),
+    ).toStrictEqual(['future.ts: anti-slop(new-rule) 0 -> 999']);
   });
 });

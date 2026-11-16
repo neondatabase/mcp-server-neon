@@ -78,6 +78,10 @@ export const withoutRules = (
 ): Counts =>
   countViolations(expand(pairs(counts).filter(([, rule]) => !rules.has(rule))));
 
+/** Only the given rules of `counts`. */
+export const onlyRules = (counts: Counts, rules: ReadonlySet<string>): Counts =>
+  countViolations(expand(pairs(counts).filter(([, rule]) => rules.has(rule))));
+
 /**
  * The baseline with `rules` set to what was found. Only rules a PR newly
  * enables are adopted this way; every other count still only shrinks.

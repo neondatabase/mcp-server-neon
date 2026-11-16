@@ -189,6 +189,7 @@
     "anti-slop-martinfowler/global-data": "warn",
     "anti-slop-martinfowler/long-function": "warn",
     "anti-slop-martinfowler/long-parameter-list": "warn",
+    "anti-slop-martinfowler/loops": "warn",
     "anti-slop-martinfowler/mutable-data": "warn",
     "anti-slop-martinfowler/mysterious-name": "warn",
     "anti-slop-martinfowler/repeated-switches": "warn",

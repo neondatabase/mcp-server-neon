@@ -90,7 +90,7 @@ For each finding include:
 
 1. evidence with file/line or symbol references;
 2. why the current shape hides requirements or creates caller burden;
-3. the smallest target Effect service module shape, including `layerWithoutDependencies`, assembled `layer`, and any honest reusable test Layer;
+3. the smallest target Effect service module shape: a `Context.Service` whose constructor is `make`, with `static readonly layer = Layer.effect(this, this.make)`, and any honest reusable test Layer;
 4. the composition-root and test impact;
 5. what should remain unchanged.
 
