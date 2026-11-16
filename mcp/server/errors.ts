@@ -27,17 +27,6 @@ class ToolCallCancelledError extends Error {
   }
 }
 
-/**
- * A failure after the client cancelled is the client's doing, whatever the
- * cancellation surfaced as (`NeonAbortError`, a driver's `AbortError`, a
- * `NeonDbError` wrapping one). Upstream timeouts use their own signals, so
- * they stay server failures.
- */
-export const asCancellation = (
-  signal: AbortSignal | undefined,
-): ToolCallCancelledError | undefined =>
-  signal?.aborted === true ? new ToolCallCancelledError() : undefined;
-
 function isClientError(error: unknown): boolean {
   return (
     error instanceof InvalidArgumentError ||
@@ -78,6 +67,10 @@ function errorResponse(error: unknown) {
     content: [{ type: 'text' as const, text: errorText(error) }],
   };
 }
+
+/** What a tool call the client cancelled renders as. */
+export const cancelledToolResult = () =>
+  errorResponse(new ToolCallCancelledError());
 
 function apiErrorReason(body: unknown): string | undefined {
   if (typeof body !== 'object' || body === null || !('reason' in body)) {

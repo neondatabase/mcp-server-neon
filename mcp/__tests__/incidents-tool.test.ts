@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { assert } from '../../lib/assert';
 import { NEON_HANDLERS } from '../tools/tools';
+import { runToolHandler } from './helpers/run-tool-handler';
 
 type ToolResult = { content: Array<{ type: string; text: string }> };
 
@@ -41,9 +42,11 @@ describe('list_incidents handler', () => {
       new Response(JSON.stringify(OPERATIONAL)),
     );
 
-    const result = (await NEON_HANDLERS.list_incidents({
-      params: {},
-    })) as ToolResult;
+    const result = (await runToolHandler(
+      NEON_HANDLERS.list_incidents({
+        params: {},
+      }),
+    )) as ToolResult;
 
     expect(JSON.parse(result.content[0].text)).toEqual({
       status: 'operational',
@@ -61,7 +64,9 @@ describe('list_incidents handler', () => {
 
   it('rejects arguments', async () => {
     await expect(
-      NEON_HANDLERS.list_incidents({ params: { region: 'aws-us-east-2' } }),
+      runToolHandler(
+        NEON_HANDLERS.list_incidents({ params: { region: 'aws-us-east-2' } }),
+      ),
     ).rejects.toThrow();
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
@@ -71,8 +76,8 @@ describe('list_incidents handler', () => {
       new Response('unavailable', { status: 503 }),
     );
 
-    await expect(NEON_HANDLERS.list_incidents({ params: {} })).rejects.toThrow(
-      'neonstatus.com returned HTTP 503.',
-    );
+    await expect(
+      runToolHandler(NEON_HANDLERS.list_incidents({ params: {} })),
+    ).rejects.toThrow('neonstatus.com returned HTTP 503.');
   });
 });

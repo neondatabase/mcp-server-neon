@@ -13,6 +13,7 @@ import { NEON_DOCS_BASE_URL } from '../../lib/config';
 import { NEON_HANDLERS } from '../tools/tools';
 import { NotFoundError } from '../server/errors';
 import { jsonContent, textContent } from './helpers/tool-result';
+import { runToolHandler } from './helpers/run-tool-handler';
 
 const originalFetch = globalThis.fetch;
 
@@ -56,16 +57,20 @@ describe('docs tools integration contracts (no external network)', () => {
         }),
       );
 
-    const searchResult = await NEON_HANDLERS.search_docs({
-      params: { query: 'ai concepts' },
-    });
+    const searchResult = await runToolHandler(
+      NEON_HANDLERS.search_docs({
+        params: { query: 'ai concepts' },
+      }),
+    );
     const { hits } = z
       .object({ hits: z.array(z.object({ slug: z.string() })) })
       .parse(jsonContent(searchResult));
 
-    const docResult = await NEON_HANDLERS.get_doc({
-      params: { slug: hits[0].slug },
-    });
+    const docResult = await runToolHandler(
+      NEON_HANDLERS.get_doc({
+        params: { slug: hits[0].slug },
+      }),
+    );
 
     expect(fetchedUrl(1)).toBe(`${NEON_DOCS_BASE_URL}/docs/ai/ai-concepts.md`);
     expect(textContent(docResult)).toBe(
@@ -78,9 +83,11 @@ describe('docs tools integration contracts (no external network)', () => {
       new Response('# Signing up\n\nWelcome.', { status: 200 }),
     );
 
-    await NEON_HANDLERS.get_doc({
-      params: { slug: 'docs/get-started/signing-up' },
-    });
+    await runToolHandler(
+      NEON_HANDLERS.get_doc({
+        params: { slug: 'docs/get-started/signing-up' },
+      }),
+    );
 
     expect(fetchedUrl(0)).toBe(
       `${NEON_DOCS_BASE_URL}/docs/get-started/signing-up.md`,
@@ -93,17 +100,21 @@ describe('docs tools integration contracts (no external network)', () => {
     );
 
     await expect(
-      NEON_HANDLERS.get_doc({
-        params: { slug: 'docs/does-not-exist.md' },
-      }),
+      runToolHandler(
+        NEON_HANDLERS.get_doc({
+          params: { slug: 'docs/does-not-exist.md' },
+        }),
+      ),
     ).rejects.toThrow(NotFoundError);
   });
 
   it('rejects invalid slugs before any fetch call', async () => {
     await expect(
-      NEON_HANDLERS.get_doc({
-        params: { slug: 'https://evil.example/payload' },
-      }),
+      runToolHandler(
+        NEON_HANDLERS.get_doc({
+          params: { slug: 'https://evil.example/payload' },
+        }),
+      ),
     ).rejects.toThrow(NeonClientError);
 
     expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();

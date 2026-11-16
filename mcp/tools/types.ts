@@ -1,7 +1,10 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { NeonToolError } from '@neon/tools/effect';
+import type { Effect } from 'effect';
 import type { Api } from '../neon-client';
 import type { AuthContext } from '../types/auth';
 import type { ClientApplication } from '../utils/client-application';
+import type { ToolStepFailed } from './errors';
 
 export type ToolHandlerExtraParams = {
   /** Absent on the anonymous `?category=docs` endpoint. */
@@ -10,7 +13,6 @@ export type ToolHandlerExtraParams = {
   clientApplication: ClientApplication;
   apiKey?: string;
   userAgent?: string;
-  signal?: AbortSignal;
   /**
    * Postgres role pinned by the connection grant. Set only by `invokeTool`
    * from the grant, never from tool arguments.
@@ -18,10 +20,13 @@ export type ToolHandlerExtraParams = {
   pinnedRoleName?: string;
 };
 
-export type ToolHandlerExtended = (
+export type ToolCallError = NeonToolError | ToolStepFailed;
+
+/** Interrupting the handler's fiber cancels the tool call. */
+export type ToolHandler = (
   args?: { params: Record<string, unknown> },
   neonClient?: Api<unknown>,
   extra?: ToolHandlerExtraParams,
-) => CallToolResult | Promise<CallToolResult>;
+) => Effect.Effect<CallToolResult, ToolCallError>;
 
-export type ToolHandlers = Record<string, ToolHandlerExtended>;
+export type ToolHandlers = Record<string, ToolHandler>;

@@ -3,6 +3,7 @@ import { HttpMiddleware, HttpRouter, HttpServer } from 'effect/http';
 import { SentryLayer } from '../../mcp/sentry/effect';
 import { ServerConfig } from '../config';
 import { WinstonLoggerLayer } from '../effect/logger';
+import { memoMap } from '../effect/runtime';
 import { DiscoveryRoutes } from './routes/discovery';
 import { HealthRoutes } from './routes/health';
 import { ListToolsRoutes } from './routes/list-tools';
@@ -28,5 +29,5 @@ export const app = HttpRouter.toWebHandler(
     WinstonLoggerLayer,
     withoutServerSpan,
   ).pipe(Layer.provide(HttpServer.layerServices)),
-  { disableLogger: true },
+  { disableLogger: true, memoMap },
 );
