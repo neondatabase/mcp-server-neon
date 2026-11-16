@@ -16,16 +16,11 @@ type RetryOptions = {
   shouldRetry?: (err: unknown) => boolean;
 };
 
-/** One attempt threw; `error` is what it threw. */
+/** One attempt threw; `error` is what it threw, judged once by `shouldRetry`. */
 class AttemptFailed extends Schema.TaggedError<
   AttemptFailed,
   { readonly brand: unique symbol }
->()('AttemptFailed', { error: Schema.Unknown }) {}
-
-const isRetryable = (
-  { shouldRetry }: RetryOptions,
-  { error }: AttemptFailed,
-): boolean => shouldRetry === undefined || shouldRetry(error);
+>()('AttemptFailed', { error: Schema.Unknown, retryable: Schema.Boolean }) {}
 
 const delays = (delaysMs: readonly number[]) =>
   Schedule.recurs(delaysMs.length).pipe(
@@ -41,7 +36,12 @@ const retrying = <T>(fn: () => Promise<T>, options: RetryOptions) =>
 
     return yield* Effect.tryPromise({
       try: fn,
-      catch: (error) => AttemptFailed.make({ error }),
+      catch: (error) =>
+        AttemptFailed.make({
+          error,
+          retryable:
+            options.shouldRetry === undefined || options.shouldRetry(error),
+        }),
     }).pipe(
       Effect.tapError((failure) =>
         Ref.updateAndGet(attempt, (n) => n + 1).pipe(
@@ -53,7 +53,7 @@ const retrying = <T>(fn: () => Promise<T>, options: RetryOptions) =>
                     ? failure.error.message
                     : failure.error,
                 isFinalAttempt: n === attempts,
-                retryable: isRetryable(options, failure),
+                retryable: failure.retryable,
               });
             }),
           ),
@@ -61,7 +61,7 @@ const retrying = <T>(fn: () => Promise<T>, options: RetryOptions) =>
       ),
       Effect.retry({
         schedule: delays(delaysMs),
-        while: (failure) => isRetryable(options, failure),
+        while: ({ retryable }) => retryable,
       }),
       Effect.catch(({ error }) => Effect.die(error)),
     );
