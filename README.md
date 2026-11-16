@@ -7,7 +7,7 @@
 # Neon MCP Server
 
 [![Install MCP Server in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en-US/install-mcp?name=Neon&config=eyJ1cmwiOiJodHRwczovL21jcC5uZW9uLnRlY2gvbWNwP2NhdGVnb3J5PXByb2plY3RzJmNhdGVnb3J5PWJyYW5jaGVzJmNhdGVnb3J5PWVuZHBvaW50cyZjYXRlZ29yeT1xdWVyeWluZyZjYXRlZ29yeT1zY2hlbWEifQ%3D%3D)
-[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=Neon&config=%7B%22url%22%3A%22https%3A%2F%2Fmcp.neon.tech%2Fmcp%3Fcategory%3Dprojects%26category%3Dbranches%26category%3Dendpoints%26category%3Dquerying%26category%3Dschema%22%7D)
+[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/powers/add?name=neon)
 
 **Neon MCP Server** is an open-source tool that lets you interact with your Lakebase Postgres databases on Neon in **natural language**.
 
@@ -110,7 +110,7 @@ Alternatively, you can add the following "Neon" entry to your client's MCP serve
 }
 ```
 
-Or use the one-click install button at the top of this README. For more information, see the [Kiro MCP documentation](https://kiro.dev/docs/mcp/).
+Or use the "Add to Kiro" button at the top of this README to install the Neon Kiro Power, which includes the Neon MCP Server. For more information, see the [Kiro MCP documentation](https://kiro.dev/docs/mcp/).
 
 - Restart or refresh your MCP client.
 - An OAuth window will open in your browser. Follow the prompts to authorize your MCP client to access your Neon account.

@@ -93,21 +93,15 @@ The denominator query (`outcome=success`) is also subject to the cap — sample 
 
 ### Replays after the grace period
 
-A rotated refresh token returns the pair its rotation issued for 5 minutes (`REFRESH_REPLAY_GRACE_MS` in `mcp/oauth/refresh-result.ts`). After that its owner gets `400 invalid_grant` and must sign in again, and every rejected attempt logs:
+A rotated refresh token returns the pair its rotation issued for 5 minutes (`REFRESH_REPLAY_GRACE_MS` in `mcp/oauth/refresh-result.ts`), and after that for as long as the refresh token in that pair is unused and the cached row exists (7 days). The served `expires_in` is never negative: clients built on oauth2-rs, such as Codex, reject a negative value and never store the pair. Each late serve logs `Served a late replay of a live rotation` with `clientId`, `replayAgeMs`, and `clientApplication`.
+
+Once the issued refresh token was rotated again or revoked, a replay after the grace period gets `400 invalid_grant` and the client must sign in again. Every rejected attempt logs:
 
 ```
-[SLO] refresh outcome=correct_invalid_grant elapsedMs=41 clientId=EADFzgU3 reason=replay_after_grace replayAgeMs=86400000 replayNext=live clientApplication=cursor
+[SLO] refresh outcome=correct_invalid_grant elapsedMs=41 clientId=EADFzgU3 reason=replay_after_grace replayAgeMs=86400000 replayNext=rotated clientApplication=cursor
 ```
 
-`replayAgeMs` is the time since the rotation. `replayNext` is the state of the refresh token that rotation issued:
-
-| `replayNext` | Meaning |
-|---|---|
-| `live` | Still the current token, unused since the rotation. |
-| `rotated` | Rotated again since: another copy of the chain (another process, or whoever holds a leaked token) moved on. |
-| `gone` | Revoked, expired, or never persisted. |
-
-`replayNext` is read when the replay is rejected. Another copy of the chain refreshes only when its 1-hour access token expires, so before that its new token is still unused: `live` points to a lost response only when `replayAgeMs` is over about an hour. Break the counts down by age (under 1h, 1h to 24h, over 24h) as well as by `replayNext`.
+`replayAgeMs` is the time since the rotation. `replayNext` is the state of the refresh token that rotation issued: `rotated` when another copy of the chain (another process, or whoever holds a leaked token) moved on, `gone` when it was revoked, expired, or never persisted. A `live` token is served, not rejected.
 
 Retries count as separate lines. The impact is the number of distinct clients, which approximates the installations that had to sign in again. The line carries `clientId`, `replayAgeMs`, `replayNext`, and `clientApplication` as Sentry Logs attributes, so in Sentry Explore > Logs:
 

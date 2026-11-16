@@ -25,7 +25,9 @@ The `list_auth_oauth_providers`, `add_auth_oauth_provider`, `update_auth_oauth_p
 
 Authorizing a client that returns through a custom URL scheme, such as older Cursor installs (`cursor://`), ends on a completion page instead of leaving the consent form on screen. The page opens the app, links back to it if the app did not open, and offers a prompt to install the Neon skills. A cancelled or failed authorization opened in a browser gets a page instead of a JSON body. Clients that return to a web or loopback address still get a plain redirect, and non-browser callers see no change. The page reports that it was shown and which of its buttons and links were used, as described under Telemetry in the README.
 
-A refresh token stops working 5 minutes after it is used: presenting it again later returns `invalid_grant`, and the client has to sign in again. Before, it returned the tokens issued when it was used for 7 days.
+A refresh token presented again returns the tokens issued when it was used, for up to 7 days, as long as the refresh token issued then has not been used. Once that one was used, presenting the old token more than 5 minutes after its first use returns `invalid_grant`, and the client has to sign in again. Before, the old token kept returning tokens for 7 days in either case.
+
+A replayed refresh token no longer gets a negative `expires_in` when the access token issued with it has expired; it gets `0`. Clients that reject a negative value, such as Codex, failed every refresh and retried until signed in again.
 
 A refresh token is accepted and revoked only for the OAuth client it was issued to. Before, another client presenting it could receive a cached rotation result, block the owner's next refresh for 10 minutes, or delete it through `/api/revoke`. The owning client's refreshes and replays are unchanged.
 
