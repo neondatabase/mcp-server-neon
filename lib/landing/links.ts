@@ -1,14 +1,10 @@
 import { SERVER_HOST } from '../config';
 
-// TEMPORARY (design preview only): show the production host instead of the
-// Vercel preview URL. Revert this commit before merging.
-const DISPLAY_HOST = 'https://mcp.neon.tech';
-
-export const MCP_URL = new URL('/mcp', DISPLAY_HOST).href;
+export const MCP_URL = new URL('/mcp', SERVER_HOST).href;
 
 export const MARKDOWN_PATH = '/mcp.md';
 
-export const LIST_TOOLS_URL = new URL('/api/list-tools', DISPLAY_HOST).href;
+export const LIST_TOOLS_URL = new URL('/api/list-tools', SERVER_HOST).href;
 
 export const OG_IMAGE_URL = new URL('/og-image.png', SERVER_HOST).href;
 
