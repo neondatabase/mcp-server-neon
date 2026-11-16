@@ -36,7 +36,7 @@ export const INSTALL_TABS: readonly InstallTab[] = [
   {
     id: 'claude-code',
     label: 'Claude Code',
-    body: `Run this command in your terminal:\n\n${fence('bash', install.claudeCode)}`,
+    body: `Run this command in your terminal:\n\n${fence('bash', install.claudeCode)}\n\nThen start Claude Code, run \`/mcp\`, select \`neon\`, and authenticate.`,
   },
   { id: 'cursor', label: 'Cursor', body: deeplink('Cursor', install.cursor) },
   { id: 'vscode', label: 'VS Code', body: deeplink('VS Code', install.vscode) },
