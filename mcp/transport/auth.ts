@@ -23,6 +23,7 @@ class McpAuthRejected extends Schema.TaggedError<
   description: Schema.String,
   /** Verification broke rather than the bearer being wrong; the span fails. */
   serverFault: Schema.Boolean,
+  cause: Schema.optional(Schema.Unknown),
 }) {}
 
 /** The 401 an MCP client reads to start OAuth discovery. */
@@ -62,6 +63,13 @@ const apiKeyAuthInfo = (
   };
 };
 
+const rejected = (description: string) =>
+  Effect.fail(McpAuthRejected.make({ description, serverFault: false }));
+
+// The client still gets the 401 it always did, but the failure is the server's.
+const brokeVerifying = (description: string, cause: unknown) =>
+  Effect.fail(McpAuthRejected.make({ description, serverFault: true, cause }));
+
 /** Token verification with two paths: stored OAuth tokens, then API keys. */
 const verifyToken = Effect.fn('McpAuth.verifyToken')(function* (
   req: Request,
@@ -80,7 +88,11 @@ const verifyToken = Effect.fn('McpAuth.verifyToken')(function* (
 
   logger.info('Trying API key verification path');
 
-  const apiKeyRecord = yield* fetchAccountDetails(bearerToken);
+  const apiKeyRecord = yield* fetchAccountDetails(bearerToken).pipe(
+    Effect.catchTag('ApiKeyVerificationUnavailable', ({ cause }) =>
+      brokeVerifying('No authorization provided', cause),
+    ),
+  );
 
   if (apiKeyRecord === null) {
     return Option.none();
@@ -110,9 +122,6 @@ const bearerTokenOf = (req: Request): string | undefined => {
   return type?.toLowerCase() === 'bearer' ? token : undefined;
 };
 
-const rejected = (description: string, serverFault = false) =>
-  Effect.fail(McpAuthRejected.make({ description, serverFault }));
-
 const authentication = Effect.fnUntraced(function* (req: Request) {
   const bearerToken = bearerTokenOf(req);
 
@@ -132,7 +141,7 @@ const authentication = Effect.fnUntraced(function* (req: Request) {
         error: defect,
       });
 
-      return rejected('Invalid token', true);
+      return brokeVerifying('Invalid token', defect);
     }),
   );
 

@@ -8,6 +8,7 @@ import type { ApiKeyRecord } from '../oauth/kv-store';
 import { resolveAccountFromAuth } from '../server/account';
 import { createNeonClient } from '../server/api';
 import { logger } from '../utils/logger';
+import { ApiKeyVerificationUnavailable } from './api-key-unavailable';
 
 /** The API-key cache could not be read or written. */
 class ApiKeyCacheFailed extends Schema.TaggedError<
@@ -134,7 +135,8 @@ const verifyApiKey = (accessToken: string) =>
 /**
  * Resolves an API key's account, or reports `'oauth'` as soon as Neon says the
  * bearer is an OAuth token, before account resolution can fail it. `null` when
- * the key cannot be verified.
+ * Neon rejects the key; `ApiKeyVerificationUnavailable` when Neon could not
+ * be reached or verification broke.
  */
 export const fetchAccountDetails = (accessToken: string) =>
   Effect.gen(function* () {
@@ -152,7 +154,9 @@ export const fetchAccountDetails = (accessToken: string) =>
         (cause) => {
           logVerificationFailure(cause);
 
-          return Effect.succeed(null);
+          return Effect.fail(
+            ApiKeyVerificationUnavailable.make({ cause: Cause.squash(cause) }),
+          );
         },
       ),
     );

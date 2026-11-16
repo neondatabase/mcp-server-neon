@@ -189,6 +189,7 @@ describe('API key verification retries', () => {
     await listTools('key-down');
 
     expect(authSpans.get('McpAuth.verifyApiKey')).toBe('internal_error');
+    expect(authSpans.get('McpAuth.authenticate')).toBe('internal_error');
   });
 
   it('closes the upstream auth check when the client aborts', async () => {
