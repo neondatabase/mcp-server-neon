@@ -6,6 +6,18 @@
       "sourceType": "github",
       "skillPath": "skills/claimable-postgres/SKILL.md",
       "computedHash": "1ad33258166b0d2edb02cd6134c7cac66d6e04207fb0767255dcc521a795e0a4"
+    },
+    "effect-program-design": {
+      "source": "K-Mistele/anti-slop",
+      "sourceType": "github",
+      "skillPath": "skills/effect-program-design/SKILL.md",
+      "computedHash": "93e652e956d3ba3ce6f9d0b04c6d6777c4bac917c9588f20481d2430cd79b836"
+    },
+    "install-anti-slop": {
+      "source": "K-Mistele/anti-slop",
+      "sourceType": "github",
+      "skillPath": "skills/install-anti-slop/SKILL.md",
+      "computedHash": "0a052a94b316615b2965ad77441e50e983f2532645d7bfb423aa7a7a217a3b62"
     }
   }
 }

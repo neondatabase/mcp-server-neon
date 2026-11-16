@@ -223,7 +223,10 @@ export function resolvedTypeMatches(
 			const name = typeReferenceName(current);
 			if (name !== null) {
 				const substitution = substitutions.get(name);
-				if (substitution !== undefined && !current.typeArguments?.params.length) {
+				if (
+					substitution !== undefined &&
+					(current.typeArguments?.params.length ?? 0) === 0
+				) {
 					return evaluate(
 						substitution.type,
 						substitution.substitutions,

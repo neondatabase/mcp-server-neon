@@ -79,19 +79,3 @@ export const propertyName = (
 	}
 	return undefined;
 };
-
-export const isMatchPatternObject = (node: ESTree.ObjectExpression): boolean => {
-	const call = node.parent;
-	if (call?.type !== "CallExpression" || !call.arguments.includes(node)) {
-		return false;
-	}
-	const callee = call.callee;
-	return (
-		callee.type === "MemberExpression" &&
-		callee.object.type === "Identifier" &&
-		callee.object.name === "Match" &&
-		!callee.computed &&
-		callee.property.type === "Identifier" &&
-		(callee.property.name === "when" || callee.property.name === "not")
-	);
-};

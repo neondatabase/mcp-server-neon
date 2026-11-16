@@ -3,32 +3,39 @@
 // lacks, when the baseline grew against origin/main, when a disable comment
 // appears or changes, when Oxlint reports a parse error, or when
 // .oxlintrc.json gains an override or ignore pattern outside the reviewed ones.
+// A JS-plugin rule that origin/main does not enable may enter the baseline in
+// the PR that enables it (--adopt); after that it only shrinks.
 //
 //   pnpm lint          check
 //   pnpm lint:shrink   lower the baseline to what is found (never raises it)
+//   pnpm lint:adopt    baseline the rules this branch newly enables
 //   pnpm lint:report   totals, worst rules, worst files
 //   tsx scripts/lint-ratchet.ts --init   write the first baseline
 //
 // Adapted from mattpocock/sandcastle scripts/lint-ratchet.ts under the MIT
 // License; see scripts/LICENSE.sandcastle.
 
-import { spawnSync } from 'node:child_process';
 import { access, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
+import { onMain, runCommand } from './lint-ratchet-git';
 import type { Counts, Violation } from './lint-ratchet-core';
 import {
+  adopt,
   countViolations,
   disableComments,
   grown,
   report,
   shrink,
+  withoutRules,
 } from './lint-ratchet-core';
-import { unreviewedConfig } from './lint-ratchet-config';
+import {
+  newlyEnabledPluginRules,
+  unreviewedConfig,
+} from './lint-ratchet-config';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const BASELINE = 'scripts/lint-baseline.json';
-const MAX_BUFFER = 256 * 1024 * 1024;
 
 const VENDORED = ['tools/oxlint/anti-slop/', '.agents/'];
 
@@ -37,30 +44,6 @@ const VENDORED = ['tools/oxlint/anti-slop/', '.agents/'];
 const OXLINT_ENV = {
   ...process.env,
   NODE_OPTIONS: `--experimental-strip-types ${process.env.NODE_OPTIONS ?? ''}`,
-};
-
-/** Returns stdout whatever the exit code: Oxlint exits non-zero when it finds something. */
-const run = (
-  bin: string,
-  args: readonly string[],
-  env = process.env,
-): string => {
-  const result = spawnSync(bin, args, {
-    cwd: ROOT,
-    env,
-    encoding: 'utf8',
-    maxBuffer: MAX_BUFFER,
-  });
-
-  if (result.error !== undefined) {
-    throw result.error;
-  }
-
-  if (result.status !== 0 && result.stdout === '') {
-    throw new Error(`${bin} ${args.join(' ')} failed: ${result.stderr}`);
-  }
-
-  return result.stdout;
 };
 
 const OxlintOutput = z.object({
@@ -76,7 +59,7 @@ const OxlintOutput = z.object({
 const UNUSED_DIRECTIVE = /^Unused \S+ directive/u;
 
 const collectOxlint = (): Violation[] => {
-  const out = run(
+  const out = runCommand(
     path.join(ROOT, 'node_modules', '.bin', 'effect-tsgo'),
     // Only the root config and its reviewed ignorePatterns apply: nested
     // .oxlintrc.json files and .eslintignore would skip the checks below.
@@ -125,10 +108,15 @@ const lines = (out: string): string[] =>
   out.split('\n').filter((line) => line !== '');
 
 const collectDirectives = async (): Promise<Violation[]> => {
-  const deleted = new Set(lines(run('git', ['ls-files', '--deleted'])));
+  const deleted = new Set(lines(runCommand('git', ['ls-files', '--deleted'])));
 
   const files = lines(
-    run('git', ['ls-files', '--cached', '--others', '--exclude-standard']),
+    runCommand('git', [
+      'ls-files',
+      '--cached',
+      '--others',
+      '--exclude-standard',
+    ]),
   ).filter(
     (file) =>
       !deleted.has(file) &&
@@ -167,40 +155,50 @@ const writeBaseline = async (counts: Counts): Promise<void> => {
   );
 };
 
-/** Growth against origin/main; undefined when main has no baseline to compare with. */
-const growthAgainstMain = (baseline: Counts): string[] | undefined => {
-  const listed = run('git', [
-    'ls-tree',
-    '--name-only',
-    'origin/main',
-    BASELINE,
-  ]);
-
-  if (listed.trim() === '') {
-    return undefined;
-  }
-
-  const main = Baseline.parse(
-    JSON.parse(run('git', ['show', `origin/main:${BASELINE}`])),
+const newlyEnabledRules = async (): Promise<Set<string>> =>
+  newlyEnabledPluginRules(
+    await readFile(path.join(ROOT, '.oxlintrc.json'), 'utf8'),
+    onMain('.oxlintrc.json'),
   );
-
-  return grown(baseline, main);
-};
 
 const section = (title: string, entries: readonly string[]): string =>
   entries.length === 0
     ? ''
     : `\n${title}\n${entries.map((l) => `  ${l}`).join('\n')}\n`;
 
-const verify = async (shrinkFirst: boolean): Promise<void> => {
-  const found = await collect();
+type Mode = 'check' | 'shrink' | 'adopt';
 
-  if (shrinkFirst) {
+const updateBaseline = async (
+  mode: Mode,
+  found: Counts,
+  adopted: ReadonlySet<string>,
+): Promise<void> => {
+  if (mode === 'shrink') {
     await writeBaseline(shrink(found, await readBaseline()));
   }
 
+  if (mode === 'adopt') {
+    await writeBaseline(adopt(found, await readBaseline(), adopted));
+  }
+};
+
+const verify = async (mode: Mode): Promise<void> => {
+  const found = await collect();
+  const adopted = await newlyEnabledRules();
+
+  await updateBaseline(mode, found, adopted);
+
   const baseline = await readBaseline();
-  const growth = growthAgainstMain(baseline);
+  const mainBaseline = onMain(BASELINE);
+
+  // Growth against origin/main, apart from the rules this branch adopts.
+  const growth =
+    mainBaseline === undefined
+      ? undefined
+      : grown(
+          withoutRules(baseline, adopted),
+          Baseline.parse(JSON.parse(mainBaseline)),
+        );
 
   if (growth === undefined) {
     process.stdout.write(
@@ -273,18 +271,23 @@ switch (process.argv[2]) {
   }
 
   case '--shrink': {
-    await verify(true);
+    await verify('shrink');
+    break;
+  }
+
+  case '--adopt': {
+    await verify('adopt');
     break;
   }
 
   case undefined: {
-    await verify(false);
+    await verify('check');
     break;
   }
 
   default: {
     throw new Error(
-      `Unknown mode ${process.argv[2]}; use --init, --report, or --shrink.`,
+      `Unknown mode ${process.argv[2]}; use --init, --report, --shrink, or --adopt.`,
     );
   }
 }

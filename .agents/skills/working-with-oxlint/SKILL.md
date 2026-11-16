@@ -3,8 +3,9 @@ name: working-with-oxlint
 description: >-
   Setting up and running Oxlint in a TypeScript repo: type-aware linting with
   oxlint-tsgolint, the strict all-categories config with a shrink-only lint
-  baseline (Matt Pocock's sandcastle), Effect rules from @effect/tsgo, and
-  Dillon Mulroy's vendored anti-slop rules. Use when adding or changing Oxlint,
+  baseline (Matt Pocock's sandcastle), Effect rules from @effect/tsgo, and the
+  vendored anti-slop rules (Kyle Mistele's fork of Dillon Mulroy's). Use when
+  adding or changing Oxlint,
   .oxlintrc.json, or oxlint.config.ts, when a repo moves from ESLint to Oxlint,
   or when linting Effect code.
 ---
@@ -43,6 +44,8 @@ Violations that existed when the config landed are counted per file and rule in 
 - Disable comments (`eslint-disable`, `oxlint-disable`, `@ts-ignore`, `@ts-expect-error`, `@effect-diagnostics`) fail outside a reviewed allowlist.
 - The config may loosen rules only in reviewed override groups (sandcastle has five: entry points, tests, tooling scripts, `src/`, and templates), and the ratchet rejects any other override.
 - Pay debt one rule or one file per PR; an `oxlint --fix` sweep of one rule across the repo is fine.
+
+This repo's ratchet adds one exception: a JS-plugin rule that `origin/main` doesn't enable may enter the baseline in the PR that enables it, with `pnpm lint:adopt`. After that it only shrinks, and every other rule still can't grow against `main`.
 
 A new file has no baseline, so it meets every cap at zero. The caps a new sandcastle `src/` file hits first are `import/max-dependencies` 10, `max-lines` 300, `max-lines-per-function` 50, `max-statements` 20, and `complexity` 15.
 
@@ -90,30 +93,22 @@ HumanLayer instead lists `effecttsgo` in `plugins` and sets each `effecttsgo/*` 
 
 ## anti-slop
 
-Dillon Mulroy's anti-slop is a set of Oxlint JS-plugin rules that reject low-evidence TypeScript, such as chained type assertions, `unknown` parameters and returns, module mocking, and ad hoc `typeof` narrowing. It is meant to be vendored: there is no npm package. Install it with its skill, which copies `src/` to `tools/oxlint/anti-slop/`, installs `@oxlint/plugins` at exactly the resolved Oxlint version, and merges the config:
+anti-slop is a set of Oxlint JS-plugin rules that reject low-evidence TypeScript, such as chained type assertions, `unknown` parameters and returns, conditional spreads, module mocking, and ad hoc `typeof` narrowing. Dillon Mulroy wrote it ([dmmulroy/anti-slop](https://github.com/dmmulroy/anti-slop)); this repo vendors Kyle Mistele's fork ([K-Mistele/anti-slop](https://github.com/K-Mistele/anti-slop)), which adds more Effect rules, a Martin Fowler code-smell bundle, LLM-judged Jev rules, and diff rules. It is meant to be vendored: there is no npm package. The vendored `install-anti-slop` skill copies `src/` to `tools/oxlint/anti-slop/`, installs `@oxlint/plugins` at exactly the resolved Oxlint version, merges the config, and updates an existing copy as a three-way merge ([update.md](../install-anti-slop/references/update.md)). `tools/oxlint/anti-slop/UPSTREAM.md` records the commits the copy came from.
 
-```bash
-npx skills add dmmulroy/anti-slop --skill install-anti-slop
-```
-
-Its Effect rules are a separate opt-in plugin:
+This repo registers three of its plugins and enables every rule in them, at the severities upstream recommends:
 
 ```json
 {
   "jsPlugins": [
     { "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" },
-    { "name": "anti-slop-effect", "specifier": "./tools/oxlint/anti-slop/effect/index.ts" }
-  ],
-  "rules": {
-    "anti-slop-effect/no-manual-effect-error-tag": "error",
-    "anti-slop-effect/no-manual-tag-comparison": "error",
-    "anti-slop-effect/no-manual-tagged-construction": "error",
-    "anti-slop-effect/no-service-constructor-imports": "error",
-    "anti-slop-effect/prefer-effect-match": "error"
-  }
+    { "name": "anti-slop-effect", "specifier": "./tools/oxlint/anti-slop/effect/index.ts" },
+    { "name": "anti-slop-martinfowler", "specifier": "./tools/oxlint/anti-slop/martinfowler/index.ts" }
+  ]
 }
 ```
 
-Add `tools/oxlint/anti-slop/**` and the agent directories (`.agents/**`, `.cursor/**`, `.claude/**`) to `ignorePatterns`. The rules are syntactic: they use Oxlint's ESTree and scope APIs, don't resolve imported types, and recognize `Effect.catch*` and `Match.when` only under those exact identifiers. To update, ask the skill to update while preserving local customizations; it doesn't force-replace the vendored copy.
+Core and Effect rules are errors. The Fowler smells warn, and `message-chains` stays off; the ratchet counts warnings like errors. The Jev rules (`jev/plugin.ts`, `martinfowler/jev-plugin.ts`) and diff rules (`diff-rules/run.ts`) are vendored but not registered: each check is a paid model request and needs the `oxlint-plugin-jev` fork as a dependency.
+
+Add `tools/oxlint/anti-slop/**` and the agent directories (`.agents/**`, `.cursor/**`, `.claude/**`) to `ignorePatterns`. The rules are syntactic: they use Oxlint's ESTree and scope APIs, don't resolve imported types, and recognize `Effect.catch*` and `Match.when` only under those exact identifiers.
 
 HumanLayer combines all three: `typeAware`, plugins `typescript`, `react`, `oxc`, `vitest`, and `effecttsgo`, vendored anti-slop, the type-aware `typescript/no-floating-promises` and `no-misused-promises`, and the syntactic `typescript/no-explicit-any`, `no-non-null-assertion`, and `oxc/no-barrel-file`, all as errors.

@@ -6,7 +6,8 @@
     "dist/**",
     "build/**",
     "out/**",
-    "tools/oxlint/anti-slop/**"
+    "tools/oxlint/anti-slop/**",
+    ".agents/**"
   ],
   "ignoreDependencies": [
     "tailwindcss",
