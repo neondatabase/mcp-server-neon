@@ -24,7 +24,7 @@ import {
   toolSpanClientAttributes,
 } from '../sentry/tool-span';
 import { ToolHandlerExtraParams } from '../tools/types';
-import { handleToolError } from './errors';
+import { asCancellation, handleToolError } from './errors';
 import { identifyClient } from '../utils/client-application';
 import {
   DEFAULT_GRANT,
@@ -174,8 +174,10 @@ export const createMcpServer = async (context: NeonServerContext) => {
 
               return result;
             } catch (error) {
-              recordToolError(span, error);
-              return handleToolError(error, properties, traceId, {
+              const toolError = asCancellation(extraArgs.signal) ?? error;
+              recordToolError(span, toolError);
+
+              return handleToolError(toolError, properties, traceId, {
                 clientName,
                 clientApplication,
               });

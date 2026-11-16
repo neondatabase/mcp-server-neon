@@ -467,10 +467,10 @@
       "cancelledByClient": true,
       "status": 499
     },
-    "sentryErrorEvents": 1,
+    "sentryErrorEvents": 0,
     "toolSpan": {
-      "status": "internal_error",
-      "errorType": "NeonAbortError"
+      "status": "ok",
+      "errorType": "ToolCallCancelledError"
     }
   },
   "client cancels run_sql while the query runs": {
@@ -486,8 +486,8 @@
     },
     "sentryErrorEvents": 0,
     "toolSpan": {
-      "status": "internal_error",
-      "errorType": "NeonDbError"
+      "status": "ok",
+      "errorType": "ToolCallCancelledError"
     }
   },
   "docs-only client cancels search_docs": {
@@ -500,10 +500,10 @@
       "cancelledByClient": true,
       "status": 499
     },
-    "sentryErrorEvents": 1,
+    "sentryErrorEvents": 0,
     "toolSpan": {
-      "status": "internal_error",
-      "errorType": "AbortError"
+      "status": "ok",
+      "errorType": "ToolCallCancelledError"
     }
   }
 }

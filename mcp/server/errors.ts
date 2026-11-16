@@ -20,10 +20,29 @@ export class NotFoundError extends Error {
   }
 }
 
+class ToolCallCancelledError extends Error {
+  constructor() {
+    super('The client cancelled the tool call.');
+    this.name = 'ToolCallCancelledError';
+  }
+}
+
+/**
+ * A failure after the client cancelled is the client's doing, whatever the
+ * cancellation surfaced as (`NeonAbortError`, a driver's `AbortError`, a
+ * `NeonDbError` wrapping one). Upstream timeouts use their own signals, so
+ * they stay server failures.
+ */
+export const asCancellation = (
+  signal: AbortSignal | undefined,
+): ToolCallCancelledError | undefined =>
+  signal?.aborted === true ? new ToolCallCancelledError() : undefined;
+
 function isClientError(error: unknown): boolean {
   return (
     error instanceof InvalidArgumentError ||
     error instanceof NotFoundError ||
+    error instanceof ToolCallCancelledError ||
     error instanceof ZodError ||
     error instanceof NeonClientError
   );
