@@ -50,6 +50,7 @@ import {
   NO_LIST_CHANGED,
   toolRegistration,
 } from '../../../mcp/tools/registration';
+import { appendAccessWarnings } from '../../../mcp/tools/access-warnings';
 import { toListedInputSchema } from '../../../mcp/tools/listed-schema';
 import { NEON_TOOLS } from '../../../mcp/tools/definitions';
 import type { NeonTool } from '../../../mcp/tools/tool-definition';
@@ -371,17 +372,8 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   grant,
                   readOnly,
                 );
-                if (
-                  outcome.kind === 'success' &&
-                  accessControlWarnings.length > 0 &&
-                  result.content
-                ) {
-                  result.content.push(
-                    ...accessControlWarnings.map((w: string) => ({
-                      type: 'text' as const,
-                      text: w,
-                    })),
-                  );
+                if (outcome.kind === 'success') {
+                  appendAccessWarnings(result, accessControlWarnings);
                 }
 
                 return outcome;

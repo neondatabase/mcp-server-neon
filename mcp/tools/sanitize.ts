@@ -32,6 +32,15 @@ function omitRolePassword(role: unknown): unknown {
   return next;
 }
 
+/** The field names {@link sanitizeGeneratedResult} removes from a tool's result. */
+export const sanitizedFields = (toolId: GeneratedToolId): string[] => {
+  const fields = [...DROP_KEYS].filter(
+    (key) => key !== 'client_secret' || !KEEP_CLIENT_SECRET.has(toolId),
+  );
+
+  return KEEP_ROLE_PASSWORD.has(toolId) ? fields : [...fields, 'password'];
+};
+
 export function sanitizeGeneratedResult(
   toolId: GeneratedToolId,
   data: unknown,
