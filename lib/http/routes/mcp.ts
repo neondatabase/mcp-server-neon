@@ -227,16 +227,36 @@ const retired = HttpServerRequest.HttpServerRequest.pipe(
   ),
 );
 
+// The router matches paths case-insensitively and collapses slashes; the
+// transport answers only its exact paths, as the App Router route always did.
+const exactly = <E, R>(
+  path: string,
+  handler: Effect.Effect<HttpServerResponse.HttpServerResponse, E, R>,
+) =>
+  HttpServerRequest.HttpServerRequest.pipe(
+    Effect.flatMap((request) =>
+      new URL(request.originalUrl, SERVER_HOST).pathname === path
+        ? handler
+        : Effect.succeed(HttpServerResponse.empty({ status: 404 })),
+    ),
+  );
+
+const transportResponse = transport.pipe(
+  Effect.map(HttpServerResponse.fromWeb),
+);
+
 export const McpRoutes = Layer.mergeAll(
   HttpRouter.add(
     '*',
     ROUTE_PATHS.canonicalMcp,
-    transport.pipe(Effect.map(HttpServerResponse.fromWeb)),
+    exactly(ROUTE_PATHS.canonicalMcp, transportResponse),
   ),
   HttpRouter.add(
     '*',
     ROUTE_PATHS.legacyMcp,
-    transport.pipe(Effect.map(HttpServerResponse.fromWeb)),
+    exactly(ROUTE_PATHS.legacyMcp, transportResponse),
   ),
-  ...RETIRED_TRANSPORT_PATHS.map((path) => HttpRouter.add('*', path, retired)),
+  ...RETIRED_TRANSPORT_PATHS.map((path) =>
+    HttpRouter.add('*', path, exactly(path, retired)),
+  ),
 );

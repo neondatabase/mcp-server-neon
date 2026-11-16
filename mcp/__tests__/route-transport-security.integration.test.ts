@@ -52,6 +52,21 @@ describe('stateless MCP transport boundary', () => {
     await expect(response.text()).resolves.toBe('');
   });
 
+  it.each([
+    'http://localhost/api/MCP',
+    'http://localhost/api//mcp',
+    'http://localhost/api/mcp/',
+    'http://localhost/api/SSE',
+  ])(
+    'returns 404 for %s, which only differs from a transport path in case or slashes',
+    async (url) => {
+      const response = await POST(new Request(url, { method: 'POST' }));
+
+      expect(response.status).toBe(404);
+      await expect(response.text()).resolves.toBe('');
+    },
+  );
+
   it('rejects a non-local Origin in local development before docs-only and auth handling', async () => {
     const response = await POST(
       legacyToolsListRequest('https://attacker.example'),
