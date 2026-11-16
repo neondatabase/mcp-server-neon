@@ -1,12 +1,7 @@
-import {
-  buildServerCard,
-  discoveryPreflight,
-  discoveryResponse,
-  SERVER_CARD_MEDIA_TYPE,
-} from '@/lib/server-metadata';
+import { app } from '../../../lib/http/app';
 
-export function GET() {
-  return discoveryResponse(buildServerCard(), SERVER_CARD_MEDIA_TYPE);
-}
+export const GET = async (request: Request): Promise<Response> =>
+  app.handler(request);
 
-export const OPTIONS = discoveryPreflight;
+export const OPTIONS = async (request: Request): Promise<Response> =>
+  app.handler(request);

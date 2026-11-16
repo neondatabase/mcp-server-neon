@@ -1,13 +1,7 @@
-import {
-  buildServerCard,
-  discoveryPreflight,
-  discoveryResponse,
-} from '@/lib/server-metadata';
+import { app } from '../../../lib/http/app';
 
-// SEP-1649 first placed the Server Card here, and directory scanners still
-// probe this path before /mcp/server-card.
-export function GET() {
-  return discoveryResponse(buildServerCard(), 'application/json');
-}
+export const GET = async (request: Request): Promise<Response> =>
+  app.handler(request);
 
-export const OPTIONS = discoveryPreflight;
+export const OPTIONS = async (request: Request): Promise<Response> =>
+  app.handler(request);

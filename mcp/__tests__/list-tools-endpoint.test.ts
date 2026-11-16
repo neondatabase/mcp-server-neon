@@ -11,20 +11,21 @@ type ListToolsResponse = {
   readOnly: boolean;
   notices?: string[];
   warnings?: string[];
-  tools: Array<{
+  tools: {
     name: string;
     title: string;
     scope: string;
     readOnlySafe: boolean;
     description: string;
     inputSchema: Record<string, unknown>;
-  }>;
+  }[];
 };
 
 async function callListTools(
   queryParams: Record<string, string | string[]> = {},
 ): Promise<ListToolsResponse> {
   const url = new URL('http://localhost/api/list-tools');
+
   for (const [key, value] of Object.entries(queryParams)) {
     if (Array.isArray(value)) {
       for (const v of value) {
@@ -34,8 +35,10 @@ async function callListTools(
       url.searchParams.set(key, value);
     }
   }
+
   const req = new Request(url.toString());
   const res = await GET(req);
+
   return res.json() as Promise<ListToolsResponse>;
 }
 
@@ -55,6 +58,7 @@ describe('/api/list-tools endpoint', () => {
       readonly: 'true',
       roleName: 'mcp_pinned_reader',
     });
+
     expect(body.grant).toEqual({
       projectId: null,
       scopes: null,
@@ -72,6 +76,7 @@ describe('/api/list-tools endpoint', () => {
     const res = await GET(
       new Request('http://localhost/api/list-tools?roleName=a-b'),
     );
+
     expect(res.status).toBe(400);
     await expect(res.json()).resolves.toEqual(
       expect.objectContaining({ error: 'invalid_request' }),
@@ -119,9 +124,11 @@ describe('/api/list-tools endpoint', () => {
     expect(body.tools).toHaveLength(
       getFilteredTools({ projectId: null, scopes: null }, true).length,
     );
+
     for (const tool of body.tools) {
       expect(tool.readOnlySafe).toBe(true);
     }
+
     expect(body.tools.map((t) => t.name)).not.toContain(
       'get_connection_string',
     );
@@ -129,9 +136,11 @@ describe('/api/list-tools endpoint', () => {
 
   it('supports legacy x-read-only header', async () => {
     const url = new URL('http://localhost/api/list-tools');
+
     const req = new Request(url.toString(), {
       headers: { 'x-read-only': 'true' },
     });
+
     const res = await GET(req);
     const body = (await res.json()) as ListToolsResponse;
     expect(body.readOnly).toBe(true);
@@ -143,17 +152,22 @@ describe('/api/list-tools endpoint', () => {
   it('readonly query param takes precedence over x-read-only header', async () => {
     const url = new URL('http://localhost/api/list-tools');
     url.searchParams.set('readonly', 'false');
+
     const req = new Request(url.toString(), {
       headers: { 'x-read-only': 'true' },
     });
+
     const res = await GET(req);
     const body = (await res.json()) as ListToolsResponse;
     expect(body.readOnly).toBe(false);
     expect(body.tools).toHaveLength(NEON_TOOLS.length);
   });
 
-  it('OPTIONS returns expected CORS allow-headers', () => {
-    const res = OPTIONS();
+  it('OPTIONS returns expected CORS allow-headers', async () => {
+    const res = await OPTIONS(
+      new Request('http://localhost/api/list-tools', { method: 'OPTIONS' }),
+    );
+
     const allowed = res.headers.get('Access-Control-Allow-Headers') ?? '';
     expect(allowed).toBe('x-read-only');
   });
@@ -164,11 +178,12 @@ describe('/api/list-tools endpoint', () => {
   describe('issue #257 — inputSchema / notices / scope-global', () => {
     it('emits inputSchema on every tool as a JSON Schema object', async () => {
       const body = await callListTools();
+
       for (const tool of body.tools) {
-        expect(typeof tool.inputSchema).toBe('object');
+        expect(tool.inputSchema).toBeTypeOf('object');
         expect(tool.inputSchema).not.toBeNull();
         // JSON Schema draft 7 marker.
-        expect(tool.inputSchema['$schema']).toMatch(/json-schema\.org/);
+        expect(tool.inputSchema.$schema).toMatch(/json-schema\.org/);
         expect(tool.inputSchema.additionalProperties).toBe(false);
       }
     });
@@ -177,8 +192,10 @@ describe('/api/list-tools endpoint', () => {
       const body = await callListTools();
       const search = body.tools.find((t) => t.name === 'search');
       expect(search).toBeDefined();
+
       const props = (search!.inputSchema as { properties?: unknown })
         .properties as Record<string, { minLength?: number }>;
+
       // search has a query field constrained to min 3 characters per the
       // prose description — assert the constraint surfaces in the schema.
       expect(props.query?.minLength).toBe(3);
@@ -200,6 +217,7 @@ describe('/api/list-tools endpoint', () => {
       expect(body.notices).toBeDefined();
       expect(body.notices).toHaveLength(2);
       expect(body.notices?.[0]).toContain('Write mode active');
+
       // Per-tool descriptions must NOT carry the notice suffix on this
       // endpoint (issue #257).
       for (const tool of body.tools) {
@@ -212,6 +230,7 @@ describe('/api/list-tools endpoint', () => {
       expect(body.notices).toBeDefined();
       expect(body.notices).toHaveLength(2);
       expect(body.notices?.[0]).toContain('read-only permissions');
+
       // Per-tool descriptions must NOT carry the <notice> suffix anymore —
       // that was the duplication the issue called out.
       for (const tool of body.tools) {
@@ -228,6 +247,7 @@ describe('/api/list-tools endpoint', () => {
         ),
       ).toBe(true);
       expect(body.notices?.join(' ')).not.toContain('proj-123');
+
       for (const tool of body.tools) {
         expect(tool.description).not.toContain('<notice>');
       }
@@ -238,6 +258,7 @@ describe('/api/list-tools endpoint', () => {
         readonly: 'true',
         projectId: 'proj-123',
       });
+
       expect(body.notices).toHaveLength(2);
       expect(body.notices?.[0]).toContain('read-only');
       expect(body.notices?.[1]).toContain('an explicit value must match');
@@ -257,7 +278,7 @@ describe('/api/list-tools endpoint', () => {
       { category: 'not-a-real-scope' },
     ];
 
-    const runs = Array.from({ length: 200 }, (_, i) =>
+    const runs = Array.from({ length: 200 }, async (_, i) =>
       callListTools(paramSets[i % paramSets.length]),
     );
 
@@ -266,7 +287,7 @@ describe('/api/list-tools endpoint', () => {
 
     for (const body of bodies) {
       expect(Array.isArray(body.tools)).toBe(true);
-      expect(typeof body.readOnly).toBe('boolean');
+      expect(body.readOnly).toBeTypeOf('boolean');
       expect(body.grant).toBeDefined();
       expect(
         body.grant.projectId === null ||
