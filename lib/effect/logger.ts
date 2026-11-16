@@ -1,4 +1,4 @@
-import { Logger, References } from 'effect';
+import { Layer, Logger, References } from 'effect';
 import type { LogLevel } from 'effect';
 import { logger } from '../../mcp/utils/logger';
 
@@ -16,7 +16,8 @@ const WINSTON_LEVELS: Record<LogLevel.LogLevel, string> = {
 /**
  * Effect logs go to the winston logger, so they keep its console format and
  * reach Sentry Logs with the request's session attributes like every other log.
- * Log annotations become the winston metadata.
+ * Log annotations become the winston metadata. Winston's `LOG_LEVEL` decides
+ * what is printed, so Effect passes every level through.
  */
 const winstonLogger = Logger.make(({ logLevel, message, fiber }) => {
   const text = Array.isArray(message)
@@ -28,4 +29,7 @@ const winstonLogger = Logger.make(({ logLevel, message, fiber }) => {
   });
 });
 
-export const WinstonLoggerLayer = Logger.layer([winstonLogger]);
+export const WinstonLoggerLayer = Layer.merge(
+  Logger.layer([winstonLogger]),
+  Layer.succeed(References.MinimumLogLevel)('All'),
+);

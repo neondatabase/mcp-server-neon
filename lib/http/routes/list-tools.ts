@@ -11,6 +11,7 @@ import {
   InvalidRoleNameError,
   resolveGrantFromSearchParams,
 } from '../../../mcp/utils/grant-context';
+import type { NeonTool } from '../../../mcp/tools/tool-definition';
 import { isReadOnly } from '../../../mcp/utils/read-only';
 import { ListToolsFailed } from './list-tools-errors';
 
@@ -45,9 +46,24 @@ const step = <A>(phase: string, run: () => A) =>
     },
   });
 
+const listedTool = (tool: NeonTool) => ({
+  name: tool.name,
+  title: tool.annotations?.title ?? tool.name,
+  // `null` scope means every category grants the tool (#257).
+  scope: tool.scope ?? 'global',
+  readOnlySafe: tool.readOnlySafe,
+  description: tool.description,
+  // Neither converter accepts both Zod major versions.
+  inputSchema:
+    '_zod' in tool.inputSchema
+      ? toJSONSchema(tool.inputSchema, { target: 'draft-7' })
+      : zodToJsonSchema(tool.inputSchema),
+});
+
 // Notices are a top-level field instead of a suffix on every description, which
-// clients would re-send on every turn (issue #257).
-const listedTools = Effect.fn('ListTools.body')(function* (input: {
+// clients would re-send on every turn (issue #257). A malformed `roleName` is
+// the caller's mistake, answered inside the span so the span stays ok.
+const listToolsResponse = Effect.fn('ListTools.body')(function* (input: {
   readonly searchParams: URLSearchParams;
   readonly readOnlyHeader: string | undefined;
 }) {
@@ -55,7 +71,14 @@ const listedTools = Effect.fn('ListTools.body')(function* (input: {
 
   const grant = yield* step('resolve_grant', () =>
     resolveGrantFromSearchParams(searchParams),
-  );
+  ).pipe(Effect.catchTag('InvalidRoleName', Effect.succeed));
+
+  if (grant instanceof InvalidRoleName) {
+    return HttpServerResponse.jsonUnsafe(
+      { error: 'invalid_request', message: grant.message },
+      { status: 400, headers: CORS_HEADERS },
+    );
+  }
 
   const readOnly = yield* step('resolve_read_only', () =>
     isReadOnly({
@@ -76,26 +99,16 @@ const listedTools = Effect.fn('ListTools.body')(function* (input: {
     getAccessControlWarnings(grant, readOnly),
   );
 
-  return yield* step('build_response_body', () => ({
+  const body = yield* step('build_response_body', () => ({
     grant,
     readOnly,
     // Absent rather than empty; JSON drops undefined fields.
     notices: notices.length > 0 ? notices : undefined,
     warnings: warnings.length > 0 ? warnings : undefined,
-    tools: tools.map((tool) => ({
-      name: tool.name,
-      title: tool.annotations?.title ?? tool.name,
-      // `null` scope means every category grants the tool (#257).
-      scope: tool.scope ?? 'global',
-      readOnlySafe: tool.readOnlySafe,
-      description: tool.description,
-      // Neither converter accepts both Zod major versions.
-      inputSchema:
-        '_zod' in tool.inputSchema
-          ? toJSONSchema(tool.inputSchema, { target: 'draft-7' })
-          : zodToJsonSchema(tool.inputSchema),
-    })),
+    tools: tools.map((tool) => listedTool(tool)),
   }));
+
+  return HttpServerResponse.jsonUnsafe(body, { headers: CORS_HEADERS });
 });
 
 const failedResponse = Effect.fn('ListTools.failed')(function* (input: {
@@ -134,23 +147,13 @@ const listTools = Effect.gen(function* () {
   const startedAt = yield* Clock.currentTimeMillis;
   const request = yield* HttpServerRequest.HttpServerRequest;
 
-  return yield* listedTools({
+  return yield* listToolsResponse({
     searchParams: new URL(request.originalUrl).searchParams,
     readOnlyHeader: request.headers['x-read-only'],
   }).pipe(
-    Effect.map((body) =>
-      HttpServerResponse.jsonUnsafe(body, { headers: CORS_HEADERS }),
+    Effect.catchTag('ListToolsFailed', (failure) =>
+      failedResponse({ failure, startedAt }),
     ),
-    Effect.catchTags({
-      InvalidRoleName: ({ message }) =>
-        Effect.succeed(
-          HttpServerResponse.jsonUnsafe(
-            { error: 'invalid_request', message },
-            { status: 400, headers: CORS_HEADERS },
-          ),
-        ),
-      ListToolsFailed: (failure) => failedResponse({ failure, startedAt }),
-    }),
   );
 }).pipe(Effect.withSpan('ListTools.get'));
 
