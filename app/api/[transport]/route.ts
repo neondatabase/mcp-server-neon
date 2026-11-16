@@ -55,7 +55,9 @@ import { NEON_TOOLS } from '../../../mcp/tools/definitions';
 import type { NeonTool } from '../../../mcp/tools/tool-definition';
 import { assert } from '../../../lib/assert';
 import { SERVER_INFO } from '../../../lib/server-metadata';
-import { webHandlerFor } from '../../../lib/http/app';
+import { AppLayer } from '../../../lib/http/app';
+import { memoMap } from '../../../lib/effect/runtime';
+import { HttpRouter } from 'effect/http';
 import { McpHandlers, McpRoutes } from '../../../lib/http/routes/mcp';
 import type { AuthenticatedAuthInfo } from '../../../mcp/transport/oauth-token';
 
@@ -656,7 +658,10 @@ const handlers = Layer.succeed(McpHandlers)({
     ),
 });
 
-const transport = webHandlerFor(Layer.merge(McpRoutes, handlers));
+const transport = HttpRouter.toWebHandler(
+  Layer.mergeAll(McpRoutes, handlers, AppLayer),
+  { disableLogger: true, memoMap },
+);
 
 const handleRequest = async (request: Request): Promise<Response> =>
   transport.handler(request);

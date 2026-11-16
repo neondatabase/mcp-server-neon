@@ -1,6 +1,6 @@
 {
   "app/api/[transport]/route.ts": {
-    "anti-slop-martinfowler(long-function)": 2,
+    "anti-slop-martinfowler(long-function)": 1,
     "anti-slop-martinfowler(repeated-switches)": 2,
     "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-runtime-typeof)": 6,
