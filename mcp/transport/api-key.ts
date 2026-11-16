@@ -1,5 +1,6 @@
 import { NeonApiError } from '@neon/sdk';
 import { toNeonEffectError } from '@neon/effect';
+import type { NeonEffectError } from '@neon/effect';
 import { waitUntil } from '@vercel/functions';
 import { Cause, Effect, Option, Predicate, Schedule, Schema } from 'effect';
 import { getApiKeys } from '../oauth/kv-store';
@@ -52,7 +53,7 @@ const cacheApiKey = (record: ApiKeyRecord) =>
 // client back through OAuth; the check is a read, so it is safe to resend.
 const getAuthDetails = (neonClient: ReturnType<typeof createNeonClient>) =>
   Effect.tryPromise({
-    try: async () => neonClient.getAuthDetails(),
+    try: async (signal) => neonClient.getAuthDetails({ signal }),
     catch: toNeonEffectError,
   }).pipe(
     Effect.retry({
@@ -62,9 +63,7 @@ const getAuthDetails = (neonClient: ReturnType<typeof createNeonClient>) =>
     }),
   );
 
-const verifyApiKey = Effect.fn('McpAuth.verifyApiKey')(function* (
-  accessToken: string,
-) {
+const verification = Effect.fnUntraced(function* (accessToken: string) {
   const neonClient = createNeonClient(accessToken);
   const { data: auth } = yield* getAuthDetails(neonClient);
 
@@ -74,9 +73,10 @@ const verifyApiKey = Effect.fn('McpAuth.verifyApiKey')(function* (
 
   // Use shared account resolution with identify on cache miss
   const account = yield* Effect.tryPromise({
-    try: async () =>
+    try: async (signal) =>
       resolveAccountFromAuth(auth, neonClient, {
-        context: { authMethod: auth.auth_method },
+        identifyContext: { context: { authMethod: auth.auth_method } },
+        signal,
       }),
     catch: toNeonEffectError,
   });
@@ -103,6 +103,34 @@ const thrownBy = (cause: Cause.Cause<{ readonly cause: unknown }>) =>
     onSome: (error) => error.cause,
   });
 
+const logVerificationFailure = (
+  cause: Cause.Cause<{ readonly cause: unknown }>,
+) => {
+  const failure = thrownBy(cause);
+
+  logger.error('API key verification failed', {
+    message: failure instanceof Error ? failure.message : String(failure),
+    status: failure instanceof NeonApiError ? failure.status : undefined,
+    data: failure instanceof NeonApiError ? failure.body : undefined,
+  });
+};
+
+// A key Neon rejects (4xx) or the SDK refuses is the caller's mistake.
+const isCallerFailure = (error: NeonEffectError): boolean =>
+  Predicate.isTagged(error, 'NeonClientError') ||
+  ('status' in error && Predicate.isNumber(error.status) && error.status < 500);
+
+// The span fails only when Neon or the network did; a rejected key keeps it ok.
+const verifyApiKey = (accessToken: string) =>
+  verification(accessToken).pipe(
+    Effect.catchIf(isCallerFailure, (error) => {
+      logVerificationFailure(Cause.fail(error));
+
+      return Effect.succeed(null);
+    }),
+    Effect.withSpan('McpAuth.verifyApiKey'),
+  );
+
 /**
  * Resolves an API key's account, or reports `'oauth'` as soon as Neon says the
  * bearer is an OAuth token, before account resolution can fail it. `null` when
@@ -122,15 +150,7 @@ export const fetchAccountDetails = (accessToken: string) =>
       Effect.catchCauseIf(
         (cause) => !Cause.hasInterruptsOnly(cause),
         (cause) => {
-          const failure = thrownBy(cause);
-
-          logger.error('API key verification failed', {
-            message:
-              failure instanceof Error ? failure.message : String(failure),
-            status:
-              failure instanceof NeonApiError ? failure.status : undefined,
-            data: failure instanceof NeonApiError ? failure.body : undefined,
-          });
+          logVerificationFailure(cause);
 
           return Effect.succeed(null);
         },

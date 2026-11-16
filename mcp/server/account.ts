@@ -11,6 +11,12 @@ type Account = {
   isOrg: boolean;
 };
 
+type ResolveAccountOptions = {
+  identifyContext?: Parameters<typeof identify>[1];
+  /** Cancels the account lookups. */
+  signal?: AbortSignal;
+};
+
 /**
  * Resolves account info from Neon API auth details.
  * Handles org accounts, personal accounts, and project-scoped API key fallback.
@@ -18,20 +24,23 @@ type Account = {
 export async function resolveAccountFromAuth(
   auth: AuthDetailsResponse,
   neonClient: Api<unknown>,
-  identifyContext?: Parameters<typeof identify>[1],
+  { identifyContext, signal }: ResolveAccountOptions = {},
 ): Promise<Account> {
   let account: Account;
 
   try {
     if (auth.auth_method === 'api_key_org') {
-      const { data: org } = await neonClient.getOrganization(auth.account_id);
+      const { data: org } = await neonClient.getOrganization(auth.account_id, {
+        signal,
+      });
+
       account = {
         id: auth.account_id,
         name: org.name,
         isOrg: true,
       };
     } else {
-      const { data: user } = await neonClient.getCurrentUserInfo();
+      const { data: user } = await neonClient.getCurrentUserInfo({ signal });
       account = {
         id: user.id,
         name: `${user.name ?? ''} ${user.last_name ?? ''}`.trim() || 'Unknown',

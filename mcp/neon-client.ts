@@ -116,8 +116,8 @@ export function createNeonClient(apiKey: string) {
       return success({ uri });
     },
 
-    async getCurrentUserInfo() {
-      return success(await neon.user.me());
+    async getCurrentUserInfo(options?: { signal?: AbortSignal }) {
+      return success(await neon.user.me({ signal: options?.signal }));
     },
 
     async getCurrentUserOrganizations(options?: { signal?: AbortSignal }) {
@@ -128,19 +128,21 @@ export function createNeonClient(apiKey: string) {
       });
     },
 
-    async getAuthDetails() {
+    async getAuthDetails(options?: { signal?: AbortSignal }) {
       const data = await raw.getAuthDetails({
         client: neon.client,
         throwOnError: true,
+        signal: options?.signal,
       });
       return success(data);
     },
 
-    async getOrganization(orgId: string) {
+    async getOrganization(orgId: string, options?: { signal?: AbortSignal }) {
       const data = await raw.getOrganization({
         client: neon.client,
         path: { org_id: orgId },
         throwOnError: true,
+        signal: options?.signal,
       });
       return success(data);
     },

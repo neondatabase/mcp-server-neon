@@ -6,6 +6,7 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { once } from 'node:events';
+import { getClient, init, spanToJSON } from '@sentry/node';
 import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
@@ -24,9 +25,30 @@ const json = (res: ServerResponse, status: number, body: Json) => {
   res.end(JSON.stringify(body));
 };
 
+// `/auth` for `key-hang` is held open, to abort the client request mid-check.
+const hangingAuth = {
+  reached: Promise.withResolvers<true>(),
+  closed: Promise.withResolvers<true>(),
+};
+
 const answerApi = (req: IncomingMessage, res: ServerResponse) => {
   const [path = ''] = (req.url ?? '').replace(/^\/api\/v2/u, '').split('?');
   const key = (req.headers.authorization ?? '').replace(/^Bearer /u, '');
+
+  if (path === '/auth' && key === 'key-hang') {
+    hangingAuth.reached.resolve(true);
+    req.on('close', () => {
+      hangingAuth.closed.resolve(true);
+    });
+
+    return;
+  }
+
+  if (path === '/auth' && key === 'key-rejected') {
+    json(res, 401, { message: 'authentication failed' });
+
+    return;
+  }
 
   if (path === '/auth') {
     const count = (authRequests.get(key) ?? 0) + 1;
@@ -71,36 +93,57 @@ process.env.SENTRY_DSN = '';
 
 process.env.OAUTH_DATABASE_URL = 'postgresql://127.0.0.1:1/api-key-retries';
 
+init({ dsn: 'http://public@127.0.0.1:1/1', tracesSampleRate: 1 });
+
+// Each McpAuth span's status by name, from the last request.
+const authSpans = new Map<string, string>();
+
+getClient()?.on('spanEnd', (span) => {
+  const { description, status } = spanToJSON(span);
+
+  if (description?.startsWith('McpAuth.') === true) {
+    authSpans.set(description, status ?? 'unset');
+  }
+});
+
 const { POST } = await import('../../app/api/[transport]/route');
 const { SERVER_HOST } = await import('../../lib/config');
 
-const listTools = async (apiKey: string) =>
-  POST(
-    new Request(`${SERVER_HOST}/mcp`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${apiKey}`,
-        'mcp-method': 'tools/list',
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/list',
-        params: {
-          _meta: {
-            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
-            'io.modelcontextprotocol/clientInfo': {
-              name: 'api-key-auth-retries',
-              version: '1.0.0',
-            },
-            'io.modelcontextprotocol/clientCapabilities': {},
+const listToolsRequest = (apiKey: string | undefined, signal?: AbortSignal) => {
+  const headers = new Headers({
+    'content-type': 'application/json',
+    accept: 'application/json, text/event-stream',
+    'mcp-method': 'tools/list',
+  });
+
+  if (apiKey !== undefined) {
+    headers.set('authorization', `Bearer ${apiKey}`);
+  }
+
+  return new Request(`${SERVER_HOST}/mcp`, {
+    method: 'POST',
+    signal,
+    headers,
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/list',
+      params: {
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientInfo': {
+            name: 'api-key-auth-retries',
+            version: '1.0.0',
           },
+          'io.modelcontextprotocol/clientCapabilities': {},
         },
-      }),
+      },
     }),
-  );
+  });
+};
+
+const listTools = async (apiKey: string | undefined) =>
+  POST(listToolsRequest(apiKey));
 
 describe('API key verification retries', () => {
   afterAll(() => {
@@ -119,5 +162,43 @@ describe('API key verification retries', () => {
 
     expect(response.status).toBe(401);
     expect(authRequests.get('key-down')).toBe(3);
+  });
+
+  it('keeps the auth spans ok for a missing bearer', async () => {
+    authSpans.clear();
+
+    const response = await listTools(undefined);
+
+    expect(response.status).toBe(401);
+    expect(authSpans.get('McpAuth.authenticate')).toBe('ok');
+  });
+
+  it('keeps the auth spans ok for a key Neon rejects', async () => {
+    authSpans.clear();
+
+    const response = await listTools('key-rejected');
+
+    expect(response.status).toBe(401);
+    expect(authSpans.get('McpAuth.verifyApiKey')).toBe('ok');
+    expect(authSpans.get('McpAuth.authenticate')).toBe('ok');
+  });
+
+  it('fails the auth spans when Neon cannot be reached', async () => {
+    authSpans.clear();
+
+    await listTools('key-down');
+
+    expect(authSpans.get('McpAuth.verifyApiKey')).toBe('internal_error');
+  });
+
+  it('closes the upstream auth check when the client aborts', async () => {
+    const controller = new AbortController();
+    const response = POST(listToolsRequest('key-hang', controller.signal));
+
+    await hangingAuth.reached.promise;
+    controller.abort();
+    await response;
+
+    await expect(hangingAuth.closed.promise).resolves.toBe(true);
   });
 });

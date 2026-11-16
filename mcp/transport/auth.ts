@@ -19,7 +19,11 @@ export { tokenStoreUnavailableResponse } from './token-store-unavailable';
 class McpAuthRejected extends Schema.TaggedError<
   McpAuthRejected,
   { readonly brand: unique symbol }
->()('McpAuthRejected', { description: Schema.String }) {}
+>()('McpAuthRejected', {
+  description: Schema.String,
+  /** Verification broke rather than the bearer being wrong; the span fails. */
+  serverFault: Schema.Boolean,
+}) {}
 
 /** The 401 an MCP client reads to start OAuth discovery. */
 export const authChallengeResponse = (
@@ -106,17 +110,10 @@ const bearerTokenOf = (req: Request): string | undefined => {
   return type?.toLowerCase() === 'bearer' ? token : undefined;
 };
 
-const rejected = (description: string) =>
-  Effect.fail(McpAuthRejected.make({ description }));
+const rejected = (description: string, serverFault = false) =>
+  Effect.fail(McpAuthRejected.make({ description, serverFault }));
 
-/**
- * The authenticated caller of an MCP request. Fails with `McpAuthRejected`
- * where the client must authenticate again, and `TokenStoreUnavailable` where
- * it should retry.
- */
-export const authenticate = Effect.fn('McpAuth.authenticate')(function* (
-  req: Request,
-) {
+const authentication = Effect.fnUntraced(function* (req: Request) {
   const bearerToken = bearerTokenOf(req);
 
   logger.info('verifyToken called', {
@@ -135,7 +132,7 @@ export const authenticate = Effect.fn('McpAuth.authenticate')(function* (
         error: defect,
       });
 
-      return rejected('Invalid token');
+      return rejected('Invalid token', true);
     }),
   );
 
@@ -152,3 +149,24 @@ export const authenticate = Effect.fn('McpAuth.authenticate')(function* (
 
   return authInfo.value;
 });
+
+const isCallerRejection = (error: unknown): error is McpAuthRejected =>
+  error instanceof McpAuthRejected && !error.serverFault;
+
+/**
+ * The authenticated caller of an MCP request. Fails with `McpAuthRejected`
+ * where the client must authenticate again, and `TokenStoreUnavailable` where
+ * it should retry. A missing, unknown, or expired bearer keeps the span ok.
+ */
+export const authenticate = (req: Request) =>
+  authentication(req).pipe(
+    Effect.map(Result.succeed),
+    Effect.catchIf(isCallerRejection, (rejection) =>
+      Effect.annotateCurrentSpan({
+        'error.type': rejection._tag,
+        'mcp.auth.rejection': rejection.description,
+      }).pipe(Effect.as(Result.fail(rejection))),
+    ),
+    Effect.withSpan('McpAuth.authenticate'),
+    Effect.flatMap(Effect.fromResult),
+  );
