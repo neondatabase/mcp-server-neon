@@ -15,7 +15,8 @@ export type AuthContext = {
     };
     client?: {
       id: string;
-      name: string;
+      /** Absent for a client registered without `client_name`. */
+      name?: string;
     };
     [key: string]: unknown;
   };
