@@ -120,8 +120,12 @@ export function createNeonClient(apiKey: string) {
       return success(await neon.user.me());
     },
 
-    async getCurrentUserOrganizations() {
-      return success({ organizations: await neon.user.organizations() });
+    async getCurrentUserOrganizations(options?: { signal?: AbortSignal }) {
+      return success({
+        organizations: await neon.user.organizations({
+          signal: options?.signal,
+        }),
+      });
     },
 
     async getAuthDetails() {

@@ -1,11 +1,11 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { NeonClientError } from '@neon/sdk';
+import { NeonClientError, NeonNetworkError } from '@neon/sdk';
 import type { NeonEffectToolContext } from '@neon/tools/effect';
 import {
   retryReadOnlyNetworkFailures,
   toEffectTools,
 } from '@neon/tools/effect';
-import { Cause, Effect, Option } from 'effect';
+import { Cause, Effect, Option, Schedule } from 'effect';
 import * as z from 'zod';
 import { InvalidArgumentError, NotFoundError } from '../server/errors';
 import {
@@ -70,10 +70,15 @@ function assertRoleCreateAllowed(
   }
 }
 
+type OrgLookupContext = {
+  neonClient: Parameters<ToolHandler>[1];
+  extra: ToolHandlerExtraParams | undefined;
+  signal: AbortSignal;
+};
+
 async function withOrgId(
   parsed: unknown,
-  neonClient: Parameters<ToolHandler>[1],
-  extra: ToolHandlerExtraParams | undefined,
+  { neonClient, extra, signal }: OrgLookupContext,
 ): Promise<object> {
   if (typeof parsed !== 'object' || parsed === null) {
     throw new Error('Tool input must be an object');
@@ -89,7 +94,7 @@ async function withOrgId(
     orgId = parsed.org_id;
   }
   const organization = await getOrgByOrgIdOrDefault(
-    { org_id: orgId },
+    { org_id: orgId, signal },
     neonClient,
     extra.account,
   );
@@ -353,8 +358,16 @@ const catchStep: (error: unknown) => ToolStepFailed = (error) => {
 export const step = <A>(run: () => A) =>
   Effect.try({ try: run, catch: catchStep });
 
-const stepPromise = <A>(run: () => Promise<A>) =>
-  Effect.tryPromise({ try: run, catch: catchStep });
+// The org lookup is a read, retried like the package tools' reads before the
+// tool itself runs.
+const orgLookup = <A>(run: (signal: AbortSignal) => Promise<A>) =>
+  Effect.tryPromise({ try: run, catch: catchStep }).pipe(
+    Effect.retry({
+      schedule: Schedule.exponential('200 millis').pipe(Schedule.jittered),
+      times: 2,
+      while: ({ error }) => error instanceof NeonNetworkError,
+    }),
+  );
 
 /** The error a tool call failed with, as the package or a step threw it. */
 export const thrownError = (error: ToolCallError): Error =>
@@ -418,7 +431,9 @@ function toolHandler(tool: NeonTool): ToolHandler {
       }
 
       const input = TOOLS_REQUIRING_ORG_ID.has(tool.id)
-        ? yield* stepPromise(async () => withOrgId(parsed, neonClient, extra))
+        ? yield* orgLookup(async (signal) =>
+            withOrgId(parsed, { neonClient, extra, signal }),
+          )
         : parsed;
 
       const execution = effectTool.execute(input, executionContext(extra));
