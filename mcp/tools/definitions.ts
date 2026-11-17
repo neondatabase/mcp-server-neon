@@ -69,6 +69,9 @@ const DESTRUCTIVE_POST_TOOLS = new Set<GeneratedToolId>([
   'functions.deploy',
   'storage.objects.presign',
   'credentials.rotate',
+  // Turns on logical replication for the whole project, which cannot be
+  // turned off, and suspends every compute in it.
+  'realtime.enable',
   'realtime.rotateSecret',
   'auth.oauthClients.rotateSecret',
 ]);
