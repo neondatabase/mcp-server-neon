@@ -3,6 +3,7 @@ import { NotFoundError } from '../server/errors';
 import { NEON_HANDLERS } from '../tools/tools';
 import type { ToolHandlerExtraParams } from '../tools/types';
 import { getOrgByOrgIdOrDefault } from '../tools/utils';
+import { runToolHandler } from './helpers/run-tool-handler';
 
 const consoleOrg = {
   id: 'org-console',
@@ -107,10 +108,12 @@ describe('list_projects generated handler', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await NEON_HANDLERS.list_projects(
-      { params: { limit: 20 } },
-      neonClient as never,
-      extra(),
+    await runToolHandler(
+      NEON_HANDLERS.list_projects(
+        { params: { limit: 20 } },
+        neonClient as never,
+        extra(),
+      ),
     );
 
     expect(fetchMock).toHaveBeenCalled();
@@ -128,10 +131,12 @@ describe('list_projects generated handler', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await NEON_HANDLERS.list_projects(
-      { params: { limit: 20, org_id: 'org-explicit' } },
-      neonClient as never,
-      extra(),
+    await runToolHandler(
+      NEON_HANDLERS.list_projects(
+        { params: { limit: 20, org_id: 'org-explicit' } },
+        neonClient as never,
+        extra(),
+      ),
     );
 
     expect(neonClient.getCurrentUserOrganizations).not.toHaveBeenCalled();

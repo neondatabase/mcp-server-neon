@@ -254,8 +254,15 @@ const toolSpanEnded = async (traceId: string) => {
   return promise;
 };
 
+// Package tool spans by trace: each tool call's `NeonTools.<id>` child.
+const packageToolSpans = new Map<string, string>();
+
 getClient()?.on('spanEnd', (span) => {
   const { description, status, data } = spanToJSON(span);
+
+  if (description?.startsWith('NeonTools.') === true) {
+    packageToolSpans.set(span.spanContext().traceId, status ?? 'unset');
+  }
 
   if (description?.startsWith('tools/call ') === true) {
     const { traceId } = span.spanContext();
@@ -562,6 +569,18 @@ describe('tool error results', () => {
 
     await expect(golden).toMatchFileSnapshot(
       './__snapshots__/tool-error-results.json',
+    );
+  });
+
+  it('fail the package tool span only for server failures', async () => {
+    const notFound = await call(CASES['Neon API 404']);
+    const serverError = await call(CASES['Neon API 500']);
+
+    await flush(2000);
+
+    expect(packageToolSpans.get(z.string().parse(notFound.traceId))).toBe('ok');
+    expect(packageToolSpans.get(z.string().parse(serverError.traceId))).toBe(
+      'internal_error',
     );
   });
 });

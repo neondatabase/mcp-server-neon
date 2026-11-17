@@ -14,6 +14,7 @@ import {
   type FakeNeon,
 } from './helpers/fake-neon';
 import { jsonContent, textContent } from './helpers/tool-result';
+import { runToolHandler } from './helpers/run-tool-handler';
 
 const PROJECT_ID = 'example-project-123';
 const BRANCH_ID = 'br-example-123';
@@ -60,7 +61,7 @@ afterEach(() => {
 function call(name: string, params: Record<string, unknown>) {
   const handler = NEON_HANDLERS[name];
   if (!handler) throw new Error(`No handler for ${name}`);
-  return handler({ params }, createNeonClient(API_KEY), extra);
+  return runToolHandler(handler({ params }, createNeonClient(API_KEY), extra));
 }
 
 describe('run_sql content', () => {

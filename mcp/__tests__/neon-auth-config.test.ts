@@ -8,6 +8,7 @@ import { createNeonClient } from '../server/api';
 import { NEON_HANDLERS } from '../tools/tools';
 import { stubFakeNeon } from './helpers/fake-neon';
 import { jsonContent } from './helpers/tool-result';
+import { runToolHandler } from './helpers/run-tool-handler';
 
 const PROJECT_ID = 'example-project-123';
 const BRANCH_ID = 'br-example-123';
@@ -78,10 +79,12 @@ const configSchema = z.object({
 });
 
 async function readConfig() {
-  const result = await NEON_HANDLERS.get_neon_auth_config(
-    { params: { project_id: PROJECT_ID, branch_id: BRANCH_ID } },
-    createNeonClient(API_KEY),
-    { clientApplication: 'unknown', apiKey: API_KEY },
+  const result = await runToolHandler(
+    NEON_HANDLERS.get_neon_auth_config(
+      { params: { project_id: PROJECT_ID, branch_id: BRANCH_ID } },
+      createNeonClient(API_KEY),
+      { clientApplication: 'unknown', apiKey: API_KEY },
+    ),
   );
   expect(result.isError).not.toBe(true);
   return configSchema.parse(jsonContent(result));

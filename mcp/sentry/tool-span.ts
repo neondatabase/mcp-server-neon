@@ -1,14 +1,13 @@
-import { startSpan, type Span } from '@sentry/node';
+import { isCallToolResult } from '@modelcontextprotocol/server';
 import type {
   CallToolResult,
   ServerContext as McpServerContext,
 } from '@modelcontextprotocol/server';
-import { isServerError } from '../server/errors';
+import { Effect, Schema } from 'effect';
+import type { ToolCallOutcome } from '../server/tool-call';
 import type { IdentifiedClient } from '../utils/client-application';
 import { conversationIdFromMeta } from '../utils/mcp-session';
 import { tagRequestConversation } from './session';
-
-const SPAN_STATUS_ERROR = 2;
 
 // The client name is whatever the client sent; Sentry caps tags at 200 but
 // not span attributes.
@@ -27,44 +26,55 @@ type ToolSpanOptions = {
   traceId: string;
 };
 
+// Fails the span for a server error; the result still reaches the client.
+class ToolServerError extends Schema.TaggedError<
+  ToolServerError,
+  { readonly brand: unique symbol }
+>()('ToolServerError', { result: Schema.declare(isCallToolResult) }) {}
+
 /**
  * One span per tool call. `mcp.*` attributes follow the OpenTelemetry MCP
  * conventions that Sentry's MCP views read; existing dashboards query
- * `tool_name`.
+ * `tool_name`. Agent mistakes and cancellations keep the span ok; `error.type`
+ * still records them.
  */
-export function startToolSpan(
-  { toolName, ctx, traceId }: ToolSpanOptions,
-  run: (span: Span) => Promise<CallToolResult>,
-): Promise<CallToolResult> {
-  const conversationId = conversationIdFromMeta(ctx.mcpReq._meta);
-  if (conversationId) tagRequestConversation(conversationId);
-  return startSpan(
-    {
-      name: `tools/call ${toolName}`,
-      op: 'mcp.server',
-      attributes: {
-        'mcp.method.name': 'tools/call',
-        'mcp.tool.name': toolName,
-        tool_name: toolName,
-        trace_id: traceId,
-        ...(conversationId && { 'gen_ai.conversation.id': conversationId }),
-      },
-    },
-    async (span) => {
-      const result = await run(span);
-      span.setAttribute('mcp.tool.result.is_error', result.isError === true);
-      return result;
-    },
-  );
-}
-
-/** Agent mistakes keep the span ok; `error.type` still records them. */
-export function recordToolError(span: Span, error: unknown): void {
-  span.setAttribute(
-    'error.type',
-    error instanceof Error ? error.name : typeof error,
-  );
-  if (isServerError(error)) {
-    span.setStatus({ code: SPAN_STATUS_ERROR, message: 'internal_error' });
-  }
-}
+export const withToolSpan =
+  ({ toolName, ctx, traceId }: ToolSpanOptions) =>
+  <R>(
+    body: Effect.Effect<ToolCallOutcome, never, R>,
+  ): Effect.Effect<CallToolResult, never, R> => {
+    const conversationId = conversationIdFromMeta(ctx.mcpReq._meta);
+    if (conversationId) tagRequestConversation(conversationId);
+    return body.pipe(
+      Effect.tap(({ result }) =>
+        Effect.annotateCurrentSpan(
+          'mcp.tool.result.is_error',
+          result.isError === true,
+        ),
+      ),
+      Effect.flatMap(({ result, kind }) =>
+        kind === 'server-error'
+          ? Effect.fail(ToolServerError.make({ result }))
+          : Effect.succeed(result),
+      ),
+      Effect.onInterrupt(() =>
+        Effect.annotateCurrentSpan({
+          'error.type': 'ToolCallCancelledError',
+          'mcp.tool.result.is_error': true,
+        }),
+      ),
+      Effect.withSpan(`tools/call ${toolName}`, {
+        attributes: {
+          'sentry.op': 'mcp.server',
+          'mcp.method.name': 'tools/call',
+          'mcp.tool.name': toolName,
+          tool_name: toolName,
+          trace_id: traceId,
+          ...(conversationId && { 'gen_ai.conversation.id': conversationId }),
+        },
+      }),
+      Effect.catchTag('ToolServerError', ({ result }) =>
+        Effect.succeed(result),
+      ),
+    );
+  };

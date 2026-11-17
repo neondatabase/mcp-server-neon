@@ -13,6 +13,7 @@ import { NEON_HANDLERS } from '../tools/tools';
 import type { ToolHandlerExtraParams } from '../tools/types';
 import { NotFoundError } from '../server/errors';
 import { textContent } from './helpers/tool-result';
+import { runToolHandler } from './helpers/run-tool-handler';
 
 const originalFetch = globalThis.fetch;
 
@@ -23,7 +24,9 @@ function fetchedRequest(index = 0): Request {
 }
 
 async function getDoc(slug: string) {
-  return textContent(await NEON_HANDLERS.get_doc({ params: { slug } }));
+  return textContent(
+    await runToolHandler(NEON_HANDLERS.get_doc({ params: { slug } })),
+  );
 }
 
 describe('get_doc handler', () => {
@@ -66,7 +69,9 @@ describe('get_doc handler', () => {
     );
 
     const error = await Promise.resolve(
-      NEON_HANDLERS.get_doc({ params: { slug: 'docs/nonexistent' } }),
+      runToolHandler(
+        NEON_HANDLERS.get_doc({ params: { slug: 'docs/nonexistent' } }),
+      ),
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(NotFoundError);
     expect(error).toHaveProperty(
@@ -84,7 +89,9 @@ describe('get_doc handler', () => {
     );
 
     const error = await Promise.resolve(
-      NEON_HANDLERS.get_doc({ params: { slug: 'docs/broken.md' } }),
+      runToolHandler(
+        NEON_HANDLERS.get_doc({ params: { slug: 'docs/broken.md' } }),
+      ),
     ).catch((e: unknown) => e);
     expect(error).not.toBeInstanceOf(NeonClientError);
     expect(error).toHaveProperty(
@@ -99,9 +106,9 @@ describe('get_doc handler', () => {
     '/etc/passwd',
     '//evil.com/malicious',
   ])('rejects the slug %s as a client error before fetching', async (slug) => {
-    await expect(NEON_HANDLERS.get_doc({ params: { slug } })).rejects.toThrow(
-      NeonClientError,
-    );
+    await expect(
+      runToolHandler(NEON_HANDLERS.get_doc({ params: { slug } })),
+    ).rejects.toThrow(NeonClientError);
     expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
   });
 });
@@ -122,10 +129,12 @@ describe('search_docs handler', () => {
   }
 
   it('posts to the configured site search and tags the caller as MCP', async () => {
-    await NEON_HANDLERS.search_docs(
-      { params: { query: 'branching' } },
-      undefined,
-      extra({ userAgent: ' Cursor/1.2 ', clientApplication: 'cursor' }),
+    await runToolHandler(
+      NEON_HANDLERS.search_docs(
+        { params: { query: 'branching' } },
+        undefined,
+        extra({ userAgent: ' Cursor/1.2 ', clientApplication: 'cursor' }),
+      ),
     );
 
     const request = fetchedRequest();
@@ -136,10 +145,12 @@ describe('search_docs handler', () => {
   });
 
   it('drops an unknown client and a user agent a header cannot carry', async () => {
-    await NEON_HANDLERS.search_docs(
-      { params: { query: 'branching' } },
-      undefined,
-      extra({ userAgent: '助手/1.0' }),
+    await runToolHandler(
+      NEON_HANDLERS.search_docs(
+        { params: { query: 'branching' } },
+        undefined,
+        extra({ userAgent: '助手/1.0' }),
+      ),
     );
 
     const request = fetchedRequest();

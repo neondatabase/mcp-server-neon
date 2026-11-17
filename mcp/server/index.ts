@@ -16,15 +16,12 @@ import { generateTraceId } from '../utils/trace';
 import { createNeonClient } from './api';
 import { track } from '../analytics/analytics';
 import { captureException } from '@sentry/node';
+import { Effect } from 'effect';
 import type { ServerContext as NeonServerContext } from '../types/context';
 import { agentSentryTags, setSentryTags } from '../sentry/utils';
-import {
-  recordToolError,
-  startToolSpan,
-  toolSpanClientAttributes,
-} from '../sentry/tool-span';
+import { withToolSpan, toolSpanClientAttributes } from '../sentry/tool-span';
 import { ToolHandlerExtraParams } from '../tools/types';
-import { asCancellation, handleToolError } from './errors';
+import { renderToolCall, runToolCallback } from './tool-call';
 import { identifyClient } from '../utils/client-application';
 import {
   DEFAULT_GRANT,
@@ -117,12 +114,12 @@ export const createMcpServer = async (context: NeonServerContext) => {
       },
       async (args: unknown, ctx: McpServerContext) => {
         const traceId = generateTraceId();
-        return await startToolSpan(
-          { toolName: tool.name, ctx, traceId },
-          async (span) => {
-            span.setAttributes(
-              toolSpanClientAttributes({ clientName, clientApplication }),
-            );
+        const agent = { clientName, clientApplication };
+
+        return runToolCallback(
+          Effect.gen(function* () {
+            yield* Effect.annotateCurrentSpan(toolSpanClientAttributes(agent));
+
             const properties = {
               authMethod: context.authMethod,
               toolName: tool.name,
@@ -133,8 +130,9 @@ export const createMcpServer = async (context: NeonServerContext) => {
               clientApplication,
               traceId,
             };
+
             logger.info('tool call:', properties);
-            setSentryTags(context, { clientName, clientApplication });
+            setSentryTags(context, agent);
             track({
               userId: context.account.id,
               event: 'tool_call',
@@ -151,38 +149,29 @@ export const createMcpServer = async (context: NeonServerContext) => {
               readOnly: context.readOnly,
               clientApplication,
               apiKey: context.apiKey,
-              signal: ctx.mcpReq.signal,
             };
-            try {
-              const result = await invokeTool(
-                tool.name,
-                args,
-                grant,
-                neonClient,
-                extraArgs,
+
+            const outcome = yield* renderToolCall(
+              invokeTool(tool.name, args, grant, neonClient, extraArgs),
+              { properties, traceId, agent },
+            );
+
+            // Append access control warnings to tool response
+            if (
+              outcome.kind === 'success' &&
+              accessControlWarnings.length > 0
+            ) {
+              outcome.result.content.push(
+                ...accessControlWarnings.map((w) => ({
+                  type: 'text' as const,
+                  text: w,
+                })),
               );
-
-              // Append access control warnings to tool response
-              if (accessControlWarnings.length > 0) {
-                result.content.push(
-                  ...accessControlWarnings.map((w) => ({
-                    type: 'text' as const,
-                    text: w,
-                  })),
-                );
-              }
-
-              return result;
-            } catch (error) {
-              const toolError = asCancellation(extraArgs.signal) ?? error;
-              recordToolError(span, toolError);
-
-              return handleToolError(toolError, properties, traceId, {
-                clientName,
-                clientApplication,
-              });
             }
-          },
+
+            return outcome;
+          }).pipe(withToolSpan({ toolName: tool.name, ctx, traceId })),
+          ctx.mcpReq.signal,
         );
       },
     );

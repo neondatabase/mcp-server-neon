@@ -22,6 +22,7 @@ import {
   type FakeNeon,
   type FakeNeonOptions,
 } from './helpers/fake-neon';
+import { runToolHandler } from './helpers/run-tool-handler';
 
 const PROJECT_ID = 'example-project-123';
 const BRANCH_ID = 'br-example-123';
@@ -69,7 +70,6 @@ function extra(readOnly: boolean): ToolHandlerExtraParams {
     account: { id: 'user-1', name: 'Test' },
     clientApplication: 'unknown',
     apiKey: API_KEY,
-    signal: new AbortController().signal,
   };
 }
 
@@ -79,12 +79,8 @@ async function call(
   grant: GrantContext,
   readOnly = false,
 ) {
-  return invokeTool(
-    tool,
-    args,
-    grant,
-    createNeonClient(API_KEY),
-    extra(readOnly),
+  return runToolHandler(
+    invokeTool(tool, args, grant, createNeonClient(API_KEY), extra(readOnly)),
   );
 }
 
@@ -283,22 +279,26 @@ describe('pinned Postgres role', () => {
   });
 
   it('takes the pin from the grant only, not from the caller-supplied extra', async () => {
-    await invokeTool(
-      'run_sql',
-      { sql: 'SELECT 1', project_id: PROJECT_ID },
-      PINNED_GRANT,
-      createNeonClient(API_KEY),
-      { ...extra(false), pinnedRoleName: 'someone_else' },
+    await runToolHandler(
+      invokeTool(
+        'run_sql',
+        { sql: 'SELECT 1', project_id: PROJECT_ID },
+        PINNED_GRANT,
+        createNeonClient(API_KEY),
+        { ...extra(false), pinnedRoleName: 'someone_else' },
+      ),
     );
     expect(neon.requestedRoles()).toEqual([PINNED]);
 
     neon = stubFakeNeon(FAKE);
-    await invokeTool(
-      'run_sql',
-      { sql: 'SELECT 1', project_id: PROJECT_ID },
-      UNPINNED_GRANT,
-      createNeonClient(API_KEY),
-      { ...extra(false), pinnedRoleName: 'someone_else' },
+    await runToolHandler(
+      invokeTool(
+        'run_sql',
+        { sql: 'SELECT 1', project_id: PROJECT_ID },
+        UNPINNED_GRANT,
+        createNeonClient(API_KEY),
+        { ...extra(false), pinnedRoleName: 'someone_else' },
+      ),
     );
     expect(neon.requestedRoles()).toEqual([OWNER]);
   });

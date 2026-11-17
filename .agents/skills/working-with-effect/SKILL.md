@@ -28,7 +28,7 @@ Effect code reaches Sentry through `SentryLayer` in `mcp/sentry/effect.ts`, merg
 
 ## Running effects
 
-Effects run only at entry points (`eslint/no-restricted-properties` on `Effect.run*`): Next.js route files forward to the web handler in `lib/http/app.ts`. Everywhere else, compose and return the Effect.
+Effects run only at entry points (`eslint/no-restricted-properties` on `Effect.run*`): Next.js route files forward to the web handler in `lib/http/app.ts`, and MCP tool callbacks run through `runToolCallback` (`mcp/server/tool-call.ts`) on the runtime in `lib/effect/runtime.ts`, which shares the web handler's memo map. Everywhere else, compose and return the Effect.
 
 Never fail with `new Error()` inside an Effect, including the `catch` of `Effect.tryPromise`: it widens the error channel and `catchTag` loses the discriminant.
 

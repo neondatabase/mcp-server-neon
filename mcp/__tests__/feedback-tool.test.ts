@@ -9,6 +9,7 @@ import { assert } from '../../lib/assert';
 import { NEON_FEEDBACK_URL } from '../../lib/config';
 import { NEON_HANDLERS } from '../tools/tools';
 import { textContent } from './helpers/tool-result';
+import { runToolHandler } from './helpers/run-tool-handler';
 
 const MAX_FEEDBACK_LENGTH = 10_000;
 
@@ -28,9 +29,11 @@ describe('send_feedback handler', () => {
       new Response(null, { status: 204 }),
     );
 
-    const result = await NEON_HANDLERS.send_feedback({
-      params: { feedback: '  The branch docs were unclear  ' },
-    });
+    const result = await runToolHandler(
+      NEON_HANDLERS.send_feedback({
+        params: { feedback: '  The branch docs were unclear  ' },
+      }),
+    );
 
     const [request] = vi.mocked(globalThis.fetch).mock.calls[0] ?? [];
     assert(request instanceof Request, 'fetch was not called with a Request');
@@ -48,12 +51,16 @@ describe('send_feedback handler', () => {
 
   it('rejects blank or too-long feedback without calling the service', async () => {
     await expect(
-      NEON_HANDLERS.send_feedback({ params: { feedback: '   ' } }),
+      runToolHandler(
+        NEON_HANDLERS.send_feedback({ params: { feedback: '   ' } }),
+      ),
     ).rejects.toThrow();
     await expect(
-      NEON_HANDLERS.send_feedback({
-        params: { feedback: 'x'.repeat(MAX_FEEDBACK_LENGTH + 1) },
-      }),
+      runToolHandler(
+        NEON_HANDLERS.send_feedback({
+          params: { feedback: 'x'.repeat(MAX_FEEDBACK_LENGTH + 1) },
+        }),
+      ),
     ).rejects.toThrow();
     expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
   });
@@ -64,7 +71,9 @@ describe('send_feedback handler', () => {
     );
 
     await expect(
-      NEON_HANDLERS.send_feedback({ params: { feedback: 'hello' } }),
+      runToolHandler(
+        NEON_HANDLERS.send_feedback({ params: { feedback: 'hello' } }),
+      ),
     ).rejects.toThrow('Too many feedback requests');
   });
 
@@ -73,14 +82,18 @@ describe('send_feedback handler', () => {
       new TypeError('fetch failed'),
     );
     await expect(
-      NEON_HANDLERS.send_feedback({ params: { feedback: 'hello' } }),
+      runToolHandler(
+        NEON_HANDLERS.send_feedback({ params: { feedback: 'hello' } }),
+      ),
     ).rejects.toThrow('The Neon feedback service could not be reached.');
 
     vi.mocked(globalThis.fetch).mockRejectedValueOnce(
       new DOMException('timed out', 'TimeoutError'),
     );
     await expect(
-      NEON_HANDLERS.send_feedback({ params: { feedback: 'hello' } }),
+      runToolHandler(
+        NEON_HANDLERS.send_feedback({ params: { feedback: 'hello' } }),
+      ),
     ).rejects.toThrow('The Neon feedback service did not respond in time.');
   });
 
@@ -90,7 +103,9 @@ describe('send_feedback handler', () => {
     );
 
     await expect(
-      NEON_HANDLERS.send_feedback({ params: { feedback: 'hello' } }),
+      runToolHandler(
+        NEON_HANDLERS.send_feedback({ params: { feedback: 'hello' } }),
+      ),
     ).rejects.toThrow('Failed to send feedback: 503 Service Unavailable');
   });
 });

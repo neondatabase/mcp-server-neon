@@ -17,7 +17,7 @@ import { NeonApiError } from '@neon/sdk';
 import { NEON_HANDLERS } from '../../../mcp/tools/index';
 import { createNeonClient } from '../../../mcp/server/api';
 import pkg from '../../../package.json';
-import { asCancellation, handleToolError } from '../../../mcp/server/errors';
+import { renderToolCall, runToolCallback } from '../../../mcp/server/tool-call';
 import { createSdkErrorReporter } from '../../../mcp/server/sdk-errors';
 import type { ToolHandlerExtraParams } from '../../../mcp/tools/types';
 import { identifyClient } from '../../../mcp/utils/client-application';
@@ -27,6 +27,7 @@ import { logger } from '../../../mcp/utils/logger';
 import { withSdkCompatRiskLog } from '../../../mcp/utils/sdk-compat-risks';
 import { generateTraceId } from '../../../mcp/utils/trace';
 import { waitUntil } from '@vercel/functions';
+import { Effect } from 'effect';
 import { track, flushAnalytics } from '../../../mcp/analytics/analytics';
 import { resolveAccountFromAuth } from '../../../mcp/server/account';
 import { model } from '../../../mcp/oauth/model';
@@ -34,9 +35,8 @@ import { getApiKeys, type ApiKeyRecord } from '../../../mcp/oauth/kv-store';
 import { agentSentryTags, setSentryTags } from '../../../mcp/sentry/utils';
 import { tagRequestSession } from '../../../mcp/sentry/session';
 import {
-  recordToolError,
-  startToolSpan,
   toolSpanClientAttributes,
+  withToolSpan,
 } from '../../../mcp/sentry/tool-span';
 import { flushAfterResponse } from '../../../mcp/sentry/flush';
 import {
@@ -404,9 +404,8 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
           v2ToolConfig(tool),
           async (args: unknown, ctx: McpServerContext) => {
             const traceId = generateTraceId();
-            return await startToolSpan(
-              { toolName: tool.name, ctx, traceId },
-              async (span) => {
+            return runToolCallback(
+              Effect.gen(function* () {
                 const {
                   account,
                   authMethod,
@@ -419,7 +418,11 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   context,
                   apiKey,
                   userAgent,
-                } = await getAuthContext(ctx);
+                } = yield* Effect.promise(async () => getAuthContext(ctx));
+                const agent = {
+                  clientName: cName,
+                  clientApplication: clientApp,
+                };
 
                 // Track server_init on first authenticated request (after client detection)
                 trackServerInit(context);
@@ -436,15 +439,9 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                 };
 
                 logger.info('tool call:', properties);
-                setSentryTags(context, {
-                  clientName: cName,
-                  clientApplication: clientApp,
-                });
-                span.setAttributes(
-                  toolSpanClientAttributes({
-                    clientName: cName,
-                    clientApplication: clientApp,
-                  }),
+                setSentryTags(context, agent);
+                yield* Effect.annotateCurrentSpan(
+                  toolSpanClientAttributes(agent),
                 );
 
                 track({
@@ -465,59 +462,43 @@ function createContextualMcpHandler(staticToolContext: StaticToolContext) {
                   clientApplication: clientApp,
                   apiKey,
                   userAgent,
-                  signal: toolCallSignal(ctx),
                 };
 
-                try {
-                  const result = await invokeTool(
-                    tool.name,
-                    args,
-                    grant,
-                    neonClient,
-                    extraArgs,
-                  );
-                  if (result.isError) {
-                    logger.warn('tool error response:', {
-                      ...properties,
-                      isError: true,
-                      contentLength: result.content?.length,
-                      firstContentType: result.content?.[0]?.type,
-                    });
-                  }
-
-                  // Append access control warnings to tool response
-                  const accessControlWarnings = getAccessControlWarnings(
-                    grant,
-                    readOnly,
-                  );
-                  if (accessControlWarnings.length > 0 && result.content) {
-                    result.content.push(
-                      ...accessControlWarnings.map((w: string) => ({
-                        type: 'text' as const,
-                        text: w,
-                      })),
-                    );
-                  }
-
-                  return result;
-                } catch (error) {
-                  const toolError = asCancellation(extraArgs.signal) ?? error;
-                  recordToolError(span, toolError);
-                  const errorResult = handleToolError(
-                    toolError,
-                    properties,
-                    traceId,
-                    { clientName: cName, clientApplication: clientApp },
-                  );
+                const outcome = yield* renderToolCall(
+                  invokeTool(tool.name, args, grant, neonClient, extraArgs),
+                  { properties, traceId, agent },
+                );
+                const { result } = outcome;
+                if (result.isError) {
                   logger.warn('tool error response:', {
                     ...properties,
                     isError: true,
-                    contentLength: errorResult.content?.length,
-                    firstContentType: errorResult.content?.[0]?.type,
+                    contentLength: result.content?.length,
+                    firstContentType: result.content?.[0]?.type,
                   });
-                  return errorResult;
                 }
-              },
+
+                // Append access control warnings to tool response
+                const accessControlWarnings = getAccessControlWarnings(
+                  grant,
+                  readOnly,
+                );
+                if (
+                  outcome.kind === 'success' &&
+                  accessControlWarnings.length > 0 &&
+                  result.content
+                ) {
+                  result.content.push(
+                    ...accessControlWarnings.map((w: string) => ({
+                      type: 'text' as const,
+                      text: w,
+                    })),
+                  );
+                }
+
+                return outcome;
+              }).pipe(withToolSpan({ toolName: tool.name, ctx, traceId })),
+              toolCallSignal(ctx),
             );
           },
         );
@@ -605,67 +586,62 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
       ) {
         const toolName = tool.name;
         const traceId = generateTraceId();
-        return await startToolSpan({ toolName, ctx, traceId }, async (span) => {
-          span.setAttributes({
-            ...toolSpanClientAttributes(docsAgent),
-            docs_only: true,
-          });
-          const properties = {
-            authMethod: 'anonymous',
-            toolName: toolName,
-            tool_name: toolName,
-            readOnly: 'true',
-            projectScoped: 'false',
-            customScopes: 'docs',
-            rolePinned: 'false',
-            clientName: docsAgent.clientName,
-            clientApplication: docsAgent.clientApplication,
-            traceId,
-            docsOnly: 'true',
-          };
-
-          logger.info('tool call (docs-only):', properties);
-
-          track({
-            anonymousId: ANONYMOUS_DOCS_USER_ID,
-            event: 'tool_call',
-            properties,
-            context: { app: docsOnlyAppContext },
-          });
-          waitUntil(flushAnalytics());
-
-          const handler = NEON_HANDLERS[toolName];
-          assert(handler, `Handler for tool ${toolName} not found`);
-          assert(
-            typeof args === 'object' && args !== null,
-            `${toolName} arguments were not validated`,
-          );
-          const signal = toolCallSignal(ctx);
-          try {
-            return await handler({ params: { ...args } }, undefined, {
-              readOnly: true,
+        return runToolCallback(
+          Effect.gen(function* () {
+            yield* Effect.annotateCurrentSpan({
+              ...toolSpanClientAttributes(docsAgent),
+              docs_only: true,
+            });
+            const properties = {
+              authMethod: 'anonymous',
+              toolName: toolName,
+              tool_name: toolName,
+              readOnly: 'true',
+              projectScoped: 'false',
+              customScopes: 'docs',
+              rolePinned: 'false',
+              clientName: docsAgent.clientName,
               clientApplication: docsAgent.clientApplication,
-              userAgent,
-              signal,
-            });
-          } catch (error) {
-            const toolError = asCancellation(signal) ?? error;
-            recordToolError(span, toolError);
-            const errorResult = handleToolError(
-              toolError,
-              properties,
               traceId,
-              docsAgent,
-            );
-            logger.warn('tool error response (docs-only):', {
-              ...properties,
-              isError: true,
-              contentLength: errorResult.content?.length,
-              firstContentType: errorResult.content?.[0]?.type,
+              docsOnly: 'true',
+            };
+
+            logger.info('tool call (docs-only):', properties);
+
+            track({
+              anonymousId: ANONYMOUS_DOCS_USER_ID,
+              event: 'tool_call',
+              properties,
+              context: { app: docsOnlyAppContext },
             });
-            return errorResult;
-          }
-        });
+            waitUntil(flushAnalytics());
+
+            const handler = NEON_HANDLERS[toolName];
+            assert(handler, `Handler for tool ${toolName} not found`);
+            assert(
+              typeof args === 'object' && args !== null,
+              `${toolName} arguments were not validated`,
+            );
+            const outcome = yield* renderToolCall(
+              handler({ params: { ...args } }, undefined, {
+                readOnly: true,
+                clientApplication: docsAgent.clientApplication,
+                userAgent,
+              }),
+              { properties, traceId, agent: docsAgent },
+            );
+            if (outcome.kind !== 'success') {
+              logger.warn('tool error response (docs-only):', {
+                ...properties,
+                isError: true,
+                contentLength: outcome.result.content?.length,
+                firstContentType: outcome.result.content?.[0]?.type,
+              });
+            }
+            return outcome;
+          }).pipe(withToolSpan({ toolName, ctx, traceId })),
+          toolCallSignal(ctx),
+        );
       }
 
       for (const tool of DOCS_ONLY_TOOLS) {

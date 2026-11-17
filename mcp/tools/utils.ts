@@ -7,7 +7,7 @@ import type { AuthContext } from '../types/auth';
  * or the account's unique organization.
  */
 export async function getOrgByOrgIdOrDefault(
-  params: { org_id?: string },
+  params: { org_id?: string; signal?: AbortSignal },
   neonClient: Api<unknown>,
   account: AuthContext['extra']['account'],
 ): Promise<{ id: string }> {
@@ -18,7 +18,10 @@ export async function getOrgByOrgIdOrDefault(
     return { id: account.id };
   }
 
-  const { data: response } = await neonClient.getCurrentUserOrganizations();
+  const { data: response } = await neonClient.getCurrentUserOrganizations({
+    signal: params.signal,
+  });
+
   const organizations = response.organizations || [];
 
   // 1. Filter organizations by managed_by==console, if there is only one organization, return that

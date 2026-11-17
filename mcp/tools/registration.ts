@@ -15,14 +15,18 @@
  * only the contract a client sees.
  */
 
-import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
+import type {
+  CallToolResult,
+  ToolAnnotations,
+} from '@modelcontextprotocol/sdk/types.js';
+import { Effect } from 'effect';
 import type { Api } from '../neon-client';
 import type { GrantContext } from '../utils/grant-context';
-import { NEON_HANDLERS } from './tools';
+import { NEON_HANDLERS, step } from './tools';
 import { injectProjectId } from './grant-filter';
 import { NEON_TOOLS } from './definitions';
 import type { NeonTool } from './tool-definition';
-import type { ToolHandlerExtraParams } from './types';
+import type { ToolCallError, ToolHandlerExtraParams } from './types';
 
 /**
  * `McpServer` advertises `listChanged: true` for tools and resources unless it
@@ -54,26 +58,33 @@ function toolByName(toolName: string): NeonTool | undefined {
  * A pinned role reaches handlers from the grant, overriding anything already
  * on `extra`, so a tool argument can never replace it.
  */
-export async function invokeTool(
+export function invokeTool(
   toolName: string,
   args: unknown,
   grant: GrantContext,
   neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
-) {
+): Effect.Effect<CallToolResult, ToolCallError> {
   const handler = NEON_HANDLERS[toolName];
-  if (!handler) {
-    throw new Error(`Handler for tool ${toolName} not found`);
-  }
   const tool = toolByName(toolName);
-  const effectiveArgs = injectProjectId(
-    (args ?? {}) as Record<string, unknown>,
-    grant,
-    tool,
+  return step(() => {
+    if (!handler) {
+      throw new Error(`Handler for tool ${toolName} not found`);
+    }
+    return {
+      handler,
+      args: injectProjectId(
+        (args ?? {}) as Record<string, unknown>,
+        grant,
+        tool,
+      ),
+    };
+  }).pipe(
+    Effect.flatMap(({ handler: run, args: effectiveArgs }) =>
+      run({ params: effectiveArgs }, neonClient, {
+        ...extra,
+        pinnedRoleName: grant.roleName,
+      }),
+    ),
   );
-
-  return handler({ params: effectiveArgs }, neonClient, {
-    ...extra,
-    pinnedRoleName: grant.roleName,
-  });
 }

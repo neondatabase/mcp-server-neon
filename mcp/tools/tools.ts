@@ -1,18 +1,25 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { NeonToolExecutionContext } from '@neon/tools';
+import { NeonClientError, NeonNetworkError } from '@neon/sdk';
+import type { NeonEffectToolContext } from '@neon/tools/effect';
+import {
+  retryReadOnlyNetworkFailures,
+  toEffectTools,
+} from '@neon/tools/effect';
+import { Cause, Effect, Option, Schedule } from 'effect';
 import * as z from 'zod';
-import { NeonClientError } from '@neon/sdk';
 import { InvalidArgumentError, NotFoundError } from '../server/errors';
 import {
   GET_CONNECTION_STRING_INPUT_SCHEMA,
   NEON_TOOLS,
   PACKAGE_TOOLS,
 } from './definitions';
+import { ToolStepFailed } from './errors';
 import { isGeneratedToolId, type ToolId } from './operations';
 import { sanitizeGeneratedResult } from './sanitize';
 import type { NeonTool } from './tool-definition';
 import type {
-  ToolHandlerExtended,
+  ToolCallError,
+  ToolHandler,
   ToolHandlerExtraParams,
   ToolHandlers,
 } from './types';
@@ -24,12 +31,16 @@ const TOOLS_REQUIRING_ORG_ID = new Set<ToolId>([
   'projects.create',
 ]);
 
+// A read that got no response from the Neon API is sent again; mutations never are.
+const EFFECT_TOOLS = toEffectTools(PACKAGE_TOOLS, {
+  retry: retryReadOnlyNetworkFailures,
+});
+
 function executionContext(
   extra: ToolHandlerExtraParams | undefined,
-): NeonToolExecutionContext {
+): NeonEffectToolContext {
   return {
     apiKey: extra?.apiKey,
-    signal: extra?.signal,
     readOnly: extra?.readOnly,
     postgresRole: extra?.pinnedRoleName,
     caller: {
@@ -59,10 +70,15 @@ function assertRoleCreateAllowed(
   }
 }
 
+type OrgLookupContext = {
+  neonClient: Parameters<ToolHandler>[1];
+  extra: ToolHandlerExtraParams | undefined;
+  signal: AbortSignal;
+};
+
 async function withOrgId(
   parsed: unknown,
-  neonClient: Parameters<ToolHandlerExtended>[1],
-  extra: ToolHandlerExtraParams | undefined,
+  { neonClient, extra, signal }: OrgLookupContext,
 ): Promise<object> {
   if (typeof parsed !== 'object' || parsed === null) {
     throw new Error('Tool input must be an object');
@@ -78,7 +94,7 @@ async function withOrgId(
     orgId = parsed.org_id;
   }
   const organization = await getOrgByOrgIdOrDefault(
-    { org_id: orgId },
+    { org_id: orgId, signal },
     neonClient,
     extra.account,
   );
@@ -329,32 +345,105 @@ function toolResult(
   };
 }
 
-function toolHandler(tool: NeonTool): ToolHandlerExtended {
-  const packageTool = PACKAGE_TOOLS[tool.id];
-  return async (args, neonClient, extra) => {
-    const params = args?.params ?? {};
-    const parsed = packageInput(tool, params);
-    if (tool.id === 'postgres.roles.create') {
-      assertRoleCreateAllowed(parsed, extra?.pinnedRoleName);
-    }
-    const input = TOOLS_REQUIRING_ORG_ID.has(tool.id)
-      ? await withOrgId(parsed, neonClient, extra)
-      : parsed;
-    const { data } = await packageTool
-      .execute(input, executionContext(extra))
-      .catch((error: unknown) => {
-        if (tool.id === 'docs.get') throw docNotFoundError(error);
-        // A failed completion can leave the temporary branch behind, so it is
-        // reported as a server error that reaches Sentry rather than as caller input.
-        if (tool.id === 'queryTuning.complete') {
-          throw new Error(
-            `Failed to complete query tuning: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
-        throw error;
-      });
-    return toolResult(tool.id, data, params);
-  };
+// A non-Error throw is rethrown, so Effect records it as a defect.
+const catchStep: (error: unknown) => ToolStepFailed = (error) => {
+  if (error instanceof Error) {
+    return ToolStepFailed.make({ error });
+  }
+
+  throw error;
+};
+
+/** Runs one of the server's own steps around a package tool. */
+export const step = <A>(run: () => A) =>
+  Effect.try({ try: run, catch: catchStep });
+
+// The org lookup is a read, retried like the package tools' reads before the
+// tool itself runs.
+const orgLookup = <A>(run: (signal: AbortSignal) => Promise<A>) =>
+  Effect.tryPromise({ try: run, catch: catchStep }).pipe(
+    Effect.retry({
+      schedule: Schedule.exponential('200 millis').pipe(Schedule.jittered),
+      times: 2,
+      while: ({ error }) => error instanceof NeonNetworkError,
+    }),
+  );
+
+/** The error a tool call failed with, as the package or a step threw it. */
+export const thrownError = (error: ToolCallError): Error =>
+  error instanceof ToolStepFailed ? error.error : error.cause;
+
+const docNotFound = (error: ToolCallError): ToolCallError => {
+  const thrown = thrownError(error);
+  const mapped = docNotFoundError(thrown);
+
+  return mapped instanceof Error && mapped !== thrown
+    ? ToolStepFailed.make({ error: mapped })
+    : error;
+};
+
+// A failed completion can leave the temporary branch behind, so it is reported
+// as a server error that reaches Sentry rather than as caller input.
+const queryTuningCompletionFailed = (cause: Cause.Cause<ToolCallError>) => {
+  if (Cause.hasInterruptsOnly(cause)) {
+    return Effect.failCause(cause);
+  }
+
+  const failed = Option.match(Cause.findErrorOption(cause), {
+    onNone: () => Cause.squash(cause),
+    onSome: thrownError,
+  });
+
+  return Effect.fail(
+    ToolStepFailed.make({
+      error: new Error(
+        `Failed to complete query tuning: ${failed instanceof Error ? failed.message : String(failed)}`,
+      ),
+    }),
+  );
+};
+
+const PACKAGE_FAILURES: Partial<
+  Record<
+    ToolId,
+    <A>(
+      execution: Effect.Effect<A, ToolCallError>,
+    ) => Effect.Effect<A, ToolCallError>
+  >
+> = {
+  'docs.get': Effect.mapError(docNotFound),
+  'queryTuning.complete': Effect.catchCause(queryTuningCompletionFailed),
+};
+
+function toolHandler(tool: NeonTool): ToolHandler {
+  const effectTool = EFFECT_TOOLS[tool.id];
+  const mapFailures = PACKAGE_FAILURES[tool.id];
+
+  return (args, neonClient, extra) =>
+    Effect.gen(function* () {
+      const params = args?.params ?? {};
+      const parsed = yield* step(() => packageInput(tool, params));
+
+      if (tool.id === 'postgres.roles.create') {
+        yield* step(() => {
+          assertRoleCreateAllowed(parsed, extra?.pinnedRoleName);
+        });
+      }
+
+      const input = TOOLS_REQUIRING_ORG_ID.has(tool.id)
+        ? yield* orgLookup(async (signal) =>
+            withOrgId(parsed, { neonClient, extra, signal }),
+          )
+        : parsed;
+
+      const execution = effectTool.execute(input, executionContext(extra));
+
+      const { data } = yield* mapFailures === undefined
+        ? execution
+        : mapFailures(execution);
+
+      return yield* step(() => toolResult(tool.id, data, params));
+    });
 }
 
 export const NEON_HANDLERS: ToolHandlers = Object.fromEntries(
