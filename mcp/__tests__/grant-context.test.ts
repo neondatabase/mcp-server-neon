@@ -433,7 +433,7 @@ describe('secrets', () => {
     expect(withRequestSecrets(all, query(''), undefined)).toStrictEqual(all);
   });
 
-  it('reports the effective mode in analytics after a request tightens it', () => {
+  it('reports the mode after a request tightens it in analytics', () => {
     const grant = withRequestSecrets(setup, new URLSearchParams(), 'none');
 
     expect(grantAnalyticsProperties(grant)).toMatchObject({ secrets: 'none' });
