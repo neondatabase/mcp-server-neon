@@ -1891,13 +1891,7 @@
   },
   "mcp/utils/retry.ts": {
     "anti-slop(no-unknown-parameters)": 1,
-    "anti-slop(require-readable-spacing)": 5,
-    "eslint(curly)": 2,
-    "eslint(func-style)": 1,
-    "eslint(init-declarations)": 1,
-    "eslint(no-await-in-loop)": 2,
-    "promise(avoid-new)": 1,
-    "unicorn(catch-error-name)": 1
+    "eslint(func-style)": 1
   },
   "mcp/utils/sdk-compat-risks.ts": {
     "anti-slop(no-runtime-typeof)": 1,

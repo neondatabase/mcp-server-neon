@@ -100,6 +100,30 @@ describe('retryAsync', () => {
       expect(fn).toHaveBeenCalledTimes(2);
     });
 
+    it('asks the predicate once per failed attempt', async () => {
+      const fn = vi
+        .fn<() => Promise<string>>()
+        .mockRejectedValueOnce(new Error('transient'))
+        .mockResolvedValue('ok');
+
+      // Retryable the first time only, so a second call would stop the retry.
+      const shouldRetry = vi
+        .fn<() => boolean>()
+        .mockReturnValueOnce(true)
+        .mockReturnValue(false);
+
+      const result = await retryAsync(fn, {
+        attempts: 2,
+        delaysMs: [1],
+        op: 'test',
+        shouldRetry,
+      });
+
+      expect(result).toBe('ok');
+      expect(fn).toHaveBeenCalledTimes(2);
+      expect(shouldRetry).toHaveBeenCalledTimes(1);
+    });
+
     it('mid-stream non-retryable error stops the loop immediately', async () => {
       const fn = vi
         .fn()
