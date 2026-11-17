@@ -18,6 +18,7 @@ export function toListedTool(tool: NeonTool) {
     title: tool.annotations?.title,
     description: tool.description,
     inputSchema: toListedInputSchema(tool.inputSchema),
+    outputSchema: tool.outputSchema,
     annotations: tool.annotations,
   };
 }

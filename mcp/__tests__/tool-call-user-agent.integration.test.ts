@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import pkg from '../../package.json';
 import { track } from '../analytics/analytics';
+import { neonBranch } from './helpers/neon-objects';
 
 // Tool calls emit a Segment event, and the write key has a production default.
 vi.mock('../analytics/analytics', () => ({
@@ -45,12 +46,12 @@ const fixtures: Record<string, { status: number; body: unknown }> = {
   'POST /api/v2/projects/proj-1/branches': {
     status: 201,
     body: {
-      branch: {
+      branch: neonBranch({
         id: 'br-child',
         project_id: 'proj-1',
         parent_id: 'br-parent',
         name: 'test-branch',
-      },
+      }),
       endpoints: [
         {
           id: 'ep-1',

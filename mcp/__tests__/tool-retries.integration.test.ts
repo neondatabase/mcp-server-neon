@@ -8,6 +8,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { once } from 'node:events';
 import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { neonProject } from './helpers/neon-objects';
 
 const PROJECT = {
   flaky: 'proj-flaky',
@@ -88,7 +89,9 @@ const answerApi = (req: IncomingMessage, res: ServerResponse) => {
 
   // The first read is dropped; the next one answers.
   if (path === `/projects/${PROJECT.flaky}` && count > 1) {
-    json(res, 200, { project: { id: PROJECT.flaky, name: 'flaky' } });
+    json(res, 200, {
+      project: neonProject({ id: PROJECT.flaky, name: 'flaky' }),
+    });
 
     return;
   }

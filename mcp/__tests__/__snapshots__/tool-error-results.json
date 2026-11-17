@@ -421,6 +421,36 @@
       "errorType": "NeonDbError"
     }
   },
+  "Neon API result breaks the output schema": {
+    "tool": "list_branches",
+    "query": "",
+    "arguments": {
+      "project_id": "proj-sql"
+    },
+    "response": {
+      "status": 200,
+      "message": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Error: list_branches result breaks its output schema: data/data/0 must have required property 'current_state', data/data/0 must have required property 'state_changed_at', data/data/0 must have required property 'creation_source', data/data/0 must have required property 'cpu_used_sec', data/data/0 must have required property 'active_time_seconds'"
+            }
+          ],
+          "isError": true,
+          "resultType": "complete",
+          "_meta": {}
+        },
+        "jsonrpc": "2.0",
+        "id": 1
+      }
+    },
+    "sentryErrorEvents": 1,
+    "toolSpan": {
+      "status": "internal_error",
+      "errorType": "Error"
+    }
+  },
   "query tuning completion fails": {
     "tool": "complete_query_tuning",
     "query": "",

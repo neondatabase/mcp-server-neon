@@ -348,6 +348,12 @@ const CASES = {
     name: 'run_sql',
     arguments: { project_id: PROJECT.sql, sql: 'select 1 /* endpoint down */' },
   },
+  // `BRANCH` lacks fields the spec marks required, such as `current_state`.
+  'Neon API result breaks the output schema': {
+    query: '',
+    name: 'list_branches',
+    arguments: { project_id: PROJECT.sql },
+  },
   'query tuning completion fails': {
     query: '',
     name: 'complete_query_tuning',

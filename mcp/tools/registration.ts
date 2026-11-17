@@ -25,6 +25,7 @@ import type { GrantContext } from '../utils/grant-context';
 import { NEON_HANDLERS, step } from './tools';
 import { injectProjectId } from './grant-filter';
 import { NEON_TOOLS } from './definitions';
+import { outputContract } from './output-contract';
 import type { NeonTool } from './tool-definition';
 import type { ToolCallError, ToolHandlerExtraParams } from './types';
 
@@ -40,12 +41,14 @@ export function toolRegistration(tool: NeonTool): {
   title?: string;
   description: string;
   inputSchema: NeonTool['inputSchema'];
+  outputSchema: ReturnType<typeof outputContract>;
   annotations: ToolAnnotations;
 } {
   return {
     title: tool.annotations?.title,
     description: tool.description,
     inputSchema: tool.inputSchema,
+    outputSchema: outputContract(tool),
     annotations: tool.annotations,
   };
 }

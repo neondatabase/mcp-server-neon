@@ -15,6 +15,7 @@ import {
 } from './definitions';
 import { ToolStepFailed } from './errors';
 import { isGeneratedToolId, type ToolId } from './operations';
+import { assertOutputContract } from './output-contract';
 import { sanitizeGeneratedResult } from './sanitize';
 import type { NeonTool } from './tool-definition';
 import type {
@@ -332,17 +333,17 @@ function toolResult(
 ): CallToolResult {
   const render = RESULT_RENDERERS[toolId];
   if (render) {
-    return render(data, params);
+    const rendered = render(data, params);
+
+    return rendered.structuredContent === undefined
+      ? { ...rendered, structuredContent: { data } }
+      : rendered;
   }
-  return {
-    content: [
-      jsonText(
-        isGeneratedToolId(toolId)
-          ? sanitizeGeneratedResult(toolId, data)
-          : data,
-      ),
-    ],
-  };
+  const shown = isGeneratedToolId(toolId)
+    ? sanitizeGeneratedResult(toolId, data)
+    : data;
+
+  return { content: [jsonText(shown)], structuredContent: { data: shown } };
 }
 
 // A non-Error throw is rethrown, so Effect records it as a defect.
@@ -442,7 +443,13 @@ function toolHandler(tool: NeonTool): ToolHandler {
         ? execution
         : mapFailures(execution);
 
-      return yield* step(() => toolResult(tool.id, data, params));
+      const result = yield* step(() => toolResult(tool.id, data, params));
+
+      yield* step(() => {
+        assertOutputContract(tool, result);
+      });
+
+      return result;
     });
 }
 

@@ -1,5 +1,6 @@
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { type NeonTool as PackageTool } from '@neon/tools';
+import { toMcpOutputJsonSchema } from '@neon/tools/mcp';
 import * as z from 'zod';
 import { NEON_PACKAGE_TOOLS } from './neon-tools';
 import {
@@ -12,6 +13,7 @@ import {
   type GeneratedToolId,
   type ToolId,
 } from './operations';
+import { sanitizedFields } from './sanitize';
 import type { NeonTool } from './tool-definition';
 
 export const PACKAGE_TOOLS: Record<ToolId, PackageTool> = NEON_PACKAGE_TOOLS;
@@ -145,6 +147,33 @@ function customAnnotations(tool: PackageTool): ToolAnnotations {
   };
 }
 
+/**
+ * The OpenAI search and fetch connector contract reads these results at the root
+ * of `structuredContent`, so their schema is `data`'s, not `{ data }`.
+ */
+const UNWRAPPED_RESULT_TOOLS = new Set<ToolId>([
+  'resources.search',
+  'resources.fetch',
+]);
+
+const wrappedDataSchema = z.object({
+  properties: z.object({ data: z.looseObject({ type: z.literal('object') }) }),
+});
+
+const outputSchema = (toolId: ToolId, tool: PackageTool) => {
+  if (tool.outputSchema === undefined) {
+    throw new Error(`@neon/tools ${toolId} has no outputSchema`);
+  }
+
+  const wrapped = toMcpOutputJsonSchema(tool.outputSchema, {
+    omit: isCustomToolId(toolId) ? [] : sanitizedFields(toolId),
+  });
+
+  return UNWRAPPED_RESULT_TOOLS.has(toolId)
+    ? wrappedDataSchema.parse(wrapped).properties.data
+    : wrapped;
+};
+
 function toolDefinition(toolId: ToolId): NeonTool {
   const tool = PACKAGE_TOOLS[toolId];
   if (isCustomToolId(toolId)) {
@@ -157,6 +186,7 @@ function toolDefinition(toolId: ToolId): NeonTool {
         toolId === 'postgres.connectionString'
           ? GET_CONNECTION_STRING_INPUT_SCHEMA
           : tool.inputSchema,
+      outputSchema: outputSchema(toolId, tool),
       annotations: customAnnotations(tool),
       ...CUSTOM_TOOL_GRANTS[toolId],
     };
@@ -169,6 +199,7 @@ function toolDefinition(toolId: ToolId): NeonTool {
     scope: GENERATED_TOOL_SCOPES[toolId],
     description: tool.description,
     inputSchema: tool.inputSchema,
+    outputSchema: outputSchema(toolId, tool),
     readOnlySafe,
     projectScoped: generatedProjectScoped(toolId, tool),
     annotations: generatedAnnotations(toolId, tool, readOnlySafe),

@@ -10,6 +10,7 @@ import {
   NO_LIST_CHANGED,
   toolRegistration,
 } from '../tools/registration';
+import { appendAccessWarnings } from '../tools/access-warnings';
 import { toListedInputSchema } from '../tools/listed-schema';
 import { logger } from '../utils/logger';
 import { generateTraceId } from '../utils/trace';
@@ -157,16 +158,8 @@ export const createMcpServer = async (context: NeonServerContext) => {
             );
 
             // Append access control warnings to tool response
-            if (
-              outcome.kind === 'success' &&
-              accessControlWarnings.length > 0
-            ) {
-              outcome.result.content.push(
-                ...accessControlWarnings.map((w) => ({
-                  type: 'text' as const,
-                  text: w,
-                })),
-              );
+            if (outcome.kind === 'success') {
+              appendAccessWarnings(outcome.result, accessControlWarnings);
             }
 
             return outcome;

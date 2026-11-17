@@ -13,6 +13,7 @@
 
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer, type Server } from 'node:http';
+import { neonProject } from './helpers/neon-objects';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -42,12 +43,10 @@ beforeEach(async () => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(
         JSON.stringify({
-          project: {
+          project: neonProject({
             id: SCOPED_PROJECT_ID,
             name: 'scoped project',
-            platform_id: 'aws',
-            region_id: 'aws-us-east-2',
-          },
+          }),
           uri: 'postgresql://owner:secret@loopback.invalid/neondb',
         }),
       );
@@ -129,6 +128,9 @@ describe('project-scoped grants', () => {
         arguments: {},
       });
       expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        data: { id: SCOPED_PROJECT_ID },
+      });
 
       // The granted project, not a fallback to "the only project on the account".
       expect(requestedPaths).toContain(`/api/v2/projects/${SCOPED_PROJECT_ID}`);
