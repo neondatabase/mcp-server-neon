@@ -312,7 +312,7 @@
           "content": [
             {
               "type": "text",
-              "text": "NeonApiError: internal server error"
+              "text": "NeonApiError: internal server error\nHTTP status: 500\nRequest ID: req-500"
             }
           ],
           "isError": true,

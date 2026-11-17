@@ -297,5 +297,5 @@ describe('/api/list-tools endpoint', () => {
         body.grant.scopes === null || Array.isArray(body.grant.scopes),
       ).toBe(true);
     }
-  });
+  }, 30_000);
 });

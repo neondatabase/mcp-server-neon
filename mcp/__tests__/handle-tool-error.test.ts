@@ -5,6 +5,7 @@ import { NeonDbError } from '@neondatabase/serverless';
 import { InvalidArgumentError } from '../server/errors';
 
 const captureException = vi.hoisted(() => vi.fn());
+const logError = vi.hoisted(() => vi.fn());
 
 vi.mock('@sentry/node', () => ({
   captureException,
@@ -14,7 +15,7 @@ vi.mock('../utils/logger', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
-    error: vi.fn(),
+    error: logError,
     debug: vi.fn(),
   },
 }));
@@ -51,15 +52,68 @@ describe('handleToolError', () => {
     });
   });
 
-  it('captures 5xx Neon API errors with the same tags', () => {
-    const error = new NeonApiError('Internal Server Error', { status: 500 });
+  it('captures 5xx Neon API errors with the agent tags and the status', () => {
+    const error = new NeonApiError('Internal Server Error', {
+      status: 500,
+      code: '',
+    });
+
     handleToolError(error, properties, undefined, agent);
 
     expect(captureException).toHaveBeenCalledWith(error, {
-      extra: properties,
+      extra: { ...properties, neonApiStatus: '500' },
       tags: {
         'client.agent': 'ChatGPT',
         'client.application': 'chatgpt',
+        'neon.api.status': '500',
+      },
+    });
+  });
+
+  it('reports the status, code, request id, and Retry-After of a Neon API 5xx', () => {
+    const error = new NeonApiError('please try again later', {
+      status: 503,
+      code: 'SERVICE_UNAVAILABLE',
+      requestId: 'req-503',
+      response: new Response(null, {
+        status: 503,
+        headers: { 'retry-after': '30' },
+      }),
+      body: { message: 'please try again later' },
+    });
+
+    const result = handleToolError(error, properties, 'trace-1', agent);
+
+    expect(result.content).toStrictEqual([
+      {
+        type: 'text',
+        text: [
+          'NeonApiError: please try again later',
+          'HTTP status: 503',
+          'Code: SERVICE_UNAVAILABLE',
+          'Request ID: req-503',
+          'Retry-After: 30',
+        ].join('\n'),
+      },
+    ]);
+
+    const apiDetails = {
+      neonApiStatus: '503',
+      neonApiCode: 'SERVICE_UNAVAILABLE',
+      neonApiRequestId: 'req-503',
+      neonApiRetryAfter: '30',
+    };
+
+    expect(logError).toHaveBeenCalledWith(
+      'Tool call error:',
+      expect.objectContaining(apiDetails),
+    );
+    expect(captureException).toHaveBeenCalledWith(error, {
+      extra: { ...properties, traceId: 'trace-1', ...apiDetails },
+      tags: {
+        'client.agent': 'ChatGPT',
+        'client.application': 'chatgpt',
+        'neon.api.status': '503',
       },
     });
   });

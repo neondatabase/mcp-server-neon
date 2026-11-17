@@ -112,7 +112,10 @@ const FAILING_PROJECTS = new Map<string, { status: number; body: Json }>([
   ],
   [
     PROJECT.serverError,
-    { status: 500, body: { message: 'internal server error' } },
+    {
+      status: 500,
+      body: { message: 'internal server error', request_id: 'req-500' },
+    },
   ],
   // A 4xx, so the case shows the completion wrapper turning a client-level
   // cleanup failure into a server failure.
@@ -512,19 +515,17 @@ const sentryItems = async () => {
 
 type SentryItems = Awaited<ReturnType<typeof sentryItems>>;
 
-const payloadsOf = <T>(
-  items: SentryItems,
-  type: string,
-  schema: z.ZodType<T>,
-) =>
+const errorEventsOf = (items: SentryItems, traceId: string | undefined) =>
   items
-    .filter((item) => item.type === type)
-    .map((item) => schema.parse(item.payload));
+    .filter(({ type }) => type === 'event')
+    .map(({ payload }) => payload)
+    .filter(
+      (payload) =>
+        ErrorEvent.parse(payload).contexts.trace.trace_id === traceId,
+    );
 
 const errorEventCount = (items: SentryItems, traceId: string | undefined) =>
-  payloadsOf(items, 'event', ErrorEvent).filter(
-    ({ contexts }) => contexts.trace.trace_id === traceId,
-  ).length;
+  errorEventsOf(items, traceId).length;
 
 const goldenEntries = async () => {
   const caseOutcomes = await Promise.all(
@@ -588,5 +589,27 @@ describe('tool error results', () => {
     expect(packageToolSpans.get(z.string().parse(serverError.traceId))).toBe(
       'internal_error',
     );
+  });
+
+  it('report a Neon API 5xx to Sentry with its status and request id', async () => {
+    const { traceId } = await call(CASES['Neon API 500']);
+
+    const items = await sentryItems();
+
+    const events = z
+      .array(
+        z.object({
+          tags: z.record(z.string(), z.unknown()),
+          extra: z.record(z.string(), z.unknown()),
+        }),
+      )
+      .parse(errorEventsOf(items, traceId));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.tags).toMatchObject({ 'neon.api.status': '500' });
+    expect(events[0]?.extra).toMatchObject({
+      neonApiStatus: '500',
+      neonApiRequestId: 'req-500',
+    });
   });
 });
