@@ -53,7 +53,7 @@ export const withPgConnectRetry = <T>(
 
 let pool: pg.Pool | null = null;
 
-const getPool = (): pg.Pool => {
+export const getOAuthPool = (): pg.Pool => {
   if (!pool) {
     pool = new pg.Pool({ connectionString: process.env.OAUTH_DATABASE_URL });
     // An idle client whose connection the server ends (a compute restart)
@@ -73,7 +73,7 @@ const getPool = (): pg.Pool => {
 // row type's creation.
 const LOST_CREATE_RACE_CODES = new Set(['23505', '42710']);
 
-const lostCreateRace = (err: unknown): boolean =>
+export const lostCreateRace = (err: unknown): boolean =>
   typeof err === 'object' &&
   err !== null &&
   'code' in err &&
@@ -99,13 +99,13 @@ export class PostgresStore extends EventEmitter {
   private async createTable(): Promise<void> {
     const ddl = `CREATE SCHEMA IF NOT EXISTS ${SCHEMA}; CREATE TABLE IF NOT EXISTS ${this.qualifiedTable}(key VARCHAR(255) PRIMARY KEY, value TEXT)`;
     try {
-      await getPool().query(ddl);
+      await getOAuthPool().query(ddl);
     } catch (err) {
       // Concurrent CREATE ... IF NOT EXISTS can lose the race and roll back
       // before the table exists; by now the winner has committed, so the
       // second run is a no-op.
       if (!lostCreateRace(err)) throw err;
-      await getPool().query(ddl);
+      await getOAuthPool().query(ddl);
     }
   }
 
@@ -118,7 +118,7 @@ export class PostgresStore extends EventEmitter {
       throw err;
     });
     await this.ready;
-    return getPool().query<Row>(text, values);
+    return getOAuthPool().query<Row>(text, values);
   }
 
   async get(key: string): Promise<string | undefined> {
@@ -171,6 +171,8 @@ export const getClients = createLazyKeyv<Client>('clients', 'Clients');
 export const getTokens = createLazyKeyv<Token>('tokens', 'Tokens');
 
 export type RefreshToken = {
+  clientId?: string;
+  grantFamilyId?: string;
   refreshToken: string;
   refreshTokenExpiresAt?: Date | undefined;
   accessToken: string;
@@ -199,6 +201,7 @@ export const getClientRegisterHeaders =
 
 /** Cached outcome of a refresh token exchange for cross-instance deduplication. */
 export type RefreshResult = {
+  grantFamilyId?: string;
   /** Client that rotated the token. Missing on rows written before it was stored. */
   clientId?: string;
   accessToken: string;

@@ -1,3 +1,8 @@
+import {
+  traceGrant,
+  storedGrantFamily,
+  refreshGrantAlias,
+} from './grant-family';
 import type { Client } from 'oauth2-server';
 import type { RefreshResult } from './kv-store';
 import type { RefreshRotation } from './model';
@@ -22,7 +27,11 @@ const isWithinReplayGrace = (rotatedAt: number): boolean =>
  */
 export type ReplayNext = 'live' | 'rotated' | 'gone';
 
-export type RefreshReplay = { ageMs: number; next: ReplayNext };
+export type RefreshReplay = {
+  ageMs: number;
+  next: ReplayNext;
+  reason?: 'revoked';
+};
 
 /**
  * What a cached rotation answers. Its pair is served within the grace period,
@@ -47,6 +56,83 @@ const nextTokenState = async (refreshToken: string): Promise<ReplayNext> => {
   return live === undefined ? 'gone' : 'live';
 };
 
+const bindLegacyAccess = async (
+  result: RefreshResult,
+  client: Client,
+  familyId: string,
+): Promise<void> => {
+  const token = await model.getStoredAccessToken(result.accessToken);
+
+  if (token === undefined) {
+    return;
+  }
+
+  if (token.client.id !== client.id) {
+    throw new Error('OAuth cached access owner conflict');
+  }
+
+  const stored = storedGrantFamily(token);
+
+  if (stored !== undefined && stored !== familyId) {
+    throw new Error('OAuth cached access family conflict');
+  }
+
+  if (stored === undefined) {
+    await model.saveToken({ ...token, grantFamilyId: familyId });
+  }
+};
+
+const legacyRotationFamily = async (
+  refreshToken: string,
+  client: Client,
+  result: RefreshResult,
+): Promise<string | undefined> => {
+  const aliases = [
+    refreshGrantAlias(client.id, refreshToken),
+    refreshGrantAlias(client.id, result.refreshToken),
+  ];
+
+  const revoked = await Promise.all(
+    aliases.map(async (alias) => model.isGrantRevoked(alias)),
+  );
+
+  if (revoked.some(Boolean)) {
+    return undefined;
+  }
+
+  const lineage = await traceGrant(
+    { clientId: client.id, refreshToken, expectedRotation: result },
+    model,
+  );
+
+  const states = await Promise.all(
+    lineage.aliases.map(async (alias) => model.isGrantRevoked(alias)),
+  );
+
+  return states.some(Boolean) ? undefined : lineage.familyId;
+};
+
+const activeRotation = async (
+  refreshToken: string,
+  client: Client,
+  result: RefreshResult,
+): Promise<RefreshResult | undefined> => {
+  const stored = storedGrantFamily(result);
+
+  const familyId =
+    stored ?? (await legacyRotationFamily(refreshToken, client, result));
+
+  if (familyId === undefined || (await model.isGrantRevoked(familyId))) {
+    return undefined;
+  }
+
+  if (stored === undefined) {
+    await bindLegacyAccess(result, client, familyId);
+  }
+
+  return { ...result, grantFamilyId: familyId };
+};
+
 /**
  * Undefined for a row whose refresh token is the presented one after the grace
  * period: upstream did not rotate it, so the token is still current and is
@@ -57,8 +143,21 @@ export const resolveRotation = async (
   client: Client,
   { result, rotatedAt }: RefreshRotation,
 ): Promise<RotationOutcome | undefined> => {
+  const active = await activeRotation(refreshToken, client, result);
+
+  if (active === undefined) {
+    return {
+      kind: 'reject',
+      replay: {
+        ageMs: Date.now() - rotatedAt,
+        next: 'gone',
+        reason: 'revoked',
+      },
+    };
+  }
+
   if (isWithinReplayGrace(rotatedAt)) {
-    return { kind: 'serve', result };
+    return { kind: 'serve', result: active };
   }
 
   if (result.refreshToken === refreshToken) {
@@ -80,10 +179,10 @@ export const resolveRotation = async (
     clientApplication: detectClientApplication(client.client_name),
   });
 
-  return { kind: 'serve', result };
+  return { kind: 'serve', result: active };
 };
 
-const getOwnedRotation = async (
+export const getOwnedRotation = async (
   refreshToken: string,
   clientId: string,
 ): Promise<RefreshRotation | undefined> => {
@@ -117,40 +216,6 @@ export const resolveOwnedRotation = async (
   return rotation === undefined
     ? undefined
     : resolveRotation(refreshToken, client, rotation);
-};
-
-/**
- * Revokes `clientId`'s own cached rotation of `refreshToken`, so the token
- * stops returning a pair: deletes the cached row, and the refresh token it
- * issued while that is still stored. Resolves whether there was a rotation.
- */
-export const revokeOwnedRotation = async (
-  refreshToken: string,
-  clientId: string,
-): Promise<boolean> => {
-  const rotation = await getOwnedRotation(refreshToken, clientId);
-
-  if (rotation === undefined) {
-    return false;
-  }
-
-  const issued = await model.getRefreshToken(rotation.result.refreshToken);
-
-  if (issued !== undefined) {
-    const access = await model.getAccessToken(issued.accessToken);
-
-    if (access !== undefined) {
-      await model.deleteToken(access);
-    }
-
-    await model.deleteRefreshToken(issued);
-  }
-
-  // Last, so a revocation that fails partway still finds the issued pair
-  // when it is retried.
-  await model.deleteRefreshResult(refreshToken);
-
-  return true;
 };
 
 /** The cached pair `client`'s own rotation of `refreshToken` serves. */
@@ -201,16 +266,19 @@ async function findOwner(
 async function clientOf(
   accessToken: string | undefined,
 ): Promise<string | undefined> {
-  if (!accessToken) return undefined;
-  return (await model.getAccessToken(accessToken))?.client.id;
+  if (!accessToken) {
+    return undefined;
+  }
+
+  return (await model.getStoredAccessToken(accessToken))?.client.id;
 }
 
 async function attribute(keys: Set<string>, clientId: string): Promise<void> {
   await Promise.all(
-    [...keys].map((key) =>
-      model.attributeRefreshResult(key, clientId).catch((err) => {
+    [...keys].map(async (key) =>
+      model.attributeRefreshResult(key, clientId).catch((error) => {
         logger.warn('Failed to record the owner of a cached refresh result', {
-          err,
+          error,
         });
       }),
     ),

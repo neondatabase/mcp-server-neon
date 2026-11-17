@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { model } from '../../../mcp/oauth/model';
-import { revokeOwnedRotation } from '../../../mcp/oauth/refresh-result';
+import { revokeGrantForClient } from '../../../mcp/oauth/grant-revocation';
 import { handleOAuthError } from '../../../lib/errors';
 import { logger } from '../../../mcp/utils/logger';
 import {
@@ -61,38 +61,21 @@ export async function POST(request: NextRequest) {
 
     const tokenTypeHint = formData.get('token_type_hint');
 
-    // Try to revoke based on hint (optimization) or try both
-    if (tokenTypeHint === 'refresh_token' || !tokenTypeHint) {
-      // A rotated refresh token still returns its cached pair while that
-      // pair is unused, so revoking it must end the cached rotation too.
-      if (await revokeOwnedRotation(token, client.id)) {
-        logger.info('Token revoked', {
-          clientId,
-          type: 'rotated_refresh_token',
-        });
-      }
+    try {
+      await revokeGrantForClient(token, client.id, tokenTypeHint);
+    } catch (error) {
+      logger.error('OAuth grant revocation did not complete', {
+        clientId,
+        errorName: error instanceof Error ? error.name : 'unknown',
+      });
 
-      const refreshToken = await model.getRefreshToken(token);
-      if (refreshToken) {
-        // Delete both refresh token and associated access token
-        const accessToken = await model.getAccessToken(
-          refreshToken.accessToken,
-        );
-        if (accessToken && accessToken.client.id === client.id) {
-          await model.deleteToken(accessToken);
-          await model.deleteRefreshToken(refreshToken);
-          logger.info('Token revoked', { clientId, type: 'refresh_token' });
-        }
-        return new NextResponse(null, { status: 200 });
-      }
-    }
-
-    if (tokenTypeHint === 'access_token' || !tokenTypeHint) {
-      const accessToken = await model.getAccessToken(token);
-      if (accessToken && accessToken.client.id === client.id) {
-        await model.deleteToken(accessToken);
-        logger.info('Token revoked', { clientId, type: 'access_token' });
-      }
+      return NextResponse.json(
+        {
+          error: 'temporarily_unavailable',
+          error_description: 'Token revocation did not complete; please retry',
+        },
+        { status: 503, headers: { 'Retry-After': '30' } },
+      );
     }
 
     // RFC 7009: Always return 200, even if token was not found

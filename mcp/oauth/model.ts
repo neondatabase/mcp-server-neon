@@ -1,3 +1,11 @@
+import type { DenialOptions } from './grant-revocation-store';
+import { denyGrant, isGrantRevoked } from './grant-revocation-store';
+import {
+  grantFamilyId,
+  storedGrantFamily,
+  GrantRevokedError,
+  traceGrant,
+} from './grant-family';
 import type {
   AuthorizationCode,
   AuthorizationCodeModel,
@@ -56,16 +64,30 @@ class Model implements AuthorizationCodeModel {
     return getClientRegisterHeaders().get(clientId);
   };
   saveToken: (token: Token) => Promise<Token> = async (token) => {
-    await getTokens().set(token.accessToken, token);
-    return token;
+    const familyId = grantFamilyId(token);
+    await this.assertGrantActive(familyId);
+    const saved = { ...token, grantFamilyId: familyId };
+    await getTokens().set(saved.accessToken, saved);
+    await this.assertGrantActive(familyId);
+
+    return saved;
   };
-  deleteToken: (token: Token) => Promise<boolean> = async (token) => {
-    return getTokens().delete(token.accessToken);
-  };
+  deleteToken: (token: Pick<Token, 'accessToken'>) => Promise<boolean> = async (
+    token,
+  ) => getTokens().delete(token.accessToken);
   saveRefreshToken: (token: RefreshToken) => Promise<RefreshToken> = async (
     token,
   ) => {
+    const familyId = storedGrantFamily(token);
+
+    if (familyId !== undefined) {
+      await this.assertGrantActive(familyId);
+    }
     await getRefreshTokens().set(token.refreshToken, token);
+
+    if (familyId !== undefined) {
+      await this.assertGrantActive(familyId);
+    }
     return token;
   };
   deleteRefreshToken: (token: RefreshToken) => Promise<boolean> = async (
@@ -89,9 +111,65 @@ class Model implements AuthorizationCodeModel {
   getAccessToken: (accessToken: string) => Promise<Token | undefined> = async (
     accessToken,
   ) => {
-    const token = await getTokens().get(accessToken);
+    const token = await this.getStoredAccessToken(accessToken);
+
+    if (token === undefined) {
+      return undefined;
+    }
+
+    const familyId = storedGrantFamily(token);
+
+    if (familyId === undefined) {
+      const lineage = await traceGrant(
+        { clientId: token.client.id, token },
+        this,
+      );
+
+      const revoked = await Promise.all(
+        [lineage.familyId, ...lineage.aliases].map(async (id) =>
+          this.isGrantRevoked(id),
+        ),
+      );
+
+      if (revoked.some(Boolean)) {
+        return undefined;
+      }
+
+      return this.saveToken({ ...token, grantFamilyId: lineage.familyId });
+    }
+
+    if (await this.isGrantRevoked(familyId)) {
+      return undefined;
+    }
+
     return token;
   };
+
+  getStoredAccessToken = async (
+    accessToken: string,
+  ): Promise<Token | undefined> => getTokens().get(accessToken);
+
+  isGrantRevoked = isGrantRevoked;
+
+  assertGrantActive = async (familyId: string): Promise<void> => {
+    if (await this.isGrantRevoked(familyId)) {
+      throw new GrantRevokedError();
+    }
+  };
+
+  revokeGrant = async (
+    id: string,
+    clientId: string,
+    options: DenialOptions = {},
+  ): Promise<void> =>
+    denyGrant({
+      id,
+      clientId,
+      canonicalId: options.canonicalId ?? id,
+      aliases: options.aliases ?? [],
+      pair: options.pair,
+    });
+
   getRefreshToken: (refreshToken: string) => Promise<RefreshToken | undefined> =
     async (refreshToken) => {
       return getRefreshTokens().get(refreshToken);
@@ -130,11 +208,20 @@ class Model implements AuthorizationCodeModel {
     oldRefreshToken: string,
     result: RefreshResult,
   ) => Promise<void> = async (oldRefreshToken, result) => {
+    const familyId = storedGrantFamily(result);
+
+    if (familyId !== undefined) {
+      await this.assertGrantActive(familyId);
+    }
     await getRefreshResults().set(
       oldRefreshToken,
       result,
       Model.REFRESH_RESULT_TTL_MS,
     );
+
+    if (familyId !== undefined) {
+      await this.assertGrantActive(familyId);
+    }
   };
 
   getRefreshResult: (

@@ -1,3 +1,11 @@
+import { retireLatePair } from '../../../mcp/oauth/grant-retirement';
+import { GrantStateUnavailableError } from '../../../mcp/oauth/grant-state-error';
+import {
+  grantFamilyId,
+  storedGrantFamily,
+  traceGrant,
+  GrantRevokedError,
+} from '../../../mcp/oauth/grant-family';
 import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { Client } from 'oauth2-server';
@@ -101,6 +109,7 @@ type RefreshTokenResult = {
   token_type: 'bearer';
   refresh_token: string;
   scope?: string | string[];
+  grantFamilyId?: string;
 };
 
 // A cached pair served an hour after its rotation carries an expired access
@@ -113,6 +122,7 @@ const cachedToResponse = (cached: RefreshResult): RefreshTokenResult => ({
   token_type: 'bearer' as const,
   refresh_token: cached.refreshToken,
   scope: cached.scope,
+  grantFamilyId: cached.grantFamilyId,
 });
 
 const rejectedReplay = (
@@ -148,6 +158,7 @@ type SloOutcome =
   | 'cliff_upstream'
   | 'transient_lock_timeout'
   | 'transient_persist_failure'
+  | 'transient_revocation'
   | 'transient_upstream_5xx'
   | 'transient_upstream_network'
   | 'bad_request';
@@ -269,7 +280,7 @@ function emitRefreshSlo(
 
   if (replay !== undefined) {
     fields.push(
-      'reason=replay_after_grace',
+      `reason=${replay.reason === 'revoked' ? 'grant_revoked' : 'replay_after_grace'}`,
       `replayAgeMs=${replay.ageMs}`,
       `replayNext=${replay.next}`,
       `clientApplication=${replay.clientApplication}`,
@@ -367,7 +378,10 @@ async function executeRefresh(
     );
   }
 
-  const oldToken = await model.getAccessToken(providedRefreshToken.accessToken);
+  const oldToken = await model.getStoredAccessToken(
+    providedRefreshToken.accessToken,
+  );
+
   if (!oldToken) {
     // info, not warn: same `correct_invalid_grant` happy path as the RT
     // missing branch above — AT was cleared out of KV (rotation cleanup or
@@ -399,6 +413,26 @@ async function executeRefresh(
     );
   }
 
+  const activeToken =
+    storedGrantFamily(oldToken) === undefined
+      ? await model.getAccessToken(oldToken.accessToken)
+      : oldToken;
+
+  if (activeToken === undefined) {
+    throw new GrantRevokedError();
+  }
+
+  const familyId = grantFamilyId(activeToken);
+  await model.assertGrantActive(familyId);
+
+  const lineage = await traceGrant(
+    { clientId: client.id, token: activeToken, refreshToken },
+    model,
+  );
+
+  const resolvedFamily = lineage.familyId;
+
+  await model.assertGrantActive(resolvedFamily);
   let upstreamToken: Awaited<ReturnType<typeof exchangeRefreshToken>>;
   // Capture the outbound HTTP request body summary so we can include a
   // sanitized fingerprint of what we sent to Hydra in the cliff_upstream
@@ -418,7 +452,7 @@ async function executeRefresh(
     // may have rotated the RT. Two attempts with a short backoff catches
     // most TCP/connection blips without piling latency.
     upstreamToken = await retryAsync(
-      () =>
+      async () =>
         callUpstreamRefreshWithTimeout(
           providedRefreshToken.refreshToken,
           captureUpstreamRequest,
@@ -559,96 +593,190 @@ async function executeRefresh(
     token_type: 'bearer',
     refresh_token: newRefreshToken,
     scope: scopeValue,
+    grantFamilyId: resolvedFamily,
   };
 
-  // Write the cross-instance success cache FIRST, before the local
-  // refresh_tokens persist. Reasoning: if persist fails after this point,
-  // peers (and this client's retries with the OLD refresh_token) can still
-  // serve the new pair from this cache via getRefreshResult. Without this
-  // ordering, a Postgres blip during persist would leak the rotation —
-  // Hydra has advanced but our system has no record, so any retry hits
-  // upstream again and gets `token_inactive`.
-  await model
-    .saveRefreshResult(refreshToken, {
-      clientId: client.id,
-      accessToken: result.access_token,
-      refreshToken: result.refresh_token,
-      expiresAt,
-      scope: scopeValue,
-    })
-    .catch((err) => {
-      logger.warn('Failed to cache refresh result', { err });
-    });
-
-  // Persist the new pair into refresh_tokens with retry. Most persist
-  // failures are transient (Postgres connection blip, deadlock, brief
-  // unavailability) and clear within milliseconds. Three quick attempts
-  // with backoff catches that without piling latency on the success path.
-  //
-  // If all retries fail, throw `transient_persist_failure`. The route's
-  // outer catch will then see that the success cache (written above) has
-  // the rotation outcome and serve the client a 200 from cache — the
-  // "degraded" path. Throwing here is what gets the SLO bucket recorded
-  // correctly; the cache rescue is handled in the route layer.
-  logger.info('Saving new tokens from refresh');
   try {
-    await retryAsync(
-      async () => {
-        const saved = await model.saveToken({
-          accessToken: upstreamToken.access_token,
-          refreshToken: newRefreshToken,
-          expires_at: expiresAt,
-          client: client,
-          user: oldToken.user,
-          scope: oldToken.scope,
-          grant: oldToken.grant,
-        });
-        await model.saveRefreshToken({
-          refreshToken: newRefreshToken,
-          accessToken: saved.accessToken,
-        });
-        if (!saved.accessToken) {
-          throw new Error('saveToken returned token without accessToken');
+    // Write the cross-instance success cache FIRST, before the local
+    // refresh_tokens persist. Reasoning: if persist fails after this point,
+    // peers (and this client's retries with the OLD refresh_token) can still
+    // serve the new pair from this cache via getRefreshResult. Without this
+    // ordering, a Postgres blip during persist would leak the rotation —
+    // Hydra has advanced but our system has no record, so any retry hits
+    // upstream again and gets `token_inactive`.
+    await model
+      .saveRefreshResult(refreshToken, {
+        clientId: client.id,
+        grantFamilyId: resolvedFamily,
+        accessToken: result.access_token,
+        refreshToken: result.refresh_token,
+        expiresAt,
+        scope: scopeValue,
+      })
+      .catch((error) => {
+        if (error instanceof GrantRevokedError) {
+          throw error;
         }
-      },
-      { attempts: 3, delaysMs: [50, 250], op: 'persist refresh result' },
-    );
-  } catch (persistErr) {
-    logger.error('Persist after upstream rotation failed (after retry)', {
-      err: persistErr instanceof Error ? persistErr.message : persistErr,
-      clientId: client.id,
+        logger.warn('Failed to cache refresh result', { error });
+      });
+
+    // Persist the new pair into refresh_tokens with retry. Most persist
+    // failures are transient (Postgres connection blip, deadlock, brief
+    // unavailability) and clear within milliseconds. Three quick attempts
+    // with backoff catches that without piling latency on the success path.
+    //
+    // If all retries fail, throw `transient_persist_failure`. The route's
+    // outer catch will then see that the success cache (written above) has
+    // the rotation outcome and serve the client a 200 from cache — the
+    // "degraded" path. Throwing here is what gets the SLO bucket recorded
+    // correctly; the cache rescue is handled in the route layer.
+    logger.info('Saving new tokens from refresh');
+
+    try {
+      await retryAsync(
+        async () => {
+          const saved = await model.saveToken({
+            accessToken: upstreamToken.access_token,
+            refreshToken: newRefreshToken,
+            expires_at: expiresAt,
+            client,
+            user: oldToken.user,
+            scope: oldToken.scope,
+            grant: oldToken.grant,
+            grantFamilyId: resolvedFamily,
+          });
+
+          await model.saveRefreshToken({
+            refreshToken: newRefreshToken,
+            accessToken: saved.accessToken,
+            clientId: client.id,
+            grantFamilyId: resolvedFamily,
+          });
+
+          if (!saved.accessToken) {
+            throw new Error('saveToken returned token without accessToken');
+          }
+        },
+        {
+          attempts: 3,
+          delaysMs: [50, 250],
+          op: 'persist refresh result',
+          shouldRetry: (error) => !(error instanceof GrantRevokedError),
+        },
+      );
+    } catch (error) {
+      if (error instanceof GrantRevokedError) {
+        throw error;
+      }
+      logger.error('Persist after upstream rotation failed (after retry)', {
+        err: error instanceof Error ? error.message : error,
+        clientId: client.id,
+      });
+      throw new RefreshError(
+        'server_error',
+        'Failed to persist refreshed tokens',
+        500,
+        'transient_persist_failure',
+      );
+    }
+
+    // Best-effort cleanup of old tokens. Errors are swallowed — they'll TTL
+    // out and the new tokens are already live.
+    await model.deleteToken(oldToken).catch((err) => {
+      logger.warn('Failed to delete old access token', { err });
     });
-    throw new RefreshError(
-      'server_error',
-      'Failed to persist refreshed tokens',
-      500,
-      'transient_persist_failure',
-    );
-  }
 
-  // Best-effort cleanup of old tokens. Errors are swallowed — they'll TTL
-  // out and the new tokens are already live.
-  await model.deleteToken(oldToken).catch((err) => {
-    logger.warn('Failed to delete old access token', { err });
-  });
-  if (newRefreshToken !== providedRefreshToken.refreshToken) {
-    await model.deleteRefreshToken(providedRefreshToken).catch((err) => {
-      logger.warn('Failed to delete old refresh token', { err });
+    if (newRefreshToken !== providedRefreshToken.refreshToken) {
+      await model.deleteRefreshToken(providedRefreshToken).catch((err) => {
+        logger.warn('Failed to delete old refresh token', { err });
+      });
+    }
+
+    logger.info('Refresh token exchanged successfully');
+
+    logger.info('Building refresh token response', {
+      hasAccessToken: Boolean(result.access_token),
+      hasRefreshToken: Boolean(result.refresh_token),
+      expiresIn: result.expires_in,
+      scopeType: typeof result.scope,
+      scopeIsArray: Array.isArray(result.scope),
     });
+  } catch (error) {
+    if (error instanceof GrantRevokedError) {
+      await retireLatePair(resolvedFamily, client.id, {
+        accessToken: result.access_token,
+        refreshToken: result.refresh_token,
+      });
+    }
+
+    throw error;
   }
-
-  logger.info('Refresh token exchanged successfully');
-
-  logger.info('Building refresh token response', {
-    hasAccessToken: !!result.access_token,
-    hasRefreshToken: !!result.refresh_token,
-    expiresIn: result.expires_in,
-    scopeType: typeof result.scope,
-    scopeIsArray: Array.isArray(result.scope),
-  });
 
   return result;
 }
+
+type RefreshResponseContext = {
+  client: Client;
+  started: number;
+  outcome: SloOutcome;
+  reason?: string;
+};
+
+const revokedResponse = (): NextResponse =>
+  NextResponse.json(
+    {
+      error: 'invalid_grant',
+      error_description: 'Authorization grant was revoked',
+    },
+    { status: 400 },
+  );
+
+const unavailableRevocationResponse = (): NextResponse =>
+  NextResponse.json(
+    {
+      error: 'temporarily_unavailable',
+      error_description:
+        'OAuth grant state is temporarily unavailable; please retry',
+    },
+    { status: 503 },
+  );
+
+const refreshResponse = async (
+  result: RefreshTokenResult,
+  context: RefreshResponseContext,
+): Promise<NextResponse> => {
+  const { grantFamilyId: familyId, ...payload } = result;
+  const clientId = context.client.id;
+
+  try {
+    if (familyId === undefined || (await model.isGrantRevoked(familyId))) {
+      if (familyId !== undefined) {
+        await retireLatePair(familyId, clientId, {
+          accessToken: result.access_token,
+          refreshToken: result.refresh_token,
+        });
+      }
+
+      emitRefreshSlo('correct_invalid_grant', context.started, {
+        clientId,
+        reason: 'grant_revoked',
+      });
+
+      return revokedResponse();
+    }
+  } catch {
+    emitRefreshSlo('transient_revocation', context.started, { clientId });
+
+    return unavailableRevocationResponse();
+  }
+
+  emitRefreshSlo(context.outcome, context.started, {
+    clientId,
+    reason: context.reason,
+  });
+
+  return NextResponse.json(payload);
+};
 
 export async function POST(request: NextRequest) {
   logger.info('Token endpoint called');
@@ -839,6 +967,8 @@ export async function POST(request: NextRequest) {
       await model.saveRefreshToken({
         refreshToken: upstreamRefreshToken,
         accessToken: token.accessToken,
+        clientId: client.id,
+        grantFamilyId: grantFamilyId(token),
       });
 
       identify(
@@ -896,10 +1026,17 @@ export async function POST(request: NextRequest) {
       const checkSuccessCache = async (): Promise<
         RefreshTokenResult | undefined
       > => {
-        const cached = await getOwnedRefreshResult(refreshToken, client).catch(
-          () => undefined,
-        );
-        return cached ? cachedToResponse(cached) : undefined;
+        try {
+          const cached = await getOwnedRefreshResult(refreshToken, client);
+
+          return cached ? cachedToResponse(cached) : undefined;
+        } catch (cacheError) {
+          if (cacheError instanceof GrantStateUnavailableError) {
+            throw cacheError;
+          }
+
+          return undefined;
+        }
       };
 
       const getCachedFailure = async () => {
@@ -929,6 +1066,9 @@ export async function POST(request: NextRequest) {
         try {
           return await resolveRotation(refreshToken, client, rotation);
         } catch (resolveError) {
+          if (resolveError instanceof GrantStateUnavailableError) {
+            throw resolveError;
+          }
           logger.warn('Failed to resolve a cached refresh rotation', {
             error: resolveError,
           });
@@ -943,11 +1083,12 @@ export async function POST(request: NextRequest) {
       if (cachedFailure) {
         const owned = await getOwnedOutcome();
         if (owned?.kind === 'serve') {
-          emitRefreshSlo('success', sloStartMs, {
-            clientId: client.id,
+          return await refreshResponse(cachedToResponse(owned.result), {
+            client,
+            started: sloStartMs,
+            outcome: 'success',
             reason: 'cache_replay_over_failure',
           });
-          return NextResponse.json(cachedToResponse(owned.result));
         }
         const replay = rejectedReplay(owned);
         logger.info('Refresh token in failure cache; rejecting fast', {
@@ -1020,16 +1161,20 @@ export async function POST(request: NextRequest) {
         //     concurrent calls so we don't hammer the lock store.
         const result = await withRefreshLock(
           refreshToken,
-          (hint) =>
+          async (hint) =>
             singleflight(
               JSON.stringify(['refresh', client.id, refreshToken]),
-              () => executeRefresh(refreshToken, client, hint),
+              async () => executeRefresh(refreshToken, client, hint),
             ),
           peekResolution,
         );
         logger.info('Returning refresh token response');
-        emitRefreshSlo('success', sloStartMs, { clientId: client.id });
-        return NextResponse.json(result);
+
+        return await refreshResponse(result, {
+          client,
+          started: sloStartMs,
+          outcome: 'success',
+        });
       } catch (error) {
         // Cross-instance fallback: if another instance already completed the
         // refresh, the distributed cache will have the result. Also covers
@@ -1037,6 +1182,18 @@ export async function POST(request: NextRequest) {
         // BEFORE the persist phase, so a persist failure leaves the cache
         // populated and the client gets a clean 200 from here instead of a
         // 500 + immediate cliff.
+        if (error instanceof GrantRevokedError) {
+          emitRefreshSlo('correct_invalid_grant', sloStartMs, {
+            clientId: client.id,
+            reason: 'grant_revoked',
+          });
+
+          return NextResponse.json(
+            { error: 'invalid_grant', error_description: error.message },
+            { status: 400 },
+          );
+        }
+
         if (error instanceof RefreshError) {
           const cached = await checkSuccessCache();
           if (cached) {
@@ -1055,14 +1212,16 @@ export async function POST(request: NextRequest) {
                 underlyingOutcome: error.sloOutcome,
               },
             );
-            emitRefreshSlo(sloBucket, sloStartMs, {
-              clientId: client.id,
+
+            return await refreshResponse(cached, {
+              client,
+              started: sloStartMs,
+              outcome: sloBucket,
               reason:
                 error.sloOutcome === 'transient_persist_failure'
                   ? 'recovered_via_cache'
                   : 'cache_replay_after_error',
             });
-            return NextResponse.json(cached);
           }
 
           emitRefreshSlo(error.sloOutcome, sloStartMs, {
@@ -1110,6 +1269,9 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   } catch (error: unknown) {
+    if (error instanceof GrantStateUnavailableError) {
+      return unavailableRevocationResponse();
+    }
     logger.error('Token endpoint error', {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
