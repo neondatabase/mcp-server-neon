@@ -24,8 +24,8 @@ importers:
         specifier: 7.13.1
         version: 7.13.1
       '@neon/tools':
-        specifier: 2.15.0
-        version: 2.15.0(@neon/effect@0.5.2(effect@4.1.2))(effect@4.1.2)
+        specifier: 2.16.0
+        version: 2.16.0(@neon/effect@0.5.2(effect@4.1.2))(effect@4.1.2)
       '@neondatabase/serverless':
         specifier: 1.0.0
         version: 1.0.0
@@ -788,8 +788,8 @@ packages:
     resolution: {integrity: sha512-PHQS6WfdZpt237eWlsBseV3cacXyqWvUmD2YQaB19RcwJ45e+G0uV4YSZvjxNfppXgpP4S+4m4b5ds7TQy/eYw==}
     engines: {node: '>=20.19.0'}
 
-  '@neon/tools@2.15.0':
-    resolution: {integrity: sha512-3Mn3OrO4QT+Y3NflhOba34076DqvEe1d3tugfBOKQDHtT6k55t/9dNR7nCYjzE/wttCW/QAT/TRt10dQucgw/g==}
+  '@neon/tools@2.16.0':
+    resolution: {integrity: sha512-PjG0bm+taFrahiVh/Ir5VcoPLSoe8pqTiWxI/qxVtbI/bdZ6gswmRRtMQzjGfjzaI4oxkiZ7L8TDeQ47a104AA==}
     engines: {node: '>=20.19.0'}
     peerDependencies:
       '@neon/effect': ^0.5.2
@@ -3188,7 +3188,7 @@ snapshots:
 
   '@neon/sdk@7.13.1': {}
 
-  '@neon/tools@2.15.0(@neon/effect@0.5.2(effect@4.1.2))(effect@4.1.2)':
+  '@neon/tools@2.16.0(@neon/effect@0.5.2(effect@4.1.2))(effect@4.1.2)':
     dependencies:
       '@neon/sdk': 7.13.1
       '@neondatabase/serverless': 1.0.0
