@@ -18,16 +18,22 @@ const withoutServerSpan = Layer.succeed(HttpMiddleware.TracerDisabledWhen)(
   () => true,
 );
 
-// Built once per instance; every Next.js route file forwards its requests
-// here. Request fibers run with this layer's output, so the config, tracer,
-// error reporter, and logger are merged in rather than provided to the routes.
-export const app = HttpRouter.toWebHandler(
-  Layer.mergeAll(
-    Routes,
-    ServerConfig.layer,
-    SentryLayer,
-    WinstonLoggerLayer,
-    withoutServerSpan,
-  ).pipe(Layer.provide(HttpServer.layerServices)),
-  { disableLogger: true, memoMap },
+/**
+ * What every request fiber runs with: config, tracer, error reporter, logger,
+ * and the HTTP server services. Web handlers merge it with their routes rather
+ * than providing it to them, and build from the shared memo map.
+ */
+export const AppLayer = Layer.mergeAll(
+  ServerConfig.layer,
+  SentryLayer,
+  WinstonLoggerLayer,
+  withoutServerSpan,
+  HttpServer.layerServices,
 );
+
+// Built once per instance; every Next.js route file except the MCP transport
+// forwards its requests here.
+export const app = HttpRouter.toWebHandler(Layer.merge(Routes, AppLayer), {
+  disableLogger: true,
+  memoMap,
+});

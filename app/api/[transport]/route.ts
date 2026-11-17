@@ -2,17 +2,11 @@ import {
   CLIENT_INFO_META_KEY,
   fromJsonSchema,
   isInitializeRequest,
-  localhostAllowedOrigins,
   McpServer,
-  originValidationResponse,
 } from '@modelcontextprotocol/server';
-import type {
-  AuthInfo,
-  ServerContext as McpServerContext,
-} from '@modelcontextprotocol/server';
-import { createMcpHandler, withMcpAuth } from 'mcp-handler';
+import type { ServerContext as McpServerContext } from '@modelcontextprotocol/server';
+import { createMcpHandler } from 'mcp-handler';
 import { captureException } from '@sentry/node';
-import { NeonApiError } from '@neon/sdk';
 
 import { NEON_HANDLERS } from '../../../mcp/tools/index';
 import { createNeonClient } from '../../../mcp/server/api';
@@ -21,24 +15,18 @@ import { renderToolCall, runToolCallback } from '../../../mcp/server/tool-call';
 import { createSdkErrorReporter } from '../../../mcp/server/sdk-errors';
 import type { ToolHandlerExtraParams } from '../../../mcp/tools/types';
 import { identifyClient } from '../../../mcp/utils/client-application';
-import { isReadOnly } from '../../../mcp/utils/read-only';
-import type { AuthContext } from '../../../mcp/types/auth';
 import { logger } from '../../../mcp/utils/logger';
 import { withSdkCompatRiskLog } from '../../../mcp/utils/sdk-compat-risks';
 import { generateTraceId } from '../../../mcp/utils/trace';
 import { waitUntil } from '@vercel/functions';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { track, flushAnalytics } from '../../../mcp/analytics/analytics';
-import { resolveAccountFromAuth } from '../../../mcp/server/account';
-import { model } from '../../../mcp/oauth/model';
-import { getApiKeys, type ApiKeyRecord } from '../../../mcp/oauth/kv-store';
 import { agentSentryTags, setSentryTags } from '../../../mcp/sentry/utils';
 import { tagRequestSession } from '../../../mcp/sentry/session';
 import {
   toolSpanClientAttributes,
   withToolSpan,
 } from '../../../mcp/sentry/tool-span';
-import { flushAfterResponse } from '../../../mcp/sentry/flush';
 import {
   MCP_SESSION_ID_HEADER,
   mintSessionId,
@@ -46,14 +34,9 @@ import {
 } from '../../../mcp/utils/mcp-session';
 import type { ServerContext, AppContext } from '../../../mcp/types/context';
 import {
-  isDocsOnlyRequest,
   normalizeStoredGrant,
-  parseRoleNameParam,
-  resolveGrantFromSearchParams,
-  resolveGrantFromToken,
   DEFAULT_GRANT,
   grantAnalyticsProperties,
-  InvalidRoleNameError,
   type GrantContext,
 } from '../../../mcp/utils/grant-context';
 import {
@@ -71,48 +54,12 @@ import { toListedInputSchema } from '../../../mcp/tools/listed-schema';
 import { NEON_TOOLS } from '../../../mcp/tools/definitions';
 import type { NeonTool } from '../../../mcp/tools/tool-definition';
 import { assert } from '../../../lib/assert';
-import { SERVER_HOST } from '../../../lib/config';
 import { SERVER_INFO } from '../../../lib/server-metadata';
-import { isWellFormedOrigin } from '../../../lib/origin';
-import { buildResourceMetadataUrlForResourceRequest } from '../../../lib/oauth/protected-resource-metadata';
-import {
-  isLandingPageRequest,
-  landingPageResponse,
-} from '../../../lib/landing';
-
-const ROUTE_PATHS = {
-  canonicalMcp: '/api/mcp',
-  canonicalSse: '/api/sse',
-  canonicalMessage: '/api/message',
-  legacyMcp: '/mcp',
-  legacySse: '/sse',
-  legacyMessage: '/message',
-} as const;
-
-const RETIRED_TRANSPORT_PATHS = new Set<string>([
-  ROUTE_PATHS.canonicalSse,
-  ROUTE_PATHS.canonicalMessage,
-  ROUTE_PATHS.legacySse,
-  ROUTE_PATHS.legacyMessage,
-]);
-
-const ACTIVE_TRANSPORT_PATHS = new Set<string>([
-  ROUTE_PATHS.canonicalMcp,
-  ROUTE_PATHS.legacyMcp,
-]);
-
-const JSON_RESPONSE_HEADERS = { 'Content-Type': 'application/json' } as const;
-
-type JsonErrorDefinition = {
-  status: number;
-  error: string;
-  code: string;
-};
-
-const HTTP_STATUS = {
-  unauthorized: 401,
-  serviceUnavailable: 503,
-} as const;
+import { AppLayer } from '../../../lib/http/app';
+import { memoMap } from '../../../lib/effect/runtime';
+import { HttpRouter } from 'effect/http';
+import { McpHandlers, McpRoutes } from '../../../lib/http/routes/mcp';
+import type { AuthenticatedAuthInfo } from '../../../mcp/transport/oauth-token';
 
 function v2ToolConfig(tool: NeonTool) {
   const registration = toolRegistration(tool);
@@ -120,32 +67,6 @@ function v2ToolConfig(tool: NeonTool) {
     ...registration,
     inputSchema: fromJsonSchema(toListedInputSchema(registration.inputSchema)),
   };
-}
-
-const PROTECTED_RESOURCE_METADATA_PATH =
-  '/.well-known/oauth-protected-resource';
-
-// Local development is the local-server case the spec's DNS-rebinding rule
-// targets, so `next dev` only accepts its own and localhost origins.
-const DEV_ALLOWED_ORIGIN_HOSTNAMES = [
-  new URL(SERVER_HOST).hostname,
-  ...localhostAllowedOrigins(),
-].filter((hostname, index, hostnames) => hostnames.indexOf(hostname) === index);
-
-function originRejection(req: Request): Response | undefined {
-  if (process.env.NODE_ENV !== 'production') {
-    return originValidationResponse(req, DEV_ALLOWED_ORIGIN_HOSTNAMES);
-  }
-  const origin = req.headers.get('origin');
-  if (origin === null || isWellFormedOrigin(origin)) return undefined;
-  return Response.json(
-    {
-      jsonrpc: '2.0',
-      error: { code: -32000, message: `Invalid Origin: ${origin}` },
-      id: null,
-    },
-    { status: 403 },
-  );
 }
 
 // A stateless client cancels by closing the HTTP request; an MCP
@@ -169,39 +90,6 @@ function getRequestClientName(ctx: McpServerContext): string | undefined {
     return undefined;
   }
   return clientInfo.name;
-}
-
-type AuthenticatedAuthInfo = AuthInfo & {
-  extra?: {
-    apiKey?: string;
-    authMethod?: AuthContext['extra']['authMethod'];
-    account?: AuthContext['extra']['account'];
-    readOnly?: boolean;
-    grant?: GrantContext;
-    client?: AuthContext['extra']['client'];
-    transport?: AppContext['transport'];
-    userAgent?: string;
-  };
-};
-
-const TOKEN_STORE_UNAVAILABLE_RESPONSE: JsonErrorDefinition = {
-  status: HTTP_STATUS.serviceUnavailable,
-  error: 'Token store unavailable',
-  code: 'token_store_unavailable',
-};
-
-const TOKEN_STORE_RETRY_AFTER_SECONDS = '5';
-
-// verifyToken can only return auth info or nothing, and mcp-handler turns
-// nothing into a 401 that sends OAuth clients back through refresh. Requests
-// that failed because the token store was down are marked here so
-// handleRequest can answer 503 instead.
-const tokenStoreUnavailableRequests = new WeakSet<Request>();
-
-function tokenStoreUnavailableResponse(): Response {
-  const response = jsonErrorResponse(TOKEN_STORE_UNAVAILABLE_RESPONSE);
-  response.headers.set('Retry-After', TOKEN_STORE_RETRY_AFTER_SECONDS);
-  return response;
 }
 
 type StaticToolContext = {
@@ -680,204 +568,6 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
   return (req: Request) => sdkErrors.settleAfter(handler(req));
 }
 
-// Cache TTL for API key verification (5 minutes)
-// Balances security (revoked keys stop working soon) with performance (reduce API calls)
-const API_KEY_CACHE_TTL_MS = 5 * 60 * 1000;
-
-// Helper: Fetch and cache API key details
-// Resolves an API key's account, or reports `'oauth'` as soon as Neon says
-// the bearer is an OAuth token, before account resolution can fail it.
-const fetchAccountDetails = async (
-  accessToken: string,
-): Promise<ApiKeyRecord | 'oauth' | null> => {
-  // 1. Check cache first
-  try {
-    const cached = await getApiKeys().get(accessToken);
-    if (cached) {
-      logger.info('API key cache hit', { accountId: cached.account.id });
-      return cached.authMethod === 'oauth' ? 'oauth' : cached;
-    }
-  } catch (error) {
-    logger.warn('API key cache read failed', { error });
-  }
-
-  // 2. Cache miss - verify with Neon API
-  try {
-    const neonClient = createNeonClient(accessToken);
-    const { data: auth } = await neonClient.getAuthDetails();
-    if (auth.auth_method === 'oauth') {
-      return 'oauth';
-    }
-
-    // Use shared account resolution with identify on cache miss
-    const account = await resolveAccountFromAuth(auth, neonClient, {
-      context: { authMethod: auth.auth_method },
-    });
-
-    const record: ApiKeyRecord = {
-      apiKey: accessToken,
-      authMethod: auth.auth_method,
-      account,
-    };
-
-    // 4. Save to cache with TTL (non-blocking)
-    waitUntil(
-      getApiKeys()
-        .set(accessToken, record, API_KEY_CACHE_TTL_MS)
-        .catch((err) => {
-          logger.warn('API key cache write failed', { err });
-        }),
-    );
-
-    logger.info('API key cache miss, verified and cached', {
-      accountId: account.id,
-    });
-    return record;
-  } catch (error) {
-    logger.error('API key verification failed', {
-      message: error instanceof Error ? error.message : String(error),
-      status: error instanceof NeonApiError ? error.status : undefined,
-      data: error instanceof NeonApiError ? error.body : undefined,
-    });
-    return null;
-  }
-};
-
-// Token verification function with two paths (OAuth tokens + API keys)
-const verifyToken = async (
-  req: Request,
-  bearerToken?: string,
-): Promise<AuthInfo | undefined> => {
-  const userAgent = req.headers.get('user-agent') || undefined;
-  const readOnlyHeader = req.headers.get('x-read-only');
-
-  logger.info('verifyToken called', {
-    hasBearerToken: !!bearerToken,
-    bearerTokenLength: bearerToken?.length ?? 0,
-    userAgent,
-  });
-
-  if (!bearerToken) {
-    return undefined;
-  }
-
-  // Parse request-level grant and read-only controls.
-  const url = new URL(req.url);
-  const searchParams = url.searchParams;
-  const readOnlyQueryParam = searchParams.get('readonly');
-
-  // ============================================
-  // PATH 1: Check OAuth tokens table FIRST
-  // (For users who authenticated via OAuth flow)
-  // ============================================
-  let tokenLookupFailed = false;
-  let token: Awaited<ReturnType<typeof model.getAccessToken>> | undefined;
-  try {
-    token = await model.getAccessToken(bearerToken);
-  } catch (error) {
-    tokenLookupFailed = true;
-    logger.warn('OAuth token lookup failed, trying API key path', { error });
-  }
-  if (token) {
-    // Expiration is checked by withMcpAuth using expiresAt field
-    // which returns proper RFC-compliant 401 with WWW-Authenticate header
-
-    logger.info('OAuth token found', { clientId: token.client.id });
-
-    let tokenGrant: GrantContext;
-    try {
-      tokenGrant = resolveGrantFromToken(token as { grant?: GrantContext });
-    } catch (error) {
-      // A stored grant we cannot read must not fall through to the API-key
-      // path, which would authenticate the same bearer without its grant.
-      logger.error('OAuth token grant is invalid', {
-        clientId: token.client.id,
-        errorName: error instanceof Error ? error.name : 'unknown',
-      });
-      return undefined;
-    }
-
-    const readOnly = isReadOnly({
-      scope: token.scope,
-    });
-
-    // Return auth from stored token (0 API calls!)
-    return {
-      token: token.accessToken,
-      scopes: Array.isArray(token.scope)
-        ? token.scope
-        : (token.scope?.split(' ') ?? ['read', 'write']),
-      clientId: token.client.id,
-      expiresAt: token.expires_at
-        ? Math.floor(token.expires_at / 1000)
-        : undefined,
-      extra: {
-        authMethod: 'oauth',
-        account: {
-          id: token.user.id,
-          name: token.user.name,
-          email: token.user.email,
-          isOrg: token.user.isOrg ?? false,
-        },
-        apiKey: bearerToken,
-        readOnly,
-        grant: tokenGrant,
-        client: {
-          id: token.client.id,
-          name: token.client.client_name,
-        },
-        transport: 'stream',
-        userAgent,
-      },
-    };
-  }
-
-  // ============================================
-  // PATH 2: Not an OAuth token - try API key
-  // (For direct API key usage)
-  // ============================================
-  logger.info('Trying API key verification path');
-
-  const apiKeyRecord = await fetchAccountDetails(bearerToken);
-  if (!apiKeyRecord) {
-    return undefined;
-  }
-
-  // Our access tokens are Neon OAuth tokens, so they also pass the API-key
-  // check. Their grant and scope live only in the token store; building them
-  // from the URL here would drop what the user chose at consent.
-  if (apiKeyRecord === 'oauth') {
-    logger.warn('OAuth bearer reached the API key path; refusing URL grant', {
-      tokenLookupFailed,
-    });
-    if (tokenLookupFailed) {
-      tokenStoreUnavailableRequests.add(req);
-    }
-    return undefined;
-  }
-
-  const readOnly = isReadOnly({
-    queryParamValue: readOnlyQueryParam,
-    headerValue: readOnlyHeader,
-  });
-  const urlGrant = resolveGrantFromSearchParams(searchParams);
-
-  return {
-    token: bearerToken,
-    scopes: ['*'], // API keys get all scopes
-    clientId: 'api-key', // Literal string
-    extra: {
-      authMethod: apiKeyRecord.authMethod,
-      account: apiKeyRecord.account,
-      apiKey: bearerToken,
-      readOnly,
-      grant: urlGrant,
-      transport: 'stream',
-      userAgent,
-    },
-  };
-};
-
 function getStaticToolContext(req: Request): StaticToolContext {
   const authInfo = req.auth;
   const authExtra = authInfo?.extra;
@@ -897,132 +587,6 @@ function getStaticToolContext(req: Request): StaticToolContext {
     grant,
     readOnly: authExtra?.readOnly === true,
   };
-}
-
-/**
- * What GET answers for this endpoint, minus the body.
- *
- * HEAD must not be forwarded to mcp-handler: its streamable-HTTP branch writes a
- * response only for GET, DELETE, and POST, so a HEAD falls through every branch
- * and the response promise never settles. The invocation then runs to the Fluid
- * Compute ceiling and Vercel answers 504 — 800 seconds of compute per probe, and
- * uptime checkers send them on a schedule.
- *
- * Mirroring GET keeps HEAD useful: probes learn the endpoint is alive, and the
- * status matches what a GET would have returned.
- */
-function headMirrorResponse(): Response {
-  // The streamable-HTTP transport is POST-only; GET is 405 (mcp-handler).
-  return new Response(null, {
-    status: 405,
-    headers: { ...JSON_RESPONSE_HEADERS, Allow: 'POST' },
-  });
-}
-
-/** Drop the body while preserving status and headers, as HEAD requires. */
-function stripBody(response: Response): Response {
-  return new Response(null, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
-}
-
-function jsonErrorResponse({
-  status,
-  error,
-  code,
-}: JsonErrorDefinition): Response {
-  return new Response(JSON.stringify({ error, code }), {
-    status,
-    headers: JSON_RESPONSE_HEADERS,
-  });
-}
-
-// Wrap with authentication. After auth is resolved, route to a context-scoped
-// MCP handler whose registered tools match the token grant/read-only context.
-const authHandler = withMcpAuth(
-  async (req) =>
-    withSdkCompatRiskLog(req, () =>
-      withMcpSession(
-        req,
-        createContextualMcpHandler(getStaticToolContext(req)),
-      ),
-    ),
-  verifyToken,
-  {
-    required: true,
-    resourceMetadataPath: PROTECTED_RESOURCE_METADATA_PATH,
-  },
-);
-
-// HEAD goes through the same auth pipeline as GET, so an unauthenticated probe
-// still receives the 401 + WWW-Authenticate that MCP clients rely on for OAuth
-// discovery. Only the handler differs: it answers directly instead of handing the
-// request to mcp-handler, which would never respond to a HEAD.
-const headAuthHandler = withMcpAuth(
-  async () => headMirrorResponse(),
-  verifyToken,
-  {
-    required: true,
-    resourceMetadataPath: PROTECTED_RESOURCE_METADATA_PATH,
-  },
-);
-
-function rewriteResourceMetadataHeader(
-  response: Response,
-  request: Request,
-): Response {
-  if (response.status !== HTTP_STATUS.unauthorized) {
-    return response;
-  }
-
-  const wwwAuthenticate = response.headers.get('WWW-Authenticate');
-  if (!wwwAuthenticate) {
-    return response;
-  }
-
-  const resourceMetadataUrl =
-    buildResourceMetadataUrlForResourceRequest(request);
-
-  const updatedHeader = /resource_metadata="[^"]*"/.test(wwwAuthenticate)
-    ? wwwAuthenticate.replace(
-        /resource_metadata="[^"]*"/,
-        `resource_metadata="${resourceMetadataUrl}"`,
-      )
-    : `${wwwAuthenticate}, resource_metadata="${resourceMetadataUrl}"`;
-
-  if (updatedHeader === wwwAuthenticate) {
-    return response;
-  }
-
-  const headers = new Headers(response.headers);
-  headers.set('WWW-Authenticate', updatedHeader);
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}
-
-function retiredTransportMessage(): string {
-  const mcpUrl = new URL('/mcp', SERVER_HOST).href;
-  return `HTTP+SSE was removed. Connect to ${mcpUrl} using Streamable HTTP. Stdio-only clients can bridge it with \`npx -y mcp-remote ${mcpUrl}\`. See https://neon.com/docs/ai/neon-mcp-server#retired-sse.`;
-}
-
-function retiredTransportResponse(method: string): Response {
-  const body =
-    method === 'HEAD'
-      ? null
-      : JSON.stringify({
-          error: 'transport_gone',
-          message: retiredTransportMessage(),
-        });
-  return new Response(body, {
-    status: 410,
-    headers: JSON_RESPONSE_HEADERS,
-  });
 }
 
 function parseJsonBody(text: string): unknown {
@@ -1075,94 +639,32 @@ async function withMcpSession(
   });
 }
 
-// Normalize the public /mcp rewrite to its internal App Router path so OAuth
-// resource metadata and transport handling use one canonical URL.
-const handleRequest = async (req: Request): Promise<Response> => {
-  const url = new URL(req.url);
-
-  if (RETIRED_TRANSPORT_PATHS.has(url.pathname)) {
-    return retiredTransportResponse(req.method);
-  }
-
-  if (!ACTIVE_TRANSPORT_PATHS.has(url.pathname)) {
-    return new Response(null, { status: 404 });
-  }
-
-  const rejectedOrigin = originRejection(req);
-  if (rejectedOrigin) {
-    return rejectedOrigin;
-  }
-
-  // A malformed pinned role is rejected before auth rather than ignored, so a
-  // typo in the connection URL cannot silently fall back to the owner role.
-  try {
-    parseRoleNameParam(url.searchParams);
-  } catch (error) {
-    if (error instanceof InvalidRoleNameError) {
-      return new Response(
-        JSON.stringify({
-          error: 'invalid_request',
-          error_description: error.message,
-        }),
-        { status: 400, headers: JSON_RESPONSE_HEADERS },
-      );
-    }
-    throw error;
-  }
-
-  if (isLandingPageRequest(req)) {
-    return landingPageResponse(req);
-  }
-
-  if (url.pathname === ROUTE_PATHS.legacyMcp) {
-    url.pathname = ROUTE_PATHS.canonicalMcp;
-  }
-
-  const normalizedReq = new Request(url.toString(), {
-    method: req.method,
-    headers: req.headers,
-    body: req.body,
-    signal: req.signal,
-    // @ts-expect-error duplex is required for streaming bodies
-    duplex: 'half',
-  });
-
-  // HEAD is answered here rather than by either MCP handler, both of which leave
-  // it unanswered until the function times out. Checked before the docs-only
-  // bypass because that path skips auth entirely, which would otherwise let an
-  // anonymous HEAD probe hang.
-  if (normalizedReq.method === 'HEAD') {
-    if (isDocsOnlyRequest(url.searchParams)) {
-      return headMirrorResponse();
-    }
-    return Promise.resolve(headAuthHandler(normalizedReq)).then((resolved) =>
-      stripBody(
-        tokenStoreUnavailableRequests.has(normalizedReq)
-          ? tokenStoreUnavailableResponse()
-          : rewriteResourceMetadataHeader(resolved, req),
-      ),
-    );
-  }
-
-  // Strict docs-only mode: bypass OAuth entirely so docs tools are usable
-  // without an account. Only triggers when the request is exactly
-  // ?category=docs (no other categories, no projectId).
-  if (isDocsOnlyRequest(url.searchParams)) {
-    const response = await withSdkCompatRiskLog(normalizedReq, () =>
+// The MCP handlers stay here; the Effect route in lib/http/routes/mcp.ts
+// authenticates the request and hands it to one of them.
+const handlers = Layer.succeed(McpHandlers)({
+  serveDocsOnly: async (req) =>
+    withSdkCompatRiskLog(req, async () =>
       withMcpSession(
-        normalizedReq,
+        req,
         createDocsOnlyMcpHandler(req.headers.get('user-agent') ?? undefined),
       ),
-    );
-    return flushAfterResponse(response);
-  }
+    ),
+  serveAuthenticated: async (req) =>
+    withSdkCompatRiskLog(req, async () =>
+      withMcpSession(
+        req,
+        createContextualMcpHandler(getStaticToolContext(req)),
+      ),
+    ),
+});
 
-  const resolved = await authHandler(normalizedReq);
-  const response = tokenStoreUnavailableRequests.has(normalizedReq)
-    ? tokenStoreUnavailableResponse()
-    : rewriteResourceMetadataHeader(resolved, req);
-  return flushAfterResponse(response);
-};
+const transport = HttpRouter.toWebHandler(
+  Layer.mergeAll(McpRoutes, handlers, AppLayer),
+  { disableLogger: true, memoMap },
+);
+
+const handleRequest = async (request: Request): Promise<Response> =>
+  transport.handler(request);
 
 // HEAD is exported explicitly. Next.js would otherwise route it to the GET export,
 // which is the same function, but relying on that implicit mapping hides the fact
