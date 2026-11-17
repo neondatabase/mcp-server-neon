@@ -6,6 +6,7 @@ import {
 } from '@sentry/node';
 import { SENTRY_DSN } from '../constants';
 import { copySessionAttributes, tagEventWithSession } from './session';
+import { recordTimeoutOrigins } from './timeout-origin';
 import pkg from '../../package.json';
 
 type SpanJSON = Parameters<NonNullable<NodeOptions['beforeSendSpan']>>[0];
@@ -18,6 +19,8 @@ function withoutTargetQuery(span: SpanJSON): SpanJSON {
     data: { ...span.data, 'http.target': target.slice(0, target.indexOf('?')) },
   };
 }
+
+recordTimeoutOrigins();
 
 init({
   dsn: SENTRY_DSN,
