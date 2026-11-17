@@ -11923,13 +11923,14 @@
           "description": "Order matching records by timestamp."
         },
         "source": {
+          "description": "Only records emitted by this Neon service. neon_auth returns 404 telemetry_not_enabled when the project's Neon Auth logs are not enabled, even when other sources return logs.",
           "type": "string",
           "enum": [
             "function",
             "storage",
-            "pg_endpoint"
-          ],
-          "description": "The Neon service that emitted the log record."
+            "pg_endpoint",
+            "neon_auth"
+          ]
         },
         "service_name": {
           "type": "string",
@@ -12154,13 +12155,14 @@
           "description": "Exclusive end of the lookup window."
         },
         "source": {
+          "description": "Only consider records emitted by this Neon service. neon_auth returns 404 telemetry_not_enabled when the project's Neon Auth logs are not enabled, even when other sources return logs.",
           "type": "string",
           "enum": [
             "function",
             "storage",
-            "pg_endpoint"
-          ],
-          "description": "Only consider records emitted by this Neon service."
+            "pg_endpoint",
+            "neon_auth"
+          ]
         },
         "limit": {
           "type": "integer",
@@ -14070,6 +14072,12 @@
             "user"
           ],
           "description": "Principal type for the credential."
+        },
+        "expires_at": {
+          "description": "When the credential stops working, 1 minute to 365 days from now. Omit for a credential that never expires.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
         }
       },
       "required": [

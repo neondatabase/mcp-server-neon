@@ -213,6 +213,9 @@ process.env.E2E_SENTRY_PORT = '3113';
 
 process.env.NEON_SITE_SEARCH_URL = `http://127.0.0.1:${portOf(api)}/site-search`;
 
+// Every docs page is unknown to the local API, so `get_doc` gets a 404.
+process.env.NEON_DOCS_BASE_URL = `http://127.0.0.1:${portOf(api)}/docs`;
+
 // The route reads OAuth tokens and the API-key cache before verifying a key.
 // A closed port makes those reads fail at once, as the route tolerates, so the
 // test never reaches an inherited database.
@@ -587,6 +590,20 @@ describe('tool error results', () => {
     expect(packageToolSpans.get(z.string().parse(notFound.traceId))).toBe('ok');
     expect(packageToolSpans.get(z.string().parse(serverError.traceId))).toBe(
       'internal_error',
+    );
+  });
+
+  it('keeps the package tool span ok for a doc page that does not exist', async () => {
+    const missingDoc = await call({
+      query: '',
+      name: 'get_doc',
+      arguments: { slug: 'docs/missing-page' },
+    });
+
+    await flush(2000);
+
+    expect(packageToolSpans.get(z.string().parse(missingDoc.traceId))).toBe(
+      'ok',
     );
   });
 });
