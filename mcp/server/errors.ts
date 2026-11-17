@@ -45,6 +45,41 @@ const POSTGRES_ERROR_FIELDS = [
   ['where', 'CONTEXT'],
 ] as const;
 
+type NeonApiErrorField = {
+  /** Label of the line in the tool result. */
+  label: string;
+  /** Key in the Sentry event's `extra` and in the error log. */
+  key: string;
+  value: string;
+};
+
+/**
+ * What identifies a failed Neon API request. A server error's message is
+ * whatever the API wrote, which can say nothing at all, so the status and
+ * request id are what a user can act on or quote to Neon support. Never the
+ * response body: it can quote user data, such as a Neon Auth user's email.
+ */
+const neonApiErrorFields = (error: NeonApiError): NeonApiErrorField[] =>
+  [
+    { label: 'HTTP status', key: 'neonApiStatus', value: String(error.status) },
+    { label: 'Code', key: 'neonErrorCode', value: error.code ?? '' },
+    { label: 'Request ID', key: 'neonRequestId', value: error.requestId ?? '' },
+  ].filter(({ value }) => value !== '');
+
+/** The Sentry tags and `extra` fields of a server error; `extra` is logged too. */
+const serverErrorReport = (agent: IdentifiedClient, apiError?: NeonApiError) =>
+  apiError === undefined
+    ? { tags: agentSentryTags(agent), extra: {} }
+    : {
+        tags: {
+          ...agentSentryTags(agent),
+          'neon.api.status': String(apiError.status),
+        },
+        extra: Object.fromEntries(
+          neonApiErrorFields(apiError).map(({ key, value }) => [key, value]),
+        ),
+      };
+
 function errorText(error: unknown): string {
   if (!(error instanceof Error)) {
     return 'Unknown error';
@@ -57,6 +92,14 @@ function errorText(error: unknown): string {
         lines.push(`${label}: ${value}`);
       }
     }
+  }
+
+  if (error instanceof NeonApiError) {
+    lines.push(
+      ...neonApiErrorFields(error).map(
+        ({ label, value }) => `${label}: ${value}`,
+      ),
+    );
   }
   return lines.join('\n');
 }
@@ -118,7 +161,17 @@ export function handleToolError(
       ],
     };
   } else {
-    const errorContext = { ...properties, ...(traceId && { traceId }) };
+    const report = serverErrorReport(
+      agent,
+      error instanceof NeonApiError ? error : undefined,
+    );
+
+    const errorContext = {
+      ...properties,
+      ...(traceId && { traceId }),
+      ...report.extra,
+    };
+
     logger.error('Tool call error:', {
       error:
         error instanceof Error
@@ -126,10 +179,7 @@ export function handleToolError(
           : 'Unknown error',
       ...errorContext,
     });
-    captureException(error, {
-      extra: errorContext,
-      tags: agentSentryTags(agent),
-    });
+    captureException(error, { extra: errorContext, tags: report.tags });
     return errorResponse(error);
   }
 }

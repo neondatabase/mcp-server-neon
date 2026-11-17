@@ -26,6 +26,7 @@ const PROJECT = {
   notFound: 'proj-not-found',
   forbidden: 'proj-forbidden',
   serverError: 'proj-server-error',
+  emptyReason: 'proj-empty-reason',
   network: 'proj-network',
   sql: 'proj-sql',
   tuning: 'proj-tuning',
@@ -113,6 +114,19 @@ const FAILING_PROJECTS = new Map<string, { status: number; body: Json }>([
   [
     PROJECT.serverError,
     { status: 500, body: { message: 'internal server error' } },
+  ],
+  // The Neon API's wrapper around a failed upstream service call, when the
+  // service gave no reason.
+  [
+    PROJECT.emptyReason,
+    {
+      status: 500,
+      body: {
+        request_id: 'req-empty-reason',
+        code: '',
+        message: 'request failed; reason:"", code:""',
+      },
+    },
   ],
   // A 4xx, so the case shows the completion wrapper turning a client-level
   // cleanup failure into a server failure.
@@ -332,6 +346,15 @@ const CASES = {
     query: '',
     name: 'describe_project',
     arguments: { project_id: PROJECT.serverError },
+  },
+  'Neon API 500 without a reason on a delete': {
+    query: '',
+    name: 'delete_auth_user',
+    arguments: {
+      project_id: PROJECT.emptyReason,
+      branch_id: BRANCH_ID,
+      auth_user_id: '6f1c2a3e-1111-4222-8333-944455556666',
+    },
   },
   'network failure': {
     query: '',

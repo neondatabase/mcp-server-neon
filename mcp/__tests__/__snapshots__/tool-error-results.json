@@ -312,7 +312,39 @@
           "content": [
             {
               "type": "text",
-              "text": "NeonApiError: internal server error"
+              "text": "NeonApiError: internal server error\nHTTP status: 500"
+            }
+          ],
+          "isError": true,
+          "resultType": "complete",
+          "_meta": {}
+        },
+        "jsonrpc": "2.0",
+        "id": 1
+      }
+    },
+    "sentryErrorEvents": 1,
+    "toolSpan": {
+      "status": "internal_error",
+      "errorType": "NeonApiError"
+    }
+  },
+  "Neon API 500 without a reason on a delete": {
+    "tool": "delete_auth_user",
+    "query": "",
+    "arguments": {
+      "project_id": "proj-empty-reason",
+      "branch_id": "br-main-123",
+      "auth_user_id": "6f1c2a3e-1111-4222-8333-944455556666"
+    },
+    "response": {
+      "status": 200,
+      "message": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "NeonApiError: request failed; reason:\"\", code:\"\"\nHTTP status: 500\nRequest ID: req-empty-reason"
             }
           ],
           "isError": true,

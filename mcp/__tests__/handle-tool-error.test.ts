@@ -51,17 +51,100 @@ describe('handleToolError', () => {
     });
   });
 
-  it('captures 5xx Neon API errors with the same tags', () => {
+  it('captures 5xx Neon API errors with the same tags and their status', () => {
     const error = new NeonApiError('Internal Server Error', { status: 500 });
     handleToolError(error, properties, undefined, agent);
 
     expect(captureException).toHaveBeenCalledWith(error, {
-      extra: properties,
+      extra: { ...properties, neonApiStatus: '500' },
       tags: {
         'client.agent': 'ChatGPT',
         'client.application': 'chatgpt',
+        'neon.api.status': '500',
       },
     });
+  });
+
+  it('reports the status and request id of a 5xx whose message says nothing, and not its body', () => {
+    const body = {
+      request_id: 'req-5xx-1',
+      code: '',
+      message: 'request failed; reason:"", code:""',
+      email: 'someone@example.com',
+    };
+
+    const error = new NeonApiError(body.message, {
+      status: 500,
+      requestId: body.request_id,
+      body,
+    });
+
+    const result = handleToolError(error, properties, 'trace-1', agent);
+
+    expect(result.content).toStrictEqual([
+      {
+        type: 'text',
+        text: [
+          'NeonApiError: request failed; reason:"", code:""',
+          'HTTP status: 500',
+          'Request ID: req-5xx-1',
+        ].join('\n'),
+      },
+    ]);
+    expect(captureException).toHaveBeenCalledWith(error, {
+      extra: {
+        ...properties,
+        traceId: 'trace-1',
+        neonApiStatus: '500',
+        neonRequestId: 'req-5xx-1',
+      },
+      tags: {
+        'client.agent': 'ChatGPT',
+        'client.application': 'chatgpt',
+        'neon.api.status': '500',
+      },
+    });
+  });
+
+  it('reports a 5xx Neon API error code and omits fields the API did not send', () => {
+    const withCode = handleToolError(
+      new NeonApiError('platform service unavailable', {
+        status: 503,
+        code: 'SERVICE_UNAVAILABLE',
+      }),
+      properties,
+      'trace-1',
+      agent,
+    );
+
+    const bare = handleToolError(
+      new NeonApiError('Neon API request failed with status 524.', {
+        status: 524,
+      }),
+      properties,
+      'trace-1',
+      agent,
+    );
+
+    expect(withCode.content).toStrictEqual([
+      {
+        type: 'text',
+        text: [
+          'NeonApiError: platform service unavailable',
+          'HTTP status: 503',
+          'Code: SERVICE_UNAVAILABLE',
+        ].join('\n'),
+      },
+    ]);
+    expect(bare.content).toStrictEqual([
+      {
+        type: 'text',
+        text: [
+          'NeonApiError: Neon API request failed with status 524.',
+          'HTTP status: 524',
+        ].join('\n'),
+      },
+    ]);
   });
 
   it('does not capture client, 4xx API, or database errors', () => {
@@ -176,11 +259,13 @@ describe('handleToolError', () => {
     const result = handleToolError(error, properties, 'trace-1', agent);
 
     expect(result.isError).toBe(true);
-    expect(result.content).toContainEqual(
-      expect.objectContaining({
-        text: expect.stringContaining('[HTTP 409]'),
-      }),
-    );
+    expect(result.content).toStrictEqual([
+      { type: 'text', text: 'role with that name already exists' },
+      {
+        type: 'text',
+        text: '[HTTP 409] role with that name already exists',
+      },
+    ]);
     expect(captureException).not.toHaveBeenCalled();
   });
 });
