@@ -605,5 +605,9 @@ describe('tool error results', () => {
     expect(packageToolSpans.get(z.string().parse(missingDoc.traceId))).toBe(
       'ok',
     );
+    expect(toolSpans.get(z.string().parse(missingDoc.traceId))).toStrictEqual({
+      status: 'ok',
+      errorType: 'NotFoundError',
+    });
   });
 });
