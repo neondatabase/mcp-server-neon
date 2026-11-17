@@ -1,6 +1,7 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { NeonToolError } from '@neon/tools/effect';
 import type { Effect } from 'effect';
+import type { NeonSecretsMode } from '@neon/tools';
 import type { Api } from '../neon-client';
 import type { AuthContext } from '../types/auth';
 import type { ClientApplication } from '../utils/client-application';
@@ -18,6 +19,8 @@ export type ToolHandlerExtraParams = {
    * from the grant, never from tool arguments.
    */
   pinnedRoleName?: string;
+  /** Set only by `invokeTool` from the grant and read-only mode. */
+  secrets?: NeonSecretsMode;
 };
 
 export type ToolCallError = NeonToolError | ToolStepFailed;

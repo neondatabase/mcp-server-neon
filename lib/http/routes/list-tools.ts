@@ -11,6 +11,11 @@ import {
   InvalidRoleNameError,
   resolveGrantFromSearchParams,
 } from '../../../mcp/utils/grant-context';
+import {
+  InvalidSecretsError,
+  SECRETS_HEADER,
+  withRequestSecrets,
+} from '../../../mcp/utils/secrets';
 import type { NeonTool } from '../../../mcp/tools/tool-definition';
 import { isReadOnly } from '../../../mcp/utils/read-only';
 import { ListToolsFailed } from './list-tools-errors';
@@ -18,10 +23,10 @@ import { ListToolsFailed } from './list-tools-errors';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'x-read-only',
+  'Access-Control-Allow-Headers': `x-read-only, ${SECRETS_HEADER}`,
 };
 
-/** The `roleName` query parameter is not a valid Postgres role name. */
+/** The `roleName` or `secrets` query parameter, or the secrets header, is malformed. */
 class InvalidRoleName extends Schema.TaggedError<
   InvalidRoleName,
   { readonly brand: unique symbol }
@@ -31,7 +36,10 @@ const step = <A>(phase: string, run: () => A) =>
   Effect.try({
     try: run,
     catch: (cause) => {
-      if (cause instanceof InvalidRoleNameError) {
+      if (
+        cause instanceof InvalidRoleNameError ||
+        cause instanceof InvalidSecretsError
+      ) {
         return InvalidRoleName.make({ message: cause.message });
       }
 
@@ -45,6 +53,16 @@ const step = <A>(phase: string, run: () => A) =>
       });
     },
   });
+
+const requestGrant = (
+  searchParams: URLSearchParams,
+  secretsHeader: string | undefined,
+) =>
+  withRequestSecrets(
+    resolveGrantFromSearchParams(searchParams),
+    searchParams,
+    secretsHeader,
+  );
 
 const listedTool = (tool: NeonTool) => ({
   name: tool.name,
@@ -66,11 +84,12 @@ const listedTool = (tool: NeonTool) => ({
 const listToolsResponse = Effect.fn('ListTools.body')(function* (input: {
   readonly searchParams: URLSearchParams;
   readonly readOnlyHeader: string | undefined;
+  readonly secretsHeader: string | undefined;
 }) {
-  const { searchParams, readOnlyHeader } = input;
+  const { searchParams, readOnlyHeader, secretsHeader } = input;
 
   const grant = yield* step('resolve_grant', () =>
-    resolveGrantFromSearchParams(searchParams),
+    requestGrant(searchParams, secretsHeader),
   ).pipe(Effect.catchTag('InvalidRoleName', Effect.succeed));
 
   if (grant instanceof InvalidRoleName) {
@@ -150,6 +169,7 @@ const listTools = Effect.gen(function* () {
   return yield* listToolsResponse({
     searchParams: new URL(request.originalUrl).searchParams,
     readOnlyHeader: request.headers['x-read-only'],
+    secretsHeader: request.headers[SECRETS_HEADER],
   }).pipe(
     Effect.catchTag('ListToolsFailed', (failure) =>
       failedResponse({ failure, startedAt }),

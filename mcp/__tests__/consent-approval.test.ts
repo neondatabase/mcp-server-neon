@@ -146,6 +146,7 @@ describe('parseConsentPost', () => {
     const parsed = parseConsentPost({
       form: form([
         ['action', 'approve'],
+        ['secrets', 'setup'],
         ['projectMode', 'all'],
         ['scopes', 'read'],
         ['category', 'projects'],
@@ -199,6 +200,7 @@ describe('parseConsentPost', () => {
     const parsed = parseConsentPost({
       form: form([
         ['action', 'approve'],
+        ['secrets', 'setup'],
         ['projectMode', 'one'],
         ['projectId', ' proj-example '],
         ['category', 'querying'],
@@ -218,6 +220,77 @@ describe('parseConsentPost', () => {
           scopes: ['querying', 'schema'],
         },
         grantWrite: true,
+      },
+    });
+  });
+
+  it.each([
+    ['all', { secrets: 'all' }],
+    ['none', { secrets: 'none' }],
+    ['setup', {}],
+  ] as const)('stores the %s secrets choice', (choice, stored) => {
+    const parsed = parseConsentPost({
+      form: form([
+        ['action', 'approve'],
+        ['secrets', choice],
+        ['projectMode', 'all'],
+        ['category', 'querying'],
+        ['scopes', 'read'],
+        ['scopes', 'write'],
+      ]),
+      mode: 'editable',
+      ceiling: editableCeiling(['read', 'write']),
+    });
+
+    expect(parsed).toStrictEqual({
+      action: 'approve',
+      confirmation: false,
+      selection: {
+        grant: { projectId: null, scopes: ['querying'], ...stored },
+        grantWrite: true,
+      },
+    });
+  });
+
+  it.each([[['yes']], [['all', 'none']]])(
+    'rejects a secrets value the form does not send (%j)',
+    (values) => {
+      const parsed = parseConsentPost({
+        form: form([
+          ['action', 'approve'],
+          ['projectMode', 'all'],
+          ['scopes', 'read'],
+          ...values.map((value): [string, string] => ['secrets', value]),
+        ]),
+        mode: 'editable',
+        ceiling: editableCeiling(['read', 'write']),
+      });
+
+      expect(parsed).toStrictEqual({
+        action: 'invalid',
+        error: {
+          kind: 'invalid_request',
+          description: 'Invalid secrets selection',
+        },
+      });
+    },
+  );
+
+  it('rejects a secrets choice on a fixed confirmation', () => {
+    const parsed = parseConsentPost({
+      form: form([
+        ['action', 'approve'],
+        ['secrets', 'all'],
+      ]),
+      mode: 'confirmation',
+      ceiling: editableCeiling(['read', 'write']),
+    });
+
+    expect(parsed).toStrictEqual({
+      action: 'invalid',
+      error: {
+        kind: 'invalid_request',
+        description: 'This connection grant cannot be edited on this page',
       },
     });
   });
@@ -244,6 +317,7 @@ describe('parseConsentPost', () => {
     const parsed = parseConsentPost({
       form: form([
         ['action', 'approve'],
+        ['secrets', 'setup'],
         ['projectMode', 'all'],
         ['roleName', ' app_reader '],
         ['category', 'querying'],
@@ -361,6 +435,7 @@ describe('parseConsentPost', () => {
     const parsed = parseConsentPost({
       form: form([
         ['action', 'approve'],
+        ['secrets', 'setup'],
         ['projectMode', 'all'],
         ['projectId', 'proj-leftover'],
         ['scopes', 'read'],

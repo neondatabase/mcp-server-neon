@@ -1,3 +1,4 @@
+import { REDACTED_SECRET } from '@neon/tools';
 import * as z from 'zod';
 import { InvalidArgumentError } from '../server/errors';
 import {
@@ -5,6 +6,7 @@ import {
   type GrantContext,
   type ScopeCategory,
 } from '../utils/grant-context';
+import { secretsNotices, withoutWithheldSecretTools } from '../utils/secrets';
 import { NEON_TOOLS } from './definitions';
 import type { NeonTool } from './tool-definition';
 
@@ -142,7 +144,7 @@ export function getAccessControlNotices(
         'Do not try to work around this restriction; it is intentional. ' +
         'If the user requests changes to Neon resources, inform them about the read-only configuration. ' +
         'Connection strings are unavailable in this mode because they carry a privileged role password; ' +
-        'if the user needs a DATABASE_URL, tell them to copy it from https://console.neon.tech. ' +
+        `if the user needs a DATABASE_URL, tell them to copy it from https://console.neon.tech. Other secrets in tool results show as ${REDACTED_SECRET}. ` +
         'The user can remove read-only mode by removing the readonly query param from the MCP server URL, ' +
         'then authorizing again when using OAuth.',
     );
@@ -188,7 +190,10 @@ export function getAccessControlNotices(
         `Valid values: ${SCOPE_CATEGORIES.join(', ')}.`,
     );
   }
-  return notices;
+  return [
+    ...notices,
+    ...secretsNotices(grant, readOnly, filterToolsForGrant(NEON_TOOLS, grant)),
+  ];
 }
 
 /**
@@ -199,7 +204,7 @@ export function getAccessControlNotices(
  *
  * Combines two filtering stages:
  * 1. Grant-based filtering (scope categories + project scoping)
- * 2. Read-only filtering (strips non-readOnlySafe tools when read-only is active)
+ * 2. Read-only and secrets filtering (non-readOnlySafe, then withheld secret-only tools)
  */
 export function getFilteredTools(
   grant: GrantContext,
@@ -209,7 +214,7 @@ export function getFilteredTools(
   if (readOnly) {
     tools = tools.filter((tool) => tool.readOnlySafe);
   }
-  return tools;
+  return withoutWithheldSecretTools(tools, grant, readOnly);
 }
 
 export function getAvailableTools(

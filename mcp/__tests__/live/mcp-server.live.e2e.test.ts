@@ -171,6 +171,8 @@ describe.sequential('MCP server live Neon lifecycle', () => {
   let server: McpServer | undefined;
   let readOnlyClient: Client | undefined;
   let readOnlyServer: McpServer | undefined;
+  const secretsClients: Partial<Record<'all' | 'none', Client>> = {};
+  const secretsServers: McpServer[] = [];
   let neonClient: NeonApiClient | undefined;
   let testOrgId = '';
   let projectId: string | undefined;
@@ -186,6 +188,29 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       arguments: params,
     });
   }
+
+  const smtpPasswordWith = async (
+    mode: 'all' | 'none',
+    target: { project_id: string; branch_id: string },
+  ) => {
+    const connected = secretsClients[mode];
+
+    if (!connected) {
+      throw new Error(`secrets=${mode} client is not connected.`);
+    }
+
+    const text = assertToolSucceeded(
+      `get_neon_auth_config/secrets=${mode}`,
+      await connected.callTool({
+        name: 'get_neon_auth_config',
+        arguments: target,
+      }),
+    );
+
+    return z
+      .object({ email_provider: z.object({ password: z.string().nullable() }) })
+      .parse(JSON.parse(text)).email_provider.password;
+  };
 
   async function inspectLocks(databaseName: string) {
     if (!projectId) throw new Error('Test project was not created.');
@@ -312,6 +337,19 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       await connect(context));
     ({ connectedServer: readOnlyServer, connectedClient: readOnlyClient } =
       await connect({ ...context, readOnly: true }));
+
+    const [all, none] = await Promise.all(
+      (['all', 'none'] as const).map(async (secrets) =>
+        connect({
+          ...context,
+          grant: { projectId: null, scopes: null, secrets },
+        }),
+      ),
+    );
+
+    secretsServers.push(all.connectedServer, none.connectedServer);
+    secretsClients.all = all.connectedClient;
+    secretsClients.none = none.connectedClient;
   }, LIVE_TEST_TIMEOUT_MS);
 
   afterAll(async () => {
@@ -335,6 +373,9 @@ describe.sequential('MCP server live Neon lifecycle', () => {
       await server?.close();
       await readOnlyClient?.close();
       await readOnlyServer?.close();
+      await secretsClients.all?.close();
+      await secretsClients.none?.close();
+      await Promise.all(secretsServers.map(async (open) => open.close()));
     }
   }, LIVE_TEST_TIMEOUT_MS);
 
@@ -1214,6 +1255,16 @@ describe.sequential('MCP server live Neon lifecycle', () => {
         host: 'smtp.invalid',
         password: REDACTED_SECRET,
       });
+
+      // The API masks the stored password for callers without project-credential read permission.
+      await expect(smtpPasswordWith('all', target)).resolves.toBeOneOf([
+        smtpPassword,
+        `****${smtpPassword.slice(-4)}`,
+      ]);
+      await expect(smtpPasswordWith('none', target)).resolves.toBe(
+        REDACTED_SECRET,
+      );
+
       expect(after.plugins.organization.membership_limit).toBe(
         before.plugins.organization.membership_limit + 1,
       );

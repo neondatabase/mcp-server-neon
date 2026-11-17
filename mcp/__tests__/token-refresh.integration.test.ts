@@ -214,11 +214,12 @@ describe('Token refresh flow', () => {
     expect(mockModel.saveRefreshResult).toHaveBeenCalledTimes(1);
   });
 
-  it('carries a pinned roleName grant onto the refreshed token', async () => {
+  it('carries a pinned roleName and secrets grant onto the refreshed token', async () => {
     const grant = {
       projectId: 'example-project-123',
       scopes: null,
       roleName: 'mcp_pinned_reader',
+      secrets: 'none' as const,
     };
     mockModel.getAccessToken.mockResolvedValue({
       ...TEST_OLD_ACCESS_TOKEN,

@@ -11,6 +11,16 @@ import {
   type GrantContext,
   type ScopeCategory,
 } from '../utils/grant-context';
+import {
+  DEFAULT_SECRETS,
+  effectiveSecrets,
+  grantSecrets,
+  SECRETS_CHOICES,
+  SECRETS_HELP,
+  SECRETS_LABELS,
+  secretsField,
+} from '../utils/secrets';
+import type { SecretsChoice } from '../utils/secrets';
 import type { ConsentMode } from './consent-mode';
 import type { ConsentField } from './consent-approval';
 import {
@@ -62,6 +72,7 @@ type ConsentView = {
   categories: ConsentCategories;
   unknownCategoryValues: string[];
   roleName?: string;
+  secrets: SecretsChoice;
   tools: ConsentTool[];
 };
 
@@ -166,6 +177,7 @@ type ConsentFormState = {
   roleName: string;
   categories: ScopeCategory[];
   writeChecked: boolean;
+  secrets: SecretsChoice;
 };
 
 type ConsentFieldError = { field: ConsentField; message: string };
@@ -198,6 +210,7 @@ function formStateFromGrant({
     categories:
       grant.scopes === null ? [...SCOPE_CATEGORIES] : [...grant.scopes],
     writeChecked,
+    secrets: grantSecrets(grant),
   };
 }
 
@@ -242,6 +255,7 @@ export function buildConsentView({
     categories,
     unknownCategoryValues: grant.unknownCategories ?? [],
     ...(grant.roleName !== undefined ? { roleName: grant.roleName } : {}),
+    secrets: effectiveSecrets(grant, !writeChecked),
     tools,
   };
 }
@@ -380,6 +394,10 @@ function renderGrantSummary(view: ConsentView): string {
         </div>`
             : ''
         }
+        <div>
+          <dt>Secrets in tool results:</dt>
+          <dd>${SECRETS_LABELS[view.secrets]}</dd>
+        </div>
       </dl>
       ${unknownHtml}
       ${emptyGrantNote(view)}
@@ -519,6 +537,7 @@ function renderEditableGrant({
         </p>
       </fieldset>
       ${renderRoleField({ formState, fieldError })}
+      ${renderSecretsField(formState.secrets)}
       <details class="choice choice-categories" data-category-disclosure>
         <summary class="category-disclosure-summary">
           <span class="choice-title">Tool categories</span>
@@ -586,6 +605,31 @@ function renderScopeSection({
     </section>`;
 }
 
+const renderSecretsField = (selected: SecretsChoice): string => {
+  const options = SECRETS_CHOICES.map(
+    (mode) => `
+        <label class="check-option">
+          <input type="radio" name="secrets" value="${mode}"${mode === selected ? ' checked' : ''} aria-describedby="secrets-help-${mode}" />
+          <span>${he.escape(SECRETS_LABELS[mode])}</span>
+        </label>
+        <p class="note" id="secrets-help-${mode}">${he.escape(SECRETS_HELP[mode])}</p>`,
+  ).join('');
+
+  return `
+      <details class="choice choice-secrets" data-secrets-disclosure>
+        <summary class="category-disclosure-summary">
+          <span class="choice-title">Secrets in tool results</span>
+          <span class="category-summary" data-secrets-summary>${he.escape(SECRETS_LABELS[selected])}</span>
+        </summary>
+        <div class="category-disclosure-body">
+          <fieldset class="choice">
+            <legend class="sr-only">Secrets in tool results</legend>${options}
+          </fieldset>
+          <p class="note">Read-only connections show no secrets.</p>
+        </div>
+      </details>`;
+};
+
 function consentScript(mode: ConsentMode): string {
   if (mode === 'confirmation') {
     return `
@@ -621,6 +665,7 @@ function consentScript(mode: ConsentMode): string {
     var CATALOG = ${catalog};
     var SCOPE_CATEGORIES = ${categories};
     var SCOPE_LABELS = ${labels};
+    var SECRETS_LABELS = ${JSON.stringify(SECRETS_LABELS)};
     var DISCOVERY_LABEL = ${JSON.stringify(DISCOVERY_LABEL)};
     var COLLAPSE_ABOVE = ${String(COLLAPSE_ABOVE)};
     var userExpanded = false;
@@ -649,7 +694,9 @@ function consentScript(mode: ConsentMode): string {
       else if (categories.length !== SCOPE_CATEGORIES.length) scopes = categories;
       var roleInput = document.querySelector('input[name="roleName"]');
       var roleName = roleInput instanceof HTMLInputElement && roleInput.value.trim() ? roleInput.value.trim() : null;
-      return { projectId: projectId, scopes: scopes, roleName: roleName };
+      var secretsInput = document.querySelector('input[name="secrets"]:checked');
+      var secrets = secretsInput instanceof HTMLInputElement ? secretsInput.value : ${JSON.stringify(DEFAULT_SECRETS)};
+      return { projectId: projectId, scopes: scopes, roleName: roleName, secrets: secrets };
     }
 
     function writeChecked() {
@@ -662,6 +709,7 @@ function consentScript(mode: ConsentMode): string {
         if (!checked && tool.writeOnly) return false;
         if (grant.projectId && !tool.projectScoped) return false;
         if (grant.roleName && PINNED_ROLE_WITHHELD[tool.name]) return false;
+        if (tool.withheldUnder.indexOf(checked ? grant.secrets : 'none') !== -1) return false;
         if (grant.scopes === null) return true;
         if (grant.scopes.length === 0) return !!ALWAYS[tool.name];
         if (ALWAYS[tool.name]) return true;
@@ -726,6 +774,8 @@ function consentScript(mode: ConsentMode): string {
       var grant = currentGrant();
       var roleSummary = document.querySelector('[data-role-summary]');
       if (roleSummary) roleSummary.textContent = grant.roleName || 'Database owner';
+      var secretsSummary = document.querySelector('[data-secrets-summary]');
+      if (secretsSummary) secretsSummary.textContent = SECRETS_LABELS[grant.secrets];
       var checked = writeChecked();
       var writeControl = document.querySelector('.scope-checkbox');
       var hiddenRead = document.querySelector('input[type="hidden"][name="scopes"][value="read"]');
@@ -780,7 +830,7 @@ function consentScript(mode: ConsentMode): string {
       }
     });
 
-    document.querySelectorAll('input[name="projectMode"], input[name="projectId"], input[name="roleName"], input[name="category"], input[type="radio"][name="scopes"]').forEach(function (input) {
+    document.querySelectorAll('input[name="projectMode"], input[name="projectId"], input[name="roleName"], input[name="category"], input[type="radio"][name="scopes"], input[name="secrets"]').forEach(function (input) {
       input.addEventListener('change', syncConsentUi);
       input.addEventListener('input', syncConsentUi);
     });
@@ -849,6 +899,7 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
           ...(formState.roleName.trim()
             ? { roleName: formState.roleName.trim() }
             : {}),
+          ...secretsField(formState.secrets),
         }
       : props.grant;
   const view = buildConsentView({
@@ -949,13 +1000,15 @@ export function renderConsentHtml(props: ConsentDialogProps): string {
     .note[data-project-id-help] { font-size: 14px; }
     .field-error { color: var(--danger); }
     .warning { padding: 12px; border: 1px solid var(--danger); }
-    .choice-categories, .choice-role { margin-top: 20px; padding-top: 20px; border-top: 1px dashed var(--line); }
+    .choice-categories, .choice-role, .choice-secrets { margin-top: 20px; padding-top: 20px; border-top: 1px dashed var(--line); }
     .choice-role .role-name { margin-top: 0; }
-    .choice-role .note { margin-top: 8px; font-size: 14px; }
+    .choice-role .note, .choice-secrets .note { margin-top: 8px; font-size: 14px; }
+    .choice-secrets .check-option + .note { margin: 4px 0 0 26px; }
+    .choice-secrets .note + .check-option { margin-top: 12px; }
     .category-disclosure-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .category-disclosure-summary .choice-title { display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0; margin: 0; }
     .choice-title::after, .tool-toggle::after { content: ''; display: block; width: 20px; height: 20px; background: url('/images/consent/chevron.svg') center / contain no-repeat; }
-    .choice-categories[open] .choice-title::after, .choice-role[open] .choice-title::after, .tool-toggle[aria-expanded="true"]::after { transform: rotate(180deg); }
+    .choice-categories[open] .choice-title::after, .choice-role[open] .choice-title::after, .choice-secrets[open] .choice-title::after, .tool-toggle[aria-expanded="true"]::after { transform: rotate(180deg); }
     .category-summary, .tool-block-title { color: var(--muted); font-size: 15px; text-align: right; }
     .category-disclosure-body { padding-top: 20px; }
     .choice-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }

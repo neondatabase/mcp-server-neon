@@ -172,11 +172,11 @@ infrastructure.
 
 2. **Tools System (`mcp/tools/`)**
    - Every tool comes from [`@neon/tools`](https://www.npmjs.com/package/@neon/tools): its implementation, input schema, safety annotations, and description. This server keeps only what is MCP-specific.
-   - `operations.ts`: the selected selectors and their grant metadata. `CUSTOM_TOOL_GRANTS` states scope, `readOnlySafe`, and `projectScoped` for the tools this server used to implement itself; `GENERATED_TOOL_SCOPES` gives the scope of every generated tool, whose `readOnlySafe` and `projectScoped` derive from method and path.
+   - `operations.ts`: the selected selectors and their grant metadata. `CUSTOM_TOOL_GRANTS` states scope and `projectScoped` for the tools this server used to implement itself; `GENERATED_TOOL_SCOPES` gives the scope of every generated tool, whose `projectScoped` derives from its path. `readOnlySafe` and `returnsOnlySecrets` come from each package tool's `metadata`.
    - `mcp-tool-names.json`: the published MCP name of every selector. It is a copy of `packages/tools/scripts/mcp-tool-names.json` in neondatabase/neon-pkgs and must stay identical to it.
    - `neon-tools.ts`: the one `createNeonTools` call, with the pinned names, the MCP-only description notes, and the docs, feedback, and API endpoints from `lib/config.ts`
    - `definitions.ts`: `NEON_TOOLS`, each package tool with its MCP name, grant flags, and annotations
-   - `tools.ts`: `NEON_HANDLERS`, which validate input, resolve `org_id`, pass the execution context (`apiKey`, `signal`, `readOnly`, `postgresRole`, `caller`), and render the package result as MCP content
+   - `tools.ts`: `NEON_HANDLERS`, which validate input, resolve `org_id`, pass the execution context (`apiKey`, `signal`, `readOnly`, `secrets`, `postgresRole`, `caller`), and render the package result as MCP content
 
 3. **Remote Transport (`app/api/[transport]/route.ts`)**
    - Next.js API route handling stateless Streamable HTTP
@@ -192,7 +192,8 @@ infrastructure.
 
 5. **Grant Context & Tool Filtering (`mcp/utils/grant-context.ts`, `mcp/tools/grant-filter.ts`)**
    - Fine-grained access control beyond plain read/write: per-category scopes (`projects`, `branches`, `endpoints`, `snapshots`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`, `functions`, `storage`, `realtime`) and optional project-scoping to a single `projectId`
-   - Grant resolved from OAuth resource URI query params (authorize-time), OAuth token grant field (runtime), or direct MCP URL query params for API-key auth. Those URL params stay camelCase (`projectId`, `category`, `readonly`).
+   - Grant resolved from OAuth resource URI query params (authorize-time), OAuth token grant field (runtime), or direct MCP URL query params for API-key auth. Those URL params stay camelCase (`projectId`, `category`, `readonly`, `roleName`, `secrets`).
+   - `secrets` (`mcp/utils/secrets.ts`) is stored on the grant like `roleName`: `all` or `none`, absent for the default `setup`. A request's `?secrets=` or `X-Neon-Secrets` can tighten any grant, OAuth included, never loosen it; `mcp/transport/auth.ts` applies that for both auth paths and rejects a malformed value before auth, and `lib/http/routes/list-tools.ts` does the same for the preview. Read-only connections use `none`. `invokeTool` passes the effective mode to `@neon/tools` as `secrets`, and `getFilteredTools` drops the tools `withheldUnderSecrets` names for it. A pinned role uses `none` for `list_postgres_roles` and `get_postgres_role` (`toolSecrets` in `grant-context.ts`).
    - `grant-filter.ts` filters `NEON_TOOLS` by scope category and hides project-agnostic tools in project-scoped mode. Project-aware published schemas keep `project_id` optional across grants; unscoped calls must supply it, while scoped calls can omit it or provide the matching grant ID. Injection precedes the original full handler schema validation.
    - Exposed publicly via `GET /api/list-tools` (stateless preview of tool visibility for a given grant)
 
@@ -204,13 +205,13 @@ infrastructure.
 
 - **Stateless Design**: The server is designed for serverless deployment. Tools like migrations and query tuning create temporary branches but do NOT store state in memory. Instead, all context (branch IDs, migration SQL, etc.) is returned to the LLM, which passes it back to subsequent tool calls. This enables horizontal scaling on Vercel.
 
-- **Read-Only Mode** (`mcp/utils/read-only.ts`): Tools define a `readOnlySafe` property. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available. Read-only mode is determined by priority: `X-Neon-Read-Only` header > `x-read-only` header (legacy) > OAuth scope (only `read` scope = read-only) > default (false). The module also exports `SCOPE_DEFINITIONS` for human-readable scope labels and `hasWriteScope()` to check for write permissions.
+- **Read-Only Mode** (`mcp/utils/read-only.ts`): Each `@neon/tools` tool states `metadata.readOnlySafe`. When the server runs in read-only mode, only tools marked as `readOnlySafe: true` are available, and the package refuses any other call made with `readOnly: true`. Read-only mode is determined by priority: `X-Neon-Read-Only` header > `x-read-only` header (legacy) > OAuth scope (only `read` scope = read-only) > default (false). The module also exports `SCOPE_DEFINITIONS` for human-readable scope labels and `hasWriteScope()` to check for write permissions.
 
   A `readOnlySafe` tool that runs caller-supplied SQL must run exactly one caller-supplied statement, as a prepared query, in its own `READ ONLY` transaction, as `run_sql` does. `run_sql_transaction` is not `readOnlySafe` because its statements share one transaction, so a `COMMIT` or `SET TRANSACTION READ WRITE` statement can end the transaction or switch it to read-write.
 
   `describe_branch` follows the same rule for its fixed structure query: one `SELECT` over the system catalogs in a `READ ONLY` transaction, in `@neon/tools`. Do not create helper objects to serve a read.
 
-  SQL tools report `metadata.method: "SQL"` whether or not they can write, so `readOnlySafe` for them is stated per tool in `CUSTOM_TOOL_GRANTS`, never derived from the method.
+  SQL tools report `metadata.method: "SQL"` whether or not they can write, so `@neon/tools` states `readOnlySafe` for each of them rather than deriving it from the method.
 
 - **MCP Tool Annotations**: All tools include MCP-standard annotations for client hints:
   - `title`: Human-readable tool name
@@ -237,11 +238,11 @@ Tools are implemented in `@neon/tools` (neondatabase/neon-pkgs, `packages/tools`
 
 To publish a package tool on this server:
 
-1. Add its selector to `operations.ts`. A generated Management API tool goes in `GENERATED_TOOL_SCOPES` with its scope category. A tool whose method or path does not say whether it is read-only safe or which project it touches (SQL, docs, anything without a Neon API path) goes in `CUSTOM_TOOL_GRANTS` with `scope`, `readOnlySafe`, and `projectScoped`:
+1. Add its selector to `operations.ts`. A generated Management API tool goes in `GENERATED_TOOL_SCOPES` with its scope category. A tool whose path does not say which project it touches (SQL, docs, anything without a Neon API path) goes in `CUSTOM_TOOL_GRANTS` with `scope` and `projectScoped`:
 
 ```typescript
 export const CUSTOM_TOOL_GRANTS = {
-  'sql.run': { scope: 'querying', readOnlySafe: true, projectScoped: true },
+  'sql.run': { scope: 'querying', projectScoped: true },
   // ...
 };
 ```
@@ -252,7 +253,7 @@ export const CUSTOM_TOOL_GRANTS = {
 Overrides stay MCP-specific:
 
 - Description text that only holds on this server (`org_id` auto-selection, read-only mode, connection scope) goes in `MCP_DESCRIPTION_NOTES` in `neon-tools.ts`, appended to the package text. Name other tools with `{{selector}}` so the reference resolves to their MCP name.
-- A result that MCP clients already parse in a shape the package does not return gets a renderer in `RESULT_RENDERERS` in `tools.ts`. Every other result is JSON text; generated results also pass through `sanitize.ts`.
+- A result that MCP clients already parse in a shape the package does not return gets a renderer in `RESULT_RENDERERS` in `tools.ts`. Every other result is JSON text. Secret fields are hidden by `@neon/tools` from the tool's `metadata.secretOutputFields`.
 - `kind: 'custom'` tools take annotations from the package; generated tools derive them in `definitions.ts`.
 
 ## Environment Configuration
@@ -314,7 +315,6 @@ normally provided through `.env.local`. Key variables:
 │   │   ├── neon-tools.ts   # createNeonTools call, MCP description notes
 │   │   ├── definitions.ts  # Tool definitions (NEON_TOOLS) with annotations
 │   │   ├── tools.ts        # Tool handlers (NEON_HANDLERS) and result rendering
-│   │   ├── sanitize.ts     # Credential stripping for generated results
 │   │   ├── grant-filter.ts # Filter NEON_TOOLS by grant context (scope categories, project scoping)
 │   │   ├── types.ts        # TypeScript types
 │   │   └── utils.ts        # org_id selection
@@ -324,6 +324,7 @@ normally provided through `.env.local`. Key variables:
 │   ├── types/          # Shared TypeScript types
 │   ├── utils/          # Shared utilities
 │   │   ├── read-only.ts          # Read-only mode detection, SUPPORTED_SCOPES
+│   │   ├── secrets.ts            # secrets param/header, effective mode, notices
 │   │   ├── grant-context.ts      # Grant resolution + scope categories + project scoping
 │   │   ├── singleflight.ts       # Promise deduplication by key (concurrent-call coalescing)
 │   │   ├── trace.ts              # TraceId generation for request correlation
@@ -406,7 +407,7 @@ The advertised OAuth scopes are `read` and `write`, listed in `scopes_supported`
 
 `*` is a request-time alias for write, and the scope stored on API-key tokens. It is not listed in `scopes_supported`. If a client requests `*` and write is granted, the issued token includes `*`.
 
-During authorization, a parameterized MCP URL (`projectId`, `category`, and/or `readonly`) is a fixed confirmation. A bare or omitted resource URL lets the user choose project, categories, and (when the OAuth request allows write) **Allow writes**. Issued OAuth scope is `read` or `read write`; project and categories are stored on the token grant, not as extra OAuth scope strings.
+During authorization, a parameterized MCP URL (`projectId`, `category`, `readonly`, `roleName`, and/or `secrets`) is a fixed confirmation. A bare or omitted resource URL lets the user choose project, categories, Postgres role, **Secrets in tool results** (Setup credentials by default; All secrets or No secrets stores `secrets: 'all'` or `'none'`), and (when the OAuth request allows write) **Allow writes**. Issued OAuth scope is `read` or `read write`; project and categories are stored on the token grant, not as extra OAuth scope strings.
 
 In addition to the top-level scopes, the server exposes **scope categories** via the non-standard `x-neon-scope-categories` field on the same metadata document: `projects`, `branches`, `endpoints`, `snapshots`, `schema`, `querying`, `neon_auth`, `data_api`, `observability`, `docs`, `functions`, `storage`, `realtime`. These drive fine-grained tool filtering (see Grant Context above) and can also constrain a token to a single project. The `observability` category covers logs (`query_logs`, `query_loki_logs`, `list_log_fields`, `list_log_field_values`) plus the AI Gateway GET. The `functions` category includes scheduled triggers. The `branches` category includes roles, databases, and branch credentials (`list_credentials`, `create_credential`, `revoke_credential`, `rotate_credential`); `credentials.reveal` is not a tool. The `realtime` category holds the branch Realtime tools; `get_realtime_secret` is not `readOnlySafe`. See `mcp/utils/grant-context.ts` for grant resolution.
 

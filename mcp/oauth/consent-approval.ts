@@ -4,6 +4,13 @@ import {
   type GrantContext,
   type ScopeCategory,
 } from '../utils/grant-context';
+import {
+  DEFAULT_SECRETS,
+  InvalidSecretsError,
+  parseSecretsValue,
+  secretsField,
+} from '../utils/secrets';
+import type { SecretsChoice } from '../utils/secrets';
 import type { ConsentMode } from './consent-mode';
 import { issuedOauthScopes, oauthWriteAllowed } from './issued-scopes';
 
@@ -11,6 +18,7 @@ const EDITOR_FIELD_NAMES = [
   'projectMode',
   'projectId',
   'roleName',
+  'secrets',
   'category',
   'scopes',
   'mode',
@@ -101,6 +109,7 @@ type FormFieldError = {
     roleName: string;
     categories: ScopeCategory[];
     grantWrite: boolean;
+    secrets: SecretsChoice;
   };
 };
 
@@ -137,6 +146,25 @@ function readScalarString(
   return { ok: true, value };
 }
 
+/** A form rendered before the secrets choice existed posts none; it gets the default. */
+const readSecrets = (form: FormData): SecretsChoice | undefined => {
+  const field = readScalarString(form, 'secrets');
+
+  if (!field.ok) {
+    return undefined;
+  }
+
+  try {
+    return parseSecretsValue(field.value ?? null) ?? DEFAULT_SECRETS;
+  } catch (error) {
+    if (error instanceof InvalidSecretsError) {
+      return undefined;
+    }
+
+    throw error;
+  }
+};
+
 function hasEditorFields(form: FormData): boolean {
   return EDITOR_FIELD_NAMES.some((name) => formValues(form, name).length > 0);
 }
@@ -168,11 +196,13 @@ function grantFromEditableSelection({
   projectId,
   roleName,
   categories,
+  secrets,
 }: {
   projectMode: 'all' | 'one';
   projectId: string;
   roleName: string | undefined;
   categories: ScopeCategory[];
+  secrets: SecretsChoice;
 }): GrantContext {
   const selectedProjectId = projectMode === 'one' ? projectId.trim() : null;
   const scopes =
@@ -185,6 +215,7 @@ function grantFromEditableSelection({
     projectId: selectedProjectId,
     scopes,
     ...(roleName !== undefined ? { roleName } : {}),
+    ...secretsField(secrets),
   };
 }
 
@@ -303,6 +334,18 @@ export function parseConsentPost({
   const roleNameInput = roleNameField.value ?? '';
   const roleName = roleNameInput.trim() || undefined;
 
+  const secrets = readSecrets(form);
+
+  if (secrets === undefined) {
+    return {
+      action: 'invalid',
+      error: {
+        kind: 'invalid_request',
+        description: 'Invalid secrets selection',
+      },
+    };
+  }
+
   const fieldError = (
     field: ConsentField,
     message: string,
@@ -321,6 +364,7 @@ export function parseConsentPost({
           roleName: roleNameInput,
           categories: categoriesField.ok ? categoriesField.categories : [],
           grantWrite: scopesField.ok ? scopesField.grantWrite : false,
+          secrets,
         },
       },
     };
@@ -364,6 +408,7 @@ export function parseConsentPost({
       projectId,
       roleName,
       categories: categoriesField.categories,
+      secrets,
     }),
     grantWrite: scopesField.grantWrite,
   };

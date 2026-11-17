@@ -246,9 +246,43 @@ describe('getFilteredTools (no notice suffix)', () => {
 describe('getAccessControlNotices', () => {
   it('emits the write-mode destructive-tools notice by default', () => {
     const notices = getAccessControlNotices(grant(), false);
-    expect(notices).toHaveLength(2);
+    expect(notices).toHaveLength(3);
     expect(notices[0]).toContain('Write mode active');
     expect(notices[0]).toContain('destructiveHint');
+    expect(notices[2]).toContain('secrets=all');
+  });
+
+  it.each([
+    [{}, 'OAuth provider client secrets and the SMTP password'],
+    [{ secrets: 'none' as const }, 'Secrets are hidden on this connection'],
+  ])('explains the secrets a %o grant hides', (secrets, expected) => {
+    expect(getAccessControlNotices(grant(secrets), false).at(-1)).toContain(
+      expected,
+    );
+  });
+
+  it('explains none when it withholds the only secret tool in scope', () => {
+    const notices = getAccessControlNotices(
+      grant({ scopes: ['realtime'], secrets: 'none' }),
+      false,
+    );
+
+    expect(notices.at(-1)).toContain('Secrets are hidden on this connection');
+  });
+
+  it('sends no secrets notice when nothing in scope is hidden', () => {
+    const querying = getAccessControlNotices(
+      grant({ scopes: ['querying'] }),
+      false,
+    );
+
+    const allSecrets = getAccessControlNotices(
+      grant({ scopes: ['neon_auth'], secrets: 'all' }),
+      false,
+    );
+
+    expect(querying.join(' ')).not.toContain('***redacted***');
+    expect(allSecrets.join(' ')).not.toContain('***redacted***');
   });
 
   it('omits the write-mode notice when no destructive tools are in scope', () => {
