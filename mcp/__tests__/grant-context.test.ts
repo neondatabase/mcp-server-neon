@@ -12,6 +12,12 @@ import {
   normalizeStoredGrant,
   type GrantContext,
 } from '../utils/grant-context';
+import {
+  effectiveSecrets,
+  InvalidSecretsError,
+  StoredSecrets,
+  withRequestSecrets,
+} from '../utils/secrets';
 
 describe('parseScopeCategories', () => {
   it('returns null for null/undefined/empty input', () => {
@@ -346,6 +352,7 @@ describe('grantAnalyticsProperties', () => {
       projectScoped: 'false',
       customScopes: 'all',
       rolePinned: 'false',
+      secrets: 'setup',
     });
   });
 
@@ -360,6 +367,7 @@ describe('grantAnalyticsProperties', () => {
       projectScoped: 'true',
       customScopes: 'branches,querying',
       rolePinned: 'true',
+      secrets: 'setup',
     });
   });
 
@@ -373,5 +381,69 @@ describe('grantAnalyticsProperties', () => {
         scopes: [...SCOPE_CATEGORIES].reverse(),
       }).customScopes,
     ).toBe('all');
+  });
+});
+
+describe('secrets', () => {
+  const setup = { projectId: null, scopes: null };
+
+  it('reads one mode from the URL and stores the default as absent', () => {
+    expect(
+      resolveGrantFromSearchParams(new URLSearchParams('secrets=none')),
+    ).toStrictEqual({ ...setup, secrets: 'none' });
+    expect(
+      resolveGrantFromSearchParams(new URLSearchParams('secrets=ALL')),
+    ).toStrictEqual({ ...setup, secrets: 'all' });
+    expect(
+      resolveGrantFromSearchParams(new URLSearchParams('secrets=setup')),
+    ).toStrictEqual(setup);
+  });
+
+  it.each(['secrets=', 'secrets=true', 'secrets=none&secrets=none'])(
+    'throws for %s instead of showing more secrets',
+    (query) => {
+      expect(() =>
+        resolveGrantFromSearchParams(new URLSearchParams(query)),
+      ).toThrow(InvalidSecretsError);
+    },
+  );
+
+  it('keeps a stored all or none and accepts no other stored value', () => {
+    expect(normalizeStoredGrant({ ...setup, secrets: 'none' })).toStrictEqual({
+      ...setup,
+      secrets: 'none',
+    });
+    expect(StoredSecrets.safeParse({ secrets: 'setup' }).success).toBe(false);
+    expect(StoredSecrets.safeParse({ secrets: true }).success).toBe(false);
+  });
+
+  it('lets a request tighten a grant but not loosen it', () => {
+    const all = { ...setup, secrets: 'all' as const };
+    const none = { ...setup, secrets: 'none' as const };
+    const query = (value: string) => new URLSearchParams(value);
+
+    expect(withRequestSecrets(all, query('secrets=setup'), null)).toStrictEqual(
+      setup,
+    );
+    expect(withRequestSecrets(setup, query(''), 'none')).toStrictEqual(none);
+    expect(withRequestSecrets(setup, query('secrets=all'), null)).toStrictEqual(
+      setup,
+    );
+    expect(withRequestSecrets(none, query(''), 'all')).toStrictEqual(none);
+    expect(withRequestSecrets(all, query(''), undefined)).toStrictEqual(all);
+  });
+
+  it('reports the mode after a request tightens it in analytics', () => {
+    const grant = withRequestSecrets(setup, new URLSearchParams(), 'none');
+
+    expect(grantAnalyticsProperties(grant)).toMatchObject({ secrets: 'none' });
+    expect(
+      grantAnalyticsProperties({ ...setup, secrets: 'all' }),
+    ).toMatchObject({ secrets: 'all' });
+  });
+
+  it('shows no secrets on read-only connections whatever the grant says', () => {
+    expect(effectiveSecrets(setup, false)).toBe('setup');
+    expect(effectiveSecrets({ ...setup, secrets: 'all' }, true)).toBe('none');
   });
 });

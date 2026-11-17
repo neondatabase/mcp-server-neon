@@ -4,7 +4,18 @@ import {
   OAuthErrorCode,
 } from '@modelcontextprotocol/server';
 import { Clock, Effect, Option, Result, Schema } from 'effect';
-import { resolveGrantFromSearchParams } from '../utils/grant-context';
+import {
+  InvalidRoleNameError,
+  parseRoleNameParam,
+  resolveGrantFromSearchParams,
+} from '../utils/grant-context';
+import {
+  InvalidSecretsError,
+  parseSecretsParam,
+  parseSecretsValue,
+  SECRETS_HEADER,
+  withRequestSecrets,
+} from '../utils/secrets';
 import { logger } from '../utils/logger';
 import { isReadOnly } from '../utils/read-only';
 import { fetchAccountDetails } from './api-key';
@@ -56,7 +67,11 @@ const apiKeyAuthInfo = (
         queryParamValue: searchParams.get('readonly'),
         headerValue: req.headers.get('x-read-only'),
       }),
-      grant: resolveGrantFromSearchParams(searchParams),
+      grant: withRequestSecrets(
+        resolveGrantFromSearchParams(searchParams),
+        searchParams,
+        req.headers.get(SECRETS_HEADER),
+      ),
       transport: 'stream',
       userAgent: req.headers.get('user-agent') ?? undefined,
     },
@@ -75,7 +90,6 @@ const verifyToken = Effect.fn('McpAuth.verifyToken')(function* (
   req: Request,
   bearerToken: string,
 ) {
-  const userAgent = req.headers.get('user-agent') ?? undefined;
   const lookup = yield* Effect.result(lookupOAuthToken(bearerToken));
 
   if (Result.isSuccess(lookup) && Option.isSome(lookup.success)) {
@@ -83,7 +97,7 @@ const verifyToken = Effect.fn('McpAuth.verifyToken')(function* (
       clientId: lookup.success.value.client.id,
     });
 
-    return oauthAuthInfo(lookup.success.value, bearerToken, userAgent);
+    return oauthAuthInfo(lookup.success.value, bearerToken, req);
   }
 
   logger.info('Trying API key verification path');
@@ -179,3 +193,29 @@ export const authenticate = (req: Request) =>
     Effect.withSpan('McpAuth.authenticate'),
     Effect.flatMap(Effect.fromResult),
   );
+
+/**
+ * The message for a malformed pinned role or secrets mode on a request, checked
+ * before auth so a typo cannot fall back to the owner role or to more secrets.
+ */
+export const grantParamError = (
+  params: URLSearchParams,
+  headers: Headers,
+): string | undefined => {
+  try {
+    parseRoleNameParam(params);
+    parseSecretsParam(params);
+    parseSecretsValue(headers.get(SECRETS_HEADER));
+
+    return undefined;
+  } catch (error) {
+    if (
+      error instanceof InvalidRoleNameError ||
+      error instanceof InvalidSecretsError
+    ) {
+      return error.message;
+    }
+
+    throw error;
+  }
+};

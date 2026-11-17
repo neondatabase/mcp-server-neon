@@ -4,12 +4,17 @@ import {
 } from '../tools/grant-filter';
 import { NEON_TOOLS } from '../tools/definitions';
 import type { GrantContext, ScopeCategory } from '../utils/grant-context';
+import { withheldUnderSecrets } from '@neon/tools';
+import { effectiveSecrets, SECRETS_CHOICES } from '../utils/secrets';
+import type { SecretsChoice } from '../utils/secrets';
 
 export type ConsentToolMeta = {
   name: string;
   title: string;
   scope: ScopeCategory | null;
   writeOnly: boolean;
+  /** The secrets modes under which the tool refuses because its result is a secret. */
+  withheldUnder: SecretsChoice[];
   projectScoped: boolean;
 };
 
@@ -21,6 +26,9 @@ export function getConsentToolCatalog(): ConsentToolMeta[] {
       title: typeof title === 'string' && title.length > 0 ? title : tool.name,
       scope: tool.scope,
       writeOnly: !tool.readOnlySafe,
+      withheldUnder: SECRETS_CHOICES.filter((mode) =>
+        withheldUnderSecrets(tool, mode),
+      ),
       projectScoped: tool.projectScoped,
     };
   });
@@ -44,6 +52,11 @@ export function filterConsentCatalog(
     ) {
       return false;
     }
+
+    if (tool.withheldUnder.includes(effectiveSecrets(grant, !writeChecked))) {
+      return false;
+    }
+
     if (grant.scopes === null) {
       return true;
     }

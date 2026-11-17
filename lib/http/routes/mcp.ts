@@ -8,13 +8,10 @@ import { flushAfterResponse } from '../../../mcp/sentry/flush';
 import {
   authChallengeResponse,
   authenticate,
+  grantParamError,
   tokenStoreUnavailableResponse,
 } from '../../../mcp/transport/auth';
-import {
-  InvalidRoleNameError,
-  isDocsOnlyRequest,
-  parseRoleNameParam,
-} from '../../../mcp/utils/grant-context';
+import { isDocsOnlyRequest } from '../../../mcp/utils/grant-context';
 import { SERVER_HOST } from '../../config';
 import { isLandingPageRequest, landingPageResponse } from '../../landing';
 import { buildResourceMetadataUrlForResourceRequest } from '../../oauth/protected-resource-metadata';
@@ -77,23 +74,18 @@ const originRejection = (req: Request): Response | undefined => {
   );
 };
 
-// A malformed pinned role is rejected before auth rather than ignored, so a
-// typo in the connection URL cannot silently fall back to the owner role.
-const invalidRoleNameResponse = (url: URL): Response | undefined => {
-  try {
-    parseRoleNameParam(url.searchParams);
+const invalidGrantParamResponse = (
+  url: URL,
+  req: Request,
+): Response | undefined => {
+  const message = grantParamError(url.searchParams, req.headers);
 
-    return undefined;
-  } catch (error) {
-    if (!(error instanceof InvalidRoleNameError)) {
-      throw error;
-    }
-
-    return Response.json(
-      { error: 'invalid_request', error_description: error.message },
-      { status: 400 },
-    );
-  }
+  return message === undefined
+    ? undefined
+    : Response.json(
+        { error: 'invalid_request', error_description: message },
+        { status: 400 },
+      );
 };
 
 /**
@@ -186,7 +178,7 @@ const head = (normalizedReq: Request, req: Request, docsOnly: boolean) =>
 const transport = Effect.gen(function* () {
   const req = yield* webRequest;
   const url = new URL(req.url);
-  const rejection = originRejection(req) ?? invalidRoleNameResponse(url);
+  const rejection = originRejection(req) ?? invalidGrantParamResponse(url, req);
 
   if (rejection !== undefined) {
     return rejection;

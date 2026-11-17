@@ -533,6 +533,73 @@ test.describe('OAuth consent modes', () => {
     expect(posted).toEqual(['app_reader']);
   });
 
+  test('B10 secrets choice is collapsed on Setup credentials, and No secrets hides secret-only tools', async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openAuthorize(page, request);
+
+    const setup = page.getByRole('radio', { name: 'Setup credentials' });
+    const none = page.getByRole('radio', { name: 'No secrets' });
+    const tools = page.locator('[data-tool-content]');
+    const disclosure = page.locator('[data-secrets-disclosure]');
+    const summary = page.locator('[data-secrets-summary]');
+
+    await expect(disclosure).not.toHaveAttribute('open');
+    await expect(summary).toHaveText('Setup credentials');
+    await expect(setup).toBeHidden();
+
+    await clearScreenshotInteractionState(page);
+    await capture(page, 'B10-editable-secrets-collapsed');
+
+    await disclosure.locator('summary').click();
+
+    await expect(setup).toBeChecked();
+    await expect(page.locator('#secrets-help-none')).toContainText(
+      '***redacted***',
+    );
+    await openCategoryDisclosure(page);
+    await expect(tools).toContainText('Get connection string');
+
+    await setup.scrollIntoViewIfNeeded();
+    await clearScreenshotInteractionState(page);
+    await capture(page, 'B10-editable-secrets-setup');
+
+    await none.check();
+
+    await expect(summary).toHaveText('No secrets');
+    await expect(tools).not.toContainText('Get connection string');
+    await expect(tools).toContainText('List roles');
+
+    await clearScreenshotInteractionState(page);
+    await capture(page, 'B10-editable-secrets-none');
+
+    await expect(
+      page.locator('#authorize-form input[name="secrets"]:checked'),
+    ).toHaveValue('none');
+  });
+
+  test('A8 secrets resource is a fixed confirmation that names the secrets choice', async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openAuthorize(page, request, {
+      resource: 'https://mcp.neon.tech/mcp?secrets=all',
+    });
+
+    await expect(
+      page
+        .locator('.facts div', { hasText: 'Secrets in tool results:' })
+        .locator('dd'),
+    ).toHaveText('All secrets');
+    await expect(page.locator('input[name="secrets"]')).toHaveCount(0);
+
+    await clearScreenshotInteractionState(page);
+    await capture(page, 'A8-secrets-confirmation');
+  });
+
   test('B9 invalid Postgres role shows a field error and keeps the selection', async ({
     page,
     request,

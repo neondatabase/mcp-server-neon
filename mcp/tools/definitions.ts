@@ -8,12 +8,10 @@ import {
   GENERATED_TOOL_SCOPES,
   isCustomToolId,
   PROJECT_SCOPED_TOOL_OVERRIDES,
-  READ_ONLY_SAFE_TOOL_OVERRIDES,
   TOOL_IDS,
   type GeneratedToolId,
   type ToolId,
 } from './operations';
-import { sanitizedFields } from './sanitize';
 import type { NeonTool } from './tool-definition';
 
 export const PACKAGE_TOOLS: Record<ToolId, PackageTool> = NEON_PACKAGE_TOOLS;
@@ -35,16 +33,6 @@ export const GET_CONNECTION_STRING_INPUT_SCHEMA = z.strictObject({
 
 function hasPathKey(tool: PackageTool, key: string): boolean {
   return tool.metadata.path.includes(`{${key}}`);
-}
-
-function generatedReadOnlySafe(
-  toolId: GeneratedToolId,
-  tool: PackageTool,
-): boolean {
-  if (READ_ONLY_SAFE_TOOL_OVERRIDES.has(toolId)) {
-    return true;
-  }
-  return tool.metadata.method === 'GET' && !tool.requiresApproval;
 }
 
 function generatedProjectScoped(
@@ -81,6 +69,9 @@ const DESTRUCTIVE_POST_TOOLS = new Set<GeneratedToolId>([
   'functions.deploy',
   'storage.objects.presign',
   'credentials.rotate',
+  // Turns on logical replication for the whole project, which cannot be
+  // turned off, and suspends every compute in it.
+  'realtime.enable',
   'realtime.rotateSecret',
   'auth.oauthClients.rotateSecret',
 ]);
@@ -165,9 +156,7 @@ const outputSchema = (toolId: ToolId, tool: PackageTool) => {
     throw new Error(`@neon/tools ${toolId} has no outputSchema`);
   }
 
-  const wrapped = toMcpOutputJsonSchema(tool.outputSchema, {
-    omit: isCustomToolId(toolId) ? [] : sanitizedFields(toolId),
-  });
+  const wrapped = toMcpOutputJsonSchema(tool.outputSchema);
 
   return UNWRAPPED_RESULT_TOOLS.has(toolId)
     ? wrappedDataSchema.parse(wrapped).properties.data
@@ -188,10 +177,14 @@ function toolDefinition(toolId: ToolId): NeonTool {
           : tool.inputSchema,
       outputSchema: outputSchema(toolId, tool),
       annotations: customAnnotations(tool),
+      readOnlySafe: tool.metadata.readOnlySafe,
+      returnsOnlySecrets: tool.metadata.returnsOnlySecrets,
+      secretOutputFields: tool.metadata.secretOutputFields,
       ...CUSTOM_TOOL_GRANTS[toolId],
     };
   }
-  const readOnlySafe = generatedReadOnlySafe(toolId, tool);
+  const { readOnlySafe, returnsOnlySecrets, secretOutputFields } =
+    tool.metadata;
   return {
     kind: 'generated',
     id: toolId,
@@ -201,6 +194,8 @@ function toolDefinition(toolId: ToolId): NeonTool {
     inputSchema: tool.inputSchema,
     outputSchema: outputSchema(toolId, tool),
     readOnlySafe,
+    returnsOnlySecrets,
+    secretOutputFields,
     projectScoped: generatedProjectScoped(toolId, tool),
     annotations: generatedAnnotations(toolId, tool, readOnlySafe),
   };

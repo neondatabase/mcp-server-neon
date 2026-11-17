@@ -415,6 +415,108 @@ describe('/api/authorize route integration', () => {
     expect(stored.approvedScopes).toEqual(['read']);
   });
 
+  it.each([
+    ['all', { secrets: 'all' }],
+    ['none', { secrets: 'none' }],
+  ] as const)(
+    'checks setup credentials on editable consent and stores %s when chosen',
+    async (choice, stored) => {
+      const getResponse = await GET(buildAuthorizeRequest());
+      const html = await getResponse.text();
+
+      expect(html).toContain(
+        '<input type="radio" name="secrets" value="setup" checked',
+      );
+
+      const state = extractState(html);
+
+      await postAuthorize({
+        state,
+        cookie: cookieHeader(getResponse),
+        fields: [
+          ['action', 'approve'],
+          ['secrets', choice],
+          ['projectMode', 'all'],
+          ['category', 'querying'],
+          ['scopes', 'read'],
+          ['scopes', 'write'],
+        ],
+      });
+
+      await expect(authTransactions.getById(state)).resolves.toMatchObject({
+        status: 'approved',
+        approvedGrant: { projectId: null, scopes: ['querying'], ...stored },
+      });
+    },
+  );
+
+  it('stores setup credentials for a consent form without the secrets choice', async () => {
+    const getResponse = await GET(buildAuthorizeRequest());
+    const state = extractState(await getResponse.text());
+
+    await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [
+        ['action', 'approve'],
+        ['projectMode', 'all'],
+        ['category', 'querying'],
+        ['scopes', 'read'],
+      ],
+    });
+
+    const stored = await authTransactions.getById(state);
+
+    expect(stored).toHaveProperty('status', 'approved');
+    expect(stored).toHaveProperty('approvedGrant', {
+      projectId: null,
+      scopes: ['querying'],
+    });
+  });
+
+  it('makes a secrets resource a fixed confirmation', async () => {
+    const resource = 'https://mcp.neon.tech/mcp?secrets=all';
+
+    const getResponse = await GET(
+      buildAuthorizeRequest({}, 'read write', { resource }),
+    );
+
+    const html = await getResponse.text();
+
+    expect(html).toContain('<dd>All secrets</dd>');
+    expect(html).not.toContain('<input type="radio" name="secrets"');
+
+    const state = extractState(html);
+
+    await postAuthorize({
+      state,
+      cookie: cookieHeader(getResponse),
+      fields: [['action', 'approve']],
+    });
+
+    await expect(authTransactions.getById(state)).resolves.toMatchObject({
+      status: 'approved',
+      approvedGrant: { projectId: null, scopes: null, secrets: 'all' },
+    });
+  });
+
+  it.each(['secrets=yes', 'secrets=all&secrets=none'])(
+    'returns invalid_target for a malformed secrets (%s)',
+    async (query) => {
+      const response = await GET(
+        buildAuthorizeRequest({}, 'read write', {
+          resource: `https://mcp.neon.tech/mcp?${query}`,
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toStrictEqual({
+        error: 'invalid_target',
+        error_description: 'Invalid resource parameter',
+      });
+    },
+  );
+
   it('makes a roleName-only resource a fixed confirmation', async () => {
     const resource = 'https://mcp.neon.tech/mcp?roleName=mcp_pinned_reader';
     const getResponse = await GET(
@@ -533,6 +635,7 @@ describe('/api/authorize route integration', () => {
       cookie: cookieHeader(getResponse),
       fields: [
         ['action', 'approve'],
+        ['secrets', 'setup'],
         ['projectMode', 'one'],
         ['projectId', 'proj-edited'],
         ['category', 'querying'],
@@ -561,6 +664,7 @@ describe('/api/authorize route integration', () => {
       cookie: cookieHeader(getResponse),
       fields: [
         ['action', 'approve'],
+        ['secrets', 'setup'],
         ['projectMode', 'one'],
         ['projectId', 'proj-edited'],
         ['roleName', 'app_reader'],

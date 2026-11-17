@@ -1,12 +1,6 @@
 {
   "version": 1,
   "skills": {
-    "claimable-postgres": {
-      "source": "neondatabase/agent-skills",
-      "sourceType": "github",
-      "skillPath": "skills/claimable-postgres/SKILL.md",
-      "computedHash": "1ad33258166b0d2edb02cd6134c7cac66d6e04207fb0767255dcc521a795e0a4"
-    },
     "effect-program-design": {
       "source": "K-Mistele/anti-slop",
       "sourceType": "github",

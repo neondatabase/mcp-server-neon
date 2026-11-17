@@ -106,9 +106,12 @@ describe('NEON_TOOLS definitions', () => {
       'create_storage_bucket',
       'get_doc',
       'list_incidents',
+      'provision_neon_data_api',
       'search_docs',
       'send_auth_test_email',
       'send_feedback',
+      'update_auth_email_provider',
+      'update_auth_webhooks',
     ]);
   });
 
@@ -783,7 +786,6 @@ describe('generated tool interface', () => {
     const completeTuning = byName('complete_query_tuning');
     expect(completeTuning.description).toContain('even when the user rejects');
     expect(completeTuning.description).toContain('apply_changes true applies');
-    expect(byName('get_neon_auth_config').description).toContain('redacted');
     expect(byName('run_sql').description).toContain('temporary branch');
     const inspect = byName('inspect_database');
     expect(inspect.description).toContain('CREATE EXTENSION');

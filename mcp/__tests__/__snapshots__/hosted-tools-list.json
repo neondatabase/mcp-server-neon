@@ -564,7 +564,7 @@
   {
     "name": "describe_branch",
     "title": "Describe Branch",
-    "description": "Returns a branch summary, its database names, and a tree of one database's schemas, tables, views, indexes, sequences, and functions. Starts a suspended compute. Branch record only: get_branch; table names: get_database_tables; columns: describe_table_schema.",
+    "description": "Returns a branch summary, its database names, and a tree of one database's schemas, tables, views, indexes, sequences, and functions. Read-only: one catalog query in a READ ONLY transaction, so it changes no data; a suspended compute wakes to run it. Branch record only: get_branch; table names: get_database_tables; columns: describe_table_schema.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -708,7 +708,7 @@
   {
     "name": "get_neon_auth_config",
     "title": "Get Neon Auth configuration",
-    "description": "Returns a branch's Neon Auth integration and settings: trusted origins, localhost, email and password, OAuth and email providers, plugins, webhook, and logs export, with secrets redacted. Needs Neon Auth on the branch (provision_neon_auth).",
+    "description": "Returns a branch's Neon Auth integration and settings: trusted origins, localhost, email and password, OAuth and email providers, plugins, webhook, and logs export. Needs Neon Auth on the branch (provision_neon_auth).",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5785,6 +5785,12 @@
               "name": {
                 "type": "string"
               },
+              "password": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "protected": {
                 "type": [
                   "boolean",
@@ -5866,6 +5872,12 @@
             },
             "name": {
               "type": "string"
+            },
+            "password": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "protected": {
               "type": [
@@ -8974,6 +8986,9 @@
             "pub_client_key": {
               "type": "string"
             },
+            "secret_server_key": {
+              "type": "string"
+            },
             "jwks_url": {
               "type": "string"
             },
@@ -8994,6 +9009,7 @@
             "auth_provider",
             "auth_provider_project_id",
             "pub_client_key",
+            "secret_server_key",
             "jwks_url",
             "schema_name",
             "table_name"
@@ -9164,6 +9180,12 @@
                   "null"
                 ]
               },
+              "client_secret": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "microsoft_tenant_id": {
                 "type": [
                   "string",
@@ -9278,6 +9300,12 @@
                 "null"
               ]
             },
+            "client_secret": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "microsoft_tenant_id": {
               "type": [
                 "string",
@@ -9386,6 +9414,12 @@
               "type": "string"
             },
             "client_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "client_secret": {
               "type": [
                 "string",
                 "null"
@@ -10916,6 +10950,9 @@
                 "username": {
                   "type": "string"
                 },
+                "password": {
+                  "type": "string"
+                },
                 "sender_email": {
                   "type": "string"
                 },
@@ -10927,6 +10964,7 @@
                 "host",
                 "port",
                 "username",
+                "password",
                 "sender_email",
                 "sender_name"
               ]
@@ -10960,7 +10998,7 @@
       "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": true
     }
   },
   {
@@ -11373,7 +11411,7 @@
       "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": true
     }
   },
   {
@@ -11687,7 +11725,7 @@
       "readOnlyHint": false,
       "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": true
     }
   },
   {
@@ -11885,13 +11923,14 @@
           "description": "Order matching records by timestamp."
         },
         "source": {
+          "description": "Only records emitted by this Neon service. neon_auth returns 404 telemetry_not_enabled when the project's Neon Auth logs are not enabled, even when other sources return logs.",
           "type": "string",
           "enum": [
             "function",
             "storage",
-            "pg_endpoint"
-          ],
-          "description": "The Neon service that emitted the log record."
+            "pg_endpoint",
+            "neon_auth"
+          ]
         },
         "service_name": {
           "type": "string",
@@ -12116,13 +12155,14 @@
           "description": "Exclusive end of the lookup window."
         },
         "source": {
+          "description": "Only consider records emitted by this Neon service. neon_auth returns 404 telemetry_not_enabled when the project's Neon Auth logs are not enabled, even when other sources return logs.",
           "type": "string",
           "enum": [
             "function",
             "storage",
-            "pg_endpoint"
-          ],
-          "description": "Only consider records emitted by this Neon service."
+            "pg_endpoint",
+            "neon_auth"
+          ]
         },
         "limit": {
           "type": "integer",
@@ -14032,6 +14072,12 @@
             "user"
           ],
           "description": "Principal type for the credential."
+        },
+        "expires_at": {
+          "description": "When the credential stops working, 1 minute to 365 days from now. Omit for a credential that never expires.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
         }
       },
       "required": [
@@ -14902,7 +14948,7 @@
   {
     "name": "enable_realtime",
     "title": "Enable Realtime",
-    "description": "Enables Realtime on a branch, or changes its allowed origins, and waits until it is applied.",
+    "description": "Enables Realtime on a branch, or changes its allowed origins, and waits until it is applied. Enabling turns on logical replication for the whole project, which cannot be turned off, and suspends every compute in the project, dropping active connections. NEVER run autonomously; always ask the user first.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -14949,7 +14995,7 @@
     "annotations": {
       "title": "Enable Realtime",
       "readOnlyHint": false,
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false
     }
