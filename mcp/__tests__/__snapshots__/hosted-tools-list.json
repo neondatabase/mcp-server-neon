@@ -708,7 +708,7 @@
   {
     "name": "get_neon_auth_config",
     "title": "Get Neon Auth configuration",
-    "description": "Returns a branch's Neon Auth integration and settings: trusted origins, localhost, email and password, OAuth and email providers, plugins, webhook, and logs export, with secrets redacted. Needs Neon Auth on the branch (provision_neon_auth).",
+    "description": "Returns a branch's Neon Auth integration and settings: trusted origins, localhost, email and password, OAuth and email providers, plugins, webhook, and logs export. Needs Neon Auth on the branch (provision_neon_auth).",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5785,6 +5785,12 @@
               "name": {
                 "type": "string"
               },
+              "password": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "protected": {
                 "type": [
                   "boolean",
@@ -5866,6 +5872,12 @@
             },
             "name": {
               "type": "string"
+            },
+            "password": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "protected": {
               "type": [
@@ -8974,6 +8986,9 @@
             "pub_client_key": {
               "type": "string"
             },
+            "secret_server_key": {
+              "type": "string"
+            },
             "jwks_url": {
               "type": "string"
             },
@@ -8994,6 +9009,7 @@
             "auth_provider",
             "auth_provider_project_id",
             "pub_client_key",
+            "secret_server_key",
             "jwks_url",
             "schema_name",
             "table_name"
@@ -9164,6 +9180,12 @@
                   "null"
                 ]
               },
+              "client_secret": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "microsoft_tenant_id": {
                 "type": [
                   "string",
@@ -9278,6 +9300,12 @@
                 "null"
               ]
             },
+            "client_secret": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "microsoft_tenant_id": {
               "type": [
                 "string",
@@ -9386,6 +9414,12 @@
               "type": "string"
             },
             "client_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "client_secret": {
               "type": [
                 "string",
                 "null"
@@ -10916,6 +10950,9 @@
                 "username": {
                   "type": "string"
                 },
+                "password": {
+                  "type": "string"
+                },
                 "sender_email": {
                   "type": "string"
                 },
@@ -10927,6 +10964,7 @@
                 "host",
                 "port",
                 "username",
+                "password",
                 "sender_email",
                 "sender_name"
               ]

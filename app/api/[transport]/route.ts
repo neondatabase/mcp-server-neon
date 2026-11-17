@@ -39,6 +39,7 @@ import {
   grantAnalyticsProperties,
   type GrantContext,
 } from '../../../mcp/utils/grant-context';
+import { DEFAULT_SECRETS } from '../../../mcp/utils/secrets';
 import {
   getAvailableTools,
   getAccessControlWarnings,
@@ -480,6 +481,7 @@ function createDocsOnlyMcpHandler(userAgent: string | undefined) {
               projectScoped: 'false',
               customScopes: 'docs',
               rolePinned: 'false',
+              secrets: DEFAULT_SECRETS,
               clientName: docsAgent.clientName,
               clientApplication: docsAgent.clientApplication,
               traceId,

@@ -5,6 +5,7 @@ import { model } from '../oauth/model';
 import type { AuthContext } from '../types/auth';
 import type { AppContext } from '../types/context';
 import { resolveGrantFromToken } from '../utils/grant-context';
+import { SECRETS_HEADER, withRequestSecrets } from '../utils/secrets';
 import type { GrantContext } from '../utils/grant-context';
 import { logger } from '../utils/logger';
 import { isReadOnly } from '../utils/read-only';
@@ -115,11 +116,14 @@ const toAuthInfo = ({
   },
 });
 
-/** The caller a stored OAuth token authenticates, with the grant chosen at consent. */
+/**
+ * The caller a stored OAuth token authenticates, with the grant chosen at
+ * consent. The request's secrets param and header may tighten that grant.
+ */
 export const oauthAuthInfo = (
   token: OAuthToken,
   bearerToken: string,
-  userAgent: string | undefined,
+  req: Request,
 ): Option.Option<AuthenticatedAuthInfo> => {
   const grant = readGrant(token);
 
@@ -142,9 +146,13 @@ export const oauthAuthInfo = (
     toAuthInfo({
       token,
       fields: fields.data,
-      grant: grant.value,
+      grant: withRequestSecrets(
+        grant.value,
+        new URL(req.url).searchParams,
+        req.headers.get(SECRETS_HEADER),
+      ),
       bearerToken,
-      userAgent,
+      userAgent: req.headers.get('user-agent') ?? undefined,
     }),
   );
 };

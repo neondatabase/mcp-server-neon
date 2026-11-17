@@ -3,98 +3,37 @@ import type { ScopeCategory } from '../utils/grant-context';
 
 type CustomToolGrant = {
   scope: ScopeCategory | null;
-  readOnlySafe: boolean;
   projectScoped: boolean;
 };
 
 /**
- * The tools this server used to implement itself. Their grant flags are stated
- * per tool: SQL tools report `metadata.method: "SQL"` whether or not the caller's
- * SQL can write, and the docs, feedback, and incidents tools have no project in
- * their path but stay visible on project-scoped connections.
- *
- * `readOnlySafe` on a tool that runs caller SQL means it runs exactly one
- * statement in its own `READ ONLY` transaction, as `sql.run` does.
- * `sql.runTransaction` is not: a `COMMIT` or `SET TRANSACTION READ WRITE`
- * statement can leave the read-only transaction. `postgres.connectionString`
- * mutates nothing, but its URI carries a privileged role password that works
- * against the read-write compute.
+ * The tools this server used to implement itself. Their scope and project
+ * scoping are stated per tool: the docs, feedback, and incidents tools have no
+ * project in their path but stay visible on project-scoped connections.
+ * Whether a tool is read-only safe comes from `@neon/tools` metadata.
  */
 export const CUSTOM_TOOL_GRANTS = {
-  'user.organizations': {
-    scope: 'projects',
-    readOnlySafe: true,
-    projectScoped: false,
-  },
-  'sql.run': { scope: 'querying', readOnlySafe: true, projectScoped: true },
-  'sql.runTransaction': {
-    scope: 'querying',
-    readOnlySafe: false,
-    projectScoped: true,
-  },
-  'schema.describeTable': {
-    scope: 'schema',
-    readOnlySafe: true,
-    projectScoped: true,
-  },
-  'schema.listTables': {
-    scope: 'schema',
-    readOnlySafe: true,
-    projectScoped: true,
-  },
-  'migrations.prepare': {
-    scope: 'querying',
-    readOnlySafe: false,
-    projectScoped: true,
-  },
-  'migrations.complete': {
-    scope: 'querying',
-    readOnlySafe: false,
-    projectScoped: true,
-  },
-  'branches.describe': {
-    scope: 'branches',
-    readOnlySafe: true,
-    projectScoped: true,
-  },
-  'postgres.connectionString': {
-    scope: 'branches',
-    readOnlySafe: false,
-    projectScoped: true,
-  },
-  'auth.getConfig': {
-    scope: 'neon_auth',
-    readOnlySafe: true,
-    projectScoped: true,
-  },
-  'sql.explain': { scope: 'querying', readOnlySafe: true, projectScoped: true },
-  'queryTuning.prepare': {
-    scope: 'querying',
-    readOnlySafe: false,
-    projectScoped: true,
-  },
-  'queryTuning.complete': {
-    scope: 'querying',
-    readOnlySafe: false,
-    projectScoped: true,
-  },
-  'queries.listSlow': {
-    scope: 'querying',
-    readOnlySafe: true,
-    projectScoped: true,
-  },
-  'database.inspect': {
-    scope: 'querying',
-    readOnlySafe: true,
-    projectScoped: true,
-  },
-  'resources.search': { scope: null, readOnlySafe: true, projectScoped: false },
-  'resources.fetch': { scope: null, readOnlySafe: true, projectScoped: false },
-  'docs.search': { scope: 'docs', readOnlySafe: true, projectScoped: true },
-  'docs.get': { scope: 'docs', readOnlySafe: true, projectScoped: true },
-  // Changes no Neon resource, so it stays available in read-only mode.
-  'feedback.send': { scope: null, readOnlySafe: true, projectScoped: true },
-  'incidents.list': { scope: null, readOnlySafe: true, projectScoped: true },
+  'user.organizations': { scope: 'projects', projectScoped: false },
+  'sql.run': { scope: 'querying', projectScoped: true },
+  'sql.runTransaction': { scope: 'querying', projectScoped: true },
+  'schema.describeTable': { scope: 'schema', projectScoped: true },
+  'schema.listTables': { scope: 'schema', projectScoped: true },
+  'migrations.prepare': { scope: 'querying', projectScoped: true },
+  'migrations.complete': { scope: 'querying', projectScoped: true },
+  'branches.describe': { scope: 'branches', projectScoped: true },
+  'postgres.connectionString': { scope: 'branches', projectScoped: true },
+  'auth.getConfig': { scope: 'neon_auth', projectScoped: true },
+  'sql.explain': { scope: 'querying', projectScoped: true },
+  'queryTuning.prepare': { scope: 'querying', projectScoped: true },
+  'queryTuning.complete': { scope: 'querying', projectScoped: true },
+  'queries.listSlow': { scope: 'querying', projectScoped: true },
+  'database.inspect': { scope: 'querying', projectScoped: true },
+  'resources.search': { scope: null, projectScoped: false },
+  'resources.fetch': { scope: null, projectScoped: false },
+  'docs.search': { scope: 'docs', projectScoped: true },
+  'docs.get': { scope: 'docs', projectScoped: true },
+  'feedback.send': { scope: null, projectScoped: true },
+  'incidents.list': { scope: null, projectScoped: true },
 } as const satisfies Partial<Record<NeonToolId, CustomToolGrant>>;
 
 export type CustomToolId = keyof typeof CUSTOM_TOOL_GRANTS;
@@ -248,7 +187,7 @@ export function isCustomToolId(id: string): id is CustomToolId {
   return isKeyOf(CUSTOM_TOOL_GRANTS, id);
 }
 
-export function isGeneratedToolId(id: string): id is GeneratedToolId {
+function isGeneratedToolId(id: string): id is GeneratedToolId {
   return isKeyOf(GENERATED_TOOL_SCOPES, id);
 }
 
@@ -260,10 +199,6 @@ export const TOOL_IDS: ToolId[] = [
   ...Object.keys(CUSTOM_TOOL_GRANTS).filter(isCustomToolId),
   ...Object.keys(GENERATED_TOOL_SCOPES).filter(isGeneratedToolId),
 ];
-
-export const READ_ONLY_SAFE_TOOL_OVERRIDES = new Set<GeneratedToolId>([
-  'logs.query',
-]);
 
 export const PROJECT_SCOPED_TOOL_OVERRIDES = {
   'projects.delete': false,

@@ -154,7 +154,7 @@ Neon MCP advertises OAuth scopes `read` and `write`. Your MCP client can request
 You can set read-only mode in two ways:
 
 1. **Default MCP URL (editable consent):** Connect with `https://mcp.neon.tech/mcp` and uncheck **Allow writes** on the authorization page. You can also choose one project, a Postgres role for SQL, and a subset of tool categories there.
-2. **Parameterized MCP URL (fixed consent):** Put `readonly`, `projectId`, `category`, and/or `roleName` on the MCP server URL. The authorization page confirms that grant and does not offer editors. Change the URL and authorize again to change the grant.
+2. **Parameterized MCP URL (fixed consent):** Put `readonly`, `projectId`, `category`, `roleName`, and/or `secrets` on the MCP server URL. The authorization page confirms that grant and does not offer editors. Change the URL and authorize again to change the grant.
 
 ```json
 {
@@ -169,7 +169,7 @@ You can set read-only mode in two ways:
 How the query param behaves:
 
 - **API key flow:** `readonly=true` is the way to enable read-only mode (there is no OAuth scope exchange in this flow). URL changes apply on the next request.
-- **OAuth flow:** `projectId`, `category`, `readonly`, and `roleName` on the MCP URL are a fixed grant confirmed at authorization. `readonly=true` cannot be widened to writes on that page. After a token is issued, changing the URL does not widen that token; authorize again.
+- **OAuth flow:** `projectId`, `category`, `readonly`, `roleName`, and `secrets` on the MCP URL are a fixed grant confirmed at authorization. `readonly=true` cannot be widened to writes on that page. After a token is issued, changing the URL does not widen that token; authorize again.
 
 For OAuth registration, `x-read-only` is an initial Allow-writes default on editable consent. It does not lock confirmation, and it does not reduce a parameterized URL that includes `readonly=false`. API-key requests still honor `x-read-only` per request, below the `readonly` query param.
 
@@ -177,14 +177,15 @@ For OAuth registration, `x-read-only` is an initial Allow-writes default on edit
 
 ### URL Query Params for Access Control
 
-Grant context (scope categories, project scoping, read-only mode, pinned Postgres role) is configured via URL query params on the MCP server URL. API-key requests apply those params on each request. OAuth tokens store the grant confirmed or edited at authorization.
+Grant context (scope categories, project scoping, read-only mode, pinned Postgres role, secrets in tool results) is configured via URL query params on the MCP server URL. API-key requests apply those params on each request. OAuth tokens store the grant confirmed or edited at authorization.
 
-| Param       | Description                                            | Example                              |
-| ----------- | ------------------------------------------------------ | ------------------------------------ |
-| `readonly`  | Enable read-only mode (`true`/`false`)                 | `?readonly=true`                     |
-| `category`  | Restrict to specific tool categories (repeated or CSV) | `?category=querying&category=schema` |
-| `projectId` | Scope all operations to a single project               | `?projectId=proj-123`                |
-| `roleName`  | Run all SQL as this Postgres role instead of the owner | `?roleName=app_reader`               |
+| Param       | Description                                              | Example                              |
+| ----------- | -------------------------------------------------------- | ------------------------------------ |
+| `readonly`  | Enable read-only mode (`true`/`false`)                   | `?readonly=true`                     |
+| `category`  | Restrict to specific tool categories (repeated or CSV)   | `?category=querying&category=schema` |
+| `projectId` | Scope all operations to a single project                 | `?projectId=proj-123`                |
+| `roleName`  | Run all SQL as this Postgres role instead of the owner   | `?roleName=app_reader`               |
+| `secrets`   | Which secrets tool results show (`setup`, `all`, `none`) | `?secrets=none`                      |
 
 **Read-only + project-scoped example:**
 
@@ -233,6 +234,33 @@ Grant context (scope categories, project scoping, read-only mode, pinned Postgre
 - **API key:** the role is read from the URL on each request. Anyone who can edit the connection URL and holds the API key can change or remove it, so keep the URL in configuration the agent does not control.
 - The pin applies to SQL connections only. Management API tools still act with the API key or OAuth token's own access; `compare_database_schema`, for example, is computed by the Neon API and is not limited by the role's grants. Combine `roleName` with `readonly=true` and `category` to limit those tools too.
 
+### Secrets in tool results
+
+`secrets` on the MCP server URL chooses which secrets tool results show. Hidden values read `***redacted***`.
+
+| `secrets`         | Tool results show                                                                                                                                                                             |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setup` (default) | Credentials Neon issues: connection strings, Postgres role passwords, credential tokens, presigned URLs, and the Neon Auth server key, OAuth client and Realtime secrets                      |
+| `all`             | Setup credentials, plus the secrets you stored in Neon Auth: OAuth provider client secrets and the SMTP password                                                                              |
+| `none`            | No secrets. `get_connection_string`, `get_realtime_secret`, `reset_postgres_role_password`, `rotate_credential`, `rotate_auth_oauth_client_secret`, and `presign_storage_object` are withheld |
+
+```json
+{
+  "mcpServers": {
+    "Neon": {
+      "url": "https://mcp.neon.tech/mcp?secrets=none"
+    }
+  }
+}
+```
+
+- The header `X-Neon-Secrets` can show fewer secrets than the URL or the OAuth grant allows, never more: `X-Neon-Secrets: none` on a default connection hides every secret, and `X-Neon-Secrets: all` changes nothing without `?secrets=all`.
+- Read-only connections show no secrets.
+- A pinned role (`roleName`) withholds `get_connection_string` and hides the passwords in `list_postgres_roles` and `get_postgres_role`, so the pinned role's password stays on the server.
+- **OAuth:** with the default URL, choose **Setup credentials**, **All secrets**, or **No secrets** on the authorization page. `secrets` on the MCP URL is a fixed grant. The token keeps the choice through refresh. A request's `secrets` param or header can show fewer secrets than the token allows, never more. Tokens issued before this option get `setup`.
+- A value other than one of `setup`, `all`, or `none` is rejected with `400`.
+- Creates still run under `none`, so a secret the API returns only once, such as a confidential OAuth client's `client_secret`, is not recoverable from that call.
+
 You can preview which tools are visible for any configuration using the `/api/list-tools` endpoint (no auth required):
 
 ```bash
@@ -244,7 +272,7 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 
 Custom tools: `list_organizations`, `describe_branch`, `run_sql`, `get_database_tables`, `describe_table_schema`, `list_slow_queries`, `explain_sql_statement`, `inspect_database`, `get_neon_auth_config`, `search`, `fetch`, `search_docs`, `get_doc`, `send_feedback`, `list_incidents`.
 
-Generated Management API tools that are GET and do not return secrets, plus `query_logs` (POST, read-only). Preview the exact set with `/api/list-tools?readonly=true`.
+Generated Management API tools that are GET and need no approval, plus `query_logs` (POST, read-only). Preview the exact set with `/api/list-tools?readonly=true`.
 
 **Tools requiring write access:**
 
@@ -402,7 +430,7 @@ Notes:
 **Neon Auth** (`?category=neon_auth`):
 
 - **`provision_neon_auth`**, **`get_auth`**, **`disable_auth`**, **`update_auth_config`**
-- **`get_neon_auth_config`**: Secrets redacted. Reads trusted origins, localhost access, email and password, OAuth providers, the email provider, the organization, magic link, and phone number plugins, the webhook, and logs export.
+- **`get_neon_auth_config`**: Reads trusted origins, localhost access, email and password, OAuth providers, the email provider, the organization, magic link, and phone number plugins, the webhook, and logs export, The SMTP password and OAuth client secrets show as `***redacted***` unless the connection uses `secrets=all`.
 - **`update_auth_allow_localhost`**, **`update_auth_email_and_password`**, **`update_auth_email_provider`**, **`send_auth_test_email`**, **`update_auth_plugins_organization`**, **`update_auth_plugins_magic_link`**, **`update_auth_plugins_phone_number`**, **`update_auth_webhooks`**, **`update_auth_logs_export`**: Change those settings. `update_auth_webhooks` replaces the whole webhook configuration. `update_auth_logs_export` turns the export of Neon Auth events to Neon Platform logs on or off; a project without logs export accepts only `enabled: false`.
 - **`list_auth_oauth_providers`**, **`add_auth_oauth_provider`**, **`update_auth_oauth_provider`**, **`delete_auth_oauth_provider`**
 - **`get_auth_oauth_server`**, **`update_auth_oauth_server`**: Configure Neon Auth as an OAuth 2.1 authorization server (including for MCP servers). Separate from the social login providers above.

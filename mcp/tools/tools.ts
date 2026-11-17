@@ -14,9 +14,8 @@ import {
   PACKAGE_TOOLS,
 } from './definitions';
 import { ToolStepFailed } from './errors';
-import { isGeneratedToolId, type ToolId } from './operations';
+import type { ToolId } from './operations';
 import { assertOutputContract } from './output-contract';
-import { sanitizeGeneratedResult } from './sanitize';
 import type { NeonTool } from './tool-definition';
 import type {
   ToolCallError,
@@ -43,6 +42,7 @@ function executionContext(
   return {
     apiKey: extra?.apiKey,
     readOnly: extra?.readOnly,
+    secrets: extra?.secrets,
     postgresRole: extra?.pinnedRoleName,
     caller: {
       source: 'mcp',
@@ -339,11 +339,7 @@ function toolResult(
       ? { ...rendered, structuredContent: { data } }
       : rendered;
   }
-  const shown = isGeneratedToolId(toolId)
-    ? sanitizeGeneratedResult(toolId, data)
-    : data;
-
-  return { content: [jsonText(shown)], structuredContent: { data: shown } };
+  return { content: [jsonText(data)], structuredContent: { data } };
 }
 
 // A non-Error throw is rethrown, so Effect records it as a defect.

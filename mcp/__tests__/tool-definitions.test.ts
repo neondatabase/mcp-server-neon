@@ -783,7 +783,6 @@ describe('generated tool interface', () => {
     const completeTuning = byName('complete_query_tuning');
     expect(completeTuning.description).toContain('even when the user rejects');
     expect(completeTuning.description).toContain('apply_changes true applies');
-    expect(byName('get_neon_auth_config').description).toContain('redacted');
     expect(byName('run_sql').description).toContain('temporary branch');
     const inspect = byName('inspect_database');
     expect(inspect.description).toContain('CREATE EXTENSION');

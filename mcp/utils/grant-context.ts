@@ -1,4 +1,13 @@
+import type { NeonSecretsMode } from '@neon/tools';
 import { parseResourceIdentifier } from '../../lib/oauth/protected-resource-metadata';
+import {
+  DEFAULT_SECRETS,
+  effectiveSecrets,
+  InvalidSecretsError,
+  parseSecretsParam,
+  secretsField,
+  StoredSecrets,
+} from './secrets';
 
 /**
  * Grant context for fine-grained tool access control.
@@ -40,6 +49,12 @@ export type GrantContext = {
    * database owner, as before this field existed.
    */
   roleName?: string;
+  /**
+   * Which secrets tool results keep, as `@neon/tools` `secrets`. Absent means
+   * `setup`: credentials Neon issues are shown, stored third-party secrets are
+   * hidden.
+   */
+  secrets?: 'all' | 'none';
 };
 
 /**
@@ -108,6 +123,7 @@ export function grantAnalyticsProperties(grant: GrantContext) {
     projectScoped: String(!!grant.projectId),
     customScopes,
     rolePinned: String(grant.roleName !== undefined),
+    secrets: grant.secrets ?? DEFAULT_SECRETS,
   };
 }
 
@@ -163,6 +179,7 @@ export function resolveGrantFromSearchParams(
     scopes,
     ...(unknownCategories.length > 0 ? { unknownCategories } : {}),
     ...(roleName ? { roleName } : {}),
+    ...secretsField(parseSecretsParam(params) ?? DEFAULT_SECRETS),
   };
 }
 
@@ -219,8 +236,8 @@ export function resolveGrantFromToken(token: {
 
 /**
  * Copy the known fields of a grant read back from storage. A stored `roleName`
- * that is present but no longer valid throws rather than being dropped, since
- * dropping it would widen the connection to the database owner.
+ * or `secrets` that is present but no longer valid throws rather than
+ * being dropped, since dropping either would widen the connection.
  */
 export function normalizeStoredGrant(
   grant: Partial<GrantContext>,
@@ -228,6 +245,13 @@ export function normalizeStoredGrant(
   if (grant.roleName !== undefined && !isValidRoleName(grant.roleName)) {
     throw new InvalidRoleNameError();
   }
+
+  const stored = StoredSecrets.safeParse(grant);
+
+  if (!stored.success) {
+    throw new InvalidSecretsError();
+  }
+
   return {
     projectId: grant.projectId ?? null,
     scopes: grant.scopes ?? null,
@@ -235,5 +259,25 @@ export function normalizeStoredGrant(
       ? { unknownCategories: grant.unknownCategories }
       : {}),
     ...(grant.roleName !== undefined ? { roleName: grant.roleName } : {}),
+    ...stored.data,
   };
 }
+
+/**
+ * Role reads hide their secrets on a pinned connection for the same reason
+ * `get_connection_string` is withheld there: their results can carry the
+ * pinned role's password.
+ */
+const PINNED_ROLE_HIDDEN_TOOLS: ReadonlySet<string> = new Set([
+  'list_postgres_roles',
+  'get_postgres_role',
+]);
+
+export const toolSecrets = (
+  toolName: string,
+  grant: GrantContext,
+  readOnly: boolean,
+): NeonSecretsMode =>
+  grant.roleName !== undefined && PINNED_ROLE_HIDDEN_TOOLS.has(toolName)
+    ? 'none'
+    : effectiveSecrets(grant, readOnly);

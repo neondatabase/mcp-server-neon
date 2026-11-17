@@ -22,6 +22,7 @@ import type {
 import { Effect } from 'effect';
 import type { Api } from '../neon-client';
 import type { GrantContext } from '../utils/grant-context';
+import { toolSecrets } from '../utils/grant-context';
 import { NEON_HANDLERS, step } from './tools';
 import { injectProjectId } from './grant-filter';
 import { NEON_TOOLS } from './definitions';
@@ -58,8 +59,8 @@ function toolByName(toolName: string): NeonTool | undefined {
 }
 
 /**
- * A pinned role reaches handlers from the grant, overriding anything already
- * on `extra`, so a tool argument can never replace it.
+ * A pinned role and the secrets mode reach handlers from the grant, overriding
+ * anything already on `extra`, so a tool argument can never replace them.
  */
 export function invokeTool(
   toolName: string,
@@ -87,6 +88,7 @@ export function invokeTool(
       run({ params: effectiveArgs }, neonClient, {
         ...extra,
         pinnedRoleName: grant.roleName,
+        secrets: toolSecrets(toolName, grant, extra.readOnly === true),
       }),
     ),
   );

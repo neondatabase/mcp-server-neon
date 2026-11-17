@@ -429,6 +429,7 @@ export async function POST(request: NextRequest) {
             roleName: parsed.error.selection.roleName,
             categories: parsed.error.selection.categories,
             writeChecked: parsed.error.selection.grantWrite,
+            secrets: parsed.error.selection.secrets,
           },
         });
         return htmlConsent(html);

@@ -4,6 +4,7 @@ import {
   type GrantContext,
   type ScopeCategory,
 } from '../utils/grant-context';
+import { StoredSecrets, withStoredSecrets } from '../utils/secrets';
 import type { ConsentMode } from './consent-mode';
 import {
   parseDownstreamAuthRequest,
@@ -76,14 +77,18 @@ function parseGrantContext(value: unknown): GrantContext | undefined {
   if (roleName !== undefined && !isValidRoleName(roleName)) {
     return undefined;
   }
-  return {
-    projectId: value.projectId,
-    scopes: value.scopes,
-    ...(unknownCategories && unknownCategories.length > 0
-      ? { unknownCategories }
-      : {}),
-    ...(roleName !== undefined ? { roleName } : {}),
-  };
+
+  return withStoredSecrets(
+    {
+      projectId: value.projectId,
+      scopes: value.scopes,
+      ...(unknownCategories && unknownCategories.length > 0
+        ? { unknownCategories }
+        : {}),
+      ...(roleName !== undefined ? { roleName } : {}),
+    },
+    StoredSecrets.safeParse(value),
+  );
 }
 
 function parseCeiling(value: unknown): ConsentCeiling | undefined {

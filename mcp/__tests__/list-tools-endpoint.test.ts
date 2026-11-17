@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import { GET, OPTIONS } from '../../app/api/list-tools/route';
 import { NEON_TOOLS } from '../../mcp/tools/definitions';
 import { getFilteredTools } from '../../mcp/tools/grant-filter';
@@ -169,7 +170,34 @@ describe('/api/list-tools endpoint', () => {
     );
 
     const allowed = res.headers.get('Access-Control-Allow-Headers') ?? '';
-    expect(allowed).toBe('x-read-only');
+    expect(allowed).toBe('x-read-only, x-neon-secrets');
+  });
+
+  it('withholds secret-only tools for X-Neon-Secrets: none', async () => {
+    const res = await GET(
+      new Request('http://localhost/api/list-tools', {
+        headers: { 'x-neon-secrets': 'none' },
+      }),
+    );
+
+    const { tools } = z
+      .object({ tools: z.array(z.object({ name: z.string() })) })
+      .parse(await res.json());
+
+    const names = tools.map((tool) => tool.name);
+
+    expect(names).not.toContain('get_connection_string');
+    expect(names).toContain('list_postgres_roles');
+  });
+
+  it('rejects a malformed secrets header even when the URL sets a mode', async () => {
+    const res = await GET(
+      new Request('http://localhost/api/list-tools?secrets=none', {
+        headers: { 'x-neon-secrets': 'yes' },
+      }),
+    );
+
+    expect(res.status).toBe(400);
   });
 
   // === Issue #257 — response shape additions ===
@@ -215,7 +243,7 @@ describe('/api/list-tools endpoint', () => {
     it('surfaces the write-mode notice in the default response', async () => {
       const body = await callListTools();
       expect(body.notices).toBeDefined();
-      expect(body.notices).toHaveLength(2);
+      expect(body.notices).toHaveLength(3);
       expect(body.notices?.[0]).toContain('Write mode active');
 
       // Per-tool descriptions must NOT carry the notice suffix on this

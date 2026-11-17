@@ -1,3 +1,4 @@
+import type { NeonSecretsMode } from '@neon/tools';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_GRANT } from '../utils/grant-context';
 import {
@@ -100,6 +101,33 @@ describe('buildConsentView', () => {
     expect(visibleToolCount(writeView)).toBeGreaterThan(COLLAPSE_ABOVE);
   });
 });
+
+const toolSection = (html: string) =>
+  /data-tool-content>(?<tools>[\s\S]*?)<\/section>/u.exec(html)?.groups
+    ?.tools ?? '';
+
+const renderSecretsPreview = (secrets: NeonSecretsMode) =>
+  renderConsentHtml({
+    client: {
+      client_name: 'Cursor',
+      redirect_uris: ['http://127.0.0.1:1/callback'],
+    },
+    identity: { kind: 'registered' },
+    redirectUri: 'http://127.0.0.1:1/callback',
+    state: 'abc',
+    mode: 'editable',
+    writeChecked: true,
+    showWriteControl: true,
+    grant: DEFAULT_GRANT,
+    formState: {
+      projectMode: 'all',
+      projectId: '',
+      roleName: '',
+      categories: ['branches', 'realtime'],
+      writeChecked: true,
+      secrets,
+    },
+  });
 
 describe('renderConsentHtml', () => {
   const client = {
@@ -404,6 +432,7 @@ describe('renderConsentHtml', () => {
         roleName: '',
         categories: [],
         writeChecked: true,
+        secrets: 'setup',
       },
     });
     const input = html.match(
@@ -450,6 +479,7 @@ describe('renderConsentHtml', () => {
         roleName: '',
         categories: ['querying', 'schema'],
         writeChecked: false,
+        secrets: 'setup',
       },
     });
 
@@ -520,6 +550,7 @@ describe('renderConsentHtml', () => {
         roleName: '"><script>x</script>',
         categories: ['querying'],
         writeChecked: false,
+        secrets: 'setup',
       },
     });
     const input = html.match(/<input\b[^>]*name="roleName"[^>]*>/);
@@ -550,6 +581,7 @@ describe('renderConsentHtml', () => {
           roleName,
           categories: ['querying', 'branches'],
           writeChecked: true,
+          secrets: 'setup',
         },
       });
     const tools = (html: string) =>
@@ -559,4 +591,57 @@ describe('renderConsentHtml', () => {
     expect(tools(render('app_reader'))).not.toContain('Get connection string');
     expect(tools(render('app_reader'))).toContain('Run SQL');
   });
+
+  it('checks the selected secrets choice and drops secret-only tools from the preview under none', () => {
+    const setup = renderSecretsPreview('setup');
+    const none = renderSecretsPreview('none');
+
+    expect(setup).toContain(
+      '<input type="radio" name="secrets" value="setup" checked',
+    );
+    expect(setup).toContain(
+      '<input type="radio" name="secrets" value="all" aria-describedby',
+    );
+    expect(setup).toContain('***redacted***');
+    expect(toolSection(setup)).toContain('Get connection string');
+    expect(renderSecretsPreview('all')).toContain(
+      '<input type="radio" name="secrets" value="all" checked',
+    );
+    expect(none).toContain(
+      '<input type="radio" name="secrets" value="none" checked',
+    );
+    expect(toolSection(none)).not.toContain('Get connection string');
+    expect(toolSection(none)).toContain('List roles');
+  });
+
+  it.each([
+    [DEFAULT_GRANT, true, '<dd>Setup credentials</dd>'],
+    [DEFAULT_GRANT, false, '<dd>No secrets</dd>'],
+    [
+      { ...DEFAULT_GRANT, secrets: 'all' as const },
+      true,
+      '<dd>All secrets</dd>',
+    ],
+    [
+      { ...DEFAULT_GRANT, secrets: 'none' as const },
+      true,
+      '<dd>No secrets</dd>',
+    ],
+  ])(
+    'states whether a confirmation shows secrets (%o, writes %s)',
+    (grant, writeChecked, expected) => {
+      const html = renderConsentHtml({
+        client,
+        identity: { kind: 'registered' },
+        redirectUri: 'http://127.0.0.1:1/callback',
+        state: 'abc',
+        mode: 'confirmation',
+        writeChecked,
+        showWriteControl: false,
+        grant,
+      });
+
+      expect(html).toContain(expected);
+    },
+  );
 });
