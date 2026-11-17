@@ -1,4 +1,7 @@
-import { type Implementation, isSpecType } from '@modelcontextprotocol/server';
+import { isSpecType } from '@modelcontextprotocol/server';
+import type { Implementation } from '@modelcontextprotocol/server';
+import { Effect } from 'effect';
+import { HttpServerResponse } from 'effect/http';
 import pkg from '../package.json';
 import registryEntry from '../server.json';
 import { assert } from './assert';
@@ -9,6 +12,7 @@ export const AI_CATALOG_MEDIA_TYPE = 'application/ai-catalog+json';
 
 const SERVER_CARD_SCHEMA =
   'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json';
+
 const SERVER_CARD_PATH = '/mcp/server-card';
 
 const serverInfo = {
@@ -19,6 +23,7 @@ const serverInfo = {
   websiteUrl: registryEntry.websiteUrl,
   icons: registryEntry.icons,
 };
+
 assert(
   isSpecType.Implementation(serverInfo),
   'server.json title, description, websiteUrl, or icons is not a valid MCP Implementation',
@@ -28,6 +33,7 @@ export const SERVER_INFO: Implementation = serverInfo;
 
 export function buildServerCard() {
   const [remote] = registryEntry.remotes;
+
   return {
     $schema: SERVER_CARD_SCHEMA,
     name: registryEntry.name,
@@ -69,15 +75,15 @@ const DISCOVERY_CORS_HEADERS = {
 };
 
 export function discoveryResponse(body: unknown, contentType: string) {
-  return new Response(JSON.stringify(body), {
+  return HttpServerResponse.text(JSON.stringify(body), {
+    contentType,
     headers: {
       ...DISCOVERY_CORS_HEADERS,
-      'Content-Type': contentType,
       'Cache-Control': 'public, max-age=3600',
     },
   });
 }
 
-export function discoveryPreflight() {
-  return new Response(null, { status: 204, headers: DISCOVERY_CORS_HEADERS });
-}
+export const discoveryPreflight = Effect.succeed(
+  HttpServerResponse.empty({ status: 204, headers: DISCOVERY_CORS_HEADERS }),
+);

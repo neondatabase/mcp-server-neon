@@ -1,22 +1,4 @@
 {
-  "app/.well-known/ai-catalog.json/route.ts": {
-    "eslint(func-style)": 1,
-    "unicorn(prefer-export-from)": 1
-  },
-  "app/.well-known/mcp.json/route.ts": {
-    "eslint(func-style)": 1,
-    "unicorn(prefer-export-from)": 1
-  },
-  "app/.well-known/oauth-authorization-server/route.ts": {
-    "anti-slop(require-readable-spacing)": 2,
-    "eslint(func-style)": 2
-  },
-  "app/.well-known/oauth-protected-resource/[...resource]/route.ts": {
-    "eslint(func-style)": 2
-  },
-  "app/.well-known/oauth-protected-resource/route.ts": {
-    "eslint(func-style)": 2
-  },
   "app/api/[transport]/route.ts": {
     "anti-slop-martinfowler(long-function)": 2,
     "anti-slop-martinfowler(repeated-switches)": 2,
@@ -103,14 +85,6 @@
     "typescript(prefer-nullish-coalescing)": 8,
     "typescript(return-await)": 1,
     "typescript(strict-boolean-expressions)": 12
-  },
-  "app/api/list-tools/route.ts": {
-    "anti-slop(no-conditional-spread)": 2,
-    "anti-slop(require-readable-spacing)": 3,
-    "eslint(func-style)": 2,
-    "eslint(max-lines-per-function)": 1,
-    "eslint(max-statements)": 1,
-    "eslint(prefer-destructuring)": 1
   },
   "app/api/register/route.ts": {
     "anti-slop-martinfowler(long-function)": 1,
@@ -211,10 +185,6 @@
   },
   "app/mcp.md/route.ts": {
     "anti-slop-martinfowler(mysterious-name)": 1
-  },
-  "app/mcp/server-card/route.ts": {
-    "eslint(func-style)": 1,
-    "unicorn(prefer-export-from)": 1
   },
   "e2e/auth-complete.spec.ts": {
     "anti-slop(no-conditional-spread)": 1,
@@ -396,11 +366,6 @@
     "eslint(func-style)": 1,
     "typescript(strict-boolean-expressions)": 2
   },
-  "lib/config.ts": {
-    "anti-slop(require-readable-spacing)": 2,
-    "typescript(prefer-nullish-coalescing)": 1,
-    "typescript(strict-boolean-expressions)": 2
-  },
   "lib/errors.ts": {
     "anti-slop-martinfowler(long-function)": 1,
     "anti-slop(no-runtime-typeof)": 1,
@@ -520,10 +485,7 @@
   },
   "lib/server-metadata.ts": {
     "anti-slop(no-unknown-parameters)": 1,
-    "anti-slop(require-readable-spacing)": 3,
-    "eslint(func-style)": 4,
-    "import(consistent-type-specifier-style)": 1,
-    "unicorn(prefer-response-static-json)": 1
+    "eslint(func-style)": 3
   },
   "mcp/__tests__/analytics-disable.test.ts": {
     "anti-slop(no-module-mocking)": 1,
@@ -809,21 +771,15 @@
     "vitest(require-mock-type-parameters)": 4
   },
   "mcp/__tests__/list-tools-endpoint.test.ts": {
-    "anti-slop(no-runtime-typeof)": 3,
+    "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(no-unsafe-dictionary-type)": 1,
-    "anti-slop(require-readable-spacing)": 18,
     "anti-slop(require-safety-comment-for-type-assertion)": 5,
     "eslint(func-style)": 1,
     "eslint(require-unicode-regexp)": 1,
-    "typescript(array-type)": 1,
-    "typescript(await-thenable)": 4,
-    "typescript(dot-notation)": 1,
     "typescript(no-non-null-assertion)": 1,
     "typescript(no-unsafe-type-assertion)": 4,
-    "typescript(promise-function-async)": 1,
     "unicorn(no-array-sort)": 1,
     "vitest(no-conditional-in-test)": 3,
-    "vitest(prefer-expect-type-of)": 2,
     "vitest(prefer-strict-equal)": 6
   },
   "mcp/__tests__/live/mcp-server.live.e2e.test.ts": {

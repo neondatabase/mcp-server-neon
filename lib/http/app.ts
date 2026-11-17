@@ -1,29 +1,13 @@
-import { DateTime, Effect, Layer } from 'effect';
-import {
-  HttpMiddleware,
-  HttpRouter,
-  HttpServer,
-  HttpServerResponse,
-} from 'effect/http';
+import { Layer } from 'effect';
+import { HttpMiddleware, HttpRouter, HttpServer } from 'effect/http';
 import { SentryLayer } from '../../mcp/sentry/effect';
-import pkg from '../../package.json';
+import { ServerConfig } from '../config';
+import { WinstonLoggerLayer } from '../effect/logger';
+import { DiscoveryRoutes } from './routes/discovery';
+import { HealthRoutes } from './routes/health';
+import { ListToolsRoutes } from './routes/list-tools';
 
-const health = Effect.gen(function* () {
-  const now = yield* DateTime.now;
-
-  return yield* HttpServerResponse.json({
-    status: 'ok',
-    version: pkg.version,
-    timestamp: DateTime.formatIso(now),
-  });
-}).pipe(Effect.withSpan('Health.check'));
-
-// A next.config.ts rewrite keeps the original URL, so the router sees /health
-// for the alias.
-const routes = Layer.mergeAll(
-  HttpRouter.add('GET', '/api/health', health),
-  HttpRouter.add('GET', '/health', health),
-);
+const Routes = Layer.mergeAll(HealthRoutes, DiscoveryRoutes, ListToolsRoutes);
 
 // Sentry's HTTP integration already opens the request span, with the header
 // and query redaction in mcp/sentry/instrument.ts. Effect's server span would
@@ -33,12 +17,16 @@ const withoutServerSpan = Layer.succeed(HttpMiddleware.TracerDisabledWhen)(
   () => true,
 );
 
-// Built once per instance; Next.js route handlers forward their requests here.
-// Request fibers run with this layer's output, so the tracer and error reporter
-// are merged in rather than provided to the routes.
+// Built once per instance; every Next.js route file forwards its requests
+// here. Request fibers run with this layer's output, so the config, tracer,
+// error reporter, and logger are merged in rather than provided to the routes.
 export const app = HttpRouter.toWebHandler(
-  Layer.mergeAll(routes, SentryLayer, withoutServerSpan).pipe(
-    Layer.provide(HttpServer.layerServices),
-  ),
+  Layer.mergeAll(
+    Routes,
+    ServerConfig.layer,
+    SentryLayer,
+    WinstonLoggerLayer,
+    withoutServerSpan,
+  ).pipe(Layer.provide(HttpServer.layerServices)),
   { disableLogger: true },
 );

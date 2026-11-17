@@ -1,12 +1,7 @@
-import {
-  AI_CATALOG_MEDIA_TYPE,
-  buildAiCatalog,
-  discoveryPreflight,
-  discoveryResponse,
-} from '@/lib/server-metadata';
+import { app } from '../../../lib/http/app';
 
-export function GET() {
-  return discoveryResponse(buildAiCatalog(), AI_CATALOG_MEDIA_TYPE);
-}
+export const GET = async (request: Request): Promise<Response> =>
+  app.handler(request);
 
-export const OPTIONS = discoveryPreflight;
+export const OPTIONS = async (request: Request): Promise<Response> =>
+  app.handler(request);

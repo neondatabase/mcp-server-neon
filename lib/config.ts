@@ -3,16 +3,53 @@
  * This is the single source of truth for all configuration values.
  */
 
+import { Config, Context, Effect, Layer, Option } from 'effect';
+
+// An empty SERVER_HOST or VERCEL_URL counts as unset.
+const resolveServerHost = (env: {
+  serverHost: Option.Option<string>;
+  vercelUrl: Option.Option<string>;
+}): string =>
+  env.serverHost.pipe(
+    Option.filter((host) => host.length > 0),
+    Option.getOrElse(() =>
+      env.vercelUrl.pipe(
+        Option.filter((url) => url.length > 0),
+        Option.match({
+          onNone: () => 'http://localhost:3000',
+          onSome: (url) => `https://${url}`,
+        }),
+      ),
+    ),
+  );
+
 // Server host detection
-export const SERVER_HOST =
-  process.env.SERVER_HOST ||
-  (process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000');
+export const SERVER_HOST = resolveServerHost({
+  serverHost: Option.fromNullishOr(process.env.SERVER_HOST),
+  vercelUrl: Option.fromNullishOr(process.env.VERCEL_URL),
+});
+
+/** Configuration read through Effect `Config`, for code that runs on Effect. */
+export class ServerConfig extends Context.Service<
+  ServerConfig,
+  { readonly serverHost: string }
+>()('@neondatabase/mcp-server-neon/lib/config/ServerConfig', {
+  make: Effect.gen(function* () {
+    const env = yield* Config.all({
+      serverHost: Config.option(Config.String('SERVER_HOST')),
+      vercelUrl: Config.option(Config.String('VERCEL_URL')),
+    });
+
+    return { serverHost: resolveServerHost(env) };
+  }),
+}) {
+  static readonly layer = Layer.effect(this, this.make);
+}
 
 // OAuth configuration
 export const UPSTREAM_OAUTH_HOST =
   process.env.UPSTREAM_OAUTH_HOST ?? 'https://oauth2.neon.tech';
+
 export const CLIENT_ID = process.env.CLIENT_ID ?? '';
 export const CLIENT_SECRET = process.env.CLIENT_SECRET ?? '';
 
@@ -40,6 +77,7 @@ export const NEON_FEEDBACK_URL =
 // Analytics and monitoring
 export const ANALYTICS_WRITE_KEY =
   process.env.ANALYTICS_WRITE_KEY ?? 'gFVzt8ozOp6AZRXoD0g0Lv6UQ6aaoS7O';
+
 export const SENTRY_DSN =
   process.env.SENTRY_DSN ??
   'https://b3564134667aa2dfeaa3992a12d9c12f@o1373725.ingest.us.sentry.io/4509328350380033';

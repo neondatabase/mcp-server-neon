@@ -243,6 +243,10 @@
     "eslint/new-cap": "off",
     // `_tag` is Effect's discriminant.
     "eslint/no-underscore-dangle": "off",
+    // Reads the `Schema.TaggedError<Self>()(...)` class factory as an error
+    // constructor called without `new`. Nothing is lost: unicorn/new-for-builtins
+    // still flags `throw Error()`, and TypeScript rejects calling a class without `new`.
+    "unicorn/throw-new-error": "off",
     // Effect code is nested calls: `pipe(Effect.gen(...), Effect.map(...))`.
     "unicorn/max-nested-calls": "off",
     // `Effect.callback((resume) => ...)` and Node streams take callbacks.
