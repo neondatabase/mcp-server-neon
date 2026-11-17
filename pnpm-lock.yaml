@@ -17,12 +17,15 @@ importers:
       '@modelcontextprotocol/server':
         specifier: 2.0.0
         version: 2.0.0
+      '@neon/effect':
+        specifier: 0.5.2
+        version: 0.5.2(effect@4.1.2)
       '@neon/sdk':
         specifier: 7.13.1
         version: 7.13.1
       '@neon/tools':
-        specifier: 2.14.4
-        version: 2.14.4
+        specifier: 2.15.0
+        version: 2.15.0(@neon/effect@0.5.2(effect@4.1.2))(effect@4.1.2)
       '@neondatabase/serverless':
         specifier: 1.0.0
         version: 1.0.0
@@ -775,13 +778,27 @@ packages:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
 
+  '@neon/effect@0.5.2':
+    resolution: {integrity: sha512-DdfTrXKACzWn+XN2K7zBKLvNDzEMJTIB+My41Zoxqr5HZ5oOel+8+3auEV5PNBRyoo78jHsOLAAzvk0KBKwaQA==}
+    engines: {node: '>=20.19.0'}
+    peerDependencies:
+      effect: ^4.0.0-rc.117
+
   '@neon/sdk@7.13.1':
     resolution: {integrity: sha512-PHQS6WfdZpt237eWlsBseV3cacXyqWvUmD2YQaB19RcwJ45e+G0uV4YSZvjxNfppXgpP4S+4m4b5ds7TQy/eYw==}
     engines: {node: '>=20.19.0'}
 
-  '@neon/tools@2.14.4':
-    resolution: {integrity: sha512-9ngkVLY5N97PMyhcylDCt27XKbVyobARJgH6eYW4CN9IZiv16cEBAyryOyopYae4A8oDtg1tTzxkaUrb5mSLzQ==}
+  '@neon/tools@2.15.0':
+    resolution: {integrity: sha512-3Mn3OrO4QT+Y3NflhOba34076DqvEe1d3tugfBOKQDHtT6k55t/9dNR7nCYjzE/wttCW/QAT/TRt10dQucgw/g==}
     engines: {node: '>=20.19.0'}
+    peerDependencies:
+      '@neon/effect': ^0.5.2
+      effect: ^4.1.2
+    peerDependenciesMeta:
+      '@neon/effect':
+        optional: true
+      effect:
+        optional: true
 
   '@neondatabase/serverless@1.0.0':
     resolution: {integrity: sha512-XWmEeWpBXIoksZSDN74kftfTnXFEGZ3iX8jbANWBc+ag6dsiQuvuR4LgB0WdCOKMb5AQgjqgufc0TgAsZubUYw==}
@@ -3164,13 +3181,21 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
+  '@neon/effect@0.5.2(effect@4.1.2)':
+    dependencies:
+      '@neon/sdk': 7.13.1
+      effect: 4.1.2
+
   '@neon/sdk@7.13.1': {}
 
-  '@neon/tools@2.14.4':
+  '@neon/tools@2.15.0(@neon/effect@0.5.2(effect@4.1.2))(effect@4.1.2)':
     dependencies:
       '@neon/sdk': 7.13.1
       '@neondatabase/serverless': 1.0.0
       zod: 4.6.5
+    optionalDependencies:
+      '@neon/effect': 0.5.2(effect@4.1.2)
+      effect: 4.1.2
 
   '@neondatabase/serverless@1.0.0':
     dependencies:
