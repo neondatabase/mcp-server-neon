@@ -1709,7 +1709,7 @@
     "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-runtime-typeof)": 2,
     "anti-slop(no-unknown-parameters)": 6,
-    "anti-slop(require-readable-spacing)": 8,
+    "anti-slop(require-readable-spacing)": 6,
     "eslint(curly)": 1,
     "eslint(func-style)": 6,
     "eslint(max-classes-per-file)": 1,

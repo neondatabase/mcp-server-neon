@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+A tool call that fails with a Neon API 5xx now reports the HTTP status, plus the API's error code, request ID, and `Retry-After` when the response has them, on separate lines under the `NeonApiError` message. Before, the result showed only the message, such as `please try again later`. The server's error log and Sentry event carry the same fields, and the event is tagged `neon.api.status`.
+
 `enable_realtime` is marked destructive: enabling Realtime turns on logical replication for the whole project for good and suspends every compute, and its description now says so. `update_auth_webhooks`, `update_auth_email_provider`, and `provision_neon_data_api` are marked open-world, because they point Neon at a webhook URL, SMTP host, or JWKS URL the caller chooses. `describe_branch` says it is read-only. Requires `@neon/tools` 2.17.1.
 
 `secrets` on the MCP URL chooses which secrets tool results show: `setup` (the default), `all`, or `none`. `setup` now includes `provision_neon_auth`'s `secret_server_key` and the role passwords in `list_postgres_roles` and `get_postgres_role`. The OAuth provider client secrets and SMTP password stored in Neon Auth read `***redacted***` instead of being removed, and `secrets=all` shows them. `secrets=none`, or the `X-Neon-Secrets: none` header, hides every secret and withholds `get_connection_string`, `get_realtime_secret`, `reset_postgres_role_password`, `rotate_credential`, `rotate_auth_oauth_client_secret`, and `presign_storage_object`. With OAuth, pick the mode on the authorization page; tokens issued before this option get `setup`. Read-only connections show no secrets, and a pinned role hides role passwords. Requires `@neon/tools` 2.16.0.

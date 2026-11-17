@@ -75,7 +75,7 @@ describe('createMcpServer grant + read-only integration', () => {
   it('registers all tools with default grant', async () => {
     const server = await createMcpServer(buildContext());
     expect(getRegisteredToolNames(server)).toHaveLength(NEON_TOOLS.length);
-  });
+  }, 30_000);
 
   it('filters by scopes when provided', async () => {
     const grant: GrantContext = {

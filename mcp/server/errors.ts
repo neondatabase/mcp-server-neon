@@ -45,6 +45,61 @@ const POSTGRES_ERROR_FIELDS = [
   ['where', 'CONTEXT'],
 ] as const;
 
+type NeonApiErrorDetails = {
+  neonApiStatus: string;
+  neonApiCode?: string;
+  neonApiRequestId?: string;
+  neonApiRetryAfter?: string;
+};
+
+const neonApiErrorDetails = (error: NeonApiError): NeonApiErrorDetails => {
+  const details: NeonApiErrorDetails = { neonApiStatus: String(error.status) };
+
+  if (error.code !== undefined && error.code !== '') {
+    details.neonApiCode = error.code;
+  }
+
+  if (error.requestId !== undefined && error.requestId !== '') {
+    details.neonApiRequestId = error.requestId;
+  }
+
+  const retryAfter = error.response?.headers.get('retry-after');
+
+  if (retryAfter !== undefined && retryAfter !== null && retryAfter !== '') {
+    details.neonApiRetryAfter = retryAfter;
+  }
+
+  return details;
+};
+
+const neonApiErrorLines = ({
+  neonApiStatus,
+  neonApiCode,
+  neonApiRequestId,
+  neonApiRetryAfter,
+}: NeonApiErrorDetails) =>
+  [
+    `HTTP status: ${neonApiStatus}`,
+    neonApiCode === undefined ? undefined : `Code: ${neonApiCode}`,
+    neonApiRequestId === undefined
+      ? undefined
+      : `Request ID: ${neonApiRequestId}`,
+    neonApiRetryAfter === undefined
+      ? undefined
+      : `Retry-After: ${neonApiRetryAfter}`,
+  ].filter((line) => line !== undefined);
+
+const serverErrorTags = (
+  agent: IdentifiedClient,
+  apiDetails: NeonApiErrorDetails | undefined,
+) =>
+  apiDetails === undefined
+    ? agentSentryTags(agent)
+    : {
+        ...agentSentryTags(agent),
+        'neon.api.status': apiDetails.neonApiStatus,
+      };
+
 function errorText(error: unknown): string {
   if (!(error instanceof Error)) {
     return 'Unknown error';
@@ -58,6 +113,11 @@ function errorText(error: unknown): string {
       }
     }
   }
+
+  if (error instanceof NeonApiError) {
+    lines.push(...neonApiErrorLines(neonApiErrorDetails(error)));
+  }
+
   return lines.join('\n');
 }
 
@@ -118,7 +178,15 @@ export function handleToolError(
       ],
     };
   } else {
-    const errorContext = { ...properties, ...(traceId && { traceId }) };
+    const apiDetails =
+      error instanceof NeonApiError ? neonApiErrorDetails(error) : undefined;
+
+    const errorContext = {
+      ...properties,
+      ...(traceId && { traceId }),
+      ...apiDetails,
+    };
+
     logger.error('Tool call error:', {
       error:
         error instanceof Error
@@ -126,10 +194,12 @@ export function handleToolError(
           : 'Unknown error',
       ...errorContext,
     });
+
     captureException(error, {
       extra: errorContext,
-      tags: agentSentryTags(agent),
+      tags: serverErrorTags(agent, apiDetails),
     });
+
     return errorResponse(error);
   }
 }
