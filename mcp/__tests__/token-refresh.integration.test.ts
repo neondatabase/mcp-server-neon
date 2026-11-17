@@ -9,8 +9,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RefreshResult } from '../oauth/kv-store';
 import type { RefreshRotation } from '../oauth/model';
+import type { Token } from 'oauth2-server';
 
 vi.mock('../oauth/model', () => {
+  const getAccessToken = vi.fn<(key: string) => Promise<Token | undefined>>();
+
   const getRefreshResult =
     vi.fn<(key: string) => Promise<RefreshResult | undefined>>();
 
@@ -18,7 +21,14 @@ vi.mock('../oauth/model', () => {
     model: {
       getClient: vi.fn(),
       getRefreshToken: vi.fn(),
-      getAccessToken: vi.fn(),
+      getAccessToken,
+      getStoredAccessToken: getAccessToken,
+      isGrantRevoked: vi
+        .fn<(id: string) => Promise<boolean>>()
+        .mockResolvedValue(false),
+      assertGrantActive: vi
+        .fn<(id: string) => Promise<void>>()
+        .mockResolvedValue(undefined),
       saveToken: vi.fn(),
       saveRefreshToken: vi.fn(),
       deleteToken: vi.fn(),
@@ -135,6 +145,7 @@ const TEST_CLIENT = {
 };
 
 const TEST_OLD_ACCESS_TOKEN = {
+  grantFamilyId: 'c'.repeat(64),
   accessToken: 'old-access-token',
   refreshToken: 'old-refresh-token',
   expires_at: Date.now() + 3600_000,

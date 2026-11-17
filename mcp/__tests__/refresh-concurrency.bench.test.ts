@@ -23,6 +23,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Shared simulated state (one Redis, one Postgres, one upstream counter)
@@ -30,6 +31,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type RedisEntry = { value: string; expiresAt?: number };
 type Token = {
+  grantFamilyId?: string;
   accessToken: string;
   refreshToken: string;
   expires_at: number;
@@ -150,6 +152,12 @@ vi.mock('../oauth/model', () => ({
       id === TEST_CLIENT.id ? TEST_CLIENT : undefined,
     getRefreshToken: async (rt: string) => state.refreshTokens.get(rt),
     getAccessToken: async (at: string) => state.tokens.get(at),
+    getStoredAccessToken: async (at: string) => state.tokens.get(at),
+    // This benchmark models active grants; denial uses the real-DB suite.
+    isGrantRevoked: async () => false,
+    assertGrantActive: async () => {
+      /* Fixture grants are active. */
+    },
     saveToken: async (token: Token) => {
       state.tokens.set(token.accessToken, token);
       return token;
@@ -276,6 +284,7 @@ function seedToken(refreshToken: string): void {
   const accessToken = `at-old-${refreshToken}`;
   state.refreshTokens.set(refreshToken, { refreshToken, accessToken });
   state.tokens.set(accessToken, {
+    grantFamilyId: createHash('sha256').update(refreshToken).digest('hex'),
     accessToken,
     refreshToken,
     expires_at: Date.now() + 3600_000,

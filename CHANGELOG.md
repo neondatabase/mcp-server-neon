@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+Explicit OAuth revocation denies the MCP grant family before deleting known token/cache rows, retires the known issuer pair and compensates late issuer responses. Incomplete retirement remains available for authenticated retry. Existing tokens are bound on first use without a forced sign-in; known denial aliases are checked before adoption. Lost links in wholly unbound historical chains limit which old credentials can be identified as one grant. New bound grants retain the replay grace and late unused-successor recovery policy. This adds `mcpauth.grant_revocations` and a denial lookup on stored-token validation. See `ai-notes/oauth-grant-revocation.md` for rollout, pending-credential retention and historical-lineage limits.
+
 `describe_table_schema` lists every constraint, including `EXCLUDE`, when the connecting role has only SELECT on the table. Mixed-case table names such as `User` and `public.User`, as `get_database_tables` returns them, now resolve. A name that matches two tables, such as `User` when both `"User"` and `user` exist, fails and names both. On Postgres 18, the `NOT NULL` rows that appeared as `CHECK` constraints are gone; the column line still says `NOT NULL`. Requires `@neon/tools` 2.14.4.
 
 `restore_snapshot` no longer finalizes by default. Without `target_branch_id`, the API restores onto the snapshot's source branch, so the old default replaced that branch, often production, with the snapshot's data. A restore now stays a separate branch unless the call passes `finalize: true`. The `restore_snapshot` and `finalize_branch_restore` descriptions say that finalize replaces the target branch and tell agents to ask the user first. Requires `@neon/tools` 2.14.3 and `@neon/sdk` 7.13.1.
