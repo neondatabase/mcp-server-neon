@@ -14995,7 +14995,7 @@
     "annotations": {
       "title": "Enable Realtime",
       "readOnlyHint": false,
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false
     }
