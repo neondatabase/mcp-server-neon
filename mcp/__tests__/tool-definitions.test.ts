@@ -106,9 +106,12 @@ describe('NEON_TOOLS definitions', () => {
       'create_storage_bucket',
       'get_doc',
       'list_incidents',
+      'provision_neon_data_api',
       'search_docs',
       'send_auth_test_email',
       'send_feedback',
+      'update_auth_email_provider',
+      'update_auth_webhooks',
     ]);
   });
 
