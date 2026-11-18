@@ -47,7 +47,18 @@ export const fetchAsMcpServer: typeof fetch = (input, init) => {
   // supplied alongside it — passing an `init.headers` would replace them all.
   const request = new Request(input, init);
   request.headers.set('User-Agent', USER_AGENT);
-  return fetch(request);
+
+  // A copied Request follows its source's signal only through a weak
+  // reference (nodejs/undici#4068, fixed in undici 8.12.4), so once `request`
+  // is garbage collected a timeout or cancellation never reaches the fetch.
+  // A Request input's signal holds only while the caller keeps that Request
+  // referenced, as @neon/sdk does until the response arrives.
+  const signal =
+    init?.signal === undefined && input instanceof Request
+      ? input.signal
+      : init?.signal;
+
+  return fetch(request, { signal });
 };
 
 /**
