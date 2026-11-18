@@ -282,7 +282,7 @@
             },
             {
               "type": "text",
-              "text": "[HTTP 403] This feature is not available on your plan (reason: plan_limit)"
+              "text": "[HTTP 403] This feature is not available on your plan (reason: plan_limit)\nRequest ID: req-403"
             }
           ],
           "isError": true,

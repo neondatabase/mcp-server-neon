@@ -139,6 +139,19 @@ function apiErrorReason(body: unknown): string | undefined {
   return typeof body.reason === 'string' ? body.reason : undefined;
 }
 
+const apiClientErrorText = (error: NeonApiError): string => {
+  const reason = apiErrorReason(error.body);
+  const { neonApiRequestId } = neonApiErrorDetails(error);
+  return [
+    `[HTTP ${error.status}] ${error.message}${reason ? ` (reason: ${reason})` : ''}`,
+    neonApiRequestId === undefined
+      ? undefined
+      : `Request ID: ${neonApiRequestId}`,
+  ]
+    .filter((line) => line !== undefined)
+    .join('\n');
+};
+
 /**
  * Whether a thrown tool error is the server's failure rather than a mistake in
  * the call (bad input, a statement Postgres rejected, a 4xx from the Neon API).
@@ -163,7 +176,6 @@ export function handleToolError(
   if (error instanceof NeonDbError || isClientError(error)) {
     return errorResponse(error);
   } else if (error instanceof NeonApiError && error.status < 500) {
-    const reason = apiErrorReason(error.body);
     return {
       isError: true,
       content: [
@@ -173,7 +185,7 @@ export function handleToolError(
         },
         {
           type: 'text' as const,
-          text: `[HTTP ${error.status}] ${error.message}${reason ? ` (reason: ${reason})` : ''}`,
+          text: apiClientErrorText(error),
         },
       ],
     };

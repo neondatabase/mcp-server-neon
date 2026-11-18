@@ -230,11 +230,27 @@ describe('handleToolError', () => {
     const result = handleToolError(error, properties, 'trace-1', agent);
 
     expect(result.isError).toBe(true);
-    expect(result.content).toContainEqual(
-      expect.objectContaining({
-        text: expect.stringContaining('[HTTP 409]'),
-      }),
-    );
+    expect(result.content).toStrictEqual([
+      { type: 'text', text: 'role with that name already exists' },
+      { type: 'text', text: '[HTTP 409] role with that name already exists' },
+    ]);
     expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it('reports the request id of a 4xx API error', () => {
+    const error = new NeonApiError('data api not found', {
+      status: 404,
+      requestId: 'req-404',
+    });
+
+    const result = handleToolError(error, properties, 'trace-1', agent);
+
+    expect(result.content).toStrictEqual([
+      { type: 'text', text: 'data api not found' },
+      {
+        type: 'text',
+        text: '[HTTP 404] data api not found\nRequest ID: req-404',
+      },
+    ]);
   });
 });

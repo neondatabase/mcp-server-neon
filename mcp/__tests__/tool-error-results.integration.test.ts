@@ -107,6 +107,7 @@ const FAILING_PROJECTS = new Map<string, { status: number; body: Json }>([
         code: 'FEATURE_NOT_AVAILABLE',
         message: 'This feature is not available on your plan',
         reason: 'plan_limit',
+        request_id: 'req-403',
       },
     },
   ],
