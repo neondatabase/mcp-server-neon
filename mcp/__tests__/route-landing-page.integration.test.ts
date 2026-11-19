@@ -52,9 +52,100 @@ describe('landing page at the MCP URL', () => {
     );
 
     expect(csp).toContain("default-src 'none'");
-    expect(tags).toHaveLength(2);
+    // the part-opening script in the head, the stylesheet, the page script
+    expect(tags).toHaveLength(3);
     expect(nonces.size).toBe(1);
     expect(csp).toContain(`'nonce-${[...nonces].join('')}'`);
+  });
+
+  it('prints all four parts of the booklet in the HTML, each at its address', async () => {
+    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
+    const body = await response.text();
+
+    const sheets = [
+      ...body.matchAll(/<article class="sheet" id="(?<id>[^"]+)"/gu),
+    ].map((match) => match.groups?.id);
+
+    expect(sheets).toStrictEqual(['install', 'api-key', 'access', 'tools']);
+
+    for (const id of sheets) {
+      // contents on the cover, the part strip, the thumb index
+      expect(body.split(`href="#${id}" data-part-link="${id}"`)).toHaveLength(
+        4,
+      );
+    }
+
+    // the head script opens the part the address names before first paint
+    expect(body).toContain('parts=["install","api-key","access","tools"]');
+    expect(body).toContain(
+      "html.js[data-part='install'] #install, html.js[data-part='api-key'] #api-key",
+    );
+  });
+
+  it('prints every client procedure, with its own address', async () => {
+    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
+    const body = await response.text();
+
+    const clients = [
+      ...body.matchAll(/<section class="client" id="(?<id>[^"]+)"/gu),
+    ].map((match) => match.groups?.id);
+
+    expect(clients).toStrictEqual([
+      'install-claude-code',
+      'install-cursor',
+      'install-vscode',
+      'install-vscode-insiders',
+      'install-chatgpt',
+      'install-other',
+    ]);
+
+    for (const id of clients) {
+      expect(body).toContain(`<a class="tab" href="#${id}"`);
+    }
+
+    expect(body).toContain('vscode-insiders:mcp/install?');
+    expect(body).toContain('npx -y mcp-remote');
+    expect(body).toContain('Authorization: Bearer &lt;NEON_API_KEY&gt;');
+  });
+
+  it('lists every tool once, in a category the parameter table links to', async () => {
+    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
+    const body = await response.text();
+
+    const listed = [
+      ...body.matchAll(
+        /<li class="tool"><div class="tool-name"><code>(?<name>[^<]+)<\/code>/gu,
+      ),
+    ].map((match) => match.groups?.name);
+
+    expect(listed).toHaveLength(NEON_TOOLS.length);
+    expect(new Set(listed)).toStrictEqual(
+      new Set(NEON_TOOLS.map((tool) => tool.name)),
+    );
+
+    const groups = [
+      ...body.matchAll(/<details class="tool-group" id="(?<id>[^"]+)"/gu),
+    ].map((match) => match.groups?.id);
+
+    const linked = [
+      ...body.matchAll(/<a href="#(?<id>tools-[^"]+)"><code>/gu),
+    ].map((match) => match.groups?.id);
+
+    expect(groups).toContain('tools-discovery');
+    expect(linked.length).toBeGreaterThan(0);
+    expect(groups).toStrictEqual(expect.arrayContaining(linked));
+  });
+
+  it('gives every element id to one element only', async () => {
+    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
+    const body = await response.text();
+
+    const ids = [...body.matchAll(/\sid="(?<id>[^"]+)"/gu)].map(
+      (match) => match.groups?.id,
+    );
+
+    expect(ids.length).toBeGreaterThan(20);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('serves the docs-only URL the same way', async () => {

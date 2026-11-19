@@ -15,6 +15,8 @@ type InstallTab = {
   id: string;
   label: string;
   body: string;
+  /** The body's paragraphs are steps to do in order, not alternatives. */
+  sequence?: boolean;
 };
 
 const fence = (language: string, code: string): string =>
@@ -43,6 +45,7 @@ export const INSTALL_TABS: readonly InstallTab[] = [
     id: 'claude-code',
     label: 'Claude Code',
     body: `Run this command in your terminal:\n\n${fence('bash', install.claudeCode)}\n\nThen start Claude Code, run \`/mcp\`, select \`neon\`, and authenticate.`,
+    sequence: true,
   },
   {
     id: 'cursor',
