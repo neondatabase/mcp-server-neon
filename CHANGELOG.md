@@ -2,7 +2,7 @@
 
 # [NEXT]
 
-The write-mode notice and the destructive tools' descriptions tell agents to call a destructive tool when the user's own message asks for that action, and to ask first otherwise. Before, they said to always ask the user first, so agents stopped and asked before deleting a branch the user had just asked them to delete. Requires `@neon/tools` 2.17.4.
+The write-mode notice tells agents to call a destructive tool when the user's own message asks for that action, and to ask first otherwise. Before, it said to always ask the user first, so agents stopped and asked before deleting a branch the user had just asked them to delete.
 
 `get_data_api` returns `{ "enabled": false }` for a database without a Data API instead of a not-found error, and a configured Data API's result adds `"enabled": true`. A missing branch or database still fails. `describe_branch` no longer lists Neon's reserved `postgres` database, which the SQL tools cannot reach. `get_doc` drops the agent skills note and feedback footer that neon.com adds to its pages. The `run_sql` description names `run_sql_transaction` for several statements, `list_incidents` says what `updated_at` means, and `provision_neon_data_api` says `add_default_grants` also covers tables the database owner creates later. SQL tools given `database_name` and `role_name` without `branch_id` make one fewer Neon API request, and a Neon API `GET` whose connection dropped before a response is retried instead of failing the tool. `delete_branch`, `complete_database_migration`, and `complete_query_tuning` no longer fail when a cleanup operation fails after the branch is already deleted. Requires `@neon/tools` 2.18.0 and `@neon/sdk` 7.14.3.
 
