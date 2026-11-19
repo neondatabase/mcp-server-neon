@@ -1,3 +1,4 @@
+import he from 'he';
 import { describe, expect, it } from 'vitest';
 
 import { GET, HEAD, POST } from '../../app/api/[transport]/route';
@@ -52,13 +53,13 @@ describe('landing page at the MCP URL', () => {
     );
 
     expect(csp).toContain("default-src 'none'");
-    // the part-opening script in the head, the stylesheet, the page script
+    // the address script in the head, the stylesheet, the page script
     expect(tags).toHaveLength(3);
     expect(nonces.size).toBe(1);
     expect(csp).toContain(`'nonce-${[...nonces].join('')}'`);
   });
 
-  it('prints all four parts of the booklet in the HTML, each at its address', async () => {
+  it('prints all four parts one after another, each at its address', async () => {
     const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
     const body = await response.text();
 
@@ -69,17 +70,97 @@ describe('landing page at the MCP URL', () => {
     expect(sheets).toStrictEqual(['install', 'api-key', 'access', 'tools']);
 
     for (const id of sheets) {
-      // contents on the cover, the part strip, the thumb index
+      // an anchor in the contents on the cover and one in the part strip
       expect(body.split(`href="#${id}" data-part-link="${id}"`)).toHaveLength(
-        4,
+        3,
       );
+      expect(body).toContain(`<h2 id="${id}-title">`);
     }
 
-    // the head script opens the part the address names before first paint
+    // no part is hidden: the only display switch left is the client procedure
+    expect(body).not.toContain('html.js .sheet');
+    expect(body).not.toMatch(/class="(?:folio|thumbs|turn)\b/u);
+  });
+
+  it('names the part in view in one head row, outside the parts', async () => {
+    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
+    const body = await response.text();
+
+    expect(body.split('class="sheet-head"')).toHaveLength(2);
+
+    const names = [
+      ...body.matchAll(
+        /<span data-head="(?<id>[^"]+)"><span class="num">(?<num>\d\d)<\/span><span>(?<name>[^<]+)<\/span><\/span>/gu,
+      ),
+    ].map(
+      (match) =>
+        `${match.groups?.id} ${match.groups?.num} ${match.groups?.name}`,
+    );
+
+    expect(names).toStrictEqual([
+      'install 01 Install',
+      'api-key 02 API key',
+      'access 03 Limit access',
+      'tools 04 Tools',
+    ]);
+
+    // the head row sits before the first part, and no part repeats its number and name
+    expect(body.indexOf('class="sheet-head"')).toBeLessThan(
+      body.indexOf('<article class="sheet"'),
+    );
+    expect(body.slice(body.indexOf('<article class="sheet"'))).not.toContain(
+      'margin-label',
+    );
+
+    // the head script names the part the address opens at; CSS shows that name, or the first without script
     expect(body).toContain('parts=["install","api-key","access","tools"]');
     expect(body).toContain(
-      "html.js[data-part='install'] #install, html.js[data-part='api-key'] #api-key",
+      "html:not([data-part]) [data-head='install'], html[data-part='install'] [data-head='install'], html[data-part='api-key'] [data-head='api-key']",
     );
+  });
+
+  it('follows the scroll instead of turning pages', async () => {
+    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
+    const body = await response.text();
+
+    // scrolling rewrites the current history entry; anchors are left to the browser
+    expect(body).toContain(
+      "history.replaceState(history.state,'','#'+current)",
+    );
+    expect(body).not.toContain('pushState');
+    expect(body).not.toContain('rotateY');
+    expect(body).not.toContain('touchstart');
+    // arrow keys are read only inside the client selector
+    expect(body.split('ArrowRight')).toHaveLength(2);
+    expect(body).toContain(`var tab=e.target.closest('[role="tab"]');
+  if(!tab)return;`);
+  });
+
+  it('prints commands in plain code blocks that copy exactly what they show', async () => {
+    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
+    const body = await response.text();
+
+    const blocks = [
+      ...body.matchAll(
+        /<div class="code-block"><pre><code>(?<shown>.*?)<\/code><\/pre><button type="button" class="copy-btn copy-square" data-copy="(?<copied>[^"]*)"/gsu,
+      ),
+    ].map((match) => ({
+      shown: String(match.groups?.shown).replaceAll(/<[^>]+>/gu, ''),
+      copied: String(match.groups?.copied),
+    }));
+
+    expect(blocks).toHaveLength(body.split('class="code-block"').length - 1);
+    expect(blocks.length).toBeGreaterThanOrEqual(6);
+
+    for (const { shown, copied } of blocks) {
+      expect(he.decode(shown)).toBe(he.decode(copied));
+      expect(copied).not.toMatch(/^\s*\$/u);
+    }
+
+    // no prompt sign is drawn before a command, and nothing on a copy button turns green
+    expect(body).not.toMatch(/content:\s*'\$'/u);
+    expect(body).not.toContain('data-lang');
+    expect(body).not.toMatch(/\.copy-square[^{}]*\{[^}]*var\(--green\)/u);
   });
 
   it('prints every client procedure, with its own address', async () => {

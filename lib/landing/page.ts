@@ -60,45 +60,33 @@ const sectionNumber = (id: string): string =>
 /** The address of one client's procedure inside the install part. */
 const clientAnchor = (id: string): string => `${INSTALL.id}-${id}`;
 
-const turnLink = (
-  section: PageSection | undefined,
-  direction: 'prev' | 'next',
-): string => {
-  if (section === undefined) {
-    return '';
-  }
-
-  const label = `<span>${section.nav}</span>`;
-
-  return `<a class="btn btn-outline turn turn-${direction}" href="#${section.id}" rel="${direction}">${direction === 'prev' ? `${ARROW_RIGHT}${label}` : `${label}${ARROW_RIGHT}`}</a>`;
-};
-
-/** One right-hand page: its number and short name at the head, the content, the folio at the foot. */
+/** One part of the long right-hand sheet. A rule divides it from the next. */
 const sheet = (section: PageSection, content: string): string => {
-  const { id, title, description, nav } = section;
-  const index = SECTIONS.indexOf(section);
+  const { id, title, description } = section;
 
   return `
-      <article class="sheet" id="${id}" aria-labelledby="${id}-title" data-sheet>
-        <div class="sheet-head">
-          <p class="margin-label" aria-hidden="true"><span class="num">${sectionNumber(id)}</span><span>${nav}</span></p>
-        </div>
+      <article class="sheet" id="${id}" aria-labelledby="${id}-title">
         <div class="sheet-body">
-          <h2 id="${id}-title" tabindex="-1">${title}</h2>
+          <h2 id="${id}-title">${title}</h2>
           <p class="sheet-desc">${description}</p>
           ${content}
         </div>
-        <nav class="folio" aria-label="Pages, from ${nav}">
-          ${turnLink(SECTIONS[index - 1], 'prev')}
-          <p class="page-no"><span class="sr-only">Page </span><b>${index + 1}</b> / ${SECTIONS.length}</p>
-          ${turnLink(SECTIONS[index + 1], 'next')}
-        </nav>
       </article>`;
 };
 
+/**
+ * The one head row of the right-hand sheet. It stays at the top and names the part in view: the
+ * number by CSS from data-part on <html>, the name typed by script. Decorative; every part has
+ * its own heading.
+ */
+const SHEET_HEAD = `
+      <div class="sheet-head" aria-hidden="true">
+        <p class="margin-label">${SECTIONS.map(({ id, nav }) => `<span data-head="${id}"><span class="num">${sectionNumber(id)}</span><span>${nav}</span></span>`).join('')}</p>
+      </div>`;
+
 const LOGO = `<a class="logo" ${external('https://neon.com')}><img src="/images/landing/neon-logo.svg" alt="Neon" width="88" height="24"></a>`;
 
-/** Single column only: the parts as a strip under the cover. */
+/** Single column only: the parts as a sticky strip under the cover. */
 const PART_STRIP = `
     <div class="bar">
       <nav class="bar-nav" aria-label="Parts">
@@ -117,9 +105,9 @@ const CONTENTS = `
             </ol>
           </nav>`;
 
-/** The left page. It never turns: what this is, the permanent URL, the contents. */
+/** The left page. It stays put while the sheet scrolls: what this is, the permanent URL, the contents. */
 const COVER = `
-    <header class="cover" id="cover">
+    <header class="cover">
       <div class="cover-head">
         ${LOGO}
         <span class="product-tag">MCP</span>
@@ -149,12 +137,6 @@ const COVER = `
         </nav>
       </footer>
     </header>`;
-
-/** The fore-edge index: the same four links as the contents, so it stays out of the tab order. */
-const THUMB_INDEX = `
-    <nav class="thumbs" aria-hidden="true">
-      ${SECTIONS.map(({ id, nav }) => `<a href="#${id}" data-part-link="${id}" tabindex="-1" title="${sectionNumber(id)} ${nav}">${sectionNumber(id)}</a>`).join('')}
-    </nav>`;
 
 /** Links until script upgrades them to a tab list; without script every procedure is printed. */
 const clientLinks = INSTALL_TABS.map(
@@ -187,13 +169,12 @@ const BODY = `<div class="desk">
   <div class="book">
     ${PART_STRIP}
     ${COVER}
-    <main class="leaves">
+    <main class="leaves">${SHEET_HEAD}
       ${sheet(INSTALL, `<div><nav class="tabs-row" aria-label="MCP clients" data-clients>${clientLinks}</nav>${clientPanels}</div>`)}
       ${sheet(API_KEY, prose(API_KEY_BLOCK.body))}
       ${sheet(ACCESS, `${accessParams}${prose(ACCESS_NOTES)}`)}
       ${sheet(TOOLS, `<div class="tool-groups">${TOOL_GROUPS_HTML}</div>`)}
     </main>
-    ${THUMB_INDEX}
   </div>
 </div>`;
 
@@ -201,9 +182,9 @@ const PART_IDS = SECTIONS.map(({ id }) => id);
 
 const CLIENT_IDS = INSTALL_TABS.map(({ id }) => id);
 
-/** Which part and which client procedure are open, by the attributes the head script sets. */
+/** Which name the head row shows and which client procedure is open, by the attributes on <html>. */
 const OPEN_CSS = [
-  `${PART_IDS.map((id) => `html.js[data-part='${id}'] #${id}`).join(', ')} { display: flex; }`,
+  `html:not([data-part]) [data-head='${PART_IDS[0]}'], ${PART_IDS.map((id) => `html[data-part='${id}'] [data-head='${id}']`).join(', ')} { visibility: visible; }`,
   `${CLIENT_IDS.map((id) => `html.js[data-client='${id}'] #${clientAnchor(id)}`).join(', ')} { display: block; }`,
 ].join('\n');
 

@@ -1,8 +1,8 @@
 import { LAYOUT_CSS } from './styles-layout';
 
 /**
- * The landing page as an instruction booklet: the left page (cover) stays put, the right page is
- * turned. Colours, type and rules are the spec-sheet design's own tokens.
+ * The landing page as an instruction booklet read by scrolling: the left page (cover) stays put,
+ * the right page is one long sheet. Colours, type and rules are the spec-sheet design's own tokens.
  */
 const COMPONENTS_CSS = `
 :root {
@@ -20,21 +20,21 @@ const COMPONENTS_CSS = `
   --muted: #94979e;
   --green: #34d59a;
   --red: #ff3621;
+  --hover: #18191b; /* Neon docs: the copy button under the pointer */
   --pad: 2.25rem;
   --sans: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* the book */
   --head: 3.5rem; /* running head = the source's header height */
-  --foot: 4rem; /* folio */
-  --tabs: 2.75rem; /* thumb index = the source's control height */
+  --foot: 4rem; /* foot of the left page */
   --bar: 2.75rem; /* single column: the sticky part strip */
-  --stick: var(--bar); /* where a sticky row inside a page parks */
+  --stick: var(--bar); /* where a sticky row inside a part parks, and where an anchor lands */
 }
 
 *, ::before, ::after { box-sizing: border-box; }
 html {
-  scroll-padding-top: calc(var(--stick) + 0.5rem);
+  scroll-padding-top: var(--stick);
   -webkit-text-size-adjust: 100%;
   background: var(--black);
 }
@@ -52,11 +52,9 @@ a { color: inherit; text-decoration: none; }
 button { font: inherit; letter-spacing: inherit; color: inherit; cursor: pointer; }
 code, pre { font-family: var(--mono); letter-spacing: 0; }
 :is(a, button, summary, [tabindex]):focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
-/* a page title receives focus after a turn so reading continues there; it is not a control */
-:is(h2, h3)[tabindex='-1']:focus { outline: none; }
 ::selection { color: var(--black); background: var(--green); }
 .nowrap { white-space: nowrap; }
-.label, .field-label, .margin-label, .num, .count, .product-tag, .tab, .badge, .page-no { font-family: var(--mono); letter-spacing: 0; }
+.label, .field-label, .margin-label, .num, .count, .product-tag, .tab, .badge { font-family: var(--mono); letter-spacing: 0; }
 .num { color: var(--green); }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
@@ -64,17 +62,15 @@ code, pre { font-family: var(--mono); letter-spacing: 0; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; height: 2.75rem; padding: 0 1.5rem; border: 1px solid transparent; border-radius: 9999px; font-size: 1rem; line-height: 1; white-space: nowrap; transition: color 0.2s, background-color 0.2s, border-color 0.2s; }
 .btn-primary { font-weight: 500; color: var(--black); background: var(--white); }
 .btn-primary:hover { background: var(--text); }
-.btn-outline { color: var(--white); background: rgba(255, 255, 255, 0.02); border-color: var(--line-control); }
-.btn-outline:hover { border-color: var(--text); }
-.btn-sm { height: 2.25rem; padding: 0 1rem; font-size: 0.875rem; }
 
 .copy-icon { display: grid; flex: none; width: 1rem; height: 1rem; }
 .copy-icon svg { grid-area: 1 / 1; width: 100%; height: 100%; }
 .copy-icon svg + svg, .copied .copy-icon svg { opacity: 0; }
 .copied .copy-icon svg + svg { opacity: 1; }
-.copy-square { position: absolute; top: 0.5rem; right: 0.5rem; display: grid; place-items: center; width: 2.25rem; height: 2.25rem; padding: 0; color: var(--muted); background: var(--raised); border: 1px solid var(--line-strong); transition: color 0.2s, border-color 0.2s; }
-.copy-square:hover, .copy-square.copied { color: var(--green); border-color: var(--green); }
-.copy-square::after { content: ''; position: absolute; inset: -0.3125rem; }
+/* copy button as in Neon docs: black, grey frame and icon; under the pointer only the fill changes. Copied = the check icon, same grey */
+.copy-square { position: absolute; top: 1rem; right: 1rem; display: grid; place-items: center; width: 1.75rem; height: 1.75rem; padding: 0; color: var(--muted); background: var(--black); border: 1px solid var(--line-strong); transition: background-color 0.2s; }
+.copy-square:hover { background: var(--hover); }
+.copy-square::after { content: ''; position: absolute; inset: -0.5rem; } /* 44px to press */
 html:not(.js) .copy-btn { display: none; } /* copying needs script; without it the text is still selectable */
 
 .logo { display: block; flex: none; }
@@ -91,8 +87,8 @@ html:not(.js) .copy-btn { display: none; } /* copying needs script; without it t
 .bar-nav::-webkit-scrollbar { display: none; }
 .bar-nav a { position: relative; display: flex; flex: none; align-items: center; height: calc(2.75rem - 1px); padding: 0 0.625rem; font-size: 0.9375rem; white-space: nowrap; color: var(--body); transition: color 0.2s; }
 .bar-nav a:hover { color: var(--white); }
-.bar-nav a[aria-current='page'] { color: var(--white); }
-.bar-nav a[aria-current='page']::after { content: ''; position: absolute; left: 0.625rem; right: 0.625rem; bottom: -1px; height: 2px; background: var(--white); }
+.bar-nav a[aria-current] { color: var(--white); }
+.bar-nav a[aria-current]::after { content: ''; position: absolute; left: 0.625rem; right: 0.625rem; bottom: -1px; height: 2px; background: var(--white); }
 
 /* left page: the cover */
 .cover { display: flex; flex-direction: column; min-width: 0; background: var(--black); border-bottom: 1px solid var(--line-strong); }
@@ -109,8 +105,9 @@ html:not(.js) .copy-btn { display: none; } /* copying needs script; without it t
 .hero-connect { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.5rem 1rem; margin-top: 1.5rem; }
 .url-field { position: relative; grid-column: 1 / -1; display: flex; align-items: center; min-width: 0; min-height: 3.5rem; padding: 0.5rem 4rem 0.5rem 1.125rem; background: var(--well); border: 1px solid var(--line-control); }
 .url-field code { flex: 1; min-width: 0; font-size: 1.0625rem; line-height: 1.3; color: var(--white); overflow-wrap: anywhere; }
-.url-field .copy-square { top: 0.4375rem; right: 0.4375rem; width: 2.5rem; height: 2.5rem; }
-.url-field .copy-square:not(:hover, .copied) { color: var(--text); border-color: var(--line-control); }
+.url-field .copy-square { top: 0.4375rem; right: 0.4375rem; width: 2.5rem; height: 2.5rem; color: var(--text); background: var(--raised); border-color: var(--line-control); }
+.url-field .copy-square:hover { background: var(--line-strong); }
+.url-field .copy-square::after { inset: -0.125rem; }
 .url-field .copy-square .copy-icon { width: 1.125rem; height: 1.125rem; }
 .docs-link { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 1.5rem; font-size: 0.9375rem; color: var(--text); transition: color 0.2s; }
 .docs-link:hover { color: var(--green); }
@@ -126,34 +123,30 @@ html:not(.js) .copy-btn { display: none; } /* copying needs script; without it t
 .toc .here { align-self: center; width: 0.4375rem; height: 0.4375rem; background: transparent; }
 .toc .leader { align-self: end; height: 0.3125rem; margin-bottom: 0.3125rem; background: radial-gradient(circle, var(--line-control) 0.75px, transparent 1px) left center / 6px 2px repeat-x; }
 .toc .num { font-size: 0.8125rem; font-weight: 500; }
-.toc a[aria-current='page'] { color: var(--white); }
-.toc a[aria-current='page'] .here { background: var(--green); }
+.toc a[aria-current] { color: var(--white); }
+.toc a[aria-current] .here { background: var(--green); }
 
 .cover-foot { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 1.5rem; min-height: var(--foot); padding: 0 var(--pad); border-top: 1px solid var(--line-strong); }
 .footer-links { display: flex; flex-wrap: wrap; margin: 0 -0.625rem; }
 .footer-links a { display: flex; align-items: center; min-height: 2.75rem; padding: 0 0.625rem; font-size: 0.9375rem; color: var(--body); transition: color 0.2s; }
 .footer-links a:hover { color: var(--white); }
 
-/* right pages */
+/* right page: one long sheet, the parts one after another with a rule between them */
 .leaves { position: relative; min-width: 0; }
 .sheet { position: relative; display: flex; flex-direction: column; min-width: 0; background: var(--black); border-bottom: 1px solid var(--line-strong); }
-.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.5rem var(--pad) 0; background: var(--black); }
-.margin-label { display: flex; gap: 0.5rem; font-size: 0.8125rem; font-weight: 500; line-height: 1.25; text-transform: uppercase; color: var(--muted); }
-.sheet-body { flex: 1; min-width: 0; padding: 0.625rem var(--pad) 2rem; container-type: inline-size; }
+/* the last part fills the window, so its anchor can bring it to the top like the others */
+.sheet:last-child { min-height: calc(100svh - var(--stick)); border-bottom: 0; }
+/* the head row names the part in view; it exists on the spread only (the part strip does this job in the single column) */
+.sheet-head { display: none; }
+.margin-label { display: grid; font-size: 0.8125rem; font-weight: 500; line-height: 1.25; text-transform: uppercase; color: var(--muted); }
+/* the four names share one cell, so the row never changes size; the number changes at once,
+   the name is erased and typed by script (interactions.ts, retype) by clipping whole letters.
+   The rule that shows the current one is generated from the part ids (page.ts) */
+.margin-label > span { grid-area: 1 / 1; display: flex; gap: 0.5rem; visibility: hidden; }
+.sheet-body { flex: 1; min-width: 0; padding: 1.75rem var(--pad) 2rem; container-type: inline-size; }
 .sheet-body > * { max-width: 46rem; }
 .sheet-body h2 { font-size: 1.5rem; font-weight: 400; line-height: 1.2; letter-spacing: -0.03em; color: var(--white); }
 .sheet-desc { margin: 0.375rem 0 1.25rem; font-size: 1rem; color: var(--muted); text-wrap: pretty; }
-
-.folio { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.75rem; min-height: var(--foot); padding: 0.75rem var(--pad); background: var(--black); border-top: 1px solid var(--line-strong); }
-.page-no { font-size: 0.8125rem; font-weight: 500; color: var(--muted); white-space: nowrap; }
-.page-no b { font-weight: 500; color: var(--white); }
-.turn { gap: 0.625rem; min-width: 0; max-width: 100%; padding: 0 1.125rem; font-size: 0.9375rem; }
-.turn span:not(.num) { overflow: hidden; text-overflow: ellipsis; }
-.turn svg { flex: none; }
-.turn-prev { justify-self: start; }
-.turn-prev svg { transform: scaleX(-1); }
-.turn-next { grid-column: 3; justify-self: end; }
-html:not(.js) .folio { display: none; } /* stacked reading: the parts simply follow each other */
 
 /* ---------- part 01: client selector (source tabs) ---------- */
 .tabs-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0 0 1px 1px; }
@@ -164,6 +157,7 @@ html:not(.js) .folio { display: none; } /* stacked reading: the parts simply fol
 .client { padding: 1rem; border: 1px solid var(--line-strong); border-top: 0; }
 .client-title { display: flex; align-items: baseline; gap: 0.625rem; margin-bottom: 0.875rem; font-size: 1.0625rem; font-weight: 500; line-height: 1.5; color: var(--white); }
 html.js .client-title { display: none; } /* the selected cell of the selector is the title */
+html.js .client { scroll-margin-top: 17rem; } /* an address that names a client lands with the part's heading and the selector in view above the panel */
 html:not(.js) .tabs-row { margin-bottom: 1.5rem; }
 html:not(.js) .client { border-top: 1px solid var(--line-strong); }
 html:not(.js) .client + .client { border-top: 0; }
@@ -183,10 +177,9 @@ html:not(.js) .client + .client { border-top: 0; }
 .prose ol li::before { content: '0' counter(step); position: absolute; left: 0; top: 1.0625rem; font: 500 0.8125rem/1.5 var(--mono); letter-spacing: 0; color: var(--green); }
 .prose ol li > * + * { margin-top: 0.75rem; }
 :is(.prose, .param) :not(pre) > code { padding: 0.0625rem 0.3125rem; font-size: 0.875em; color: var(--white); background: var(--raised); overflow-wrap: anywhere; }
-.code-block { position: relative; background: var(--well); border: 1px solid var(--line-strong); }
-.code-block pre { margin: 0; padding: 0.875rem 3.5rem 0.875rem 1rem; font-size: 0.8125rem; line-height: 1.6; color: var(--white); white-space: pre-wrap; overflow-wrap: anywhere; }
-.code-block[data-lang='bash'] pre { padding-left: 2.25rem; }
-.code-block[data-lang='bash']::before { content: '$'; position: absolute; left: 1rem; top: 0.875rem; font: 0.8125rem/1.6 var(--mono); color: var(--green); }
+/* code block as in Neon docs: black, 1px frame, square, no prompt sign */
+.code-block { position: relative; background: var(--black); border: 1px solid var(--line-strong); }
+.code-block pre { margin: 0; padding: 1.25rem 3.5rem 1.25rem 1rem; font-size: 0.875rem; line-height: 1.5; color: var(--white); white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* ---------- part 03: parameters ---------- */
 .params { margin-bottom: 1.5rem; border: 1px solid var(--line-strong); }
@@ -214,10 +207,7 @@ html:not(.js) .client + .client { border-top: 0; }
 .tool-name code { font-size: 0.9375rem; font-weight: 500; color: var(--white); overflow-wrap: anywhere; }
 .tool-title { font-size: 0.9375rem; color: var(--muted); }
 .badge { order: 3; padding: 0.125rem 0.375rem; font-size: 0.75rem; font-weight: 500; line-height: 1.2; color: var(--green); border: 1px solid rgba(52, 213, 154, 0.4); }
-.tool-desc { margin-top: 0.375rem; font-size: 0.9375rem; line-height: 1.6; color: var(--body); text-wrap: pretty; }
-
-/* thumb index: only on the spread */
-.thumbs { display: none; }`;
+.tool-desc { margin-top: 0.375rem; font-size: 0.9375rem; line-height: 1.6; color: var(--body); text-wrap: pretty; }`;
 
 export const LANDING_PAGE_CSS = `${COMPONENTS_CSS}
 ${LAYOUT_CSS}`;

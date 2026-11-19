@@ -24,8 +24,8 @@ const keepFlagsWhole = (html: string): string =>
 
 const markdown = new Marked({
   renderer: {
-    code: ({ text, lang }) =>
-      `<div class="code-block" data-lang="${he.escape(lang ?? 'text')}"><pre><code>${keepFlagsWhole(he.escape(text))}</code></pre>${copyButton(text)}</div>`,
+    code: ({ text }) =>
+      `<div class="code-block"><pre><code>${keepFlagsWhole(he.escape(text))}</code></pre>${copyButton(text)}</div>`,
     link: ({ href, text }) =>
       APP_LINK.test(href)
         ? `<a class="btn btn-primary" href="${he.escape(href)}">${he.escape(text)}</a>`
