@@ -1,7 +1,5 @@
 /**
- * The spans a `POST /api/auth-complete/events` beacon leaves in Sentry. Every
- * rejection is the page's or a stranger's mistake, answered inside the span,
- * so none of them is an error.
+ * The spans a `POST /api/auth-complete/events` beacon leaves in Sentry.
  */
 import { getClient, init, spanToJSON } from '@sentry/node';
 import { describe, expect, it } from 'vitest';
