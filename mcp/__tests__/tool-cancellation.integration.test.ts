@@ -1,8 +1,15 @@
 import { createServer, type IncomingMessage, type Server } from 'node:http';
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import type { ServerContext } from '../types/context';
 import { assert } from '../../lib/assert';
+
+setFlagsFromString('--expose-gc');
+
+const gc = z.function().parse(runInNewContext('gc'));
 
 type UpstreamCall = {
   received: Promise<IncomingMessage>;
@@ -58,6 +65,7 @@ beforeAll(async () => {
   assert(address !== null && typeof address === 'object', 'no listen address');
 
   process.env.NEON_API_HOST = `http://127.0.0.1:${address.port}/api/v2`;
+  process.env.NEON_DOCS_BASE_URL = `http://127.0.0.1:${address.port}`;
   process.env.ANALYTICS_WRITE_KEY = '';
   process.env.SENTRY_DSN = '';
   ({ createMcpServer } = await import('../server/index'));
@@ -86,33 +94,66 @@ const context: ServerContext = {
   },
 };
 
+/**
+ * Runs a full garbage collection before cancelling, so only references the
+ * in-flight request actually holds can carry the abort to it.
+ */
+const cancelOnceUpstreamReceived = async (
+  tool: Parameters<Client['callTool']>[0],
+): Promise<IncomingMessage> => {
+  const { received, closed } = nextUpstreamCall();
+
+  const server = await createMcpServer(context);
+
+  const client = new Client({ name: 'cancel-test', version: '1.0.0' });
+
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+
+  await server.connect(serverTransport);
+
+  await client.connect(clientTransport);
+
+  try {
+    const controller = new AbortController();
+
+    const call = client.callTool(tool, { signal: controller.signal });
+
+    const req = await received;
+
+    gc();
+
+    controller.abort();
+
+    await expect(call).rejects.toThrow();
+
+    await closed;
+
+    return req;
+  } finally {
+    await client.close();
+
+    await server.close();
+  }
+};
+
 describe('tool call cancellation', () => {
   it('aborts the upstream Neon API request when the MCP client cancels the call', async () => {
-    const { received, closed } = nextUpstreamCall();
-    const server = await createMcpServer(context);
-    const client = new Client({ name: 'cancel-test', version: '1.0.0' });
-    const [clientTransport, serverTransport] =
-      InMemoryTransport.createLinkedPair();
-    await server.connect(serverTransport);
-    await client.connect(clientTransport);
+    const req = await cancelOnceUpstreamReceived({
+      name: 'list_branches',
+      arguments: { project_id: 'proj-cancel' },
+    });
 
-    try {
-      const controller = new AbortController();
-      const call = client.callTool(
-        { name: 'list_branches', arguments: { project_id: 'proj-cancel' } },
-        { signal: controller.signal },
-      );
+    expect(req.url).toContain('/projects/proj-cancel/branches');
+  }, 15_000);
 
-      const req = await received;
-      expect(req.url).toContain('/projects/proj-cancel/branches');
+  it('aborts the upstream docs request when the MCP client cancels the call', async () => {
+    const req = await cancelOnceUpstreamReceived({
+      name: 'get_doc',
+      arguments: { slug: 'docs/introduction' },
+    });
 
-      controller.abort();
-      await expect(call).rejects.toThrow();
-      await closed;
-    } finally {
-      await client.close();
-      await server.close();
-    }
+    expect(req.url).toBe('/docs/introduction.md');
   }, 15_000);
 
   it('aborts the upstream Neon API request when the /mcp HTTP request is aborted', async () => {
