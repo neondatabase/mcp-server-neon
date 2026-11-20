@@ -4,7 +4,7 @@
  * event naming the store operation.
  */
 import { once } from 'node:events';
-import { flush, init, startSpan } from '@sentry/node';
+import { flush, httpIntegration, init, startSpan } from '@sentry/node';
 import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
@@ -35,7 +35,12 @@ const Transaction = z.object({
 
 const fixture = await startSentryFixtureServer();
 
-init({ dsn: SENTRY_FIXTURE_DSN, tracesSampleRate: 1 });
+// The fixture's own HTTP requests would otherwise become transactions too.
+init({
+  dsn: SENTRY_FIXTURE_DSN,
+  tracesSampleRate: 1,
+  integrations: [httpIntegration({ ignoreIncomingRequests: () => true })],
+});
 
 const items = async (type: string) => {
   await flush(5000);

@@ -1,7 +1,10 @@
 import { Context, Effect, Layer, Option } from 'effect';
 import type { Client } from 'oauth2-server';
 import { ClientMetadataUnavailableError } from '../../lib/oauth/client-id-metadata-document';
-import { ClientMetadataUnavailable } from '../../lib/oauth/client-metadata-unavailable';
+import {
+  ClientMetadataUnavailable,
+  withSpanOkOnClientOutage,
+} from '../../lib/oauth/client-metadata-unavailable';
 import { model } from './model';
 import { OAuthStoreUnavailable } from './oauth-store-unavailable';
 import { revokeOwnedRotation } from './refresh-result';
@@ -125,19 +128,17 @@ export class OAuthStore extends Context.Service<
       );
     }),
 
-    findClient: Effect.fn('OAuthStore.findClient')(function* (input: {
-      readonly clientId: string;
-    }) {
-      const client = yield* Effect.tryPromise({
+    findClient: (input: { readonly clientId: string }) =>
+      Effect.tryPromise({
         try: async () => model.getClient(input.clientId, ''),
         catch: (cause) =>
           cause instanceof ClientMetadataUnavailableError
             ? ClientMetadataUnavailable.make({ cause })
             : OAuthStoreUnavailable.make({ operation: 'getClient', cause }),
-      });
-
-      return Option.fromUndefinedOr(client);
-    }),
+      }).pipe(
+        Effect.map(Option.fromUndefinedOr),
+        withSpanOkOnClientOutage('OAuthStore.findClient'),
+      ),
 
     revokeToken: Effect.fn('OAuthStore.revokeToken')(function* (input: {
       readonly token: string;

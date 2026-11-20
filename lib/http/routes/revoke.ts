@@ -3,10 +3,13 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http';
 import { OAuthStore } from '../../../mcp/oauth/oauth-store';
 import { clientMetadataUnavailableResponse } from '../../oauth/client-metadata-unavailable';
 import {
-  extractClientCredentials,
+  readClientCredentials,
   verifyClientCredentials,
 } from '../../oauth/client-credentials';
-import { OAuthServerFault } from '../../oauth/oauth-server-fault';
+import {
+  OAuthServerFault,
+  oauthServerErrorResponse,
+} from '../../oauth/oauth-server-fault';
 import {
   oauthErrorResponse,
   unreadableBodyResponse,
@@ -30,7 +33,7 @@ const revokeForClient = Effect.fnUntraced(function* (
     Effect.map((request) => request.headers.authorization),
   );
 
-  const credentials = extractClientCredentials(authorization, formData);
+  const credentials = yield* readClientCredentials(authorization, formData);
 
   if (credentials.clientId === undefined || credentials.clientId === '') {
     return oauthErrorResponse(400, 'invalid_request', 'client_id is required');
@@ -103,6 +106,12 @@ const revoke = revocation.pipe(
         'error.type': 'ClientMetadataUnavailable',
       }).pipe(Effect.as(clientMetadataUnavailableResponse())),
     HttpServerError: unreadableBodyResponse,
+    // It always answered server_error; it is the caller's input, so it stays
+    // out of Sentry.
+    MalformedClientCredentials: () =>
+      Effect.annotateCurrentSpan({
+        'error.type': 'MalformedClientCredentials',
+      }).pipe(Effect.as(oauthServerErrorResponse())),
   }),
   Effect.catchDefect((cause) =>
     Effect.fail(OAuthServerFault.make({ endpoint: 'revoke', cause })),

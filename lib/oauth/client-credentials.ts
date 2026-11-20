@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import type { Client } from 'oauth2-server';
 import {
   clientIdFromAssertion,
@@ -8,7 +8,10 @@ import {
   ClientMetadataUnavailableError,
   isClientIdMetadataUrl,
 } from './client-id-metadata-document';
-import { ClientMetadataUnavailable } from './client-metadata-unavailable';
+import {
+  ClientMetadataUnavailable,
+  withSpanOkOnClientOutage,
+} from './client-metadata-unavailable';
 import { OAuthServerFault } from './oauth-server-fault';
 
 type ClientCredentials = {
@@ -66,6 +69,22 @@ export async function authenticateClient(
   return credentials.clientSecret === client.secret;
 }
 
+/** The `Authorization: Basic` header is not valid base64. */
+class MalformedClientCredentials extends Schema.TaggedError<
+  MalformedClientCredentials,
+  { readonly brand: unique symbol }
+>()('MalformedClientCredentials', { cause: Schema.Unknown }) {}
+
+/** `extractClientCredentials` for Effect code. */
+export const readClientCredentials = (
+  authorization: string | undefined,
+  formData: URLSearchParams,
+) =>
+  Effect.try({
+    try: () => extractClientCredentials(authorization, formData),
+    catch: (cause) => MalformedClientCredentials.make({ cause }),
+  });
+
 /**
  * `authenticateClient` for Effect code. A metadata document or JWKS that can't
  * be read right now fails with `ClientMetadataUnavailable`.
@@ -83,4 +102,4 @@ export const verifyClientCredentials = (
             endpoint: 'client authentication',
             cause: error,
           }),
-  }).pipe(Effect.withSpan('OAuthClient.authenticate'));
+  }).pipe(withSpanOkOnClientOutage('OAuthClient.authenticate'));

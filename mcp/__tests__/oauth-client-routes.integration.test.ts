@@ -5,7 +5,7 @@
  * sends nothing to Sentry.
  */
 import { once } from 'node:events';
-import { flush, init, startSpan } from '@sentry/node';
+import { flush, httpIntegration, init, startSpan } from '@sentry/node';
 import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
@@ -46,7 +46,12 @@ const Registration = z.object({
 
 const fixture = await startSentryFixtureServer();
 
-init({ dsn: SENTRY_FIXTURE_DSN, tracesSampleRate: 1 });
+// The fixture's own HTTP requests would otherwise become transactions too.
+init({
+  dsn: SENTRY_FIXTURE_DSN,
+  tracesSampleRate: 1,
+  integrations: [httpIntegration({ ignoreIncomingRequests: () => true })],
+});
 
 const items = async (type: string) => {
   await flush(5000);
@@ -357,6 +362,57 @@ describe('OAuth client routes', () => {
       });
       await expect(errorEventCount()).resolves.toBe(eventsBefore);
     });
+
+    it('answers a malformed Basic header with server_error and no Sentry event', async () => {
+      const eventsBefore = await errorEventCount();
+
+      const { response, name } = await send('/api/revoke', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          authorization: 'Basic %%%',
+        },
+        body: new URLSearchParams({ token: 'anything' }).toString(),
+      });
+
+      expect(response.status).toBe(500);
+
+      const [routeSpan] = await oauthSpans(name);
+
+      expect(routeSpan).toStrictEqual({
+        description: 'OAuthRevoke.revoke',
+        status: 'ok',
+        errorType: 'MalformedClientCredentials',
+      });
+      await expect(errorEventCount()).resolves.toBe(eventsBefore);
+    });
+
+    // A metadata document host that accepts no connection: the fetch hits its
+    // deadline, which is the client's outage.
+    it('answers an unreachable client metadata document with 503 and ok spans', async () => {
+      const eventsBefore = await errorEventCount();
+
+      const { response, name } = await revoke({
+        client_id: 'https://neon.com:9/client.json',
+        token: 'anything',
+      });
+
+      expect(response.status).toBe(503);
+      expect(response.headers.get('retry-after')).toBe('30');
+      await expect(oauthSpans(name)).resolves.toStrictEqual([
+        {
+          description: 'OAuthRevoke.revoke',
+          status: 'ok',
+          errorType: 'ClientMetadataUnavailable',
+        },
+        {
+          description: 'OAuthStore.findClient',
+          status: 'ok',
+          errorType: 'ClientMetadataUnavailable',
+        },
+      ]);
+      await expect(errorEventCount()).resolves.toBe(eventsBefore);
+    }, 30_000);
 
     it('answers a body that is not a form with 415', async () => {
       const { response } = await send('/api/revoke', {
