@@ -1,7 +1,8 @@
 import { Layer } from 'effect';
-import { Analytics } from '../../../mcp/analytics/analytics-service';
-import { OAuthStore } from '../../../mcp/oauth/oauth-store';
+import { OAuthServices } from '../oauth-services';
 import { AuthCompleteEventsRoutes } from './auth-complete-events';
+import { AuthorizeRoutes } from './authorize';
+import { CallbackRoutes } from './callback';
 import { RegisterRoutes } from './register';
 import { RevokeRoutes } from './revoke';
 
@@ -10,6 +11,7 @@ export const OAuthRoutes = Layer.mergeAll(
   RegisterRoutes,
   RevokeRoutes,
   AuthCompleteEventsRoutes,
-  OAuthStore.layer,
-  Analytics.layer,
+  CallbackRoutes,
+  AuthorizeRoutes,
+  OAuthServices,
 );
