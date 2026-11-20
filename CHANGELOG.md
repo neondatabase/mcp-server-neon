@@ -2,6 +2,8 @@
 
 # [NEXT]
 
+A tool call that fails with a Neon API 4xx now ends its `[HTTP <status>] <message>` text with a `Request ID: <id>` line when the API returned one, such as `get_data_api` on a database without the Data API. Before, only 5xx results showed the request ID.
+
 A tool call that fails with a Neon API 5xx now reports the HTTP status, plus the API's error code, request ID, and `Retry-After` when the response has them, on separate lines under the `NeonApiError` message. Before, the result showed only the message, such as `please try again later`. The server's error log and Sentry event carry the same fields, and the event is tagged `neon.api.status`.
 
 `enable_realtime` is marked destructive: enabling Realtime turns on logical replication for the whole project for good and suspends every compute, and its description now says so. `update_auth_webhooks`, `update_auth_email_provider`, and `provision_neon_data_api` are marked open-world, because they point Neon at a webhook URL, SMTP host, or JWKS URL the caller chooses. `describe_branch` says it is read-only. Requires `@neon/tools` 2.17.1.
