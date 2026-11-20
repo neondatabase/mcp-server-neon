@@ -7,8 +7,14 @@ import { memoMap } from '../effect/runtime';
 import { DiscoveryRoutes } from './routes/discovery';
 import { HealthRoutes } from './routes/health';
 import { ListToolsRoutes } from './routes/list-tools';
+import { OAuthRoutes } from './routes/oauth';
 
-const Routes = Layer.mergeAll(HealthRoutes, DiscoveryRoutes, ListToolsRoutes);
+const Routes = Layer.mergeAll(
+  HealthRoutes,
+  DiscoveryRoutes,
+  ListToolsRoutes,
+  OAuthRoutes,
+);
 
 // Sentry's HTTP integration already opens the request span, with the header
 // and query redaction in mcp/sentry/instrument.ts. Effect's server span would

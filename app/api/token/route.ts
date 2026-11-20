@@ -673,7 +673,11 @@ export async function POST(request: NextRequest) {
 
     logger.info('Token request parsed', { grantType });
 
-    const credentials = extractClientCredentials(request, formData);
+    const credentials = extractClientCredentials(
+      request.headers.get('authorization'),
+      formData,
+    );
+
     const { clientId } = credentials;
 
     if (!clientId) {

@@ -199,7 +199,9 @@ describe('/api/register route integration', () => {
   });
 
   it('returns 204 and CORS headers for OPTIONS', async () => {
-    const response = await OPTIONS();
+    const response = await OPTIONS(
+      new Request('http://localhost/api/register', { method: 'OPTIONS' }),
+    );
 
     expect(response).toBeInstanceOf(Response);
     expect(response.status).toBe(204);
