@@ -9,11 +9,12 @@ import { model } from './model';
 import { OAuthStoreUnavailable } from './oauth-store-unavailable';
 import { revokeOwnedRotation } from './refresh-result';
 
+// One span per store round trip, so a slow revocation shows which one.
 const stored = <A>(operation: string, run: () => Promise<A>) =>
   Effect.tryPromise({
     try: run,
     catch: (cause) => OAuthStoreUnavailable.make({ operation, cause }),
-  });
+  }).pipe(Effect.withSpan(`OAuthModel.${operation}`));
 
 /** RFC 7009 `token_type_hint`; any other value revokes nothing. */
 type TokenTypeHint = Option.Option<string>;

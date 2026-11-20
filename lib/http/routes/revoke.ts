@@ -25,6 +25,32 @@ const CORS_HEADERS = {
 // caller can't probe for them.
 const revoked = HttpServerResponse.empty({ status: 200 });
 
+/** Revokes the token the form names, for the authenticated client. */
+const revokeNamedToken = Effect.fnUntraced(function* (input: {
+  readonly formData: URLSearchParams;
+  readonly clientId: string;
+}) {
+  const { formData, clientId } = input;
+  const token = formData.get('token');
+
+  if (token === null || token === '') {
+    return oauthErrorResponse(400, 'invalid_request', 'token is required');
+  }
+
+  const store = yield* OAuthStore;
+
+  yield* store.revokeToken({
+    token,
+    // An empty hint counts as no hint, so both token types are tried.
+    tokenTypeHint: Option.fromNullishOr(formData.get('token_type_hint')).pipe(
+      Option.filter((hint) => hint !== ''),
+    ),
+    clientId,
+  });
+
+  return revoked;
+});
+
 /** Authenticates the client, then revokes the token it names. */
 const revokeForClient = Effect.fnUntraced(function* (
   formData: URLSearchParams,
@@ -38,6 +64,10 @@ const revokeForClient = Effect.fnUntraced(function* (
   if (credentials.clientId === undefined || credentials.clientId === '') {
     return oauthErrorResponse(400, 'invalid_request', 'client_id is required');
   }
+
+  yield* Effect.annotateCurrentSpan({
+    'oauth.client_id': credentials.clientId,
+  });
 
   const store = yield* OAuthStore;
   const client = yield* store.findClient({ clientId: credentials.clientId });
@@ -59,22 +89,7 @@ const revokeForClient = Effect.fnUntraced(function* (
     );
   }
 
-  const token = formData.get('token');
-
-  if (token === null || token === '') {
-    return oauthErrorResponse(400, 'invalid_request', 'token is required');
-  }
-
-  yield* store.revokeToken({
-    token,
-    // An empty hint counts as no hint, so both token types are tried.
-    tokenTypeHint: Option.fromNullishOr(formData.get('token_type_hint')).pipe(
-      Option.filter((hint) => hint !== ''),
-    ),
-    clientId: client.value.id,
-  });
-
-  return revoked;
+  return yield* revokeNamedToken({ formData, clientId: client.value.id });
 });
 
 const revocation = Effect.gen(function* () {
