@@ -40,7 +40,7 @@ const boundedBody = Effect.gen(function* () {
   const webRequest = yield* HttpServerRequest.toWeb(request).pipe(Effect.orDie);
 
   // A request without a body has no stream; it decodes like an empty body and
-  // is answered 400. A stream that fails while it is read is not caught.
+  // is answered 400. A stream that fails while it is read fails here.
   if (webRequest.body === null) {
     return '';
   }
@@ -99,7 +99,19 @@ const recordAction = Effect.gen(function* () {
  * auth_complete_viewed event.
  */
 const authCompleteEvents = recordAction.pipe(
-  Effect.catchTag('BeaconTooLarge', () => Effect.succeed(empty(413))),
+  Effect.catchTags({
+    BeaconTooLarge: () => Effect.succeed(empty(413)),
+    // The upload failed, usually a dropped connection: the client's failure,
+    // so it stays out of Sentry.
+    HttpServerError: (error) =>
+      Effect.logWarning('Auth-complete beacon body could not be read').pipe(
+        Effect.annotateLogs({ reason: error.reason._tag }),
+        Effect.andThen(
+          Effect.annotateCurrentSpan({ 'error.type': 'RequestBodyUnreadable' }),
+        ),
+        Effect.as(empty(400)),
+      ),
+  }),
   Effect.withSpan('AuthCompleteEvents.record'),
 );
 
