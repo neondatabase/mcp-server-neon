@@ -14,6 +14,7 @@ export class Analytics extends Context.Service<
 >()('@neondatabase/mcp-server-neon/mcp/analytics/analytics-service/Analytics', {
   make: Effect.succeed({
     track: Effect.fn('Analytics.track')(function* (event: TrackParams) {
+      yield* Effect.annotateCurrentSpan({ 'analytics.event': event.event });
       yield* Effect.sync(() => {
         track(event);
         waitUntil(flushAnalytics());

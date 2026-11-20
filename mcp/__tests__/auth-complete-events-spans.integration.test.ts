@@ -11,11 +11,17 @@ init({ dsn: 'http://public@127.0.0.1:1/1', tracesSampleRate: 1 });
 const spans: { description: string | undefined; status: string | undefined }[] =
   [];
 
+const trackedEvents: unknown[] = [];
+
 getClient()?.on('spanEnd', (span) => {
-  const { description, status } = spanToJSON(span);
+  const { description, status, data } = spanToJSON(span);
 
   if (description?.startsWith('AuthCompleteEvents.') === true) {
     spans.push({ description, status });
+  }
+
+  if (description === 'Analytics.track') {
+    trackedEvents.push(data['analytics.event']);
   }
 });
 
@@ -61,6 +67,15 @@ const EVENT = JSON.stringify({
 });
 
 describe('auth-complete events spans', () => {
+  it('names the recorded event on its Analytics.track span', async () => {
+    trackedEvents.length = 0;
+
+    const response = await beacon(EVENT, ORIGIN);
+
+    expect(response.status).toBe(204);
+    expect(trackedEvents).toStrictEqual(['auth_complete_action']);
+  });
+
   it('keeps the span ok for a beacon without a body', async () => {
     spans.length = 0;
 
