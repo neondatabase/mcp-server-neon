@@ -34,12 +34,31 @@ const beacon = async (body: string, origin: string) =>
     }),
   );
 
+const beaconWithoutBody = async () =>
+  POST(
+    new Request(`${ORIGIN}/api/auth-complete/events`, {
+      method: 'POST',
+      headers: { origin: ORIGIN },
+    }),
+  );
+
 const EVENT = JSON.stringify({
   pageViewId: '3f6a9a3e-2c1b-4d1e-9f5a-0b8c7d6e5f40',
   action: 'docs_clicked',
 });
 
 describe('auth-complete events spans', () => {
+  it('keeps the span ok for a beacon without a body', async () => {
+    spans.length = 0;
+
+    const response = await beaconWithoutBody();
+
+    expect(response.status).toBe(400);
+    expect(spans).toStrictEqual([
+      { description: 'AuthCompleteEvents.record', status: 'ok' },
+    ]);
+  });
+
   it.each([
     { name: 'a recorded beacon', body: EVENT, origin: ORIGIN, status: 204 },
     {
