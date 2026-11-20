@@ -295,7 +295,8 @@ normally provided through `.env.local`. Key variables:
 │   ├── assert.ts       # Type-narrowing assertion helper
 │   ├── config.ts       # Centralized configuration
 │   ├── errors.ts       # OAuth-aware HTTP error mapping for route handlers
-│   ├── http/app.ts     # Effect HttpRouter web handler (serves /api/health and /health)
+│   ├── http/app.ts     # Effect HttpRouter web handler every route file forwards to
+│   ├── http/routes/    # Effect routes: health, discovery, list-tools, MCP transport, OAuth register and revoke
 │   └── oauth/          # OAuth utilities for Next.js
 ├── mcp/            # MCP server source code
 │   ├── __tests__/      # Vitest unit/integration/MCP e2e tests
@@ -318,7 +319,7 @@ normally provided through `.env.local`. Key variables:
 │   │   ├── grant-filter.ts # Filter NEON_TOOLS by grant context (scope categories, project scoping)
 │   │   ├── types.ts        # TypeScript types
 │   │   └── utils.ts        # org_id selection
-│   ├── oauth/          # OAuth model and KV store
+│   ├── oauth/          # OAuth model, KV store, and the OAuthStore Effect service over them
 │   ├── analytics/      # Segment analytics
 │   ├── sentry/         # Sentry setup, tool spans, session tagging, Effect layer
 │   ├── types/          # Shared TypeScript types

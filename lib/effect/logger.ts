@@ -9,7 +9,10 @@ import {
 import type { LogLevel } from 'effect';
 import { logger } from '../../mcp/utils/logger';
 
-const WINSTON_LEVELS: Record<LogLevel.LogLevel, string> = {
+const WINSTON_LEVELS: Record<
+  LogLevel.LogLevel,
+  'debug' | 'info' | 'warn' | 'error'
+> = {
   All: 'debug',
   Trace: 'debug',
   Debug: 'debug',
@@ -21,8 +24,9 @@ const WINSTON_LEVELS: Record<LogLevel.LogLevel, string> = {
 };
 
 /**
- * Effect logs go to the winston logger, so they keep its console format and
- * reach Sentry Logs with the request's session attributes like every other log.
+ * Effect logs go to the winston logger's level methods, so they keep its
+ * console format and reach Sentry Logs with the request's session attributes
+ * like every other log, and tests observe them where they observe the rest.
  * Log annotations become the winston metadata, and a logged cause its
  * `cause` field. Winston's `LOG_LEVEL` decides what is printed, so Effect
  * passes every level through.
@@ -42,12 +46,12 @@ const winstonLogger = Logger.make(({ logLevel, message, cause, fiber }) => {
   const level = WINSTON_LEVELS[logLevel];
 
   if (cause.reasons.length === 0) {
-    logger.log(level, text, annotations);
+    logger[level](text, annotations);
 
     return;
   }
 
-  logger.log(level, text, { ...annotations, cause: Cause.pretty(cause) });
+  logger[level](text, { ...annotations, cause: Cause.pretty(cause) });
 });
 
 export const WinstonLoggerLayer = Layer.merge(
