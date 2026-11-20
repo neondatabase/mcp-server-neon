@@ -101,10 +101,18 @@ const revocation = Effect.gen(function* () {
  */
 const revoke = revocation.pipe(
   Effect.catchTags({
-    ClientMetadataUnavailable: () =>
-      Effect.annotateCurrentSpan({
-        'error.type': 'ClientMetadataUnavailable',
-      }).pipe(Effect.as(clientMetadataUnavailableResponse())),
+    ClientMetadataUnavailable: ({ cause }) =>
+      Effect.logWarning('Client metadata unavailable during revocation').pipe(
+        Effect.annotateLogs({
+          reason: cause instanceof Error ? cause.message : String(cause),
+        }),
+        Effect.andThen(
+          Effect.annotateCurrentSpan({
+            'error.type': 'ClientMetadataUnavailable',
+          }),
+        ),
+        Effect.as(clientMetadataUnavailableResponse()),
+      ),
     HttpServerError: unreadableBodyResponse,
     // It always answered server_error; it is the caller's input, so it stays
     // out of Sentry.

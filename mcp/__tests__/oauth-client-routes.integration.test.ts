@@ -5,6 +5,8 @@
  * sends nothing to Sentry.
  */
 import { once } from 'node:events';
+import { Writable } from 'node:stream';
+import winston from 'winston';
 import { flush, httpIntegration, init, startSpan } from '@sentry/node';
 import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -21,6 +23,7 @@ const {
 await ensureTestOauthDatabase();
 
 const { model } = await import('../oauth/model');
+const { logger } = await import('../utils/logger');
 const { app } = await import('../../lib/http/app');
 
 const Items = z.array(z.object({ type: z.string(), payload: z.unknown() }));
@@ -410,6 +413,59 @@ describe('OAuth client routes', () => {
           status: 'ok',
           errorType: 'ClientMetadataUnavailable',
         },
+      ]);
+      await expect(errorEventCount()).resolves.toBe(eventsBefore);
+    }, 30_000);
+
+    it('logs a JWKS outage and answers 503 with ok spans', async () => {
+      const clientId = `jwks-outage-${crypto.randomUUID()}`;
+      const lines: string[] = [];
+
+      const transport = new winston.transports.Stream({
+        stream: new Writable({
+          write(chunk: Buffer, _encoding, callback) {
+            lines.push(chunk.toString());
+            callback();
+          },
+        }),
+      });
+
+      await model.saveClient({
+        id: clientId,
+        secret: 'unused',
+        grants: [],
+        tokenEndpointAuthMethod: 'private_key_jwt',
+        jwks_uri: 'https://neon.com:9/jwks.json',
+      });
+      logger.add(transport);
+
+      const eventsBefore = await errorEventCount();
+
+      const { response, name } = await revoke({
+        client_id: clientId,
+        client_assertion: 'not-checked-before-the-jwks-loads',
+        client_assertion_type:
+          'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+        token: 'anything',
+      });
+
+      logger.remove(transport);
+
+      expect(response.status).toBe(503);
+      expect(
+        lines.some((line) =>
+          line.includes('Client metadata unavailable during revocation'),
+        ),
+      ).toBe(true);
+
+      const spans = await oauthSpans(name);
+
+      expect(
+        spans.map(({ description, status }) => ({ description, status })),
+      ).toStrictEqual([
+        { description: 'OAuthRevoke.revoke', status: 'ok' },
+        { description: 'OAuthStore.findClient', status: 'ok' },
+        { description: 'OAuthClient.authenticate', status: 'ok' },
       ]);
       await expect(errorEventCount()).resolves.toBe(eventsBefore);
     }, 30_000);
