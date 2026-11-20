@@ -34,8 +34,6 @@ export const AUTH_COMPLETE_ACTIONS = [
   'return_clicked',
 ] as const;
 
-export type AuthCompleteAction = (typeof AUTH_COMPLETE_ACTIONS)[number];
-
 /**
  * The page can hold a live authorization code in its return link, so nothing
  * but its own nonce-tagged script runs, and it loads nothing from elsewhere.
