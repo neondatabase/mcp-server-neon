@@ -193,14 +193,16 @@ describe('tool retries', () => {
     expect(requests.get(`GET /projects/${PROJECT.flaky}`)).toBe(2);
   });
 
-  it('gives up on a read after two retries', async () => {
+  // @neon/sdk sends a GET whose connection dropped up to three times, and the
+  // tool runs up to three times.
+  it('gives up on a read after two tool retries', async () => {
     const result = await callTool('describe_project', {
       project_id: PROJECT.down,
     });
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toMatch(/^NeonNetworkError: /u);
-    expect(requests.get(`GET /projects/${PROJECT.down}`)).toBe(3);
+    expect(requests.get(`GET /projects/${PROJECT.down}`)).toBe(9);
   });
 
   it('sends the org lookup again after a dropped connection', async () => {

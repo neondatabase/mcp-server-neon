@@ -83,7 +83,7 @@
   {
     "name": "run_sql",
     "title": "Run SQL",
-    "description": "Runs one SQL statement on a branch's database and returns its rows. After a prepare step, pass its temporary branch_id. NEVER run destructive SQL autonomously; always ask the user first.",
+    "description": "Runs one SQL statement on a branch's database and returns its rows. For several statements, send one per call or use run_sql_transaction. After a prepare step, pass its temporary branch_id. NEVER run destructive SQL autonomously; always ask the user first.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1601,7 +1601,7 @@
   {
     "name": "list_incidents",
     "title": "List Neon incidents",
-    "description": "Lists open Neon incidents and maintenance from neonstatus.com and the affected components and regions. Needs no credentials. Call it when Neon requests fail unexpectedly or the user asks whether Neon is down.",
+    "description": "Lists open Neon incidents and maintenance from neonstatus.com and the affected components and regions. Needs no credentials. Fetches the page on every call; updated_at is when neonstatus.com last updated the overall status, not when this call fetched it. Call it when Neon requests fail unexpectedly or the user asks whether Neon is down.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1619,6 +1619,7 @@
               "type": "string"
             },
             "updated_at": {
+              "description": "When neonstatus.com last updated the overall status, not when this call fetched it.",
               "type": "string"
             },
             "status_page_url": {
@@ -11474,7 +11475,7 @@
   {
     "name": "get_data_api",
     "title": "Retrieve Neon Data API configuration",
-    "description": "Gets the Neon Data API configuration for one database on a branch.",
+    "description": "Gets the Neon Data API configuration for one database on a branch. Returns enabled false when the database has no Data API; provision_neon_data_api enables it.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -11505,74 +11506,95 @@
       "type": "object",
       "properties": {
         "data": {
-          "type": "object",
-          "properties": {
-            "url": {
-              "type": "string"
-            },
-            "status": {
-              "type": "string"
-            },
-            "settings": {
-              "type": [
-                "object",
-                "null"
-              ]
-            },
-            "available_schemas": {
-              "anyOf": [
-                {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "settings": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "available_schemas": {
                   "anyOf": [
                     {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     {
                       "type": "null"
                     }
                   ]
                 },
-                {
-                  "type": "null"
+                "observed_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "auth_provider": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "jwks_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "provider_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "jwt_audience": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "enabled": {
+                  "type": "boolean",
+                  "const": true
                 }
+              },
+              "required": [
+                "url",
+                "status",
+                "enabled"
               ]
             },
-            "observed_at": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "auth_provider": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "jwks_url": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "provider_name": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "jwt_audience": {
-              "type": [
-                "string",
-                "null"
+            {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "const": false
+                }
+              },
+              "required": [
+                "enabled"
               ]
             }
-          },
-          "required": [
-            "url",
-            "status"
           ]
         }
       },
@@ -11632,8 +11654,8 @@
           "description": "Expected `aud` claim in incoming JWTs."
         },
         "add_default_grants": {
-          "type": "boolean",
-          "description": "Grant all permissions to the tables in the public schema to authenticated users"
+          "description": "Grants the authenticated role read and write access to public-schema tables, including tables the database owner creates later. Without it, the Data API can read no table until you GRANT access. Never grants anonymous.",
+          "type": "boolean"
         },
         "skip_auth_schema": {
           "type": "boolean",
