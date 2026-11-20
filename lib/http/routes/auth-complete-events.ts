@@ -38,10 +38,15 @@ const appendChunk = (body: BodyChunks, chunk: Uint8Array) => {
 const boundedBody = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
 
+  // A request without a body has no stream to read; it decodes like an empty
+  // body and is answered 400.
   const body = yield* request.stream.pipe(
     Stream.runFoldEffect(
       (): BodyChunks => ({ size: 0, chunks: [] }),
       appendChunk,
+    ),
+    Effect.catchTag('HttpServerError', () =>
+      Effect.succeed<BodyChunks>({ size: 0, chunks: [] }),
     ),
   );
 
