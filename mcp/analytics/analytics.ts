@@ -6,6 +6,13 @@ type Account = AuthContext['extra']['account'];
 
 export type TrackParams = Parameters<Analytics['track']>[0];
 
+export type IdentifyAccount = Account | null;
+
+export type IdentifyParams = Omit<
+  Parameters<Analytics['identify']>[0],
+  'userId' | 'anonymousId'
+>;
+
 // Auto-initialize analytics at module load time (for serverless compatibility)
 // flushAt: 1 ensures events are sent immediately (required for serverless)
 const analytics: Analytics | undefined =
@@ -25,10 +32,7 @@ export const flushAnalytics = async (): Promise<void> => {
   await analytics?.flush();
 };
 
-export const identify = (
-  account: Account | null,
-  params: Omit<Parameters<Analytics['identify']>[0], 'userId' | 'anonymousId'>,
-) => {
+export const identify = (account: IdentifyAccount, params: IdentifyParams) => {
   if (account) {
     analytics?.identify({
       ...params,

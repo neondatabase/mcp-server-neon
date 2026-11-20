@@ -1,10 +1,12 @@
 import { Context, Effect, Layer, Option } from 'effect';
-import type { Client } from 'oauth2-server';
+import type { AuthorizationCode, Client, Token } from 'oauth2-server';
 import { ClientMetadataUnavailableError } from '../../lib/oauth/client-id-metadata-document';
 import {
   ClientMetadataUnavailable,
   withSpanOkOnClientOutage,
 } from '../../lib/oauth/client-metadata-unavailable';
+import { withPgConnectRetry } from './kv-store';
+import type { RefreshToken } from './kv-store';
 import { model } from './model';
 import { OAuthStoreUnavailable } from './oauth-store-unavailable';
 import { revokeOwnedRotation } from './refresh-result';
@@ -116,6 +118,37 @@ export class OAuthStore extends Context.Service<
       Option.Option<Client>,
       OAuthStoreUnavailable | ClientMetadataUnavailable
     >;
+    readonly findAuthorizationCode: (input: {
+      readonly code: string;
+    }) => Effect.Effect<
+      Option.Option<AuthorizationCode>,
+      OAuthStoreUnavailable
+    >;
+    /** Retried once on a Postgres connect failure, like every callback write. */
+    readonly saveAuthorizationCode: (input: {
+      readonly code: AuthorizationCode;
+    }) => Effect.Effect<void, OAuthStoreUnavailable>;
+    /** An authorization code is single-use. */
+    readonly consumeAuthorizationCode: (input: {
+      readonly code: AuthorizationCode;
+    }) => Effect.Effect<void, OAuthStoreUnavailable>;
+    /** Stores an issued access token and the refresh token that renews it. */
+    readonly saveTokenPair: (input: {
+      readonly token: Token;
+      readonly refreshToken: string;
+    }) => Effect.Effect<Token, OAuthStoreUnavailable>;
+    readonly findAccessToken: (input: {
+      readonly accessToken: string;
+    }) => Effect.Effect<Option.Option<Token>, OAuthStoreUnavailable>;
+    readonly findRefreshToken: (input: {
+      readonly refreshToken: string;
+    }) => Effect.Effect<Option.Option<RefreshToken>, OAuthStoreUnavailable>;
+    readonly deleteAccessToken: (input: {
+      readonly token: Token;
+    }) => Effect.Effect<void, OAuthStoreUnavailable>;
+    readonly deleteRefreshToken: (input: {
+      readonly refreshToken: RefreshToken;
+    }) => Effect.Effect<void, OAuthStoreUnavailable>;
     /** RFC 7009 revocation by the owning client; unknown tokens are a no-op. */
     readonly revokeToken: (input: {
       readonly token: string;
@@ -148,6 +181,78 @@ export class OAuthStore extends Context.Service<
         Effect.map(Option.fromUndefinedOr),
         withSpanOkOnClientOutage('OAuthStore.findClient'),
       ),
+
+    findAuthorizationCode: ({ code }: { readonly code: string }) =>
+      stored('getAuthorizationCode', async () =>
+        model.getAuthorizationCode(code),
+      ).pipe(
+        Effect.map(Option.fromUndefinedOr),
+        Effect.withSpan('OAuthStore.findAuthorizationCode'),
+      ),
+
+    saveAuthorizationCode: ({ code }: { readonly code: AuthorizationCode }) =>
+      stored('saveAuthorizationCode', async () =>
+        withPgConnectRetry('callback.saveAuthorizationCode', async () =>
+          model.saveAuthorizationCode(code),
+        ),
+      ).pipe(
+        Effect.asVoid,
+        Effect.withSpan('OAuthStore.saveAuthorizationCode'),
+      ),
+
+    consumeAuthorizationCode: ({
+      code,
+    }: {
+      readonly code: AuthorizationCode;
+    }) =>
+      stored('revokeAuthorizationCode', async () =>
+        model.revokeAuthorizationCode(code),
+      ).pipe(
+        Effect.asVoid,
+        Effect.withSpan('OAuthStore.consumeAuthorizationCode'),
+      ),
+
+    saveTokenPair: Effect.fn('OAuthStore.saveTokenPair')(function* (input: {
+      readonly token: Token;
+      readonly refreshToken: string;
+    }) {
+      const saved = yield* stored('saveToken', async () =>
+        model.saveToken(input.token),
+      );
+
+      yield* stored('saveRefreshToken', async () =>
+        model.saveRefreshToken({
+          refreshToken: input.refreshToken,
+          accessToken: saved.accessToken,
+        }),
+      );
+
+      return saved;
+    }),
+
+    findAccessToken: ({ accessToken }: { readonly accessToken: string }) =>
+      stored('getAccessToken', async () =>
+        model.getAccessToken(accessToken),
+      ).pipe(Effect.map(Option.fromUndefinedOr)),
+
+    findRefreshToken: ({ refreshToken }: { readonly refreshToken: string }) =>
+      stored('getRefreshToken', async () =>
+        model.getRefreshToken(refreshToken),
+      ).pipe(Effect.map(Option.fromUndefinedOr)),
+
+    deleteAccessToken: ({ token }: { readonly token: Token }) =>
+      stored('deleteToken', async () => model.deleteToken(token)).pipe(
+        Effect.asVoid,
+      ),
+
+    deleteRefreshToken: ({
+      refreshToken,
+    }: {
+      readonly refreshToken: RefreshToken;
+    }) =>
+      stored('deleteRefreshToken', async () =>
+        model.deleteRefreshToken(refreshToken),
+      ).pipe(Effect.asVoid),
 
     revokeToken: Effect.fn('OAuthStore.revokeToken')(function* (input: {
       readonly token: string;
