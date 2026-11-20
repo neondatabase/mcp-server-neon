@@ -1,4 +1,4 @@
-import { Schema } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 import { HttpServerResponse } from 'effect/http';
 
 /**
@@ -20,3 +20,22 @@ export const clientMetadataUnavailableResponse = () =>
     },
     { status: 503, headers: { 'Retry-After': '30' } },
   );
+
+/**
+ * `Effect.withSpan` that keeps the span ok when the client's metadata host is
+ * down, which is not the server's failure: it sets `error.type` instead. The
+ * failure still reaches the caller.
+ */
+export const withSpanOkOnClientOutage =
+  (name: string) =>
+  <A, E, R>(self: Effect.Effect<A, ClientMetadataUnavailable | E, R>) =>
+    self.pipe(
+      Effect.map(Result.succeed),
+      Effect.catchTag('ClientMetadataUnavailable', (outage) =>
+        Effect.annotateCurrentSpan({
+          'error.type': 'ClientMetadataUnavailable',
+        }).pipe(Effect.as(Result.fail(outage))),
+      ),
+      Effect.withSpan(name),
+      Effect.flatMap(Effect.fromResult),
+    );
