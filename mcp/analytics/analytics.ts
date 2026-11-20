@@ -4,6 +4,8 @@ import { AuthContext } from '../types/auth';
 
 type Account = AuthContext['extra']['account'];
 
+export type TrackParams = Parameters<Analytics['track']>[0];
+
 // Auto-initialize analytics at module load time (for serverless compatibility)
 // flushAt: 1 ensures events are sent immediately (required for serverless)
 const analytics: Analytics | undefined =
@@ -45,6 +47,6 @@ export const identify = (
   }
 };
 
-export const track = (params: Parameters<Analytics['track']>[0]) => {
+export const track = (params: TrackParams) => {
   analytics?.track(params);
 };

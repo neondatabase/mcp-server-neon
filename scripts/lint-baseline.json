@@ -36,21 +36,6 @@
     "unicorn(prefer-add-event-listener)": 1,
     "unicorn(switch-case-braces)": 4
   },
-  "app/api/auth-complete/events/route.ts": {
-    "anti-slop(no-known-value-widening)": 1,
-    "anti-slop(no-runtime-typeof)": 2,
-    "anti-slop(no-unsafe-dictionary-type)": 1,
-    "anti-slop(require-readable-spacing)": 14,
-    "anti-slop(require-safety-comment-for-type-assertion)": 2,
-    "eslint(curly)": 2,
-    "eslint(func-style)": 3,
-    "eslint(init-declarations)": 1,
-    "eslint(no-await-in-loop)": 2,
-    "eslint(require-unicode-regexp)": 1,
-    "import(consistent-type-specifier-style)": 1,
-    "typescript(consistent-type-imports)": 1,
-    "typescript(no-unsafe-type-assertion)": 2
-  },
   "app/api/authorize/route.ts": {
     "anti-slop-martinfowler(long-function)": 2,
     "anti-slop-martinfowler(long-parameter-list)": 1,
