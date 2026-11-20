@@ -84,8 +84,11 @@ const oauthSpans = async (name: string) => {
 
 let requestCount = 0;
 
+// Node's fetch needs `duplex` for a streamed body; the DOM type omits it.
+type StreamingRequestInit = RequestInit & { duplex?: 'half' };
+
 /** Sends a request to `path` under a uniquely named request span. */
-const send = async (path: string, requestInit: RequestInit) => {
+const send = async (path: string, requestInit: StreamingRequestInit) => {
   requestCount += 1;
 
   const name = `POST ${path} #${requestCount}`;
@@ -149,6 +152,41 @@ describe('OAuth client routes', () => {
     fixture.close();
     await once(fixture, 'close');
   });
+
+  it.each([
+    { path: '/api/register', contentType: 'application/json' },
+    { path: '/api/revoke', contentType: 'application/x-www-form-urlencoded' },
+  ])(
+    'answers a body $path cannot read with server_error and no Sentry event',
+    async ({ path, contentType }) => {
+      const eventsBefore = await errorEventCount();
+
+      const { response, name } = await send(path, {
+        method: 'POST',
+        headers: { 'content-type': contentType },
+        body: new ReadableStream({
+          start(controller) {
+            controller.error(new Error('connection reset'));
+          },
+        }),
+        duplex: 'half',
+      });
+
+      expect(response.status).toBe(500);
+      await expect(response.json()).resolves.toStrictEqual({
+        error: 'server_error',
+        error_description: 'Internal server error',
+      });
+
+      const [routeSpan] = await oauthSpans(name);
+
+      expect(routeSpan).toMatchObject({
+        status: 'ok',
+        errorType: 'RequestBodyUnreadable',
+      });
+      await expect(errorEventCount()).resolves.toBe(eventsBefore);
+    },
+  );
 
   describe('POST /api/register', () => {
     it('stores the client with the headers it registered with', async () => {
@@ -267,6 +305,21 @@ describe('OAuth client routes', () => {
 
       expect(response.status).toBe(200);
       await expect(model.getAccessToken(accessToken)).resolves.toBeDefined();
+    });
+
+    it('treats an empty token_type_hint as no hint', async () => {
+      const client = await registerClient();
+      const { accessToken } = await seedTokens(client.client_id);
+
+      const { response } = await revoke({
+        client_id: client.client_id,
+        client_secret: client.client_secret,
+        token: accessToken,
+        token_type_hint: '',
+      });
+
+      expect(response.status).toBe(200);
+      await expect(model.getAccessToken(accessToken)).resolves.toBeUndefined();
     });
 
     it('answers 200 for an unknown client', async () => {

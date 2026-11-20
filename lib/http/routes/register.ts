@@ -5,7 +5,10 @@ import { OAuthStore } from '../../../mcp/oauth/oauth-store';
 import { generateRandomString } from '../../../mcp/oauth/utils';
 import { OAuthServerFault } from '../../oauth/oauth-server-fault';
 import { normalizeRedirectUris } from '../../oauth/redirect-uri';
-import { oauthErrorResponse } from '../oauth-error-response';
+import {
+  oauthErrorResponse,
+  unreadableBodyResponse,
+} from '../oauth-error-response';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -169,15 +172,17 @@ const registration = Effect.gen(function* () {
  * is the server's and reaches Sentry.
  */
 const register = registration.pipe(
-  Effect.catchTag('InvalidRegistration', ({ reason, description }) =>
-    Effect.logWarning('Client registration validation failed').pipe(
-      Effect.annotateLogs({ reason }),
-      Effect.andThen(
-        Effect.annotateCurrentSpan({ 'error.type': 'InvalidRegistration' }),
+  Effect.catchTags({
+    InvalidRegistration: ({ reason, description }) =>
+      Effect.logWarning('Client registration validation failed').pipe(
+        Effect.annotateLogs({ reason }),
+        Effect.andThen(
+          Effect.annotateCurrentSpan({ 'error.type': 'InvalidRegistration' }),
+        ),
+        Effect.as(oauthErrorResponse(400, 'invalid_request', description)),
       ),
-      Effect.as(oauthErrorResponse(400, 'invalid_request', description)),
-    ),
-  ),
+    HttpServerError: unreadableBodyResponse,
+  }),
   Effect.catchDefect((cause) =>
     Effect.fail(OAuthServerFault.make({ endpoint: 'register', cause })),
   ),

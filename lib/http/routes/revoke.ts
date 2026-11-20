@@ -7,7 +7,10 @@ import {
   verifyClientCredentials,
 } from '../../oauth/client-credentials';
 import { OAuthServerFault } from '../../oauth/oauth-server-fault';
-import { oauthErrorResponse } from '../oauth-error-response';
+import {
+  oauthErrorResponse,
+  unreadableBodyResponse,
+} from '../oauth-error-response';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -61,7 +64,10 @@ const revokeForClient = Effect.fnUntraced(function* (
 
   yield* store.revokeToken({
     token,
-    tokenTypeHint: Option.fromNullishOr(formData.get('token_type_hint')),
+    // An empty hint counts as no hint, so both token types are tried.
+    tokenTypeHint: Option.fromNullishOr(formData.get('token_type_hint')).pipe(
+      Option.filter((hint) => hint !== ''),
+    ),
     clientId: client.value.id,
   });
 
@@ -91,11 +97,13 @@ const revocation = Effect.gen(function* () {
  * unexpected is the server's and reaches Sentry.
  */
 const revoke = revocation.pipe(
-  Effect.catchTag('ClientMetadataUnavailable', () =>
-    Effect.annotateCurrentSpan({
-      'error.type': 'ClientMetadataUnavailable',
-    }).pipe(Effect.as(clientMetadataUnavailableResponse())),
-  ),
+  Effect.catchTags({
+    ClientMetadataUnavailable: () =>
+      Effect.annotateCurrentSpan({
+        'error.type': 'ClientMetadataUnavailable',
+      }).pipe(Effect.as(clientMetadataUnavailableResponse())),
+    HttpServerError: unreadableBodyResponse,
+  }),
   Effect.catchDefect((cause) =>
     Effect.fail(OAuthServerFault.make({ endpoint: 'revoke', cause })),
   ),
