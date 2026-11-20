@@ -6,7 +6,17 @@ import { describe, expect, it } from 'vitest';
 
 process.env.NEON_MCP_DISABLE_ANALYTICS = '1';
 
-init({ dsn: 'http://public@127.0.0.1:1/1', tracesSampleRate: 1 });
+const errorEvents: unknown[] = [];
+
+init({
+  dsn: 'http://public@127.0.0.1:1/1',
+  tracesSampleRate: 1,
+  beforeSend: (event) => {
+    errorEvents.push(event);
+
+    return null;
+  },
+});
 
 const spans: { description: string | undefined; status: string | undefined }[] =
   [];
@@ -87,15 +97,17 @@ describe('auth-complete events spans', () => {
     ]);
   });
 
-  it('fails the span for a body stream that fails while it is read', async () => {
+  it('answers a body stream that fails while read with 400 and no Sentry event', async () => {
     spans.length = 0;
+    errorEvents.length = 0;
 
     const response = await beaconWithFailingBody();
 
     expect(response.status).toBe(400);
     expect(spans).toStrictEqual([
-      { description: 'AuthCompleteEvents.record', status: 'internal_error' },
+      { description: 'AuthCompleteEvents.record', status: 'ok' },
     ]);
+    expect(errorEvents).toStrictEqual([]);
   });
 
   it.each([
