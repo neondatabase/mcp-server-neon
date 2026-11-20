@@ -78,9 +78,17 @@ const revokeRefreshToken = Effect.fnUntraced(function* (input: {
   );
 
   if (access !== undefined && access.client.id === clientId) {
-    yield* stored('deleteToken', async () => model.deleteToken(access));
-    yield* stored('deleteRefreshToken', async () =>
-      model.deleteRefreshToken(refresh),
+    // Once the access token is gone, a later revocation can no longer find
+    // the refresh token's owner, so both deletes run even if the request is
+    // aborted between them.
+    yield* Effect.uninterruptible(
+      stored('deleteToken', async () => model.deleteToken(access)).pipe(
+        Effect.andThen(
+          stored('deleteRefreshToken', async () =>
+            model.deleteRefreshToken(refresh),
+          ),
+        ),
+      ),
     );
     yield* Effect.logInfo('Token revoked').pipe(
       Effect.annotateLogs({ clientId, type: 'refresh_token' }),

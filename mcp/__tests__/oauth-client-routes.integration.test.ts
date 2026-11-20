@@ -6,9 +6,10 @@
  */
 import { once } from 'node:events';
 import { Writable } from 'node:stream';
+import pg from 'pg';
 import winston from 'winston';
 import { flush, httpIntegration, init, startSpan } from '@sentry/node';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
 
@@ -20,7 +21,7 @@ const {
   startSentryFixtureServer,
 } = await import('../../e2e/sentry-fixture');
 
-await ensureTestOauthDatabase();
+const databaseUrl = await ensureTestOauthDatabase();
 
 const { model } = await import('../oauth/model');
 const { logger } = await import('../utils/logger');
@@ -334,6 +335,84 @@ describe('OAuth client routes', () => {
       await expect(
         spanAttribute(name, 'OAuthRevoke.revoke', 'oauth.client_id'),
       ).resolves.toBe(client.client_id);
+    });
+
+    it('finishes deleting the token pair when the request is aborted mid-revocation', async () => {
+      const client = await registerClient();
+      const { accessToken, refreshToken } = await seedTokens(client.client_id);
+      const locker = new pg.Client({ connectionString: databaseUrl });
+      // pg_stat_activity is a snapshot per transaction, so the lock holder
+      // can't watch for the waiting delete itself.
+      const observer = new pg.Client({ connectionString: databaseUrl });
+
+      await locker.connect();
+      await observer.connect();
+      await locker.query('BEGIN');
+      // Holds the access token's row, so the revocation's first delete waits.
+      await locker.query(
+        'SELECT 1 FROM mcpauth.tokens WHERE key = $1 FOR UPDATE',
+        [`keyv:${accessToken}`],
+      );
+
+      const abort = new AbortController();
+
+      const pending = app.handler(
+        new Request('http://localhost/api/revoke', {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: client.client_id,
+            client_secret: client.client_secret,
+            token: refreshToken,
+          }).toString(),
+          signal: abort.signal,
+        }),
+      );
+
+      await vi.waitFor(
+        async () => {
+          const { rows } = await observer.query<{ waiting: number }>(
+            "SELECT count(*)::int AS waiting FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE 'DELETE FROM mcpauth.tokens%'",
+          );
+
+          expect(rows[0]?.waiting).toBe(1);
+        },
+        { timeout: 10_000 },
+      );
+
+      abort.abort();
+      await locker.query('ROLLBACK');
+      await pending;
+      await locker.end();
+      await observer.end();
+
+      await vi.waitFor(
+        async () => {
+          await expect(
+            model.getRefreshToken(refreshToken),
+          ).resolves.toBeUndefined();
+        },
+        { timeout: 10_000 },
+      );
+      await expect(model.getAccessToken(accessToken)).resolves.toBeUndefined();
+    }, 30_000);
+
+    it('records no client id for a client the store does not resolve', async () => {
+      const sentinel = 'SENTINEL_SECRET';
+
+      const { response, name } = await revoke({
+        client_id: `https://user:${sentinel}@example.invalid/client.json?token=${sentinel}`,
+        token: 'anything',
+      });
+
+      expect(response.status).toBe(200);
+      await expect(
+        spanAttribute(name, 'OAuthRevoke.revoke', 'oauth.client_id'),
+      ).resolves.toBeUndefined();
+
+      const transactions = await items('transaction');
+
+      expect(JSON.stringify(transactions)).not.toContain(sentinel);
     });
 
     it('keeps an access token another client names', async () => {
