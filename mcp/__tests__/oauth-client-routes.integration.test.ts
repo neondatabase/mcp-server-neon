@@ -90,6 +90,22 @@ const oauthSpans = async (name: string) => {
     }));
 };
 
+/** One attribute of the span `description` in the transaction `name`. */
+const spanAttribute = async (
+  name: string,
+  description: string,
+  attribute: string,
+) => {
+  const payloads = await items('transaction');
+
+  const span = payloads
+    .map((payload) => Transaction.parse(payload))
+    .find((candidate) => candidate.transaction === name)
+    ?.spans.find((candidate) => candidate.description === description);
+
+  return span?.data[attribute];
+};
+
 let requestCount = 0;
 
 // Node's fetch needs `duplex` for a streamed body; the DOM type omits it.
@@ -236,7 +252,20 @@ describe('OAuth client routes', () => {
           status: 'ok',
           errorType: undefined,
         },
+        {
+          description: 'OAuthModel.saveClient',
+          status: 'ok',
+          errorType: undefined,
+        },
+        {
+          description: 'OAuthModel.saveClientRegisterHeaders',
+          status: 'ok',
+          errorType: undefined,
+        },
       ]);
+      await expect(
+        spanAttribute(name, 'OAuthRegister.register', 'oauth.client_id'),
+      ).resolves.toBe(body.client_id);
     });
 
     it.each([
@@ -296,7 +325,15 @@ describe('OAuth client routes', () => {
         { description: 'OAuthStore.findClient', status: 'ok' },
         { description: 'OAuthClient.authenticate', status: 'ok' },
         { description: 'OAuthStore.revokeToken', status: 'ok' },
+        { description: 'OAuthModel.revokeOwnedRotation', status: 'ok' },
+        { description: 'OAuthModel.getRefreshToken', status: 'ok' },
+        { description: 'OAuthModel.getAccessToken', status: 'ok' },
+        { description: 'OAuthModel.deleteToken', status: 'ok' },
+        { description: 'OAuthModel.deleteRefreshToken', status: 'ok' },
       ]);
+      await expect(
+        spanAttribute(name, 'OAuthRevoke.revoke', 'oauth.client_id'),
+      ).resolves.toBe(client.client_id);
     });
 
     it('keeps an access token another client names', async () => {

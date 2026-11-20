@@ -148,6 +148,8 @@ const registration = Effect.gen(function* () {
     registrationDate: Math.floor(now / 1000),
   };
 
+  yield* Effect.annotateCurrentSpan({ 'oauth.client_id': clientId });
+
   const store = yield* OAuthStore;
 
   yield* store.saveClient({
