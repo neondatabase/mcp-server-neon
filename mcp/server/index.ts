@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import {
-  fromJsonSchema,
   McpServer,
   type ServerContext as McpServerContext,
 } from '@modelcontextprotocol/server';
@@ -11,7 +10,7 @@ import {
   toolRegistration,
 } from '../tools/registration';
 import { appendAccessWarnings } from '../tools/access-warnings';
-import { toListedInputSchema } from '../tools/listed-schema';
+import { inputContract } from '../tools/input-contract';
 import { logger } from '../utils/logger';
 import { generateTraceId } from '../utils/trace';
 import { track } from '../analytics/analytics';
@@ -106,9 +105,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
       tool.name,
       {
         ...registration,
-        inputSchema: fromJsonSchema(
-          toListedInputSchema(registration.inputSchema),
-        ),
+        inputSchema: inputContract(registration.inputSchema),
       },
       async (args: unknown, ctx: McpServerContext) => {
         const traceId = generateTraceId();

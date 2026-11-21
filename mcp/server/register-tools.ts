@@ -1,4 +1,3 @@
-import { fromJsonSchema } from '@modelcontextprotocol/server';
 import type {
   McpServer,
   ServerContext as McpServerContext,
@@ -6,7 +5,7 @@ import type {
 import type { Effect } from 'effect';
 import type { McpCallbackServices } from '../../lib/effect/runtime';
 import { withToolSpan } from '../sentry/tool-span';
-import { toListedInputSchema } from '../tools/listed-schema';
+import { inputContract } from '../tools/input-contract';
 import { toolRegistration } from '../tools/registration';
 import type { NeonTool } from '../tools/tool-definition';
 import { generateTraceId } from '../utils/trace';
@@ -23,9 +22,11 @@ export type ToolCall = (call: {
 
 const v2ToolConfig = (tool: NeonTool) => {
   const registration = toolRegistration(tool);
-  const listed = toListedInputSchema(registration.inputSchema);
 
-  return { ...registration, inputSchema: fromJsonSchema(listed) };
+  return {
+    ...registration,
+    inputSchema: inputContract(registration.inputSchema),
+  };
 };
 
 // A stateless client cancels by closing the HTTP request; an MCP

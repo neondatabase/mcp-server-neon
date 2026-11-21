@@ -8,6 +8,7 @@ import {
 } from '../utils/grant-context';
 import { secretsNotices, withoutWithheldSecretTools } from '../utils/secrets';
 import { NEON_TOOLS } from './definitions';
+import { optionalProjectIdSchema } from './optional-project-id';
 import type { NeonTool } from './tool-definition';
 
 /**
@@ -33,17 +34,6 @@ export function isDocsOnlyTool(tool: Pick<NeonTool, 'name' | 'scope'>) {
     tool.name === 'send_feedback' ||
     tool.name === 'list_incidents'
   );
-}
-
-// Hosts may cache this schema and its instructions independently of the grant.
-const PROJECT_ID_GUIDANCE =
-  'Required for an unscoped connection. May be omitted when the connection is ' +
-  'scoped to one project; if provided, it must match that project.';
-
-function withProjectIdGuidance(description: string | undefined): string {
-  const base = description?.trim();
-  if (!base) return PROJECT_ID_GUIDANCE;
-  return `${/[.!?]$/.test(base) ? base : `${base}.`} ${PROJECT_ID_GUIDANCE}`;
 }
 
 /**
@@ -103,28 +93,6 @@ function applyProjectScopeFilter(
   if (!grant.projectId) return tools;
 
   return tools.filter((tool) => tool.projectScoped);
-}
-
-function optionalProjectIdSchema(tool: NeonTool): NeonTool | null {
-  if (!tool.projectScoped) return null;
-  const schema = tool.inputSchema;
-  if (!(schema instanceof z.ZodObject)) return null;
-  if (!('project_id' in schema.shape)) return null;
-  const projectIdSchema = schema.shape.project_id;
-
-  return {
-    ...tool,
-    inputSchema: z.strictObject({
-      ...schema.shape,
-      project_id: z
-        .optional(projectIdSchema)
-        .describe(
-          withProjectIdGuidance(
-            z.globalRegistry.get(projectIdSchema)?.description,
-          ),
-        ),
-    }),
-  };
 }
 
 /**
