@@ -1,5 +1,10 @@
 import he from 'he';
 import { init } from '@sentry/node';
+import { Predicate } from 'effect';
+import type {
+  TokenEndpointResponse,
+  TokenEndpointResponseHelpers,
+} from 'openid-client';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET } from '../../app/callback/route';
@@ -65,6 +70,37 @@ vi.mock('@vercel/functions', () => ({
   waitUntil: vi.fn(),
 }));
 
+type UpstreamResponse = TokenEndpointResponse & TokenEndpointResponseHelpers;
+
+const assertUpstreamResponse: (
+  value: unknown,
+) => asserts value is UpstreamResponse = (value) => {
+  if (!Predicate.hasProperty(value, 'expiresIn')) {
+    throw new Error('not an upstream token response');
+  }
+};
+
+// Shaped like openid-client's response: `expiresIn` is a non-enumerable
+// helper, so code that copies the tokens with a spread loses it.
+const upstreamTokens = (fields: { refresh_token?: string }) => {
+  const tokens = Object.defineProperties(
+    {
+      access_token: 'upstream-access',
+      id_token: 'upstream-id-token',
+      token_type: 'bearer',
+      ...fields,
+    },
+    {
+      expiresIn: { value: () => 3600 },
+      claims: { value: () => undefined },
+    },
+  );
+
+  assertUpstreamResponse(tokens);
+
+  return tokens;
+};
+
 function buildRequest(state: string, cookie: string): NextRequest {
   const url = `http://localhost/callback?code=upstream-code&state=${encodeURIComponent(state)}`;
   return new NextRequest(url, {
@@ -101,12 +137,9 @@ describe('/callback route integration', () => {
       redirect_uris: ['http://127.0.0.1:55667/callback'],
     } as never);
 
-    vi.mocked(exchangeCode).mockResolvedValue({
-      access_token: 'upstream-access',
-      refresh_token: 'upstream-refresh',
-      id_token: 'upstream-id-token',
-      expiresIn: () => 3600,
-    } as never);
+    vi.mocked(exchangeCode).mockResolvedValue(
+      upstreamTokens({ refresh_token: 'upstream-refresh' }),
+    );
 
     vi.mocked(resolveAccountFromAuth).mockResolvedValue({
       id: 'user-1',
@@ -118,12 +151,7 @@ describe('/callback route integration', () => {
   });
 
   it('answers a missing upstream refresh token with 502 and reports it', async () => {
-    const upstream = await exchangeCode(new URL('http://127.0.0.1'), 'state');
-
-    const withoutRefresh = { ...upstream };
-
-    delete withoutRefresh.refresh_token;
-    vi.mocked(exchangeCode).mockResolvedValue(withoutRefresh);
+    vi.mocked(exchangeCode).mockResolvedValue(upstreamTokens({}));
     reported.length = 0;
 
     const seeded = await seedApprovedTransaction();

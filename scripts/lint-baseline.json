@@ -754,7 +754,7 @@
   "mcp/__tests__/oauth-callback-route.integration.test.ts": {
     "anti-slop(no-module-mocking)": 7,
     "anti-slop(require-readable-spacing)": 79,
-    "anti-slop(require-safety-comment-for-type-assertion)": 5,
+    "anti-slop(require-safety-comment-for-type-assertion)": 4,
     "eslint(curly)": 1,
     "eslint(func-style)": 4,
     "eslint(max-params)": 1,
@@ -765,7 +765,7 @@
     "typescript(no-non-null-assertion)": 7,
     "typescript(no-unnecessary-type-assertion)": 1,
     "typescript(no-unsafe-assignment)": 2,
-    "typescript(no-unsafe-type-assertion)": 5,
+    "typescript(no-unsafe-type-assertion)": 4,
     "typescript(require-array-sort-compare)": 1,
     "typescript(strict-boolean-expressions)": 2,
     "unicorn(no-array-sort)": 1,

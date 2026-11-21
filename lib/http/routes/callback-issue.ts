@@ -24,9 +24,10 @@ const warnMissingExpiry = (input: {
 const saveAuthorizationCode = Effect.fnUntraced(function* (input: {
   readonly client: Client;
   readonly approved: ApprovedAuthTransaction;
-  readonly tokens: UpstreamTokens & { readonly refresh_token: string };
+  readonly tokens: UpstreamTokens;
+  readonly refreshToken: string;
 }) {
-  const { client, approved, tokens } = input;
+  const { client, approved, tokens, refreshToken } = input;
   const { clientId } = approved.request;
 
   const account = yield* resolveAccount({
@@ -40,6 +41,7 @@ const saveAuthorizationCode = Effect.fnUntraced(function* (input: {
     approved,
     account,
     tokens,
+    refreshToken,
   });
 
   const store = yield* OAuthStore;
@@ -107,7 +109,8 @@ export const issueAuthorizationCode = Effect.fnUntraced(function* (input: {
   const { code, account } = yield* saveAuthorizationCode({
     client,
     approved,
-    tokens: { ...tokens, refresh_token: refreshToken },
+    tokens,
+    refreshToken,
   });
 
   yield* emitAuthCallbackSlo({
