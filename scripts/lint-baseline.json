@@ -1079,7 +1079,7 @@
     "vitest(prefer-expect-type-of)": 1,
     "vitest(prefer-import-in-mock)": 6,
     "vitest(prefer-strict-equal)": 1,
-    "vitest(require-mock-type-parameters)": 21
+    "vitest(require-mock-type-parameters)": 20
   },
   "mcp/__tests__/tool-call-user-agent.integration.test.ts": {
     "anti-slop(no-known-value-widening)": 1,
@@ -1373,13 +1373,12 @@
   },
   "mcp/oauth/refresh-lock.ts": {
     "anti-slop-martinfowler(mutable-data)": 2,
-    "anti-slop(require-readable-spacing)": 7,
+    "anti-slop(require-readable-spacing)": 6,
     "eslint(curly)": 4,
-    "eslint(func-style)": 5,
+    "eslint(func-style)": 4,
     "eslint(init-declarations)": 2,
     "import(consistent-type-specifier-style)": 1,
     "typescript(prefer-nullish-coalescing)": 1,
-    "typescript(promise-function-async)": 1,
     "typescript(strict-boolean-expressions)": 3,
     "unicorn(catch-error-name)": 1,
     "unicorn(numeric-separators-style)": 3
