@@ -54,7 +54,7 @@ vi.mock('../oauth/utils', () => ({
 await vi.hoisted(async () => {
   const { createServer } = await import('node:http');
   const { EventEmitter } = await import('node:events');
-  const { Predicate } = await import('effect');
+  const { Predicate: P } = await import('effect');
 
   const answers = new Map<string, object>([
     ['/api/v2/auth', { auth_method: 'oauth', account_id: 'user-1' }],
@@ -79,8 +79,7 @@ await vi.hoisted(async () => {
 
   const address = api.address();
 
-  const port =
-    address === null || Predicate.isString(address) ? 0 : address.port;
+  const port = address === null || P.isString(address) ? 0 : address.port;
 
   process.env.NEON_API_HOST = `http://127.0.0.1:${port}/api/v2`;
 });
