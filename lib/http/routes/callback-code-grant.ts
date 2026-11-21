@@ -7,6 +7,7 @@ import type { resolveAccount } from './callback-account';
 
 const AUTHORIZATION_CODE_TTL_MS = 10 * 60 * 1000;
 
+/** openid-client's response; `expiresIn` is a non-enumerable helper, so a spread drops it. */
 export type UpstreamTokens = {
   readonly access_token: string;
   readonly refresh_token?: string;
@@ -22,9 +23,10 @@ export const authorizationCode = (input: {
   readonly client: Client;
   readonly approved: ApprovedAuthTransaction;
   readonly account: Account;
-  readonly tokens: UpstreamTokens & { readonly refresh_token: string };
+  readonly tokens: UpstreamTokens;
+  readonly refreshToken: string;
 }): AuthorizationCode => {
-  const { now, client, approved, account, tokens } = input;
+  const { now, client, approved, account, tokens, refreshToken } = input;
   const { request } = approved;
 
   return {
@@ -38,7 +40,7 @@ export const authorizationCode = (input: {
     token: {
       access_token: tokens.access_token,
       access_token_expires_at: now + (tokens.expiresIn() ?? 3600) * 1000,
-      refresh_token: tokens.refresh_token,
+      refresh_token: refreshToken,
       id_token: tokens.id_token,
     },
     code_challenge: request.codeChallenge,
