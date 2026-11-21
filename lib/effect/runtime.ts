@@ -4,6 +4,7 @@ import type { Effect } from 'effect';
 import { Analytics } from '../../mcp/analytics/analytics-service';
 import { NeonAccounts } from '../../mcp/server/neon-accounts';
 import { SentryLayer } from '../../mcp/sentry/effect';
+import { flushInBackground } from '../../mcp/sentry/flush';
 import { WinstonLoggerLayer } from './logger';
 
 // The HTTP app and the MCP callbacks build their layers through this map, so a
@@ -34,3 +35,11 @@ export const runAfterResponse = (
 ) => {
   waitUntil(mcpRuntime.runPromise(effect));
 };
+
+/**
+ * Keeps the function alive after `response` is built until Sentry has sent
+ * what it buffered, for handlers that don't stream their body.
+ */
+export const flushSentryAfter = async (
+  response: Promise<Response>,
+): Promise<Response> => response.finally(flushInBackground);

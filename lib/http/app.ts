@@ -3,7 +3,7 @@ import { HttpMiddleware, HttpRouter, HttpServer } from 'effect/http';
 import { SentryLayer } from '../../mcp/sentry/effect';
 import { ServerConfig } from '../config';
 import { WinstonLoggerLayer } from '../effect/logger';
-import { memoMap } from '../effect/runtime';
+import { flushSentryAfter, memoMap } from '../effect/runtime';
 import { DiscoveryRoutes } from './routes/discovery';
 import { HealthRoutes } from './routes/health';
 import { ListToolsRoutes } from './routes/list-tools';
@@ -37,9 +37,16 @@ export const AppLayer = Layer.mergeAll(
   HttpServer.layerServices,
 );
 
-// Built once per instance; every Next.js route file except the MCP transport
-// (lib/http/mcp-app.ts) forwards its requests here.
-export const app = HttpRouter.toWebHandler(Layer.merge(Routes, AppLayer), {
+const webHandler = HttpRouter.toWebHandler(Layer.merge(Routes, AppLayer), {
   disableLogger: true,
   memoMap,
 });
+
+// Built once per instance; every Next.js route file except the MCP transport
+// (lib/http/mcp-app.ts) forwards its requests here. None of these routes
+// stream a body, so the Sentry flush need not wait for one.
+export const app = {
+  handler: async (request: Request) =>
+    flushSentryAfter(webHandler.handler(request)),
+  dispose: webHandler.dispose,
+};

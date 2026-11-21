@@ -1,7 +1,8 @@
 import type { CallToolResult } from '@modelcontextprotocol/server';
-import { Cause, Effect, Exit, Option } from 'effect';
-import { mcpRuntime } from '../../lib/effect/runtime';
+import { Cause, Effect, ErrorReporter, Exit, Option } from 'effect';
+import { mcpRuntime, runAfterResponse } from '../../lib/effect/runtime';
 import type { McpCallbackServices } from '../../lib/effect/runtime';
+import { flushSentry } from '../sentry/flush';
 import { thrownError } from '../tools/tools';
 import type { ToolCallError } from '../tools/types';
 import type { IdentifiedClient } from '../utils/client-application';
@@ -82,10 +83,16 @@ export const runToolCallback = async (
 
 /**
  * Runs the Effect behind an MCP SDK callback that returns nothing, such as a
- * lifecycle hook. A failure there is the callback's own to report.
+ * lifecycle hook, which can outlive its request. A defect there goes to Sentry;
+ * an error the callback reported itself is not sent twice.
  */
 export const runSdkCallback = (
   callback: Effect.Effect<void, never, McpCallbackServices>,
 ): void => {
-  mcpRuntime.runFork(callback);
+  runAfterResponse(
+    callback.pipe(
+      Effect.catchCause((cause) => ErrorReporter.report(cause)),
+      Effect.andThen(flushSentry),
+    ),
+  );
 };
