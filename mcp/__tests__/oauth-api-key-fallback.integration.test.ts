@@ -79,6 +79,7 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
+const { identify } = await import('../analytics/analytics');
 const { model } = await import('../oauth/model');
 const { POST, GET, HEAD } = await import('../../app/api/[transport]/route');
 
@@ -217,6 +218,31 @@ describe('OAuth bearer on the API-key path', () => {
 
     expectTokenStoreUnavailable(res);
     expect(getAuthDetails).not.toHaveBeenCalled();
+  });
+
+  it('identifies the account behind an API key on a cache miss only', async () => {
+    vi.mocked(model.getAccessToken).mockResolvedValue(undefined);
+    neonSays('api_key_user');
+
+    const miss = await listTools(API_KEY);
+
+    expect(miss.res.status).toBe(200);
+    expect(identify).toHaveBeenCalledExactlyOnceWith(
+      { id: 'user-1', name: 'User', email: 'u@x.dev', isOrg: false },
+      { context: { authMethod: 'api_key_user' } },
+    );
+
+    vi.mocked(identify).mockClear();
+    apiKeyCache.set(API_KEY, {
+      apiKey: API_KEY,
+      authMethod: 'api_key_user',
+      account: { id: 'user-1', name: 'User', isOrg: false },
+    });
+
+    const hit = await listTools(API_KEY);
+
+    expect(hit.res.status).toBe(200);
+    expect(identify).not.toHaveBeenCalled();
   });
 
   it('answers 401 with the OAuth challenge when the store has no record', async () => {
