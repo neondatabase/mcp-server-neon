@@ -1,6 +1,7 @@
 import { Analytics } from '@segment/analytics-node';
-import { ANALYTICS_WRITE_KEY } from '../constants';
+import { ANALYTICS_HOST, ANALYTICS_WRITE_KEY } from '../constants';
 import { AuthContext } from '../types/auth';
+import { logger } from '../utils/logger';
 
 type Account = AuthContext['extra']['account'];
 
@@ -19,17 +20,42 @@ const analytics: Analytics | undefined =
   process.env.NEON_MCP_DISABLE_ANALYTICS !== '1' && ANALYTICS_WRITE_KEY
     ? new Analytics({
         writeKey: ANALYTICS_WRITE_KEY,
-        host: 'https://track.neon.tech',
+        host: ANALYTICS_HOST,
         flushAt: 1,
       })
     : undefined;
+
+// Segment drops an event once its retries are exhausted and flush() still
+// resolves, so this listener is the only trace of the lost event.
+analytics?.on('error', (error) => {
+  logger.error('Analytics delivery failed', {
+    code: error.code,
+    reason: error.reason instanceof Error ? error.reason.message : undefined,
+  });
+});
+
+// Segment returns at once from a flush that starts while another runs, so
+// callers share the running one, which waits for every queued event.
+const shareRunningFlush = (client: Analytics) => {
+  let running: Promise<void> | undefined = undefined;
+
+  return async () => {
+    running ??= client.flush().finally(() => {
+      running = undefined;
+    });
+
+    return running;
+  };
+};
+
+const flush = analytics && shareRunningFlush(analytics);
 
 /**
  * Flush all pending analytics events.
  * Call this before returning from short-lived serverless functions.
  */
 export const flushAnalytics = async (): Promise<void> => {
-  await analytics?.flush();
+  await flush?.();
 };
 
 export const identify = (account: IdentifyAccount, params: IdentifyParams) => {
