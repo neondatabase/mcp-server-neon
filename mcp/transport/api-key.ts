@@ -1,5 +1,4 @@
 import { NeonApiError } from '@neon/sdk';
-import { waitUntil } from '@vercel/functions';
 import {
   Cause,
   Effect,
@@ -10,6 +9,7 @@ import {
   Schema,
 } from 'effect';
 import { Analytics } from '../analytics/analytics-service';
+import { runAfterResponse } from '../../lib/effect/runtime';
 import { getApiKeys } from '../oauth/kv-store';
 import type { ApiKeyRecord } from '../oauth/kv-store';
 import { isNeonCallerMistake, NeonAccounts } from '../server/neon-accounts';
@@ -86,9 +86,9 @@ const verification = Effect.fnUntraced(function* (accessToken: string) {
     account,
   };
 
-  const context = yield* Effect.context();
-
-  waitUntil(cacheApiKey(record).pipe(Effect.runPromiseWith(context)));
+  yield* Effect.sync(() => {
+    runAfterResponse(cacheApiKey(record));
+  });
   yield* Effect.logInfo('API key cache miss, verified and cached').pipe(
     Effect.annotateLogs({ accountId: account.id }),
   );

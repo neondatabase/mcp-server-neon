@@ -5,10 +5,10 @@ import {
   ClientMetadataUnavailable,
   withSpanOkOnClientOutage,
 } from '../../lib/oauth/client-metadata-unavailable';
-import { withPgConnectRetry } from './kv-store';
 import type { ClientRegisterHeadersRecord, RefreshToken } from './kv-store';
 import { model } from './model';
 import { OAuthStoreUnavailable } from './oauth-store-unavailable';
+import { retryPgConnect } from './pg-connect-retry';
 import { stored } from './stored';
 import { revokeToken } from './token-revocation';
 import type { TokenTypeHint } from './token-revocation';
@@ -95,22 +95,25 @@ export class OAuthStore extends Context.Service<
     findClient: (input: {
       readonly clientId: string;
       readonly connectRetryOperation?: string;
-    }) =>
-      Effect.tryPromise({
-        try: async () =>
-          input.connectRetryOperation === undefined
-            ? model.getClient(input.clientId, '')
-            : withPgConnectRetry(input.connectRetryOperation, async () =>
-                model.getClient(input.clientId, ''),
-              ),
+    }) => {
+      const lookup = Effect.tryPromise({
+        try: async () => model.getClient(input.clientId, ''),
         catch: (cause) =>
           cause instanceof ClientMetadataUnavailableError
             ? ClientMetadataUnavailable.make({ cause })
             : OAuthStoreUnavailable.make({ operation: 'getClient', cause }),
-      }).pipe(
+      });
+
+      const attempted =
+        input.connectRetryOperation === undefined
+          ? lookup
+          : lookup.pipe(retryPgConnect(input.connectRetryOperation));
+
+      return attempted.pipe(
         Effect.map(Option.fromUndefinedOr),
         withSpanOkOnClientOutage('OAuthStore.findClient'),
-      ),
+      );
+    },
 
     findRegisterHeaders: ({ clientId }: { readonly clientId: string }) =>
       stored('getClientRegisterHeaders', async () =>
@@ -127,10 +130,9 @@ export class OAuthStore extends Context.Service<
 
     saveAuthorizationCode: ({ code }: { readonly code: AuthorizationCode }) =>
       stored('saveAuthorizationCode', async () =>
-        withPgConnectRetry('callback.saveAuthorizationCode', async () =>
-          model.saveAuthorizationCode(code),
-        ),
+        model.saveAuthorizationCode(code),
       ).pipe(
+        retryPgConnect('callback.saveAuthorizationCode'),
         Effect.asVoid,
         Effect.withSpan('OAuthStore.saveAuthorizationCode'),
       ),

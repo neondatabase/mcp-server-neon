@@ -6,6 +6,7 @@ import type {
 } from './auth-transaction';
 import { authTransactions } from './auth-transaction-store';
 import { OAuthStoreUnavailable } from './oauth-store-unavailable';
+import { retryPgConnect } from './pg-connect-retry';
 
 type CreatePendingInput = Parameters<typeof authTransactions.createPending>[0];
 
@@ -19,7 +20,10 @@ const transaction = <A>(operation: string, run: () => Promise<A>) =>
   Effect.tryPromise({
     try: run,
     catch: (cause) => OAuthStoreUnavailable.make({ operation, cause }),
-  }).pipe(Effect.withSpan(`AuthTransactions.${operation}`));
+  }).pipe(
+    retryPgConnect(`authTx.${operation}`),
+    Effect.withSpan(`AuthTransactions.${operation}`),
+  );
 
 const optional = <A>(operation: string, run: () => Promise<A | undefined>) =>
   transaction(operation, run).pipe(Effect.map(Option.fromUndefinedOr));
