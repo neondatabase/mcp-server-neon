@@ -173,6 +173,17 @@ describe('analytics delivery with the Segment client', () => {
     expect(deliveredMessageIds).toHaveLength(messageIds.length + 1);
   });
 
+  it('waits for an event queued while the previous flush settles', async () => {
+    const first = flushAnalytics();
+
+    await Promise.resolve();
+    track({ userId: 'user-1', event: 'tool_call', messageId: 'late' });
+    await flushAnalytics();
+
+    expect(deliveredMessageIds).toContain('late');
+    await first;
+  });
+
   it('prints no overlapping-flush warning when events overlap', async () => {
     const { exitCode, stderr } = await runOverlappingEventsInChildProcess();
 

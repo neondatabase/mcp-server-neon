@@ -34,21 +34,23 @@ analytics?.on('error', (error) => {
   });
 });
 
-// Segment returns at once from a flush that starts while another runs, so
-// callers share the running one, which waits for every queued event.
-const shareRunningFlush = (client: Analytics) => {
-  let running: Promise<void> | undefined = undefined;
+// Segment returns at once from a flush that starts while another runs, before
+// the caller's event is sent. Each caller's flush starts after the previous one
+// settles, so it starts after that caller's event was queued and waits for it.
+const serializeFlushes = (client: Analytics) => {
+  let previous: Promise<void> = Promise.resolve();
 
   return async () => {
-    running ??= client.flush().finally(() => {
-      running = undefined;
-    });
+    previous = previous.then(
+      async () => client.flush(),
+      async () => client.flush(),
+    );
 
-    return running;
+    return previous;
   };
 };
 
-const flush = analytics && shareRunningFlush(analytics);
+const flush = analytics && serializeFlushes(analytics);
 
 /**
  * Flush all pending analytics events.
