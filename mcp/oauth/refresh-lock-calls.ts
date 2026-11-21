@@ -1,4 +1,4 @@
-import { Context, Effect, Ref, Schedule } from 'effect';
+import { Effect, Ref, Schedule } from 'effect';
 import {
   LOCK_HEARTBEAT_MS,
   LOCK_TTL_MS,
@@ -6,7 +6,6 @@ import {
 } from './refresh-lock';
 import type { RefreshLockStore } from './refresh-lock-store';
 import { RefreshLockStoreFailed } from './refresh-lock-store-failed';
-import { annotateStoreFallback, logStoreFallback } from './store-fallback';
 
 /** One lock in one store, held under `owner`. */
 type Owned = {
@@ -41,41 +40,6 @@ export const logStoreWarning = (
         failure.cause instanceof Error ? failure.cause.message : failure.cause,
     }),
   );
-
-/** The store reads whose fallback the current lock wait already logged. */
-export const LoggedFallbacks = Context.Reference<
-  Ref.Ref<ReadonlySet<string>> | undefined
->(
-  '@neondatabase/mcp-server-neon/mcp/oauth/refresh-lock-calls/LoggedFallbacks',
-  {
-    defaultValue: () => undefined,
-  },
-);
-
-// A waiter's store reads fail on every poll while the store is down, so a
-// lock wait logs each read's fallback once and annotates its span every time.
-export const logFallbackOncePerWait = (
-  message: string,
-  failure: RefreshLockStoreFailed,
-) =>
-  Effect.gen(function* () {
-    const logged = yield* LoggedFallbacks;
-
-    if (logged === undefined) {
-      return yield* logStoreFallback(message, failure);
-    }
-
-    const key = `${failure.store}:${failure.operation}`;
-
-    const first = yield* Ref.modify(logged, (keys) => [
-      !keys.has(key),
-      new Set([...keys, key]),
-    ]);
-
-    yield* first
-      ? logStoreFallback(message, failure)
-      : annotateStoreFallback(failure);
-  });
 
 export const acquire = ({ store, refreshToken, owner }: Owned) =>
   storeCall({

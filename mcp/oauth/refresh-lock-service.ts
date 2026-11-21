@@ -7,16 +7,15 @@ import {
   refreshLockStores,
 } from './refresh-lock';
 import {
-  LoggedFallbacks,
   acquire,
   heartbeat,
-  logFallbackOncePerWait,
   logStoreWarning,
   release,
   storeCall,
 } from './refresh-lock-calls';
 import type { RefreshLockStore } from './refresh-lock-store';
 import { RefreshLockTimeout } from './refresh-lock-timeout';
+import { logFallbacksOnce, logStoreFallback } from './store-fallback';
 
 /** What the lock holder can ask of its release. */
 export type ReleaseHint = {
@@ -78,7 +77,7 @@ const poll = <A, E, R>(
       run: async () => store.isHeld(refreshToken),
     }).pipe(
       Effect.catchTag('RefreshLockStoreFailed', (failure) =>
-        logFallbackOncePerWait(
+        logStoreFallback(
           'refresh-lock isHeld failed, still waiting',
           failure,
         ).pipe(Effect.as(true)),
@@ -97,10 +96,7 @@ const poll = <A, E, R>(
 // A peek that finds the refresh token's answer, even a failure, is the wait
 // succeeding, so the span stays ok and the failure is returned after it.
 const wait = <A, E, R>(input: Attempt<A, E, R>) =>
-  Ref.make<ReadonlySet<string>>(new Set()).pipe(
-    Effect.flatMap((logged) =>
-      poll(input, 0).pipe(Effect.provideService(LoggedFallbacks, logged)),
-    ),
+  logFallbacksOnce(poll(input, 0)).pipe(
     Effect.tap((resolution) =>
       Effect.annotateCurrentSpan(
         'refresh_lock.outcome',
@@ -277,7 +273,7 @@ export class RefreshLock extends Context.Service<
                 run: async () => store.hasTransient(refreshToken),
               }).pipe(
                 Effect.catchTag('RefreshLockStoreFailed', (failure) =>
-                  logFallbackOncePerWait(
+                  logStoreFallback(
                     'refresh-lock transient marker read failed, assuming none',
                     failure,
                   ).pipe(Effect.as(false)),

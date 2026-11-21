@@ -939,26 +939,47 @@ describe('Token refresh flow', () => {
       reported.length = 0;
     });
 
-    it('answers as with an empty failure cache when reading it fails', async () => {
+    const failureCacheWarning = [
+      'Refresh cache read failed, continuing without it',
+      {
+        store: 'refresh_failures',
+        operation: 'getRefreshFailure',
+        errorName: 'Error',
+        errorCode: 'ECONNREFUSED',
+      },
+    ];
+
+    it('answers as with an empty failure cache when reading it fails, logging it once', async () => {
       mockModel.getRefreshToken.mockResolvedValue(undefined);
       const healthy = await answer();
+      const healthyReads = mockModel.getRefreshFailure.mock.calls.length;
       mockModel.getRefreshFailure.mockRejectedValue(refused());
 
       const degraded = await answer();
 
       expect(healthy.status).toBe(400);
       expect(degraded).toStrictEqual(healthy);
-      expect(fallbackWarnings()).toStrictEqual(
-        Array.from({ length: 2 }, () => [
-          'Refresh cache read failed, continuing without it',
-          {
-            store: 'refresh_failures',
-            operation: 'getRefreshFailure',
-            errorName: 'Error',
-            errorCode: 'ECONNREFUSED',
-          },
-        ]),
-      );
+      expect(healthyReads).toBe(2);
+      expect(mockModel.getRefreshFailure).toHaveBeenCalledTimes(4);
+      expect(fallbackWarnings()).toStrictEqual([failureCacheWarning]);
+      expect(reported).toStrictEqual([]);
+    });
+
+    it('logs a failed cache read once in each of two concurrent requests', async () => {
+      mockModel.getRefreshToken.mockResolvedValue(undefined);
+      mockModel.getRefreshFailure.mockRejectedValue(refused());
+
+      const responses = await Promise.all([
+        POST(makeTokenRequest('concurrent-rt-a')),
+        POST(makeTokenRequest('concurrent-rt-b')),
+      ]);
+
+      expect(responses.map(({ status }) => status)).toStrictEqual([400, 400]);
+      expect(mockModel.getRefreshFailure).toHaveBeenCalledTimes(4);
+      expect(fallbackWarnings()).toStrictEqual([
+        failureCacheWarning,
+        failureCacheWarning,
+      ]);
       expect(reported).toStrictEqual([]);
     });
 
@@ -988,7 +1009,9 @@ describe('Token refresh flow', () => {
       expect(reported).toStrictEqual([]);
     });
 
-    it('keeps a waiter waiting until the lock timeout when the lock store reads fail', async () => {
+    it('keeps a waiter waiting until the lock timeout when every store read fails, logging each once', async () => {
+      mockModel.getRefreshFailure.mockRejectedValue(refused());
+      mockModel.getRefreshResult.mockRejectedValue(refused());
       __setRefreshLockStoresForTests([
         {
           ...passthroughLockStore,
@@ -1014,12 +1037,28 @@ describe('Token refresh flow', () => {
         slo: '[SLO] refresh outcome=transient_lock_timeout elapsedMs=* clientId=client-1',
       });
       expect(mockExchange).not.toHaveBeenCalled();
+      expect(
+        mockModel.getRefreshFailure.mock.calls.length,
+      ).toBeGreaterThanOrEqual(50);
+      expect(
+        mockModel.getRefreshRotation.mock.calls.length,
+      ).toBeGreaterThanOrEqual(50);
       expect(fallbackWarnings()).toStrictEqual([
+        failureCacheWarning,
         [
           'refresh-lock transient marker read failed, assuming none',
           {
             store: 'postgres',
             operation: 'hasTransient',
+            errorName: 'Error',
+            errorCode: 'ECONNREFUSED',
+          },
+        ],
+        [
+          'Refresh cache read failed, continuing without it',
+          {
+            store: 'refresh_results',
+            operation: 'getOwnedRefreshResult',
             errorName: 'Error',
             errorCode: 'ECONNREFUSED',
           },
