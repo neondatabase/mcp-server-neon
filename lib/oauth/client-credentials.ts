@@ -1,10 +1,18 @@
-import type { NextRequest } from 'next/server';
+import { Effect, Schema } from 'effect';
 import type { Client } from 'oauth2-server';
 import {
   clientIdFromAssertion,
   verifyClientAssertion,
 } from './client-assertion';
-import { isClientIdMetadataUrl } from './client-id-metadata-document';
+import {
+  ClientMetadataUnavailableError,
+  isClientIdMetadataUrl,
+} from './client-id-metadata-document';
+import {
+  ClientMetadataUnavailable,
+  withSpanOkOnClientOutage,
+} from './client-metadata-unavailable';
+import { OAuthServerFault } from './oauth-server-fault';
 
 type ClientCredentials = {
   clientId: string | undefined;
@@ -14,13 +22,12 @@ type ClientCredentials = {
 };
 
 export function extractClientCredentials(
-  request: NextRequest,
+  authorization: string | null | undefined,
   formData: URLSearchParams,
 ): ClientCredentials {
   const clientAssertion = formData.get('client_assertion') ?? undefined;
   const clientAssertionType =
     formData.get('client_assertion_type') ?? undefined;
-  const authorization = request.headers.get('authorization');
   if (authorization?.startsWith('Basic ')) {
     const credentials = atob(authorization.replace(/^Basic\s+/i, ''));
     const [clientId, clientSecret] = credentials.split(':');
@@ -61,3 +68,38 @@ export async function authenticateClient(
   }
   return credentials.clientSecret === client.secret;
 }
+
+/** The `Authorization: Basic` header is not valid base64. */
+class MalformedClientCredentials extends Schema.TaggedError<
+  MalformedClientCredentials,
+  { readonly brand: unique symbol }
+>()('MalformedClientCredentials', { cause: Schema.Unknown }) {}
+
+/** `extractClientCredentials` for Effect code. */
+export const readClientCredentials = (
+  authorization: string | undefined,
+  formData: URLSearchParams,
+) =>
+  Effect.try({
+    try: () => extractClientCredentials(authorization, formData),
+    catch: (cause) => MalformedClientCredentials.make({ cause }),
+  });
+
+/**
+ * `authenticateClient` for Effect code. A metadata document or JWKS that can't
+ * be read right now fails with `ClientMetadataUnavailable`.
+ */
+export const verifyClientCredentials = (
+  client: Client,
+  credentials: ClientCredentials,
+) =>
+  Effect.tryPromise({
+    try: async () => authenticateClient(client, credentials),
+    catch: (error) =>
+      error instanceof ClientMetadataUnavailableError
+        ? ClientMetadataUnavailable.make({ cause: error })
+        : OAuthServerFault.make({
+            endpoint: 'client authentication',
+            cause: error,
+          }),
+  }).pipe(withSpanOkOnClientOutage('OAuthClient.authenticate'));

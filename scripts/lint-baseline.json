@@ -27,7 +27,7 @@
     "typescript(no-unnecessary-type-assertion)": 1,
     "typescript(no-unsafe-type-assertion)": 4,
     "typescript(promise-function-async)": 2,
-    "typescript(strict-boolean-expressions)": 12,
+    "typescript(strict-boolean-expressions)": 11,
     "typescript(switch-exhaustiveness-check)": 2,
     "unicorn(consistent-function-scoping)": 1,
     "unicorn(no-array-callback-reference)": 1,
@@ -35,21 +35,6 @@
     "unicorn(no-negated-condition)": 1,
     "unicorn(prefer-add-event-listener)": 1,
     "unicorn(switch-case-braces)": 4
-  },
-  "app/api/auth-complete/events/route.ts": {
-    "anti-slop(no-known-value-widening)": 1,
-    "anti-slop(no-runtime-typeof)": 2,
-    "anti-slop(no-unsafe-dictionary-type)": 1,
-    "anti-slop(require-readable-spacing)": 14,
-    "anti-slop(require-safety-comment-for-type-assertion)": 2,
-    "eslint(curly)": 2,
-    "eslint(func-style)": 3,
-    "eslint(init-declarations)": 1,
-    "eslint(no-await-in-loop)": 2,
-    "eslint(require-unicode-regexp)": 1,
-    "import(consistent-type-specifier-style)": 1,
-    "typescript(consistent-type-imports)": 1,
-    "typescript(no-unsafe-type-assertion)": 2
   },
   "app/api/authorize/route.ts": {
     "anti-slop-martinfowler(long-function)": 2,
@@ -75,33 +60,6 @@
     "typescript(prefer-nullish-coalescing)": 8,
     "typescript(return-await)": 1,
     "typescript(strict-boolean-expressions)": 12
-  },
-  "app/api/register/route.ts": {
-    "anti-slop-martinfowler(long-function)": 1,
-    "anti-slop(no-runtime-typeof)": 1,
-    "anti-slop(require-readable-spacing)": 7,
-    "anti-slop(require-safety-comment-for-type-assertion)": 1,
-    "eslint(func-style)": 2,
-    "eslint(max-lines-per-function)": 1,
-    "eslint(max-statements)": 1,
-    "typescript(consistent-type-imports)": 1,
-    "typescript(no-unsafe-assignment)": 9,
-    "typescript(no-unsafe-call)": 2,
-    "typescript(no-unsafe-member-access)": 12,
-    "typescript(no-unsafe-type-assertion)": 1,
-    "typescript(strict-boolean-expressions)": 2,
-    "unicorn(no-array-for-each)": 1,
-    "unicorn(prefer-set-has)": 2
-  },
-  "app/api/revoke/route.ts": {
-    "anti-slop-martinfowler(long-function)": 1,
-    "anti-slop(require-readable-spacing)": 8,
-    "eslint(complexity)": 1,
-    "eslint(func-style)": 2,
-    "eslint(max-lines-per-function)": 1,
-    "eslint(max-statements)": 1,
-    "typescript(consistent-type-imports)": 1,
-    "typescript(strict-boolean-expressions)": 5
   },
   "app/api/token/route.ts": {
     "anti-slop-martinfowler(long-function)": 2,
@@ -384,7 +342,7 @@
     "unicorn(numeric-separators-style)": 1
   },
   "lib/oauth/client-credentials.ts": {
-    "anti-slop(require-readable-spacing)": 6,
+    "anti-slop(require-readable-spacing)": 5,
     "eslint(curly)": 1,
     "eslint(func-style)": 2,
     "eslint(require-unicode-regexp)": 1,
@@ -628,10 +586,6 @@
     "vitest(prefer-strict-equal)": 1,
     "vitest(require-mock-type-parameters)": 1,
     "vitest(require-to-throw-message)": 2
-  },
-  "mcp/__tests__/generated-result.test.ts": {
-    "anti-slop(require-readable-spacing)": 3,
-    "vitest(prefer-strict-equal)": 13
   },
   "mcp/__tests__/grant-context.test.ts": {
     "anti-slop(require-readable-spacing)": 8,
@@ -1333,7 +1287,7 @@
   "mcp/__tests__/tool-cancellation.integration.test.ts": {
     "anti-slop(no-runtime-typeof)": 1,
     "anti-slop(no-unknown-parameters)": 1,
-    "anti-slop(require-readable-spacing)": 10,
+    "anti-slop(require-readable-spacing)": 7,
     "eslint(func-style)": 2,
     "eslint(init-declarations)": 4,
     "eslint(no-promise-executor-return)": 4,
@@ -1424,7 +1378,7 @@
     "typescript(consistent-type-imports)": 1
   },
   "mcp/neon-client.ts": {
-    "anti-slop(require-readable-spacing)": 10,
+    "anti-slop(require-readable-spacing)": 9,
     "eslint(func-style)": 2,
     "eslint(max-lines-per-function)": 1,
     "import(consistent-type-specifier-style)": 2,
@@ -1482,7 +1436,7 @@
     "anti-slop(no-runtime-typeof)": 13,
     "anti-slop(no-unknown-parameters)": 6,
     "anti-slop(no-unsafe-dictionary-type)": 1,
-    "anti-slop(require-readable-spacing)": 37,
+    "anti-slop(require-readable-spacing)": 36,
     "eslint(func-style)": 8,
     "eslint(max-lines-per-function)": 1,
     "eslint(max-statements)": 1,
@@ -1546,7 +1500,7 @@
   },
   "mcp/oauth/consent-tools.ts": {
     "anti-slop(no-runtime-typeof)": 1,
-    "anti-slop(require-readable-spacing)": 8,
+    "anti-slop(require-readable-spacing)": 7,
     "eslint(func-style)": 2,
     "eslint(prefer-destructuring)": 1,
     "typescript(strict-boolean-expressions)": 1
@@ -1722,7 +1676,7 @@
     "anti-slop(no-unknown-parameters)": 2,
     "anti-slop(require-readable-spacing)": 5,
     "effecttsgo(missed-pipeable-opportunity)": 1,
-    "eslint(max-lines-per-function)": 4,
+    "eslint(max-lines-per-function)": 3,
     "eslint(object-shorthand)": 1,
     "import(consistent-type-specifier-style)": 1,
     "import(max-dependencies)": 1,
@@ -1740,9 +1694,9 @@
   },
   "mcp/tools/definitions.ts": {
     "anti-slop(no-shape-in-symbol-names)": 6,
-    "anti-slop(require-readable-spacing)": 12,
+    "anti-slop(require-readable-spacing)": 11,
     "eslint(curly)": 1,
-    "eslint(func-style)": 8,
+    "eslint(func-style)": 7,
     "eslint(prefer-destructuring)": 1,
     "eslint(prefer-named-capture-group)": 1,
     "eslint(require-unicode-regexp)": 1,
@@ -1794,18 +1748,6 @@
     "typescript(no-unsafe-type-assertion)": 1,
     "typescript(strict-boolean-expressions)": 1
   },
-  "mcp/tools/sanitize.ts": {
-    "anti-slop-martinfowler(loops)": 2,
-    "anti-slop(no-known-value-widening)": 2,
-    "anti-slop(no-runtime-typeof)": 1,
-    "anti-slop(no-unknown-parameters)": 3,
-    "anti-slop(no-unknown-returns)": 3,
-    "anti-slop(no-unsafe-dictionary-type)": 3,
-    "anti-slop(require-readable-spacing)": 10,
-    "eslint(curly)": 3,
-    "eslint(func-style)": 4,
-    "unicorn(no-array-callback-reference)": 1
-  },
   "mcp/tools/tool-definition.ts": {
     "import(no-namespace)": 1
   },
@@ -1822,7 +1764,6 @@
     "eslint(max-lines)": 1,
     "eslint(prefer-named-capture-group)": 1,
     "eslint(require-unicode-regexp)": 1,
-    "import(consistent-type-specifier-style)": 1,
     "import(max-dependencies)": 1,
     "import(no-namespace)": 1,
     "typescript(strict-boolean-expressions)": 4,
@@ -1861,7 +1802,7 @@
   "mcp/utils/grant-context.ts": {
     "anti-slop(no-conditional-spread)": 4,
     "anti-slop(no-runtime-typeof)": 1,
-    "anti-slop(require-readable-spacing)": 14,
+    "anti-slop(require-readable-spacing)": 13,
     "anti-slop(require-safety-comment-for-type-assertion)": 1,
     "eslint(curly)": 5,
     "eslint(func-style)": 10,
