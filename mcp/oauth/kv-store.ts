@@ -1,7 +1,6 @@
 import { EventEmitter } from 'node:events';
 import pg from 'pg';
 import { logger } from '../utils/logger';
-import { retryAsync } from '../utils/retry';
 import type { AuthorizationCode, Client, Token } from 'oauth2-server';
 import Keyv from 'keyv';
 import { AuthContext } from '../types/auth';
@@ -34,23 +33,6 @@ export const isPgConnectFailure = (err: unknown): boolean => {
   const msg = err instanceof Error ? err.message : String(err);
   return PG_CONNECT_ERROR_PATTERNS.some((re) => re.test(msg));
 };
-
-/**
- * Retry a single Postgres-bound call once on connect failures. Idempotent
- * operations only (get/set/delete by primary key). Logs at warn on retry
- * so the SLO dashboards can still see the underlying blip even when the
- * user-visible outcome is success.
- */
-export const withPgConnectRetry = <T>(
-  op: string,
-  fn: () => Promise<T>,
-): Promise<T> =>
-  retryAsync(fn, {
-    attempts: 2,
-    delaysMs: [1500],
-    op,
-    shouldRetry: isPgConnectFailure,
-  });
 
 let pool: pg.Pool | null = null;
 

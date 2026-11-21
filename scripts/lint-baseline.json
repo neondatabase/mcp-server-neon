@@ -795,8 +795,7 @@
     "eslint(no-script-url)": 1
   },
   "mcp/__tests__/pg-connect-retry.test.ts": {
-    "anti-slop(require-readable-spacing)": 7,
-    "vitest(require-mock-type-parameters)": 3
+    "anti-slop(require-readable-spacing)": 1
   },
   "mcp/__tests__/pinned-role-route.integration.test.ts": {
     "anti-slop(no-chained-type-assertions)": 1,
@@ -967,15 +966,6 @@
     "vitest(prefer-strict-equal)": 4,
     "vitest(require-mock-type-parameters)": 7,
     "vitest(require-top-level-describe)": 2
-  },
-  "mcp/__tests__/retry.test.ts": {
-    "anti-slop(no-module-mocking)": 1,
-    "anti-slop(require-readable-spacing)": 9,
-    "eslint(require-unicode-regexp)": 2,
-    "import(first)": 1,
-    "vitest(no-conditional-in-test)": 2,
-    "vitest(prefer-import-in-mock)": 1,
-    "vitest(require-mock-type-parameters)": 11
   },
   "mcp/__tests__/route-head.integration.test.ts": {
     "anti-slop(no-known-value-widening)": 1,
@@ -1240,7 +1230,7 @@
     "eslint(max-lines-per-function)": 1,
     "eslint(max-lines)": 1,
     "import(consistent-type-specifier-style)": 3,
-    "typescript(promise-function-async)": 9,
+    "typescript(promise-function-async)": 7,
     "typescript(strict-boolean-expressions)": 1,
     "unicorn(catch-error-name)": 1
   },
@@ -1346,7 +1336,6 @@
     "typescript(consistent-type-imports)": 2,
     "typescript(no-unsafe-assignment)": 1,
     "typescript(no-unsafe-type-assertion)": 1,
-    "typescript(promise-function-async)": 1,
     "typescript(strict-boolean-expressions)": 1,
     "unicorn(catch-error-name)": 2,
     "unicorn(prefer-event-target)": 1
@@ -1608,10 +1597,6 @@
     "eslint(curly)": 3,
     "eslint(func-style)": 5,
     "typescript(strict-boolean-expressions)": 1
-  },
-  "mcp/utils/retry.ts": {
-    "anti-slop(no-unknown-parameters)": 1,
-    "eslint(func-style)": 1
   },
   "mcp/utils/trace.ts": {
     "eslint(func-style)": 1,

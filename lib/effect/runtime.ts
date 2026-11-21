@@ -1,4 +1,6 @@
+import { waitUntil } from '@vercel/functions';
 import { Layer, ManagedRuntime } from 'effect';
+import type { Effect } from 'effect';
 import { Analytics } from '../../mcp/analytics/analytics-service';
 import { NeonAccounts } from '../../mcp/server/neon-accounts';
 import { SentryLayer } from '../../mcp/sentry/effect';
@@ -22,3 +24,13 @@ export const McpCallbackLayer = Layer.mergeAll(
 export const mcpRuntime = ManagedRuntime.make(McpCallbackLayer, { memoMap });
 
 export type McpCallbackServices = Layer.Success<typeof McpCallbackLayer>;
+
+/**
+ * Runs `effect` after the response on the shared runtime, keeping a serverless
+ * function alive until it settles. The one place work outlives its request.
+ */
+export const runAfterResponse = (
+  effect: Effect.Effect<void, never, McpCallbackServices>,
+) => {
+  waitUntil(mcpRuntime.runPromise(effect));
+};
