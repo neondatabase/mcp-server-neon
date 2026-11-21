@@ -8,7 +8,15 @@ const { captureExceptionSpy, logger } = vi.hoisted(() => ({
 vi.mock('@sentry/node', () => ({ captureException: captureExceptionSpy }));
 vi.mock('../utils/logger', () => ({ logger }));
 
+const { mcpRuntime } = await import('../../lib/effect/runtime');
 const { createSdkErrorReporter } = await import('../server/sdk-errors');
+
+type Reporter = ReturnType<typeof createSdkErrorReporter>;
+
+const respond = async (reporter: Reporter, status: number) =>
+  mcpRuntime.runPromise(
+    reporter.settleAfter(Promise.resolve(new Response(null, { status }))),
+  );
 
 const tags = { client_application: 'test-client' };
 
@@ -30,9 +38,7 @@ describe('createSdkErrorReporter', () => {
   it('reports an error behind a 5xx response to Sentry', async () => {
     const reporter = createSdkErrorReporter(() => tags);
     reporter.onError(sdkError('factory failed'));
-    await reporter.settleAfter(
-      Promise.resolve(new Response(null, { status: 500 })),
-    );
+    await respond(reporter, 500);
 
     expect(logger.error).toHaveBeenCalledWith(
       'MCP SDK error',
@@ -50,9 +56,7 @@ describe('createSdkErrorReporter', () => {
   it('logs an error behind a 4xx response as a rejected request only', async () => {
     const reporter = createSdkErrorReporter(() => tags);
     reporter.onError(sdkError('Unsupported protocol version'));
-    await reporter.settleAfter(
-      Promise.resolve(new Response(null, { status: 400 })),
-    );
+    await respond(reporter, 400);
 
     expect(logger.warn).toHaveBeenCalledWith('MCP SDK rejected request', {
       status: 400,
@@ -65,17 +69,17 @@ describe('createSdkErrorReporter', () => {
 
   it('reports an error raised after the response to Sentry', async () => {
     const reporter = createSdkErrorReporter(() => tags);
-    await reporter.settleAfter(
-      Promise.resolve(new Response(null, { status: 200 })),
-    );
+    await respond(reporter, 200);
     reporter.onError(sdkError('stream write failed'));
 
-    expect(captureExceptionSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'stream write failed' }),
-      expect.objectContaining({
-        extra: { source: 'request', severity: 'error', status: undefined },
-      }),
-    );
+    await vi.waitFor(() => {
+      expect(captureExceptionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'stream write failed' }),
+        expect.objectContaining({
+          extra: { source: 'request', severity: 'error', status: undefined },
+        }),
+      );
+    });
   });
 
   it('reports pending errors and rethrows when the handler throws', async () => {
@@ -83,9 +87,9 @@ describe('createSdkErrorReporter', () => {
     reporter.onError(sdkError('handler crashed'));
     const thrown = new Error('handler crashed');
 
-    await expect(reporter.settleAfter(Promise.reject(thrown))).rejects.toBe(
-      thrown,
-    );
+    await expect(
+      mcpRuntime.runPromise(reporter.settleAfter(Promise.reject(thrown))),
+    ).rejects.toBe(thrown);
     expect(captureExceptionSpy).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'handler crashed' }),
       expect.objectContaining({

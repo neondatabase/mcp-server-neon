@@ -8,8 +8,8 @@ const { apiKeyCache, apiKeyCacheGet, getAuthDetails, getCurrentUserInfo } =
     return {
       apiKeyCache,
       apiKeyCacheGet: vi.fn(async (key: string) => apiKeyCache.get(key)),
-      getAuthDetails: vi.fn(),
-      getCurrentUserInfo: vi.fn(),
+      getAuthDetails: vi.fn<() => Promise<{ data: unknown }>>(),
+      getCurrentUserInfo: vi.fn<() => Promise<{ data: unknown }>>(),
     };
   });
 
@@ -33,13 +33,35 @@ vi.mock('../oauth/kv-store', async () => {
   };
 });
 
-vi.mock('../server/api', () => ({
-  createNeonClient: () => ({
-    getAuthDetails,
-    getCurrentUserInfo,
-    getOrganization: async () => ({ data: { name: 'Org' } }),
-  }),
-}));
+// The Neon API, answering from the `getAuthDetails` and `getCurrentUserInfo`
+// spies; a rejected spy is a 500.
+const answerFrom = async (spy: typeof getAuthDetails) => {
+  try {
+    const { data } = await spy();
+
+    return Response.json(data);
+  } catch {
+    return Response.json({ message: 'Neon API 500' }, { status: 500 });
+  }
+};
+
+const neonApi = async (input: string | URL | Request) => {
+  const { pathname } = new URL(input instanceof Request ? input.url : input);
+
+  if (pathname.endsWith('/auth')) {
+    return answerFrom(getAuthDetails);
+  }
+
+  if (pathname.endsWith('/users/me')) {
+    return answerFrom(getCurrentUserInfo);
+  }
+
+  if (pathname.includes('/organizations/')) {
+    return Response.json({ id: 'org-1', name: 'Org' });
+  }
+
+  throw new Error(`No fake for ${pathname}`);
+};
 
 vi.mock('../analytics/analytics', () => ({
   track: vi.fn(),
@@ -135,6 +157,7 @@ function expectTokenStoreUnavailable(res: Response) {
 describe('OAuth bearer on the API-key path', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('fetch', neonApi);
     apiKeyCache.clear();
     apiKeyCacheGet.mockImplementation(async (key: string) =>
       apiKeyCache.get(key),

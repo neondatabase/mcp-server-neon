@@ -4,7 +4,6 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as z from 'zod';
-import { createNeonClient } from '../server/api';
 import { NEON_HANDLERS } from '../tools/tools';
 import { stubFakeNeon } from './helpers/fake-neon';
 import { jsonContent } from './helpers/tool-result';
@@ -82,7 +81,6 @@ async function readConfig() {
   const result = await runToolHandler(
     NEON_HANDLERS.get_neon_auth_config(
       { params: { project_id: PROJECT_ID, branch_id: BRANCH_ID } },
-      createNeonClient(API_KEY),
       { clientApplication: 'unknown', apiKey: API_KEY },
     ),
   );

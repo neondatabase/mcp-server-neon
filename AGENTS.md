@@ -165,10 +165,11 @@ infrastructure.
    - Implements error handling and observability (Sentry, analytics)
    - Each tool call is tracked and wrapped in error handling
 
-   **Account Resolution (`mcp/server/account.ts`)**:
-   - Resolves user/org account info from Neon API auth details
+   **Account Resolution (`mcp/server/neon-accounts.ts`, `mcp/server/account.ts`)**:
+   - `NeonAccounts` is the Effect service for the Neon API calls outside tools: auth details, the account behind them, and the `org_id` default for the project tools. It uses `@neon/effect`, so interrupting a call aborts its request
    - Handles org accounts, personal accounts, and project-scoped API keys
    - Falls back gracefully when project-scoped keys cannot access account-level endpoints
+   - `account.ts` holds the shared rules and the Promise `resolveAccountFromAuth` the OAuth callback still uses
 
 2. **Tools System (`mcp/tools/`)**
    - Every tool comes from [`@neon/tools`](https://www.npmjs.com/package/@neon/tools): its implementation, input schema, safety annotations, and description. This server keeps only what is MCP-specific.
@@ -179,8 +180,8 @@ infrastructure.
    - `tools.ts`: `NEON_HANDLERS`, which validate input, resolve `org_id`, pass the execution context (`apiKey`, `signal`, `readOnly`, `secrets`, `postgresRole`, `caller`), and render the package result as MCP content
 
 3. **Remote Transport (`app/api/[transport]/route.ts`)**
-   - Next.js API route handling stateless Streamable HTTP
-   - Uses `mcp-handler` 2.x for MCP 2026-07-28 plus stateless 2025-era compatibility
+   - The route file forwards to the Effect web handler in `lib/http/mcp-app.ts`; `lib/http/routes/mcp.ts` checks the origin and grant params, authenticates, and hands the request to the `McpHandlers` service (`mcp/server/mcp-handlers.ts`)
+   - `McpHandlers` builds one MCP server per request with `mcp-handler` 2.x (MCP 2026-07-28 plus stateless 2025-era compatibility): `mcp/server/authenticated-handler.ts` and `mcp/server/docs-only-handler.ts`
    - Rejects untrusted `Origin` headers before docs-only or authenticated handling
 
 4. **OAuth System (`lib/oauth/` and `mcp/oauth/`)**
@@ -304,20 +305,20 @@ normally provided through `.env.local`. Key variables:
 │   │   ├── *.integration.test.ts  # Integration tests
 │   │   └── *.e2e.test.ts          # MCP protocol e2e tests
 │   ├── server/         # MCP server factory
-│   │   ├── index.ts          # Server creation and tool registration
+│   │   ├── index.ts          # createMcpServer, the server the tests drive
+│   │   ├── mcp-handlers.ts   # McpHandlers: the per-request MCP servers behind /mcp
+│   │   ├── neon-accounts.ts  # NeonAccounts: auth details, account, org_id default
 │   │   ├── api.ts            # Neon API client factory
-│   │   ├── account.ts        # Account resolution (user/org/project-scoped)
+│   │   ├── account.ts        # Account resolution rules (user/org/project-scoped)
 │   │   ├── errors.ts         # Error handling utilities
 │   ├── tools/          # MCP layer over @neon/tools
-│   │   ├── index.ts        # Re-exports handlers
 │   │   ├── operations.ts   # Selected selectors, scope categories, grant flags
 │   │   ├── mcp-tool-names.json # Published MCP name per selector (copy from neon-pkgs)
 │   │   ├── neon-tools.ts   # createNeonTools call, MCP description notes
 │   │   ├── definitions.ts  # Tool definitions (NEON_TOOLS) with annotations
 │   │   ├── tools.ts        # Tool handlers (NEON_HANDLERS) and result rendering
 │   │   ├── grant-filter.ts # Filter NEON_TOOLS by grant context (scope categories, project scoping)
-│   │   ├── types.ts        # TypeScript types
-│   │   └── utils.ts        # org_id selection
+│   │   └── types.ts        # TypeScript types
 │   ├── oauth/          # OAuth model, KV store, and the OAuthStore Effect service over them
 │   ├── analytics/      # Segment analytics, and the Analytics Effect service over it
 │   ├── sentry/         # Sentry setup, tool spans, session tagging, Effect layer
@@ -364,7 +365,7 @@ Code comments reference these files by path (e.g. `ai-notes/refresh-slo.md`).
 
 - **Effect and Oxlint**: Code written with Effect follows [`.agents/skills/effect-program-design`](.agents/skills/effect-program-design/SKILL.md) and this repo's additions in [`.agents/skills/working-with-effect`](.agents/skills/working-with-effect/SKILL.md); Oxlint setup follows [`.agents/skills/working-with-oxlint`](.agents/skills/working-with-oxlint/SKILL.md). `working-with-effect` and `working-with-oxlint` belong to this repo; edit them in place. `effect-program-design` and `install-anti-slop` are vendored from K-Mistele/anti-slop (`skills-lock.json`); update them only with `npx skills update`.
 
-- **Neon API Client**: Tools call the Neon API through `@neon/tools` with `fetchAsMcpServer` from `mcp/neon-client.ts`, which sets the server's `User-Agent`. `createNeonClient` in the same file covers the calls outside tools: account resolution, `org_id` selection, and the live suites' setup and cleanup.
+- **Neon API Client**: Tools call the Neon API through `@neon/tools` with `fetchAsMcpServer` from `mcp/neon-client.ts`, which sets the server's `User-Agent`. The transport's calls outside tools (auth details, account resolution, `org_id` selection) go through `NeonAccounts` with the same `fetch`; `createNeonClient` in `mcp/neon-client.ts` covers the OAuth callback and the live suites' setup and cleanup.
 
 ## Remote MCP Server (Vercel)
 

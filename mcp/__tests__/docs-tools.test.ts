@@ -132,7 +132,6 @@ describe('search_docs handler', () => {
     await runToolHandler(
       NEON_HANDLERS.search_docs(
         { params: { query: 'branching' } },
-        undefined,
         extra({ userAgent: ' Cursor/1.2 ', clientApplication: 'cursor' }),
       ),
     );
@@ -148,7 +147,6 @@ describe('search_docs handler', () => {
     await runToolHandler(
       NEON_HANDLERS.search_docs(
         { params: { query: 'branching' } },
-        undefined,
         extra({ userAgent: '助手/1.0' }),
       ),
     );

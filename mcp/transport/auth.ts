@@ -16,7 +16,6 @@ import {
   SECRETS_HEADER,
   withRequestSecrets,
 } from '../utils/secrets';
-import { logger } from '../utils/logger';
 import { isReadOnly } from '../utils/read-only';
 import { fetchAccountDetails } from './api-key';
 import { lookupOAuthToken, oauthAuthInfo } from './oauth-token';
@@ -93,14 +92,14 @@ const verifyToken = Effect.fn('McpAuth.verifyToken')(function* (
   const lookup = yield* Effect.result(lookupOAuthToken(bearerToken));
 
   if (Result.isSuccess(lookup) && Option.isSome(lookup.success)) {
-    logger.info('OAuth token found', {
-      clientId: lookup.success.value.client.id,
-    });
+    yield* Effect.logInfo('OAuth token found').pipe(
+      Effect.annotateLogs({ clientId: lookup.success.value.client.id }),
+    );
 
-    return oauthAuthInfo(lookup.success.value, bearerToken, req);
+    return yield* oauthAuthInfo(lookup.success.value, bearerToken, req);
   }
 
-  logger.info('Trying API key verification path');
+  yield* Effect.logInfo('Trying API key verification path');
 
   const apiKeyRecord = yield* fetchAccountDetails(bearerToken).pipe(
     Effect.catchTag('ApiKeyVerificationUnavailable', ({ cause }) =>
@@ -118,9 +117,9 @@ const verifyToken = Effect.fn('McpAuth.verifyToken')(function* (
   if (apiKeyRecord === 'oauth') {
     const tokenLookupFailed = Result.isFailure(lookup);
 
-    logger.warn('OAuth bearer reached the API key path; refusing URL grant', {
-      tokenLookupFailed,
-    });
+    yield* Effect.logWarning(
+      'OAuth bearer reached the API key path; refusing URL grant',
+    ).pipe(Effect.annotateLogs({ tokenLookupFailed }));
 
     return tokenLookupFailed
       ? yield* TokenStoreUnavailable.make({})
@@ -139,24 +138,25 @@ const bearerTokenOf = (req: Request): string | undefined => {
 const authentication = Effect.fnUntraced(function* (req: Request) {
   const bearerToken = bearerTokenOf(req);
 
-  logger.info('verifyToken called', {
-    hasBearerToken: bearerToken !== undefined && bearerToken !== '',
-    bearerTokenLength: bearerToken?.length ?? 0,
-    userAgent: req.headers.get('user-agent') ?? undefined,
-  });
+  yield* Effect.logInfo('verifyToken called').pipe(
+    Effect.annotateLogs({
+      hasBearerToken: bearerToken !== undefined && bearerToken !== '',
+      bearerTokenLength: bearerToken?.length ?? 0,
+      userAgent: req.headers.get('user-agent') ?? undefined,
+    }),
+  );
 
   if (bearerToken === undefined || bearerToken === '') {
     return yield* rejected('No authorization provided');
   }
 
   const authInfo = yield* verifyToken(req, bearerToken).pipe(
-    Effect.catchDefect((defect) => {
-      logger.error('Unexpected error authenticating bearer token', {
-        error: defect,
-      });
-
-      return brokeVerifying('Invalid token', defect);
-    }),
+    Effect.catchDefect((defect) =>
+      Effect.logError('Unexpected error authenticating bearer token').pipe(
+        Effect.annotateLogs({ error: defect }),
+        Effect.andThen(brokeVerifying('Invalid token', defect)),
+      ),
+    ),
   );
 
   if (Option.isNone(authInfo)) {

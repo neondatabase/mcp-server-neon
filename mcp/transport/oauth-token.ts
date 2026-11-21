@@ -7,8 +7,8 @@ import type { AppContext } from '../types/context';
 import { resolveGrantFromToken } from '../utils/grant-context';
 import { SECRETS_HEADER, withRequestSecrets } from '../utils/secrets';
 import type { GrantContext } from '../utils/grant-context';
-import { logger } from '../utils/logger';
 import { isReadOnly } from '../utils/read-only';
+import { StoredGrantInvalid } from './stored-grant-invalid';
 
 export type AuthenticatedAuthInfo = AuthInfo & {
   extra?: {
@@ -54,28 +54,30 @@ export const lookupOAuthToken = (bearerToken: string) =>
   }).pipe(
     Effect.map(Option.fromNullishOr),
     Effect.tapError(({ cause }) =>
-      Effect.sync(() => {
-        logger.warn('OAuth token lookup failed, trying API key path', {
-          error: cause,
-        });
-      }),
+      Effect.logWarning('OAuth token lookup failed, trying API key path').pipe(
+        Effect.annotateLogs({ error: cause }),
+      ),
     ),
   );
 
-const readGrant = (token: OAuthToken): Option.Option<GrantContext> => {
-  try {
-    return Option.some(resolveGrantFromToken(token));
-  } catch (error) {
-    // A stored grant we cannot read must not fall through to the API-key
-    // path, which would authenticate the same bearer without its grant.
-    logger.error('OAuth token grant is invalid', {
-      clientId: token.client.id,
-      errorName: error instanceof Error ? error.name : 'unknown',
-    });
-
-    return Option.none();
-  }
-};
+// A stored grant we cannot read must not fall through to the API-key path,
+// which would authenticate the same bearer without its grant.
+const readGrant = (token: OAuthToken) =>
+  Effect.try({
+    try: () => resolveGrantFromToken(token),
+    catch: (cause) => StoredGrantInvalid.make({ cause }),
+  }).pipe(
+    Effect.asSome,
+    Effect.catchTag('StoredGrantInvalid', ({ cause }) =>
+      Effect.logError('OAuth token grant is invalid').pipe(
+        Effect.annotateLogs({
+          clientId: token.client.id,
+          errorName: cause instanceof Error ? cause.name : 'unknown',
+        }),
+        Effect.as(Option.none<GrantContext>()),
+      ),
+    ),
+  );
 
 const toAuthInfo = ({
   token,
@@ -120,26 +122,28 @@ const toAuthInfo = ({
  * The caller a stored OAuth token authenticates, with the grant chosen at
  * consent. The request's secrets param and header may tighten that grant.
  */
-export const oauthAuthInfo = (
+export const oauthAuthInfo = Effect.fnUntraced(function* (
   token: OAuthToken,
   bearerToken: string,
   req: Request,
-): Option.Option<AuthenticatedAuthInfo> => {
-  const grant = readGrant(token);
+) {
+  const grant = yield* readGrant(token);
 
   if (Option.isNone(grant)) {
-    return Option.none();
+    return Option.none<AuthenticatedAuthInfo>();
   }
 
   const fields = storedTokenFields.safeParse(token);
 
   if (!fields.success) {
-    logger.error('OAuth token fields are invalid', {
-      clientId: token.client.id,
-      issues: fields.error.issues.map(({ path }) => path.join('.')),
-    });
+    yield* Effect.logError('OAuth token fields are invalid').pipe(
+      Effect.annotateLogs({
+        clientId: token.client.id,
+        issues: fields.error.issues.map(({ path }) => path.join('.')),
+      }),
+    );
 
-    return Option.none();
+    return Option.none<AuthenticatedAuthInfo>();
   }
 
   return Option.some(
@@ -155,4 +159,4 @@ export const oauthAuthInfo = (
       userAgent: req.headers.get('user-agent') ?? undefined,
     }),
   );
-};
+});

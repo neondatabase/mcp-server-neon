@@ -5,6 +5,7 @@ import {
   type ErrorEvent,
   type Span,
 } from '@sentry/node';
+import { Effect } from 'effect';
 
 const SESSION_ATTRIBUTES = [
   'mcp.session.id',
@@ -23,9 +24,10 @@ function setOnRequest(key: keyof SessionAttributes, value: string): void {
   if (active) getRootSpan(active).setAttribute(key, value);
 }
 
-export function tagRequestSession(sessionId: string): void {
-  setOnRequest('mcp.session.id', sessionId);
-}
+export const tagRequestSession = (sessionId: string) =>
+  Effect.sync(() => {
+    setOnRequest('mcp.session.id', sessionId);
+  });
 
 export function tagRequestConversation(conversationId: string): void {
   setOnRequest('gen_ai.conversation.id', conversationId);

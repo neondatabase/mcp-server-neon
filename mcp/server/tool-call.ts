@@ -1,6 +1,7 @@
 import type { CallToolResult } from '@modelcontextprotocol/server';
 import { Cause, Effect, Exit, Option } from 'effect';
 import { mcpRuntime } from '../../lib/effect/runtime';
+import type { McpCallbackServices } from '../../lib/effect/runtime';
 import { thrownError } from '../tools/tools';
 import type { ToolCallError } from '../tools/types';
 import type { IdentifiedClient } from '../utils/client-application';
@@ -48,10 +49,10 @@ const renderFailure = (
  * Runs a tool handler and renders a failure the way clients have always seen
  * it. A server error is logged and sent to Sentry here, inside the tool span.
  */
-export const renderToolCall = (
-  handler: Effect.Effect<CallToolResult, ToolCallError>,
+export const renderToolCall = <R>(
+  handler: Effect.Effect<CallToolResult, ToolCallError, R>,
   report: ToolErrorReport,
-): Effect.Effect<ToolCallOutcome> =>
+): Effect.Effect<ToolCallOutcome, never, R> =>
   handler.pipe(
     Effect.map((result): ToolCallOutcome => ({ result, kind: 'success' })),
     Effect.catchCause((cause) => renderFailure(cause, report)),
@@ -63,7 +64,7 @@ export const renderToolCall = (
  * upstream request; a failure outside the handler rejects like it always has.
  */
 export const runToolCallback = async (
-  callback: Effect.Effect<CallToolResult>,
+  callback: Effect.Effect<CallToolResult, never, McpCallbackServices>,
   signal: AbortSignal,
 ): Promise<CallToolResult> => {
   const exit = await mcpRuntime.runPromiseExit(callback, { signal });
@@ -77,4 +78,14 @@ export const runToolCallback = async (
   }
 
   throw Cause.squash(exit.cause);
+};
+
+/**
+ * Runs the Effect behind an MCP SDK callback that returns nothing, such as a
+ * lifecycle hook. A failure there is the callback's own to report.
+ */
+export const runSdkCallback = (
+  callback: Effect.Effect<void, never, McpCallbackServices>,
+): void => {
+  mcpRuntime.runFork(callback);
 };
