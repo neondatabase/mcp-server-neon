@@ -1,4 +1,5 @@
 import he from 'he';
+import { init } from '@sentry/node';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET } from '../../app/callback/route';
@@ -17,6 +18,18 @@ import {
 import { consentCookieName } from '../oauth/browser-binding';
 import { SERVER_HOST } from '../../lib/config';
 import { ClientMetadataUnavailableError } from '../../lib/oauth/client-id-metadata-document';
+
+// Server failures the route answers still reach Sentry; these record which.
+const reported: string[] = [];
+
+init({
+  dsn: 'http://public@127.0.0.1:1/1',
+  beforeSend: (event) => {
+    reported.push(event.exception?.values?.at(-1)?.type ?? 'unknown');
+
+    return null;
+  },
+});
 
 vi.mock('../oauth/model', () => ({
   model: {
@@ -102,6 +115,28 @@ describe('/callback route integration', () => {
       isOrg: false,
     } as never);
     vi.mocked(model.saveAuthorizationCode).mockResolvedValue({} as never);
+  });
+
+  it('answers a missing upstream refresh token with 502 and reports it', async () => {
+    const upstream = await exchangeCode(new URL('http://127.0.0.1'), 'state');
+
+    const withoutRefresh = { ...upstream };
+
+    delete withoutRefresh.refresh_token;
+    vi.mocked(exchangeCode).mockResolvedValue(withoutRefresh);
+    reported.length = 0;
+
+    const seeded = await seedApprovedTransaction();
+    const response = await GET(buildRequest(seeded.id, seeded.cookie));
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toStrictEqual({
+      error: 'server_error',
+      error_description: 'Upstream did not issue a refresh token',
+    });
+    await vi.waitFor(() => {
+      expect(reported).toStrictEqual(['UpstreamRefreshTokenMissing']);
+    });
   });
 
   it('persists the approved grant and scopes from the transaction', async () => {

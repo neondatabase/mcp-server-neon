@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST } from '../../app/api/token/route';
+import { identify } from '../analytics/analytics';
 import { model } from '../oauth/model';
 import { ClientMetadataUnavailableError } from '../../lib/oauth/client-id-metadata-document';
 import { CLIENT_ASSERTION_TYPE } from '../../lib/oauth/client-assertion';
@@ -91,6 +92,20 @@ describe('/api/token route integration', () => {
       expect.objectContaining({
         grant,
       }),
+    );
+    expect(identify).toHaveBeenCalledExactlyOnceWith(
+      {
+        id: 'user-1',
+        name: 'User',
+        email: 'user@example.com',
+        isOrg: false,
+      },
+      {
+        context: {
+          authMethod: 'oauth',
+          client: { id: 'client-123', name: 'Token Route Test Client' },
+        },
+      },
     );
   });
 

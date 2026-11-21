@@ -1,7 +1,7 @@
 import { Effect, Layer, Option } from 'effect';
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http';
 import { OAuthStore } from '../../../mcp/oauth/oauth-store';
-import { isClientIdMetadataUrl } from '../../oauth/client-id-metadata-document';
+import { clientIdForSpan } from '../../oauth/client-id-span';
 import { clientMetadataUnavailableResponse } from '../../oauth/client-metadata-unavailable';
 import {
   readClientCredentials,
@@ -20,19 +20,6 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-
-// Only a client the store resolved is recorded, so a caller can't put
-// arbitrary text on the span. A metadata document URL may carry a query
-// string, which is left out.
-const clientIdForSpan = (clientId: string) => {
-  if (!isClientIdMetadataUrl(clientId)) {
-    return clientId;
-  }
-
-  const url = new URL(clientId);
-
-  return `${url.origin}${url.pathname}`;
 };
 
 // RFC 7009: the endpoint answers 200 for an unknown client or token, so a

@@ -1,13 +1,17 @@
 import he from 'he';
+import { Effect, Option } from 'effect';
+import type { Layer } from 'effect';
+import { HttpServerResponse } from 'effect/http';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { flushAnalytics, track } from '../analytics/analytics';
 import {
   clientNameForPage,
   presentToBrowser,
-  withCompletionContext,
 } from '../oauth/auth-complete-response';
+import { FlowAnswer } from '../oauth/flow-answer';
+import type { CompletionContext } from '../oauth/flow-answer';
+import { OAuthServices } from '../../lib/http/oauth-services';
 import { model } from '../oauth/model';
 
 vi.mock('../analytics/analytics', () => ({
@@ -26,19 +30,54 @@ vi.mock('../oauth/model', () => ({
 const APP_CALLBACK = 'cursor://anysphere.cursor-mcp/oauth/callback';
 const BROWSER_ACCEPT = 'text/html,application/xhtml+xml';
 
-function callbackRequest(query = '', accept?: string): NextRequest {
-  return new NextRequest(`http://localhost/callback${query}`, {
-    headers: accept ? { accept } : {},
+const run = async <A>(
+  effect: Effect.Effect<A, never, Layer.Success<typeof OAuthServices>>,
+) => Effect.runPromise(effect.pipe(Effect.provide(OAuthServices)));
+
+const present = async (
+  answer: FlowAnswer,
+  { query = '', accept }: { query?: string; accept?: string } = {},
+) =>
+  HttpServerResponse.toWeb(
+    await run(
+      presentToBrowser({ answer, accept, query: new URLSearchParams(query) }),
+    ),
+  );
+
+const redirect = (
+  location: string,
+  context?: CompletionContext,
+  clears?: { id: string; secure: boolean },
+) =>
+  FlowAnswer.Redirect({
+    location,
+    status: 307,
+    clears: Option.fromUndefinedOr(clears),
+    context: Option.fromUndefinedOr(context),
   });
-}
 
 /** A native-app redirect, tagged the way /callback tags it. */
-function appRedirect(query: string, relayedError?: string): NextResponse {
-  return withCompletionContext(
-    NextResponse.redirect(`${APP_CALLBACK}${query}`),
-    relayedError ? { relayedError } : {},
+const appRedirect = (query: string, relayedError?: string) =>
+  redirect(
+    `${APP_CALLBACK}${query}`,
+    relayedError === undefined ? {} : { relayedError },
   );
-}
+
+const jsonError = (
+  body: { error: string; error_description?: string },
+  status: number,
+  options: {
+    headers?: Record<string, string>;
+    context?: CompletionContext;
+  } = {},
+) =>
+  FlowAnswer.OAuthError({
+    status,
+    error: body.error,
+    description: body.error_description,
+    headers: options.headers ?? {},
+    context: Option.fromUndefinedOr(options.context),
+  });
 
 function returnLink(html: string): URL | undefined {
   const href = /id="return-link" href="([^"]+)"/.exec(html)?.[1];
@@ -69,10 +108,9 @@ describe('presentToBrowser', () => {
       '%s renders "%s" and hands the redirect back to the app',
       async (query, relayedError, title, hasOnboard) => {
         const location = `${APP_CALLBACK}${query}`;
-        const response = await presentToBrowser(
-          callbackRequest('', BROWSER_ACCEPT),
-          appRedirect(query, relayedError),
-        );
+        const response = await present(appRedirect(query, relayedError), {
+          accept: BROWSER_ACCEPT,
+        });
 
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toContain('text/html');
@@ -86,12 +124,12 @@ describe('presentToBrowser', () => {
     );
 
     it('relays the error_description to the app without showing it', async () => {
-      const response = await presentToBrowser(
-        callbackRequest('', BROWSER_ACCEPT),
+      const response = await present(
         appRedirect(
           '?error=server_error&error_description=Call%20evil.example',
           'server_error',
         ),
+        { accept: BROWSER_ACCEPT },
       );
       const html = await response.text();
       expect(returnLink(html)?.searchParams.get('error_description')).toBe(
@@ -100,18 +138,23 @@ describe('presentToBrowser', () => {
       expect(html.replace(/href="[^"]*"/g, '')).not.toContain('evil.example');
     });
 
-    it('keeps the cookies the callback set', async () => {
-      const original = appRedirect('?code=c');
-      original.cookies.set('mcp-consent-abc', '', { maxAge: 0 });
-
-      const response = await presentToBrowser(
-        callbackRequest('', BROWSER_ACCEPT),
-        original,
+    it('clears the transaction cookies the redirect clears', async () => {
+      const answer = redirect(
+        `${APP_CALLBACK}?code=c`,
+        {},
+        { id: 'abc', secure: true },
       );
 
-      expect(response.headers.getSetCookie()).toEqual(
-        original.headers.getSetCookie(),
+      const page = await present(answer, { accept: BROWSER_ACCEPT });
+      const plain = await present(answer);
+
+      expect(page.headers.getSetCookie()).toStrictEqual(
+        plain.headers.getSetCookie(),
       );
+      expect(page.headers.getSetCookie().map((c) => c.split('=')[0])).toEqual([
+        '__Host-neon_mcp_at_abc',
+        'neon_mcp_at_abc',
+      ]);
     });
 
     it.each([
@@ -119,9 +162,11 @@ describe('presentToBrowser', () => {
       ['temporarily_unavailable', true],
       ['invalid_scope', false],
     ])('explains a relayed %s with fixed text', async (error, isTemporary) => {
-      const response = await presentToBrowser(
-        callbackRequest('', BROWSER_ACCEPT),
+      const response = await present(
         appRedirect(`?error=${error}&state=s`, error),
+        {
+          accept: BROWSER_ACCEPT,
+        },
       );
       const html = await response.text();
       expect(
@@ -131,16 +176,16 @@ describe('presentToBrowser', () => {
     });
 
     it('keeps the redirect for a non-browser caller', async () => {
-      const original = appRedirect('?code=c');
-      const response = await presentToBrowser(callbackRequest(), original);
-      expect(response).toBe(original);
+      const response = await present(appRedirect('?code=c'));
+      expect(response.status).toBe(307);
+      expect(response.headers.get('location')).toBe(`${APP_CALLBACK}?code=c`);
     });
 
     it('takes the outcome from /callback, not from the client redirect_uri', async () => {
       // A client can register a redirect_uri that already carries `error`.
-      const response = await presentToBrowser(
-        callbackRequest('', BROWSER_ACCEPT),
+      const response = await present(
         appRedirect('?error=access_denied&code=c&state=s'),
+        { accept: BROWSER_ACCEPT },
       );
       const html = await response.text();
       expect(html).toContain('<h1>You’ve approved access to Neon</h1>');
@@ -148,12 +193,11 @@ describe('presentToBrowser', () => {
     });
 
     it('keeps a redirect /callback did not tag', async () => {
-      const original = NextResponse.redirect(`${APP_CALLBACK}?code=c`);
-      const response = await presentToBrowser(
-        callbackRequest('', BROWSER_ACCEPT),
-        original,
-      );
-      expect(response).toBe(original);
+      const response = await present(redirect(`${APP_CALLBACK}?code=c`), {
+        accept: BROWSER_ACCEPT,
+      });
+      expect(response.status).toBe(307);
+      expect(response.headers.get('location')).toBe(`${APP_CALLBACK}?code=c`);
     });
   });
 
@@ -162,12 +206,11 @@ describe('presentToBrowser', () => {
     'https://chatgpt.com/connector_platform_oauth_redirect?code=c',
     'javascript:alert(1)',
   ])('keeps the plain redirect to %s', async (location) => {
-    const original = NextResponse.redirect(location);
-    const response = await presentToBrowser(
-      callbackRequest('', BROWSER_ACCEPT),
-      original,
-    );
-    expect(response).toBe(original);
+    const response = await present(redirect(location, {}), {
+      accept: BROWSER_ACCEPT,
+    });
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(location);
   });
 
   describe('JSON failures', () => {
@@ -213,10 +256,10 @@ describe('presentToBrowser', () => {
     ])(
       'renders %s for a browser with fixed text',
       async (_label, body, status, query, title, text) => {
-        const response = await presentToBrowser(
-          callbackRequest(query, BROWSER_ACCEPT),
-          NextResponse.json(body, { status }),
-        );
+        const response = await present(jsonError(body, status), {
+          query,
+          accept: BROWSER_ACCEPT,
+        });
 
         expect(response.status).toBe(status);
         expect(response.headers.get('content-type')).toContain('text/html');
@@ -230,15 +273,12 @@ describe('presentToBrowser', () => {
     );
 
     it('keeps the query and Retry-After when a reload can retry', async () => {
-      const response = await presentToBrowser(
-        callbackRequest('?code=c&state=s', BROWSER_ACCEPT),
-        withCompletionContext(
-          NextResponse.json(
-            { error: 'temporarily_unavailable' },
-            { status: 503, headers: { 'Retry-After': '30' } },
-          ),
-          { retryable: true },
-        ),
+      const response = await present(
+        jsonError({ error: 'temporarily_unavailable' }, 503, {
+          headers: { 'Retry-After': '30' },
+          context: { retryable: true },
+        }),
+        { query: '?code=c&state=s', accept: BROWSER_ACCEPT },
       );
 
       expect(response.status).toBe(503);
@@ -251,9 +291,9 @@ describe('presentToBrowser', () => {
     it.each([400, 500])(
       'shows a neutral page and reports nothing for a bare /callback %i',
       async (status) => {
-        const response = await presentToBrowser(
-          callbackRequest('', BROWSER_ACCEPT),
-          NextResponse.json({ error: 'invalid_request' }, { status }),
+        const response = await present(
+          jsonError({ error: 'invalid_request' }, status),
+          { accept: BROWSER_ACCEPT },
         );
 
         expect(response.status).toBe(status);
@@ -264,41 +304,18 @@ describe('presentToBrowser', () => {
       },
     );
 
-    it('keeps a failure that is not JSON', async () => {
-      const original = new NextResponse('upstream down', { status: 502 });
-      const response = await presentToBrowser(
-        callbackRequest('?code=c&state=s', BROWSER_ACCEPT),
-        original,
-      );
-      expect(response).toBe(original);
-    });
-
-    it('shows the failed page when the JSON body cannot be parsed', async () => {
-      const response = await presentToBrowser(
-        callbackRequest('?code=c&state=s', BROWSER_ACCEPT),
-        new NextResponse('{', {
-          status: 400,
-          headers: { 'content-type': 'application/json' },
-        }),
-      );
-      expect(await response.text()).toContain(
-        '<h1>Couldn’t connect to Neon</h1>',
-      );
-    });
-
     it.each([
-      ['a non-browser caller', undefined, 400],
-      ['a JSON client', 'application/json', 400],
-    ])('keeps JSON for %s', async (_label, accept, status) => {
-      const original = NextResponse.json(
-        { error: 'invalid_request' },
-        { status },
+      ['a non-browser caller', undefined],
+      ['a JSON client', 'application/json'],
+    ])('keeps JSON for %s', async (_label, accept) => {
+      const response = await present(
+        jsonError({ error: 'invalid_request' }, 400),
+        { accept },
       );
-      const response = await presentToBrowser(
-        callbackRequest('', accept),
-        original,
-      );
-      expect(response).toBe(original);
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toStrictEqual({
+        error: 'invalid_request',
+      });
     });
   });
 });
@@ -311,13 +328,13 @@ describe('auth_complete_viewed', () => {
   });
 
   it('reports a success with the user and client the callback knew', async () => {
-    const response = await presentToBrowser(
-      callbackRequest('', BROWSER_ACCEPT),
-      withCompletionContext(NextResponse.redirect(`${APP_CALLBACK}?code=c`), {
+    const response = await present(
+      redirect(`${APP_CALLBACK}?code=c`, {
         userId: 'user-1',
         clientId: 'client-1',
         clientName: 'Cursor',
       }),
+      { accept: BROWSER_ACCEPT },
     );
 
     expect(track).toHaveBeenCalledTimes(1);
@@ -345,12 +362,11 @@ describe('auth_complete_viewed', () => {
   });
 
   it('marks a failure a reload can retry, so its repeat views can be told apart', async () => {
-    await presentToBrowser(
-      callbackRequest('?code=c&state=s', BROWSER_ACCEPT),
-      withCompletionContext(
-        NextResponse.json({ error: 'server_error' }, { status: 500 }),
-        { retryable: true },
-      ),
+    await present(
+      jsonError({ error: 'server_error' }, 500, {
+        context: { retryable: true },
+      }),
+      { query: '?code=c&state=s', accept: BROWSER_ACCEPT },
     );
 
     expect(track).toHaveBeenCalledWith(
@@ -364,11 +380,11 @@ describe('auth_complete_viewed', () => {
   });
 
   it('attributes a client registered as Claude to Claude Desktop', async () => {
-    await presentToBrowser(
-      callbackRequest('', BROWSER_ACCEPT),
-      withCompletionContext(NextResponse.redirect(`${APP_CALLBACK}?code=c`), {
-        clientName: 'Claude',
-      }),
+    await present(
+      redirect(`${APP_CALLBACK}?code=c`, { clientName: 'Claude' }),
+      {
+        accept: BROWSER_ACCEPT,
+      },
     );
 
     expect(track).toHaveBeenCalledWith(
@@ -381,10 +397,10 @@ describe('auth_complete_viewed', () => {
   });
 
   it('reports a browser failure anonymously', async () => {
-    await presentToBrowser(
-      callbackRequest('?code=c&state=s', BROWSER_ACCEPT),
-      NextResponse.json({ error: 'invalid_request' }, { status: 400 }),
-    );
+    await present(jsonError({ error: 'invalid_request' }, 400), {
+      query: '?code=c&state=s',
+      accept: BROWSER_ACCEPT,
+    });
 
     expect(track).toHaveBeenCalledWith({
       anonymousId: expect.any(String),
@@ -398,11 +414,10 @@ describe('auth_complete_viewed', () => {
     expect(vi.mocked(track).mock.calls[0]![0]).not.toHaveProperty('userId');
   });
 
-  it('reports nothing when the original response passes through', async () => {
-    await presentToBrowser(
-      callbackRequest('', BROWSER_ACCEPT),
-      NextResponse.redirect('http://127.0.0.1:55667/callback?code=c'),
-    );
+  it('reports nothing when the answer passes through', async () => {
+    await present(redirect('http://127.0.0.1:55667/callback?code=c', {}), {
+      accept: BROWSER_ACCEPT,
+    });
     expect(track).not.toHaveBeenCalled();
   });
 });
@@ -417,9 +432,11 @@ describe('clientNameForPage', () => {
       client_name: 'Cursor',
     } as never);
 
-    await expect(clientNameForPage('client-1', APP_CALLBACK)).resolves.toBe(
-      'Cursor',
-    );
+    await expect(
+      run(
+        clientNameForPage({ clientId: 'client-1', redirectUri: APP_CALLBACK }),
+      ),
+    ).resolves.toBe('Cursor');
   });
 
   it.each([
@@ -432,7 +449,7 @@ describe('clientNameForPage', () => {
     ],
   ])('skips the lookup for %s', async (_label, clientId, redirectUri) => {
     await expect(
-      clientNameForPage(clientId, redirectUri),
+      run(clientNameForPage({ clientId, redirectUri })),
     ).resolves.toBeUndefined();
     expect(model.getClient).not.toHaveBeenCalled();
   });
@@ -441,7 +458,9 @@ describe('clientNameForPage', () => {
     vi.mocked(model.getClient).mockRejectedValue(new Error('db down'));
 
     await expect(
-      clientNameForPage('client-1', APP_CALLBACK),
+      run(
+        clientNameForPage({ clientId: 'client-1', redirectUri: APP_CALLBACK }),
+      ),
     ).resolves.toBeUndefined();
   });
 });
