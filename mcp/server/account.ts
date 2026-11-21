@@ -1,8 +1,6 @@
-import type { NeonApiClient, AuthDetailsResponse } from '../neon-client';
-import { NeonApiError } from '@neon/sdk';
+import type { AuthDetailsResponse } from '../neon-client';
 import { addBreadcrumb } from '@sentry/node';
 import { Option, Result, Schema } from 'effect';
-import { logger } from '../utils/logger';
 
 export type NeonAccount = {
   id: string;
@@ -122,37 +120,3 @@ export const selectOrganization = (
     `Multiple organizations found. Please specify the org_id parameter with one of the following organization IDs:\n${orgList}`,
   );
 };
-
-/**
- * Resolves account info from Neon API auth details.
- * Handles org accounts, personal accounts, and project-scoped API key fallback.
- * The OAuth callback still resolves accounts through this; the MCP transport
- * uses `NeonAccounts`.
- */
-export async function resolveAccountFromAuth(
-  auth: AuthDetailsResponse,
-  neonClient: NeonApiClient,
-): Promise<NeonAccount> {
-  try {
-    if (auth.auth_method === 'api_key_org') {
-      const { data: org } = await neonClient.getOrganization(auth.account_id);
-
-      return orgAccount(auth.account_id, org.name);
-    }
-
-    const { data: user } = await neonClient.getCurrentUserInfo();
-
-    return userAccount(user);
-  } catch (error) {
-    if (error instanceof NeonApiError && isProjectScopedKeyRejection(error)) {
-      logger.debug('Using project-scoped API key fallback', {
-        account_id: auth.account_id,
-      });
-      projectScopedFallbackBreadcrumb(auth);
-
-      return projectScopedAccount(auth.account_id);
-    }
-
-    throw error;
-  }
-}

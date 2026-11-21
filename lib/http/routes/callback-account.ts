@@ -1,25 +1,26 @@
-import { Effect } from 'effect';
-import { resolveAccountFromAuth } from '../../../mcp/server/account';
-import { createNeonClient } from '../../../mcp/server/api';
+import { Effect, Redacted } from 'effect';
+import { NeonAccounts } from '../../../mcp/server/neon-accounts';
 import { CallbackFailed } from './callback-failed';
 
-/** The Neon account behind the upstream access token; interruption aborts it. */
+/** The Neon account behind the upstream access token. */
 export const resolveAccount = (input: {
   readonly accessToken: string;
   readonly clientId: string;
 }) =>
-  Effect.tryPromise({
-    try: async (signal) => {
-      const neonClient = createNeonClient(input.accessToken);
-      const { data: auth } = await neonClient.getAuthDetails({ signal });
+  Effect.gen(function* () {
+    const accounts = yield* NeonAccounts;
+    const apiKey = Redacted.make(input.accessToken);
+    const auth = yield* accounts.authDetails({ apiKey });
 
-      return resolveAccountFromAuth(auth, neonClient, { signal });
-    },
-    catch: (cause) =>
+    return yield* accounts.account({ apiKey, auth });
+  }).pipe(
+    Effect.mapError((cause) =>
       CallbackFailed.make({
         cause,
         clientId: input.clientId,
         consumed: true,
         sloEmitted: false,
       }),
-  }).pipe(Effect.withSpan('OAuthCallback.resolveAccount'));
+    ),
+    Effect.withSpan('OAuthCallback.resolveAccount'),
+  );
