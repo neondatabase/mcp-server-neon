@@ -6,7 +6,6 @@
  */
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createNeonClient } from '../server/api';
 import { handleToolError } from '../server/errors';
 import { invokeTool } from '../tools/registration';
 import {
@@ -79,9 +78,7 @@ async function call(
   grant: GrantContext,
   readOnly = false,
 ) {
-  return runToolHandler(
-    invokeTool(tool, args, grant, createNeonClient(API_KEY), extra(readOnly)),
-  );
+  return runToolHandler(invokeTool(tool, args, grant, extra(readOnly)));
 }
 
 // The tool result, or the error response the server would send.
@@ -284,7 +281,6 @@ describe('pinned Postgres role', () => {
         'run_sql',
         { sql: 'SELECT 1', project_id: PROJECT_ID },
         PINNED_GRANT,
-        createNeonClient(API_KEY),
         { ...extra(false), pinnedRoleName: 'someone_else' },
       ),
     );
@@ -296,7 +292,6 @@ describe('pinned Postgres role', () => {
         'run_sql',
         { sql: 'SELECT 1', project_id: PROJECT_ID },
         UNPINNED_GRANT,
-        createNeonClient(API_KEY),
         { ...extra(false), pinnedRoleName: 'someone_else' },
       ),
     );

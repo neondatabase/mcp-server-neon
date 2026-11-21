@@ -1,13 +1,18 @@
 import { NeonApiError } from '@neon/sdk';
-import { toNeonEffectError } from '@neon/effect';
-import type { NeonEffectError } from '@neon/effect';
 import { waitUntil } from '@vercel/functions';
-import { Cause, Effect, Option, Predicate, Schedule, Schema } from 'effect';
+import {
+  Cause,
+  Effect,
+  Option,
+  Predicate,
+  Redacted,
+  Schedule,
+  Schema,
+} from 'effect';
+import { Analytics } from '../analytics/analytics-service';
 import { getApiKeys } from '../oauth/kv-store';
 import type { ApiKeyRecord } from '../oauth/kv-store';
-import { resolveAccountFromAuth } from '../server/account';
-import { createNeonClient } from '../server/api';
-import { logger } from '../utils/logger';
+import { isNeonCallerMistake, NeonAccounts } from '../server/neon-accounts';
 import { ApiKeyVerificationUnavailable } from './api-key-unavailable';
 
 /** The API-key cache could not be read or written. */
@@ -27,11 +32,10 @@ const cachedApiKey = (accessToken: string) =>
   }).pipe(
     Effect.map(Option.fromNullishOr),
     Effect.catch(({ cause }) =>
-      Effect.sync(() => {
-        logger.warn('API key cache read failed', { error: cause });
-
-        return Option.none();
-      }),
+      Effect.logWarning('API key cache read failed').pipe(
+        Effect.annotateLogs({ error: cause }),
+        Effect.as(Option.none()),
+      ),
     ),
   );
 
@@ -44,19 +48,19 @@ const cacheApiKey = (record: ApiKeyRecord) =>
     catch: (cause) => ApiKeyCacheFailed.make({ cause }),
   }).pipe(
     Effect.catch(({ cause }) =>
-      Effect.sync(() => {
-        logger.warn('API key cache write failed', { err: cause });
-      }),
+      Effect.logWarning('API key cache write failed').pipe(
+        Effect.annotateLogs({ err: cause }),
+      ),
     ),
   );
 
-// A dropped connection to the Neon API would otherwise answer 401 and send the
-// client back through OAuth; the check is a read, so it is safe to resend.
-const getAuthDetails = (neonClient: ReturnType<typeof createNeonClient>) =>
-  Effect.tryPromise({
-    try: async (signal) => neonClient.getAuthDetails({ signal }),
-    catch: toNeonEffectError,
-  }).pipe(
+const verification = Effect.fnUntraced(function* (accessToken: string) {
+  const accounts = yield* NeonAccounts;
+  const apiKey = Redacted.make(accessToken);
+
+  // A dropped connection to the Neon API would otherwise answer 401 and send
+  // the client back through OAuth; the check is a read, so it is safe to resend.
+  const auth = yield* accounts.authDetails({ apiKey }).pipe(
     Effect.retry({
       schedule: Schedule.exponential('200 millis').pipe(Schedule.jittered),
       times: 2,
@@ -64,22 +68,16 @@ const getAuthDetails = (neonClient: ReturnType<typeof createNeonClient>) =>
     }),
   );
 
-const verification = Effect.fnUntraced(function* (accessToken: string) {
-  const neonClient = createNeonClient(accessToken);
-  const { data: auth } = yield* getAuthDetails(neonClient);
-
   if (auth.auth_method === 'oauth') {
     return 'oauth' as const;
   }
 
-  // Use shared account resolution with identify on cache miss
-  const account = yield* Effect.tryPromise({
-    try: async (signal) =>
-      resolveAccountFromAuth(auth, neonClient, {
-        identifyContext: { context: { authMethod: auth.auth_method } },
-        signal,
-      }),
-    catch: toNeonEffectError,
+  const account = yield* accounts.account({ apiKey, auth });
+  const analytics = yield* Analytics;
+
+  yield* analytics.identify({
+    account,
+    params: { context: { authMethod: auth.auth_method } },
   });
 
   const record: ApiKeyRecord = {
@@ -91,9 +89,9 @@ const verification = Effect.fnUntraced(function* (accessToken: string) {
   const context = yield* Effect.context();
 
   waitUntil(cacheApiKey(record).pipe(Effect.runPromiseWith(context)));
-  logger.info('API key cache miss, verified and cached', {
-    accountId: account.id,
-  });
+  yield* Effect.logInfo('API key cache miss, verified and cached').pipe(
+    Effect.annotateLogs({ accountId: account.id }),
+  );
 
   return record;
 });
@@ -109,26 +107,21 @@ const logVerificationFailure = (
 ) => {
   const failure = thrownBy(cause);
 
-  logger.error('API key verification failed', {
-    message: failure instanceof Error ? failure.message : String(failure),
-    status: failure instanceof NeonApiError ? failure.status : undefined,
-    data: failure instanceof NeonApiError ? failure.body : undefined,
-  });
+  return Effect.logError('API key verification failed').pipe(
+    Effect.annotateLogs({
+      message: failure instanceof Error ? failure.message : String(failure),
+      status: failure instanceof NeonApiError ? failure.status : undefined,
+      data: failure instanceof NeonApiError ? failure.body : undefined,
+    }),
+  );
 };
-
-// A key Neon rejects (4xx) or the SDK refuses is the caller's mistake.
-const isCallerFailure = (error: NeonEffectError): boolean =>
-  Predicate.isTagged(error, 'NeonClientError') ||
-  ('status' in error && Predicate.isNumber(error.status) && error.status < 500);
 
 // The span fails only when Neon or the network did; a rejected key keeps it ok.
 const verifyApiKey = (accessToken: string) =>
   verification(accessToken).pipe(
-    Effect.catchIf(isCallerFailure, (error) => {
-      logVerificationFailure(Cause.fail(error));
-
-      return Effect.succeed(null);
-    }),
+    Effect.catchIf(isNeonCallerMistake, (error) =>
+      logVerificationFailure(Cause.fail(error)).pipe(Effect.as(null)),
+    ),
     Effect.withSpan('McpAuth.verifyApiKey'),
   );
 
@@ -143,7 +136,9 @@ export const fetchAccountDetails = (accessToken: string) =>
     const cached = yield* cachedApiKey(accessToken);
 
     if (Option.isSome(cached)) {
-      logger.info('API key cache hit', { accountId: cached.value.account.id });
+      yield* Effect.logInfo('API key cache hit').pipe(
+        Effect.annotateLogs({ accountId: cached.value.account.id }),
+      );
 
       return cached.value.authMethod === 'oauth' ? 'oauth' : cached.value;
     }
@@ -151,13 +146,16 @@ export const fetchAccountDetails = (accessToken: string) =>
     return yield* verifyApiKey(accessToken).pipe(
       Effect.catchCauseIf(
         (cause) => !Cause.hasInterruptsOnly(cause),
-        (cause) => {
-          logVerificationFailure(cause);
-
-          return Effect.fail(
-            ApiKeyVerificationUnavailable.make({ cause: Cause.squash(cause) }),
-          );
-        },
+        (cause) =>
+          logVerificationFailure(cause).pipe(
+            Effect.andThen(
+              Effect.fail(
+                ApiKeyVerificationUnavailable.make({
+                  cause: Cause.squash(cause),
+                }),
+              ),
+            ),
+          ),
       ),
     );
   });

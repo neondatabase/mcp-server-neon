@@ -1,13 +1,16 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { NeonClientError, NeonNetworkError } from '@neon/sdk';
+import { NeonClientError } from '@neon/sdk';
+import type { NeonEffectError } from '@neon/effect';
 import type { NeonEffectToolContext } from '@neon/tools/effect';
 import {
   retryReadOnlyNetworkFailures,
   toEffectTools,
 } from '@neon/tools/effect';
-import { Cause, Effect, Option, Schedule } from 'effect';
+import { Cause, Effect, Option, Predicate, Redacted, Schedule } from 'effect';
 import * as z from 'zod';
 import { InvalidArgumentError, NotFoundError } from '../server/errors';
+import { NeonAccounts } from '../server/neon-accounts';
+import type { NoDefaultOrganization } from '../server/no-default-organization';
 import {
   GET_CONNECTION_STRING_INPUT_SCHEMA,
   NEON_TOOLS,
@@ -23,7 +26,6 @@ import type {
   ToolHandlerExtraParams,
   ToolHandlers,
 } from './types';
-import { getOrgByOrgIdOrDefault } from './utils';
 
 const TOOLS_REQUIRING_ORG_ID = new Set<ToolId>([
   'projects.list',
@@ -71,36 +73,64 @@ function assertRoleCreateAllowed(
   }
 }
 
-type OrgLookupContext = {
-  neonClient: Parameters<ToolHandler>[1];
-  extra: ToolHandlerExtraParams | undefined;
-  signal: AbortSignal;
-};
+// Rendered and classified like the errors the lookup used to throw.
+const orgLookupFailed = (
+  error: NeonEffectError | NoDefaultOrganization,
+): ToolStepFailed =>
+  ToolStepFailed.make({
+    error: Predicate.isTagged(error, 'NoDefaultOrganization')
+      ? new NotFoundError(error.message)
+      : error.cause,
+  });
 
-async function withOrgId(
+// The org lookup is a read, retried like the package tools' reads before the
+// tool itself runs.
+const withOrgId = (
   parsed: unknown,
-  { neonClient, extra, signal }: OrgLookupContext,
-): Promise<object> {
-  if (typeof parsed !== 'object' || parsed === null) {
-    throw new Error('Tool input must be an object');
-  }
-  if (!neonClient || !extra?.account) {
-    throw new Error('Resolving org_id requires an authenticated Neon client');
-  }
-  let orgId: string | undefined;
-  if ('org_id' in parsed && parsed.org_id !== undefined) {
-    if (typeof parsed.org_id !== 'string') {
-      throw new Error('org_id must be a string');
-    }
-    orgId = parsed.org_id;
-  }
-  const organization = await getOrgByOrgIdOrDefault(
-    { org_id: orgId, signal },
-    neonClient,
-    extra.account,
-  );
-  return { ...parsed, org_id: organization.id };
-}
+  extra: ToolHandlerExtraParams | undefined,
+) =>
+  Effect.gen(function* () {
+    const { input, query } = yield* step(() => {
+      if (!Predicate.isObjectKeyword(parsed)) {
+        throw new Error('Tool input must be an object');
+      }
+
+      if (extra?.apiKey === undefined || extra.account === undefined) {
+        throw new Error(
+          'Resolving org_id requires an authenticated Neon client',
+        );
+      }
+
+      const orgId = Predicate.hasProperty(parsed, 'org_id')
+        ? parsed.org_id
+        : undefined;
+
+      if (orgId !== undefined && !Predicate.isString(orgId)) {
+        throw new Error('org_id must be a string');
+      }
+
+      return {
+        input: parsed,
+        query: {
+          apiKey: Redacted.make(extra.apiKey),
+          account: extra.account,
+          orgId,
+        },
+      };
+    });
+
+    const accounts = yield* NeonAccounts;
+    const organization = yield* accounts.organization(query).pipe(
+      Effect.retry({
+        schedule: Schedule.exponential('200 millis').pipe(Schedule.jittered),
+        times: 2,
+        while: Predicate.isTagged('NeonNetworkError'),
+      }),
+      Effect.mapError(orgLookupFailed),
+    );
+
+    return { ...input, org_id: organization.id };
+  });
 
 function packageInput(tool: NeonTool, params: Record<string, unknown>) {
   if (tool.id === 'postgres.connectionString') {
@@ -355,17 +385,6 @@ const catchStep: (error: unknown) => ToolStepFailed = (error) => {
 export const step = <A>(run: () => A) =>
   Effect.try({ try: run, catch: catchStep });
 
-// The org lookup is a read, retried like the package tools' reads before the
-// tool itself runs.
-const orgLookup = <A>(run: (signal: AbortSignal) => Promise<A>) =>
-  Effect.tryPromise({ try: run, catch: catchStep }).pipe(
-    Effect.retry({
-      schedule: Schedule.exponential('200 millis').pipe(Schedule.jittered),
-      times: 2,
-      while: ({ error }) => error instanceof NeonNetworkError,
-    }),
-  );
-
 /** The error a tool call failed with, as the package or a step threw it. */
 export const thrownError = (error: ToolCallError): Error =>
   error instanceof ToolStepFailed ? error.error : error.cause;
@@ -416,7 +435,7 @@ function toolHandler(tool: NeonTool): ToolHandler {
   const effectTool = EFFECT_TOOLS[tool.id];
   const mapFailures = PACKAGE_FAILURES[tool.id];
 
-  return (args, neonClient, extra) =>
+  return (args, extra) =>
     Effect.gen(function* () {
       const params = args?.params ?? {};
       const parsed = yield* step(() => packageInput(tool, params));
@@ -428,9 +447,7 @@ function toolHandler(tool: NeonTool): ToolHandler {
       }
 
       const input = TOOLS_REQUIRING_ORG_ID.has(tool.id)
-        ? yield* orgLookup(async (signal) =>
-            withOrgId(parsed, { neonClient, extra, signal }),
-          )
+        ? yield* withOrgId(parsed, extra)
         : parsed;
 
       const execution = effectTool.execute(input, executionContext(extra));
