@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { assert, beforeAll, describe, expect, it } from 'vitest';
 import { Client, neon } from '@neondatabase/serverless';
 import type { Token } from 'oauth2-server';
 import { ensureOauthDatabaseUrl } from '../../e2e/provision-oauth-db';
@@ -79,7 +79,11 @@ describe('Keyv stores after the server terminates their connections', () => {
         [`keyv:${tokenKey}`],
       );
 
-      const blockedWrite = getTokens().set(tokenKey, token);
+      // Settled at once, so the rejection is handled before it arrives.
+      const blockedWrite = Promise.allSettled([
+        getTokens().set(tokenKey, token),
+      ]);
+
       await waitFor(async () => {
         const rows = await sql`
           SELECT 1 FROM pg_stat_activity
@@ -95,7 +99,10 @@ describe('Keyv stores after the server terminates their connections', () => {
       );
 
       // The write the server cut off fails loudly instead of resolving false.
-      await expect(blockedWrite).rejects.toThrow(KvStoreWriteError);
+      const [outcome] = await blockedWrite;
+
+      assert(outcome?.status === 'rejected');
+      expect(outcome.reason).toBeInstanceOf(KvStoreWriteError);
     } finally {
       await locker.query('ROLLBACK');
       await locker.end();
