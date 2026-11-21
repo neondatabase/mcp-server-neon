@@ -9,6 +9,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RefreshResult } from '../oauth/kv-store';
 import type { RefreshRotation } from '../oauth/model';
+import type { RefreshLockStore } from '../oauth/refresh-lock-store';
+import { __setRefreshLockStoresForTests } from '../oauth/refresh-lock';
 
 vi.mock('../oauth/model', () => {
   const getRefreshResult =
@@ -67,29 +69,33 @@ vi.mock('@vercel/functions', () => ({
   waitUntil: vi.fn(),
 }));
 
-// Default: lock is a passthrough — keeps the existing tests focused on the
-// underlying refresh logic rather than the lock plumbing. The dedicated
+// Default: a lock store that always grants the lock, keeping these tests
+// focused on the refresh logic rather than the lock plumbing. The dedicated
 // `refresh-lock.test.ts` covers acquire/wait/release semantics.
-const mockSignalTransientFailure = vi.fn().mockResolvedValue(undefined);
 const mockPeekTransientFailure = vi.fn().mockResolvedValue(false);
-// Capture the ReleaseHint that executeRefresh mutates so tests can assert on
-// it (replaces the pre-atomic-Lua `signalTransientFailure` call signature).
+// Records whether the holder asked its release to also write the transient
+// marker (the atomic RELEASE_WITH_TRANSIENT_LUA path in refresh-lock-store.ts).
 let lastReleaseHint: { markTransientForWaiters?: boolean } | undefined;
-vi.mock('../oauth/refresh-lock', () => ({
-  withRefreshLock: vi.fn(
-    async (
-      _token: string,
-      execute: (hint: { markTransientForWaiters?: boolean }) => unknown,
-    ) => {
-      lastReleaseHint = {};
-      return execute(lastReleaseHint);
-    },
-  ),
-  signalTransientFailure: (...args: unknown[]) =>
-    mockSignalTransientFailure(...args),
-  peekTransientFailure: (...args: unknown[]) =>
-    mockPeekTransientFailure(...args),
-}));
+const passthroughLockStore = {
+  name: 'postgres',
+  tryAcquire: async () => {
+    lastReleaseHint = {};
+    return true;
+  },
+  isHeld: async () => false,
+  extend: async () => undefined,
+  release: async (
+    _refreshToken: string,
+    _owner: string,
+    transientTtlMs?: number,
+  ) => {
+    if (transientTtlMs !== undefined) {
+      lastReleaseHint = { markTransientForWaiters: true };
+    }
+  },
+  markTransient: async () => undefined,
+  hasTransient: async () => mockPeekTransientFailure(),
+} satisfies RefreshLockStore;
 
 // Spy on logger so SLO assertions can read what was emitted.
 const loggerInfoSpy = vi.fn();
@@ -180,6 +186,8 @@ describe('Token refresh flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     loggerInfoSpy.mockClear();
+    __setRefreshLockStoresForTests([passthroughLockStore]);
+    mockPeekTransientFailure.mockResolvedValue(false);
 
     mockModel.getClient.mockResolvedValue(TEST_CLIENT as any);
     mockModel.getRefreshToken.mockResolvedValue(TEST_REFRESH_TOKEN_RECORD);
@@ -424,9 +432,9 @@ describe('Token refresh flow', () => {
     });
 
     it('marks the release hint on upstream 5xx so the lock release also writes the transient marker atomically', async () => {
-      // executeRefresh now mutates the ReleaseHint passed by withRefreshLock
+      // executeRefresh marks the ReleaseHint passed by RefreshLock.withLock
       // instead of calling signalTransientFailure directly — see
-      // RELEASE_WITH_TRANSIENT_LUA in refresh-lock.ts. This test pins the
+      // RELEASE_WITH_TRANSIENT_LUA in refresh-lock-store.ts. This test pins the
       // contract: a 5xx upstream response must set markTransientForWaiters so
       // waiters bail fast as transient_upstream_5xx instead of timing out.
       const upstreamError = new Error('Internal Server Error') as Error & {

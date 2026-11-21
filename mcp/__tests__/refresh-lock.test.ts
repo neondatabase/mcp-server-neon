@@ -1,3 +1,4 @@
+import { Effect, Option } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Shared spies the createClient mock closes over.
@@ -25,10 +26,55 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
+type Hint = { markTransientForWaiters?: boolean };
+
 async function loadModule() {
   // Reset module state so the memoised redis client is rebuilt.
   vi.resetModules();
-  return import('../oauth/refresh-lock');
+  const lock = await import('../oauth/refresh-lock');
+  const { RefreshLock } = await import('../oauth/refresh-lock-service');
+  const { RefreshLockTimeout } = await import('../oauth/refresh-lock-timeout');
+
+  // The Promise interface these tests were written against, over the
+  // RefreshLock service: a hint the callback sets marks the release.
+  const withRefreshLock = async <T>(
+    refreshToken: string,
+    execute: (hint: Hint) => Promise<T>,
+    peek: () => Promise<T | undefined>,
+  ): Promise<T> =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* RefreshLock;
+
+        return yield* service.withLock({
+          refreshToken,
+          execute: (release) =>
+            Effect.suspend(() => {
+              const hint: Hint = {};
+
+              return Effect.promise(async () => execute(hint)).pipe(
+                Effect.ensuring(
+                  Effect.suspend(() =>
+                    hint.markTransientForWaiters === true
+                      ? release.markTransientForWaiters
+                      : Effect.void,
+                  ),
+                ),
+              );
+            }),
+          peek: Effect.promise(async () => peek()).pipe(
+            Effect.map(Option.fromUndefinedOr),
+          ),
+        });
+      }).pipe(Effect.provide(RefreshLock.layer)),
+    );
+
+  return {
+    withRefreshLock,
+    RefreshLockTimeout,
+    signalTransientFailure: lock.signalTransientFailure,
+    peekTransientFailure: lock.peekTransientFailure,
+  };
 }
 
 beforeEach(() => {
@@ -47,7 +93,7 @@ afterEach(() => {
   delete process.env.REDIS_URL;
 });
 
-describe('withRefreshLock', () => {
+describe('RefreshLock.withLock', () => {
   it('falls through to execute when neither KV_URL nor OAUTH_DATABASE_URL is set', async () => {
     delete process.env.KV_URL;
     delete process.env.REDIS_URL;
@@ -168,13 +214,12 @@ describe('withRefreshLock', () => {
     setSpy.mockResolvedValue(null);
     getSpy.mockResolvedValue('peer-owner');
 
-    const { withRefreshLock } = await loadModule();
+    const { withRefreshLock, RefreshLockTimeout } = await loadModule();
     const peek = vi.fn().mockResolvedValue(undefined);
 
-    await expect(withRefreshLock('rt', vi.fn(), peek)).rejects.toMatchObject({
-      status: 503,
-      oauth_error: 'temporarily_unavailable',
-    });
+    await expect(withRefreshLock('rt', vi.fn(), peek)).rejects.toBeInstanceOf(
+      RefreshLockTimeout,
+    );
   }, 10_000);
 
   it('on lock not acquired and lock disappears (vanished holder), takes over and runs execute', async () => {
@@ -247,13 +292,13 @@ describe('withRefreshLock', () => {
     });
     getSpy.mockResolvedValue(null); // every check sees lock gone
 
-    const { withRefreshLock } = await loadModule();
+    const { withRefreshLock, RefreshLockTimeout } = await loadModule();
     const peek = vi.fn().mockResolvedValue(undefined);
     const execute = vi.fn();
 
-    await expect(withRefreshLock('rt', execute, peek)).rejects.toMatchObject({
-      status: 503,
-    });
+    await expect(withRefreshLock('rt', execute, peek)).rejects.toBeInstanceOf(
+      RefreshLockTimeout,
+    );
     // 1 initial acquire + 1 takeover acquire = 2 total SETs (no 3rd).
     expect(setCalls).toBe(2);
     expect(execute).not.toHaveBeenCalled();
