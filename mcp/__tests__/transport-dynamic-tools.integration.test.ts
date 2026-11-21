@@ -38,13 +38,6 @@ vi.mock('@sentry/node', async () => {
   return { ...actual, captureException: captureExceptionSpy };
 });
 
-// The invalid-token challenge test must not verify its fake key against Neon.
-vi.mock('../server/api', () => ({
-  createNeonClient: () => ({
-    getAuthDetails: vi.fn().mockRejectedValue(new Error('Invalid test token')),
-  }),
-}));
-
 // Mocks the module that defines the handlers, not the barrel that re-exports
 // them, so it applies no matter which one the code under test imports.
 vi.mock('../tools/tools', async () => {
@@ -70,9 +63,7 @@ vi.mock('../tools/tools', async () => {
           )
           .pipe(
             Effect.flatMap((params) =>
-              Effect.promise(async () =>
-                runSqlSpy({ params }, args[1], args[2]),
-              ),
+              Effect.promise(async () => runSqlSpy({ params }, args[1])),
             ),
           ),
     },
@@ -256,7 +247,8 @@ describe('transport dynamic tool composition', () => {
         }),
       }),
     );
-    expect(flushAnalyticsSpy).toHaveBeenCalledTimes(1);
+    // Analytics flushes after each event: server_init, then tool_call.
+    expect(flushAnalyticsSpy).toHaveBeenCalledTimes(2);
   });
 
   it('tracks the OAuth project scope and selected categories on both events', async () => {
@@ -775,7 +767,6 @@ describe('transport dynamic tool composition', () => {
         }),
       },
       expect.anything(),
-      expect.anything(),
     );
   });
 
@@ -955,6 +946,13 @@ describe('transport dynamic tool composition', () => {
 
   it('emits resource_metadata for the exact requested resource path and query', async () => {
     vi.mocked(model.getAccessToken).mockResolvedValue(undefined);
+    // The fake key must not be verified against Neon; this Neon rejects it.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({ message: 'authentication failed' }, { status: 401 }),
+      ),
+    );
 
     const req = new Request('http://localhost:3100/mcp?readonly=true', {
       method: 'POST',
@@ -973,6 +971,7 @@ describe('transport dynamic tool composition', () => {
     });
 
     const res = await POST(req);
+    vi.unstubAllGlobals();
     expect(res.status).toBe(401);
     const challenge = res.headers.get('WWW-Authenticate');
     expect(challenge).toContain(

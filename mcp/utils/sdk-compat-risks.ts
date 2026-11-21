@@ -1,5 +1,5 @@
 import { isLegacyRequest } from '@modelcontextprotocol/server';
-import { logger } from './logger';
+import { Effect, Option, Predicate } from 'effect';
 
 // @modelcontextprotocol/server 2.0.0 serves both request shapes logged here;
 // 2.2.0 answers both with 400. A request the current handler already rejects
@@ -11,57 +11,71 @@ type SdkCompatRisk = {
   fields: Record<string, string | number | undefined>;
 };
 
-function isRequestMessage(message: unknown): boolean {
-  return (
-    typeof message === 'object' &&
-    message !== null &&
-    'id' in message &&
-    'method' in message
-  );
-}
+const isRequestMessage = Predicate.and(
+  Predicate.hasProperty('id'),
+  Predicate.hasProperty('method'),
+);
 
-async function findSdkCompatRisk(
-  req: Request,
-): Promise<SdkCompatRisk | undefined> {
-  if (req.method !== 'POST') return undefined;
+// The MCP handler answers an unparseable body with its own 400.
+const jsonBody = (req: Request) =>
+  Effect.promise(async (): Promise<Option.Option<unknown>> => {
+    try {
+      const body: unknown = await req.clone().json();
 
-  let body: unknown;
-  try {
-    body = await req.clone().json();
-  } catch {
-    // The MCP handler answers an unparseable body with its own 400.
-    return undefined;
+      return Option.some(body);
+    } catch {
+      return Option.none();
+    }
+  });
+
+const findSdkCompatRisk = Effect.fnUntraced(function* (req: Request) {
+  if (req.method !== 'POST') {
+    return Option.none<SdkCompatRisk>();
   }
 
+  const parsed = yield* jsonBody(req);
+
+  if (Option.isNone(parsed)) {
+    return Option.none<SdkCompatRisk>();
+  }
+
+  const body = parsed.value;
   const userAgent = req.headers.get('user-agent') ?? undefined;
 
   if (Array.isArray(body) && body.length > MAX_BATCH_SIZE) {
-    return {
+    return Option.some<SdkCompatRisk>({
       message: 'MCP batch over 100 messages',
       fields: { batchSize: body.length, userAgent },
-    };
+    });
   }
 
   if (
     isRequestMessage(body) &&
     !req.headers.has('mcp-protocol-version') &&
-    !(await isLegacyRequest(req, body))
+    !(yield* Effect.promise(async () => isLegacyRequest(req, body)))
   ) {
-    return {
+    return Option.some<SdkCompatRisk>({
       message: 'MCP 2026-07-28 request without MCP-Protocol-Version',
       fields: { method: req.headers.get('mcp-method') ?? undefined, userAgent },
-    };
+    });
   }
 
-  return undefined;
-}
+  return Option.none<SdkCompatRisk>();
+});
 
-export async function withSdkCompatRiskLog(
+/** Serves the request, then logs a shape the next SDK release would reject. */
+export const withSdkCompatRiskLog = Effect.fnUntraced(function* <E, R>(
   req: Request,
-  serve: () => Promise<Response>,
-): Promise<Response> {
-  const risk = await findSdkCompatRisk(req);
-  const response = await serve();
-  if (risk && response.ok) logger.warn(risk.message, risk.fields);
+  serve: Effect.Effect<Response, E, R>,
+) {
+  const risk = yield* findSdkCompatRisk(req);
+  const response = yield* serve;
+
+  if (Option.isSome(risk) && response.ok) {
+    yield* Effect.logWarning(risk.value.message).pipe(
+      Effect.annotateLogs(risk.value.fields),
+    );
+  }
+
   return response;
-}
+});

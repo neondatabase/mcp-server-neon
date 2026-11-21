@@ -38,7 +38,7 @@ export const AppLayer = Layer.mergeAll(
 );
 
 // Built once per instance; every Next.js route file except the MCP transport
-// forwards its requests here.
+// (lib/http/mcp-app.ts) forwards its requests here.
 export const app = HttpRouter.toWebHandler(Layer.merge(Routes, AppLayer), {
   disableLogger: true,
   memoMap,

@@ -14,7 +14,6 @@ import { appendAccessWarnings } from '../tools/access-warnings';
 import { toListedInputSchema } from '../tools/listed-schema';
 import { logger } from '../utils/logger';
 import { generateTraceId } from '../utils/trace';
-import { createNeonClient } from './api';
 import { track } from '../analytics/analytics';
 import { captureException } from '@sentry/node';
 import { Effect } from 'effect';
@@ -44,8 +43,6 @@ export const createMcpServer = async (context: NeonServerContext) => {
     },
     instructions: formatAccessControlInstructions(grant, readOnly),
   });
-
-  const neonClient = createNeonClient(context.apiKey);
 
   let { clientName, clientApplication } = identifyClient(
     context.userAgent,
@@ -153,7 +150,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
             };
 
             const outcome = yield* renderToolCall(
-              invokeTool(tool.name, args, grant, neonClient, extraArgs),
+              invokeTool(tool.name, args, grant, extraArgs),
               { properties, traceId, agent },
             );
 

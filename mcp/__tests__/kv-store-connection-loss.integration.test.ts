@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { assert, beforeAll, describe, expect, it } from 'vitest';
 import { Client, neon } from '@neondatabase/serverless';
 import type { Token } from 'oauth2-server';
 import { ensureOauthDatabaseUrl } from '../../e2e/provision-oauth-db';
@@ -13,6 +13,7 @@ import {
   getRefreshTokens,
   getTokens,
 } from '../oauth/kv-store';
+import { KvStoreWriteError } from '../oauth/kv-store-write-error';
 
 // Tags this file's pool so pg_terminate_backend only hits these connections,
 // not other test files sharing the database.
@@ -38,6 +39,8 @@ const waitFor = async (check: () => Promise<boolean>, timeoutMs = 10_000) => {
   }
 };
 
+type Readable = { readonly get: (key: string) => Promise<object | undefined> };
+
 const readAllStores = () =>
   Promise.all(
     [
@@ -49,7 +52,7 @@ const readAllStores = () =>
       getRefreshResults(),
       getRefreshFailures(),
       getApiKeys(),
-    ].map((store) => store.get(`missing-${randomUUID()}`)),
+    ].map(async (store: Readable) => store.get(`missing-${randomUUID()}`)),
   );
 
 describe('Keyv stores after the server terminates their connections', () => {
@@ -62,7 +65,7 @@ describe('Keyv stores after the server terminates their connections', () => {
       user: {},
     };
 
-    expect(await getTokens().set(tokenKey, token)).toBe(true);
+    await getTokens().set(tokenKey, token);
     expect(await readAllStores()).toEqual(Array(8).fill(undefined));
 
     // Hold the token row so the next write is mid-query when its backend is
@@ -76,7 +79,11 @@ describe('Keyv stores after the server terminates their connections', () => {
         [`keyv:${tokenKey}`],
       );
 
-      const blockedWrite = getTokens().set(tokenKey, token);
+      // Settled at once, so the rejection is handled before it arrives.
+      const blockedWrite = Promise.allSettled([
+        getTokens().set(tokenKey, token),
+      ]);
+
       await waitFor(async () => {
         const rows = await sql`
           SELECT 1 FROM pg_stat_activity
@@ -91,7 +98,11 @@ describe('Keyv stores after the server terminates their connections', () => {
         expect.arrayContaining(['active', 'idle']),
       );
 
-      expect(await blockedWrite).toBe(false);
+      // The write the server cut off fails loudly instead of resolving false.
+      const [outcome] = await blockedWrite;
+
+      assert(outcome?.status === 'rejected');
+      expect(outcome.reason).toBeInstanceOf(KvStoreWriteError);
     } finally {
       await locker.query('ROLLBACK');
       await locker.end();

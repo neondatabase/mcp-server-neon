@@ -34,10 +34,6 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
-vi.mock('../server/api', () => ({
-  createNeonClient: () => ({}),
-}));
-
 const { createMcpServer } = await import('../server/index');
 
 function buildContext(overrides: Partial<ServerContext> = {}): ServerContext {

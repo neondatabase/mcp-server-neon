@@ -1,11 +1,60 @@
-import { captureException } from '@sentry/node';
 import type { McpHandlerOptions } from 'mcp-handler';
-import { logger } from '../utils/logger';
+import { Cause, Effect, Exit } from 'effect';
+import { runAfterResponse } from '../../lib/effect/runtime';
+import type { McpCallbackServices } from '../../lib/effect/runtime';
+import { reportServerFailure } from '../sentry/effect';
+import { flushSentry } from '../sentry/flush';
 
 type McpErrorEvent = Extract<
   Parameters<NonNullable<McpHandlerOptions['onEvent']>>[0],
   { type: 'ERROR' }
 >;
+
+type SentryTags = () => Record<string, string>;
+
+const reportSdkError = (
+  event: McpErrorEvent,
+  status: number | undefined,
+  tags: SentryTags,
+) => {
+  const error =
+    event.error instanceof Error ? event.error : new Error(event.error);
+
+  if (status !== undefined && status < 500) {
+    // Rejection messages quote the request, which can carry credentials.
+    return Effect.logWarning('MCP SDK rejected request').pipe(
+      Effect.annotateLogs({
+        status,
+        source: event.source,
+        errorName: error.name,
+      }),
+    );
+  }
+
+  return Effect.logError('MCP SDK error').pipe(
+    Effect.annotateLogs({
+      message: error.message,
+      stack: error.stack,
+      source: event.source,
+      severity: event.severity,
+      context: event.context,
+      status,
+    }),
+    Effect.andThen(
+      reportServerFailure(error, {
+        tags: tags(),
+        extra: { source: event.source, severity: event.severity, status },
+      }),
+    ),
+  );
+};
+
+// A report made once the request is over has no response flush behind it.
+const reportAfterResponse = (
+  report: Effect.Effect<void, never, McpCallbackServices>,
+) => {
+  runAfterResponse(report.pipe(Effect.andThen(flushSentry)));
+};
 
 /**
  * mcp-handler forwards every SDK `onerror` report as severity `error`. The SDK
@@ -14,62 +63,60 @@ type McpErrorEvent = Extract<
  * client error from a server failure. Anything reported after the response is
  * a failure while streaming it.
  */
-export function createSdkErrorReporter(tags: () => Record<string, string>) {
+export const createSdkErrorReporter = (tags: SentryTags) => {
   const pending: McpErrorEvent[] = [];
-  let settled = false;
+  const state = { settled: false };
 
-  function report(event: McpErrorEvent, status: number | undefined) {
-    const error =
-      event.error instanceof Error
-        ? event.error
-        : new Error(String(event.error));
-    if (status !== undefined && status < 500) {
-      // Rejection messages quote the request, which can carry credentials.
-      logger.warn('MCP SDK rejected request', {
-        status,
-        source: event.source,
-        errorName: error.name,
-      });
-      return;
-    }
-    logger.error('MCP SDK error', {
-      message: error.message,
-      stack: error.stack,
-      source: event.source,
-      severity: event.severity,
-      context: event.context,
-      status,
-    });
-    captureException(error, {
-      tags: tags(),
-      extra: { source: event.source, severity: event.severity, status },
-    });
-  }
+  const settle = (status: number) =>
+    Effect.suspend(() => {
+      state.settled = true;
 
-  function settle(status: number) {
-    settled = true;
-    for (const event of pending.splice(0)) {
-      report(event, status);
-    }
-  }
+      return Effect.forEach(
+        pending.splice(0),
+        (event) => reportSdkError(event, status, tags),
+        { discard: true },
+      );
+    });
+
+  const settleWhenDone = (response: Promise<Response>) =>
+    Effect.promise(async () => response).pipe(
+      Effect.exit,
+      Effect.flatMap(
+        Exit.match({
+          onSuccess: ({ status }) => settle(status),
+          onFailure: () => settle(500),
+        }),
+      ),
+    );
 
   return {
-    onError(event: McpErrorEvent) {
-      if (settled) {
-        report(event, undefined);
-      } else {
-        pending.push(event);
+    onError: (event: McpErrorEvent): void => {
+      if (state.settled) {
+        reportAfterResponse(reportSdkError(event, undefined, tags));
+
+        return;
       }
+
+      pending.push(event);
     },
-    async settleAfter(response: Promise<Response>): Promise<Response> {
-      try {
-        const resolved = await response;
-        settle(resolved.status);
-        return resolved;
-      } catch (error) {
-        settle(500);
-        throw error;
-      }
-    },
+    /**
+     * Waits for mcp-handler's response and reports the events held for it once
+     * its status is known. A client that disconnects interrupts the wait, but
+     * the response still settles, and the held events are reported then.
+     */
+    settleAfter: (response: Promise<Response>) =>
+      Effect.promise(async () => response).pipe(
+        Effect.onExit(
+          Exit.match({
+            onSuccess: ({ status }) => settle(status),
+            onFailure: (cause) =>
+              Cause.hasInterruptsOnly(cause)
+                ? Effect.sync(() => {
+                    reportAfterResponse(settleWhenDone(response));
+                  })
+                : settle(500),
+          }),
+        ),
+      ),
   };
-}
+};

@@ -1,5 +1,4 @@
 import { neon } from '@neondatabase/serverless';
-import { withPgConnectRetry } from './kv-store';
 import {
   parseAuthTransaction,
   type ApprovedAuthTransaction,
@@ -114,9 +113,7 @@ async function ensureSchema(connectionString: string): Promise<void> {
 export async function ensureAuthTransactionSchema(
   connectionString: string,
 ): Promise<void> {
-  await withPgConnectRetry('authTx.ensureSchema', () =>
-    ensureSchema(connectionString),
-  );
+  await ensureSchema(connectionString);
 }
 
 async function cleanupExpired(connectionString: string): Promise<void> {
@@ -128,11 +125,11 @@ async function cleanupExpired(connectionString: string): Promise<void> {
 }
 
 export function createAuthTransactionStore(connectionString: string) {
-  const query = async <T>(op: string, fn: () => Promise<T>): Promise<T> => {
-    await withPgConnectRetry(`${op}.ensureSchema`, () =>
-      ensureSchema(connectionString),
-    );
-    return withPgConnectRetry(op, fn);
+  // `op` names the call; the AuthTransactions service retries connect
+  // failures under it.
+  const query = async <T>(_op: string, fn: () => Promise<T>): Promise<T> => {
+    await ensureSchema(connectionString);
+    return fn();
   };
 
   return {

@@ -1,99 +1,122 @@
-import type { Api, AuthDetailsResponse } from '../neon-client';
-import { NeonApiError } from '@neon/sdk';
+import type { AuthDetailsResponse } from '../neon-client';
 import { addBreadcrumb } from '@sentry/node';
-import { identify } from '../analytics/analytics';
-import { logger } from '../utils/logger';
+import { Option, Result, Schema } from 'effect';
 
-type Account = {
+export type NeonAccount = {
   id: string;
   name: string;
   email?: string;
   isOrg: boolean;
 };
 
-type ResolveAccountOptions = {
-  identifyContext?: Parameters<typeof identify>[1];
-  /** Cancels the account lookups. */
-  signal?: AbortSignal;
+export const orgAccount = (accountId: string, name: string): NeonAccount => ({
+  id: accountId,
+  name,
+  isOrg: true,
+});
+
+export const userAccount = (user: {
+  readonly id: string;
+  readonly name?: string | null;
+  readonly last_name?: string | null;
+  readonly email: string;
+}): NeonAccount => {
+  const name = `${user.name ?? ''} ${user.last_name ?? ''}`.trim();
+
+  return {
+    id: user.id,
+    name: name === '' ? 'Unknown' : name,
+    email: user.email,
+    isOrg: false,
+  };
+};
+
+export const projectScopedAccount = (accountId: string): NeonAccount => ({
+  id: accountId,
+  name: 'Project-scoped API Key',
+  isOrg: false,
+});
+
+const ErrorBody = Schema.Struct({ message: Schema.String });
+
+/**
+ * Project-scoped API keys cannot read account-level endpoints; Neon answers
+ * 403 or 404 with a message naming the project scope.
+ */
+export const isProjectScopedKeyRejection = ({
+  status,
+  body,
+}: {
+  readonly status: number;
+  readonly body: unknown;
+}): boolean =>
+  (status === 403 || status === 404) &&
+  Option.match(Schema.decodeUnknownOption(ErrorBody)(body), {
+    onNone: () => false,
+    onSome: ({ message }) =>
+      message.includes('outside the project') ||
+      message.includes('project-scoped'),
+  });
+
+export const projectScopedFallbackBreadcrumb = (
+  auth: AuthDetailsResponse,
+): void => {
+  addBreadcrumb({
+    category: 'auth',
+    message: 'Using project-scoped API key fallback',
+    level: 'info',
+    data: {
+      auth_type: 'project_scoped_key',
+      auth_method: auth.auth_method,
+      account_id: auth.account_id,
+    },
+  });
+};
+
+type ListedOrganization = {
+  readonly id: string;
+  readonly name: string;
+  readonly managed_by: string;
 };
 
 /**
- * Resolves account info from Neon API auth details.
- * Handles org accounts, personal accounts, and project-scoped API key fallback.
+ * The organization a call that needs `org_id` runs in when the caller passed
+ * none: the only console-managed one, else the only one. Fails with the message
+ * the caller sees.
  */
-export async function resolveAccountFromAuth(
-  auth: AuthDetailsResponse,
-  neonClient: Api<unknown>,
-  { identifyContext, signal }: ResolveAccountOptions = {},
-): Promise<Account> {
-  let account: Account;
+export const selectOrganization = (
+  organizations: readonly ListedOrganization[],
+): Result.Result<{ readonly id: string }, string> => {
+  const consoleOrganizations = organizations.filter(
+    (org) => org.managed_by === 'console',
+  );
+  const [onlyConsole] = consoleOrganizations;
 
-  try {
-    if (auth.auth_method === 'api_key_org') {
-      const { data: org } = await neonClient.getOrganization(auth.account_id, {
-        signal,
-      });
-
-      account = {
-        id: auth.account_id,
-        name: org.name,
-        isOrg: true,
-      };
-    } else {
-      const { data: user } = await neonClient.getCurrentUserInfo({ signal });
-      account = {
-        id: user.id,
-        name: `${user.name ?? ''} ${user.last_name ?? ''}`.trim() || 'Unknown',
-        email: user.email,
-        isOrg: false,
-      };
-    }
-  } catch (error) {
-    // Project-scoped API keys cannot access account-level endpoints
-    const message =
-      error instanceof NeonApiError &&
-      typeof error.body === 'object' &&
-      error.body !== null &&
-      'message' in error.body &&
-      typeof error.body.message === 'string'
-        ? error.body.message
-        : undefined;
-    const isProjectScopedKeyError =
-      error instanceof NeonApiError &&
-      (error.status === 404 || error.status === 403) &&
-      (message?.includes('outside the project') ||
-        message?.includes('project-scoped'));
-
-    if (isProjectScopedKeyError) {
-      logger.debug('Using project-scoped API key fallback', {
-        account_id: auth.account_id,
-      });
-
-      // Add breadcrumb for debugging context in case of later errors
-      addBreadcrumb({
-        category: 'auth',
-        message: 'Using project-scoped API key fallback',
-        level: 'info',
-        data: {
-          auth_type: 'project_scoped_key',
-          auth_method: auth.auth_method,
-          account_id: auth.account_id,
-        },
-      });
-
-      account = {
-        id: auth.account_id,
-        name: 'Project-scoped API Key',
-        isOrg: false,
-      };
-    } else {
-      throw error;
-    }
+  if (consoleOrganizations.length === 1 && onlyConsole !== undefined) {
+    return Result.succeed({ id: onlyConsole.id });
   }
 
-  if (identifyContext) {
-    identify(account, identifyContext);
+  const [only] = organizations;
+
+  if (
+    consoleOrganizations.length === 0 &&
+    organizations.length === 1 &&
+    only !== undefined
+  ) {
+    return Result.succeed({ id: only.id });
   }
 
-  return account;
-}
+  if (organizations.length === 0) {
+    return Result.fail('No organizations found for this user');
+  }
+
+  const orgList = organizations
+    .map(
+      (org) => `- ${org.name} (ID: ${org.id}) [managed by: ${org.managed_by}]`,
+    )
+    .join('\n');
+
+  return Result.fail(
+    `Multiple organizations found. Please specify the org_id parameter with one of the following organization IDs:\n${orgList}`,
+  );
+};

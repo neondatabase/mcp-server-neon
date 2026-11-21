@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
-import { isPgConnectFailure, withPgConnectRetry } from '../oauth/kv-store';
+import { Effect, Exit, Fiber, ManagedRuntime } from 'effect';
+import { TestClock } from 'effect/testing';
+import { describe, expect, it } from 'vitest';
+import { isPgConnectFailure } from '../oauth/kv-store';
+import { OAuthStoreUnavailable } from '../oauth/oauth-store-unavailable';
+import { retryPgConnect } from '../oauth/pg-connect-retry';
 
 // These pin the predicate / retry helper contract that the /callback
 // hot-path depends on. Regression for the 2026-05-12 OAUTH_DATABASE_URL
@@ -49,42 +53,83 @@ describe('isPgConnectFailure', () => {
   });
 });
 
-describe('withPgConnectRetry', () => {
+describe('retryPgConnect', () => {
+  const xx000 = Object.assign(new Error("Couldn't connect"), { code: 'XX000' });
+
+  const storeCall = (results: (string | Error)[]) => {
+    let calls = 0;
+
+    const attempt = Effect.suspend(() => {
+      const result = results[calls] ?? results.at(-1);
+
+      calls += 1;
+
+      return result instanceof Error
+        ? Effect.fail(
+            OAuthStoreUnavailable.make({ operation: 'op', cause: result }),
+          )
+        : Effect.succeed(result);
+    });
+
+    return { attempt, calls: () => calls };
+  };
+
+  const runtime = ManagedRuntime.make(TestClock.layer());
+
+  const run = async <A, E>(effect: Effect.Effect<A, E>) =>
+    runtime.runPromiseExit(effect);
+
   it('returns the value on first success without retrying', async () => {
-    const fn = vi.fn(async () => 'ok');
-    await expect(withPgConnectRetry('test.op', fn)).resolves.toBe('ok');
-    expect(fn).toHaveBeenCalledTimes(1);
+    const call = storeCall(['ok']);
+    const exit = await run(call.attempt.pipe(retryPgConnect('test.op')));
+
+    expect(exit).toStrictEqual(Exit.succeed('ok'));
+    expect(call.calls()).toBe(1);
   });
 
   it('retries once on XX000 and succeeds on the second attempt', async () => {
-    const xx000 = Object.assign(new Error("Couldn't connect"), {
-      code: 'XX000',
-    });
-    const fn = vi
-      .fn<() => Promise<string>>()
-      .mockRejectedValueOnce(xx000)
-      .mockResolvedValue('ok');
-    await expect(withPgConnectRetry('test.op', fn)).resolves.toBe('ok');
-    expect(fn).toHaveBeenCalledTimes(2);
+    const call = storeCall([xx000, 'ok']);
+
+    const exit = await run(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkChild(
+          call.attempt.pipe(retryPgConnect('test.op')),
+        );
+
+        yield* TestClock.adjust('1500 millis');
+
+        return yield* Fiber.join(fiber);
+      }),
+    );
+
+    expect(exit).toStrictEqual(Exit.succeed('ok'));
+    expect(call.calls()).toBe(2);
   });
 
-  it('throws after exhausting both attempts on persistent XX000', async () => {
-    const xx000 = Object.assign(new Error("Couldn't connect"), {
-      code: 'XX000',
-    });
-    const fn = vi.fn(async () => {
-      throw xx000;
-    });
-    await expect(withPgConnectRetry('test.op', fn)).rejects.toBe(xx000);
-    expect(fn).toHaveBeenCalledTimes(2);
+  it('fails after both attempts on persistent XX000', async () => {
+    const call = storeCall([xx000]);
+
+    const exit = await run(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkChild(
+          call.attempt.pipe(retryPgConnect('test.op')),
+        );
+
+        yield* TestClock.adjust('1500 millis');
+
+        return yield* Fiber.join(fiber);
+      }),
+    );
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    expect(call.calls()).toBe(2);
   });
 
-  it('does NOT retry non-retryable errors', async () => {
-    const err = new Error('logic bug');
-    const fn = vi.fn(async () => {
-      throw err;
-    });
-    await expect(withPgConnectRetry('test.op', fn)).rejects.toBe(err);
-    expect(fn).toHaveBeenCalledTimes(1);
+  it('does not retry an error that is not a connect failure', async () => {
+    const call = storeCall([new Error('logic bug')]);
+    const exit = await run(call.attempt.pipe(retryPgConnect('test.op')));
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    expect(call.calls()).toBe(1);
   });
 });

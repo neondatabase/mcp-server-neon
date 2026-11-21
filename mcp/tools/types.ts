@@ -2,7 +2,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { NeonToolError } from '@neon/tools/effect';
 import type { Effect } from 'effect';
 import type { NeonSecretsMode } from '@neon/tools';
-import type { Api } from '../neon-client';
+import type { NeonAccounts } from '../server/neon-accounts';
 import type { AuthContext } from '../types/auth';
 import type { ClientApplication } from '../utils/client-application';
 import type { ToolStepFailed } from './errors';
@@ -25,11 +25,13 @@ export type ToolHandlerExtraParams = {
 
 export type ToolCallError = NeonToolError | ToolStepFailed;
 
-/** Interrupting the handler's fiber cancels the tool call. */
+/**
+ * Interrupting the handler's fiber cancels the tool call. `NeonAccounts`
+ * resolves `org_id` for the project tools.
+ */
 export type ToolHandler = (
   args?: { params: Record<string, unknown> },
-  neonClient?: Api<unknown>,
   extra?: ToolHandlerExtraParams,
-) => Effect.Effect<CallToolResult, ToolCallError>;
+) => Effect.Effect<CallToolResult, ToolCallError, NeonAccounts>;
 
 export type ToolHandlers = Record<string, ToolHandler>;

@@ -785,7 +785,7 @@ describe('Token refresh flow', () => {
       mockExchange.mockRejectedValue(upstreamError);
 
       await POST(makeTokenRequest('old-refresh-token'));
-      // Single attempt only — the retryAsync.shouldRetry guard skips HTTP
+      // Single attempt only — the upstream retry skips HTTP
       // responses to avoid presenting an already-rotated RT.
       expect(mockExchange).toHaveBeenCalledTimes(1);
     });
@@ -835,7 +835,7 @@ describe('Token refresh flow', () => {
       mockExchange.mockRejectedValue(wrapped);
 
       await POST(makeTokenRequest('old-refresh-token'));
-      // Two attempts (the retryAsync configured for upstream uses attempts=2),
+      // Two attempts (the upstream retry allows one retry),
       // both fail, classify and emit.
       expect(mockExchange).toHaveBeenCalledTimes(2);
       expect(lastSloLine()).toMatch(/outcome=transient_upstream_network\b/);
