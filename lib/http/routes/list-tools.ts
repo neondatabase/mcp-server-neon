@@ -81,54 +81,57 @@ const listedTool = (tool: NeonTool) => ({
 // Notices are a top-level field instead of a suffix on every description, which
 // clients would re-send on every turn (issue #257). A malformed `roleName` is
 // the caller's mistake, answered inside the span so the span stays ok.
-const listToolsResponse = Effect.fn('ListTools.body')(function* (input: {
-  readonly searchParams: URLSearchParams;
-  readonly readOnlyHeader: string | undefined;
-  readonly secretsHeader: string | undefined;
-}) {
-  const { searchParams, readOnlyHeader, secretsHeader } = input;
+const listToolsResponse = Effect.fn('ListTools.body')(
+  function* (input: {
+    readonly searchParams: URLSearchParams;
+    readonly readOnlyHeader: string | undefined;
+    readonly secretsHeader: string | undefined;
+  }) {
+    const { searchParams, readOnlyHeader, secretsHeader } = input;
 
-  const grant = yield* step('resolve_grant', () =>
-    requestGrant(searchParams, secretsHeader),
-  ).pipe(Effect.catchTag('InvalidRoleName', Effect.succeed));
-
-  if (grant instanceof InvalidRoleName) {
-    return HttpServerResponse.jsonUnsafe(
-      { error: 'invalid_request', message: grant.message },
-      { status: 400, headers: CORS_HEADERS },
+    const grant = yield* step('resolve_grant', () =>
+      requestGrant(searchParams, secretsHeader),
     );
-  }
 
-  const readOnly = yield* step('resolve_read_only', () =>
-    isReadOnly({
-      queryParamValue: searchParams.get('readonly'),
-      headerValue: readOnlyHeader,
-    }),
-  );
+    const readOnly = yield* step('resolve_read_only', () =>
+      isReadOnly({
+        queryParamValue: searchParams.get('readonly'),
+        headerValue: readOnlyHeader,
+      }),
+    );
 
-  const tools = yield* step('get_filtered_tools', () =>
-    getFilteredTools(grant, readOnly),
-  );
+    const tools = yield* step('get_filtered_tools', () =>
+      getFilteredTools(grant, readOnly),
+    );
 
-  const notices = yield* step('get_access_control_notices', () =>
-    getAccessControlNotices(grant, readOnly),
-  );
+    const notices = yield* step('get_access_control_notices', () =>
+      getAccessControlNotices(grant, readOnly),
+    );
 
-  const warnings = yield* step('get_access_control_warnings', () =>
-    getAccessControlWarnings(grant, readOnly),
-  );
+    const warnings = yield* step('get_access_control_warnings', () =>
+      getAccessControlWarnings(grant, readOnly),
+    );
 
-  const body = yield* step('build_response_body', () => ({
-    grant,
-    readOnly,
-    // Absent rather than empty; JSON drops undefined fields.
-    notices: notices.length > 0 ? notices : undefined,
-    warnings: warnings.length > 0 ? warnings : undefined,
-    tools: tools.map((tool) => listedTool(tool)),
-  }));
+    const body = yield* step('build_response_body', () => ({
+      grant,
+      readOnly,
+      // Absent rather than empty; JSON drops undefined fields.
+      notices: notices.length > 0 ? notices : undefined,
+      warnings: warnings.length > 0 ? warnings : undefined,
+      tools: tools.map((tool) => listedTool(tool)),
+    }));
 
-  return HttpServerResponse.jsonUnsafe(body, { headers: CORS_HEADERS });
-});
+    return HttpServerResponse.jsonUnsafe(body, { headers: CORS_HEADERS });
+  },
+  Effect.catchTag('InvalidRoleName', ({ message }) =>
+    Effect.succeed(
+      HttpServerResponse.jsonUnsafe(
+        { error: 'invalid_request', message },
+        { status: 400, headers: CORS_HEADERS },
+      ),
+    ),
+  ),
+);
 
 const failedResponse = Effect.fn('ListTools.failed')(function* (input: {
   readonly failure: ListToolsFailed;
