@@ -13,6 +13,7 @@ import {
   getRefreshTokens,
   getTokens,
 } from '../oauth/kv-store';
+import { KvStoreWriteError } from '../oauth/kv-store-write-error';
 
 // Tags this file's pool so pg_terminate_backend only hits these connections,
 // not other test files sharing the database.
@@ -38,6 +39,8 @@ const waitFor = async (check: () => Promise<boolean>, timeoutMs = 10_000) => {
   }
 };
 
+type Readable = { readonly get: (key: string) => Promise<object | undefined> };
+
 const readAllStores = () =>
   Promise.all(
     [
@@ -49,7 +52,7 @@ const readAllStores = () =>
       getRefreshResults(),
       getRefreshFailures(),
       getApiKeys(),
-    ].map((store) => store.get(`missing-${randomUUID()}`)),
+    ].map(async (store: Readable) => store.get(`missing-${randomUUID()}`)),
   );
 
 describe('Keyv stores after the server terminates their connections', () => {
@@ -62,7 +65,7 @@ describe('Keyv stores after the server terminates their connections', () => {
       user: {},
     };
 
-    expect(await getTokens().set(tokenKey, token)).toBe(true);
+    await getTokens().set(tokenKey, token);
     expect(await readAllStores()).toEqual(Array(8).fill(undefined));
 
     // Hold the token row so the next write is mid-query when its backend is
@@ -91,7 +94,8 @@ describe('Keyv stores after the server terminates their connections', () => {
         expect.arrayContaining(['active', 'idle']),
       );
 
-      expect(await blockedWrite).toBe(false);
+      // The write the server cut off fails loudly instead of resolving false.
+      await expect(blockedWrite).rejects.toThrow(KvStoreWriteError);
     } finally {
       await locker.query('ROLLBACK');
       await locker.end();

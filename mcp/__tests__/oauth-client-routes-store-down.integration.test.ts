@@ -1,7 +1,7 @@
 /**
- * /api/revoke when the OAuth database refuses connections: the client gets
- * the OAuth `server_error` 500, the route span fails, and Sentry gets one
- * event naming the store operation.
+ * /api/register and /api/revoke when the OAuth database refuses connections:
+ * the client gets the OAuth `server_error` 500, the route span fails, and
+ * Sentry gets one event naming the store operation.
  */
 import { once } from 'node:events';
 import { flush, httpIntegration, init, startSpan } from '@sentry/node';
@@ -68,11 +68,53 @@ const routeSpan = async (name: string, description: string) => {
     ?.spans.find((span) => span.description === description);
 };
 
-describe('POST /api/revoke with the store down', () => {
+describe('OAuth client routes with the store down', () => {
   afterAll(async () => {
     fixture.close();
     await once(fixture, 'close');
   });
+
+  it('answers a registration with 500 instead of credentials it never stored', async () => {
+    const earlier = await errorEvents();
+
+    const response = await startSpan(
+      { name: 'register store down', op: 'http.server' },
+      async () =>
+        app.handler(
+          new Request('http://localhost/api/register', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              client_name: 'Codex',
+              redirect_uris: ['http://127.0.0.1:55555/callback'],
+              grant_types: ['authorization_code'],
+              response_types: ['code'],
+            }),
+          }),
+        ),
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toStrictEqual({
+      error: 'server_error',
+      error_description: 'Internal server error',
+    });
+    await expect(
+      routeSpan('register store down', 'OAuthRegister.register'),
+    ).resolves.toStrictEqual({
+      description: 'OAuthRegister.register',
+      status: 'internal_error',
+    });
+
+    const after = await errorEvents();
+    const reported = after.slice(earlier.length);
+
+    expect(reported).toHaveLength(1);
+    expect(reported[0]?.exception.values).toContainEqual({
+      type: 'OAuthStoreUnavailable',
+      value: 'OAuth store saveClient failed',
+    });
+  }, 30_000);
 
   it('answers 500 and reports the failed client lookup', async () => {
     const before = await errorEvents();
