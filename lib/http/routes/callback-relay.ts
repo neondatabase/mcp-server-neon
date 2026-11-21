@@ -1,4 +1,4 @@
-import { Effect, Option } from 'effect';
+import { Cause, Effect, ErrorReporter, Option } from 'effect';
 import { AuthTransactions } from '../../../mcp/oauth/auth-transactions';
 import { clientNameForPage } from '../../../mcp/oauth/auth-complete-response';
 import { isAuthTransactionId } from '../../../mcp/oauth/browser-binding';
@@ -65,7 +65,20 @@ const consumeForRelay = Effect.fnUntraced(function* (state: string) {
 
   const transactions = yield* AuthTransactions;
 
-  return yield* transactions.consumeBound({ id: state, browserSecret });
+  // An unreadable store is answered like a transaction we can't find, as it
+  // always was; the failure is the server's, so Sentry gets it.
+  return yield* transactions.consumeBound({ id: state, browserSecret }).pipe(
+    Effect.catchTag('OAuthStoreUnavailable', (failure) =>
+      ErrorReporter.report(Cause.fail(failure)).pipe(
+        Effect.andThen(
+          Effect.annotateCurrentSpan({
+            'error.type': 'OAuthStoreUnavailable',
+          }),
+        ),
+        Effect.as(Option.none()),
+      ),
+    ),
+  );
 });
 
 type Relay = {

@@ -5,34 +5,10 @@ import { FlowAnswer } from '../../../mcp/oauth/flow-answer';
 import { OAuthStore } from '../../../mcp/oauth/oauth-store';
 import { emitAuthCallbackSlo } from '../../oauth/auth-callback-slo';
 import { oauthBrowserRequest } from '../oauth-request';
-import { failed } from './callback-answers';
+import { failed, missingRefreshToken } from './callback-answers';
 import { resolveAccount } from './callback-account';
 import { authorizationCode, clientRedirect } from './callback-code-grant';
 import type { UpstreamTokens } from './callback-code-grant';
-
-/** Upstream must issue a refresh token; without one there is nothing to keep. */
-const missingRefreshToken = Effect.fnUntraced(function* (input: {
-  readonly startedAt: number;
-  readonly clientId: string;
-  readonly scope: string | undefined;
-}) {
-  yield* Effect.logError(
-    'Upstream did not issue refresh_token at callback; offline_access likely missing from granted scopes',
-  ).pipe(Effect.annotateLogs({ clientId: input.clientId, scope: input.scope }));
-  yield* emitAuthCallbackSlo({
-    outcome: 'internal_error',
-    startedAt: input.startedAt,
-    context: { clientId: input.clientId, reason: 'no_refresh_token' },
-  });
-
-  return FlowAnswer.OAuthError({
-    status: 502,
-    error: 'server_error',
-    description: 'Upstream did not issue a refresh token',
-    headers: {},
-    context: Option.none(),
-  });
-});
 
 const warnMissingExpiry = (input: {
   readonly tokens: UpstreamTokens;

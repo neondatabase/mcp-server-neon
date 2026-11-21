@@ -6,11 +6,24 @@
  * and distributed cache fallback (cross-instance) behavior.
  */
 
+import { init } from '@sentry/node';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RefreshResult } from '../oauth/kv-store';
 import type { RefreshRotation } from '../oauth/model';
 import type { RefreshLockStore } from '../oauth/refresh-lock-store';
 import { __setRefreshLockStoresForTests } from '../oauth/refresh-lock';
+
+// Server failures the route answers still reach Sentry; these record which.
+const reported: string[] = [];
+
+init({
+  dsn: 'http://public@127.0.0.1:1/1',
+  beforeSend: (event) => {
+    reported.push(event.exception?.values?.at(-1)?.type ?? 'unknown');
+
+    return null;
+  },
+});
 
 vi.mock('../oauth/model', () => {
   const getRefreshResult =
@@ -843,6 +856,8 @@ describe('Token refresh flow', () => {
         }),
       );
 
+      reported.length = 0;
+
       const response = await POST(makeTokenRequest('old-refresh-token'));
       const body = await response.json();
 
@@ -853,6 +868,10 @@ describe('Token refresh flow', () => {
       // signal that lets us track Postgres degradation rates.
       expect(lastSloLine()).toMatch(/outcome=transient_persist_failure\b/);
       expect(lastSloLine()).toMatch(/reason=recovered_via_cache/);
+      // The persist failure is the server's, so Sentry gets it once.
+      await vi.waitFor(() => {
+        expect(reported).toStrictEqual(['RefreshFailed']);
+      });
     });
 
     it('persist retry — succeeds on attempt 2 emits outcome=success', async () => {

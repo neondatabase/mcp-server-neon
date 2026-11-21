@@ -1,4 +1,4 @@
-import { Clock, Effect, Option } from 'effect';
+import { Cause, Clock, Effect, ErrorReporter, Option } from 'effect';
 import { HttpServerResponse } from 'effect/http';
 import type { Client } from 'oauth2-server';
 import type { RefreshResult } from '../../../mcp/oauth/kv-store';
@@ -7,6 +7,7 @@ import { RefreshRotations } from '../../../mcp/oauth/refresh-rotations';
 import { emitRefreshSlo, loggedReplay } from '../../../mcp/oauth/refresh-slo';
 import type { SloOutcome } from '../../../mcp/oauth/refresh-slo';
 import { cachedToResponse } from '../../../mcp/oauth/refresh-token-result';
+import type { RefreshTokenResult } from '../../../mcp/oauth/refresh-token-result';
 import { oauthErrorResponse } from '../oauth-error-response';
 import {
   checkSuccessCache,
@@ -101,6 +102,42 @@ const refreshAnswered = Effect.fnUntraced(function* (grant: Grant) {
 // A winning peer's cached result is folded into this answer. That also
 // covers a failed persist: the success cache is written before the persist,
 // so the client gets a clean 200 instead of a 500 and an immediate cliff.
+/** Another attempt already rotated this grant: serve its cached result. */
+const answerFromCache = Effect.fnUntraced(function* (input: {
+  readonly grant: Grant;
+  readonly failure: RefreshFailed;
+  readonly cached: RefreshTokenResult;
+}) {
+  const { grant, failure, cached } = input;
+  // A recovered persist failure still counts as bad in the SLO, so the
+  // metric doesn't mask Postgres degradation behind a 200.
+  const recovered = failure.outcome === 'transient_persist_failure';
+
+  const sloBucket: SloOutcome = recovered
+    ? 'transient_persist_failure'
+    : 'success';
+
+  // The client is served, but the server failed to persist the rotation.
+  if (recovered) {
+    yield* ErrorReporter.report(Cause.fail(failure));
+    yield* Effect.annotateCurrentSpan({ 'error.type': 'RefreshFailed' });
+  }
+
+  yield* Effect.logInfo(
+    'Returning cached refresh result (cross-instance hit)',
+  ).pipe(
+    Effect.annotateLogs({ sloBucket, underlyingOutcome: failure.outcome }),
+  );
+  yield* emitRefreshSlo({
+    outcome: sloBucket,
+    startMs: grant.startMs,
+    clientId: grant.client.id,
+    reason: recovered ? 'recovered_via_cache' : 'cache_replay_after_error',
+  });
+
+  return HttpServerResponse.jsonUnsafe(cached);
+});
+
 const answerRefreshFailure = Effect.fnUntraced(function* (input: {
   readonly grant: Grant;
   readonly failure: RefreshFailed;
@@ -110,27 +147,7 @@ const answerRefreshFailure = Effect.fnUntraced(function* (input: {
   const cached = yield* checkSuccessCache(grant);
 
   if (Option.isSome(cached)) {
-    // A recovered persist failure still counts as bad in the SLO, so the
-    // metric doesn't mask Postgres degradation behind a 200.
-    const recovered = failure.outcome === 'transient_persist_failure';
-
-    const sloBucket: SloOutcome = recovered
-      ? 'transient_persist_failure'
-      : 'success';
-
-    yield* Effect.logInfo(
-      'Returning cached refresh result (cross-instance hit)',
-    ).pipe(
-      Effect.annotateLogs({ sloBucket, underlyingOutcome: failure.outcome }),
-    );
-    yield* emitRefreshSlo({
-      outcome: sloBucket,
-      startMs,
-      clientId: client.id,
-      reason: recovered ? 'recovered_via_cache' : 'cache_replay_after_error',
-    });
-
-    return HttpServerResponse.jsonUnsafe(cached.value);
+    return yield* answerFromCache({ grant, failure, cached: cached.value });
   }
 
   yield* emitRefreshSlo({

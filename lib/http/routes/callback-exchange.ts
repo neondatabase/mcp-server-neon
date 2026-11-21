@@ -68,7 +68,8 @@ export const consumeApprovedTransaction = Effect.fnUntraced(function* (input: {
   const approved = yield* transactions
     .consumeApproved({ id: state, browserSecret })
     .pipe(
-      Effect.mapError(failed({ clientId: pendingClientId, consumed: true })),
+      // A failed consume may not have run its DELETE, so a reload can retry.
+      Effect.mapError(failed({ clientId: pendingClientId, consumed: false })),
     );
 
   if (Option.isNone(approved)) {

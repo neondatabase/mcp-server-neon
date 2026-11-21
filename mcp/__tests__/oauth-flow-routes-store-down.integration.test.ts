@@ -68,13 +68,13 @@ const spanStatus = async (name: string, description: string) => {
     ?.spans.find((span) => span.description === description)?.status;
 };
 
-const get = async (name: string, path: string, cookie?: string) =>
+const get = async (
+  name: string,
+  path: string,
+  headers: Record<string, string> = {},
+) =>
   startSpan({ name, op: 'http.server' }, async () =>
-    app.handler(
-      new Request(new URL(path, SERVER_HOST), {
-        headers: cookie === undefined ? {} : { cookie },
-      }),
-    ),
+    app.handler(new Request(new URL(path, SERVER_HOST), { headers })),
   );
 
 const STATE = 'a'.repeat(32);
@@ -121,7 +121,7 @@ describe('OAuth browser flow routes with the store down', () => {
     const response = await get(
       'callback store down',
       `/callback?code=c&state=${STATE}`,
-      `neon_mcp_at_${STATE}=${SECRET}`,
+      { cookie: `neon_mcp_at_${STATE}=${SECRET}` },
     );
 
     expect(response.status).toBe(500);
@@ -141,4 +141,34 @@ describe('OAuth browser flow routes with the store down', () => {
       value: 'OAuth callback failed',
     });
   }, 30_000);
+
+  it.each([
+    { accept: 'application/json', type: 'application/json' },
+    { accept: 'text/html', type: 'text/html' },
+  ])(
+    'answers a relayed upstream error ($accept) without a transaction and reports the store failure once',
+    async ({ accept, type }) => {
+      const earlier = await errorEvents();
+      const before = earlier.length;
+
+      const response = await get(
+        `callback relay store down ${accept}`,
+        `/callback?error=access_denied&error_description=denied&state=${STATE}`,
+        { cookie: `neon_mcp_at_${STATE}=${SECRET}`, accept },
+      );
+
+      expect(response.status).toBe(400);
+      expect(response.headers.get('content-type')).toContain(type);
+
+      const after = await errorEvents();
+      const reported = after.slice(before);
+
+      expect(reported).toHaveLength(1);
+      expect(reported[0]?.exception.values).toContainEqual({
+        type: 'OAuthStoreUnavailable',
+        value: 'OAuth store consumeBound failed',
+      });
+    },
+    30_000,
+  );
 });
