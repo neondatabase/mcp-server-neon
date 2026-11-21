@@ -1,6 +1,7 @@
 import { Effect, Layer } from 'effect';
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http';
 import { ServerConfig } from '../../config';
+import { landingMarkdownResponse } from '../../landing';
 import { CLIENT_ASSERTION_SIGNING_ALGORITHMS } from '../../oauth/client-assertion';
 import {
   deriveResourceIdentifierFromMetadataRequest,
@@ -89,6 +90,13 @@ const protectedResourceMetadata = Effect.gen(function* () {
   });
 }).pipe(Effect.withSpan('Discovery.protectedResourceMetadata'));
 
+const landingMarkdown = Effect.gen(function* () {
+  const request = yield* HttpServerRequest.HttpServerRequest;
+  const webRequest = yield* HttpServerRequest.toWeb(request);
+
+  return HttpServerResponse.fromWeb(landingMarkdownResponse(webRequest));
+}).pipe(Effect.withSpan('Discovery.landingMarkdown'));
+
 const discoveryDocument = (build: () => object, contentType: string) =>
   Effect.sync(() => discoveryResponse(build(), contentType));
 
@@ -136,6 +144,9 @@ export const DiscoveryRoutes = Layer.mergeAll(
       Effect.withSpan('Discovery.aiCatalog'),
     ),
   ),
+  // The landing page as Markdown, whatever the `Accept`. The route file exports
+  // only GET and HEAD, and the router has no HEAD method.
+  HttpRouter.add('*', '/mcp.md', landingMarkdown),
   HttpRouter.add('OPTIONS', '/mcp/server-card', discoveryPreflight),
   HttpRouter.add('OPTIONS', '/.well-known/mcp.json', discoveryPreflight),
   HttpRouter.add('OPTIONS', '/.well-known/ai-catalog.json', discoveryPreflight),

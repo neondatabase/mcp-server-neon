@@ -94,7 +94,7 @@ describe('landing page at the MCP URL', () => {
   });
 
   it('serves the Markdown page at /mcp.md whatever the Accept', async () => {
-    const response = getMarkdown(
+    const response = await getMarkdown(
       new Request('https://mcp.neon.tech/mcp.md', {
         headers: { Accept: '*/*' },
       }),
@@ -108,7 +108,7 @@ describe('landing page at the MCP URL', () => {
   });
 
   it('answers a HEAD for /mcp.md with headers and no body', async () => {
-    const response = headMarkdown(
+    const response = await headMarkdown(
       new Request('https://mcp.neon.tech/mcp.md', { method: 'HEAD' }),
     );
 

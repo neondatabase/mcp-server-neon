@@ -1,5 +1,7 @@
-import { landingMarkdownResponse } from '@/lib/landing';
+import { app } from '../../lib/http/app';
 
-export const GET = (req: Request): Response => landingMarkdownResponse(req);
+export const GET = async (request: Request): Promise<Response> =>
+  app.handler(request);
 
-export const HEAD = GET;
+export const HEAD = async (request: Request): Promise<Response> =>
+  app.handler(request);
