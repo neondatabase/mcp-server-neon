@@ -62,9 +62,9 @@ export const fetchAsMcpServer: typeof fetch = (input, init) => {
 };
 
 /**
- * The Neon API calls the server makes outside the tools: account resolution,
- * org selection for the project tools, and the live suites' setup and cleanup.
- * Tools call the API through `@neon/tools`.
+ * Promise wrappers for the OAuth callback's account resolution and the live
+ * suites' setup and cleanup. Tools call the API through `@neon/tools`; the
+ * transport's account and org lookups go through `NeonAccounts`.
  */
 export function createNeonClient(apiKey: string) {
   const neon = createSdkClient({
@@ -131,14 +131,6 @@ export function createNeonClient(apiKey: string) {
       return success(await neon.user.me({ signal: options?.signal }));
     },
 
-    async getCurrentUserOrganizations(options?: { signal?: AbortSignal }) {
-      return success({
-        organizations: await neon.user.organizations({
-          signal: options?.signal,
-        }),
-      });
-    },
-
     async getAuthDetails(options?: { signal?: AbortSignal }) {
       const data = await raw.getAuthDetails({
         client: neon.client,
@@ -161,5 +153,3 @@ export function createNeonClient(apiKey: string) {
 }
 
 export type NeonApiClient = ReturnType<typeof createNeonClient>;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export type Api<_Unused = unknown> = NeonApiClient;

@@ -1,11 +1,11 @@
-import { Environment } from '../constants';
 import type { GrantContext } from '../utils/grant-context';
 import { AuthContext } from './auth';
 
 export type AppContext = {
   name: string;
   transport: 'stream';
-  environment: Environment;
+  /** `NODE_ENV` as the process sees it, `production` when unset. */
+  environment: string;
   version: string;
 };
 

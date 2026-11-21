@@ -25,7 +25,6 @@ const API_KEY = 'fake-api-key-for-tests';
 
 const mocks = vi.hoisted(() => {
   return {
-    getAuthDetails: vi.fn(),
     apiKeysGet: vi.fn(),
     trackSpy: vi.fn(),
     captureExceptionSpy: vi.fn(),
@@ -38,12 +37,6 @@ const mocks = vi.hoisted(() => {
     },
   };
 });
-
-vi.mock('../server/api', () => ({
-  createNeonClient: () => ({
-    getAuthDetails: mocks.getAuthDetails,
-  }),
-}));
 
 vi.mock('../oauth/model', () => ({
   model: { getAccessToken: vi.fn() },
@@ -289,7 +282,9 @@ describe('pinned role through the MCP route', () => {
 
       expect(status).toBe(401);
       expect(mocks.apiKeysGet).not.toHaveBeenCalled();
-      expect(mocks.getAuthDetails).not.toHaveBeenCalled();
+      expect(neon.api).not.toContainEqual(
+        expect.objectContaining({ path: '/auth' }),
+      );
       expect(neon.connectionUriRequests()).toEqual([]);
     });
   });

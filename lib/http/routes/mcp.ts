@@ -1,32 +1,17 @@
-import {
-  localhostAllowedOrigins,
-  originValidationResponse,
-} from '@modelcontextprotocol/server';
-import { Context, Effect, Layer } from 'effect';
+import { Effect, Layer } from 'effect';
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http';
 import { flushAfterResponse } from '../../../mcp/sentry/flush';
+import { McpHandlers } from '../../../mcp/server/mcp-handlers';
 import {
   authChallengeResponse,
   authenticate,
-  grantParamError,
   tokenStoreUnavailableResponse,
 } from '../../../mcp/transport/auth';
 import { isDocsOnlyRequest } from '../../../mcp/utils/grant-context';
 import { SERVER_HOST } from '../../config';
 import { isLandingPageRequest, landingPageResponse } from '../../landing';
 import { buildResourceMetadataUrlForResourceRequest } from '../../oauth/protected-resource-metadata';
-import { isWellFormedOrigin } from '../../origin';
-
-/** The MCP handlers a request is handed to once it is accepted. */
-export class McpHandlers extends Context.Service<
-  McpHandlers,
-  {
-    /** `?category=docs`: no account, docs tools only. */
-    readonly serveDocsOnly: (req: Request) => Promise<Response>;
-    /** Runs with `req.auth` set to the authenticated caller. */
-    readonly serveAuthenticated: (req: Request) => Promise<Response>;
-  }
->()('@neondatabase/mcp-server-neon/lib/http/routes/mcp/McpHandlers') {}
+import { invalidGrantParamResponse, originRejection } from './mcp-rejections';
 
 const ROUTE_PATHS = {
   canonicalMcp: '/api/mcp',
@@ -45,48 +30,6 @@ const RETIRED_TRANSPORT_PATHS = [
 ];
 
 const JSON_RESPONSE_HEADERS = { 'Content-Type': 'application/json' } as const;
-
-// Local development is the local-server case the spec's DNS-rebinding rule
-// targets, so `next dev` only accepts its own and localhost origins.
-const DEV_ALLOWED_ORIGIN_HOSTNAMES = [
-  new URL(SERVER_HOST).hostname,
-  ...localhostAllowedOrigins(),
-].filter((hostname, index, hostnames) => hostnames.indexOf(hostname) === index);
-
-const originRejection = (req: Request): Response | undefined => {
-  if (process.env.NODE_ENV !== 'production') {
-    return originValidationResponse(req, DEV_ALLOWED_ORIGIN_HOSTNAMES);
-  }
-
-  const origin = req.headers.get('origin');
-
-  if (origin === null || isWellFormedOrigin(origin)) {
-    return undefined;
-  }
-
-  return Response.json(
-    {
-      jsonrpc: '2.0',
-      error: { code: -32_000, message: `Invalid Origin: ${origin}` },
-      id: null,
-    },
-    { status: 403 },
-  );
-};
-
-const invalidGrantParamResponse = (
-  url: URL,
-  req: Request,
-): Response | undefined => {
-  const message = grantParamError(url.searchParams, req.headers);
-
-  return message === undefined
-    ? undefined
-    : Response.json(
-        { error: 'invalid_request', error_description: message },
-        { status: 400 },
-      );
-};
 
 /**
  * What GET answers for this endpoint, minus the body.
@@ -140,17 +83,15 @@ const webRequest = HttpServerRequest.HttpServerRequest.pipe(
  * resource metadata URL derived from the request; an unreadable token store
  * gets 503.
  */
+type AuthInfo = Effect.Success<ReturnType<typeof authenticate>>;
+
 const authenticated = (
   req: Request,
   resourceRequest: Request,
-  serve: (req: Request) => Promise<Response>,
+  serve: (authInfo: AuthInfo) => Effect.Effect<Response>,
 ) =>
   authenticate(req).pipe(
-    Effect.flatMap((authInfo) => {
-      req.auth = authInfo;
-
-      return Effect.promise(async () => serve(req));
-    }),
+    Effect.flatMap(serve),
     Effect.catchTags({
       McpAuthRejected: (rejection) =>
         Effect.succeed(
@@ -171,9 +112,9 @@ const authenticated = (
 const head = (normalizedReq: Request, req: Request, docsOnly: boolean) =>
   docsOnly
     ? Effect.succeed(headMirrorResponse())
-    : authenticated(normalizedReq, req, async () => headMirrorResponse()).pipe(
-        Effect.map(stripBody),
-      );
+    : authenticated(normalizedReq, req, () =>
+        Effect.succeed(headMirrorResponse()),
+      ).pipe(Effect.map(stripBody));
 
 const transport = Effect.gen(function* () {
   const req = yield* webRequest;
@@ -207,10 +148,12 @@ const transport = Effect.gen(function* () {
   const { serveDocsOnly, serveAuthenticated } = yield* McpHandlers;
 
   const response = docsOnly
-    ? yield* Effect.promise(async () => serveDocsOnly(normalizedReq))
-    : yield* authenticated(normalizedReq, req, serveAuthenticated);
+    ? yield* serveDocsOnly({ request: normalizedReq })
+    : yield* authenticated(normalizedReq, req, (authInfo) =>
+        serveAuthenticated({ request: normalizedReq, authInfo }),
+      );
 
-  return flushAfterResponse(response);
+  return yield* flushAfterResponse(response);
 });
 
 const retired = HttpServerRequest.HttpServerRequest.pipe(

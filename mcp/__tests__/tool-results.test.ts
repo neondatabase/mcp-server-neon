@@ -5,7 +5,6 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ZodError } from 'zod';
-import { createNeonClient } from '../server/api';
 import { NEON_HANDLERS } from '../tools/tools';
 import type { ToolHandlerExtraParams } from '../tools/types';
 import {
@@ -61,7 +60,7 @@ afterEach(() => {
 function call(name: string, params: Record<string, unknown>) {
   const handler = NEON_HANDLERS[name];
   if (!handler) throw new Error(`No handler for ${name}`);
-  return runToolHandler(handler({ params }, createNeonClient(API_KEY), extra));
+  return runToolHandler(handler({ params }, extra));
 }
 
 describe('run_sql content', () => {

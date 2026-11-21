@@ -11,7 +11,6 @@ import { GET } from '../../app/callback/route';
 import { model } from '../oauth/model';
 import { track } from '../analytics/analytics';
 import { exchangeCode } from '../../lib/oauth/client';
-import { resolveAccountFromAuth } from '../server/account';
 import { logger } from '../utils/logger';
 import { seedApprovedTransaction } from './auth-transaction-fixtures';
 import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
@@ -51,15 +50,39 @@ vi.mock('../oauth/utils', () => ({
   generateRandomString: vi.fn(() => 'fixed-random'),
 }));
 
-vi.mock('../server/api', () => ({
-  createNeonClient: vi.fn(() => ({
-    getAuthDetails: vi.fn(async () => ({ data: { auth_method: 'session' } })),
-  })),
-}));
+// A local Neon API answers the account lookup for the upstream access token.
+await vi.hoisted(async () => {
+  const { createServer } = await import('node:http');
+  const { EventEmitter } = await import('node:events');
+  const { Predicate: P } = await import('effect');
 
-vi.mock('../server/account', () => ({
-  resolveAccountFromAuth: vi.fn(),
-}));
+  const answers = new Map<string, object>([
+    ['/api/v2/auth', { auth_method: 'oauth', account_id: 'user-1' }],
+    [
+      '/api/v2/users/me',
+      { id: 'user-1', name: 'User', last_name: '', email: 'user@example.com' },
+    ],
+  ]);
+
+  const api = createServer((req, res) => {
+    const answer = answers.get(req.url ?? '');
+
+    res.writeHead(answer === undefined ? 404 : 200, {
+      'content-type': 'application/json',
+    });
+    res.end(JSON.stringify(answer ?? { message: 'not found' }));
+  });
+
+  api.listen(0, '127.0.0.1');
+  await EventEmitter.once(api, 'listening');
+  api.unref();
+
+  const address = api.address();
+
+  const port = address === null || P.isString(address) ? 0 : address.port;
+
+  process.env.NEON_API_HOST = `http://127.0.0.1:${port}/api/v2`;
+});
 
 vi.mock('../analytics/analytics', () => ({
   track: vi.fn(),
@@ -141,12 +164,6 @@ describe('/callback route integration', () => {
       upstreamTokens({ refresh_token: 'upstream-refresh' }),
     );
 
-    vi.mocked(resolveAccountFromAuth).mockResolvedValue({
-      id: 'user-1',
-      name: 'User',
-      email: 'user@example.com',
-      isOrg: false,
-    } as never);
     vi.mocked(model.saveAuthorizationCode).mockResolvedValue({} as never);
   });
 

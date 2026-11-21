@@ -20,7 +20,7 @@ import type {
   ToolAnnotations,
 } from '@modelcontextprotocol/sdk/types.js';
 import { Effect } from 'effect';
-import type { Api } from '../neon-client';
+import type { NeonAccounts } from '../server/neon-accounts';
 import type { GrantContext } from '../utils/grant-context';
 import { toolSecrets } from '../utils/grant-context';
 import { NEON_HANDLERS, step } from './tools';
@@ -66,9 +66,8 @@ export function invokeTool(
   toolName: string,
   args: unknown,
   grant: GrantContext,
-  neonClient: Api<unknown>,
   extra: ToolHandlerExtraParams,
-): Effect.Effect<CallToolResult, ToolCallError> {
+): Effect.Effect<CallToolResult, ToolCallError, NeonAccounts> {
   const handler = NEON_HANDLERS[toolName];
   const tool = toolByName(toolName);
   return step(() => {
@@ -85,11 +84,14 @@ export function invokeTool(
     };
   }).pipe(
     Effect.flatMap(({ handler: run, args: effectiveArgs }) =>
-      run({ params: effectiveArgs }, neonClient, {
-        ...extra,
-        pinnedRoleName: grant.roleName,
-        secrets: toolSecrets(toolName, grant, extra.readOnly === true),
-      }),
+      run(
+        { params: effectiveArgs },
+        {
+          ...extra,
+          pinnedRoleName: grant.roleName,
+          secrets: toolSecrets(toolName, grant, extra.readOnly === true),
+        },
+      ),
     ),
   );
 }

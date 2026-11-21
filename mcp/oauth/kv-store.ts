@@ -1,11 +1,11 @@
 import { EventEmitter } from 'node:events';
 import pg from 'pg';
 import { logger } from '../utils/logger';
-import { retryAsync } from '../utils/retry';
 import type { AuthorizationCode, Client, Token } from 'oauth2-server';
 import Keyv from 'keyv';
 import { AuthContext } from '../types/auth';
 import { AuthDetailsResponse } from '../neon-client';
+import { KvStoreWriteError } from './kv-store-write-error';
 
 const SCHEMA = 'mcpauth';
 
@@ -33,23 +33,6 @@ export const isPgConnectFailure = (err: unknown): boolean => {
   const msg = err instanceof Error ? err.message : String(err);
   return PG_CONNECT_ERROR_PATTERNS.some((re) => re.test(msg));
 };
-
-/**
- * Retry a single Postgres-bound call once on connect failures. Idempotent
- * operations only (get/set/delete by primary key). Logs at warn on retry
- * so the SLO dashboards can still see the underlying blip even when the
- * user-visible outcome is success.
- */
-export const withPgConnectRetry = <T>(
-  op: string,
-  fn: () => Promise<T>,
-): Promise<T> =>
-  retryAsync(fn, {
-    attempts: 2,
-    delaysMs: [1500],
-    op,
-    shouldRetry: isPgConnectFailure,
-  });
 
 let pool: pg.Pool | null = null;
 
@@ -151,17 +134,63 @@ export class PostgresStore extends EventEmitter {
   }
 }
 
-const createLazyKeyv = <T>(table: string, errorLabel: string) => {
-  let instance: Keyv<T> | null = null;
+/**
+ * Keyv's `set` and `delete` catch a store error, emit it, and resolve `false`,
+ * so a write the database rejected looks like a success. These go around
+ * that: `set` throws when Keyv reports the failure, and `delete` asks the
+ * store directly, so a missing row (`false`) can't be confused with an error.
+ * Rows keep Keyv's key prefix and serialization.
+ */
+type KvTable<T> = {
+  readonly get: Keyv<T>['get'];
+  readonly set: (key: string, value: T, ttl?: number) => Promise<void>;
+  readonly delete: (key: string) => Promise<boolean>;
+};
 
-  const build = (): Keyv<T> => {
+const strictTable = <T>(
+  inst: Keyv<T>,
+  store: PostgresStore,
+  table: string,
+): KvTable<T> => ({
+  get: inst.get.bind(inst),
+  set: async (key, value, ttl) => {
+    let cause: Error | undefined = undefined;
+
+    const capture = (error: Error) => {
+      cause = error;
+    };
+
+    inst.on('error', capture);
+
+    try {
+      if (!(await inst.set(key, value, ttl))) {
+        throw new KvStoreWriteError('set', table, { cause });
+      }
+    } finally {
+      inst.off('error', capture);
+    }
+  },
+  delete: async (key) => {
+    try {
+      return await store.delete(inst._getKeyPrefix(key));
+    } catch (error) {
+      throw new KvStoreWriteError('delete', table, { cause: error });
+    }
+  },
+});
+
+const createLazyKeyv = <T>(table: string, errorLabel: string) => {
+  let instance: KvTable<T> | null = null;
+
+  const build = (): KvTable<T> => {
     logger.info(`initializing keyv for ${table}`);
-    const inst = new Keyv<T>({ store: new PostgresStore(table) });
+    const store = new PostgresStore(table);
+    const inst = new Keyv<T>({ store });
     inst.on('error', (err) => {
       logger.error(`${errorLabel} keyv error:`, { err });
     });
     logger.info(`keyv initialized for ${table}`);
-    return inst;
+    return strictTable(inst, store, table);
   };
 
   return () => (instance ??= build());
