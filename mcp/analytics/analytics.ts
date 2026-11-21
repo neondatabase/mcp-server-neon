@@ -28,7 +28,7 @@ const analytics: Analytics | undefined =
 // Segment drops an event once its retries are exhausted and flush() still
 // resolves, so this listener is the only trace of the lost event.
 analytics?.on('error', (error) => {
-  logger.error('Analytics delivery failed', {
+  logger.warn('Analytics delivery failed', {
     code: error.code,
     reason: error.reason instanceof Error ? error.reason.message : undefined,
   });

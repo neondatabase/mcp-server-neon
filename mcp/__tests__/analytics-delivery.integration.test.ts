@@ -146,7 +146,7 @@ describe('analytics delivery with the Segment client', () => {
       logs.lines.map((line) => LogLine.parse(JSON.parse(line))),
     ).toStrictEqual([
       {
-        level: 'error',
+        level: 'warn',
         message: 'Analytics delivery failed',
         code: 'delivery_failure',
         reason: '[400] Bad Request',
