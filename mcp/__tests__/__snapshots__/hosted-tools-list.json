@@ -83,7 +83,7 @@
   {
     "name": "run_sql",
     "title": "Run SQL",
-    "description": "Runs one SQL statement on a branch's database and returns its rows. For several statements, send one per call or use run_sql_transaction. After a prepare step, pass its temporary branch_id. NEVER run destructive SQL autonomously; always ask the user first.",
+    "description": "Runs one SQL statement on a branch's database and returns its rows. For several statements, send one per call or use run_sql_transaction. After a prepare step, pass its temporary branch_id. NEVER run destructive SQL autonomously: run it only when the user's own message asks for it and unambiguously identifies its target; otherwise ask first.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -176,7 +176,7 @@
   {
     "name": "run_sql_transaction",
     "title": "Run SQL Transaction",
-    "description": "Runs several SQL statements in one transaction and returns each one's rows. After a prepare step, pass its temporary branch_id. NEVER run destructive SQL autonomously; always ask the user first.",
+    "description": "Runs several SQL statements in one transaction and returns each one's rows. After a prepare step, pass its temporary branch_id. NEVER run destructive SQL autonomously: run it only when the user's own message asks for it and unambiguously identifies its target; otherwise ask first.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -388,7 +388,7 @@
   {
     "name": "prepare_database_migration",
     "title": "Prepare Database Migration",
-    "description": "Applies a schema change on a new temporary branch and returns a migration_id. Test it there with run_sql, ask the user, then always call complete_database_migration with the response's complete object so the branch is deleted.",
+    "description": "Applies a schema change on a new temporary branch and returns a migration_id. Test it there with run_sql, then always call complete_database_migration with the response's complete object so the branch is deleted.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -459,7 +459,7 @@
   {
     "name": "complete_database_migration",
     "title": "Complete Database Migration",
-    "description": "Applies or discards a prepared migration and deletes the temporary branch. NEVER run autonomously; always ask the user first. Pass the complete object from prepare_database_migration; apply_changes false discards.",
+    "description": "Applies or discards a prepared migration and deletes the temporary branch. NEVER run autonomously: run it only when the user's own message asks for it and unambiguously identifies its target; otherwise ask first. Pass the complete object from prepare_database_migration; apply_changes false discards.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1110,7 +1110,7 @@
   {
     "name": "list_slow_queries",
     "title": "List Slow Queries",
-    "description": "Lists queries from pg_stat_statements, slowest mean execution time first. For sizes, indexes, locks, cache, bloat, or replication, use inspect_database.",
+    "description": "Lists queries from pg_stat_statements, slowest mean execution time first, leaving out Neon's own setup and session-reset statements. For sizes, indexes, locks, cache, bloat, or replication, use inspect_database.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2961,7 +2961,7 @@
   {
     "name": "delete_project",
     "title": "Delete project",
-    "description": "Deletes a project with all its branches, computes, databases, and roles. NEVER run autonomously; always ask the user first. recover_project undoes it within 7 days. For one branch, use delete_branch.",
+    "description": "Deletes a project with all its branches, computes, databases, and roles. NEVER run autonomously: run it only when the user's own message asks for it and unambiguously identifies its target; otherwise ask first. recover_project undoes it within 7 days. For one branch, use delete_branch.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4945,7 +4945,7 @@
   {
     "name": "delete_branch",
     "title": "Delete branch",
-    "description": "Deletes a branch with all its data and disconnects its clients. NEVER run autonomously; always ask the user first. The root, the default, and a branch with children cannot be deleted. For the whole project, use delete_project.",
+    "description": "Deletes a branch with all its data and disconnects its clients. NEVER run autonomously: run it only when the user's own message asks for it and unambiguously identifies its target; otherwise ask first. The root, the default, and a branch with children cannot be deleted. Returns the deleted branch, or null when the project has no branch with that id. For the whole project, use delete_project.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4971,7 +4971,181 @@
       "type": "object",
       "properties": {
         "data": {
-          "type": "null"
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "project_id": {
+                  "type": "string"
+                },
+                "parent_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "parent_lsn": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "parent_timestamp": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "current_state": {
+                  "type": "string"
+                },
+                "pending_state": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "state_changed_at": {
+                  "type": "string"
+                },
+                "logical_size": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "creation_source": {
+                  "type": "string"
+                },
+                "primary": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "default": {
+                  "type": "boolean"
+                },
+                "protected": {
+                  "type": "boolean"
+                },
+                "cpu_used_sec": {
+                  "type": "number"
+                },
+                "compute_time_seconds": {
+                  "type": "number"
+                },
+                "active_time_seconds": {
+                  "type": "number"
+                },
+                "written_data_bytes": {
+                  "type": "number"
+                },
+                "data_transfer_bytes": {
+                  "type": "number"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "ttl_interval_seconds": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "expires_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "last_reset_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "created_by": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "init_source": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "restore_status": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "restored_from": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "restored_as": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "restricted_actions": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "recovery": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "project_id",
+                "name",
+                "current_state",
+                "state_changed_at",
+                "creation_source",
+                "default",
+                "protected",
+                "cpu_used_sec",
+                "compute_time_seconds",
+                "active_time_seconds",
+                "written_data_bytes",
+                "data_transfer_bytes",
+                "created_at",
+                "updated_at"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -5405,7 +5579,7 @@
   {
     "name": "reset_from_parent",
     "title": "Reset branch from parent",
-    "description": "Resets a branch to its parent's current state, discarding the branch's own changes. NEVER run autonomously; always ask the user first. preserve_under_name first saves the current state as a new branch. To restore a snapshot, use restore_snapshot.",
+    "description": "Resets a branch to its parent's current state, discarding the branch's own changes. NEVER run autonomously: run it only when the user's own message asks for it and unambiguously identifies its target; otherwise ask first. preserve_under_name first saves the current state as a new branch. To restore a snapshot, use restore_snapshot.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5702,7 +5876,7 @@
   {
     "name": "finalize_branch_restore",
     "title": "Finalize branch restore from snapshot",
-    "description": "Finalizes a branch restored with finalize false: moves the original branch's computes onto it, restarting them, and takes over its name. NEVER run autonomously; always ask the user first.",
+    "description": "Finalizes a branch restored with finalize false: moves the original branch's computes onto it, restarting them, and takes over its name. NEVER run autonomously: run it only when the user's own message asks for it and unambiguously identifies its target; otherwise ask first.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -8619,7 +8793,7 @@
   {
     "name": "restore_snapshot",
     "title": "Restore snapshot",
-    "description": "Restores a snapshot into a new branch and waits until it is ready. finalize true replaces target_branch_id (default: the snapshot's source branch) with it. NEVER finalize autonomously; ask the user first. Swap in later with finalize_branch_restore.",
+    "description": "Restores a snapshot into a new branch and waits until it is ready. finalize true replaces target_branch_id (default: the snapshot's source branch) with it. NEVER finalize autonomously: finalize only when the user's own message asks for it and unambiguously identifies its target; otherwise ask first. Swap in later with finalize_branch_restore.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -14970,7 +15144,7 @@
   {
     "name": "enable_realtime",
     "title": "Enable Realtime",
-    "description": "Enables Realtime on a branch, or changes its allowed origins, and waits until it is applied. Enabling turns on logical replication for the whole project, which cannot be turned off, and suspends every compute in the project, dropping active connections. NEVER run autonomously; always ask the user first.",
+    "description": "Enables Realtime on a branch, or changes its allowed origins, and waits until it is applied. Enabling turns on logical replication for the whole project, which cannot be turned off, and suspends every compute in the project, dropping active connections. NEVER run autonomously: run it only when the user's own message asks for it and unambiguously identifies its target; otherwise ask first.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -15125,7 +15299,7 @@
   {
     "name": "rotate_realtime_secret",
     "title": "Rotate the Realtime shared secret",
-    "description": "Replaces a branch's Realtime secret and waits until the old one stops working. NEVER run autonomously; always ask the user first. Then update the application backend from get_realtime_secret.",
+    "description": "Replaces a branch's Realtime secret and waits until the old one stops working. NEVER run autonomously: run it only when the user's own message asks for it and unambiguously identifies its target; otherwise ask first. Then update the application backend from get_realtime_secret.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",

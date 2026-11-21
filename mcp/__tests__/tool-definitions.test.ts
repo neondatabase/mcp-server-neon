@@ -94,6 +94,20 @@ describe('NEON_TOOLS definitions', () => {
     }
   });
 
+  it('no destructive tool tells agents to always ask the user first', () => {
+    const destructive = NEON_TOOLS.filter(
+      (tool) => tool.annotations.destructiveHint === true,
+    );
+
+    expect(destructive.length).toBeGreaterThan(0);
+
+    const oldRule = destructive
+      .filter((tool) => tool.description.includes('always ask the user first'))
+      .map((tool) => tool.name);
+
+    expect(oldRule).toStrictEqual([]);
+  });
+
   it('marks private Neon operations closed-world and public-capable ones open-world', () => {
     expect(NEON_TOOLS).toHaveLength(141);
     const generated = NEON_TOOLS.filter((tool) => tool.kind === 'generated');

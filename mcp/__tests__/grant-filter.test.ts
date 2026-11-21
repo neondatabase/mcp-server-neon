@@ -250,7 +250,7 @@ describe('getAccessControlNotices', () => {
     expect(notices[0]).toContain('Write mode active');
     expect(notices[0]).toContain('destructiveHint');
     expect(notices[0]).toContain(
-      "invoke it only when the user's own message asks for that action, otherwise ask first",
+      "invoke it only when the user's own message asks for that action and unambiguously identifies its target; otherwise ask first",
     );
     expect(notices[2]).toContain('secrets=all');
   });

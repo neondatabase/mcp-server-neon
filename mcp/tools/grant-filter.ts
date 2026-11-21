@@ -155,7 +155,7 @@ export function getAccessControlNotices(
     if (hasExposedDestructive) {
       notices.push(
         'Notice: Write mode active. Destructive tools are exposed. ' +
-          "For tools with `destructiveHint: true`, NEVER invoke one autonomously: invoke it only when the user's own message asks for that action, otherwise ask first.",
+          "For tools with `destructiveHint: true`, NEVER invoke one autonomously: invoke it only when the user's own message asks for that action and unambiguously identifies its target; otherwise ask first.",
       );
     }
   }
