@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { captureExceptionSpy, logger } = vi.hoisted(() => ({
+const { captureExceptionSpy, flushSpy, logger } = vi.hoisted(() => ({
   captureExceptionSpy: vi.fn(),
+  flushSpy: vi.fn<(timeout: number) => Promise<boolean>>(async () => true),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@sentry/node', () => ({ captureException: captureExceptionSpy }));
+vi.mock('@sentry/node', () => ({
+  captureException: captureExceptionSpy,
+  flush: flushSpy,
+}));
 vi.mock('../utils/logger', () => ({ logger }));
 
 const { mcpRuntime } = await import('../../lib/effect/runtime');
@@ -96,5 +100,52 @@ describe('createSdkErrorReporter', () => {
         extra: { source: 'request', severity: 'error', status: 500 },
       }),
     );
+  });
+
+  it('keeps the function alive to report held errors after a client disconnect', async () => {
+    const keepalives: Promise<unknown>[] = [];
+    const requestContext = Symbol.for('@vercel/request-context');
+
+    Object.defineProperty(globalThis, requestContext, {
+      value: {
+        get: () => ({
+          waitUntil: (promise: Promise<unknown>) => keepalives.push(promise),
+        }),
+      },
+      configurable: true,
+    });
+
+    try {
+      const reporter = createSdkErrorReporter(() => tags);
+      const response = Promise.withResolvers<Response>();
+      const disconnect = new AbortController();
+
+      reporter.onError(sdkError('factory failed before disconnect'));
+
+      const request = mcpRuntime.runPromiseExit(
+        reporter.settleAfter(response.promise),
+        { signal: disconnect.signal },
+      );
+
+      disconnect.abort();
+      await request;
+
+      expect(keepalives).toHaveLength(1);
+
+      response.resolve(new Response(null, { status: 500 }));
+      await Promise.all(keepalives);
+
+      expect(captureExceptionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'factory failed before disconnect',
+        }),
+        expect.objectContaining({
+          extra: { source: 'request', severity: 'error', status: 500 },
+        }),
+      );
+      expect(flushSpy).toHaveBeenCalledWith(2000);
+    } finally {
+      Reflect.deleteProperty(globalThis, requestContext);
+    }
   });
 });

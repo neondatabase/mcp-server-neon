@@ -1,7 +1,9 @@
 import type { McpHandlerOptions } from 'mcp-handler';
 import { Cause, Effect, Exit } from 'effect';
+import { runAfterResponse } from '../../lib/effect/runtime';
+import type { McpCallbackServices } from '../../lib/effect/runtime';
 import { reportServerFailure } from '../sentry/effect';
-import { runSdkCallback } from './tool-call';
+import { flushSentry } from '../sentry/flush';
 
 type McpErrorEvent = Extract<
   Parameters<NonNullable<McpHandlerOptions['onEvent']>>[0],
@@ -47,6 +49,13 @@ const reportSdkError = (
   );
 };
 
+// A report made once the request is over has no response flush behind it.
+const reportAfterResponse = (
+  report: Effect.Effect<void, never, McpCallbackServices>,
+) => {
+  runAfterResponse(report.pipe(Effect.andThen(flushSentry)));
+};
+
 /**
  * mcp-handler forwards every SDK `onerror` report as severity `error`. The SDK
  * reports requests it rejects with a 4xx the same way as its own 500s, and it
@@ -83,7 +92,7 @@ export const createSdkErrorReporter = (tags: SentryTags) => {
   return {
     onError: (event: McpErrorEvent): void => {
       if (state.settled) {
-        runSdkCallback(reportSdkError(event, undefined, tags));
+        reportAfterResponse(reportSdkError(event, undefined, tags));
 
         return;
       }
@@ -103,7 +112,7 @@ export const createSdkErrorReporter = (tags: SentryTags) => {
             onFailure: (cause) =>
               Cause.hasInterruptsOnly(cause)
                 ? Effect.sync(() => {
-                    runSdkCallback(settleWhenDone(response));
+                    reportAfterResponse(settleWhenDone(response));
                   })
                 : settle(500),
           }),
