@@ -1,6 +1,11 @@
 import type { Effect } from 'effect';
 import { isPgConnectFailure } from './kv-store';
+import { KvStoreWriteError } from './kv-store-write-error';
 import { retryLogged } from './logged-retry';
+
+// A store write failure wraps the database error that classifies it.
+const databaseCause = (cause: unknown) =>
+  cause instanceof KvStoreWriteError ? cause.cause : cause;
 
 const describe = (cause: unknown) =>
   cause instanceof Error ? cause.message : String(cause);
@@ -21,6 +26,6 @@ export const retryPgConnect =
       attempt,
       op,
       delaysMs: [1500],
-      retryable: (error) => isPgConnectFailure(error.cause),
-      describe: (error) => describe(error.cause),
+      retryable: (error) => isPgConnectFailure(databaseCause(error.cause)),
+      describe: (error) => describe(databaseCause(error.cause)),
     });
