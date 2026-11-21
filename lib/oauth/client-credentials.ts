@@ -21,7 +21,7 @@ type ClientCredentials = {
   clientAssertionType: string | undefined;
 };
 
-export function extractClientCredentials(
+function extractClientCredentials(
   authorization: string | null | undefined,
   formData: URLSearchParams,
 ): ClientCredentials {

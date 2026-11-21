@@ -294,10 +294,9 @@ normally provided through `.env.local`. Key variables:
 ├── lib/                # Next.js-compatible utilities
 │   ├── assert.ts       # Type-narrowing assertion helper
 │   ├── config.ts       # Centralized configuration
-│   ├── errors.ts       # OAuth-aware HTTP error mapping for route handlers
 │   ├── http/app.ts     # Effect HttpRouter web handler every route file forwards to
-│   ├── http/routes/    # Effect routes: health, discovery, list-tools, MCP transport, OAuth register, revoke, and auth-complete events
-│   └── oauth/          # OAuth utilities for Next.js
+│   ├── http/routes/    # Effect routes: health, discovery, list-tools, MCP transport, and the OAuth server (register, revoke, authorize, callback, token, auth-complete events)
+│   └── oauth/          # OAuth utilities: upstream Hydra client (UpstreamOAuth), OAuth error answers, client credentials
 ├── mcp/            # MCP server source code
 │   ├── __tests__/      # Vitest unit/integration/MCP e2e tests
 │   │   ├── live/                   # Opt-in MCP → real Neon lifecycle tests
@@ -327,7 +326,6 @@ normally provided through `.env.local`. Key variables:
 │   │   ├── read-only.ts          # Read-only mode detection, SUPPORTED_SCOPES
 │   │   ├── secrets.ts            # secrets param/header, effective mode, notices
 │   │   ├── grant-context.ts      # Grant resolution + scope categories + project scoping
-│   │   ├── singleflight.ts       # Promise deduplication by key (concurrent-call coalescing)
 │   │   ├── trace.ts              # TraceId generation for request correlation
 │   │   ├── client-application.ts # Client application utilities
 │   │   └── logger.ts             # Logging utilities

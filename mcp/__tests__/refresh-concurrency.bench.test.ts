@@ -6,9 +6,8 @@
  * forwarding to upstream Hydra — Hydra detects refresh-token reuse and
  * revokes the entire chain. This file simulates that by:
  *
- *   1. Replacing the in-memory `singleflight` with a passthrough — that
- *      module dedups within one instance, so leaving it in would mask the
- *      cross-instance behavior we want to test.
+ *   1. Relying on the same-instance dedup sitting inside the lock: every
+ *      request has to take or wait on the cross-instance lock first.
  *   2. Mocking `redis` with a shared in-memory store so all concurrent
  *      callers see the same lock state (as they would in production).
  *   3. Mocking `model` with a shared in-memory store standing in for
@@ -137,13 +136,6 @@ vi.mock('redis', () => {
   return { createClient: vi.fn(() => createRedisMock()) };
 });
 
-// Passthrough singleflight — bypasses same-instance dedup so the lock has
-// to do the work, simulating cross-instance behavior.
-vi.mock('../utils/singleflight', () => ({
-  singleflight: async <T>(_key: string, fn: () => Promise<T>): Promise<T> =>
-    fn(),
-}));
-
 vi.mock('../oauth/model', () => ({
   model: {
     getClient: async (id: string) =>
@@ -219,13 +211,6 @@ vi.mock('../oauth/utils', () => ({
 vi.mock('../analytics/analytics', () => ({
   identify: vi.fn(),
   flushAnalytics: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('../../lib/errors', () => ({
-  handleOAuthError: vi.fn(
-    () =>
-      new Response(JSON.stringify({ error: 'server_error' }), { status: 500 }),
-  ),
 }));
 
 vi.mock('@vercel/functions', () => ({
@@ -494,7 +479,7 @@ describe('Concurrent refresh — race coverage', () => {
 
 // ─────────────────────────────────────────────────────────────────────────
 // Multi-listener bench: simulates N independent Vercel instances by giving
-// each one its own module graph (own singleflight Map, own redis-client
+// each one its own module graph (own RefreshInflight map, own redis-client
 // memoization in refresh-lock.ts), exposed via real HTTP on distinct ports.
 // They share only the mock Redis backing state and the mock Postgres model
 // state — same as production where multiple Vercel instances share one
@@ -559,7 +544,7 @@ describe('Distributed lock across real HTTP listeners', () => {
     state.upstreamLatencyMs = 100;
 
     // Spin up 5 listeners, each backed by its own isolated route-handler
-    // module graph (own singleflight Map, own redis client memo).
+    // module graph (own RefreshInflight map, own redis client memo).
     const listeners: Listener[] = [];
     for (let i = 0; i < 5; i++) {
       const handler = await loadIsolatedHandler();

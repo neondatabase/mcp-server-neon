@@ -196,6 +196,36 @@ describe('refresh token client binding', () => {
     expect(upstream.calls).toBe(1);
   });
 
+  it('answers a stored code whose user does not decode with 500 and saves no token', async () => {
+    const authorizationCode = `code-${randomUUID()}`;
+    const accessToken = `at-${randomUUID()}`;
+
+    await model.saveAuthorizationCode({
+      authorizationCode,
+      expiresAt: new Date(Date.now() + 60_000),
+      redirectUri: 'http://localhost/callback',
+      scope: 'read write',
+      client: { id: owner.id, grants: [] },
+      user: { id: 'user-1' },
+      token: {
+        access_token: accessToken,
+        refresh_token: `rt-${randomUUID()}`,
+        access_token_expires_at: Date.now() + 3_600_000,
+      },
+    });
+
+    const response = await tokenRoute.POST(
+      form('/api/token', owner, {
+        grant_type: 'authorization_code',
+        code: authorizationCode,
+        redirect_uri: 'http://localhost/callback',
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    await expect(model.getAccessToken(accessToken)).resolves.toBeUndefined();
+  });
+
   it('attributes cached rotations written without a client through the chain', async () => {
     const first = await seedRefreshToken();
     const second = await refresh(owner, first);

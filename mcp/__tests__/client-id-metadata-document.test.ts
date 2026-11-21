@@ -12,7 +12,7 @@ import {
   type FetchMetadataDocument,
   type MetadataDocumentResponse,
 } from '../../lib/oauth/client-id-metadata-document';
-import { handleOAuthError } from '../../lib/errors';
+import { oauthErrorAnswer } from '../../lib/oauth/oauth-error';
 
 const CLIENT_ID = 'https://client.example.com/oauth/metadata.json';
 
@@ -398,17 +398,15 @@ describe('fetchOverHttps', () => {
   });
 });
 
-describe('handleOAuthError', () => {
-  it('answers an unreadable metadata document with 503, not invalid_client', async () => {
-    const response = handleOAuthError(
-      new ClientMetadataUnavailableError('timed out'),
-      'test',
-    );
-
-    expect(response.status).toBe(503);
-    expect(response.headers.get('Retry-After')).toBe('30');
-    expect(await response.json()).toMatchObject({
+describe('oauthErrorAnswer', () => {
+  it('answers an unreadable metadata document with 503, not invalid_client', () => {
+    expect(
+      oauthErrorAnswer(new ClientMetadataUnavailableError('timed out')),
+    ).toStrictEqual({
+      status: 503,
       error: 'temporarily_unavailable',
+      description: 'Could not read the client ID metadata document',
+      headers: { 'Retry-After': '30' },
     });
   });
 });

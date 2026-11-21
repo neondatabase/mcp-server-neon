@@ -132,7 +132,7 @@ const CLIENT = {
 
 let databaseUrl: string;
 
-// A fresh module graph per instance: its own singleflight, its own lock
+// A fresh module graph per instance: its own RefreshInflight, its own lock
 // store clients, its own Keyv pools. Only the databases are shared.
 async function startInstance(phase: Phase): Promise<Instance> {
   vi.resetModules();
