@@ -37,14 +37,10 @@ const userIdOf = (code: AuthorizationCode) => {
 
 const identifyUser = Effect.fnUntraced(function* (input: {
   readonly client: Client;
-  readonly code: AuthorizationCode;
+  readonly user: typeof CodeUser.Type;
 }) {
+  const { user } = input;
   const analytics = yield* Analytics;
-
-  const user = yield* Schema.decodeUnknownEffect(CodeUser)(
-    input.code.user,
-  ).pipe(storedFault);
-
   const clientName: unknown = input.client.client_name;
 
   yield* analytics.identify({
@@ -91,6 +87,11 @@ const issueTokens = Effect.fnUntraced(function* (input: {
   const issued =
     yield* Schema.decodeUnknownEffect(IssuedTokens)(code).pipe(storedFault);
 
+  // Decoded before any write, so a malformed code saves nothing.
+  const user = yield* Schema.decodeUnknownEffect(CodeUser)(code.user).pipe(
+    storedFault,
+  );
+
   const upstreamRefreshToken = issued.token.refresh_token;
 
   if (!isPresent(upstreamRefreshToken)) {
@@ -120,7 +121,7 @@ const issueTokens = Effect.fnUntraced(function* (input: {
     refreshToken: upstreamRefreshToken,
   });
 
-  yield* identifyUser({ client, code });
+  yield* identifyUser({ client, user });
   // An authorization code can only be used once.
   yield* store.consumeAuthorizationCode({ code });
   yield* Effect.logInfo('Authorization code exchanged successfully');
