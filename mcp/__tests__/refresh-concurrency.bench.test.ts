@@ -213,13 +213,6 @@ vi.mock('../analytics/analytics', () => ({
   flushAnalytics: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../../lib/errors', () => ({
-  handleOAuthError: vi.fn(
-    () =>
-      new Response(JSON.stringify({ error: 'server_error' }), { status: 500 }),
-  ),
-}));
-
 vi.mock('@vercel/functions', () => ({
   waitUntil: vi.fn(),
 }));
