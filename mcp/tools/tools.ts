@@ -414,6 +414,7 @@ const queryTuningCompletionFailed = (cause: Cause.Cause<ToolCallError>) => {
     ToolStepFailed.make({
       error: new Error(
         `Failed to complete query tuning: ${failed instanceof Error ? failed.message : String(failed)}`,
+        { cause: failed },
       ),
     }),
   );
