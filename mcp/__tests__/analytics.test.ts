@@ -4,6 +4,7 @@ const analyticsSpies = vi.hoisted(() => ({
   closeAndFlush: vi.fn().mockResolvedValue(undefined),
   flush: vi.fn().mockResolvedValue(undefined),
   identify: vi.fn(),
+  on: vi.fn<() => void>(),
   track: vi.fn(),
 }));
 
@@ -12,6 +13,7 @@ vi.mock('@segment/analytics-node', () => ({
     closeAndFlush = analyticsSpies.closeAndFlush;
     flush = analyticsSpies.flush;
     identify = analyticsSpies.identify;
+    on = analyticsSpies.on;
     track = analyticsSpies.track;
   },
 }));
