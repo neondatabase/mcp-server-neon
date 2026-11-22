@@ -105,11 +105,14 @@ const passthroughLockStore = {
 
 // Spy on logger so SLO assertions can read what was emitted.
 const loggerInfoSpy = vi.fn();
+const loggerWarnSpy = vi.fn<(...args: unknown[]) => void>();
 const loggerErrorSpy = vi.fn();
 vi.mock('../utils/logger', () => ({
   logger: {
     info: (...args: unknown[]) => loggerInfoSpy(...args),
-    warn: vi.fn(),
+    warn: (...args: unknown[]) => {
+      loggerWarnSpy(...args);
+    },
     error: (...args: unknown[]) => loggerErrorSpy(...args),
     debug: vi.fn(),
   },
@@ -901,5 +904,176 @@ describe('Token refresh flow', () => {
       expect(response.status).toBe(400);
       expect(lastSloLine()).toMatch(/outcome=bad_request\b/);
     });
+  });
+
+  describe('store reads that fall back', () => {
+    const refused = () =>
+      Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), {
+        code: 'ECONNREFUSED',
+      });
+
+    const answer = async () => {
+      const response = await POST(makeTokenRequest('old-refresh-token'));
+      const body: unknown = await response.json();
+
+      return {
+        status: response.status,
+        body,
+        slo: lastSloLine()?.replace(/elapsedMs=\d+/u, 'elapsedMs=*'),
+      };
+    };
+
+    const FALLBACK_MESSAGES = new Set<unknown>([
+      'Refresh cache read failed, continuing without it',
+      'refresh-lock isHeld failed, still waiting',
+      'refresh-lock transient marker read failed, assuming none',
+    ]);
+
+    const fallbackWarnings = () =>
+      loggerWarnSpy.mock.calls.filter(([message]) =>
+        FALLBACK_MESSAGES.has(message),
+      );
+
+    beforeEach(() => {
+      loggerWarnSpy.mockClear();
+      reported.length = 0;
+    });
+
+    const failureCacheWarning = [
+      'Refresh cache read failed, continuing without it',
+      {
+        store: 'refresh_failures',
+        operation: 'getRefreshFailure',
+        errorName: 'Error',
+        errorCode: 'ECONNREFUSED',
+      },
+    ];
+
+    it('answers as with an empty failure cache when reading it fails, logging it once', async () => {
+      mockModel.getRefreshToken.mockResolvedValue(undefined);
+      const healthy = await answer();
+      const healthyReads = mockModel.getRefreshFailure.mock.calls.length;
+      mockModel.getRefreshFailure.mockRejectedValue(refused());
+
+      const degraded = await answer();
+
+      expect(healthy.status).toBe(400);
+      expect(degraded).toStrictEqual(healthy);
+      expect(healthyReads).toBe(2);
+      expect(mockModel.getRefreshFailure).toHaveBeenCalledTimes(4);
+      expect(fallbackWarnings()).toStrictEqual([failureCacheWarning]);
+      expect(reported).toStrictEqual([]);
+    });
+
+    it('logs a failed cache read once in each of two concurrent requests', async () => {
+      mockModel.getRefreshToken.mockResolvedValue(undefined);
+      mockModel.getRefreshFailure.mockRejectedValue(refused());
+
+      const responses = await Promise.all([
+        POST(makeTokenRequest('concurrent-rt-a')),
+        POST(makeTokenRequest('concurrent-rt-b')),
+      ]);
+
+      expect(responses.map(({ status }) => status)).toStrictEqual([400, 400]);
+      expect(mockModel.getRefreshFailure).toHaveBeenCalledTimes(4);
+      expect(fallbackWarnings()).toStrictEqual([
+        failureCacheWarning,
+        failureCacheWarning,
+      ]);
+      expect(reported).toStrictEqual([]);
+    });
+
+    it('answers as with no cached rotation when reading it fails', async () => {
+      mockModel.getRefreshFailure.mockResolvedValue({
+        failedAt: Date.now() - 5000,
+        oauthError: 'invalid_grant',
+      });
+      const healthy = await answer();
+      mockModel.getRefreshRotation.mockRejectedValueOnce(refused());
+
+      const degraded = await answer();
+
+      expect(healthy.status).toBe(400);
+      expect(degraded).toStrictEqual(healthy);
+      expect(fallbackWarnings()).toStrictEqual([
+        [
+          'Refresh cache read failed, continuing without it',
+          {
+            store: 'refresh_results',
+            operation: 'getRefreshRotation',
+            errorName: 'Error',
+            errorCode: 'ECONNREFUSED',
+          },
+        ],
+      ]);
+      expect(reported).toStrictEqual([]);
+    });
+
+    it('keeps a waiter waiting until the lock timeout when every store read fails, logging each once', async () => {
+      mockModel.getRefreshFailure.mockRejectedValue(refused());
+      mockModel.getRefreshResult.mockRejectedValue(refused());
+      __setRefreshLockStoresForTests([
+        {
+          ...passthroughLockStore,
+          tryAcquire: async () => false,
+          isHeld: async () => {
+            throw refused();
+          },
+          hasTransient: async () => {
+            throw refused();
+          },
+        },
+      ]);
+
+      const degraded = await answer();
+
+      expect(degraded).toStrictEqual({
+        status: 503,
+        body: {
+          error: 'temporarily_unavailable',
+          error_description:
+            'A refresh of this token is in progress; please retry shortly',
+        },
+        slo: '[SLO] refresh outcome=transient_lock_timeout elapsedMs=* clientId=client-1',
+      });
+      expect(mockExchange).not.toHaveBeenCalled();
+      expect(
+        mockModel.getRefreshFailure.mock.calls.length,
+      ).toBeGreaterThanOrEqual(50);
+      expect(
+        mockModel.getRefreshRotation.mock.calls.length,
+      ).toBeGreaterThanOrEqual(50);
+      expect(fallbackWarnings()).toStrictEqual([
+        failureCacheWarning,
+        [
+          'refresh-lock transient marker read failed, assuming none',
+          {
+            store: 'postgres',
+            operation: 'hasTransient',
+            errorName: 'Error',
+            errorCode: 'ECONNREFUSED',
+          },
+        ],
+        [
+          'Refresh cache read failed, continuing without it',
+          {
+            store: 'refresh_results',
+            operation: 'getOwnedRefreshResult',
+            errorName: 'Error',
+            errorCode: 'ECONNREFUSED',
+          },
+        ],
+        [
+          'refresh-lock isHeld failed, still waiting',
+          {
+            store: 'postgres',
+            operation: 'isHeld',
+            errorName: 'Error',
+            errorCode: 'ECONNREFUSED',
+          },
+        ],
+      ]);
+      expect(reported).toStrictEqual([]);
+    }, 15_000);
   });
 });

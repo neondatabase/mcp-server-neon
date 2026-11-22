@@ -90,22 +90,6 @@ export async function signalTransientFailure(
   );
 }
 
-/**
- * Check whether a lock holder recently signalled a transient failure for
- * this refresh token in any store. Store errors count as "no marker" so
- * callers default to the normal poll loop instead of erroring out.
- */
-export async function peekTransientFailure(
-  refreshToken: string,
-): Promise<boolean> {
-  const seen = await Promise.all(
-    refreshLockStores().map((store) =>
-      store.hasTransient(refreshToken).catch(() => false),
-    ),
-  );
-  return seen.some(Boolean);
-}
-
 /** Test seam for resetting module state. */
 export function __resetForTests(): void {
   storesOverride = undefined;

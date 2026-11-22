@@ -69,11 +69,20 @@ async function loadModule() {
       }).pipe(Effect.provide(RefreshLock.layer)),
     );
 
+  const hasTransientFailure = async (refreshToken: string) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* RefreshLock;
+
+        return yield* service.hasTransientFailure({ refreshToken });
+      }).pipe(Effect.provide(RefreshLock.layer)),
+    );
+
   return {
     withRefreshLock,
     RefreshLockTimeout,
     signalTransientFailure: lock.signalTransientFailure,
-    peekTransientFailure: lock.peekTransientFailure,
+    hasTransientFailure,
   };
 }
 
@@ -434,7 +443,7 @@ describe('RefreshLock.withLock', () => {
   });
 });
 
-describe('signalTransientFailure / peekTransientFailure', () => {
+describe('signalTransientFailure / RefreshLock.hasTransientFailure', () => {
   it('signal writes to redis with 30s TTL', async () => {
     setSpy.mockResolvedValue('OK');
     const { signalTransientFailure } = await loadModule();
@@ -455,19 +464,19 @@ describe('signalTransientFailure / peekTransientFailure', () => {
 
   it('peek returns true when marker is present', async () => {
     getSpy.mockResolvedValue('1');
-    const { peekTransientFailure } = await loadModule();
-    expect(await peekTransientFailure('rt-flaky')).toBe(true);
+    const { hasTransientFailure } = await loadModule();
+    expect(await hasTransientFailure('rt-flaky')).toBe(true);
   });
 
   it('peek returns false when marker is absent', async () => {
     getSpy.mockResolvedValue(null);
-    const { peekTransientFailure } = await loadModule();
-    expect(await peekTransientFailure('rt-flaky')).toBe(false);
+    const { hasTransientFailure } = await loadModule();
+    expect(await hasTransientFailure('rt-flaky')).toBe(false);
   });
 
   it('peek defaults to false on redis error so caller falls back to normal poll', async () => {
     getSpy.mockRejectedValue(new Error('boom'));
-    const { peekTransientFailure } = await loadModule();
-    expect(await peekTransientFailure('rt-flaky')).toBe(false);
+    const { hasTransientFailure } = await loadModule();
+    expect(await hasTransientFailure('rt-flaky')).toBe(false);
   });
 });

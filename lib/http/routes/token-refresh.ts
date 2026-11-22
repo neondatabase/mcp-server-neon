@@ -1,6 +1,5 @@
 import { Cause, Clock, Effect, ErrorReporter, Option } from 'effect';
 import { HttpServerResponse } from 'effect/http';
-import type { Client } from 'oauth2-server';
 import type { RefreshResult } from '../../../mcp/oauth/kv-store';
 import type { RefreshFailed } from '../../../mcp/oauth/refresh-failed';
 import { RefreshRotations } from '../../../mcp/oauth/refresh-rotations';
@@ -8,6 +7,7 @@ import { emitRefreshSlo, loggedReplay } from '../../../mcp/oauth/refresh-slo';
 import type { SloOutcome } from '../../../mcp/oauth/refresh-slo';
 import { cachedToResponse } from '../../../mcp/oauth/refresh-token-result';
 import type { RefreshTokenResult } from '../../../mcp/oauth/refresh-token-result';
+import { logFallbacksOnce } from '../../../mcp/oauth/store-fallback';
 import { oauthErrorResponse } from '../oauth-error-response';
 import {
   checkSuccessCache,
@@ -189,7 +189,7 @@ const answerLockTimeout = Effect.fnUntraced(function* (grant: Grant) {
 /** The refresh_token grant for an authenticated client. */
 export const refreshTokenGrant = Effect.fnUntraced(function* (input: {
   readonly formData: URLSearchParams;
-  readonly client: Client;
+  readonly client: Grant['client'];
 }) {
   const { formData, client } = input;
 
@@ -228,4 +228,4 @@ export const refreshTokenGrant = Effect.fnUntraced(function* (input: {
       RefreshLockTimeout: () => answerLockTimeout(grant),
     }),
   );
-});
+}, logFallbacksOnce);

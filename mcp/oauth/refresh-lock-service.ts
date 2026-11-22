@@ -4,7 +4,6 @@ import {
   LOCK_POLL_INTERVAL_MS,
   LOCK_POLL_MAX_ATTEMPTS,
   WAITER_TOTAL_BUDGET_MS,
-  peekTransientFailure,
   refreshLockStores,
 } from './refresh-lock';
 import {
@@ -15,8 +14,8 @@ import {
   storeCall,
 } from './refresh-lock-calls';
 import type { RefreshLockStore } from './refresh-lock-store';
-import { RefreshLockStoreFailed } from './refresh-lock-store-failed';
 import { RefreshLockTimeout } from './refresh-lock-timeout';
+import { logFallbacksOnce, logStoreFallback } from './store-fallback';
 
 /** What the lock holder can ask of its release. */
 export type ReleaseHint = {
@@ -76,9 +75,16 @@ const poll = <A, E, R>(
       store,
       operation: 'isHeld',
       run: async () => store.isHeld(refreshToken),
-    }).pipe(Effect.option);
+    }).pipe(
+      Effect.catchTag('RefreshLockStoreFailed', (failure) =>
+        logStoreFallback(
+          'refresh-lock isHeld failed, still waiting',
+          failure,
+        ).pipe(Effect.as(true)),
+      ),
+    );
 
-    if (Option.getOrElse(held, () => true)) {
+    if (held) {
       return yield* poll(input, round + 1);
     }
 
@@ -90,7 +96,7 @@ const poll = <A, E, R>(
 // A peek that finds the refresh token's answer, even a failure, is the wait
 // succeeding, so the span stays ok and the failure is returned after it.
 const wait = <A, E, R>(input: Attempt<A, E, R>) =>
-  poll(input, 0).pipe(
+  logFallbacksOnce(poll(input, 0)).pipe(
     Effect.tap((resolution) =>
       Effect.annotateCurrentSpan(
         'refresh_lock.outcome',
@@ -257,18 +263,26 @@ export class RefreshLock extends Context.Service<
       }: {
         readonly refreshToken: string;
       }) =>
-        Effect.tryPromise({
-          try: async () => peekTransientFailure(refreshToken),
-          catch: (cause) =>
-            RefreshLockStoreFailed.make({
-              store: 'all',
-              operation: 'hasTransient',
-              cause,
-            }),
-        }).pipe(
-          Effect.catchTag('RefreshLockStoreFailed', () =>
-            Effect.succeed(false),
+        Effect.suspend(() =>
+          Effect.forEach(
+            refreshLockStores(),
+            (store) =>
+              storeCall({
+                store,
+                operation: 'hasTransient',
+                run: async () => store.hasTransient(refreshToken),
+              }).pipe(
+                Effect.catchTag('RefreshLockStoreFailed', (failure) =>
+                  logStoreFallback(
+                    'refresh-lock transient marker read failed, assuming none',
+                    failure,
+                  ).pipe(Effect.as(false)),
+                ),
+              ),
+            { concurrency: 'unbounded' },
           ),
+        ).pipe(
+          Effect.map((seen) => seen.some(Boolean)),
           Effect.withSpan('RefreshLock.hasTransientFailure'),
         ),
     }),

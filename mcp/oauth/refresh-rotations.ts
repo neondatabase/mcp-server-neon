@@ -9,12 +9,22 @@ import {
   resolveRotation,
 } from './refresh-result';
 import type { RotationOutcome } from './refresh-result';
+import { logStoreFallback } from './store-fallback';
 import { stored } from './stored';
 
 type TokenOfClient = {
   readonly refreshToken: string;
   readonly client: Client;
 };
+
+const continueWithout =
+  (store: 'refresh_results' | 'refresh_failures') =>
+  ({ operation, cause }: OAuthStoreUnavailable) =>
+    logStoreFallback('Refresh cache read failed, continuing without it', {
+      store,
+      operation,
+      cause,
+    }).pipe(Effect.as(Option.none()));
 
 /**
  * The refresh-result and refresh-failure caches: what a refresh token's
@@ -71,7 +81,10 @@ export class RefreshRotations extends Context.Service<
           getOwnedRefreshResult(refreshToken, client),
         ).pipe(
           Effect.map(Option.fromUndefinedOr),
-          Effect.catchTag('OAuthStoreUnavailable', () => Effect.succeedNone),
+          Effect.catchTag(
+            'OAuthStoreUnavailable',
+            continueWithout('refresh_results'),
+          ),
           Effect.withSpan('RefreshRotations.ownedResult'),
         ),
 
@@ -81,7 +94,10 @@ export class RefreshRotations extends Context.Service<
             model.getRefreshRotation(refreshToken),
           ).pipe(
             Effect.map(Option.fromUndefinedOr),
-            Effect.catchTag('OAuthStoreUnavailable', () => Effect.succeedNone),
+            Effect.catchTag(
+              'OAuthStoreUnavailable',
+              continueWithout('refresh_results'),
+            ),
           );
 
           if (
@@ -119,7 +135,10 @@ export class RefreshRotations extends Context.Service<
               ),
             ),
           ),
-          Effect.catchTag('OAuthStoreUnavailable', () => Effect.succeedNone),
+          Effect.catchTag(
+            'OAuthStoreUnavailable',
+            continueWithout('refresh_failures'),
+          ),
           Effect.withSpan('RefreshRotations.cachedFailure'),
         ),
 
