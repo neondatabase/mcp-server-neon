@@ -171,14 +171,13 @@ export function isServerError(error: unknown): boolean {
   );
 }
 
-// The driver reports a failed fetch with `sourceError` and any HTTP answer but
-// 400 only in its message, so a 4xx there (quota, auth) is the caller's.
-const SQL_ENDPOINT_FAILURE =
-  /^(?:Server error \(HTTP status 5\d\d\)|Neon internal error)/u;
-
+// Only an unreachable endpoint (`sourceError`) or an answer the driver couldn't
+// read is surely the server's: an HTTP error answer, 5xx included, can carry
+// the caller's condition, such as a quota or a role that can't log in.
 const isSqlEndpointFailure = (error: NeonDbError) =>
   (error.code === undefined || error.code === '') &&
-  (error.sourceError !== undefined || SQL_ENDPOINT_FAILURE.test(error.message));
+  (error.sourceError !== undefined ||
+    error.message.startsWith('Neon internal error'));
 
 export function handleToolError(
   error: unknown,

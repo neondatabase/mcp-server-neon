@@ -415,7 +415,7 @@
         "id": 1
       }
     },
-    "sentryErrorEvents": 1,
+    "sentryErrorEvents": 0,
     "toolSpan": {
       "status": "internal_error",
       "errorType": "NeonDbError"

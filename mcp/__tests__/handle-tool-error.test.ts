@@ -156,8 +156,12 @@ describe('handleToolError', () => {
       'This connection is trying to access this endpoint from a blocked network.',
     );
 
-    const endpointDown = new NeonDbError(
-      'Server error (HTTP status 503): upstream unavailable',
+    const loginRejected = new NeonDbError(
+      'Server error (HTTP status 500): {"message":"SASL authentication failed","code":"08P01"}',
+    );
+
+    const unreadable = new NeonDbError(
+      'Neon internal error: unexpected non-array response',
     );
 
     const raisedByQuery = Object.assign(
@@ -170,18 +174,18 @@ describe('handleToolError', () => {
       { sourceError: new TypeError('fetch failed') },
     );
 
-    for (const error of [quota, blockedNetwork, raisedByQuery]) {
+    for (const error of [quota, blockedNetwork, loginRejected, raisedByQuery]) {
       handleToolError(error, properties, 'trace-1', agent);
     }
 
     expect(captureException).not.toHaveBeenCalled();
 
-    for (const error of [endpointDown, unreachable]) {
+    for (const error of [unreadable, unreachable]) {
       handleToolError(error, properties, 'trace-1', agent);
     }
 
     expect(captureException.mock.calls.map(([error]) => error)).toStrictEqual([
-      endpointDown,
+      unreadable,
       unreachable,
     ]);
   });
