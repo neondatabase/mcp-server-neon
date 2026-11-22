@@ -171,6 +171,14 @@ export function isServerError(error: unknown): boolean {
   );
 }
 
+// Only an unreachable endpoint (`sourceError`) or an answer the driver couldn't
+// read is surely the server's: an HTTP error answer, 5xx included, can carry
+// the caller's condition, such as a quota or a role that can't log in.
+const isSqlEndpointFailure = (error: NeonDbError) =>
+  (error.code === undefined || error.code === '') &&
+  (error.sourceError !== undefined ||
+    error.message.startsWith('Neon internal error'));
+
 export function handleToolError(
   error: unknown,
   properties: Record<string, string>,
@@ -179,7 +187,7 @@ export function handleToolError(
 ) {
   if (
     isClientError(error) ||
-    (error instanceof NeonDbError && !isServerError(error))
+    (error instanceof NeonDbError && !isSqlEndpointFailure(error))
   ) {
     return errorResponse(error);
   } else if (error instanceof NeonApiError && error.status < 500) {
