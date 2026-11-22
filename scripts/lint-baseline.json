@@ -1457,7 +1457,6 @@
     "anti-slop(no-conditional-spread)": 1,
     "anti-slop(no-unknown-parameters)": 2,
     "anti-slop(require-readable-spacing)": 5,
-    "effecttsgo(missed-pipeable-opportunity)": 1,
     "eslint(max-lines-per-function)": 3,
     "eslint(object-shorthand)": 1,
     "import(consistent-type-specifier-style)": 1,
@@ -1488,16 +1487,14 @@
   "mcp/tools/grant-filter.ts": {
     "anti-slop(no-known-value-widening)": 1,
     "anti-slop(no-unsafe-dictionary-type)": 2,
-    "anti-slop(require-readable-spacing)": 26,
-    "eslint(curly)": 9,
-    "eslint(func-style)": 13,
+    "anti-slop(require-readable-spacing)": 22,
+    "eslint(curly)": 5,
+    "eslint(func-style)": 11,
     "eslint(max-lines-per-function)": 1,
-    "eslint(require-unicode-regexp)": 1,
     "import(consistent-type-specifier-style)": 2,
     "import(no-namespace)": 1,
     "typescript(no-base-to-string)": 1,
-    "typescript(no-unsafe-assignment)": 1,
-    "typescript(strict-boolean-expressions)": 5
+    "typescript(strict-boolean-expressions)": 4
   },
   "mcp/tools/listed-schema.ts": {
     "anti-slop(require-readable-spacing)": 1,
