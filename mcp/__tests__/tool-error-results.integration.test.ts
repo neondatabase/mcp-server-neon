@@ -616,6 +616,31 @@ describe('tool error results', () => {
     });
   });
 
+  it('report a failed query tuning completion with the error that failed it', async () => {
+    const { traceId } = await call(CASES['query tuning completion fails']);
+
+    const items = await sentryItems();
+
+    const events = z
+      .array(
+        z.object({
+          exception: z.object({
+            values: z.array(z.object({ type: z.string(), value: z.string() })),
+          }),
+        }),
+      )
+      .parse(errorEventsOf(items, traceId));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.exception.values).toStrictEqual([
+      { type: 'NeonNotFoundError', value: 'branch not found' },
+      {
+        type: 'Error',
+        value: 'Failed to complete query tuning: branch not found',
+      },
+    ]);
+  });
+
   it('keeps the package tool span ok for a doc page that does not exist', async () => {
     const missingDoc = await call({
       query: '',

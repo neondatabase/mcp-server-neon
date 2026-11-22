@@ -118,7 +118,7 @@ describe('handleToolError', () => {
     });
   });
 
-  it('does not capture client, 4xx API, or database errors', () => {
+  it('does not capture client, 4xx API, or Postgres statement errors', () => {
     handleToolError(
       new InvalidArgumentError('bad arg'),
       properties,
@@ -132,7 +132,9 @@ describe('handleToolError', () => {
       agent,
     );
     handleToolError(
-      new NeonDbError('relation missing'),
+      Object.assign(new NeonDbError('relation "t" does not exist'), {
+        code: '42P01',
+      }),
       properties,
       'trace-1',
       agent,
