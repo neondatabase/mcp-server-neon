@@ -469,7 +469,7 @@
     "typescript(no-unsafe-assignment)": 2,
     "vitest(prefer-import-in-mock)": 2,
     "vitest(prefer-strict-equal)": 1,
-    "vitest(require-mock-type-parameters)": 5
+    "vitest(require-mock-type-parameters)": 4
   },
   "mcp/__tests__/helpers/fake-neon.ts": {
     "anti-slop-effect(prefer-effect-match)": 1,

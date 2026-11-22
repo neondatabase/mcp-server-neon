@@ -171,6 +171,14 @@ export function isServerError(error: unknown): boolean {
   );
 }
 
+// The driver reports a failed fetch with `sourceError` and any HTTP answer but
+// 400 only in its message, so a 4xx there (quota, auth) is the caller's.
+const SQL_ENDPOINT_FAILURE =
+  /^(?:Server error \(HTTP status 5\d\d\)|Neon internal error)/u;
+
+const isSqlEndpointFailure = (error: NeonDbError) =>
+  error.sourceError !== undefined || SQL_ENDPOINT_FAILURE.test(error.message);
+
 export function handleToolError(
   error: unknown,
   properties: Record<string, string>,
@@ -179,7 +187,7 @@ export function handleToolError(
 ) {
   if (
     isClientError(error) ||
-    (error instanceof NeonDbError && !isServerError(error))
+    (error instanceof NeonDbError && !isSqlEndpointFailure(error))
   ) {
     return errorResponse(error);
   } else if (error instanceof NeonApiError && error.status < 500) {

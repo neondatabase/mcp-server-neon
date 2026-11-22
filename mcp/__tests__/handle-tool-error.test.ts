@@ -2,9 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NeonApiError, NeonClientError, NeonError } from '@neon/sdk';
 import { createNeonTools, InspectDiagnosticError } from '@neon/tools';
 import { NeonDbError } from '@neondatabase/serverless';
+import type { captureException as sentryCaptureException } from '@sentry/node';
 import { InvalidArgumentError } from '../server/errors';
 
-const captureException = vi.hoisted(() => vi.fn());
+const captureException = vi.hoisted(() =>
+  vi.fn<typeof sentryCaptureException>(),
+);
+
 const logError = vi.hoisted(() => vi.fn());
 
 vi.mock('@sentry/node', () => ({
@@ -141,6 +145,40 @@ describe('handleToolError', () => {
     );
 
     expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it("captures a SQL endpoint failure but not a driver answer that is the caller's", () => {
+    const quota = new NeonDbError(
+      'Server error (HTTP status 402): {"message":"Your account or project has exceeded the quota."}',
+    );
+
+    const blockedNetwork = new NeonDbError(
+      'This connection is trying to access this endpoint from a blocked network.',
+    );
+
+    const endpointDown = new NeonDbError(
+      'Server error (HTTP status 503): upstream unavailable',
+    );
+
+    const unreachable = Object.assign(
+      new NeonDbError('Error connecting to database: fetch failed'),
+      { sourceError: new TypeError('fetch failed') },
+    );
+
+    for (const error of [quota, blockedNetwork]) {
+      handleToolError(error, properties, 'trace-1', agent);
+    }
+
+    expect(captureException).not.toHaveBeenCalled();
+
+    for (const error of [endpointDown, unreachable]) {
+      handleToolError(error, properties, 'trace-1', agent);
+    }
+
+    expect(captureException.mock.calls.map(([error]) => error)).toStrictEqual([
+      endpointDown,
+      unreachable,
+    ]);
   });
 
   it('reports the Postgres error fields an agent needs to fix the query', () => {
