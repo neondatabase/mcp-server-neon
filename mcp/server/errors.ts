@@ -177,7 +177,8 @@ const SQL_ENDPOINT_FAILURE =
   /^(?:Server error \(HTTP status 5\d\d\)|Neon internal error)/u;
 
 const isSqlEndpointFailure = (error: NeonDbError) =>
-  error.sourceError !== undefined || SQL_ENDPOINT_FAILURE.test(error.message);
+  (error.code === undefined || error.code === '') &&
+  (error.sourceError !== undefined || SQL_ENDPOINT_FAILURE.test(error.message));
 
 export function handleToolError(
   error: unknown,

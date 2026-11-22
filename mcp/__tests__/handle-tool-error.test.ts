@@ -160,12 +160,17 @@ describe('handleToolError', () => {
       'Server error (HTTP status 503): upstream unavailable',
     );
 
+    const raisedByQuery = Object.assign(
+      new NeonDbError('Server error (HTTP status 503): raised by the query'),
+      { code: 'P0001' },
+    );
+
     const unreachable = Object.assign(
       new NeonDbError('Error connecting to database: fetch failed'),
       { sourceError: new TypeError('fetch failed') },
     );
 
-    for (const error of [quota, blockedNetwork]) {
+    for (const error of [quota, blockedNetwork, raisedByQuery]) {
       handleToolError(error, properties, 'trace-1', agent);
     }
 
