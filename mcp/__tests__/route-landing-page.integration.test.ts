@@ -70,16 +70,12 @@ describe('landing page at the MCP URL', () => {
     expect(sheets).toStrictEqual(['install', 'api-key', 'access', 'tools']);
 
     for (const id of sheets) {
-      // an anchor in the contents on the cover and one in the part strip
+      // one anchor, in the part strip
       expect(body.split(`href="#${id}" data-part-link="${id}"`)).toHaveLength(
-        3,
+        2,
       );
       expect(body).toContain(`<h2 id="${id}-title">`);
     }
-
-    // no part is hidden: the only display switch left is the client procedure
-    expect(body).not.toContain('html.js .sheet');
-    expect(body).not.toMatch(/class="(?:folio|thumbs|turn)\b/u);
   });
 
   it('names the part in view in one head row, outside the parts', async () => {
@@ -90,18 +86,15 @@ describe('landing page at the MCP URL', () => {
 
     const names = [
       ...body.matchAll(
-        /<span data-head="(?<id>[^"]+)"><span class="num">(?<num>\d\d)<\/span><span>(?<name>[^<]+)<\/span><\/span>/gu,
+        /<span data-head="(?<id>[^"]+)"><span class="head-mark"><\/span><span>(?<name>[^<]+)<\/span><\/span>/gu,
       ),
-    ].map(
-      (match) =>
-        `${match.groups?.id} ${match.groups?.num} ${match.groups?.name}`,
-    );
+    ].map((match) => `${match.groups?.id} ${match.groups?.name}`);
 
     expect(names).toStrictEqual([
-      'install 01 Install',
-      'api-key 02 API key',
-      'access 03 Limit access',
-      'tools 04 Tools',
+      'install Installation guide',
+      'api-key Connect with a Neon API key',
+      'access Limit access',
+      expect.stringMatching(/^tools Tools \(\d+\)$/u),
     ]);
 
     // the head row sits before the first part, and no part repeats its number and name
@@ -113,27 +106,10 @@ describe('landing page at the MCP URL', () => {
     );
 
     // the head script names the part the address opens at; CSS shows that name, or the first without script
-    expect(body).toContain('parts=["install","api-key","access","tools"]');
+    expect(body).toContain('(["install","api-key","access","tools"],');
     expect(body).toContain(
       "html:not([data-part]) [data-head='install'], html[data-part='install'] [data-head='install'], html[data-part='api-key'] [data-head='api-key']",
     );
-  });
-
-  it('follows the scroll instead of turning pages', async () => {
-    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
-    const body = await response.text();
-
-    // scrolling rewrites the current history entry; anchors are left to the browser
-    expect(body).toContain(
-      "history.replaceState(history.state,'','#'+current)",
-    );
-    expect(body).not.toContain('pushState');
-    expect(body).not.toContain('rotateY');
-    expect(body).not.toContain('touchstart');
-    // arrow keys are read only inside the client selector
-    expect(body.split('ArrowRight')).toHaveLength(2);
-    expect(body).toContain(`var tab=e.target.closest('[role="tab"]');
-  if(!tab)return;`);
   });
 
   it('prints commands in plain code blocks that copy exactly what they show', async () => {
@@ -156,11 +132,6 @@ describe('landing page at the MCP URL', () => {
       expect(he.decode(shown)).toBe(he.decode(copied));
       expect(copied).not.toMatch(/^\s*\$/u);
     }
-
-    // no prompt sign is drawn before a command, and nothing on a copy button turns green
-    expect(body).not.toMatch(/content:\s*'\$'/u);
-    expect(body).not.toContain('data-lang');
-    expect(body).not.toMatch(/\.copy-square[^{}]*\{[^}]*var\(--green\)/u);
   });
 
   it('prints every client procedure, with its own address', async () => {

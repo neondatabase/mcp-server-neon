@@ -2,19 +2,17 @@ import he from 'he';
 import { OAUTH_PAGE_FONT_LINKS } from '../../mcp/oauth/page-shell';
 import { SERVER_INFO } from '../server-metadata';
 import {
-  ACCESS_BLOCK,
   ACCESS_NOTES,
   ACCESS_PARAMS,
-  API_KEY_BLOCK,
-  INSTALL_SECTION,
+  API_KEY_BODY,
+  HERO_LEAD,
+  INSTALL_PART,
   INSTALL_TABS,
-  TOOLS_SECTION,
+  PARTS,
+  paramEffect,
 } from './content';
-import {
-  COPY_ICONS,
-  INTERACTION_SCRIPT,
-  openAtAddressScript,
-} from './interactions';
+import type { PartId } from './content';
+import { INTERACTION_SCRIPT, openAtAddressScript } from './interactions';
 import {
   DOCS_URL,
   MARKDOWN_PATH,
@@ -23,48 +21,18 @@ import {
   REPOSITORY_URL,
   STATUS_URL,
 } from './links';
-import {
-  ARROW_RIGHT,
-  LABEL_ARROW,
-  external,
-  inline,
-  prose,
-  steps,
-} from './markup';
+import { LABEL_ARROW, codeBlock, external, inline, prose } from './markup';
 import { LANDING_PAGE_CSS } from './styles';
-import { SCOPE_CATEGORIES } from '../../mcp/utils/grant-context';
 import { TOOL_GROUPS_HTML, toolGroupAnchor } from './tools';
 
-type SectionCopy = {
-  id: string;
-  title: string;
-  description: string;
-};
-
-type PageSection = SectionCopy & { nav: string };
-
-const INSTALL: PageSection = { ...INSTALL_SECTION, nav: 'Install' };
-const API_KEY: PageSection = { ...API_KEY_BLOCK, nav: 'API key' };
-const ACCESS: PageSection = { ...ACCESS_BLOCK, nav: 'Limit access' };
-const TOOLS: PageSection = { ...TOOLS_SECTION, nav: 'Tools' };
-
-/** The parts in page order; a part's number is its place in this list. */
-const SECTIONS: readonly PageSection[] = [INSTALL, API_KEY, ACCESS, TOOLS];
-
-const sectionNumber = (id: string): string =>
-  String(SECTIONS.findIndex((section) => section.id === id) + 1).padStart(
-    2,
-    '0',
-  );
-
 /** The address of one client's procedure inside the install part. */
-const clientAnchor = (id: string): string => `${INSTALL.id}-${id}`;
+const clientAnchor = (id: string): string => `${INSTALL_PART.id}-${id}`;
 
 /** One part of the long right-hand sheet. A rule divides it from the next. */
-const sheet = (section: PageSection, content: string): string => {
-  const { id, title, description } = section;
-
-  return `
+const sheet = (
+  { id, title, description }: (typeof PARTS)[number],
+  content: string,
+): string => `
       <article class="sheet" id="${id}" aria-labelledby="${id}-title">
         <div class="sheet-body">
           <h2 id="${id}-title">${title}</h2>
@@ -72,16 +40,14 @@ const sheet = (section: PageSection, content: string): string => {
           ${content}
         </div>
       </article>`;
-};
 
 /**
- * The one head row of the right-hand sheet. It stays at the top and names the part in view: the
- * number by CSS from data-part on <html>, the name typed by script. Decorative; every part has
- * its own heading.
+ * The one head row of the right-hand sheet. It stays at the top and names the part in view, by
+ * CSS from data-part on <html>. Decorative; every part has its own heading.
  */
 const SHEET_HEAD = `
       <div class="sheet-head" aria-hidden="true">
-        <p class="margin-label">${SECTIONS.map(({ id, nav }) => `<span data-head="${id}"><span class="num">${sectionNumber(id)}</span><span>${nav}</span></span>`).join('')}</p>
+        <p class="margin-label">${PARTS.map(({ id, title }) => `<span data-head="${id}"><span class="head-mark"></span><span>${title}</span></span>`).join('')}</p>
       </div>`;
 
 const LOGO = `<a class="logo" ${external('https://neon.com')}><img src="/images/landing/neon-logo.svg" alt="Neon" width="88" height="24"></a>`;
@@ -90,52 +56,36 @@ const LOGO = `<a class="logo" ${external('https://neon.com')}><img src="/images/
 const PART_STRIP = `
     <div class="bar">
       <nav class="bar-nav" aria-label="Parts">
-        ${SECTIONS.map(({ id, nav }) => `<a href="#${id}" data-part-link="${id}">${nav}</a>`).join('')}
+        ${PARTS.map(({ id, nav }) => `<a href="#${id}" data-part-link="${id}">${nav}</a>`).join('')}
       </nav>
     </div>`;
 
-const CONTENTS = `
-          <nav class="toc" aria-labelledby="contents-label">
-            <p class="field-label" id="contents-label">Contents</p>
-            <ol>
-              ${SECTIONS.map(
-                ({ id, title }) =>
-                  `<li><a href="#${id}" data-part-link="${id}"><span class="here" aria-hidden="true"></span><span>${title}</span><span class="leader" aria-hidden="true"></span><span class="num">${sectionNumber(id)}</span></a></li>`,
-              ).join('')}
-            </ol>
-          </nav>`;
-
-/** The left page. It stays put while the sheet scrolls: what this is, the permanent URL, the contents. */
-const COVER = `
-    <header class="cover">
-      <div class="cover-head">
-        ${LOGO}
-        <span class="product-tag">MCP</span>
-      </div>
-      <div class="cover-body">
-        <div class="cover-hatch" aria-hidden="true"></div>
-        <div class="cover-main">
-          <p class="label">${LABEL_ARROW}<span>Model Context Protocol</span></p>
-          <h1 id="hero-title">Neon MCP Server <span class="version">v${he.escape(SERVER_INFO.version)}</span></h1>
-          <p class="hero-description">${he.escape(SERVER_INFO.description ?? '')}</p>
-          <div class="hero-connect">
-            <p class="field-label" id="url-label">MCP server URL</p>
-            <a class="docs-link" ${external(DOCS_URL)}>Read the docs${ARROW_RIGHT}</a>
-            <div class="url-field" role="group" aria-labelledby="url-label">
-              <code>${he.escape(MCP_URL)}</code>
-              <button type="button" class="copy-btn copy-square" data-copy="${he.escape(MCP_URL)}" data-top-task aria-label="Copy MCP server URL" title="Copy MCP server URL">${COPY_ICONS}</button>
-            </div>
-          </div>
-          ${CONTENTS}
-        </div>
-      </div>
-      <footer class="cover-foot">
+/** Docs, GitHub, Status. Printed twice: at the foot of the left page, shown on the spread, and at
+ * the end of the page, shown in the single column; the other copy is not displayed. */
+const FOOTER = (where: 'cover' | 'page'): string => `
+      <footer class="cover-foot ${where}-foot">
         <nav class="footer-links" aria-label="Resources">
           <a ${external(DOCS_URL)}>Docs</a>
           <a ${external(REPOSITORY_URL)}>GitHub</a>
           <a ${external(STATUS_URL)}>Status</a>
         </nav>
-      </footer>
+      </footer>`;
+
+/** The left page. It stays put while the sheet scrolls: what this is and the permanent URL. */
+const COVER = `
+    <header class="cover">
+      <div class="cover-head">
+        ${LOGO}
+      </div>
+      <div class="cover-body">
+        <div class="cover-main">
+          <p class="label">${LABEL_ARROW}<span>Model Context Protocol</span></p>
+          <h1 id="hero-title">Neon MCP Server <span class="version">v${he.escape(SERVER_INFO.version)}</span></h1>
+          <p class="hero-description">${he.escape(HERO_LEAD)}</p>
+          <div class="hero-connect" role="group" aria-label="MCP server URL">${codeBlock(MCP_URL, undefined, 'Copy MCP server URL')}</div>
+        </div>
+      </div>
+      ${FOOTER('cover')}
     </header>`;
 
 /** Links until script upgrades them to a tab list; without script every procedure is printed. */
@@ -145,40 +95,38 @@ const clientLinks = INSTALL_TABS.map(
 ).join('');
 
 const clientPanels = INSTALL_TABS.map(
-  ({ id, label, body, sequence }) =>
-    `<section class="client" id="${clientAnchor(id)}" data-client="${id}" aria-labelledby="client-${id}"><h3 class="client-title" id="client-${id}">${label}</h3>${sequence === true ? steps(body) : prose(body)}</section>`,
+  ({ id, label, body }) =>
+    `<section class="client" id="${clientAnchor(id)}" data-client="${id}" aria-labelledby="client-${id}"><h3 class="client-title" id="client-${id}">${label}</h3>${prose(body)}</section>`,
 ).join('');
 
-/** Each category value in the parameter table points at that category's tools. */
-const linkCategories = (html: string): string =>
-  SCOPE_CATEGORIES.reduce(
-    (linked, category) =>
-      linked.replace(
-        `<code>${category}</code>`,
-        `<a href="#${toolGroupAnchor(category)}"><code>${category}</code></a>`,
-      ),
-    html,
-  );
+/** A tool category in the parameter table, pointing at that category's tools. */
+const categoryLink = (category: string): string =>
+  `<a href="#${toolGroupAnchor(category)}"><code>${he.escape(category)}</code></a>`;
 
-const accessParams = `<dl class="params">${ACCESS_PARAMS.map(
-  ({ param, effect }) =>
-    `<div class="param"><dt><code>${he.escape(param)}</code></dt><dd>${linkCategories(inline(effect))}</dd></div>`,
-).join('')}</dl>`;
+const accessParams = `<div class="params-wrap"><table class="params"><thead><tr><th scope="col">Parameter</th><th scope="col">What it does</th></tr></thead><tbody>${ACCESS_PARAMS.map(
+  (param) =>
+    `<tr><td><code>${he.escape(param.param)}</code></td><td>${paramEffect({ ...param, effect: inline(param.effect) }, categoryLink)}</td></tr>`,
+).join('')}</tbody></table></div>`;
+
+/** What each part holds on the page. */
+const PART_CONTENT = {
+  install: `<div><nav class="tabs-row" aria-label="MCP clients" data-clients>${clientLinks}</nav>${clientPanels}</div>`,
+  'api-key': prose(API_KEY_BODY),
+  access: `${accessParams}${prose(ACCESS_NOTES)}`,
+  tools: `<div class="tool-groups">${TOOL_GROUPS_HTML}</div>`,
+} satisfies Record<PartId, string>;
 
 const BODY = `<div class="desk">
   <div class="book">
     ${PART_STRIP}
     ${COVER}
-    <main class="leaves">${SHEET_HEAD}
-      ${sheet(INSTALL, `<div><nav class="tabs-row" aria-label="MCP clients" data-clients>${clientLinks}</nav>${clientPanels}</div>`)}
-      ${sheet(API_KEY, prose(API_KEY_BLOCK.body))}
-      ${sheet(ACCESS, `${accessParams}${prose(ACCESS_NOTES)}`)}
-      ${sheet(TOOLS, `<div class="tool-groups">${TOOL_GROUPS_HTML}</div>`)}
+    <main class="leaves">${SHEET_HEAD}${PARTS.map((part) => sheet(part, PART_CONTENT[part.id])).join('')}
     </main>
+    ${FOOTER('page')}
   </div>
 </div>`;
 
-const PART_IDS = SECTIONS.map(({ id }) => id);
+const PART_IDS = PARTS.map(({ id }) => id);
 
 const CLIENT_IDS = INSTALL_TABS.map(({ id }) => id);
 
