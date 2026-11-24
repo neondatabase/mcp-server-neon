@@ -31,15 +31,9 @@ assert(
 
 export const SERVER_INFO: Implementation = serverInfo;
 
-const [REGISTRY_REMOTE] = registryEntry.remotes;
-
-/**
- * The server's public address, as the MCP registry lists it (server.json). Install instructions
- * name it on every deployment, previews included, since it is the server people should add.
- */
-export const PUBLIC_MCP_URL = REGISTRY_REMOTE.url;
-
 export function buildServerCard() {
+  const [remote] = registryEntry.remotes;
+
   return {
     $schema: SERVER_CARD_SCHEMA,
     name: registryEntry.name,
@@ -51,9 +45,9 @@ export function buildServerCard() {
     icons: registryEntry.icons,
     remotes: [
       {
-        type: REGISTRY_REMOTE.type,
+        type: remote.type,
         url: `${SERVER_HOST}/mcp`,
-        headers: REGISTRY_REMOTE.headers,
+        headers: remote.headers,
       },
     ],
   };

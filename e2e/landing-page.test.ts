@@ -110,26 +110,27 @@ test.describe('Landing page', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeInViewport();
   });
 
-  test('copies the public URL and the exact highlighted install command', async ({
+  test('copies the deployment URL and the exact highlighted install command', async ({
+    baseURL,
     context,
     page,
   }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.goto('/mcp');
 
-    const publicUrl = 'https://mcp.neon.tech/mcp';
+    const serverUrl = new URL('/mcp', baseURL).href;
 
     const clipboard = async () =>
       page.evaluate(async () => navigator.clipboard.readText());
 
     const url = page.getByRole('group', { name: 'MCP server URL' });
-    await expect(url.getByText(publicUrl)).toBeVisible();
+    await expect(url.getByText(serverUrl)).toBeVisible();
     await url.getByRole('button', { name: 'Copy MCP server URL' }).click();
     await expect(url.getByRole('button', { name: 'Copied' })).toBeVisible();
-    await expect.poll(clipboard).toBe(publicUrl);
+    await expect.poll(clipboard).toBe(serverUrl);
 
     const panel = page.getByRole('tabpanel', { name: 'Claude Code' });
-    const command = `claude mcp add --transport http "neon" '${publicUrl}'`;
+    const command = `claude mcp add --transport http "neon" '${serverUrl}'`;
     await expect(panel.locator('pre code')).toHaveText(command);
     await panel.getByRole('button', { name: 'Copy', exact: true }).click();
     await expect.poll(clipboard).toBe(command);
