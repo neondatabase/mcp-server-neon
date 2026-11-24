@@ -46,6 +46,27 @@ export const PINNED_ROLE_WITHHELD_TOOLS: ReadonlySet<string> = new Set([
   'get_connection_string',
 ]);
 
+/**
+ * Tools only an unrestricted grant gets: every category, every project, no
+ * pinned role. call_api reaches any Neon API route, so a category, project,
+ * or role restriction cannot be enforced on it.
+ */
+export const UNRESTRICTED_GRANT_TOOLS: ReadonlySet<string> = new Set([
+  'call_api',
+]);
+
+export const isUnrestrictedGrant = ({
+  scopes,
+  projectId,
+  roleName,
+}: Pick<GrantContext, 'scopes' | 'projectId' | 'roleName'>): boolean => {
+  const everyCategory =
+    scopes === null ||
+    SCOPE_CATEGORIES.every((category) => scopes.includes(category));
+
+  return everyCategory && projectId === null && roleName === undefined;
+};
+
 export function filterToolsForGrant(
   tools: readonly NeonTool[],
   grant: GrantContext,
@@ -55,6 +76,12 @@ export function filterToolsForGrant(
   if (grant.roleName !== undefined) {
     filtered = filtered.filter(
       (tool) => !PINNED_ROLE_WITHHELD_TOOLS.has(tool.name),
+    );
+  }
+
+  if (!isUnrestrictedGrant(grant)) {
+    filtered = filtered.filter(
+      (tool) => !UNRESTRICTED_GRANT_TOOLS.has(tool.name),
     );
   }
   // Hosts can review and cache one schema independently of a user's grant.

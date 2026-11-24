@@ -1,6 +1,8 @@
 import {
   ALWAYS_AVAILABLE_TOOLS,
+  isUnrestrictedGrant,
   PINNED_ROLE_WITHHELD_TOOLS,
+  UNRESTRICTED_GRANT_TOOLS,
 } from '../tools/grant-filter';
 import { NEON_TOOLS } from '../tools/definitions';
 import type { GrantContext, ScopeCategory } from '../utils/grant-context';
@@ -16,6 +18,8 @@ export type ConsentToolMeta = {
   /** The secrets modes under which the tool refuses because its result is a secret. */
   withheldUnder: SecretsChoice[];
   projectScoped: boolean;
+  /** Listed only for every category, every project, and no pinned role. */
+  unrestrictedOnly: boolean;
 };
 
 export function getConsentToolCatalog(): ConsentToolMeta[] {
@@ -30,6 +34,7 @@ export function getConsentToolCatalog(): ConsentToolMeta[] {
         withheldUnderSecrets(tool, mode),
       ),
       projectScoped: tool.projectScoped,
+      unrestrictedOnly: UNRESTRICTED_GRANT_TOOLS.has(tool.name),
     };
   });
 }
@@ -44,6 +49,10 @@ export function filterConsentCatalog(
       return false;
     }
     if (grant.projectId && !tool.projectScoped) {
+      return false;
+    }
+
+    if (tool.unrestrictedOnly && !isUnrestrictedGrant(grant)) {
       return false;
     }
     if (

@@ -69,6 +69,11 @@ export const NEON_SITE_SEARCH_URL =
   process.env.NEON_SITE_SEARCH_URL ??
   'https://br-frosty-cell-a5smzg39-assistant.compute.c-1.us-east-2.aws.neon.tech/site-search';
 
+// The OpenAPI spec search_api reads. Overridable so the e2e suite can serve a
+// fixture spec and stay off the network.
+export const NEON_API_SPEC_URL =
+  process.env.NEON_API_SPEC_URL ?? 'https://neon.com/api_spec/release/v2.json';
+
 // Where send_feedback posts to (the neondatabase/neon-feedback Function).
 // Overridable so tests and local runs never send real feedback.
 export const NEON_FEEDBACK_URL =

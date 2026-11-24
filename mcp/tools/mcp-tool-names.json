@@ -1,6 +1,7 @@
 {
 	"add_auth_oauth_provider": "auth.oauthProviders.add",
 	"add_auth_trusted_domain": "auth.trustedDomains.add",
+	"call_api": "api.call",
 	"compare_database_schema": "branches.compareSchema",
 	"complete_database_migration": "migrations.complete",
 	"complete_query_tuning": "queryTuning.complete",
@@ -112,6 +113,7 @@
 	"run_sql": "sql.run",
 	"run_sql_transaction": "sql.runTransaction",
 	"search": "resources.search",
+	"search_api": "api.search",
 	"search_docs": "docs.search",
 	"send_auth_test_email": "auth.emailProvider.sendTest",
 	"send_feedback": "feedback.send",

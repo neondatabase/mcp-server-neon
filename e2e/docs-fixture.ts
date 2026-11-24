@@ -5,7 +5,8 @@
  *
  * The tools fetch server-side, inside the Next dev server, so Playwright's
  * `request.route()` cannot intercept them; the URLs are swapped instead
- * (`NEON_DOCS_BASE_URL`, `NEON_SITE_SEARCH_URL`, `NEON_FEEDBACK_URL`).
+ * (`NEON_DOCS_BASE_URL`, `NEON_SITE_SEARCH_URL`, `NEON_FEEDBACK_URL`,
+ * `NEON_API_SPEC_URL`).
  *
  * The port is fixed rather than ephemeral because the dev server is spawned
  * before `globalSetup` runs, so its environment has to be built in
@@ -95,6 +96,50 @@ function siteSearchResponse(
   );
 }
 
+// The same server stands in for the OpenAPI spec search_api reads: one route
+// is enough to prove the search, the describe, and the field shape.
+const API_SPEC_FIXTURE_PATH = '/api_spec/release/v2.json';
+export const API_SPEC_FIXTURE_URL = `http://127.0.0.1:${DOCS_FIXTURE_PORT}${API_SPEC_FIXTURE_PATH}`;
+
+const API_SPEC_FIXTURE = {
+  openapi: '3.0.3',
+  info: { title: 'Neon API fixture', version: 'v2' },
+  paths: {
+    '/projects/{project_id}/branches': {
+      post: {
+        operationId: 'createProjectBranch',
+        summary: 'Create branch',
+        parameters: [
+          {
+            name: 'project_id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' },
+            description: 'The Neon project ID. More detail here.',
+          },
+        ],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  branch: {
+                    type: 'object',
+                    properties: {
+                      name: { type: 'string', description: 'The branch name.' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
 /** Marker the e2e assertion matches on. */
 export const DOCS_FIXTURE_MARKER = 'E2E_DOCS_PAGE_FIXTURE_MARKER';
 
@@ -126,6 +171,13 @@ export async function startDocsFixtureServer(): Promise<Server> {
         response.writeHead(status, { 'Content-Type': 'application/json' });
         response.end(responseBody);
       });
+      return;
+    }
+
+    if (request.url === API_SPEC_FIXTURE_PATH && request.method === 'GET') {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify(API_SPEC_FIXTURE));
+
       return;
     }
     if (request.url === FEEDBACK_FIXTURE_PATH && request.method === 'POST') {

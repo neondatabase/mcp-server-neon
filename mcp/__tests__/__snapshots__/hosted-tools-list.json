@@ -1552,6 +1552,132 @@
     }
   },
   {
+    "name": "search_api",
+    "title": "Search the Neon API",
+    "description": "Finds Neon API endpoints for a task no other tool covers, with the fields call_api takes.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "What the request should do, e.g. \"create branch\"."
+        },
+        "limit": {
+          "default": 5,
+          "description": "Maximum endpoints to return.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "endpoints": {
+              "description": "Matching endpoints, best first. Body field names are dotted paths into the JSON body.",
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          },
+          "required": [
+            "endpoints"
+          ]
+        }
+      },
+      "required": [
+        "data"
+      ]
+    },
+    "annotations": {
+      "title": "Search the Neon API",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "call_api",
+    "title": "Call the Neon API",
+    "description": "Sends one request to any Neon API endpoint, for a task no other tool covers; find it with search_api first. NEVER run a write autonomously: run it only when the user's own message asks for it and unambiguously identifies its target; otherwise ask first.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": [
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
+          "description": "The HTTP method."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "A path from search_api with each {placeholder} filled in."
+        },
+        "query": {
+          "description": "Query parameters.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "body": {
+          "description": "The JSON body, nested as the API expects."
+        }
+      },
+      "required": [
+        "method",
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "The response body: JSON, text, or null when empty."
+        }
+      },
+      "required": [
+        "data"
+      ]
+    },
+    "annotations": {
+      "title": "Call the Neon API",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "send_feedback",
     "title": "Send Feedback",
     "description": "Sends anonymous feedback text to the Neon team, with no account, project, or connection details. Only call it when the user asks to give feedback.",

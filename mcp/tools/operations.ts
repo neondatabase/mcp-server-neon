@@ -32,6 +32,8 @@ export const CUSTOM_TOOL_GRANTS = {
   'resources.fetch': { scope: null, projectScoped: false },
   'docs.search': { scope: 'docs', projectScoped: true },
   'docs.get': { scope: 'docs', projectScoped: true },
+  'api.search': { scope: 'docs', projectScoped: true },
+  'api.call': { scope: null, projectScoped: false },
   'feedback.send': { scope: null, projectScoped: true },
   'incidents.list': { scope: null, projectScoped: true },
 } as const satisfies Partial<Record<NeonToolId, CustomToolGrant>>;

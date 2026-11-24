@@ -270,7 +270,7 @@ curl "https://mcp.neon.tech/api/list-tools?readonly=true&category=querying"
 <details>
 <summary><strong>Tools available in read-only mode</strong></summary>
 
-Custom tools: `list_organizations`, `describe_branch`, `run_sql`, `get_database_tables`, `describe_table_schema`, `list_slow_queries`, `explain_sql_statement`, `inspect_database`, `get_neon_auth_config`, `search`, `fetch`, `search_docs`, `get_doc`, `send_feedback`, `list_incidents`.
+Custom tools: `list_organizations`, `describe_branch`, `run_sql`, `get_database_tables`, `describe_table_schema`, `list_slow_queries`, `explain_sql_statement`, `inspect_database`, `get_neon_auth_config`, `search`, `fetch`, `search_docs`, `get_doc`, `search_api`, `send_feedback`, `list_incidents`.
 
 Generated Management API tools that are GET and need no approval, plus `query_logs` (POST, read-only). Preview the exact set with `/api/list-tools?readonly=true`.
 
@@ -462,6 +462,11 @@ Notes:
 
 - **`search_docs`**: Searches neon.com (docs, API reference, PostgreSQL tutorial, guides, FAQs, changelog, and blog) with the same search as the neon.com search box. Takes `query`, optional `categories` (`docs`, `api`, `postgresql`, `guides`, `faqs`, `blog`, `changelog`), and optional `limit` (1-40, default 10). Returns ranked pages with `title`, `url`, `slug`, `category`, `breadcrumb`, `heading`, and `excerpt`; pass `slug` to `get_doc` to read the page.
 - **`get_doc`**: Fetches one neon.com page as markdown. Takes `slug` from a `search_docs` hit (for example `docs/guides/prisma` or `postgresql/tutorial/inner-join`).
+- **`search_api`**: Searches the released Neon OpenAPI spec for endpoints that match `query` (optional `limit`, 1-20, default 5). Returns each endpoint's `method`, `path`, `summary`, `operation_id`, and its path, query, and body `fields`, with body fields as dotted paths. Needs no login.
+
+**Neon API passthrough** (only on a connection with every category, every project, and no pinned role, in write mode, with `secrets` set to `setup` or `all`):
+
+- **`call_api`**: Sends one request to any Neon API path, for operations no other tool covers. Takes `method`, `path` (with every placeholder filled in, such as `/projects/<id>/branches`), optional `query`, and optional JSON `body`, and returns the response body. With the default `secrets=setup`, it refuses paths under `/auth/`, because Neon Auth routes return stored secrets; use the Neon Auth tools for those.
 
 **Functions** (`?category=functions`):
 

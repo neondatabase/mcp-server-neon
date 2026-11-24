@@ -131,6 +131,45 @@ describe('createMcpServer grant + read-only integration', () => {
     expect(getRegisteredToolNames(server)).toContain('get_connection_string');
   });
 
+  it.each([
+    ['a category subset', { projectId: null, scopes: ['docs', 'querying'] }],
+    ['a project', { projectId: 'proj-123', scopes: null }],
+    ['a pinned role', { projectId: null, scopes: null, roleName: 'reader' }],
+    ['secrets=none', { projectId: null, scopes: null, secrets: 'none' }],
+  ] satisfies [string, GrantContext][])(
+    'refuses a call_api tools/call on a grant limited to %s',
+    async (_label, grant) => {
+      const mcpServer = await createMcpServer(buildContext({ grant }));
+      const client = new Client({ name: 'test-client', version: '1.0.0' });
+
+      const [clientTransport, serverTransport] =
+        InMemoryTransport.createLinkedPair();
+
+      try {
+        await mcpServer.connect(serverTransport);
+        await client.connect(clientTransport);
+        const listed = await client.listTools();
+
+        expect(listed.tools.map((tool) => tool.name)).not.toContain('call_api');
+
+        const call = client.callTool({
+          name: 'call_api',
+          arguments: { method: 'GET', path: '/projects' },
+        });
+
+        await expect(call).rejects.toMatchObject({ code: -32_602 });
+        await expect(call).rejects.toThrow('call_api');
+      } finally {
+        await Promise.allSettled([client.close(), mcpServer.close()]);
+      }
+    },
+  );
+
+  it('refuses a call_api tools/call in read-only mode', async () => {
+    const mcpServer = await createMcpServer(buildContext({ readOnly: true }));
+    expect(getRegisteredToolNames(mcpServer)).not.toContain('call_api');
+  });
+
   it('puts access-control notices on initialize instructions', async () => {
     const mcpServer = await createMcpServer(
       buildContext({
