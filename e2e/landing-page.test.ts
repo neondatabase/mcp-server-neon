@@ -1,74 +1,171 @@
 import { expect, test } from '@playwright/test';
 
-/**
- * What the landing page's script does in a browser (lib/landing/client/). The page reads and
- * navigates without it; these cover what it adds: the client tabs, the categories an address or
- * a link opens, and the head row and address following the scroll.
- */
 test.describe('Landing page', () => {
-  test('an address that names a client opens with that client selected', async ({
+  test('opens the linked client and supports keyboard navigation through its tabs and panel', async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/mcp#install-chatgpt');
 
-    await expect(page.getByRole('tab', { name: 'ChatGPT' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
-    await expect(page.locator('#install-chatgpt')).toBeVisible();
-    await expect(page.locator('#install-claude-code')).toBeHidden();
-  });
+    const chatgpt = page.getByRole('tab', { name: 'ChatGPT' });
+    const claude = page.getByRole('tab', { name: 'Claude Code' });
+    const claudePanel = page.getByRole('tabpanel', { name: 'Claude Code' });
 
-  test('arrow keys, Home and End move between client tabs', async ({
-    page,
-  }) => {
-    await page.goto('/mcp');
-    await page.getByRole('tab', { name: 'Claude Code' }).focus();
+    await expect(chatgpt).toHaveAttribute('aria-selected', 'true');
+    await expect(chatgpt).toBeInViewport();
+    await expect(page.getByRole('tabpanel', { name: 'ChatGPT' })).toBeVisible();
+    await expect(claudePanel).toBeHidden();
 
-    await page.keyboard.press('ArrowRight');
-    await expect(page.getByRole('tab', { name: 'Cursor' })).toBeFocused();
-    await expect(page.getByRole('tab', { name: 'Cursor' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
-    await expect(page.locator('#install-cursor')).toBeVisible();
+    await chatgpt.press('Home');
+    await expect(claude).toBeFocused();
+    await claude.press('ArrowRight');
+    const cursor = page.getByRole('tab', { name: 'Cursor' });
+    await expect(cursor).toBeFocused();
     await expect(page).toHaveURL(/#install-cursor$/u);
-
-    await page.keyboard.press('End');
     await expect(
-      page.getByRole('tab', { name: 'Other clients' }),
-    ).toBeFocused();
+      page.getByRole('tabpanel', { name: 'Cursor' }).getByRole('link', {
+        name: 'Open in Cursor',
+      }),
+    ).toHaveAttribute(
+      'href',
+      /^cursor:\/\/anysphere\.cursor-deeplink\/mcp\/install\?/u,
+    );
 
-    // past the last tab is the first
-    await page.keyboard.press('ArrowRight');
-    await expect(
-      page.getByRole('tab', { name: 'Claude Code' }),
-    ).toHaveAttribute('aria-selected', 'true');
+    await cursor.press('End');
+    const other = page.getByRole('tab', { name: 'Other clients' });
+    await expect(other).toBeFocused();
+    await expect(other).toBeInViewport();
+    await other.press('ArrowRight');
+    await expect(claude).toBeFocused();
+    await expect(claude).toHaveAttribute('aria-selected', 'true');
+
+    const y = await page.evaluate(() => scrollY);
+    await page.keyboard.press('ArrowDown');
+    await expect
+      .poll(async () => page.evaluate(() => scrollY))
+      .toBeGreaterThan(y);
+    await expect(claude).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(claudePanel).toBeFocused();
   });
 
-  test('a category in the parameter table opens only that category', async ({
+  test('opens a linked tool category and folds it when following another category link', async ({
     page,
   }) => {
-    await page.goto('/mcp');
+    await page.goto('/mcp#tools-projects');
+    const projects = page.locator('#tools-projects');
+    const branches = page.locator('#tools-branches');
+    await expect(projects).toHaveAttribute('open', '');
+
     await page
-      .locator('.params')
+      .getByRole('article', { name: 'Limit access' })
       .getByRole('link', { name: 'branches', exact: true })
       .click();
 
-    await expect(page.locator('#tools-branches')).toHaveAttribute('open', '');
-    await expect(page.locator('.tool-group[open]')).toHaveCount(1);
+    await expect(page).toHaveURL(/#tools-branches$/u);
+    await expect(branches).toHaveAttribute('open', '');
+    await expect(branches.locator('summary')).toBeInViewport();
+    await expect(projects).not.toHaveAttribute('open');
   });
 
-  test('the head row and the address follow the part in view', async ({
+  test('updates the sticky heading and URL as the document scrolls', async ({
     page,
   }) => {
     await page.goto('/mcp');
-    await page.locator('#access').evaluate((part) => {
-      part.scrollIntoView();
+    const heading = page.locator('.sheet-head');
+    const historyLength = await page.evaluate(() => history.length);
+    await expect(heading.getByText('Installation guide')).toBeVisible();
+
+    await page
+      .getByRole('article', { name: 'Limit access' })
+      .evaluate((part) => {
+        part.scrollIntoView();
+      });
+
+    await expect(heading.getByText('Limit access')).toBeVisible();
+    await expect(page).toHaveURL(/#access$/u);
+    expect(await page.evaluate(() => history.length)).toBe(historyLength);
+  });
+
+  test('keeps the mobile section link current and clears the fragment at the cover', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/mcp?category=docs');
+
+    const access = page
+      .getByRole('navigation', { name: 'Parts' })
+      .getByRole('link', { name: 'Limit access' });
+
+    await access.click();
+    await expect(access).toHaveAttribute('aria-current', 'location');
+    await expect(
+      page.getByRole('heading', { name: 'Limit access' }),
+    ).toBeInViewport();
+
+    await page.evaluate(() => {
+      scrollTo({ top: 0, behavior: 'instant' });
+    });
+    await expect(page).toHaveURL(/\/mcp\?category=docs$/u);
+    await expect(page.getByRole('heading', { level: 1 })).toBeInViewport();
+  });
+
+  test('copies the public URL and the exact highlighted install command', async ({
+    context,
+    page,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto('/mcp');
+
+    const publicUrl = 'https://mcp.neon.tech/mcp';
+
+    const clipboard = async () =>
+      page.evaluate(async () => navigator.clipboard.readText());
+
+    const url = page.getByRole('group', { name: 'MCP server URL' });
+    await expect(url.getByText(publicUrl)).toBeVisible();
+    await url.getByRole('button', { name: 'Copy MCP server URL' }).click();
+    await expect(url.getByRole('button', { name: 'Copied' })).toBeVisible();
+    await expect.poll(clipboard).toBe(publicUrl);
+
+    const panel = page.getByRole('tabpanel', { name: 'Claude Code' });
+    const command = `claude mcp add --transport http "neon" '${publicUrl}'`;
+    await expect(panel.locator('pre code')).toHaveText(command);
+    await panel.getByRole('button', { name: 'Copy', exact: true }).click();
+    await expect.poll(clipboard).toBe(command);
+  });
+
+  test.describe('with JavaScript disabled', () => {
+    test.use({
+      javaScriptEnabled: false,
+      viewport: { width: 390, height: 844 },
     });
 
-    await expect(page.locator('html')).toHaveAttribute('data-part', 'access');
-    await expect(page.locator('[data-head="access"]')).toBeVisible();
-    await expect(page).toHaveURL(/#access$/u);
+    test('follows the visual focus order and keeps client instructions reachable', async ({
+      page,
+    }) => {
+      await page.goto('/mcp');
+      await page.keyboard.press('Tab');
+
+      await expect(
+        page.getByRole('link', { name: 'Neon', exact: true }),
+      ).toBeFocused();
+      await expect(
+        page.getByRole('button', { name: 'Copy MCP server URL' }),
+      ).toBeHidden();
+      await expect(
+        page.getByRole('heading', { name: 'Claude Code', exact: true }),
+      ).toBeVisible();
+
+      await page
+        .getByRole('navigation', { name: 'MCP clients' })
+        .getByRole('link', { name: 'Other clients' })
+        .click();
+
+      await expect(page).toHaveURL(/#install-other$/u);
+      await expect(
+        page.getByRole('heading', { name: 'Other clients' }),
+      ).toBeInViewport();
+    });
   });
 });

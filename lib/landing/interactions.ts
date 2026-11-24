@@ -1,7 +1,7 @@
-import { addressFollowsPart, openAtAddress } from './client/address';
+import { openAtAddress } from './client/address';
 import { copyButtons, glideAfterLoad } from './client/controls';
-import { partTracking, toolGroups } from './client/sheet';
-import { clientAddress, clientTabs, tabKeys, tabRoles } from './client/tabs';
+import { partTracking, syncPartAddress, toolGroups } from './client/sheet';
+import { clientTabs, enhanceTabs, tabKeys } from './client/tabs';
 
 /** The copy mark as Neon docs code blocks draw it; the check is neon.com's square-cornered 1px line. */
 const COPY_ICON =
@@ -14,14 +14,13 @@ const CHECK_ICON =
 export const COPY_ICONS = `<span class="copy-icon">${COPY_ICON}${CHECK_ICON}</span>`;
 
 /** A value as JavaScript source inside a <script>: JSON, with `<` escaped so it cannot close the tag. */
-const scriptValue = (
-  value: readonly string[] | readonly (readonly [string, string])[],
-): string => JSON.stringify(value).replaceAll('<', String.raw`\u003c`);
+const scriptValue = (value: readonly string[]): string =>
+  JSON.stringify(value).replaceAll('<', String.raw`\u003c`);
 
 /** The head script (client/address.ts, openAtAddress) called with the page's part and client addresses. */
 export const openAtAddressScript = (
   partIds: readonly string[],
-  clientAnchors: readonly (readonly [anchor: string, id: string])[],
+  clientAnchors: readonly string[],
 ): string =>
   `(${String(openAtAddress)})(${scriptValue(partIds)},${scriptValue(clientAnchors)});`;
 
@@ -30,16 +29,10 @@ export const openAtAddressScript = (
  * text and run on its own. They share only the DOM, so their order is the order they act on load:
  * the client and category the address names are opened before the part in view is read.
  */
-export const INTERACTION_SCRIPT = [
-  tabRoles,
-  clientTabs,
-  tabKeys,
-  clientAddress,
-  toolGroups,
-  partTracking,
-  addressFollowsPart,
-  copyButtons,
-  glideAfterLoad,
-]
-  .map((feature) => `(${String(feature)})();`)
-  .join('\n');
+export const INTERACTION_SCRIPT = `
+(${String(copyButtons)})();
+(${String(clientTabs)})(${String(enhanceTabs)},${String(tabKeys)});
+(${String(toolGroups)})();
+(${String(partTracking)})(${String(syncPartAddress)});
+(${String(glideAfterLoad)})();
+`;

@@ -1,146 +1,128 @@
-/** The client selector is a row of links until script makes it a tab list, each tab owning its panel. */
-export const tabRoles = (): void => {
-  const tablist = document.querySelector('[data-clients]');
+export const enhanceTabs = (
+  tablist: HTMLElement,
+  tabs: readonly HTMLAnchorElement[],
+  select: (tab: HTMLAnchorElement) => void,
+): void => {
+  tablist.setAttribute('role', 'tablist');
 
-  tablist?.setAttribute('role', 'tablist');
-
-  for (const tab of document.querySelectorAll<HTMLAnchorElement>(
-    '[data-client-link]',
-  )) {
-    const panel = document.querySelector(
-      `[id="${CSS.escape(tab.hash.slice(1))}"]`,
-    );
-
+  for (const tab of tabs) {
+    const id = tab.hash.slice(1);
+    const panel = document.querySelector<HTMLElement>(tab.hash);
     tab.setAttribute('role', 'tab');
-    tab.id = `tab-${tab.dataset.clientLink ?? ''}`;
-    tab.setAttribute('aria-controls', tab.hash.slice(1));
-    panel?.setAttribute('role', 'tabpanel');
-    panel?.setAttribute('aria-labelledby', tab.id);
+    tab.setAttribute('aria-controls', id);
+
+    if (panel) {
+      panel.setAttribute('role', 'tabpanel');
+      panel.setAttribute('aria-labelledby', tab.id);
+      panel.tabIndex = 0;
+    }
+
+    tab.addEventListener('click', (event) => {
+      const modified =
+        event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+
+      if (event.defaultPrevented || event.button !== 0 || modified) {
+        return;
+      }
+
+      event.preventDefault();
+      select(tab);
+      history.replaceState(history.state, '', tab.hash);
+    });
   }
 };
 
-/**
- * A press on a tab changes the procedure in place; the page does not move and history gets no
- * entry.
- */
-export const clientTabs = (): void => {
-  const root = document.documentElement;
-  const tablist = document.querySelector<HTMLElement>('[data-clients]');
-
-  const tabs = [
-    ...document.querySelectorAll<HTMLAnchorElement>('[data-client-link]'),
-  ];
-
-  const select = (id: string): void => {
-    root.dataset.client = id;
-
-    for (const tab of tabs) {
-      const selected = tab.dataset.clientLink === id;
-
-      tab.setAttribute('aria-selected', String(selected));
-      tab.tabIndex = selected ? 0 : -1;
-
-      // the strip scrolls sideways on a narrow page: bring the selected label into it
-      if (selected && tablist) {
-        const right = tab.offsetLeft + tab.offsetWidth - tablist.clientWidth;
-
-        tablist.scrollLeft = Math.min(
-          Math.max(tablist.scrollLeft, right),
-          tab.offsetLeft,
-        );
-      }
-    }
-  };
-
-  document.addEventListener('click', (event) => {
-    const tab =
-      event.target instanceof Element
-        ? event.target.closest<HTMLAnchorElement>('[data-client-link]')
-        : null;
-
-    const modified =
-      event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
-
-    if (tab && event.button === 0 && !modified && !event.defaultPrevented) {
-      event.preventDefault();
-      select(tab.dataset.clientLink ?? '');
-      history.replaceState(history.state, '', tab.hash);
-    }
-  });
-
-  select(root.dataset.client ?? '');
-};
-
-/**
- * The tab list's keys: arrows move to the next or previous client, Home and End to the first or
- * last, Space selects the focused one. Each move is a press on that tab (clientTabs).
- */
-export const tabKeys = (): void => {
-  const tabs = [
-    ...document.querySelectorAll<HTMLAnchorElement>('[data-client-link]'),
-  ];
-
-  document.addEventListener('keydown', (event) => {
-    const tab =
-      event.target instanceof Element
-        ? event.target.closest<HTMLAnchorElement>('[role="tab"]')
-        : null;
+export const tabKeys = (
+  tablist: HTMLElement,
+  tabs: readonly HTMLAnchorElement[],
+): void => {
+  tablist.addEventListener('keydown', (event) => {
+    const { target } = event;
 
     const modified =
       event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
 
-    if (!tab || modified || event.defaultPrevented) {
+    if (
+      !(target instanceof HTMLAnchorElement) ||
+      modified ||
+      event.defaultPrevented
+    ) {
       return;
     }
 
-    const index = tabs.indexOf(tab);
+    const index = tabs.indexOf(target);
+
+    if (index === -1) {
+      return;
+    }
 
     const moves = new Map([
-      ['ArrowRight', index + 1],
-      ['ArrowDown', index + 1],
       ['ArrowLeft', index - 1],
-      ['ArrowUp', index - 1],
+      ['ArrowRight', index + 1],
       ['Home', 0],
       ['End', tabs.length - 1],
       [' ', index],
     ]);
 
     const next = moves.get(event.key);
-    const other = next === undefined ? undefined : tabs.at(next % tabs.length);
 
-    if (other) {
+    if (next !== undefined) {
       event.preventDefault();
-      other.click();
-      other.focus();
+      const tab = tabs.at(next % tabs.length);
+      tab?.click();
+      tab?.focus({ preventScroll: true });
     }
   });
 };
 
-/**
- * An address that names a client (on load or by a later hash change): its panel was hidden when
- * the browser looked for the anchor, so press its tab, then go there.
- */
-export const clientAddress = (): void => {
-  const tablist = document.querySelector('[data-clients]');
+/** Enhance the client links as tabs, keeping their fragment URLs shareable. */
+export const clientTabs = (
+  enhance: typeof enhanceTabs,
+  bindKeys: typeof tabKeys,
+): void => {
+  const root = document.documentElement;
+  const tablist = document.querySelector<HTMLElement>('[data-clients]');
 
-  const open = (behavior: ScrollBehavior): void => {
-    const panel = document.querySelector<HTMLElement>(
-      `.client[id="${CSS.escape(location.hash.slice(1))}"]`,
+  if (!tablist) {
+    return;
+  }
+
+  const tabs = [...tablist.querySelectorAll<HTMLAnchorElement>('.tab')];
+
+  const select = (tab: HTMLAnchorElement): void => {
+    root.dataset.client = tab.hash.slice(1);
+
+    for (const link of tabs) {
+      link.setAttribute('aria-selected', String(link === tab));
+      link.tabIndex = link === tab ? 0 : -1;
+    }
+
+    // Reveal the selected label in an overflowing tab strip without moving the page.
+    const { offsetLeft, offsetWidth } = tab;
+    const right = offsetLeft + offsetWidth - tablist.clientWidth;
+    tablist.scrollLeft = Math.min(
+      Math.max(tablist.scrollLeft, right),
+      offsetLeft,
     );
+  };
 
-    const tab = panel
-      ? tablist?.querySelector<HTMLElement>(`[href="#${CSS.escape(panel.id)}"]`)
-      : null;
+  const openLinkedPanel = (behavior: ScrollBehavior): void => {
+    const linked = tabs.find((tab) => tab.hash === location.hash);
+    const active = linked ?? (behavior === 'instant' ? tabs.at(0) : undefined);
 
-    if (panel && tab) {
-      tab.click();
-      panel.scrollIntoView({ behavior });
+    if (active) {
+      select(active);
+    }
+
+    if (linked) {
+      document.querySelector(linked.hash)?.scrollIntoView({ behavior });
     }
   };
 
+  enhance(tablist, tabs, select);
+  bindKeys(tablist, tabs);
   globalThis.addEventListener('hashchange', () => {
-    open('auto');
+    openLinkedPanel('auto');
   });
-
-  open('instant');
+  openLinkedPanel('instant');
 };

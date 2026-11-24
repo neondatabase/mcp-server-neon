@@ -47,5 +47,5 @@ const toolItem = (tool: NeonTool): string => {
 
 export const TOOL_GROUPS_HTML = TOOL_GROUPS.map(
   ({ label, anchor, tools }) =>
-    `<details class="tool-group" id="${anchor}"><summary><span class="tool-group-label">${he.escape(label)}</span><span class="count">${tools.length}</span></summary><ul class="tool-list">${tools.map((tool) => toolItem(tool)).join('')}</ul></details>`,
+    `<details class="tool-group" id="${anchor}"><summary><span>${he.escape(label)}</span><span class="count">${tools.length}</span></summary><ul class="tool-list">${tools.map((tool) => toolItem(tool)).join('')}</ul></details>`,
 ).join('');

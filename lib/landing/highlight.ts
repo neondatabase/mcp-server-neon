@@ -8,8 +8,7 @@ import he from 'he';
 const token = (kind: string, text: string): string =>
   `<span class="tok-${kind}">${he.escape(text)}</span>`;
 
-const SHELL_TOKEN = /"(?:\\.|[^"\\])*"|'[^']*'|\s+|[^\s"']+/gu;
-const COMMAND_BREAK = /^(?:\||\|\||&&|;)$/u;
+const SHELL_TOKEN = /"(?:\\.|[^"\\])*"|'[^']*'|\s+|[^\s"']+|["']/gu;
 
 const shell = (source: string): string => {
   let atCommand = true;
@@ -21,12 +20,6 @@ const shell = (source: string): string => {
       return text;
     }
 
-    if (COMMAND_BREAK.test(text)) {
-      atCommand = true;
-
-      return token('punct', text);
-    }
-
     const quoted = text.startsWith('"') || text.startsWith("'");
     const word = atCommand ? 'fn' : 'str';
 
@@ -36,7 +29,7 @@ const shell = (source: string): string => {
   }).join('');
 };
 
-const JSON_TOKEN = /"(?:\\.|[^"\\])*"|[:,]|[^":,]+/gu;
+const JSON_TOKEN = /"(?:\\.|[^"\\])*"|[:,]|[^":,]+|"/gu;
 
 const json = (source: string): string =>
   Array.from(source.matchAll(JSON_TOKEN), ({ 0: text, index }) => {
@@ -55,7 +48,7 @@ const json = (source: string): string =>
   }).join('');
 
 export const highlight = (source: string, language?: string): string => {
-  if (language === 'bash' || language === 'sh' || language === 'shell') {
+  if (language === 'bash') {
     return shell(source);
   }
 

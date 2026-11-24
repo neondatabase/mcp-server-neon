@@ -5,9 +5,6 @@ import { COPY_ICONS } from './interactions';
 
 const APP_LINK = /^(?:cursor|vscode|vscode-insiders):/u;
 
-export const LABEL_ARROW =
-  '<svg viewBox="0 0 12 14" width="12" height="14" aria-hidden="true"><path d="M12 7L3 12.1962L3 1.80385L12 7Z" fill="currentColor"/></svg>';
-
 export const external = (href: string): string =>
   `href="${he.escape(href)}" target="_blank" rel="noopener noreferrer"`;
 
@@ -17,7 +14,7 @@ export const codeBlock = (
   language?: string,
   label = 'Copy',
 ): string =>
-  `<div class="code-block"><pre><code>${highlight(text, language)}</code></pre><button type="button" class="copy-btn copy-square" data-copy="${he.escape(text)}" aria-label="${label}" title="${label}">${COPY_ICONS}</button></div>`;
+  `<div class="code-block"><pre><code>${highlight(text, language)}</code></pre><button type="button" class="copy-btn" aria-label="${he.escape(label)}" title="${he.escape(label)}" hidden>${COPY_ICONS}</button></div>`;
 
 const markdown = new Marked({
   renderer: {
@@ -32,6 +29,3 @@ const markdown = new Marked({
 
 export const prose = (source: string): string =>
   `<div class="prose">${markdown.parse(source, { async: false })}</div>`;
-
-export const inline = (source: string): string =>
-  markdown.parseInline(source, { async: false });

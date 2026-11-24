@@ -21,7 +21,7 @@ import {
   REPOSITORY_URL,
   STATUS_URL,
 } from './links';
-import { LABEL_ARROW, codeBlock, external, inline, prose } from './markup';
+import { codeBlock, external, prose } from './markup';
 import { LANDING_PAGE_CSS } from './styles';
 import { TOOL_GROUPS_HTML, toolGroupAnchor } from './tools';
 
@@ -52,17 +52,20 @@ const SHEET_HEAD = `
 
 const LOGO = `<a class="logo" ${external('https://neon.com')}><img src="/images/landing/neon-logo.svg" alt="Neon" width="88" height="24"></a>`;
 
+const LABEL_ARROW =
+  '<svg viewBox="0 0 12 14" width="12" height="14" aria-hidden="true"><path d="M12 7L3 12.1962L3 1.80385L12 7Z" fill="currentColor"/></svg>';
+
 /** Single column only: the parts as a sticky strip under the cover. */
 const PART_STRIP = `
     <div class="bar">
       <nav class="bar-nav" aria-label="Parts">
-        ${PARTS.map(({ id, nav }) => `<a href="#${id}" data-part-link="${id}">${nav}</a>`).join('')}
+        ${PARTS.map(({ id, nav }) => `<a href="#${id}">${nav}</a>`).join('')}
       </nav>
     </div>`;
 
 /** Docs, GitHub, Status. Printed twice: at the foot of the left page, shown on the spread, and at
  * the end of the page, shown in the single column; the other copy is not displayed. */
-const FOOTER = (where: 'cover' | 'page'): string => `
+const footer = (where: 'cover' | 'page'): string => `
       <footer class="cover-foot ${where}-foot">
         <nav class="footer-links" aria-label="Resources">
           <a ${external(DOCS_URL)}>Docs</a>
@@ -85,18 +88,18 @@ const COVER = `
           <div class="hero-connect" role="group" aria-label="MCP server URL">${codeBlock(MCP_URL, undefined, 'Copy MCP server URL')}</div>
         </div>
       </div>
-      ${FOOTER('cover')}
+      ${footer('cover')}
     </header>`;
 
 /** Links until script upgrades them to a tab list; without script every procedure is printed. */
 const clientLinks = INSTALL_TABS.map(
   ({ id, label }) =>
-    `<a class="tab" href="#${clientAnchor(id)}" data-client-link="${id}"><span>${label}</span></a>`,
+    `<a class="tab" id="tab-${id}" href="#${clientAnchor(id)}">${label}</a>`,
 ).join('');
 
 const clientPanels = INSTALL_TABS.map(
   ({ id, label, body }) =>
-    `<section class="client" id="${clientAnchor(id)}" data-client="${id}" aria-labelledby="client-${id}"><h3 class="client-title" id="client-${id}">${label}</h3>${prose(body)}</section>`,
+    `<section class="client" id="${clientAnchor(id)}" aria-labelledby="client-${id}"><h3 class="client-title" id="client-${id}">${label}</h3>${prose(body)}</section>`,
 ).join('');
 
 /** A tool category in the parameter table, pointing at that category's tools. */
@@ -105,7 +108,7 @@ const categoryLink = (category: string): string =>
 
 const accessParams = `<div class="params-wrap"><table class="params"><thead><tr><th scope="col">Parameter</th><th scope="col">What it does</th></tr></thead><tbody>${ACCESS_PARAMS.map(
   (param) =>
-    `<tr><td><code>${he.escape(param.param)}</code></td><td>${paramEffect({ ...param, effect: inline(param.effect) }, categoryLink)}</td></tr>`,
+    `<tr><td><code>${he.escape(param.param)}</code></td><td>${paramEffect({ ...param, effect: he.escape(param.effect) }, categoryLink)}</td></tr>`,
 ).join('')}</tbody></table></div>`;
 
 /** What each part holds on the page. */
@@ -118,22 +121,22 @@ const PART_CONTENT = {
 
 const BODY = `<div class="desk">
   <div class="book">
-    ${PART_STRIP}
     ${COVER}
+    ${PART_STRIP}
     <main class="leaves">${SHEET_HEAD}${PARTS.map((part) => sheet(part, PART_CONTENT[part.id])).join('')}
     </main>
-    ${FOOTER('page')}
+    ${footer('page')}
   </div>
 </div>`;
 
 const PART_IDS = PARTS.map(({ id }) => id);
 
-const CLIENT_IDS = INSTALL_TABS.map(({ id }) => id);
+const CLIENT_ANCHORS = INSTALL_TABS.map(({ id }) => clientAnchor(id));
 
 /** Which name the head row shows and which client procedure is open, by the attributes on <html>. */
 const OPEN_CSS = [
   `html:not([data-part]) [data-head='${PART_IDS[0]}'], ${PART_IDS.map((id) => `html[data-part='${id}'] [data-head='${id}']`).join(', ')} { visibility: visible; }`,
-  `${CLIENT_IDS.map((id) => `html.js[data-client='${id}'] #${clientAnchor(id)}`).join(', ')} { display: block; }`,
+  `${CLIENT_ANCHORS.map((id) => `html.js[data-client='${id}'] #${id}`).join(', ')} { display: block; }`,
 ].join('\n');
 
 const TITLE = 'Neon MCP Server — Connect with Claude Code, Cursor & VS Code';
@@ -157,10 +160,7 @@ const HEAD = `<meta charset="utf-8">
 ${OAUTH_PAGE_FONT_LINKS}
 <link rel="stylesheet" href="/fonts/geist-mono/geist-mono.css">`;
 
-const OPEN_AT_ADDRESS = openAtAddressScript(
-  PART_IDS,
-  CLIENT_IDS.map((id) => [clientAnchor(id), id]),
-);
+const OPEN_AT_ADDRESS = openAtAddressScript(PART_IDS, CLIENT_ANCHORS);
 
 export const renderLandingPage = (nonce: string): string => `<!DOCTYPE html>
 <html lang="en">

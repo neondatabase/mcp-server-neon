@@ -61,22 +61,21 @@ code, pre { font-family: var(--mono); letter-spacing: 0; }
 :is(a, button, summary, [tabindex]):focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
 ::selection { color: var(--black); background: var(--green); }
 .label, .margin-label, .count { font-family: var(--mono); letter-spacing: 0; }
-.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* ---------- controls (source) ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; height: 2.5rem; padding: 0 1.25rem; border: 1px solid transparent; border-radius: 9999px; font-size: 0.9375rem; line-height: 1; white-space: nowrap; transition: color 0.2s, background-color 0.2s, border-color 0.2s; }
 .btn-primary { font-weight: 500; color: var(--black); background: var(--white); }
 .btn-primary:hover { background: var(--text); }
 
-.copy-icon { display: grid; flex: none; width: 1rem; height: 1rem; }
+.copy-icon { display: grid; width: 0.875rem; height: 0.875rem; }
 .copy-icon svg { grid-area: 1 / 1; width: 100%; height: 100%; }
 .copy-icon svg + svg, .copied .copy-icon svg { opacity: 0; }
 .copied .copy-icon svg + svg { opacity: 1; }
 /* copy button as in Neon docs: black, grey frame and icon; under the pointer only the fill changes. Copied = the check icon, same grey */
-.copy-square { position: absolute; top: 1rem; right: 1rem; display: grid; place-items: center; width: 1.75rem; height: 1.75rem; padding: 0; color: var(--muted); background: var(--black); border: 1px solid var(--line-strong); transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-.copy-square:hover { background: var(--fill-hover); }
-.copy-square::after { content: ''; position: absolute; inset: -0.5rem; } /* 44px to press */
-html:not(.js) .copy-btn { display: none; } /* copying needs script; without it the text is still selectable */
+.copy-btn { position: absolute; top: min(1rem, calc(50% - 0.875rem)); right: 1rem; display: grid; place-items: center; width: 1.75rem; height: 1.75rem; padding: 0; color: var(--muted); background: var(--black); border: 1px solid var(--line-strong); transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+.copy-btn:hover { background: var(--fill-hover); }
+.copy-btn::after { content: ''; position: absolute; inset: -0.5rem; } /* 44px to press */
+.copy-btn[hidden] { display: none; }
 
 .logo { display: block; flex: none; }
 .logo img { display: block; }
@@ -91,8 +90,9 @@ html:not(.js) .copy-btn { display: none; } /* copying needs script; without it t
 .bar-nav::-webkit-scrollbar { display: none; }
 .bar-nav a { position: relative; display: flex; flex: none; align-items: center; height: calc(2.75rem - 1px); padding: 0 0.625rem; font-size: 0.9375rem; white-space: nowrap; color: var(--body); transition: color 0.2s; }
 .bar-nav a:hover { color: var(--white); }
-.bar-nav a[aria-current] { color: var(--white); }
-.bar-nav a[aria-current]::after { content: ''; position: absolute; left: 0.625rem; right: 0.625rem; bottom: -1px; height: 2px; background: var(--white); }
+.bar-nav a:focus-visible { outline-offset: -2px; }
+.bar-nav a[aria-current='location'] { color: var(--white); }
+.bar-nav a[aria-current='location']::after { content: ''; position: absolute; left: 0.625rem; right: 0.625rem; bottom: -1px; height: 2px; background: var(--white); }
 
 /* left page: the cover */
 .cover { display: flex; flex-direction: column; min-width: 0; background: var(--black); border-bottom: 1px solid var(--line-strong); }
@@ -108,6 +108,7 @@ html:not(.js) .copy-btn { display: none; } /* copying needs script; without it t
 .hero-connect { margin-top: 1.5rem; } /* the URL is the same code block as the ones on the right page */
 
 .cover-foot { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 1.5rem; min-height: var(--foot); padding: 0 var(--pad); border-top: 1px solid var(--line-strong); }
+.cover > .cover-foot { display: none; }
 .footer-links { display: flex; flex-wrap: wrap; margin: 0 -0.625rem; }
 .footer-links a { display: flex; align-items: center; min-height: 2.75rem; padding: 0 0.625rem; font-size: 0.9375rem; color: var(--body); transition: color 0.2s; }
 .footer-links a:hover { color: var(--white); }
@@ -145,7 +146,7 @@ html:not(.js) .copy-btn { display: none; } /* copying needs script; without it t
 .client { padding: 1rem; border: 1px solid var(--line-strong); border-top: 0; }
 .client-title { display: flex; align-items: baseline; gap: 0.625rem; margin-bottom: 0.875rem; font-size: 1.0625rem; font-weight: 500; line-height: 1.5; color: var(--white); }
 html.js .client-title { display: none; } /* the selected cell of the selector is the title */
-html.js .client { scroll-margin-top: 17rem; } /* an address that names a client lands with the part's heading and the selector in view above the panel */
+html.js .client { scroll-margin-top: min(17rem, 40svh); } /* leave room for the tab strip above a linked panel */
 html:not(.js) .tabs-row { margin-bottom: 1.5rem; }
 html:not(.js) .client { border-top: 1px solid var(--line-strong); }
 html:not(.js) .client + .client { border-top: 0; }
@@ -175,10 +176,9 @@ html:not(.js) .client + .client { border-top: 0; }
    the copy button sits mid-height on a one-line block. A long line wraps instead of scrolling,
    and only between words: a command name or flag is never split */
 .code-block { position: relative; background: var(--black); border: 1px solid var(--line-strong); }
-.code-block pre { margin: 0; padding: 1rem 3.5rem 1rem 1rem; font-size: 0.875rem; line-height: 1.3125rem; color: var(--code); white-space: pre-wrap; overflow-wrap: anywhere; }
+.code-block pre { margin: 0; padding: 1rem; font-size: 0.875rem; line-height: 1.3125rem; color: var(--code); white-space: pre-wrap; overflow-wrap: anywhere; }
+.code-block:has(.copy-btn:not([hidden])) pre { padding-right: 3.5rem; }
 .code-block :is(.tok-fn, .tok-str) { white-space: nowrap; }
-.code-block .copy-square { top: min(1rem, calc(50% - 0.875rem)); }
-.code-block .copy-icon { width: 0.875rem; height: 0.875rem; }
 /* token colours of the docs' code theme */
 .tok-fn { color: #f7b983; }
 .tok-str { color: #ffed9c; }

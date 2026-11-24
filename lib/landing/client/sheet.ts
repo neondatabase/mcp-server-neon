@@ -1,62 +1,81 @@
-/**
- * Which part is in view: data-part on <html> (the head row reads it; addressFollowsPart names it
- * in the address) and the mark in the part strip.
- */
-export const partTracking = (): void => {
+/** Keep nested client and tool links while their part is current. */
+export const syncPartAddress = (
+  part: string,
+  firstPart: string | undefined,
+  atCover: boolean,
+): void => {
+  const { hash, pathname, search } = location;
+
+  // On mobile, the cover is above the first part and has no fragment.
+  if (atCover) {
+    if (hash !== '') {
+      history.replaceState(history.state, '', pathname + search);
+    }
+
+    return;
+  }
+
+  const addressed =
+    hash === ''
+      ? firstPart
+      : document
+          .querySelector(`#${CSS.escape(hash.slice(1))}`)
+          ?.closest('.sheet')?.id;
+
+  if (part !== '' && addressed !== part) {
+    history.replaceState(history.state, '', `#${part}`);
+  }
+};
+
+type ScrollState = { part: string; timer?: ReturnType<typeof setTimeout> };
+
+/** Keep the sticky navigation and the shareable URL in sync with document scroll. */
+export const partTracking = (syncAddress: typeof syncPartAddress): void => {
   const root = document.documentElement;
   const sheets = [...document.querySelectorAll<HTMLElement>('.sheet')];
-
-  const partLinks = [
-    ...document.querySelectorAll<HTMLAnchorElement>('[data-part-link]'),
-  ];
-
-  // the sticky row the parts pass under: the head row on the spread, the part strip in the single
-  // column (the other one is not displayed)
-  const stickyRows = [
-    ...document.querySelectorAll<HTMLElement>('.sheet-head, .bar'),
-  ];
-
-  const state = { current: '', frame: 0 };
+  const partStrip = document.querySelector<HTMLElement>('.bar');
+  const partLinks = partStrip?.querySelectorAll<HTMLAnchorElement>('a') ?? [];
+  const head = document.querySelector<HTMLElement>('.sheet-head');
+  const state: ScrollState = { part: '' };
 
   const follow = (): void => {
-    // a part becomes current when the rule above it has gone under the sticky row
-    const line = Math.max(...stickyRows.map((row) => row.offsetHeight)) + 2;
+    const line =
+      Math.max(partStrip?.offsetHeight ?? 0, head?.offsetHeight ?? 0) + 2;
 
     const here =
       sheets.findLast((sheet) => sheet.getBoundingClientRect().top <= line) ??
       sheets.at(0);
 
-    state.frame = 0;
-
-    if (here !== undefined && here.id !== state.current) {
-      state.current = here.id;
+    if (here !== undefined && here.id !== state.part) {
+      state.part = here.id;
       root.dataset.part = here.id;
 
       for (const link of partLinks) {
-        if (link.dataset.partLink === here.id) {
-          link.setAttribute('aria-current', 'location');
-        } else {
-          link.removeAttribute('aria-current');
-        }
+        link.setAttribute(
+          'aria-current',
+          link.hash === `#${here.id}` ? 'location' : 'false',
+        );
       }
     }
   };
 
-  const onScroll = (): void => {
-    if (state.frame === 0) {
-      state.frame = requestAnimationFrame(follow);
-    }
-  };
-
-  globalThis.addEventListener('scroll', onScroll, { passive: true });
-  globalThis.addEventListener('resize', onScroll);
+  globalThis.addEventListener(
+    'scroll',
+    () => {
+      follow();
+      clearTimeout(state.timer);
+      state.timer = setTimeout(() => {
+        const atCover = scrollY === 0 && (partStrip?.offsetHeight ?? 0) > 0;
+        syncAddress(state.part, sheets.at(0)?.id, atCover);
+      }, 150);
+    },
+    { passive: true },
+  );
+  globalThis.addEventListener('resize', follow);
   follow();
 };
 
-/**
- * The tool categories: an address or a link that names one opens it and folds the others, so it
- * is the row under the head. A link then scrolls there as to any anchor.
- */
+/** An address names one category. Open it before the browser scrolls to its link. */
 export const toolGroups = (): void => {
   const groups = [
     ...document.querySelectorAll<HTMLDetailsElement>('.tool-group'),
@@ -65,7 +84,6 @@ export const toolGroups = (): void => {
   const groupAt = (hash: string): HTMLDetailsElement | undefined =>
     groups.find((group) => `#${group.id}` === hash);
 
-  // false when the group is already the only one open, so there is nothing to move to
   const show = (group: HTMLDetailsElement): boolean => {
     const changed = groups.some((other) => other.open !== (other === group));
 
@@ -84,18 +102,20 @@ export const toolGroups = (): void => {
     }
   };
 
-  document.addEventListener('click', (event) => {
-    const link =
-      event.target instanceof Element
-        ? event.target.closest<HTMLAnchorElement>('a[href^="#"]')
-        : null;
+  for (const link of document.querySelectorAll<HTMLAnchorElement>(
+    'a[href^="#tools-"]',
+  )) {
+    link.addEventListener('click', (event) => {
+      const group = groupAt(link.hash);
 
-    const group = link ? groupAt(link.hash) : undefined;
+      const modified =
+        event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
 
-    if (group) {
-      show(group);
-    }
-  });
+      if (group && !event.defaultPrevented && event.button === 0 && !modified) {
+        show(group);
+      }
+    });
+  }
 
   globalThis.addEventListener('hashchange', () => {
     open('auto');

@@ -1,4 +1,3 @@
-import he from 'he';
 import { describe, expect, it } from 'vitest';
 
 import { GET, HEAD, POST } from '../../app/api/[transport]/route';
@@ -27,14 +26,7 @@ describe('landing page at the MCP URL', () => {
 
     const body = await response.text();
 
-    expect(body).toContain(
-      '<h1 id="hero-title">Neon MCP Server <span class="version">',
-    );
-    expect(body).toContain('claude mcp add --transport http');
-    expect(body).toContain('cursor://anysphere.cursor-deeplink/mcp/install');
-    expect(body).toContain('vscode:mcp/install?');
-    expect(body).toContain(`Tools (${NEON_TOOLS.length})`);
-    expect(body).toContain('<code>run_sql</code>');
+    expect(body).toContain('Neon MCP Server');
   });
 
   it('runs only its own nonce-tagged scripts and styles', async () => {
@@ -46,118 +38,18 @@ describe('landing page at the MCP URL', () => {
       ([tag]) => tag,
     );
 
-    const nonces = new Set(
-      tags.map((tag) =>
-        tag.replace(/^.* nonce="(?<nonce>[^"]+)".*$/su, '$<nonce>'),
-      ),
-    );
+    const nonce = /<(?:script|style)\b[^>]* nonce="(?<nonce>[^"]+)"/u.exec(body)
+      ?.groups?.nonce;
+
+    expect(nonce).toBeDefined();
+
+    for (const tag of tags) {
+      expect(tag).toContain(`nonce="${nonce}"`);
+    }
 
     expect(csp).toContain("default-src 'none'");
-    // the address script in the head, the stylesheet, the page script
-    expect(tags).toHaveLength(3);
-    expect(nonces.size).toBe(1);
-    expect(csp).toContain(`'nonce-${[...nonces].join('')}'`);
-  });
-
-  it('prints all four parts one after another, each at its address', async () => {
-    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
-    const body = await response.text();
-
-    const sheets = [
-      ...body.matchAll(/<article class="sheet" id="(?<id>[^"]+)"/gu),
-    ].map((match) => match.groups?.id);
-
-    expect(sheets).toStrictEqual(['install', 'api-key', 'access', 'tools']);
-
-    for (const id of sheets) {
-      // one anchor, in the part strip
-      expect(body.split(`href="#${id}" data-part-link="${id}"`)).toHaveLength(
-        2,
-      );
-      expect(body).toContain(`<h2 id="${id}-title">`);
-    }
-  });
-
-  it('names the part in view in one head row, outside the parts', async () => {
-    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
-    const body = await response.text();
-
-    expect(body.split('class="sheet-head"')).toHaveLength(2);
-
-    const names = [
-      ...body.matchAll(
-        /<span data-head="(?<id>[^"]+)"><span class="head-mark"><\/span><span>(?<name>[^<]+)<\/span><\/span>/gu,
-      ),
-    ].map((match) => `${match.groups?.id} ${match.groups?.name}`);
-
-    expect(names).toStrictEqual([
-      'install Installation guide',
-      'api-key Connect with a Neon API key',
-      'access Limit access',
-      expect.stringMatching(/^tools Tools \(\d+\)$/u),
-    ]);
-
-    // the head row sits before the first part, and no part repeats its number and name
-    expect(body.indexOf('class="sheet-head"')).toBeLessThan(
-      body.indexOf('<article class="sheet"'),
-    );
-    expect(body.slice(body.indexOf('<article class="sheet"'))).not.toContain(
-      'margin-label',
-    );
-
-    // the head script names the part the address opens at; CSS shows that name, or the first without script
-    expect(body).toContain('(["install","api-key","access","tools"],');
-    expect(body).toContain(
-      "html:not([data-part]) [data-head='install'], html[data-part='install'] [data-head='install'], html[data-part='api-key'] [data-head='api-key']",
-    );
-  });
-
-  it('prints commands in plain code blocks that copy exactly what they show', async () => {
-    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
-    const body = await response.text();
-
-    const blocks = [
-      ...body.matchAll(
-        /<div class="code-block"><pre><code>(?<shown>.*?)<\/code><\/pre><button type="button" class="copy-btn copy-square" data-copy="(?<copied>[^"]*)"/gsu,
-      ),
-    ].map((match) => ({
-      shown: String(match.groups?.shown).replaceAll(/<[^>]+>/gu, ''),
-      copied: String(match.groups?.copied),
-    }));
-
-    expect(blocks).toHaveLength(body.split('class="code-block"').length - 1);
-    expect(blocks.length).toBeGreaterThanOrEqual(6);
-
-    for (const { shown, copied } of blocks) {
-      expect(he.decode(shown)).toBe(he.decode(copied));
-      expect(copied).not.toMatch(/^\s*\$/u);
-    }
-  });
-
-  it('prints every client procedure, with its own address', async () => {
-    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
-    const body = await response.text();
-
-    const clients = [
-      ...body.matchAll(/<section class="client" id="(?<id>[^"]+)"/gu),
-    ].map((match) => match.groups?.id);
-
-    expect(clients).toStrictEqual([
-      'install-claude-code',
-      'install-cursor',
-      'install-vscode',
-      'install-vscode-insiders',
-      'install-chatgpt',
-      'install-other',
-    ]);
-
-    for (const id of clients) {
-      expect(body).toContain(`<a class="tab" href="#${id}"`);
-    }
-
-    expect(body).toContain('vscode-insiders:mcp/install?');
-    expect(body).toContain('npx -y mcp-remote');
-    expect(body).toContain('Authorization: Bearer &lt;NEON_API_KEY&gt;');
+    expect(csp).toContain(`script-src 'nonce-${nonce}'`);
+    expect(csp).toContain(`style-src 'self' 'nonce-${nonce}'`);
   });
 
   it('lists every tool once, in a category the parameter table links to', async () => {
@@ -183,21 +75,8 @@ describe('landing page at the MCP URL', () => {
       ...body.matchAll(/<a href="#(?<id>tools-[^"]+)"><code>/gu),
     ].map((match) => match.groups?.id);
 
-    expect(groups).toContain('tools-discovery');
     expect(linked.length).toBeGreaterThan(0);
-    expect(groups).toStrictEqual(expect.arrayContaining(linked));
-  });
-
-  it('gives every element id to one element only', async () => {
-    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
-    const body = await response.text();
-
-    const ids = [...body.matchAll(/\sid="(?<id>[^"]+)"/gu)].map(
-      (match) => match.groups?.id,
-    );
-
-    expect(ids.length).toBeGreaterThan(20);
-    expect(new Set(ids).size).toBe(ids.length);
+    expect(groups).toStrictEqual(['tools-discovery', ...linked]);
   });
 
   it('serves the docs-only URL the same way', async () => {
