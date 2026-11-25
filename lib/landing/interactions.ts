@@ -1,37 +1,38 @@
-export const COPY_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+import { openAtAddress } from './client/address';
+import { copyButtons, glideAfterLoad } from './client/controls';
+import { partTracking, syncPartAddress, toolGroups } from './client/sheet';
+import { clientTabs, enhanceTabs, tabKeys } from './client/tabs';
+
+/** The copy mark as Neon docs code blocks draw it; the check is neon.com's square-cornered 1px line. */
+const COPY_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect width="8.995" height="9.002" x="5.939" y="5.935" stroke="currentColor" rx="1"/><path fill="currentColor" fill-rule="evenodd" d="M2.434.935a1.5 1.5 0 0 0-1.5 1.5v7.001a1.5 1.5 0 0 0 1.5 1.5h1.499a.5.5 0 0 0 0-1h-1.5a.5.5 0 0 1-.5-.5V2.435a.5.5 0 0 1 .5-.5h6.995a.5.5 0 0 1 .5.5v1.5a.5.5 0 1 0 1 0v-1.5a1.5 1.5 0 0 0-1.5-1.5z" clip-rule="evenodd"/></svg>';
 
 const CHECK_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 6l4.286 5L13 2"/></svg>';
 
-export const INTERACTION_SCRIPT = `(function(){
-var tabs=Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
-function select(tab){
-  tabs.forEach(function(t){
-    var on=t===tab;
-    t.setAttribute('aria-selected',String(on));
-    t.tabIndex=on?0:-1;
-    document.getElementById(t.getAttribute('aria-controls')).hidden=!on;
-  });
-  tab.focus();
-  tab.scrollIntoView({block:'nearest',inline:'nearest'});
-}
-tabs.forEach(function(tab,i){
-  tab.addEventListener('click',function(){select(tab);});
-  tab.addEventListener('keydown',function(e){
-    var next={ArrowRight:i+1,ArrowLeft:i-1,Home:0,End:tabs.length-1}[e.key];
-    if(next===undefined)return;
-    e.preventDefault();
-    select(tabs[(next+tabs.length)%tabs.length]);
-  });
-});
-var copyIcon=${JSON.stringify(COPY_ICON)},checkIcon=${JSON.stringify(CHECK_ICON)};
-document.addEventListener('click',function(e){
-  var btn=e.target.closest('.copy-btn');
-  if(!btn||!navigator.clipboard)return;
-  navigator.clipboard.writeText(btn.getAttribute('data-copy')).then(function(){
-    btn.classList.add('copied');btn.innerHTML=checkIcon;
-    setTimeout(function(){btn.classList.remove('copied');btn.innerHTML=copyIcon;},2000);
-  });
-});
-})();`;
+/** Both states of a copy button; CSS shows the check while it has `.copied`. */
+export const COPY_ICONS = `<span class="copy-icon">${COPY_ICON}${CHECK_ICON}</span>`;
+
+/** A value as JavaScript source inside a <script>: JSON, with `<` escaped so it cannot close the tag. */
+const scriptValue = (value: readonly string[]): string =>
+  JSON.stringify(value).replaceAll('<', String.raw`\u003c`);
+
+/** The head script (client/address.ts, openAtAddress) called with the page's part and client addresses. */
+export const openAtAddressScript = (
+  partIds: readonly string[],
+  clientAnchors: readonly string[],
+): string =>
+  `(${String(openAtAddress)})(${scriptValue(partIds)},${scriptValue(clientAnchors)});`;
+
+/**
+ * The page script, run at the end of the body: each feature in client/ inlined by its own source
+ * text and run on its own. They share only the DOM, so their order is the order they act on load:
+ * the client and category the address names are opened before the part in view is read.
+ */
+export const INTERACTION_SCRIPT = `
+(${String(copyButtons)})();
+(${String(clientTabs)})(${String(enhanceTabs)},${String(tabKeys)});
+(${String(toolGroups)})();
+(${String(partTracking)})(${String(syncPartAddress)});
+(${String(glideAfterLoad)})();
+`;

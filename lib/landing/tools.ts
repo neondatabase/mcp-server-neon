@@ -11,8 +11,13 @@ export const TOOL_COUNT = NEON_TOOLS.length;
 
 type ToolGroup = {
   label: string;
+  anchor: string;
   tools: readonly NeonTool[];
 };
+
+/** The address of a category's row in the tools part: `tools-neon-auth` for `neon_auth`. */
+export const toolGroupAnchor = (scope: string | null): string =>
+  `tools-${(scope ?? 'discovery').replaceAll('_', '-')}`;
 
 export const TOOL_GROUPS: readonly ToolGroup[] = [
   null,
@@ -22,7 +27,9 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
 
   const label = scope === null ? DISCOVERY_LABEL : SCOPE_CATEGORY_LABELS[scope];
 
-  return tools.length === 0 ? [] : [{ label, tools }];
+  return tools.length === 0
+    ? []
+    : [{ label, anchor: toolGroupAnchor(scope), tools }];
 });
 
 const toolItem = (tool: NeonTool): string => {
@@ -30,15 +37,15 @@ const toolItem = (tool: NeonTool): string => {
 
   const titleHtml =
     title !== undefined && title !== tool.name
-      ? `<span>${he.escape(title)}</span>`
+      ? `<span class="tool-title">${he.escape(title)}</span>`
       : '';
 
   const badge = tool.readOnlySafe ? '<span class="badge">read-only</span>' : '';
 
-  return `<div class="tool"><div class="tool-name"><code>${he.escape(tool.name)}</code>${titleHtml}${badge}</div><p class="tool-desc">${he.escape(tool.description)}</p></div>`;
+  return `<li class="tool"><div class="tool-name"><code>${he.escape(tool.name)}</code>${badge}${titleHtml}</div><p class="tool-desc">${he.escape(tool.description)}</p></li>`;
 };
 
 export const TOOL_GROUPS_HTML = TOOL_GROUPS.map(
-  ({ label, tools }) =>
-    `<details class="tool-group"><summary><span>${he.escape(label)}</span><span class="count">${tools.length}</span></summary><div class="tool-list">${tools.map((tool) => toolItem(tool)).join('')}</div></details>`,
+  ({ label, anchor, tools }) =>
+    `<details class="tool-group" id="${anchor}"><summary><span>${he.escape(label)}</span><span class="count">${tools.length}</span></summary><ul class="tool-list">${tools.map((tool) => toolItem(tool)).join('')}</ul></details>`,
 ).join('');

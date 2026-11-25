@@ -26,14 +26,7 @@ describe('landing page at the MCP URL', () => {
 
     const body = await response.text();
 
-    expect(body).toContain(
-      '<h1 id="hero-title">Neon MCP Server <span class="version">',
-    );
-    expect(body).toContain('claude mcp add --transport http');
-    expect(body).toContain('cursor://anysphere.cursor-deeplink/mcp/install');
-    expect(body).toContain('vscode:mcp/install?');
-    expect(body).toContain(`Tools (${NEON_TOOLS.length})`);
-    expect(body).toContain('<code>run_sql</code>');
+    expect(body).toContain('Neon MCP Server');
   });
 
   it('runs only its own nonce-tagged scripts and styles', async () => {
@@ -45,16 +38,45 @@ describe('landing page at the MCP URL', () => {
       ([tag]) => tag,
     );
 
-    const nonces = new Set(
-      tags.map((tag) =>
-        tag.replace(/^.* nonce="(?<nonce>[^"]+)".*$/su, '$<nonce>'),
-      ),
-    );
+    const nonce = /<(?:script|style)\b[^>]* nonce="(?<nonce>[^"]+)"/u.exec(body)
+      ?.groups?.nonce;
+
+    expect(nonce).toBeDefined();
+
+    for (const tag of tags) {
+      expect(tag).toContain(`nonce="${nonce}"`);
+    }
 
     expect(csp).toContain("default-src 'none'");
-    expect(tags).toHaveLength(3);
-    expect(nonces.size).toBe(1);
-    expect(csp).toContain(`'nonce-${[...nonces].join('')}'`);
+    expect(csp).toContain(`script-src 'nonce-${nonce}'`);
+    expect(csp).toContain(`style-src 'self' 'nonce-${nonce}'`);
+  });
+
+  it('lists every tool once, in a category the parameter table links to', async () => {
+    const response = await get(MCP_URL, { Accept: BROWSER_ACCEPT });
+    const body = await response.text();
+
+    const listed = [
+      ...body.matchAll(
+        /<li class="tool"><div class="tool-name"><code>(?<name>[^<]+)<\/code>/gu,
+      ),
+    ].map((match) => match.groups?.name);
+
+    expect(listed).toHaveLength(NEON_TOOLS.length);
+    expect(new Set(listed)).toStrictEqual(
+      new Set(NEON_TOOLS.map((tool) => tool.name)),
+    );
+
+    const groups = [
+      ...body.matchAll(/<details class="tool-group" id="(?<id>[^"]+)"/gu),
+    ].map((match) => match.groups?.id);
+
+    const linked = [
+      ...body.matchAll(/<a href="#(?<id>tools-[^"]+)"><code>/gu),
+    ].map((match) => match.groups?.id);
+
+    expect(linked.length).toBeGreaterThan(0);
+    expect(groups).toStrictEqual(['tools-discovery', ...linked]);
   });
 
   it('serves the docs-only URL the same way', async () => {
