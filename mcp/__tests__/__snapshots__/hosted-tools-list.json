@@ -1,7 +1,7 @@
 [
   {
     "name": "list_organizations",
-    "title": "List organizations for the current user",
+    "title": "List user organizations",
     "description": "Lists user orgs, or the key's org; search matches name or id.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -9,7 +9,7 @@
       "properties": {
         "search": {
           "type": "string",
-          "description": "Part of an organization name or id, ignoring case."
+          "description": "Org name/id substring, ignoring case."
         }
       },
       "additionalProperties": false
@@ -73,7 +73,7 @@
       ]
     },
     "annotations": {
-      "title": "List organizations for the current user",
+      "title": "List user organizations",
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
@@ -1907,7 +1907,7 @@
   {
     "name": "set_organization_spend_cap",
     "title": "Set spend cap",
-    "description": "Sets org cap; admins only.",
+    "description": "Sets org cap; admin. New limits default on when available; false keeps emails.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1924,7 +1924,7 @@
           "description": "USD cents: 100 = $1."
         },
         "spend_cap_enabled": {
-          "description": "True opts in; false keeps emails. Omit preserves.",
+          "description": "Omit: new suspension on when available; existing preserves. False: emails only; true: suspension.",
           "type": "boolean"
         }
       },
