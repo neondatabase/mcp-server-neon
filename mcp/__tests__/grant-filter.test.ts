@@ -516,8 +516,43 @@ describe('search_docs visibility', () => {
     expect(docsOnly.sort()).toEqual([
       'get_doc',
       'list_incidents',
+      'search_api',
       'search_docs',
       'send_feedback',
     ]);
+  });
+});
+
+describe('search_api and call_api visibility', () => {
+  const visible = (name: string, g: GrantContext, readOnly = false) =>
+    getAvailableTools(g, readOnly)
+      .map((t) => t.name)
+      .includes(name);
+
+  it('lists search_api wherever the docs tools are', () => {
+    expect(visible('search_api', grant())).toBe(true);
+    expect(visible('search_api', grant({ scopes: ['docs'] }))).toBe(true);
+    expect(visible('search_api', grant({ projectId: 'proj-1' }))).toBe(true);
+    expect(visible('search_api', grant({ roleName: 'reader' }))).toBe(true);
+    expect(visible('search_api', grant(), true)).toBe(true);
+    expect(visible('search_api', grant({ scopes: ['querying'] }))).toBe(false);
+  });
+
+  it('lists call_api only on an unrestricted, writable grant that keeps setup secrets', () => {
+    expect(visible('call_api', grant())).toBe(true);
+    expect(visible('call_api', grant({ scopes: [...SCOPE_CATEGORIES] }))).toBe(
+      true,
+    );
+    expect(visible('call_api', grant({ secrets: 'all' }))).toBe(true);
+
+    expect(
+      visible('call_api', grant({ scopes: SCOPE_CATEGORIES.slice(1) })),
+    ).toBe(false);
+    expect(visible('call_api', grant({ scopes: ['docs'] }))).toBe(false);
+    expect(visible('call_api', grant({ scopes: [] }))).toBe(false);
+    expect(visible('call_api', grant({ projectId: 'proj-1' }))).toBe(false);
+    expect(visible('call_api', grant({ roleName: 'reader' }))).toBe(false);
+    expect(visible('call_api', grant({ secrets: 'none' }))).toBe(false);
+    expect(visible('call_api', grant(), true)).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ import {
 } from '@neon/tools';
 import {
   NEON_API_HOST,
+  NEON_API_SPEC_URL,
   NEON_DOCS_BASE_URL,
   NEON_FEEDBACK_URL,
   NEON_SITE_SEARCH_URL,
@@ -83,6 +84,7 @@ export const NEON_PACKAGE_TOOLS = createNeonTools({
   descriptions: withMcpNotes,
   siteSearchUrl: NEON_SITE_SEARCH_URL,
   docsBaseUrl: NEON_DOCS_BASE_URL,
+  apiSpecUrl: NEON_API_SPEC_URL,
   feedbackUrl: NEON_FEEDBACK_URL,
   feedbackSource: 'neon_mcp',
 });

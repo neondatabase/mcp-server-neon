@@ -708,6 +708,7 @@ function consentScript(mode: ConsentMode): string {
       return CATALOG.filter(function (tool) {
         if (!checked && tool.writeOnly) return false;
         if (grant.projectId && !tool.projectScoped) return false;
+        if (tool.unrestrictedOnly && (grant.scopes !== null || grant.projectId || grant.roleName)) return false;
         if (grant.roleName && PINNED_ROLE_WITHHELD[tool.name]) return false;
         if (tool.withheldUnder.indexOf(checked ? grant.secrets : 'none') !== -1) return false;
         if (grant.scopes === null) return true;

@@ -205,6 +205,7 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
       expect(result.tools.map((tool) => tool.name).sort()).toEqual([
         'get_doc',
         'list_incidents',
+        'search_api',
         'search_docs',
         'send_feedback',
       ]);
@@ -213,6 +214,7 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
       ).toEqual({
         get_doc: 'Get Documentation Page',
         list_incidents: 'List Neon incidents',
+        search_api: 'Search the Neon API',
         search_docs: 'Search Documentation',
         send_feedback: 'Send Feedback',
       });
@@ -247,6 +249,7 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
       expect(result.tools.map((tool) => tool.name).sort()).toEqual([
         'get_doc',
         'list_incidents',
+        'search_api',
         'search_docs',
         'send_feedback',
       ]);
@@ -280,9 +283,53 @@ test.describe('Docs-only MCP endpoint (no OAuth)', () => {
     expect(toolNames).toEqual([
       'get_doc',
       'list_incidents',
+      'search_api',
       'search_docs',
       'send_feedback',
     ]);
+  });
+
+  // Reads the spec stand-in that `playwright.config.ts` points
+  // NEON_API_SPEC_URL at; no login is needed to search the public spec.
+  test('tools/call search_api returns endpoints with their fields', async ({
+    request,
+  }) => {
+    const callResult = await callDocsTool(request, 11, 'search_api', {
+      query: 'create branch',
+    });
+
+    const text = callResult?.result?.content?.[0]?.text;
+
+    expect(callResult?.result?.isError).not.toBe(true);
+    expect(text).toBeDefined();
+    expect(JSON.parse(String(text))).toEqual({
+      endpoints: [
+        {
+          method: 'POST',
+          path: '/projects/{project_id}/branches',
+          summary: 'Create branch',
+          operation_id: 'createProjectBranch',
+          body_required: false,
+          content_type: 'application/json',
+          fields: [
+            {
+              in: 'path',
+              name: 'project_id',
+              required: true,
+              type: 'string',
+              description: 'The Neon project ID.',
+            },
+            {
+              in: 'body',
+              name: 'branch.name',
+              required: false,
+              type: 'string',
+              description: 'The branch name.',
+            },
+          ],
+        },
+      ],
+    });
   });
 
   // Posts to the site search stand-in that `playwright.config.ts` points

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import {
+  API_SPEC_FIXTURE_URL,
   DOCS_FIXTURE_BASE_URL,
   FEEDBACK_FIXTURE_URL,
   SITE_SEARCH_FIXTURE_URL,
@@ -68,6 +69,8 @@ export default defineConfig({
       NEON_FEEDBACK_URL: FEEDBACK_FIXTURE_URL,
       // Same fixture server for search_docs, so no test depends on neon-agent.
       NEON_SITE_SEARCH_URL: SITE_SEARCH_FIXTURE_URL,
+      // Same fixture server for search_api, so no test depends on neon.com.
+      NEON_API_SPEC_URL: API_SPEC_FIXTURE_URL,
       // An unset SENTRY_DSN falls back to the production DSN in lib/config.ts,
       // and the suite triggers server errors on purpose. The fixture also
       // lets tests read the spans and logs the server sends.

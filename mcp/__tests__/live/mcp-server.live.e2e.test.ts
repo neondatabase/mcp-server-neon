@@ -489,6 +489,92 @@ describe.sequential('MCP server live Neon lifecycle', () => {
     LIVE_TEST_TIMEOUT_MS,
   );
 
+  const createdProjectId = () => {
+    if (projectId === undefined) {
+      throw new Error('Test project was not created.');
+    }
+
+    return projectId;
+  };
+
+  it(
+    'finds an endpoint with search_api and creates, reads, and deletes a branch with call_api',
+    async () => {
+      const project = createdProjectId();
+
+      const searchResult = await callTool('search_api', {
+        query: 'create branch',
+        limit: 1,
+      });
+
+      assertToolSucceeded('search_api', searchResult);
+
+      const { data: found } = z
+        .object({
+          data: z.object({
+            endpoints: z.array(
+              z.object({
+                method: z.string(),
+                path: z.string(),
+                fields: z.array(z.object({ name: z.string() })),
+              }),
+            ),
+          }),
+        })
+        .parse(searchResult.structuredContent);
+
+      expect(found.endpoints[0]).toMatchObject({
+        method: 'POST',
+        path: '/projects/{project_id}/branches',
+      });
+      expect(found.endpoints[0]?.fields.map((field) => field.name)).toContain(
+        'branch.name',
+      );
+
+      const branchResponse = z.object({
+        data: z.object({
+          branch: z.object({ id: z.string(), name: z.string() }),
+        }),
+      });
+
+      const created = await callTool('call_api', {
+        method: 'POST',
+        path: `/projects/${project}/branches`,
+        body: { branch: { name: 'call-api-live' } },
+      });
+
+      assertToolSucceeded('call_api', created);
+
+      const branchId = branchResponse.parse(created.structuredContent).data
+        .branch.id;
+
+      const read = await callTool('call_api', {
+        method: 'GET',
+        path: `/projects/${project}/branches/${branchId}`,
+      });
+
+      assertToolSucceeded('call_api', read);
+      expect(
+        branchResponse.parse(read.structuredContent).data.branch.name,
+      ).toBe('call-api-live');
+
+      const authRoute = await callTool('call_api', {
+        method: 'GET',
+        path: `/projects/${project}/branches/${branchId}/auth/oauth_providers`,
+      });
+
+      expect(authRoute.isError).toBe(true);
+
+      const deleted = await callTool('call_api', {
+        method: 'DELETE',
+        path: `/projects/${project}/branches/${branchId}`,
+      });
+
+      assertToolSucceeded('call_api', deleted);
+    },
+    LIVE_TEST_TIMEOUT_MS,
+  );
+
   it(
     'creates same-named public and CRM tables in the real database',
     async () => {
