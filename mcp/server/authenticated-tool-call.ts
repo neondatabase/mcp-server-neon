@@ -1,5 +1,6 @@
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { Analytics } from '../analytics/analytics-service';
+import { ApiRoutes, CallApiRequest } from '../analytics/api-routes';
 import { toolSpanClientAttributes } from '../sentry/tool-span';
 import { setSentryTags } from '../sentry/utils';
 import { invokeTool } from '../tools/registration';
@@ -62,7 +63,17 @@ export const authenticatedToolCall =
 
       yield* trackServerInit(caller, server.state);
 
-      const properties = toolCallProperties(tool.name, caller, traceId);
+      const callProperties = toolCallProperties(tool.name, caller, traceId);
+
+      const properties =
+        tool.name === 'call_api'
+          ? {
+              ...callProperties,
+              ...(yield* (yield* ApiRoutes).forCall(
+                Schema.decodeUnknownOption(CallApiRequest)(args),
+              )),
+            }
+          : callProperties;
 
       yield* recordToolCall(caller, properties);
 
