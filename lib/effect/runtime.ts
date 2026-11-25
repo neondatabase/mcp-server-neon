@@ -2,6 +2,7 @@ import { waitUntil } from '@vercel/functions';
 import { Layer, ManagedRuntime } from 'effect';
 import type { Effect } from 'effect';
 import { Analytics } from '../../mcp/analytics/analytics-service';
+import { ApiRoutes } from '../../mcp/analytics/api-routes';
 import { NeonAccounts } from '../../mcp/server/neon-accounts';
 import { SentryLayer } from '../../mcp/sentry/effect';
 import { flushInBackground } from '../../mcp/sentry/flush';
@@ -17,6 +18,7 @@ export const McpCallbackLayer = Layer.mergeAll(
   WinstonLoggerLayer,
   NeonAccounts.layer,
   Analytics.layer,
+  ApiRoutes.layer,
 );
 
 // MCP SDK callbacks (tool calls, lifecycle hooks) run inside mcp-handler,
