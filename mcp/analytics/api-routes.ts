@@ -93,6 +93,29 @@ const fetchSpec = (url: string) =>
     catch: (cause) => ApiSpecUnavailable.make({ message: messageOf(cause) }),
   }).pipe(Effect.withSpan('ApiRoutes.fetchSpec', { attributes: { url } }));
 
+// The lookup runs in the layer's scope, not the caller's, so a fetch slower
+// than SPEC_WAIT still lands in the cache instead of being interrupted with the
+// wait.
+const routeVia =
+  (spec: Effect.Effect<OpenApiSpec, ApiSpecUnavailable>, scope: Scope.Scope) =>
+  (request: CallApiRequest) =>
+    Effect.forkIn(spec, scope).pipe(
+      Effect.flatMap(Fiber.join),
+      Effect.timeout(SPEC_WAIT),
+      Effect.flatMap((loaded) =>
+        Effect.try({
+          try: () => callApiRoute(request, loaded),
+          catch: (cause) =>
+            ApiSpecUnavailable.make({ message: messageOf(cause) }),
+        }),
+      ),
+      Effect.catchTags({
+        ApiSpecUnavailable: ({ message }) => unknownRoute(request, message),
+        TimeoutError: () =>
+          unknownRoute(request, `no spec within ${Duration.format(SPEC_WAIT)}`),
+      }),
+    );
+
 /** Resolves `call_api` requests to spec route templates for `tool_call`. */
 export class ApiRoutes extends Context.Service<
   ApiRoutes,
@@ -110,31 +133,8 @@ export class ApiRoutes extends Context.Service<
         Exit.isSuccess(exit) ? Duration.hours(1) : Duration.zero,
     });
 
-    // The lookup runs in the layer's scope, not the caller's, so a fetch slower
-    // than SPEC_WAIT still lands in the cache instead of being interrupted with
-    // the wait.
     const scope = yield* Scope.Scope;
-
-    const routeOf = (request: CallApiRequest) =>
-      Effect.forkIn(Cache.get(specs, NEON_API_SPEC_URL), scope).pipe(
-        Effect.flatMap(Fiber.join),
-        Effect.timeout(SPEC_WAIT),
-        Effect.flatMap((spec) =>
-          Effect.try({
-            try: () => callApiRoute(request, spec),
-            catch: (cause) =>
-              ApiSpecUnavailable.make({ message: messageOf(cause) }),
-          }),
-        ),
-        Effect.catchTags({
-          ApiSpecUnavailable: ({ message }) => unknownRoute(request, message),
-          TimeoutError: () =>
-            unknownRoute(
-              request,
-              `no spec within ${Duration.format(SPEC_WAIT)}`,
-            ),
-        }),
-      );
+    const routeOf = routeVia(Cache.get(specs, NEON_API_SPEC_URL), scope);
 
     const forCall = Effect.fn('ApiRoutes.forCall')(function* (
       request: Option.Option<CallApiRequest>,
