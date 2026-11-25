@@ -6,16 +6,13 @@
  * Sentry events each answer leaves, and that a client disconnect after the
  * upstream exchange started still persists the rotated pair.
  */
-import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import type { ServerResponse } from 'node:http';
 import { createServer } from 'node:https';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { flush, httpIntegration, init, startSpan } from '@sentry/node';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import { selfSignedCertificate } from './helpers/self-signed-certificate';
 
 process.env.E2E_SENTRY_PORT = '3117';
 
@@ -53,40 +50,6 @@ const rotated = (): UpstreamAnswer => ({
   },
 });
 
-const certificate = async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'token-spans-'));
-  const key = path.join(dir, 'key.pem');
-  const cert = path.join(dir, 'cert.pem');
-
-  const openssl = spawn(
-    'openssl',
-    [
-      'req',
-      '-x509',
-      '-newkey',
-      'rsa:2048',
-      '-nodes',
-      '-keyout',
-      key,
-      '-out',
-      cert,
-      '-days',
-      '1',
-      '-subj',
-      '/CN=127.0.0.1',
-    ],
-    { stdio: 'ignore' },
-  );
-
-  await once(openssl, 'exit');
-
-  const pair = { key: await readFile(key), cert: await readFile(cert) };
-
-  await rm(dir, { recursive: true, force: true });
-
-  return pair;
-};
-
 const answerToken = async (refreshToken: string, response: ServerResponse) => {
   upstream.received.push(refreshToken);
 
@@ -96,37 +59,40 @@ const answerToken = async (refreshToken: string, response: ServerResponse) => {
   response.end(JSON.stringify(body));
 };
 
-const hydra = createServer(await certificate(), (request, response) => {
-  const chunks: Buffer[] = [];
+const hydra = createServer(
+  await selfSignedCertificate(),
+  (request, response) => {
+    const chunks: Buffer[] = [];
 
-  request.on('data', (chunk: Buffer) => {
-    chunks.push(chunk);
-  });
-  request.on('end', () => {
-    const issuer = `https://127.0.0.1:${hydraPort()}`;
+    request.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+    request.on('end', () => {
+      const issuer = `https://127.0.0.1:${hydraPort()}`;
 
-    if (request.url === '/.well-known/openid-configuration') {
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(
-        JSON.stringify({
-          issuer,
-          authorization_endpoint: `${issuer}/oauth2/auth`,
-          token_endpoint: `${issuer}/oauth2/token`,
-          response_types_supported: ['code'],
-        }),
-      );
+      if (request.url === '/.well-known/openid-configuration') {
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(
+          JSON.stringify({
+            issuer,
+            authorization_endpoint: `${issuer}/oauth2/auth`,
+            token_endpoint: `${issuer}/oauth2/token`,
+            response_types_supported: ['code'],
+          }),
+        );
 
-      return;
-    }
+        return;
+      }
 
-    const refreshToken =
-      new URLSearchParams(Buffer.concat(chunks).toString('utf8')).get(
-        'refresh_token',
-      ) ?? '';
+      const refreshToken =
+        new URLSearchParams(Buffer.concat(chunks).toString('utf8')).get(
+          'refresh_token',
+        ) ?? '';
 
-    void answerToken(refreshToken, response);
-  });
-});
+      void answerToken(refreshToken, response);
+    });
+  },
+);
 
 hydra.listen(0, '127.0.0.1');
 
