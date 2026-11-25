@@ -1,9 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { once } from 'node:events';
+import { createServer } from 'node:net';
+import type { AddressInfo, Socket } from 'node:net';
+import { Predicate } from 'effect';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { neon } from '@neondatabase/serverless';
 import { ensureOauthDatabaseUrl } from '../../e2e/provision-oauth-db';
 import {
   createPostgresRefreshLockStore,
+  createRedisRefreshLockStore,
   ensureRefreshLockSchema,
   type RefreshLockStore,
 } from '../oauth/refresh-lock-store';
@@ -139,5 +144,145 @@ describe('Postgres refresh lock store', () => {
     await expect(
       Promise.all(graphs.map((m) => m.ensureRefreshLockSchema(url))),
     ).resolves.toHaveLength(3);
+  });
+});
+
+const DROP_AFTER_MS = 20;
+
+// The keys, owners, and TTLs in these tests never start with `*` or `$`.
+const commandsIn = (chunk: string): string[][] =>
+  chunk.split('\r\n').reduce<string[][]>((commands, line) => {
+    if (line.startsWith('*')) {
+      commands.push([]);
+    } else if (line !== '' && !line.startsWith('$')) {
+      commands.at(-1)?.push(line);
+    }
+
+    return commands;
+  }, []);
+
+// A Redis stand-in that answers SET and GET or, during an outage, accepts
+// every connection and drops it after DROP_AFTER_MS without replying.
+const redisData = new Map<string, string>();
+const redisSockets = new Set<Socket>();
+const redisCounts = { accepted: 0, peakOpen: 0 };
+const outage = { active: false };
+
+const replyTo = ([command, key, value, ...options]: string[]): string => {
+  const found = redisData.get(key);
+
+  if (command === 'GET') {
+    return found === undefined ? '$-1\r\n' : `$${found.length}\r\n${found}\r\n`;
+  }
+
+  if (options.includes('NX') && found !== undefined) {
+    return '$-1\r\n';
+  }
+
+  redisData.set(key, value);
+
+  return '+OK\r\n';
+};
+
+const dropSocket = (socket: Socket) => {
+  redisSockets.delete(socket);
+  socket.destroy();
+};
+
+const redisServer = createServer((socket) => {
+  redisCounts.accepted += 1;
+  redisSockets.add(socket);
+  redisCounts.peakOpen = Math.max(redisCounts.peakOpen, redisSockets.size);
+  socket.on('error', () => {
+    dropSocket(socket);
+  });
+  socket.on('close', () => {
+    redisSockets.delete(socket);
+  });
+
+  if (outage.active) {
+    setTimeout(() => {
+      dropSocket(socket);
+    }, DROP_AFTER_MS);
+
+    return;
+  }
+
+  socket.on('data', (chunk) => {
+    for (const command of commandsIn(chunk.toString())) {
+      socket.write(replyTo(command));
+    }
+  });
+});
+
+redisServer.listen(0, '127.0.0.1');
+
+await once(redisServer, 'listening');
+
+const redisAddress: AddressInfo | string | null = redisServer.address();
+
+if (redisAddress === null || Predicate.isString(redisAddress)) {
+  throw new Error('Redis stand-in has no TCP address');
+}
+
+const startOutage = () => {
+  outage.active = true;
+
+  for (const socket of redisSockets) {
+    dropSocket(socket);
+  }
+
+  redisCounts.accepted = 0;
+  redisCounts.peakOpen = 0;
+};
+
+const endOutage = async () => {
+  outage.active = false;
+  // Connections accepted during the outage are still dropped.
+  await sleep(DROP_AFTER_MS * 2);
+};
+
+describe('Redis refresh lock store', () => {
+  afterAll(() => {
+    redisServer.close();
+  });
+
+  it('keeps one client through an outage and recovers on it', async () => {
+    const s = createRedisRefreshLockStore(
+      `redis://127.0.0.1:${redisAddress.port}`,
+    );
+
+    const rt = token();
+
+    const failedAcquire = async () =>
+      expect(s.tryAcquire(token(), 'owner-x', 6000)).rejects.toBeInstanceOf(
+        Error,
+      );
+
+    // Four calls, one after another, during an outage.
+    const failDuringOutage = async () => {
+      startOutage();
+      const startedAt = Date.now();
+      await failedAcquire();
+      await failedAcquire();
+      await failedAcquire();
+      await failedAcquire();
+      await sleep(500);
+
+      expect(redisCounts.peakOpen).toBe(1);
+      expect(redisCounts.accepted).toBeLessThanOrEqual(
+        (Date.now() - startedAt) / DROP_AFTER_MS + 2,
+      );
+      await endOutage();
+    };
+
+    await failDuringOutage();
+    await expect(s.tryAcquire(rt, 'owner-a', 6000)).resolves.toBe(true);
+    await expect(s.tryAcquire(rt, 'owner-b', 6000)).resolves.toBe(false);
+
+    await failDuringOutage();
+    await expect(s.isHeld(rt)).resolves.toBe(true);
+    await expect(s.tryAcquire(rt, 'owner-b', 6000)).resolves.toBe(false);
+    expect(redisSockets.size).toBe(1);
   });
 });

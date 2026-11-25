@@ -8,6 +8,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { once } from 'node:events';
 import { neon } from '@neondatabase/serverless';
 import { createClient, type RedisClientType } from 'redis';
 import { logger } from '../utils/logger';
@@ -104,22 +105,74 @@ else
 end
 `;
 
-export function createRedisRefreshLockStore(url: string): RefreshLockStore {
-  let clientPromise: Promise<RedisClientType> | null = null;
+type OwnedRedisClient = {
+  client: RedisClientType;
+  connected: Promise<RedisClientType>;
+  // `once(client, 'ready')` would reject on the first reconnect error.
+  ready: EventTarget;
+  reconnecting: boolean;
+  reconnected: Promise<RedisClientType> | null;
+};
 
-  const getClient = (): Promise<RedisClientType> => {
-    if (clientPromise) return clientPromise;
+export function createRedisRefreshLockStore(url: string): RefreshLockStore {
+  let owned: OwnedRedisClient | null = null;
+
+  const connectClient = (): OwnedRedisClient => {
     const client = createClient({ url }) as RedisClientType;
-    client.on('error', (err) => {
+
+    client.on('ready', () => {
+      state.reconnecting = false;
+      state.reconnected = null;
+      state.ready.dispatchEvent(new Event('ready'));
+    });
+    client.on('error', (err: Error) => {
       logger.error('refresh-lock redis error', { err });
-      clientPromise = null;
+
+      if (client.isOpen) {
+        state.reconnecting = true;
+
+        return;
+      }
+
+      // Its reconnect strategy gave up and closed it. Waiting calls get the
+      // closed client, whose commands reject.
+      if (owned === state) {
+        owned = null;
+      }
+
+      state.ready.dispatchEvent(new Event('ready'));
     });
-    const pending = client.connect().then(() => client);
-    pending.catch(() => {
-      clientPromise = null;
+
+    const state: OwnedRedisClient = {
+      client,
+      connected: client.connect().then(() => client),
+      ready: new EventTarget(),
+      reconnecting: false,
+      reconnected: null,
+    };
+
+    state.connected.catch(() => {
+      if (owned === state) {
+        owned = null;
+      }
     });
-    clientPromise = pending;
-    return clientPromise;
+
+    return state;
+  };
+
+  // The client reconnects by itself after an error, so calls wait for it to
+  // be ready again instead of opening another client.
+  const getClient = async (): Promise<RedisClientType> => {
+    owned ??= connectClient();
+
+    if (!owned.reconnecting) {
+      return owned.connected;
+    }
+
+    const { client } = owned;
+    owned.reconnected ??= once(owned.ready, 'ready').then(() => client);
+
+    return owned.reconnected;
   };
 
   const run = async <T>(
