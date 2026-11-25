@@ -20,6 +20,10 @@ import { ToolStepFailed } from './errors';
 import type { ToolId } from './operations';
 import { assertOutputContract } from './output-contract';
 import type { NeonTool } from './tool-definition';
+import {
+  SPEND_CAP_RESULT_SCHEMA,
+  spendCapToolResult,
+} from './spend-cap-result';
 import type {
   ToolCallError,
   ToolHandler,
@@ -344,6 +348,12 @@ const RESULT_RENDERERS: Partial<
     (data: unknown, params: Record<string, unknown>) => CallToolResult
   >
 > = {
+  'organizations.spendingLimit.get': (data) =>
+    spendCapToolResult(SPEND_CAP_RESULT_SCHEMA.parse(data)),
+  'organizations.spendingLimit.set': (data) =>
+    spendCapToolResult(SPEND_CAP_RESULT_SCHEMA.parse(data)),
+  'organizations.spendingLimit.disable': (data) =>
+    spendCapToolResult(SPEND_CAP_RESULT_SCHEMA.parse(data)),
   'sql.run': sqlRunResult,
   'sql.runTransaction': sqlTransactionResult,
   'resources.search': structuredResult,

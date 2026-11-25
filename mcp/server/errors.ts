@@ -112,6 +112,15 @@ function errorText(error: unknown): string {
         lines.push(`${label}: ${value}`);
       }
     }
+    const action = BILLING_ERROR_ACTIONS.get('SPEND_CAP_EXCEEDED');
+
+    if (
+      error.code === '57P03' &&
+      error.detail?.includes('SPEND_CAP_EXCEEDED') === true &&
+      action !== undefined
+    ) {
+      lines.push(action);
+    }
   }
 
   if (error instanceof NeonApiError) {
@@ -141,7 +150,8 @@ function apiErrorReason(body: unknown): string | undefined {
 
 const apiClientErrorResponse = (error: NeonApiError) => {
   const reason = apiErrorReason(error.body);
-  return {
+
+  const response = {
     isError: true,
     content: [
       {
@@ -154,7 +164,40 @@ const apiClientErrorResponse = (error: NeonApiError) => {
       },
     ],
   };
+
+  const action = BILLING_ERROR_ACTIONS.get(error.code ?? '');
+
+  if (action === undefined) {
+    return response;
+  }
+
+  return {
+    ...response,
+    content: [
+      ...response.content,
+      { type: 'text' as const, text: `Code: ${error.code}\n${action}` },
+    ],
+    structuredContent: {
+      error: {
+        message: error.message,
+        status: error.status,
+        code: error.code,
+        action,
+      },
+    },
+  };
 };
+
+const BILLING_ERROR_ACTIONS = new Map([
+  [
+    'SPEND_CAP_EXCEEDED',
+    'An Organization Admin can increase or disable the spend cap in Organization Billing. Storage charges continue; recovery is asynchronous and other restrictions can remain.',
+  ],
+  [
+    'INSUFFICIENT_ORG_PERMISSIONS',
+    'An Organization Admin must change this setting in Organization Billing.',
+  ],
+]);
 
 /**
  * Whether a thrown tool error is the server's failure rather than a mistake in

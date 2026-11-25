@@ -2,7 +2,7 @@
   {
     "name": "list_organizations",
     "title": "List organizations for the current user",
-    "description": "Lists the organizations the user belongs to; an organization API key gets its own organization. search filters by name or id.",
+    "description": "Lists user orgs, or the key's org; search matches name or id.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1791,6 +1791,344 @@
       "title": "List Neon incidents",
       "readOnlyHint": true,
       "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "get_organization_spend_cap",
+    "title": "Get spend cap",
+    "description": "Gets org cap status and usage.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "org_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Org id."
+        }
+      },
+      "required": [
+        "org_id"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "spending_limit_cents": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "spend_cap_enabled": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "current_usage_cents": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "usage_observed_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "invoice_period_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "enforcement_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "generation": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "period_ends_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "monitoring_delay": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "warning": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "spending_limit_cents"
+          ]
+        }
+      },
+      "required": [
+        "data"
+      ]
+    },
+    "annotations": {
+      "title": "Get spend cap",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "set_organization_spend_cap",
+    "title": "Set spend cap",
+    "description": "Sets org cap; admins only.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "org_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Org id."
+        },
+        "spending_limit_cents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "USD cents: 100 = $1."
+        },
+        "spend_cap_enabled": {
+          "description": "True opts in; false keeps emails. Omit preserves.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "org_id",
+        "spending_limit_cents"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "spending_limit_cents": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "spend_cap_enabled": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "current_usage_cents": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "usage_observed_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "invoice_period_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "enforcement_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "generation": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "period_ends_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "monitoring_delay": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "warning": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "spending_limit_cents"
+          ]
+        }
+      },
+      "required": [
+        "data"
+      ]
+    },
+    "annotations": {
+      "title": "Set spend cap",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "disable_organization_spend_cap",
+    "title": "Disable spend cap",
+    "description": "Disables cap, keeping amount and emails; admin required.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "org_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Org id."
+        }
+      },
+      "required": [
+        "org_id"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "spending_limit_cents": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "spend_cap_enabled": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "current_usage_cents": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "usage_observed_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "invoice_period_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "enforcement_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "generation": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "period_ends_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "monitoring_delay": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "warning": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "spending_limit_cents"
+          ]
+        }
+      },
+      "required": [
+        "data"
+      ]
+    },
+    "annotations": {
+      "title": "Disable spend cap",
+      "readOnlyHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true
     }

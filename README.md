@@ -6,6 +6,8 @@
 
 # Neon MCP Server
 
+Organization spend caps: use `get_organization_spend_cap`, `set_organization_spend_cap`, and `disable_organization_spend_cap` with `org_id`. Set takes positive integer `spending_limit_cents` in USD cents; only explicit `spend_cap_enabled: true` opts in to suspension. Omission preserves the setting. Disable retains the amount and email notifications. Organization Admin permission is required for writes. Detection can lag by 1-2 hours and storage charges continue. Saves acknowledge configuration asynchronously; missing status is unavailable, and applied status does not confirm all workloads stopped or resumed. See [billing semantics and release prerequisites](ai-notes/organization-spend-caps.md).
+
 [![Install MCP Server in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en-US/install-mcp?name=Neon&config=eyJ1cmwiOiJodHRwczovL21jcC5uZW9uLnRlY2gvbWNwP2NhdGVnb3J5PXByb2plY3RzJmNhdGVnb3J5PWJyYW5jaGVzJmNhdGVnb3J5PWVuZHBvaW50cyZjYXRlZ29yeT1xdWVyeWluZyZjYXRlZ29yeT1zY2hlbWEifQ%3D%3D)
 [![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/powers/add?name=neon)
 
