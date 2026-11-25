@@ -11,9 +11,11 @@ import {
   Duration,
   Effect,
   Exit,
+  Fiber,
   Layer,
   Option,
   Schema,
+  Scope,
 } from 'effect';
 import { NEON_API_SPEC_URL } from '../../lib/config';
 import { ApiSpecUnavailable } from './api-spec-unavailable';
@@ -103,13 +105,19 @@ export class ApiRoutes extends Context.Service<
   make: Effect.gen(function* () {
     const specs = yield* Cache.makeWith(fetchSpec, {
       capacity: 1,
-      // A failed or interrupted fetch is retried on the next call_api.
+      // A failed fetch is retried on the next call_api.
       timeToLive: (exit) =>
         Exit.isSuccess(exit) ? Duration.hours(1) : Duration.zero,
     });
 
+    // The lookup runs in the layer's scope, not the caller's, so a fetch slower
+    // than SPEC_WAIT still lands in the cache instead of being interrupted with
+    // the wait.
+    const scope = yield* Scope.Scope;
+
     const routeOf = (request: CallApiRequest) =>
-      Cache.get(specs, NEON_API_SPEC_URL).pipe(
+      Effect.forkIn(Cache.get(specs, NEON_API_SPEC_URL), scope).pipe(
+        Effect.flatMap(Fiber.join),
         Effect.timeout(SPEC_WAIT),
         Effect.flatMap((spec) =>
           Effect.try({

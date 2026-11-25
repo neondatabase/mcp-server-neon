@@ -9,6 +9,7 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { once } from 'node:events';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
@@ -189,12 +190,13 @@ describe.sequential('call_api route tracking', () => {
     });
   });
 
-  it('waits at most 2 seconds for a stalled spec, records spec_unavailable, and still runs the call', async () => {
-    specDelayMs = 5000;
+  it('waits at most 2 seconds for a slow spec, then keeps it for the next call', async () => {
+    specStatus = 200;
+    specDelayMs = 2500;
 
     const started = performance.now();
 
-    const { isError, properties } = await callTool('call_api', {
+    const slow = await callTool('call_api', {
       method: 'GET',
       path: BRANCH_PATH,
     });
@@ -202,25 +204,22 @@ describe.sequential('call_api route tracking', () => {
     const elapsedMs = performance.now() - started;
 
     specDelayMs = 0;
+    await sleep(1000);
 
-    expect(isError).toBe(false);
-    expect(properties).toMatchObject({ apiRoute: 'spec_unavailable' });
-    expect(elapsedMs).toBeLessThan(4000);
-  });
-
-  it('fetches the spec again after a failure or stall and records the route template, never the path', async () => {
-    specStatus = 200;
-
-    const { properties } = await callTool('call_api', {
+    const cached = await callTool('call_api', {
       method: 'GET',
       path: BRANCH_PATH,
     });
 
-    expect(properties).toMatchObject({
+    expect(slow.isError).toBe(false);
+    expect(slow.properties).toMatchObject({ apiRoute: 'spec_unavailable' });
+    expect(elapsedMs).toBeLessThan(2500);
+    expect(cached.properties).toMatchObject({
       apiMethod: 'GET',
       apiRoute: BRANCH_ROUTE,
     });
     expect(JSON.stringify(delivered)).not.toContain('br-secret-name');
+    expect(specRequests).toBe(2);
   });
 
   it('records unmatched for a path the spec has no route for, from the cached spec', async () => {
