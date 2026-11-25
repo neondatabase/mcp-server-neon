@@ -12,6 +12,8 @@ import { once } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { neonBranch } from './helpers/neon-objects';
+
 const BRANCH_PATH = '/projects/proj-1/branches/br-secret-name';
 const BRANCH_ROUTE = '/projects/{project_id}/branches/{branch_id}';
 
@@ -31,7 +33,16 @@ const API = new Map<string, z.core.util.JSONType>([
     { id: 'user_test_123', name: 'Test User', email: 'test@example.com' },
   ],
   ['/users/me/organizations', { organizations: [] }],
-  [BRANCH_PATH, { branch: { id: 'br-secret-name' } }],
+  [
+    BRANCH_PATH,
+    {
+      branch: neonBranch({
+        id: 'br-secret-name',
+        project_id: 'proj-1',
+        name: 'secret-name',
+      }),
+    },
+  ],
 ]);
 
 const SegmentBatch = z.object({
@@ -47,6 +58,7 @@ type Delivered = z.infer<typeof SegmentBatch>['batch'][number];
 
 const delivered: Delivered[] = [];
 let specStatus = 200;
+let specDelayMs = 0;
 let specRequests = 0;
 
 const json = (
@@ -78,7 +90,9 @@ const answer = (req: IncomingMessage, res: ServerResponse) => {
 
     if (path === '/spec.json') {
       specRequests += 1;
-      json(res, specStatus, specStatus === 200 ? SPEC : {});
+      setTimeout(() => {
+        json(res, specStatus, specStatus === 200 ? SPEC : {});
+      }, specDelayMs);
 
       return;
     }
@@ -175,7 +189,26 @@ describe.sequential('call_api route tracking', () => {
     });
   });
 
-  it('fetches the spec again after a failure and records the route template, never the path', async () => {
+  it('waits at most 2 seconds for a stalled spec, records spec_unavailable, and still runs the call', async () => {
+    specDelayMs = 5000;
+
+    const started = performance.now();
+
+    const { isError, properties } = await callTool('call_api', {
+      method: 'GET',
+      path: BRANCH_PATH,
+    });
+
+    const elapsedMs = performance.now() - started;
+
+    specDelayMs = 0;
+
+    expect(isError).toBe(false);
+    expect(properties).toMatchObject({ apiRoute: 'spec_unavailable' });
+    expect(elapsedMs).toBeLessThan(4000);
+  });
+
+  it('fetches the spec again after a failure or stall and records the route template, never the path', async () => {
     specStatus = 200;
 
     const { properties } = await callTool('call_api', {
@@ -188,10 +221,11 @@ describe.sequential('call_api route tracking', () => {
       apiRoute: BRANCH_ROUTE,
     });
     expect(JSON.stringify(delivered)).not.toContain('br-secret-name');
-    expect(specRequests).toBe(2);
   });
 
   it('records unmatched for a path the spec has no route for, from the cached spec', async () => {
+    const fetched = specRequests;
+
     const { isError, properties } = await callTool('call_api', {
       method: 'DELETE',
       path: '/nope/x',
@@ -202,11 +236,14 @@ describe.sequential('call_api route tracking', () => {
       apiMethod: 'DELETE',
       apiRoute: 'unmatched',
     });
-    expect(specRequests).toBe(2);
+    expect(specRequests).toBe(fetched);
   });
 
   it('adds no route properties to other tools', async () => {
-    const { properties } = await callTool('list_incidents', {});
+    const { properties } = await callTool('get_branch', {
+      project_id: 'proj-1',
+      branch_id: 'br-secret-name',
+    });
 
     expect(properties).not.toHaveProperty('apiMethod');
     expect(properties).not.toHaveProperty('apiRoute');
