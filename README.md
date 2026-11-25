@@ -451,7 +451,7 @@ Notes:
 
 - **`send_feedback`**: Sends anonymous feedback to the Neon team. Only the feedback text is sent, with no account, project, or connection details. Messages are limited to 10,000 characters.
 
-**Observability** (`?category=observability`): these tools require the Neon Platform Beta and are currently only available for projects in the `aws-us-east-2` region. A branch without logs access returns HTTP 404 with reason `telemetry_not_enabled`.
+**Observability** (`?category=observability`): these tools require the Neon Platform Beta and are currently only available for projects in `aws-us-east-1`, `aws-us-east-2`, `aws-eu-central-1`, and `aws-ap-southeast-1`. A branch without logs access returns HTTP 404 with reason `telemetry_not_enabled`.
 
 - **`query_logs`**: Queries OpenTelemetry logs for a branch. POST in the Management API; treated as read-only by this server.
 - **`query_loki_logs`**: Runs a LogQL range query on the branch's Loki-compatible read API and returns Loki's response: lines grouped by stream labels, with nanosecond timestamps.
