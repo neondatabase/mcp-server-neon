@@ -2,7 +2,7 @@
 
 # [NEXT]
 
-`/api/token` refuses an authorization code past its 10-minute expiry with `invalid_grant` (`Authorization code expired`). Before, the expiry check never matched a stored code, so an unused code stayed exchangeable.
+`/api/token` refuses an authorization code more than 10 minutes after it was issued with `400 invalid_grant` (`Authorization code expired`); the client has to authorize again. Before, codes never expired.
 
 `search_api` finds Neon API endpoints in the released OpenAPI spec and returns each one's path, query, and body fields, and `call_api` sends one request to any Neon API path, so an agent can reach operations no other tool covers, such as VPC endpoints, JWKS, project transfers, and spending limits. `search_api` needs no login and is served on the `?category=docs` endpoint too. `call_api` is listed only on a connection with every category, every project, and no pinned role, and not in read-only mode or with `secrets=none`. With the default `secrets=setup`, it refuses paths under `/auth/`, which return stored secrets. `NEON_API_SPEC_URL` overrides the spec location. Requires `@neon/tools` 2.20.0 and `@neon/sdk` 7.16.0.
 
