@@ -370,8 +370,9 @@ describe('auth_complete_viewed', () => {
     // Delivered by the time what the page handed to waitUntil settled.
     const [event, ...others] = tracked();
 
+    const uuid: unknown = expect.stringMatching(/^[0-9a-f-]{36}$/u);
+
     expect(others).toStrictEqual([]);
-    expect(event?.anonymousId).toMatch(/^[0-9a-f-]{36}$/u);
     expect({
       userId: event?.userId,
       anonymousId: event?.anonymousId,
@@ -379,7 +380,7 @@ describe('auth_complete_viewed', () => {
       properties: event?.properties,
     }).toStrictEqual({
       userId: 'user-1',
-      anonymousId: event?.anonymousId,
+      anonymousId: uuid,
       event: 'auth_complete_viewed',
       properties: {
         pageViewId: event?.anonymousId,

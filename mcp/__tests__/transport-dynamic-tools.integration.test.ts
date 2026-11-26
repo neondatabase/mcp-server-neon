@@ -256,9 +256,11 @@ const listToolsForToken = async (bearerToken: string) => {
 
 const runSqlCall = { name: 'run_sql', arguments: { sql: 'select 1' } };
 
-/** The events Segment received for `userId`, in arrival order. */
+// Each event is its own /v1/batch POST, and the POSTs of one request race.
 const eventsFor = (userId: string) =>
-  analytics.delivered.filter((event) => event.userId === userId);
+  analytics.delivered
+    .filter((event) => event.userId === userId)
+    .toSorted((a, b) => (a.event ?? '').localeCompare(b.event ?? ''));
 
 const InitializeResult = z.object({
   result: z
@@ -291,7 +293,7 @@ describe('transport dynamic tool composition', () => {
     });
 
     // Both are delivered by the time what the requests handed to waitUntil
-    // settled: the server flushes after each event.
+    // settled.
     expect(eventsFor(userId)).toMatchObject([
       {
         event: 'server_init',
@@ -1029,10 +1031,7 @@ describe('transport dynamic tool composition', () => {
   });
 
   it('?category=docs bypasses OAuth without an Authorization header', async () => {
-    // Critical contract: the docs-only branch in handleRequest routes the
-    // request to the no-auth handler. A regression that removes the bypass or
-    // routes through authHandler would surface here as a 401 with
-    // WWW-Authenticate set.
+    // Without the bypass this request would get a 401 with WWW-Authenticate set.
     const res = await POST(
       mcpRequest({
         method: 'initialize',

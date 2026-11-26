@@ -646,11 +646,6 @@
     "vitest(prefer-strict-equal)": 3,
     "vitest(require-top-level-describe)": 1
   },
-  "mcp/__tests__/oauth-api-key-fallback.integration.test.ts": {
-    "anti-slop(no-module-mocking)": 1,
-    "typescript(consistent-type-imports)": 1,
-    "vitest(prefer-import-in-mock)": 1
-  },
   "mcp/__tests__/oauth-authorize-route.integration.test.ts": {
     "anti-slop(no-chained-type-assertions)": 5,
     "anti-slop(no-conditional-spread)": 1,

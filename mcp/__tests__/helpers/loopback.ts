@@ -74,6 +74,8 @@ const SegmentEvent = z.object({
   context: z.record(z.string(), z.json()).optional(),
 });
 
+type SegmentEvent = z.infer<typeof SegmentEvent>;
+
 const SegmentBatch = z.object({ batch: z.array(SegmentEvent) });
 
 /**

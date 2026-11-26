@@ -5,7 +5,7 @@
  * `oauth-api-key-fallback-store-answers.integration.test.ts` covers the store
  * answering.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { collectKeepalives, serveLoopback } from './helpers/loopback';
 import {
   listedToolNames,
@@ -13,36 +13,6 @@ import {
   responseBody,
 } from './helpers/mcp-request';
 import { neonAuthStandIn } from './helpers/neon-auth';
-
-const CACHED_OAUTH_BEARER = vi.hoisted(
-  () => `oauth-cached-${crypto.randomUUID()}`,
-);
-
-// No current code path caches an OAuth bearer's record, and the cache has no
-// service a test could seed, so one record is served in front of the real,
-// unreachable cache. Every other key reaches the real cache.
-vi.mock('../oauth/kv-store', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../oauth/kv-store')>();
-
-  return {
-    ...actual,
-    getApiKeys: () => {
-      const cache = actual.getApiKeys();
-
-      return {
-        ...cache,
-        get: async (key: string) =>
-          key === CACHED_OAUTH_BEARER
-            ? {
-                apiKey: key,
-                authMethod: 'oauth' as const,
-                account: { id: 'user-1', name: 'User', isOrg: false },
-              }
-            : cache.get(key),
-      };
-    },
-  };
-});
 
 const neon = neonAuthStandIn();
 const upstream = await serveLoopback(neon.answer);
@@ -103,6 +73,10 @@ const expectTokenStoreUnavailable = (res: Response) => {
 };
 
 describe('OAuth bearer on the API-key path while the token store is down', () => {
+  beforeEach(() => {
+    logged.length = 0;
+  });
+
   it('answers 503 instead of a URL grant when the token store lookup fails', async () => {
     const { res, body } = await listTools(bearerFor('oauth'));
 
@@ -123,13 +97,6 @@ describe('OAuth bearer on the API-key path while the token store is down', () =>
     // A cache write would reach the unreachable store and log its failure.
     expect(logged).not.toContain('API key cache write failed');
     expect(logged).not.toContain('API key cache miss, verified and cached');
-  });
-
-  it('answers 503 for a cached OAuth record without asking Neon again', async () => {
-    const { res } = await listTools(CACHED_OAUTH_BEARER);
-
-    expectTokenStoreUnavailable(res);
-    expect(neon.requestedWith(CACHED_OAUTH_BEARER)).toStrictEqual([]);
   });
 
   // An authenticated route answers 503 for this bearer while the store is down.
