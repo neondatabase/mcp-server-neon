@@ -95,9 +95,11 @@ const authorizationCode = (input: {
   readonly grant: unknown;
 }) => {
   const upstreamAccessToken = `upstream-access-${crypto.randomUUID()}`;
+  const upstreamRefreshToken = `upstream-refresh-${crypto.randomUUID()}`;
 
   return {
     upstreamAccessToken,
+    upstreamRefreshToken,
     code: {
       authorizationCode: `code-${crypto.randomUUID()}`,
       client: input.client,
@@ -106,7 +108,7 @@ const authorizationCode = (input: {
       expiresAt: new Date(Date.now() + 60_000),
       token: {
         access_token: upstreamAccessToken,
-        refresh_token: `upstream-refresh-${crypto.randomUUID()}`,
+        refresh_token: upstreamRefreshToken,
         access_token_expires_at: Date.now() + 3_600_000,
       },
       scope: input.scope,
@@ -115,9 +117,13 @@ const authorizationCode = (input: {
   };
 };
 
-/** Counts calls to the store's code and refresh token lookups. */
+/**
+ * Store lookups that record each call and find nothing, so a code or refresh
+ * token the test names is unknown to the store.
+ */
 const countedLookups = () => {
-  const calls = { authorizationCodes: [] as string[], refreshTokens: 0 };
+  const authorizationCodes: string[] = [];
+  const calls = { authorizationCodes, refreshTokens: 0 };
 
   const overrides: Partial<StoreOperations> = {
     findAuthorizationCode: ({ code }) =>
@@ -143,11 +149,13 @@ describe('/api/token route integration', () => {
 
   it('persists authorization-code grant context onto saved access token', async () => {
     const client = publicClient();
+
     const grant = {
       projectId: 'proj_123',
       scopes: ['querying', 'schema'],
       roleName: 'mcp_pinned_reader',
     };
+
     const { code, upstreamAccessToken } = authorizationCode({
       client,
       redirectUri: REDIRECT_URI,
@@ -199,12 +207,14 @@ describe('/api/token route integration', () => {
 
   it('returns the authorization code scope including * on the token', async () => {
     const client = publicClient();
-    const { code, upstreamAccessToken } = authorizationCode({
-      client,
-      redirectUri: REDIRECT_URI,
-      scope: 'read write *',
-      grant: { projectId: null, scopes: null },
-    });
+
+    const { code, upstreamAccessToken, upstreamRefreshToken } =
+      authorizationCode({
+        client,
+        redirectUri: REDIRECT_URI,
+        scope: 'read write *',
+        grant: { projectId: null, scopes: null },
+      });
 
     await onStore((store) =>
       store
@@ -225,6 +235,7 @@ describe('/api/token route integration', () => {
     await expect(response.json()).resolves.toMatchObject({
       access_token: upstreamAccessToken,
       token_type: 'bearer',
+      refresh_token: upstreamRefreshToken,
       scope: 'read write *',
     });
   });
@@ -294,6 +305,7 @@ describe('/api/token route integration', () => {
   describe('a metadata-document client that declared private_key_jwt', async () => {
     const { privateKey, publicKey } = await generateKeyPair('RS256');
     const jwk = { ...(await exportJWK(publicKey)), kid: 'k1' };
+
     const client = {
       id: 'https://chatgpt.example/oauth/client.json',
       tokenEndpointAuthMethod: 'private_key_jwt',
@@ -337,6 +349,7 @@ describe('/api/token route integration', () => {
         .setAudience(`${SERVER_HOST}/api/token`)
         .setExpirationTime('1m')
         .sign(privateKey);
+
       const lookups = countedLookups();
 
       const response = await appCounting(lookups).handler(

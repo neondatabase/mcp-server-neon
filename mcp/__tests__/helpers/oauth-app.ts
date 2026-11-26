@@ -7,9 +7,8 @@ import { ensureTestOauthDatabase } from '../ensure-test-oauth-database';
 await ensureTestOauthDatabase();
 
 /**
- * The OAuth server's routes on the real services: the OAuth Postgres store,
- * the refresh lock, upstream OAuth, analytics. A test merges a layer after
- * this one to replace any of those services, then builds its own handler with
- * `HttpRouter.toWebHandler`.
+ * The OAuth server's routes on their real services. A test merges a layer
+ * after this one to replace any of those services, then builds its own
+ * handler with `HttpRouter.toWebHandler`.
  */
 export const OAuthTestApp = Layer.mergeAll(OAuthRoutes, AppLayer);

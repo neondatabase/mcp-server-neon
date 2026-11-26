@@ -779,10 +779,6 @@
     "vitest(prefer-import-in-mock)": 1,
     "vitest(require-mock-type-parameters)": 2
   },
-  "mcp/__tests__/oauth-token-route.integration.test.ts": {
-    "anti-slop(require-readable-spacing)": 5,
-    "anti-slop(require-safety-comment-for-type-assertion)": 1
-  },
   "mcp/__tests__/origin.test.ts": {
     "eslint(no-script-url)": 1
   },
