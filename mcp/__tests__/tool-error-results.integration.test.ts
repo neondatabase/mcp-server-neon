@@ -344,6 +344,11 @@ const CASES = {
     name: 'describe_project',
     arguments: { project_id: PROJECT.network },
   },
+  'network failure on a tool that changes resources': {
+    query: '',
+    name: 'create_branch',
+    arguments: { project_id: PROJECT.network },
+  },
   'Postgres rejects the statement': {
     query: '',
     name: 'run_sql',

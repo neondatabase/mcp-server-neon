@@ -342,7 +342,37 @@
           "content": [
             {
               "type": "text",
-              "text": "NeonNetworkError: Network error: no response received from the Neon API (UND_ERR_SOCKET)."
+              "text": "NeonNetworkError: Network error: no response received from the Neon API (UND_ERR_SOCKET).\nThe server already retried this read-only call. It changed nothing; call it again in a moment."
+            }
+          ],
+          "isError": true,
+          "resultType": "complete",
+          "_meta": {}
+        },
+        "jsonrpc": "2.0",
+        "id": 1
+      }
+    },
+    "sentryErrorEvents": 1,
+    "toolSpan": {
+      "status": "internal_error",
+      "errorType": "NeonNetworkError"
+    }
+  },
+  "network failure on a tool that changes resources": {
+    "tool": "create_branch",
+    "query": "",
+    "arguments": {
+      "project_id": "proj-network"
+    },
+    "response": {
+      "status": 200,
+      "message": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "NeonNetworkError: Network error: no response received from the Neon API (UND_ERR_SOCKET).\nThis tool can change resources, so the server did not run it again. Check the current state before calling it again."
             }
           ],
           "isError": true,

@@ -86,9 +86,11 @@ async function settle(
   result: Promise<CallToolResult>,
 ): Promise<CallToolResult> {
   return result.catch((error: unknown) =>
-    handleToolError(error, {}, undefined, {
-      clientName: 'test',
-      clientApplication: 'unknown',
+    handleToolError(error, {
+      properties: {},
+      traceId: undefined,
+      agent: { clientName: 'test', clientApplication: 'unknown' },
+      readOnlyTool: false,
     }),
   );
 }

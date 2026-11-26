@@ -148,7 +148,7 @@ export const createMcpServer = async (context: NeonServerContext) => {
 
             const outcome = yield* renderToolCall(
               invokeTool(tool.name, args, grant, extraArgs),
-              { properties, traceId, agent },
+              { properties, traceId, agent, tool },
             );
 
             // Append access control warnings to tool response

@@ -121,11 +121,13 @@ function errorText(error: unknown): string {
   return lines.join('\n');
 }
 
+const textResponse = (text: string) => ({
+  isError: true,
+  content: [{ type: 'text' as const, text }],
+});
+
 function errorResponse(error: unknown) {
-  return {
-    isError: true,
-    content: [{ type: 'text' as const, text: errorText(error) }],
-  };
+  return textResponse(errorText(error));
 }
 
 /** What a tool call the client cancelled renders as. */
@@ -179,11 +181,27 @@ const isSqlEndpointFailure = (error: NeonDbError) =>
   (error.sourceError !== undefined ||
     error.message.startsWith('Neon internal error'));
 
+// Matched by name: the org lookup throws from another copy of `@neon/sdk` than
+// the one `@neon/tools` resolves.
+const isNoResponse = (error: Error) => error.name === 'NeonNetworkError';
+
+// The server resends only a read-only tool after the Neon API sent no response
+// (`retryReadOnlyNetworkFailures` in `mcp/tools/tools.ts`).
+const noResponseGuidance = (readOnlyTool: boolean) =>
+  readOnlyTool
+    ? 'The server already retried this read-only call. It changed nothing; call it again in a moment.'
+    : 'This tool can change resources, so the server did not run it again. Check the current state before calling it again.';
+
+type ToolErrorContext = {
+  properties: Record<string, string>;
+  traceId: string | undefined;
+  agent: IdentifiedClient;
+  readOnlyTool: boolean;
+};
+
 export function handleToolError(
   error: unknown,
-  properties: Record<string, string>,
-  traceId: string | undefined,
-  agent: IdentifiedClient,
+  { properties, traceId, agent, readOnlyTool }: ToolErrorContext,
 ) {
   if (
     isClientError(error) ||
@@ -215,6 +233,8 @@ export function handleToolError(
       tags: serverErrorTags(agent, apiDetails),
     });
 
-    return errorResponse(error);
+    return error instanceof Error && isNoResponse(error)
+      ? textResponse(`${errorText(error)}\n${noResponseGuidance(readOnlyTool)}`)
+      : errorResponse(error);
   }
 }

@@ -1,7 +1,8 @@
 /**
  * Which tool calls the server sends again after the Neon API drops the
- * connection. Each case is a stateless `POST /mcp` through the deployed route
- * handler against a local Neon API that counts the requests it receives.
+ * connection, and what the failed call tells the agent. Each case is a
+ * stateless `POST /mcp` through the deployed route handler against a local
+ * Neon API that counts the requests it receives.
  */
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -17,9 +18,10 @@ const PROJECT = {
 
 const requests = new Map<string, number>();
 
-// `hang` holds the org lookup open, to cancel the call while it runs.
+// `down` drops every org lookup; `hang` holds it open, to cancel the call
+// while it runs.
 type OrgLookup = {
-  mode: 'flaky' | 'hang';
+  mode: 'flaky' | 'down' | 'hang';
   reached: PromiseWithResolvers<true>;
   closed: PromiseWithResolvers<true>;
 };
@@ -72,7 +74,7 @@ const answerApi = (req: IncomingMessage, res: ServerResponse) => {
     }
 
     // The first lookup is dropped; the next one answers.
-    if (count > 1) {
+    if (orgLookup.mode === 'flaky' && count > 1) {
       json(res, 200, {
         organizations: [{ id: 'org-1', name: 'Org', managed_by: 'console' }],
       });
@@ -178,6 +180,12 @@ const callTool = async (name: string, args: Record<string, Json>) => {
     .parse(JSON.parse(data ?? 'null')).result;
 };
 
+const READ_RETRIED =
+  'The server already retried this read-only call. It changed nothing; call it again in a moment.';
+
+const MUTATION_NOT_RETRIED =
+  'This tool can change resources, so the server did not run it again. Check the current state before calling it again.';
+
 describe('tool retries', () => {
   afterAll(() => {
     api.close();
@@ -202,6 +210,7 @@ describe('tool retries', () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toMatch(/^NeonNetworkError: /u);
+    expect(result.content[0]?.text).toContain(READ_RETRIED);
     expect(requests.get(`GET /projects/${PROJECT.down}`)).toBe(9);
   });
 
@@ -210,6 +219,18 @@ describe('tool retries', () => {
 
     expect(result.isError).toBeUndefined();
     expect(requests.get('GET /users/me/organizations')).toBe(2);
+  });
+
+  it('says a read was retried when the org lookup never answers', async () => {
+    orgLookup.mode = 'down';
+    requests.delete('GET /users/me/organizations');
+
+    const result = await callTool('list_projects', {});
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toMatch(/^NeonNetworkError: /u);
+    expect(result.content[0]?.text).toContain(READ_RETRIED);
+    expect(requests.get('GET /users/me/organizations')).toBe(9);
   });
 
   it('closes the org lookup when the client cancels', async () => {
@@ -231,6 +252,7 @@ describe('tool retries', () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toMatch(/^NeonNetworkError: /u);
+    expect(result.content[0]?.text).toContain(MUTATION_NOT_RETRIED);
     expect(requests.get(`POST /projects/${PROJECT.down}/branches`)).toBe(1);
   });
 });
