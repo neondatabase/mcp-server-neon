@@ -86,6 +86,45 @@ describe('createSdkErrorReporter', () => {
     });
   });
 
+  it('logs a protocol error behind a 4xx response as a rejected request only', async () => {
+    const reporter = createSdkErrorReporter(() => tags);
+    const report = vi.fn<() => void>();
+    reporter.onProtocolError(new SyntaxError('invalid body'), report);
+    await respond(reporter, 400);
+
+    expect(logger.warn).toHaveBeenCalledWith('MCP SDK rejected request', {
+      status: 400,
+      source: 'protocol',
+      errorName: 'SyntaxError',
+    });
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it.each([200, 202, 500])(
+    'reports a protocol error behind a %i response',
+    async (status) => {
+      const reporter = createSdkErrorReporter(() => tags);
+      const report = vi.fn<() => void>();
+      reporter.onProtocolError(
+        new Error('notification handler failed'),
+        report,
+      );
+      await respond(reporter, status);
+
+      expect(report).toHaveBeenCalledTimes(1);
+      expect(logger.warn).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reports a protocol error raised after the response', async () => {
+    const reporter = createSdkErrorReporter(() => tags);
+    const report = vi.fn<() => void>();
+    await respond(reporter, 400);
+    reporter.onProtocolError(new Error('stream write failed'), report);
+
+    expect(report).toHaveBeenCalledTimes(1);
+  });
+
   it('reports pending errors and rethrows when the handler throws', async () => {
     const reporter = createSdkErrorReporter(() => tags);
     reporter.onError(sdkError('handler crashed'));

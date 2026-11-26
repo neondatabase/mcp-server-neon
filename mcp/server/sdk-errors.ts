@@ -12,6 +12,14 @@ type McpErrorEvent = Extract<
 
 type SentryTags = () => Record<string, string>;
 
+type HeldReport = (status: number) => Effect.Effect<void>;
+
+// Rejection messages quote the request, which can carry credentials.
+const logRejectedRequest = (status: number, source: string, error: Error) =>
+  Effect.logWarning('MCP SDK rejected request').pipe(
+    Effect.annotateLogs({ status, source, errorName: error.name }),
+  );
+
 const reportSdkError = (
   event: McpErrorEvent,
   status: number | undefined,
@@ -21,14 +29,7 @@ const reportSdkError = (
     event.error instanceof Error ? event.error : new Error(event.error);
 
   if (status !== undefined && status < 500) {
-    // Rejection messages quote the request, which can carry credentials.
-    return Effect.logWarning('MCP SDK rejected request').pipe(
-      Effect.annotateLogs({
-        status,
-        source: event.source,
-        errorName: error.name,
-      }),
-    );
+    return logRejectedRequest(status, event.source, error);
   }
 
   return Effect.logError('MCP SDK error').pipe(
@@ -62,20 +63,22 @@ const reportAfterResponse = (
  * reports both before the response exists, so only the response status tells a
  * client error from a server failure. Anything reported after the response is
  * a failure while streaming it.
+ *
+ * The 2025-era transport reports what it rejects, such as a body that is not
+ * JSON, to the server's own `onerror` instead, which `onProtocolError` holds
+ * the same way.
  */
 export const createSdkErrorReporter = (tags: SentryTags) => {
-  const pending: McpErrorEvent[] = [];
+  const pending: HeldReport[] = [];
   const state = { settled: false };
 
   const settle = (status: number) =>
     Effect.suspend(() => {
       state.settled = true;
 
-      return Effect.forEach(
-        pending.splice(0),
-        (event) => reportSdkError(event, status, tags),
-        { discard: true },
-      );
+      return Effect.forEach(pending.splice(0), (report) => report(status), {
+        discard: true,
+      });
     });
 
   const settleWhenDone = (response: Promise<Response>) =>
@@ -97,7 +100,25 @@ export const createSdkErrorReporter = (tags: SentryTags) => {
         return;
       }
 
-      pending.push(event);
+      pending.push((status) => reportSdkError(event, status, tags));
+    },
+    /**
+     * Calls `report` unless the response is a 4xx. A protocol error behind a
+     * 2xx, such as a failing notification handler, was never answered as a
+     * rejection, so it still counts as a server failure.
+     */
+    onProtocolError: (error: Error, report: () => void): void => {
+      if (state.settled) {
+        report();
+
+        return;
+      }
+
+      pending.push((status) =>
+        status >= 400 && status < 500
+          ? logRejectedRequest(status, 'protocol', error)
+          : Effect.sync(report),
+      );
     },
     /**
      * Waits for mcp-handler's response and reports the events held for it once

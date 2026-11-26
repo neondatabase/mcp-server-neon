@@ -39,7 +39,7 @@ export const createAuthenticatedMcpHandler = (
       // The SDK's Protocol takes its lifecycle hooks as properties only.
       Object.assign(server.server, {
         oninitialized: onInitialized(client),
-        onerror: onServerError(client, state),
+        onerror: onServerError(client, state, sdkErrors),
       });
       registerTools(
         server,

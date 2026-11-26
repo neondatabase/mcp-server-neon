@@ -64,11 +64,17 @@ const serverError = (
     });
   });
 
-/** The SDK's protocol errors, which arrive outside any request. */
+/** The SDK's protocol errors, which arrive outside any request handler. */
 export const onServerError =
-  (client: ClientIdentity, state: ServerState) =>
+  (
+    client: ClientIdentity,
+    state: ServerState,
+    sdkErrors: ReturnType<typeof createSdkErrorReporter>,
+  ) =>
   (error: Error): void => {
-    runSdkCallback(serverError(error, client, state));
+    sdkErrors.onProtocolError(error, () => {
+      runSdkCallback(serverError(error, client, state));
+    });
   };
 
 const isConnectionLost = (error: Error | string): boolean =>
