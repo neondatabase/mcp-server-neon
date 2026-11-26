@@ -29,7 +29,6 @@ await model.saveClient({
   client_name: 'Code expiry test',
 });
 
-/** Stores a code for `client` that expires `expiresInMs` from now. */
 const storeCode = async (expiresInMs: number) => {
   const authorizationCode = `code-${randomUUID()}`;
   const accessToken = `at-${randomUUID()}`;
