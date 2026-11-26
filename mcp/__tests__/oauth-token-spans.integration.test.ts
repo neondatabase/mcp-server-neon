@@ -27,10 +27,6 @@ process.env.CLIENT_ID = 'token-spans-upstream-client';
 
 process.env.CLIENT_SECRET = 'token-spans-upstream-secret';
 
-delete process.env.KV_URL;
-
-delete process.env.REDIS_URL;
-
 type UpstreamAnswer = { readonly status: number; readonly body: object };
 
 type Upstream = {

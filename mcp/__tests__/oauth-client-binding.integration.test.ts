@@ -72,9 +72,9 @@ beforeAll(async () => {
   const stores = await import('../oauth/refresh-lock-store');
   await stores.ensureRefreshLockSchema(databaseUrl);
   const lock = await import('../oauth/refresh-lock');
-  lock.__setRefreshLockStoresForTests([
+  lock.__setRefreshLockStoreForTests(
     stores.createPostgresRefreshLockStore(databaseUrl),
-  ]);
+  );
   model = (await import('../oauth/model')).model;
   getRefreshResults = (await import('../oauth/kv-store')).getRefreshResults;
   tokenRoute = await import('../../app/api/token/route');
@@ -663,7 +663,7 @@ describe('refresh token replay grace period', () => {
 
     await restore();
     advance(GRACE_MS);
-    lock.__setRefreshLockStoresForTests([unavailableLock]);
+    lock.__setRefreshLockStoreForTests(unavailableLock);
 
     try {
       const replay = await refresh(owner, old);
@@ -671,9 +671,9 @@ describe('refresh token replay grace period', () => {
       expect(replay.body.refresh_token).toBe(current);
       expect(upstream.calls).toBe(1);
     } finally {
-      lock.__setRefreshLockStoresForTests([
+      lock.__setRefreshLockStoreForTests(
         stores.createPostgresRefreshLockStore(databaseUrl),
-      ]);
+      );
     }
   });
 

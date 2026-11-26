@@ -55,7 +55,6 @@
     "pg": "8.14.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "redis": "4.6.0",
     "winston": "3.17.0",
     "winston-transport": "4.9.0",
     "zod": "4.6.5",

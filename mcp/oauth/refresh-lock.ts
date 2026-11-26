@@ -1,6 +1,6 @@
 /**
- * Cross-instance distributed lock for refresh-token rotation: the stores and
- * their timings. `RefreshLock` in `refresh-lock-service.ts` runs the lock.
+ * Cross-instance distributed lock for refresh-token rotation: the store and
+ * its timings. `RefreshLock` in `refresh-lock-service.ts` runs the lock.
  *
  * The cliff we're closing: two Vercel instances each receive a /api/token
  * request with the same refresh_token RT₁ within milliseconds, both forward
@@ -9,18 +9,13 @@
  * `RefreshInflight`; this lock extends the same dedup property across
  * instances.
  *
- * The lock lives in Postgres (`OAUTH_DATABASE_URL`). While `KV_URL` is still
- * configured, the Redis lock is taken first and the Postgres lock inside it,
- * so deployments that only know the Redis lock keep coordinating with this
- * one during a rollover. Lock-acquire failures fall through to the
- * underlying executor: the only failure mode is "we don't get the
- * cross-instance dedup benefit," not "refresh breaks."
+ * The lock lives in Postgres (`OAUTH_DATABASE_URL`). Lock-acquire failures
+ * fall through to the underlying executor: the only failure mode is "we
+ * don't get the cross-instance dedup benefit," not "refresh breaks."
  */
 
-import { logger } from '../utils/logger';
 import {
   createPostgresRefreshLockStore,
-  createRedisRefreshLockStore,
   type RefreshLockStore,
 } from './refresh-lock-store';
 
@@ -50,55 +45,28 @@ export const WAITER_TOTAL_BUDGET_MS = 8_000;
 // attempt isn't masked.
 export const TRANSIENT_TTL_MS = 30_000;
 
-let storesOverride: RefreshLockStore[] | undefined;
-let cachedStores: RefreshLockStore[] | undefined;
+let storeOverride: RefreshLockStore | null | undefined;
+let cachedStore: RefreshLockStore | undefined;
 
-/** The configured lock stores, outermost first; none in local development. */
-export function refreshLockStores(): RefreshLockStore[] {
-  if (storesOverride) return storesOverride;
-  if (cachedStores) return cachedStores;
-  const stores: RefreshLockStore[] = [];
-  const redisUrl = process.env.KV_URL || process.env.REDIS_URL;
-  if (redisUrl) stores.push(createRedisRefreshLockStore(redisUrl));
+/** The lock store; none in local development without `OAUTH_DATABASE_URL`. */
+export function refreshLockStore(): RefreshLockStore | undefined {
+  if (storeOverride !== undefined) return storeOverride ?? undefined;
+  if (cachedStore) return cachedStore;
   const databaseUrl = process.env.OAUTH_DATABASE_URL;
-  if (databaseUrl) stores.push(createPostgresRefreshLockStore(databaseUrl));
-  cachedStores = stores;
-  return stores;
-}
-
-/**
- * Signal that the lock holder hit a transient (5xx-class) failure during the
- * upstream call. Concurrent waiters poll this marker and exit early instead
- * of waiting up to LOCK_POLL_MAX_ATTEMPTS × LOCK_POLL_INTERVAL_MS and
- * surfacing as 503 lock-timeout. Best-effort; failure to write is tolerable
- * because the worst-case is just the existing lock-wait timeout path.
- */
-export async function signalTransientFailure(
-  refreshToken: string,
-): Promise<void> {
-  await Promise.all(
-    refreshLockStores().map(async (store) => {
-      try {
-        await store.markTransient(refreshToken, TRANSIENT_TTL_MS);
-      } catch (err) {
-        logger.warn('refresh-lock failed to signal transient failure', {
-          store: store.name,
-          err: err instanceof Error ? err.message : err,
-        });
-      }
-    }),
-  );
+  if (!databaseUrl) return undefined;
+  cachedStore = createPostgresRefreshLockStore(databaseUrl);
+  return cachedStore;
 }
 
 /** Test seam for resetting module state. */
 export function __resetForTests(): void {
-  storesOverride = undefined;
-  cachedStores = undefined;
+  storeOverride = undefined;
+  cachedStore = undefined;
 }
 
-/** Test seam for running the lock against specific stores. */
-export function __setRefreshLockStoresForTests(
-  stores: RefreshLockStore[],
+/** Test seam for running the lock against a specific store, or none. */
+export function __setRefreshLockStoreForTests(
+  store: RefreshLockStore | null,
 ): void {
-  storesOverride = stores;
+  storeOverride = store;
 }

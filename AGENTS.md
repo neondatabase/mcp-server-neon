@@ -377,7 +377,6 @@ The remote MCP server (`mcp.neon.tech`) is deployed on Vercel's serverless infra
 - **mcp-handler library**: Abstracts MCP protocol complexity for serverless environments
 - **Vercel Fluid Compute**: 800-second API route ceiling for long-running tool calls
 - **Postgres** (`OAUTH_DATABASE_URL`): token persistence and API-key caching via Keyv, OAuth transactions, and the cross-instance refresh-token lock (`mcp/oauth/refresh-lock.ts`)
-- **Upstash Redis** (`KV_URL`, transitional): the refresh-token lock also takes the Redis lock while `KV_URL` is set, so deployments from before the Postgres lock keep coordinating. Remove once no such deployment serves traffic.
 
 ### API Endpoints
 
@@ -418,7 +417,6 @@ In addition to the top-level scopes, the server exposes **scope categories** via
 | `SERVER_HOST`                 | Server URL (falls back to `VERCEL_URL`) |
 | `UPSTREAM_OAUTH_HOST`         | Neon OAuth provider URL                 |
 | `CLIENT_ID` / `CLIENT_SECRET` | OAuth client credentials                |
-| `KV_URL`                      | Upstash Redis URL (transitional lock)   |
 | `OAUTH_DATABASE_URL`          | Postgres URL for token storage          |
 | `SENTRY_DSN`                  | Sentry error tracking DSN               |
 | `ANALYTICS_WRITE_KEY`         | Segment analytics write key             |

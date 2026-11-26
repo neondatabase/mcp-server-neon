@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WinstonLoggerLayer } from '../../lib/effect/logger';
 import {
   __resetForTests,
-  __setRefreshLockStoresForTests,
+  __setRefreshLockStoreForTests,
 } from '../oauth/refresh-lock';
 import { RefreshLock } from '../oauth/refresh-lock-service';
 import type { RefreshLockStore } from '../oauth/refresh-lock-store';
@@ -20,10 +20,6 @@ import { SentryLayer } from '../sentry/effect';
 import { logger } from '../utils/logger';
 
 process.env.OAUTH_DATABASE_URL = 'postgresql://127.0.0.1:1/oauth';
-
-delete process.env.KV_URL;
-
-delete process.env.REDIS_URL;
 
 const errorEvents: unknown[] = [];
 
@@ -234,7 +230,7 @@ describe('store reads that fall back', () => {
 
   describe('refresh-lock reads with the lock store failing', () => {
     it('counts a failed transient-marker read as no marker and logs it', async () => {
-      __setRefreshLockStoresForTests([unreadableLockStore({ acquire: 0 })]);
+      __setRefreshLockStoreForTests(unreadableLockStore({ acquire: 0 }));
 
       const marked = await run(
         Effect.gen(function* () {
@@ -271,7 +267,7 @@ describe('store reads that fall back', () => {
     it('keeps waiting on failed reads without taking over, logging each read once', async () => {
       const calls = { acquire: 0 };
       const peeks = { count: 0 };
-      __setRefreshLockStoresForTests([unreadableLockStore(calls)]);
+      __setRefreshLockStoreForTests(unreadableLockStore(calls));
 
       const result = await run(
         Effect.gen(function* () {
