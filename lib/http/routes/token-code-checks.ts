@@ -133,7 +133,8 @@ export const codeRejection = Effect.fnUntraced(function* (input: {
 
   const now = yield* Clock.currentTimeMillis;
 
-  if (code.expiresAt < new Date(now)) {
+  // An unreadable expiry is an expired code.
+  if (!(code.expiresAt.getTime() > now)) {
     yield* Effect.logWarning('Authorization code expired');
 
     return yield* rejectedSome(

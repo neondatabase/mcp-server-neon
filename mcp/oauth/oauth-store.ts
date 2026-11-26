@@ -120,11 +120,18 @@ export class OAuthStore extends Context.Service<
         model.getClientRegisterHeaders(clientId),
       ).pipe(Effect.map(Option.fromUndefinedOr)),
 
+    // The row stores `expiresAt` as JSON, so it reads back as an ISO string.
     findAuthorizationCode: ({ code }: { readonly code: string }) =>
       stored('getAuthorizationCode', async () =>
         model.getAuthorizationCode(code),
       ).pipe(
         Effect.map(Option.fromUndefinedOr),
+        Effect.map(
+          Option.map((found) => ({
+            ...found,
+            expiresAt: new Date(found.expiresAt),
+          })),
+        ),
         Effect.withSpan('OAuthStore.findAuthorizationCode'),
       ),
 
