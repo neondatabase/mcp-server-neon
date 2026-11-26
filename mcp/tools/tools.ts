@@ -1,18 +1,10 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { NeonEffectToolContext } from '@neon/tools/effect';
+import type { NeonEffectToolContext, NeonToolError } from '@neon/tools/effect';
 import {
   retryReadOnlyNetworkFailures,
   toEffectTools,
 } from '@neon/tools/effect';
-import {
-  Cause,
-  Effect,
-  Match,
-  Option,
-  Predicate,
-  Redacted,
-  Schedule,
-} from 'effect';
+import { Cause, Effect, Option, Predicate, Redacted, Schedule } from 'effect';
 import * as z from 'zod';
 import {
   InternalToolError,
@@ -149,7 +141,7 @@ const PACKAGE_DOC_NOT_FOUND =
   /^Doc page not found: "(.+)"\. Pass the slug of a docs search hit\.$/;
 
 // The package's message cannot name search_docs, which is the MCP name.
-const docNotFound = <A>(execution: Effect.Effect<A, ToolCallError>) =>
+const docNotFound = <A>(execution: Effect.Effect<A, NeonToolError>) =>
   execution.pipe(
     Effect.catchTag('NeonClientError', (error) => {
       const slug = PACKAGE_DOC_NOT_FOUND.exec(error.message)?.[1];
@@ -394,33 +386,18 @@ const catchStep: (error: unknown) => ToolStepFailed = (error) => {
 /** Runs one of the server's own steps around a package tool. */
 const step = <A>(run: () => A) => Effect.try({ try: run, catch: catchStep });
 
-/**
- * The error a tool call failed with: what the package or a step threw, or the
- * server's own error.
- */
-export const thrownError = (error: ToolCallError): Error =>
-  Match.value(error).pipe(
-    Match.tag('ToolStepFailed', ({ error: thrown }) => thrown),
-    Match.tagStartsWith('Neon', ({ cause }) => cause),
-    Match.tag(
-      'InvalidArgumentError',
-      'NotFoundError',
-      'InternalToolError',
-      (own) => own,
-    ),
-    Match.exhaustive,
-  );
-
 // A failed completion can leave the temporary branch behind, so it is reported
 // as a server error that reaches Sentry rather than as caller input.
-const queryTuningCompletionFailed = (cause: Cause.Cause<ToolCallError>) => {
+const queryTuningCompletionFailed = (
+  cause: Cause.Cause<NeonToolError>,
+): Effect.Effect<never, ToolCallError> => {
   if (Cause.hasInterruptsOnly(cause)) {
     return Effect.failCause(cause);
   }
 
   const failed = Option.match(Cause.findErrorOption(cause), {
     onNone: () => Cause.squash(cause),
-    onSome: thrownError,
+    onSome: (error) => error.cause,
   });
 
   return Effect.fail(
@@ -435,7 +412,7 @@ const PACKAGE_FAILURES: Partial<
   Record<
     ToolId,
     <A>(
-      execution: Effect.Effect<A, ToolCallError>,
+      execution: Effect.Effect<A, NeonToolError>,
     ) => Effect.Effect<A, ToolCallError>
   >
 > = {

@@ -7,23 +7,17 @@ import { captureException } from '@sentry/node';
 import { agentSentryTags } from '../sentry/utils';
 import type { IdentifiedClient } from '../utils/client-application';
 
-/** The tool arguments are wrong for this call or this connection. */
 export class InvalidArgumentError extends Schema.TaggedError<
   InvalidArgumentError,
   { readonly brand: unique symbol }
 >()('InvalidArgumentError', { message: Schema.String }) {}
 
-/** The resource the call names does not exist. */
 export class NotFoundError extends Schema.TaggedError<
   NotFoundError,
   { readonly brand: unique symbol }
 >()('NotFoundError', { message: Schema.String }) {}
 
-/**
- * The server's own code around a package tool failed, such as a query-tuning
- * completion that may have left its temporary branch behind. It is always a
- * server error.
- */
+/** It is always a server error. */
 export class InternalToolError extends Schema.TaggedError<
   InternalToolError,
   { readonly brand: unique symbol }
@@ -191,10 +185,7 @@ const isSqlEndpointFailure = (error: NeonDbError) =>
   (error.sourceError !== undefined ||
     error.message.startsWith('Neon internal error'));
 
-/**
- * Renders a failed tool call's error for the client. A server error is logged
- * and sent to Sentry first.
- */
+/** A server error is logged and sent to Sentry first. */
 export function handleToolError(
   error: unknown,
   properties: Record<string, string>,
