@@ -1,16 +1,17 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { NeonClientError } from '@neon/sdk';
-import type { NeonEffectError } from '@neon/effect';
-import type { NeonEffectToolContext } from '@neon/tools/effect';
+import type { NeonEffectToolContext, NeonToolError } from '@neon/tools/effect';
 import {
   retryReadOnlyNetworkFailures,
   toEffectTools,
 } from '@neon/tools/effect';
 import { Cause, Effect, Option, Predicate, Redacted, Schedule } from 'effect';
 import * as z from 'zod';
-import { InvalidArgumentError, NotFoundError } from '../server/errors';
+import {
+  InternalToolError,
+  InvalidArgumentError,
+  NotFoundError,
+} from '../server/errors';
 import { NeonAccounts } from '../server/neon-accounts';
-import type { NoDefaultOrganization } from '../server/no-default-organization';
 import {
   GET_CONNECTION_STRING_INPUT_SCHEMA,
   NEON_TOOLS,
@@ -18,7 +19,7 @@ import {
 } from './definitions';
 import { ToolStepFailed } from './errors';
 import type { ToolId } from './operations';
-import { assertOutputContract } from './output-contract';
+import { outputContractViolation } from './output-contract';
 import type { NeonTool } from './tool-definition';
 import type {
   ToolCallError,
@@ -58,30 +59,24 @@ function executionContext(
  * A scoped `create_postgres_role` runs its SQL as the database owner, and a pinned
  * connection promises that every SQL the server runs logs in as the pinned role.
  */
-function assertRoleCreateAllowed(
+const checkRoleCreateAllowed = (
   parsed: unknown,
   pinnedRoleName: string | undefined,
-): void {
-  if (pinnedRoleName === undefined) return;
-  if (typeof parsed !== 'object' || parsed === null || !('access' in parsed)) {
-    return;
+): Effect.Effect<void, InvalidArgumentError> => {
+  if (
+    pinnedRoleName === undefined ||
+    !Predicate.hasProperty(parsed, 'access') ||
+    (parsed.access !== 'read_only' && parsed.access !== 'read_write')
+  ) {
+    return Effect.void;
   }
-  if (parsed.access === 'read_only' || parsed.access === 'read_write') {
-    throw new InvalidArgumentError(
-      `This connection is pinned to Postgres role "${pinnedRoleName}", so its SQL runs only as that role. access ${parsed.access} creates the role with SQL as the database owner, which this connection does not allow. Connect without roleName to create a ${parsed.access} role.`,
-    );
-  }
-}
 
-// Rendered and classified like the errors the lookup used to throw.
-const orgLookupFailed = (
-  error: NeonEffectError | NoDefaultOrganization,
-): ToolStepFailed =>
-  ToolStepFailed.make({
-    error: Predicate.isTagged(error, 'NoDefaultOrganization')
-      ? new NotFoundError(error.message)
-      : error.cause,
-  });
+  return Effect.fail(
+    InvalidArgumentError.make({
+      message: `This connection is pinned to Postgres role "${pinnedRoleName}", so its SQL runs only as that role. access ${parsed.access} creates the role with SQL as the database owner, which this connection does not allow. Connect without roleName to create a ${parsed.access} role.`,
+    }),
+  );
+};
 
 // The org lookup is a read, retried like the package tools' reads before the
 // tool itself runs.
@@ -90,46 +85,47 @@ const withOrgId = (
   extra: ToolHandlerExtraParams | undefined,
 ) =>
   Effect.gen(function* () {
-    const { input, query } = yield* step(() => {
-      if (!Predicate.isObjectKeyword(parsed)) {
-        throw new Error('Tool input must be an object');
-      }
+    if (!Predicate.isObjectKeyword(parsed)) {
+      return yield* InternalToolError.make({
+        message: 'Tool input must be an object',
+      });
+    }
 
-      if (extra?.apiKey === undefined || extra.account === undefined) {
-        throw new Error(
-          'Resolving org_id requires an authenticated Neon client',
-        );
-      }
+    if (extra?.apiKey === undefined || extra.account === undefined) {
+      return yield* InternalToolError.make({
+        message: 'Resolving org_id requires an authenticated Neon client',
+      });
+    }
 
-      const orgId = Predicate.hasProperty(parsed, 'org_id')
-        ? parsed.org_id
-        : undefined;
+    const orgId = Predicate.hasProperty(parsed, 'org_id')
+      ? parsed.org_id
+      : undefined;
 
-      if (orgId !== undefined && !Predicate.isString(orgId)) {
-        throw new Error('org_id must be a string');
-      }
-
-      return {
-        input: parsed,
-        query: {
-          apiKey: Redacted.make(extra.apiKey),
-          account: extra.account,
-          orgId,
-        },
-      };
-    });
+    if (orgId !== undefined && !Predicate.isString(orgId)) {
+      return yield* InternalToolError.make({
+        message: 'org_id must be a string',
+      });
+    }
 
     const accounts = yield* NeonAccounts;
-    const organization = yield* accounts.organization(query).pipe(
-      Effect.retry({
-        schedule: Schedule.exponential('200 millis').pipe(Schedule.jittered),
-        times: 2,
-        while: Predicate.isTagged('NeonNetworkError'),
-      }),
-      Effect.mapError(orgLookupFailed),
-    );
+    const organization = yield* accounts
+      .organization({
+        apiKey: Redacted.make(extra.apiKey),
+        account: extra.account,
+        orgId,
+      })
+      .pipe(
+        Effect.retry({
+          schedule: Schedule.exponential('200 millis').pipe(Schedule.jittered),
+          times: 2,
+          while: Predicate.isTagged('NeonNetworkError'),
+        }),
+        Effect.catchTag('NoDefaultOrganization', ({ message }) =>
+          Effect.fail(NotFoundError.make({ message })),
+        ),
+      );
 
-    return { ...input, org_id: organization.id };
+    return { ...parsed, org_id: organization.id };
   });
 
 function packageInput(tool: NeonTool, params: Record<string, unknown>) {
@@ -145,14 +141,20 @@ const PACKAGE_DOC_NOT_FOUND =
   /^Doc page not found: "(.+)"\. Pass the slug of a docs search hit\.$/;
 
 // The package's message cannot name search_docs, which is the MCP name.
-function docNotFoundError(error: unknown): unknown {
-  if (!(error instanceof NeonClientError)) return error;
-  const slug = PACKAGE_DOC_NOT_FOUND.exec(error.message)?.[1];
-  if (slug === undefined) return error;
-  return new NotFoundError(
-    `Doc page not found: "${slug}". Pass a slug returned by search_docs.`,
+const docNotFound = <A>(execution: Effect.Effect<A, NeonToolError>) =>
+  execution.pipe(
+    Effect.catchTag('NeonClientError', (error) => {
+      const slug = PACKAGE_DOC_NOT_FOUND.exec(error.message)?.[1];
+
+      return Effect.fail(
+        slug === undefined
+          ? error
+          : NotFoundError.make({
+              message: `Doc page not found: "${slug}". Pass a slug returned by search_docs.`,
+            }),
+      );
+    }),
   );
-}
 
 function jsonText(data: unknown) {
   return { type: 'text' as const, text: JSON.stringify(data, null, 2) };
@@ -382,40 +384,26 @@ const catchStep: (error: unknown) => ToolStepFailed = (error) => {
 };
 
 /** Runs one of the server's own steps around a package tool. */
-export const step = <A>(run: () => A) =>
-  Effect.try({ try: run, catch: catchStep });
-
-/** The error a tool call failed with, as the package or a step threw it. */
-export const thrownError = (error: ToolCallError): Error =>
-  error instanceof ToolStepFailed ? error.error : error.cause;
-
-const docNotFound = (error: ToolCallError): ToolCallError => {
-  const thrown = thrownError(error);
-  const mapped = docNotFoundError(thrown);
-
-  return mapped instanceof Error && mapped !== thrown
-    ? ToolStepFailed.make({ error: mapped })
-    : error;
-};
+const step = <A>(run: () => A) => Effect.try({ try: run, catch: catchStep });
 
 // A failed completion can leave the temporary branch behind, so it is reported
 // as a server error that reaches Sentry rather than as caller input.
-const queryTuningCompletionFailed = (cause: Cause.Cause<ToolCallError>) => {
+const queryTuningCompletionFailed = (
+  cause: Cause.Cause<NeonToolError>,
+): Effect.Effect<never, ToolCallError> => {
   if (Cause.hasInterruptsOnly(cause)) {
     return Effect.failCause(cause);
   }
 
   const failed = Option.match(Cause.findErrorOption(cause), {
     onNone: () => Cause.squash(cause),
-    onSome: thrownError,
+    onSome: (error) => error.cause,
   });
 
   return Effect.fail(
-    ToolStepFailed.make({
-      error: new Error(
-        `Failed to complete query tuning: ${failed instanceof Error ? failed.message : String(failed)}`,
-        { cause: failed },
-      ),
+    InternalToolError.make({
+      message: `Failed to complete query tuning: ${failed instanceof Error ? failed.message : String(failed)}`,
+      cause: failed,
     }),
   );
 };
@@ -424,11 +412,11 @@ const PACKAGE_FAILURES: Partial<
   Record<
     ToolId,
     <A>(
-      execution: Effect.Effect<A, ToolCallError>,
+      execution: Effect.Effect<A, NeonToolError>,
     ) => Effect.Effect<A, ToolCallError>
   >
 > = {
-  'docs.get': Effect.mapError(docNotFound),
+  'docs.get': docNotFound,
   'queryTuning.complete': Effect.catchCause(queryTuningCompletionFailed),
 };
 
@@ -442,9 +430,7 @@ function toolHandler(tool: NeonTool): ToolHandler {
       const parsed = yield* step(() => packageInput(tool, params));
 
       if (tool.id === 'postgres.roles.create') {
-        yield* step(() => {
-          assertRoleCreateAllowed(parsed, extra?.pinnedRoleName);
-        });
+        yield* checkRoleCreateAllowed(parsed, extra?.pinnedRoleName);
       }
 
       const input = TOOLS_REQUIRING_ORG_ID.has(tool.id)
@@ -459,9 +445,13 @@ function toolHandler(tool: NeonTool): ToolHandler {
 
       const result = yield* step(() => toolResult(tool.id, data, params));
 
-      yield* step(() => {
-        assertOutputContract(tool, result);
-      });
+      const violation = yield* step(() =>
+        outputContractViolation(tool, result),
+      );
+
+      if (violation !== undefined) {
+        return yield* InternalToolError.make({ message: violation });
+      }
 
       return result;
     });

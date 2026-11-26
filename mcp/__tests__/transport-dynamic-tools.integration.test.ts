@@ -46,6 +46,7 @@ vi.mock('../tools/tools', async () => {
   const { NEON_TOOLS } = await import('../tools/definitions');
   const z = await import('zod');
   const { Effect } = await import('effect');
+  const { ToolStepFailed } = await import('../tools/errors');
   const runSqlTool = NEON_TOOLS.find((tool) => tool.name === 'run_sql');
   if (!runSqlTool) throw new Error('run_sql is not defined');
   return {
@@ -55,17 +56,23 @@ vi.mock('../tools/tools', async () => {
       // Preserve the real handler's required-ID validation after grant injection.
       // The shared published schema now permits an omitted project_id.
       run_sql: (...args: Parameters<typeof actual.NEON_HANDLERS.run_sql>) =>
-        actual
-          .step(() =>
+        Effect.try({
+          try: () =>
             z
               .record(z.string(), z.unknown())
               .parse(runSqlTool.inputSchema.parse(args[0]?.params ?? {})),
-          )
-          .pipe(
-            Effect.flatMap((params) =>
-              Effect.promise(async () => runSqlSpy({ params }, args[1])),
-            ),
+          catch: (error) => {
+            if (error instanceof Error) {
+              return ToolStepFailed.make({ error });
+            }
+
+            throw error;
+          },
+        }).pipe(
+          Effect.flatMap((params) =>
+            Effect.promise(async () => runSqlSpy({ params }, args[1])),
           ),
+        ),
     },
   };
 });

@@ -1449,7 +1449,6 @@
     "eslint(func-style)": 6,
     "eslint(max-classes-per-file)": 1,
     "eslint(max-params)": 1,
-    "eslint(no-else-return)": 1,
     "typescript(strict-boolean-expressions)": 4
   },
   "mcp/server/index.ts": {
@@ -1484,7 +1483,6 @@
     "unicorn(prefer-at)": 1
   },
   "mcp/tools/grant-filter.ts": {
-    "anti-slop(no-known-value-widening)": 1,
     "anti-slop(no-unsafe-dictionary-type)": 2,
     "anti-slop(require-readable-spacing)": 22,
     "eslint(curly)": 5,
@@ -1525,14 +1523,10 @@
     "import(no-namespace)": 1
   },
   "mcp/tools/tools.ts": {
-    "anti-slop(no-known-value-widening)": 1,
-    "anti-slop(no-runtime-typeof)": 1,
-    "anti-slop(no-unknown-parameters)": 16,
-    "anti-slop(no-unknown-returns)": 1,
+    "anti-slop(no-unknown-parameters)": 15,
     "anti-slop(no-unsafe-dictionary-type)": 4,
-    "anti-slop(require-readable-spacing)": 21,
-    "eslint(curly)": 3,
-    "eslint(func-style)": 17,
+    "anti-slop(require-readable-spacing)": 17,
+    "eslint(func-style)": 15,
     "eslint(init-declarations)": 1,
     "eslint(max-lines)": 1,
     "eslint(prefer-named-capture-group)": 1,

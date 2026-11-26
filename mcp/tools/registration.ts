@@ -15,20 +15,17 @@
  * only the contract a client sees.
  */
 
-import type {
-  CallToolResult,
-  ToolAnnotations,
-} from '@modelcontextprotocol/sdk/types.js';
-import { Effect } from 'effect';
-import type { NeonAccounts } from '../server/neon-accounts';
+import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
+import { Effect, Result } from 'effect';
+import { InternalToolError, InvalidArgumentError } from '../server/errors';
 import type { GrantContext } from '../utils/grant-context';
 import { toolSecrets } from '../utils/grant-context';
-import { NEON_HANDLERS, step } from './tools';
+import { NEON_HANDLERS } from './tools';
 import { injectProjectId } from './grant-filter';
 import { NEON_TOOLS } from './definitions';
 import { outputContract } from './output-contract';
 import type { NeonTool } from './tool-definition';
-import type { ToolCallError, ToolHandlerExtraParams } from './types';
+import type { ToolHandler, ToolHandlerExtraParams } from './types';
 
 /**
  * `McpServer` advertises `listChanged: true` for tools and resources unless it
@@ -67,31 +64,30 @@ export function invokeTool(
   args: unknown,
   grant: GrantContext,
   extra: ToolHandlerExtraParams,
-): Effect.Effect<CallToolResult, ToolCallError, NeonAccounts> {
+): ReturnType<ToolHandler> {
   const handler = NEON_HANDLERS[toolName];
   const tool = toolByName(toolName);
-  return step(() => {
-    if (!handler) {
-      throw new Error(`Handler for tool ${toolName} not found`);
-    }
-    return {
-      handler,
-      args: injectProjectId(
-        (args ?? {}) as Record<string, unknown>,
-        grant,
-        tool,
-      ),
-    };
-  }).pipe(
-    Effect.flatMap(({ handler: run, args: effectiveArgs }) =>
-      run(
-        { params: effectiveArgs },
-        {
-          ...extra,
-          pinnedRoleName: grant.roleName,
-          secrets: toolSecrets(toolName, grant, extra.readOnly === true),
-        },
-      ),
-    ),
+  if (!handler) {
+    return Effect.fail(
+      InternalToolError.make({
+        message: `Handler for tool ${toolName} not found`,
+      }),
+    );
+  }
+  return Result.match(
+    injectProjectId((args ?? {}) as Record<string, unknown>, grant, tool),
+    {
+      onFailure: (message) =>
+        Effect.fail(InvalidArgumentError.make({ message })),
+      onSuccess: (effectiveArgs) =>
+        handler(
+          { params: effectiveArgs },
+          {
+            ...extra,
+            pinnedRoleName: grant.roleName,
+            secrets: toolSecrets(toolName, grant, extra.readOnly === true),
+          },
+        ),
+    },
   );
 }

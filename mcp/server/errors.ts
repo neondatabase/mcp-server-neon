@@ -1,40 +1,46 @@
 import { NeonApiError, NeonClientError } from '@neon/sdk';
 import { NeonDbError } from '@neondatabase/serverless';
+import { Schema } from 'effect';
 import { ZodError } from 'zod';
 import { logger } from '../utils/logger';
 import { captureException } from '@sentry/node';
 import { agentSentryTags } from '../sentry/utils';
 import type { IdentifiedClient } from '../utils/client-application';
 
-export class InvalidArgumentError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'InvalidArgumentError';
-  }
+export class InvalidArgumentError extends Schema.TaggedError<
+  InvalidArgumentError,
+  { readonly brand: unique symbol }
+>()('InvalidArgumentError', { message: Schema.String }) {}
+
+export class NotFoundError extends Schema.TaggedError<
+  NotFoundError,
+  { readonly brand: unique symbol }
+>()('NotFoundError', { message: Schema.String }) {}
+
+/** It is always a server error. */
+export class InternalToolError extends Schema.TaggedError<
+  InternalToolError,
+  { readonly brand: unique symbol }
+>()('InternalToolError', {
+  message: Schema.String,
+  cause: Schema.optional(Schema.Unknown),
+}) {
+  // Tool results render `${name}: ${message}` and the tool span records `name`
+  // as `error.type`; clients and dashboards read `Error` for these failures.
+  override readonly name = 'Error';
 }
 
-export class NotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NotFoundError';
-  }
-}
-
-class ToolCallCancelledError extends Error {
-  constructor() {
-    super('The client cancelled the tool call.');
-    this.name = 'ToolCallCancelledError';
+class ToolCallCancelledError extends Schema.TaggedError<
+  ToolCallCancelledError,
+  { readonly brand: unique symbol }
+>()('ToolCallCancelledError', {}) {
+  override get message(): string {
+    return 'The client cancelled the tool call.';
   }
 }
 
 function isClientError(error: unknown): boolean {
-  return (
-    error instanceof InvalidArgumentError ||
-    error instanceof NotFoundError ||
-    error instanceof ToolCallCancelledError ||
-    error instanceof ZodError ||
-    error instanceof NeonClientError
-  );
+  return error instanceof ZodError || error instanceof NeonClientError;
 }
 
 const POSTGRES_ERROR_FIELDS = [
@@ -121,7 +127,7 @@ function errorText(error: unknown): string {
   return lines.join('\n');
 }
 
-function errorResponse(error: unknown) {
+export function errorResponse(error: unknown) {
   return {
     isError: true,
     content: [{ type: 'text' as const, text: errorText(error) }],
@@ -130,7 +136,7 @@ function errorResponse(error: unknown) {
 
 /** What a tool call the client cancelled renders as. */
 export const cancelledToolResult = () =>
-  errorResponse(new ToolCallCancelledError());
+  errorResponse(ToolCallCancelledError.make({}));
 
 function apiErrorReason(body: unknown): string | undefined {
   if (typeof body !== 'object' || body === null || !('reason' in body)) {
@@ -157,9 +163,9 @@ const apiClientErrorResponse = (error: NeonApiError) => {
 };
 
 /**
- * Whether a thrown tool error is the server's failure rather than a mistake in
- * the call (bad input, a statement Postgres rejected, a 4xx from the Neon API).
- * Only these mark the tool span as failed.
+ * Whether an error a package tool or a step threw is the server's failure
+ * rather than a mistake in the call (bad input, a statement Postgres rejected,
+ * a 4xx from the Neon API). Only these mark the tool span as failed.
  */
 export function isServerError(error: unknown): boolean {
   // The driver copies a SQLSTATE only from Postgres's answer; a NeonDbError
@@ -179,6 +185,7 @@ const isSqlEndpointFailure = (error: NeonDbError) =>
   (error.sourceError !== undefined ||
     error.message.startsWith('Neon internal error'));
 
+/** A server error is logged and sent to Sentry first. */
 export function handleToolError(
   error: unknown,
   properties: Record<string, string>,
@@ -190,31 +197,33 @@ export function handleToolError(
     (error instanceof NeonDbError && !isSqlEndpointFailure(error))
   ) {
     return errorResponse(error);
-  } else if (error instanceof NeonApiError && error.status < 500) {
-    return apiClientErrorResponse(error);
-  } else {
-    const apiDetails =
-      error instanceof NeonApiError ? neonApiErrorDetails(error) : undefined;
-
-    const errorContext = {
-      ...properties,
-      ...(traceId && { traceId }),
-      ...apiDetails,
-    };
-
-    logger.error('Tool call error:', {
-      error:
-        error instanceof Error
-          ? `${error.name}: ${error.message}`
-          : 'Unknown error',
-      ...errorContext,
-    });
-
-    captureException(error, {
-      extra: errorContext,
-      tags: serverErrorTags(agent, apiDetails),
-    });
-
-    return errorResponse(error);
   }
+
+  if (error instanceof NeonApiError && error.status < 500) {
+    return apiClientErrorResponse(error);
+  }
+
+  const apiDetails =
+    error instanceof NeonApiError ? neonApiErrorDetails(error) : undefined;
+
+  const errorContext = {
+    ...properties,
+    ...(traceId && { traceId }),
+    ...apiDetails,
+  };
+
+  logger.error('Tool call error:', {
+    error:
+      error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : 'Unknown error',
+    ...errorContext,
+  });
+
+  captureException(error, {
+    extra: errorContext,
+    tags: serverErrorTags(agent, apiDetails),
+  });
+
+  return errorResponse(error);
 }

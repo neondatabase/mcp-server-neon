@@ -3,7 +3,6 @@ import { NeonApiError, NeonClientError, NeonError } from '@neon/sdk';
 import { createNeonTools, InspectDiagnosticError } from '@neon/tools';
 import { NeonDbError } from '@neondatabase/serverless';
 import type { captureException as sentryCaptureException } from '@sentry/node';
-import { InvalidArgumentError } from '../server/errors';
 
 const captureException = vi.hoisted(() =>
   vi.fn<typeof sentryCaptureException>(),
@@ -122,13 +121,7 @@ describe('handleToolError', () => {
     });
   });
 
-  it('does not capture client, 4xx API, or Postgres statement errors', () => {
-    handleToolError(
-      new InvalidArgumentError('bad arg'),
-      properties,
-      'trace-1',
-      agent,
-    );
+  it('does not capture 4xx API or Postgres statement errors', () => {
     handleToolError(
       new NeonApiError('Not Found', { status: 404 }),
       properties,

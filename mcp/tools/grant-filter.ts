@@ -1,6 +1,6 @@
 import { REDACTED_SECRET } from '@neon/tools';
+import { Result } from 'effect';
 import * as z from 'zod';
-import { InvalidArgumentError } from '../server/errors';
 import {
   SCOPE_CATEGORIES,
   type GrantContext,
@@ -264,31 +264,35 @@ function schemaHasProjectId(schema: NeonTool['inputSchema']): boolean {
   return schema instanceof z.ZodObject && 'project_id' in schema.shape;
 }
 
+/**
+ * The arguments with the grant's project filled in. Fails with the reason the
+ * `project_id` argument is invalid for this connection.
+ */
 export function injectProjectId(
   args: Record<string, unknown>,
   grant: GrantContext,
   tool?: Pick<NeonTool, 'projectScoped'> & {
     inputSchema?: NeonTool['inputSchema'];
   },
-): Record<string, unknown> {
-  if (tool && !tool.projectScoped) return args;
+): Result.Result<Record<string, unknown>, string> {
+  if (tool && !tool.projectScoped) return Result.succeed(args);
   if (tool?.inputSchema && !schemaHasProjectId(tool.inputSchema)) {
-    return args;
+    return Result.succeed(args);
   }
   if (!grant.projectId) {
     if (args.project_id === undefined && tool?.inputSchema) {
-      throw new InvalidArgumentError(
+      return Result.fail(
         'project_id is required because this connection is not scoped to a project. ' +
           'Pass the target project ID, for example one returned by list_projects.',
       );
     }
-    return args;
+    return Result.succeed(args);
   }
   if (args.project_id !== undefined && args.project_id !== grant.projectId) {
-    throw new InvalidArgumentError(
+    return Result.fail(
       `project_id "${String(args.project_id)}" does not match this connection's project "${grant.projectId}". ` +
         'Omit project_id to use that project. To work on another project, reconnect with access to it.',
     );
   }
-  return { ...args, project_id: grant.projectId };
+  return Result.succeed({ ...args, project_id: grant.projectId });
 }
