@@ -195,7 +195,7 @@ const BILLING_ERROR_ACTIONS = new Map([
   ],
   [
     'INSUFFICIENT_ORG_PERMISSIONS',
-    'An Organization Admin must change this setting in Organization Billing.',
+    'An Organization Admin must perform this action.',
   ],
 ]);
 

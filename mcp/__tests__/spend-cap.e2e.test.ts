@@ -336,9 +336,18 @@ describe('organization spend-cap MCP protocol', () => {
     },
   );
 
-  it.each(['SPEND_CAP_EXCEEDED', 'INSUFFICIENT_ORG_PERMISSIONS'])(
+  it.each([
+    [
+      'SPEND_CAP_EXCEEDED',
+      'An Organization Admin can increase or disable the spend cap in Organization Billing. Storage charges continue; recovery is asynchronous and other restrictions can remain.',
+    ],
+    [
+      'INSUFFICIENT_ORG_PERMISSIONS',
+      'An Organization Admin must perform this action.',
+    ],
+  ])(
     'preserves %s on an existing blocked tool without retry or server-error classification',
-    async (code) => {
+    async (code, action) => {
       fixture.code = code;
       await withClient(async (client) => {
         const result = await client.callTool({
@@ -352,6 +361,7 @@ describe('organization spend-cap MCP protocol', () => {
             code,
             status: 403,
             message: 'Denied by policy',
+            action,
           },
         });
         expect(JSON.stringify(result.content)).toContain('Organization Admin');
