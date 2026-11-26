@@ -55,17 +55,15 @@ vi.mock('../tools/tools', async () => {
       // Preserve the real handler's required-ID validation after grant injection.
       // The shared published schema now permits an omitted project_id.
       run_sql: (...args: Parameters<typeof actual.NEON_HANDLERS.run_sql>) =>
-        actual
-          .step(() =>
-            z
-              .record(z.string(), z.unknown())
-              .parse(runSqlTool.inputSchema.parse(args[0]?.params ?? {})),
-          )
-          .pipe(
-            Effect.flatMap((params) =>
-              Effect.promise(async () => runSqlSpy({ params }, args[1])),
-            ),
+        Effect.sync(() =>
+          z
+            .record(z.string(), z.unknown())
+            .parse(runSqlTool.inputSchema.parse(args[0]?.params ?? {})),
+        ).pipe(
+          Effect.flatMap((params) =>
+            Effect.promise(async () => runSqlSpy({ params }, args[1])),
           ),
+        ),
     },
   };
 });

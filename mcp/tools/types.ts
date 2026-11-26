@@ -2,6 +2,11 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { NeonToolError } from '@neon/tools/effect';
 import type { Effect } from 'effect';
 import type { NeonSecretsMode } from '@neon/tools';
+import type {
+  InternalToolError,
+  InvalidArgumentError,
+  NotFoundError,
+} from '../server/errors';
 import type { NeonAccounts } from '../server/neon-accounts';
 import type { AuthContext } from '../types/auth';
 import type { ClientApplication } from '../utils/client-application';
@@ -23,7 +28,12 @@ export type ToolHandlerExtraParams = {
   secrets?: NeonSecretsMode;
 };
 
-export type ToolCallError = NeonToolError | ToolStepFailed;
+export type ToolCallError =
+  | NeonToolError
+  | ToolStepFailed
+  | InvalidArgumentError
+  | NotFoundError
+  | InternalToolError;
 
 /**
  * Interrupting the handler's fiber cancels the tool call. `NeonAccounts`

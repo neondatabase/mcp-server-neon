@@ -21,16 +21,17 @@ export const outputContract = (tool: NeonTool) => {
 };
 
 /**
- * Throws when a successful result breaks the tool's `outputSchema`. The MCP SDK
- * runs the same check after the handler returns and would turn the result into
- * an error the tool-call span and analytics had already counted as a success.
+ * How a successful result breaks the tool's `outputSchema`, if it does. The MCP
+ * SDK runs the same check after the handler returns and would turn the result
+ * into an error the tool-call span and analytics had already counted as a
+ * success.
  */
-export const assertOutputContract = (
+export const outputContractViolation = (
   tool: NeonTool,
   result: CallToolResult,
-): void => {
+): string | undefined => {
   if (result.isError === true) {
-    return;
+    return undefined;
   }
 
   const checked = outputContract(tool)['~standard'].validate(
@@ -41,9 +42,7 @@ export const assertOutputContract = (
     throw new TypeError(`${tool.name} output validation is asynchronous`);
   }
 
-  if (checked.issues !== undefined) {
-    throw new Error(
-      `${tool.name} result breaks its output schema: ${checked.issues.map((issue) => issue.message).join('; ')}`,
-    );
-  }
+  return checked.issues === undefined
+    ? undefined
+    : `${tool.name} result breaks its output schema: ${checked.issues.map((issue) => issue.message).join('; ')}`;
 };

@@ -1,12 +1,16 @@
 import type { CallToolResult } from '@modelcontextprotocol/server';
-import { Cause, Effect, ErrorReporter, Exit, Option } from 'effect';
+import { Cause, Effect, ErrorReporter, Exit, Match, Option } from 'effect';
 import { mcpRuntime, runAfterResponse } from '../../lib/effect/runtime';
 import type { McpCallbackServices } from '../../lib/effect/runtime';
 import { flushSentry } from '../sentry/flush';
-import { thrownError } from '../tools/tools';
 import type { ToolCallError } from '../tools/types';
 import type { IdentifiedClient } from '../utils/client-application';
-import { cancelledToolResult, handleToolError, isServerError } from './errors';
+import {
+  cancelledToolResult,
+  errorResponse,
+  handleToolError,
+  isServerError,
+} from './errors';
 
 export type ToolCallOutcome = {
   readonly result: CallToolResult;
@@ -20,30 +24,60 @@ type ToolErrorReport = {
   agent: IdentifiedClient;
 };
 
+const renderedFailure = (
+  errorType: string,
+  render: () => ToolCallOutcome,
+): Effect.Effect<ToolCallOutcome> =>
+  Effect.annotateCurrentSpan('error.type', errorType).pipe(Effect.map(render));
+
+/** Renders what a package tool or a step threw, or a defect, by its type. */
+const renderThrown = (
+  cause: unknown,
+  { properties, traceId, agent }: ToolErrorReport,
+) =>
+  renderedFailure(cause instanceof Error ? cause.name : 'unknown', () => ({
+    result: handleToolError(cause, properties, traceId, agent),
+    kind: isServerError(cause) ? 'server-error' : 'client-error',
+  }));
+
+const renderToolCallError = (error: ToolCallError, report: ToolErrorReport) =>
+  Match.value(error).pipe(
+    Match.tag('InvalidArgumentError', 'NotFoundError', (clientError) =>
+      renderedFailure(clientError.name, () => ({
+        result: errorResponse(clientError),
+        kind: 'client-error',
+      })),
+    ),
+    Match.tag('InternalToolError', (serverError) =>
+      renderedFailure(serverError.name, () => ({
+        result: handleToolError(
+          serverError,
+          report.properties,
+          report.traceId,
+          report.agent,
+        ),
+        kind: 'server-error',
+      })),
+    ),
+    Match.tag('ToolStepFailed', ({ error: thrown }) =>
+      renderThrown(thrown, report),
+    ),
+    Match.tagStartsWith('Neon', ({ cause }) => renderThrown(cause, report)),
+    Match.exhaustive,
+  );
+
 const renderFailure = (
   cause: Cause.Cause<ToolCallError>,
-  { properties, traceId, agent }: ToolErrorReport,
+  report: ToolErrorReport,
 ): Effect.Effect<ToolCallOutcome, ToolCallError> => {
   if (Cause.hasInterruptsOnly(cause)) {
     return Effect.failCause(cause);
   }
 
-  const thrown = Option.match(Cause.findErrorOption(cause), {
-    onNone: () => Cause.squash(cause),
-    onSome: thrownError,
+  return Option.match(Cause.findErrorOption(cause), {
+    onNone: () => renderThrown(Cause.squash(cause), report),
+    onSome: (error) => renderToolCallError(error, report),
   });
-
-  return Effect.annotateCurrentSpan(
-    'error.type',
-    thrown instanceof Error ? thrown.name : 'unknown',
-  ).pipe(
-    Effect.map(
-      (): ToolCallOutcome => ({
-        result: handleToolError(thrown, properties, traceId, agent),
-        kind: isServerError(thrown) ? 'server-error' : 'client-error',
-      }),
-    ),
-  );
 };
 
 /**

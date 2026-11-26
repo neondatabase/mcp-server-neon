@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Result } from 'effect';
 import * as z from 'zod';
 import { filterToolsForGrant, injectProjectId } from '../tools/grant-filter';
 import { toListedInputSchema } from '../tools/listed-schema';
@@ -97,8 +98,12 @@ describe.each(fixtures)('$kind stable project schema', (tool) => {
   it('requires an explicit ID for an unscoped full handler', () => {
     const args = argumentsFor(tool);
     const wireArgs = parseArgs(published(tool, unscoped).inputSchema, args);
-    expect(() => injectProjectId(wireArgs, unscoped, tool)).toThrow(
-      'project_id is required because this connection is not scoped to a project',
+    expect(injectProjectId(wireArgs, unscoped, tool)).toStrictEqual(
+      Result.fail(
+        expect.stringContaining(
+          'project_id is required because this connection is not scoped to a project',
+        ),
+      ),
     );
 
     const explicit = { ...args, project_id: 'project-b' };
@@ -107,7 +112,9 @@ describe.each(fixtures)('$kind stable project schema', (tool) => {
       explicit,
     );
     expect(
-      tool.inputSchema.parse(injectProjectId(explicitWire, unscoped, tool)),
+      tool.inputSchema.parse(
+        Result.getOrThrow(injectProjectId(explicitWire, unscoped, tool)),
+      ),
     ).toEqual(explicit);
   });
 
@@ -120,7 +127,7 @@ describe.each(fixtures)('$kind stable project schema', (tool) => {
       };
       const wireArgs = parseArgs(published(tool, scoped).inputSchema, args);
       const effective = injectProjectId(wireArgs, scoped, tool);
-      expect(tool.inputSchema.parse(effective)).toEqual({
+      expect(tool.inputSchema.parse(Result.getOrThrow(effective))).toEqual({
         ...argumentsFor(tool),
         project_id: 'project-a',
       });
@@ -134,8 +141,12 @@ describe.each(fixtures)('$kind stable project schema', (tool) => {
   it('rejects a conflicting ID before invoking a scoped handler', () => {
     const args = { ...argumentsFor(tool), project_id: 'project-b' };
     const wireArgs = parseArgs(published(tool, scoped).inputSchema, args);
-    expect(() => injectProjectId(wireArgs, scoped, tool)).toThrow(
-      `does not match this connection's project "project-a"`,
+    expect(injectProjectId(wireArgs, scoped, tool)).toStrictEqual(
+      Result.fail(
+        expect.stringContaining(
+          `does not match this connection's project "project-a"`,
+        ),
+      ),
     );
   });
 
@@ -195,7 +206,9 @@ describe('unchanged tool visibility and tools without a project ID', () => {
     for (const grant of [scoped, unscoped]) {
       expect(published(docsTool, grant).inputSchema).toBe(docsTool.inputSchema);
       const args = { slug: 'docs/example' };
-      expect(injectProjectId(args, grant, docsTool)).toBe(args);
+      expect(Result.getOrThrow(injectProjectId(args, grant, docsTool))).toBe(
+        args,
+      );
     }
   });
 });

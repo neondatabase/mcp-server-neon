@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { Result } from 'effect';
 import * as z from 'zod';
 import {
   filterToolsForGrant,
@@ -389,42 +390,54 @@ describe('getAccessControlWarnings', () => {
 describe('injectProjectId', () => {
   it('accepts a matching explicit ID and rejects a conflicting ID', () => {
     const scoped = grant({ projectId: 'proj-123' });
-    expect(injectProjectId({ project_id: 'proj-123' }, scoped)).toEqual({
-      project_id: 'proj-123',
-    });
-    expect(() =>
+    expect(injectProjectId({ project_id: 'proj-123' }, scoped)).toEqual(
+      Result.succeed({ project_id: 'proj-123' }),
+    );
+    expect(
       injectProjectId({ project_id: 'other-project' }, scoped),
-    ).toThrow(`does not match this connection's project "proj-123"`);
+    ).toStrictEqual(
+      Result.fail(
+        expect.stringContaining(
+          `does not match this connection's project "proj-123"`,
+        ),
+      ),
+    );
   });
 
   it('injects project_id when grant is project-scoped', () => {
     const args = { branch_id: 'br-1' };
     const scoped = grant({ projectId: 'proj-123' });
-    expect(injectProjectId(args, scoped)).toEqual({
-      branch_id: 'br-1',
-      project_id: 'proj-123',
-    });
+    expect(injectProjectId(args, scoped)).toEqual(
+      Result.succeed({
+        branch_id: 'br-1',
+        project_id: 'proj-123',
+      }),
+    );
     expect(
       injectProjectId(args, scoped, {
         projectScoped: true,
       }),
-    ).toEqual({
-      branch_id: 'br-1',
-      project_id: 'proj-123',
-    });
+    ).toEqual(
+      Result.succeed({
+        branch_id: 'br-1',
+        project_id: 'proj-123',
+      }),
+    );
     expect(
       injectProjectId({ sql: 'select 1' }, scoped, {
         projectScoped: true,
       }),
-    ).toEqual({
-      sql: 'select 1',
-      project_id: 'proj-123',
-    });
+    ).toEqual(
+      Result.succeed({
+        sql: 'select 1',
+        project_id: 'proj-123',
+      }),
+    );
   });
 
   it('returns args unchanged when not project-scoped', () => {
     const args = { project_id: 'proj-keep', branch_id: 'br-1' };
-    expect(injectProjectId(args, grant())).toEqual(args);
+    expect(injectProjectId(args, grant())).toEqual(Result.succeed(args));
   });
 
   it('does not inject project_id when the tool schema has none', () => {
@@ -433,12 +446,12 @@ describe('injectProjectId', () => {
     const searchDocs = NEON_TOOLS.find((t) => t.name === 'search_docs');
     expect(getDoc).toBeDefined();
     expect(searchDocs).toBeDefined();
-    expect(injectProjectId({ slug: 'docs/x' }, scoped, getDoc)).toEqual({
-      slug: 'docs/x',
-    });
-    expect(injectProjectId({ query: 'x' }, scoped, searchDocs)).toEqual({
-      query: 'x',
-    });
+    expect(injectProjectId({ slug: 'docs/x' }, scoped, getDoc)).toEqual(
+      Result.succeed({ slug: 'docs/x' }),
+    );
+    expect(injectProjectId({ query: 'x' }, scoped, searchDocs)).toEqual(
+      Result.succeed({ query: 'x' }),
+    );
   });
 });
 

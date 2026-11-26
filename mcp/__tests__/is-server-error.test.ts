@@ -2,11 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NeonApiError, NeonClientError } from '@neon/sdk';
 import { NeonDbError } from '@neondatabase/serverless';
 import { z } from 'zod';
-import {
-  InvalidArgumentError,
-  isServerError,
-  NotFoundError,
-} from '../server/errors';
+import { isServerError } from '../server/errors';
 
 function zodError() {
   const parsed = z.object({ sql: z.string() }).safeParse({});
@@ -22,8 +18,6 @@ describe('isServerError', () => {
         code: '42601',
       }),
     ],
-    ['invalid tool input', new InvalidArgumentError('bad slug')],
-    ['a missing resource', new NotFoundError('no such doc')],
     ['schema validation', zodError()],
     ['an SDK client error', new NeonClientError('no parent branch')],
     ['a Neon API 4xx', new NeonApiError('Not Found', { status: 404 })],
