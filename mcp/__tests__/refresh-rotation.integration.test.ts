@@ -19,6 +19,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
 import { NextRequest } from 'next/server';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { UpstreamClientConfig } from '../../lib/oauth/client';
 import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
 
 type RedisEntry = { value: string; expiresAt?: number };
@@ -87,7 +88,10 @@ vi.mock('redis', () => ({
 }));
 
 vi.mock('../../lib/oauth/client', () => ({
-  exchangeRefreshToken: async (_client: unknown, refreshToken: string) => {
+  exchangeRefreshToken: async (
+    _client: UpstreamClientConfig,
+    refreshToken: string,
+  ) => {
     shared.upstreamCalls++;
     if (shared.presented.has(refreshToken)) shared.reuse.push(refreshToken);
     shared.presented.add(refreshToken);

@@ -68,10 +68,7 @@ export class ServerConfig extends Context.Service<
   static readonly layer = Layer.effect(this, this.make);
 }
 
-// The values below stay module constants: the Neon API and docs endpoints
-// build the static NEON_TOOLS at module load, the Segment client reads the
-// analytics settings outside Effect, and Sentry initializes before any Effect
-// runs.
+// The values below are read at module load, before any Effect runs.
 
 // Neon API configuration
 export const NEON_API_HOST =

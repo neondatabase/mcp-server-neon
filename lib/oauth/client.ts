@@ -11,7 +11,7 @@ import {
 import { Redacted } from 'effect';
 
 /** The `ServerConfig` values the upstream client is built from. */
-type UpstreamClientConfig = {
+export type UpstreamClientConfig = {
   readonly serverHost: string;
   readonly upstreamOAuthHost: string;
   readonly clientId: string;

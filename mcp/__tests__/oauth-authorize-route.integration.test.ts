@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { GET, POST } from '../../app/api/authorize/route';
 import { model } from '../oauth/model';
 import { upstreamAuth } from '../../lib/oauth/client';
+import type { UpstreamClientConfig } from '../../lib/oauth/client';
 import { SERVER_HOST } from '../../lib/config';
 import { authTransactions } from '../oauth/auth-transaction-store';
 import { AUTH_RESTART_DESCRIPTION } from '../oauth/consent-html-headers';
@@ -32,7 +33,7 @@ vi.mock('@vercel/functions', () => ({
 
 vi.mock('../../lib/oauth/client', () => ({
   upstreamAuth: vi.fn(
-    async (_client: unknown, state: string) =>
+    async (_client: UpstreamClientConfig, state: string) =>
       new URL(`https://oauth.example/authorize?state=${state}`),
   ),
 }));

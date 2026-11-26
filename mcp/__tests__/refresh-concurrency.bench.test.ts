@@ -22,6 +22,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { UpstreamClientConfig } from '../../lib/oauth/client';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Shared simulated state (one Redis, one Postgres, one upstream counter)
@@ -186,7 +187,7 @@ vi.mock('../oauth/model', () => ({
 }));
 
 vi.mock('../../lib/oauth/client', () => ({
-  exchangeRefreshToken: async (_client: unknown, rt: string) => {
+  exchangeRefreshToken: async (_client: UpstreamClientConfig, rt: string) => {
     state.upstreamCalls++;
     if (state.upstreamLatencyMs > 0) {
       await new Promise<void>((r) => {
