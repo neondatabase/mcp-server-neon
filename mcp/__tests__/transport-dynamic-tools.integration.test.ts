@@ -60,13 +60,15 @@ Object.assign(process.env, {
   E2E_SENTRY_PORT: '3131',
 });
 
-neonConfig.fetchEndpoint = `${upstream.origin}/sql`;
-
 // Imported once the environment is set: lib/config reads it at import.
 const { ensureTestOauthDatabase } =
   await import('./ensure-test-oauth-database');
 
 await ensureTestOauthDatabase();
+
+// Set once the real test database is provisioned: its reachability probe and
+// schema setup go through the same driver.
+neonConfig.fetchEndpoint = `${upstream.origin}/sql`;
 
 const {
   SENTRY_FIXTURE_DSN,
