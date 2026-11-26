@@ -32,7 +32,7 @@
     "test:e2e": "pnpm test:e2e:mcp && pnpm test:e2e:web"
   },
   "dependencies": {
-    "@effect/opentelemetry": "4.1.2",
+    "@effect/opentelemetry": "4.1.4",
     "@modelcontextprotocol/sdk": "1.25.3",
     "@modelcontextprotocol/server": "2.0.0",
     "@neon/effect": "0.5.7",
@@ -43,7 +43,7 @@
     "@segment/analytics-node": "2.2.1",
     "@sentry/node": "10.78.0",
     "@vercel/functions": "3.3.4",
-    "effect": "4.1.2",
+    "effect": "4.1.4",
     "he": "1.2.0",
     "jose": "6.2.2",
     "keyv": "5.3.2",
@@ -63,6 +63,7 @@
   },
   "devDependencies": {
     "@effect/tsgo": "0.67.1",
+    "@effect/vitest": "4.1.4",
     "@modelcontextprotocol/client": "2.0.0",
     "@oxlint/plugins": "1.91.0",
     "@playwright/test": "1.58.2",
@@ -81,6 +82,6 @@
     "tailwindcss": "4.1.7",
     "tsx": "4.21.0",
     "typescript": "5.8.3",
-    "vitest": "4.0.18"
+    "vitest": "5.1.1"
   }
 }

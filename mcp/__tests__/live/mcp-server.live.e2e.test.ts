@@ -166,7 +166,7 @@ function holdTableLock(uri: string, table: string, marker: string) {
   ]);
 }
 
-describe.sequential('MCP server live Neon lifecycle', () => {
+describe('MCP server live Neon lifecycle', { concurrent: false }, () => {
   let client: Client | undefined;
   let server: McpServer | undefined;
   let readOnlyClient: Client | undefined;

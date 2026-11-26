@@ -68,7 +68,7 @@ function expectNoCredentials(output: string, ownerPassword: string) {
   expect(output).not.toMatch(/postgres(ql)?:\/\/[^\s"]*:[^\s"]*@/);
 }
 
-describe.sequential('pinned Postgres role on live Neon', () => {
+describe('pinned Postgres role on live Neon', { concurrent: false }, () => {
   const connected: Connected[] = [];
   let neonClient: NeonApiClient | undefined;
   let createServer:
