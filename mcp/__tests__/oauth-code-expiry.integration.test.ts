@@ -29,13 +29,13 @@ await model.saveClient({
   client_name: 'Code expiry test',
 });
 
-const storeCode = async (expiresInMs: number) => {
+const storeCode = async (expiresAt: Date) => {
   const authorizationCode = `code-${randomUUID()}`;
   const accessToken = `at-${randomUUID()}`;
 
   await model.saveAuthorizationCode({
     authorizationCode,
-    expiresAt: new Date(Date.now() + expiresInMs),
+    expiresAt,
     redirectUri: REDIRECT_URI,
     scope: 'read write',
     client: { id: client.id, grants: [] },
@@ -72,7 +72,9 @@ const exchange = async (authorizationCode: string) => {
 
 describe('authorization code expiry', () => {
   it('refuses an expired code and keeps it unexchanged', async () => {
-    const { authorizationCode, accessToken } = await storeCode(-1000);
+    const { authorizationCode, accessToken } = await storeCode(
+      new Date(Date.now() - 1000),
+    );
 
     await expect(exchange(authorizationCode)).resolves.toStrictEqual({
       status: 400,
@@ -85,7 +87,9 @@ describe('authorization code expiry', () => {
   });
 
   it('exchanges a code that has not expired', async () => {
-    const { authorizationCode, accessToken } = await storeCode(60_000);
+    const { authorizationCode, accessToken } = await storeCode(
+      new Date(Date.now() + 60_000),
+    );
 
     const { status, body } = await exchange(authorizationCode);
 
@@ -94,5 +98,16 @@ describe('authorization code expiry', () => {
     await expect(
       model.getAuthorizationCode(authorizationCode),
     ).resolves.toBeUndefined();
+  });
+
+  it('answers a stored code with an unreadable expiry as a server fault', async () => {
+    const { authorizationCode, accessToken } = await storeCode(
+      new Date('not a date'),
+    );
+
+    await expect(exchange(authorizationCode)).resolves.toMatchObject({
+      status: 500,
+    });
+    await expect(model.getAccessToken(accessToken)).resolves.toBeUndefined();
   });
 });

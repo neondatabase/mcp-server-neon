@@ -783,7 +783,7 @@
     "anti-slop(no-module-mocking)": 2,
     "anti-slop(require-readable-spacing)": 6,
     "anti-slop(require-safety-comment-for-type-assertion)": 14,
-    "typescript(no-unnecessary-type-assertion)": 12,
+    "typescript(no-unnecessary-type-assertion)": 11,
     "typescript(no-unsafe-type-assertion)": 14,
     "typescript(promise-function-async)": 2,
     "unicorn(numeric-separators-style)": 6,
