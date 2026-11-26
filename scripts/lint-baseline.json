@@ -779,18 +779,6 @@
     "vitest(prefer-import-in-mock)": 1,
     "vitest(require-mock-type-parameters)": 2
   },
-  "mcp/__tests__/oauth-token-route.integration.test.ts": {
-    "anti-slop(no-module-mocking)": 2,
-    "anti-slop(require-readable-spacing)": 6,
-    "anti-slop(require-safety-comment-for-type-assertion)": 14,
-    "typescript(no-unnecessary-type-assertion)": 12,
-    "typescript(no-unsafe-type-assertion)": 14,
-    "typescript(promise-function-async)": 2,
-    "unicorn(numeric-separators-style)": 6,
-    "vitest(prefer-import-in-mock)": 2,
-    "vitest(prefer-strict-equal)": 3,
-    "vitest(require-mock-type-parameters)": 12
-  },
   "mcp/__tests__/origin.test.ts": {
     "eslint(no-script-url)": 1
   },

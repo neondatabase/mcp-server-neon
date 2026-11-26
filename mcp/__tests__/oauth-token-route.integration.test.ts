@@ -1,170 +1,243 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
-import { POST } from '../../app/api/token/route';
-import { identify } from '../analytics/analytics';
-import { model } from '../oauth/model';
-import { ClientMetadataUnavailableError } from '../../lib/oauth/client-id-metadata-document';
-import { CLIENT_ASSERTION_TYPE } from '../../lib/oauth/client-assertion';
-import { SERVER_HOST } from '../../lib/config';
+/**
+ * /api/token on the real OAuth Postgres store. Client ID metadata document
+ * clients are served by replacing the store's client lookup: the document
+ * fetch refuses loopback addresses, so no local server can host one.
+ */
+import { Effect, Layer, Option } from 'effect';
+import { HttpRouter } from 'effect/http';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
+import { afterAll, describe, expect, it } from 'vitest';
+import { SERVER_HOST } from '../../lib/config';
+import { CLIENT_ASSERTION_TYPE } from '../../lib/oauth/client-assertion';
+import { ClientMetadataUnavailable } from '../../lib/oauth/client-metadata-unavailable';
+import { Analytics } from '../analytics/analytics-service';
+import { OAuthStore } from '../oauth/oauth-store';
+import { OAuthTestApp } from './helpers/oauth-app';
 
-vi.mock('../oauth/model', () => ({
-  model: {
-    getClient: vi.fn(),
-    getAuthorizationCode: vi.fn(),
-    saveToken: vi.fn(),
-    saveRefreshToken: vi.fn(),
-    revokeAuthorizationCode: vi.fn(),
-    getRefreshToken: vi.fn(),
-    getRefreshFailure: vi.fn(),
-    getAccessToken: vi.fn(),
-    deleteToken: vi.fn(),
-    deleteRefreshToken: vi.fn(),
-  },
-}));
+const REDIRECT_URI = 'http://127.0.0.1:55667/callback';
 
-vi.mock('../analytics/analytics', () => ({
-  identify: vi.fn(),
-  flushAnalytics: vi.fn().mockResolvedValue(undefined),
-}));
+type StoreOperations = typeof OAuthStore.Service;
+
+type StoredCode = Parameters<
+  StoreOperations['saveAuthorizationCode']
+>[0]['code'];
+
+type Identified = Parameters<(typeof Analytics.Service)['identify']>[0];
+
+const handlers: { readonly dispose: () => Promise<void> }[] = [];
+
+/** The OAuth app with `overrides` merged over its real services. */
+const appWith = <ROut>(overrides: Layer.Layer<ROut>) => {
+  const handler = HttpRouter.toWebHandler(
+    Layer.mergeAll(OAuthTestApp, overrides),
+    { disableLogger: true },
+  );
+
+  handlers.push(handler);
+
+  return handler;
+};
+
+/** The real OAuth store with some of its operations replaced. */
+const storeWith = (overrides: Partial<StoreOperations>) =>
+  Layer.effect(
+    OAuthStore,
+    OAuthStore.make.pipe(
+      Effect.map((real) => OAuthStore.of({ ...real, ...overrides })),
+    ),
+  );
+
+const onStore = async <A, E>(
+  run: (store: StoreOperations) => Effect.Effect<A, E>,
+) =>
+  Effect.runPromise(
+    OAuthStore.pipe(Effect.flatMap(run), Effect.provide(OAuthStore.layer)),
+  );
+
+/** Analytics that records `identify` calls instead of sending them. */
+const recordingAnalytics = () => {
+  const identified: Identified[] = [];
+
+  const layer = Layer.succeed(
+    Analytics,
+    Analytics.of({
+      track: () => Effect.void,
+      identify: (input) =>
+        Effect.sync(() => {
+          identified.push(input);
+        }),
+    }),
+  );
+
+  return { identified, layer };
+};
+
+const tokenRequest = (fields: Record<string, string>) =>
+  new Request('http://localhost/api/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(fields).toString(),
+  });
+
+const publicClient = () => ({
+  id: `token-route-${crypto.randomUUID()}`,
+  secret: '',
+  tokenEndpointAuthMethod: 'none',
+  redirect_uris: [REDIRECT_URI],
+  grants: ['authorization_code', 'refresh_token'],
+  client_name: 'Token Route Test Client',
+});
+
+const authorizationCode = (input: {
+  readonly client: StoredCode['client'];
+  readonly redirectUri: string;
+  readonly scope: string;
+  readonly grant: unknown;
+}) => {
+  const upstreamAccessToken = `upstream-access-${crypto.randomUUID()}`;
+  const upstreamRefreshToken = `upstream-refresh-${crypto.randomUUID()}`;
+
+  return {
+    upstreamAccessToken,
+    upstreamRefreshToken,
+    code: {
+      authorizationCode: `code-${crypto.randomUUID()}`,
+      client: input.client,
+      redirectUri: input.redirectUri,
+      user: { id: 'user-1', name: 'User', email: 'user@example.com' },
+      expiresAt: new Date(Date.now() + 60_000),
+      token: {
+        access_token: upstreamAccessToken,
+        refresh_token: upstreamRefreshToken,
+        access_token_expires_at: Date.now() + 3_600_000,
+      },
+      scope: input.scope,
+      grant: input.grant,
+    },
+  };
+};
+
+/**
+ * Store lookups that record each call and find nothing, so a code or refresh
+ * token the test names is unknown to the store.
+ */
+const countedLookups = () => {
+  const authorizationCodes: string[] = [];
+  const calls = { authorizationCodes, refreshTokens: 0 };
+
+  const overrides: Partial<StoreOperations> = {
+    findAuthorizationCode: ({ code }) =>
+      Effect.sync(() => {
+        calls.authorizationCodes.push(code);
+      }).pipe(Effect.andThen(Effect.succeedNone)),
+    findRefreshToken: () =>
+      Effect.sync(() => {
+        calls.refreshTokens += 1;
+      }).pipe(Effect.andThen(Effect.succeedNone)),
+  };
+
+  return { calls, overrides };
+};
+
+const savedAccessToken = async (accessToken: string) =>
+  onStore((store) => store.findAccessToken({ accessToken }));
 
 describe('/api/token route integration', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  afterAll(async () => {
+    await Promise.all(handlers.map(async (handler) => handler.dispose()));
   });
 
   it('persists authorization-code grant context onto saved access token', async () => {
-    const client = {
-      id: 'client-123',
-      secret: '',
-      tokenEndpointAuthMethod: 'none',
-      redirect_uris: ['http://127.0.0.1:55667/callback'],
-      grants: ['authorization_code', 'refresh_token'],
-      client_name: 'Token Route Test Client',
-    };
+    const client = publicClient();
+
     const grant = {
       projectId: 'proj_123',
       scopes: ['querying', 'schema'],
       roleName: 'mcp_pinned_reader',
     };
 
-    vi.mocked(model.getClient).mockResolvedValue(client as never);
-    vi.mocked(model.getAuthorizationCode).mockResolvedValue({
-      authorizationCode: 'code-123',
+    const { code, upstreamAccessToken } = authorizationCode({
       client,
-      user: { id: 'user-1', name: 'User', email: 'user@example.com' },
-      expiresAt: new Date(Date.now() + 60_000),
-      token: {
-        access_token: 'upstream-access',
-        refresh_token: 'upstream-refresh',
-        access_token_expires_at: Date.now() + 3600_000,
-      },
+      redirectUri: REDIRECT_URI,
       scope: 'read write',
       grant,
-    } as never);
-
-    vi.mocked(model.saveToken).mockResolvedValue({
-      accessToken: 'saved-access',
-      refreshToken: 'saved-refresh',
-      expires_at: Date.now() + 3600_000,
-      scope: 'read write',
-      client,
-      user: { id: 'user-1' },
-      grant,
-    } as never);
-
-    const body = new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: client.id,
-      code: 'code-123',
-      redirect_uri: client.redirect_uris[0],
-    });
-    const request = new NextRequest('http://localhost/api/token', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
     });
 
-    const response = await POST(request);
-    expect(response.status).toBe(200);
+    await onStore((store) =>
+      store
+        .saveClient({ client, registerHeaders: {} })
+        .pipe(Effect.andThen(store.saveAuthorizationCode({ code }))),
+    );
 
-    expect(model.saveToken).toHaveBeenCalledWith(
-      expect.objectContaining({
-        grant,
+    const analytics = recordingAnalytics();
+
+    const response = await appWith(analytics.layer).handler(
+      tokenRequest({
+        grant_type: 'authorization_code',
+        client_id: client.id,
+        code: code.authorizationCode,
+        redirect_uri: REDIRECT_URI,
       }),
     );
-    expect(identify).toHaveBeenCalledExactlyOnceWith(
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      access_token: upstreamAccessToken,
+    });
+    await expect(savedAccessToken(upstreamAccessToken)).resolves.toMatchObject(
+      Option.some({ grant }),
+    );
+    expect(analytics.identified).toStrictEqual([
       {
-        id: 'user-1',
-        name: 'User',
-        email: 'user@example.com',
-        isOrg: false,
-      },
-      {
-        context: {
-          authMethod: 'oauth',
-          client: { id: 'client-123', name: 'Token Route Test Client' },
+        account: {
+          id: 'user-1',
+          name: 'User',
+          email: 'user@example.com',
+          isOrg: false,
+        },
+        params: {
+          context: {
+            authMethod: 'oauth',
+            client: { id: client.id, name: 'Token Route Test Client' },
+          },
         },
       },
-    );
+    ]);
   });
 
   it('returns the authorization code scope including * on the token', async () => {
-    const client = {
-      id: 'client-123',
-      secret: '',
-      tokenEndpointAuthMethod: 'none',
-      redirect_uris: ['http://127.0.0.1:55667/callback'],
-      grants: ['authorization_code', 'refresh_token'],
-      client_name: 'Token Route Test Client',
-    };
+    const client = publicClient();
 
-    vi.mocked(model.getClient).mockResolvedValue(client as never);
-    vi.mocked(model.getAuthorizationCode).mockResolvedValue({
-      authorizationCode: 'code-123',
-      client,
-      user: { id: 'user-1', name: 'User', email: 'user@example.com' },
-      expiresAt: new Date(Date.now() + 60_000),
-      token: {
-        access_token: 'upstream-access',
-        refresh_token: 'upstream-refresh',
-        access_token_expires_at: Date.now() + 3600_000,
-      },
-      scope: 'read write *',
-      grant: { projectId: null, scopes: null },
-    } as never);
-
-    vi.mocked(model.saveToken).mockResolvedValue({
-      accessToken: 'saved-access',
-      refreshToken: 'saved-refresh',
-      expires_at: Date.now() + 3600_000,
-      scope: 'read write *',
-      client,
-      user: { id: 'user-1' },
-    } as never);
-
-    const body = new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: client.id,
-      code: 'code-123',
-      redirect_uri: client.redirect_uris[0],
-    });
-    const request = new NextRequest('http://localhost/api/token', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    });
-
-    const response = await POST(request);
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual(
-      expect.objectContaining({
-        access_token: 'saved-access',
-        token_type: 'bearer',
-        refresh_token: 'saved-refresh',
+    const { code, upstreamAccessToken, upstreamRefreshToken } =
+      authorizationCode({
+        client,
+        redirectUri: REDIRECT_URI,
         scope: 'read write *',
+        grant: { projectId: null, scopes: null },
+      });
+
+    await onStore((store) =>
+      store
+        .saveClient({ client, registerHeaders: {} })
+        .pipe(Effect.andThen(store.saveAuthorizationCode({ code }))),
+    );
+
+    const response = await appWith(recordingAnalytics().layer).handler(
+      tokenRequest({
+        grant_type: 'authorization_code',
+        client_id: client.id,
+        code: code.authorizationCode,
+        redirect_uri: REDIRECT_URI,
       }),
     );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      access_token: upstreamAccessToken,
+      token_type: 'bearer',
+      refresh_token: upstreamRefreshToken,
+      scope: 'read write *',
+    });
   });
 
   describe('redirect_uri on authorization_code exchange', () => {
@@ -178,64 +251,61 @@ describe('/api/token route integration', () => {
       client_name: 'Claude Code',
     };
 
-    const exchange = (redirectUri: string) => {
-      vi.mocked(model.getClient).mockResolvedValue(portlessClient as never);
-      vi.mocked(model.getAuthorizationCode).mockResolvedValue({
-        authorizationCode: 'code-123',
+    const exchange = async (redirectUri: string) => {
+      const { code, upstreamAccessToken } = authorizationCode({
         client: portlessClient,
         redirectUri: 'http://localhost:54321/callback',
-        user: { id: 'user-1', name: 'User', email: 'user@example.com' },
-        expiresAt: new Date(Date.now() + 60_000),
-        token: {
-          access_token: 'upstream-access',
-          refresh_token: 'upstream-refresh',
-          access_token_expires_at: Date.now() + 3600_000,
-        },
         scope: 'read',
         grant: { projectId: null, scopes: null },
-      } as never);
-      vi.mocked(model.saveToken).mockResolvedValue({
-        accessToken: 'saved-access',
-        refreshToken: 'saved-refresh',
-        expires_at: Date.now() + 3600_000,
-        scope: 'read',
-        client: portlessClient,
-        user: { id: 'user-1' },
-      } as never);
+      });
 
-      return POST(
-        new NextRequest('http://localhost/api/token', {
-          method: 'POST',
-          headers: { 'content-type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            grant_type: 'authorization_code',
-            client_id: portlessClient.id,
-            code: 'code-123',
-            redirect_uri: redirectUri,
-          }).toString(),
+      await onStore((store) => store.saveAuthorizationCode({ code }));
+
+      const response = await appWith(
+        Layer.mergeAll(
+          storeWith({
+            findClient: () => Effect.succeedSome(portlessClient),
+          }),
+          recordingAnalytics().layer,
+        ),
+      ).handler(
+        tokenRequest({
+          grant_type: 'authorization_code',
+          client_id: portlessClient.id,
+          code: code.authorizationCode,
+          redirect_uri: redirectUri,
         }),
       );
+
+      return { response, upstreamAccessToken };
     };
 
     it('accepts the loopback redirect the code was issued for', async () => {
-      const response = await exchange('http://localhost:54321/callback');
+      const { response } = await exchange('http://localhost:54321/callback');
+
       expect(response.status).toBe(200);
     });
 
     it('rejects a redirect that is neither bound to the code nor registered', async () => {
-      const response = await exchange('http://localhost:60000/callback');
+      const { response, upstreamAccessToken } = await exchange(
+        'http://localhost:60000/callback',
+      );
+
       expect(response.status).toBe(400);
-      await expect(response.json()).resolves.toEqual({
+      await expect(response.json()).resolves.toStrictEqual({
         error: 'invalid_request',
         error_description: 'Invalid redirect URI',
       });
-      expect(model.saveToken).not.toHaveBeenCalled();
+      await expect(
+        savedAccessToken(upstreamAccessToken),
+      ).resolves.toStrictEqual(Option.none());
     });
   });
 
   describe('a metadata-document client that declared private_key_jwt', async () => {
     const { privateKey, publicKey } = await generateKeyPair('RS256');
     const jwk = { ...(await exportJWK(publicKey)), kid: 'k1' };
+
     const client = {
       id: 'https://chatgpt.example/oauth/client.json',
       tokenEndpointAuthMethod: 'private_key_jwt',
@@ -245,31 +315,30 @@ describe('/api/token route integration', () => {
       client_name: 'ChatGPT',
     };
 
-    const refresh = (extra: Record<string, string>) => {
-      vi.mocked(model.getClient).mockResolvedValue(client as never);
-      vi.mocked(model.getRefreshFailure).mockResolvedValue(undefined as never);
-      vi.mocked(model.getRefreshToken).mockResolvedValue(undefined as never);
-      return POST(
-        new NextRequest('http://localhost/api/token', {
-          method: 'POST',
-          headers: { 'content-type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            grant_type: 'refresh_token',
-            client_id: client.id,
-            refresh_token: 'refresh-123',
-            ...extra,
-          }).toString(),
+    const appCounting = (lookups: ReturnType<typeof countedLookups>) =>
+      appWith(
+        storeWith({
+          findClient: () => Effect.succeedSome(client),
+          ...lookups.overrides,
         }),
       );
-    };
 
     it('is refused without an assertion before its refresh token is read', async () => {
-      const response = await refresh({});
+      const lookups = countedLookups();
+
+      const response = await appCounting(lookups).handler(
+        tokenRequest({
+          grant_type: 'refresh_token',
+          client_id: client.id,
+          refresh_token: 'refresh-123',
+        }),
+      );
+
       expect(response.status).toBe(400);
       await expect(response.json()).resolves.toMatchObject({
         error: 'invalid_client',
       });
-      expect(model.getRefreshToken).not.toHaveBeenCalled();
+      expect(lookups.calls.refreshTokens).toBe(0);
     });
 
     it('authenticates with a signed assertion', async () => {
@@ -280,30 +349,24 @@ describe('/api/token route integration', () => {
         .setAudience(`${SERVER_HOST}/api/token`)
         .setExpirationTime('1m')
         .sign(privateKey);
-      vi.mocked(model.getClient).mockResolvedValue(client as never);
-      vi.mocked(model.getAuthorizationCode).mockResolvedValue(
-        undefined as never,
-      );
 
-      const response = await POST(
-        new NextRequest('http://localhost/api/token', {
-          method: 'POST',
-          headers: { 'content-type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            grant_type: 'authorization_code',
-            client_id: client.id,
-            code: 'code-123',
-            client_assertion_type: CLIENT_ASSERTION_TYPE,
-            client_assertion: assertion,
-          }).toString(),
+      const lookups = countedLookups();
+
+      const response = await appCounting(lookups).handler(
+        tokenRequest({
+          grant_type: 'authorization_code',
+          client_id: client.id,
+          code: 'code-123',
+          client_assertion_type: CLIENT_ASSERTION_TYPE,
+          client_assertion: assertion,
         }),
       );
 
       // Authenticated, so the request reaches the code lookup; the code is
       // unknown to this test's store.
-      expect(model.getAuthorizationCode).toHaveBeenCalledWith('code-123');
+      expect(lookups.calls.authorizationCodes).toStrictEqual(['code-123']);
       expect(response.status).toBe(400);
-      await expect(response.json()).resolves.toEqual({
+      await expect(response.json()).resolves.toStrictEqual({
         error: 'invalid_grant',
         error_description: 'Invalid authorization code',
       });
@@ -311,19 +374,23 @@ describe('/api/token route integration', () => {
   });
 
   it('answers 503 and consumes nothing when the client metadata document is unreadable', async () => {
-    vi.mocked(model.getClient).mockRejectedValue(
-      new ClientMetadataUnavailableError('answered 502'),
-    );
+    const lookups = countedLookups();
 
-    const response = await POST(
-      new NextRequest('http://localhost/api/token', {
-        method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          client_id: 'https://client.example.com/oauth/metadata.json',
-          refresh_token: 'refresh-123',
-        }).toString(),
+    const response = await appWith(
+      storeWith({
+        findClient: () =>
+          Effect.fail(
+            ClientMetadataUnavailable.make({
+              cause: new Error('answered 502'),
+            }),
+          ),
+        ...lookups.overrides,
+      }),
+    ).handler(
+      tokenRequest({
+        grant_type: 'refresh_token',
+        client_id: 'https://client.example.com/oauth/metadata.json',
+        refresh_token: 'refresh-123',
       }),
     );
 
@@ -331,7 +398,7 @@ describe('/api/token route integration', () => {
     await expect(response.json()).resolves.toMatchObject({
       error: 'temporarily_unavailable',
     });
-    expect(model.getRefreshToken).not.toHaveBeenCalled();
-    expect(model.getAuthorizationCode).not.toHaveBeenCalled();
+    expect(lookups.calls.refreshTokens).toBe(0);
+    expect(lookups.calls.authorizationCodes).toStrictEqual([]);
   });
 });
