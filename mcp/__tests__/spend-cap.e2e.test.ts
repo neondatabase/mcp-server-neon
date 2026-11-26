@@ -34,6 +34,7 @@ type RequestLog = {
 type BillingFixture = {
   response: object;
   code: string;
+  status?: number;
   requests: RequestLog[];
 };
 
@@ -55,7 +56,7 @@ const answerApi = async (req: IncomingMessage, res: ServerResponse) => {
     auth: req.headers.authorization,
     agent: req.headers['user-agent'],
   });
-  res.writeHead(fixture.code ? 403 : 200, {
+  res.writeHead(fixture.status ?? (fixture.code ? 403 : 200), {
     'content-type': 'application/json',
   });
   res.end(
@@ -132,6 +133,7 @@ describe('organization spend-cap MCP protocol', () => {
   beforeEach(() => {
     fixture.response = observed;
     fixture.code = '';
+    fixture.status = undefined;
     fixture.requests.length = 0;
   });
 
@@ -242,7 +244,7 @@ describe('organization spend-cap MCP protocol', () => {
     },
   );
 
-  it('disable preserves notification amount with GET followed by PUT', async () => {
+  it('disable atomically preserves the current notification amount with a bodyless POST', async () => {
     fixture.response = {
       spending_limit_cents: 32_125,
       spend_cap_enabled: false,
@@ -255,19 +257,73 @@ describe('organization spend-cap MCP protocol', () => {
       });
 
       expect(result.isError).not.toBe(true);
-      expect(fixture.requests.map((r) => r.method)).toStrictEqual([
-        'GET',
-        'PUT',
-      ]);
-      expect(JSON.parse(fixture.requests[1].body)).toStrictEqual({
-        spending_limit_cents: 32_125,
-        spend_cap_enabled: false,
+      expect(fixture.requests).toHaveLength(1);
+      expect(fixture.requests[0]).toMatchObject({
+        method: 'POST',
+        path: '/api/v2/organizations/org-1/billing/spending_limit/disable',
+        body: '',
+        auth: 'Bearer test-key',
       });
+      expect(fixture.requests[0].agent).toMatch(/^mcp-server-neon\//u);
       expect(result.structuredContent).toMatchObject({
         data: { spending_limit_cents: 32_125, enforcement_status: 'pending' },
       });
     });
   });
+
+  it('disable retains an unset notification amount', async () => {
+    fixture.response = {
+      spending_limit_cents: null,
+      spend_cap_enabled: false,
+      enforcement_status: 'pending',
+    };
+    await withClient(async (client) => {
+      const result = await client.callTool({
+        name: names[2],
+        arguments: { org_id: 'org-1' },
+      });
+
+      expect(result.isError).not.toBe(true);
+      expect(fixture.requests).toHaveLength(1);
+      expect(fixture.requests[0]).toMatchObject({
+        method: 'POST',
+        path: '/api/v2/organizations/org-1/billing/spending_limit/disable',
+        body: '',
+      });
+      expect(result.structuredContent).toMatchObject({
+        data: {
+          spending_limit_cents: null,
+          spend_cap_enabled: false,
+          enforcement_status: 'pending',
+        },
+      });
+      expect(JSON.stringify(result.content)).toContain('not configured');
+    });
+  });
+
+  it.each([404, 405, 429, 503])(
+    'surfaces an atomic disable error (%s) without retry or fallback',
+    async (status) => {
+      fixture.status = status;
+      fixture.code = 'DISABLE_FAILED';
+      await withClient(async (client) => {
+        const result = await client.callTool({
+          name: names[2],
+          arguments: { org_id: 'org-1' },
+        });
+
+        expect(result.isError).toBe(true);
+        expect(JSON.stringify(result.content)).toContain(String(status));
+        expect(JSON.stringify(result.content)).toContain('Denied by policy');
+        expect(fixture.requests).toHaveLength(1);
+        expect(fixture.requests[0]).toMatchObject({
+          method: 'POST',
+          path: '/api/v2/organizations/org-1/billing/spending_limit/disable',
+          body: '',
+        });
+      });
+    },
+  );
 
   it('formats maximum safe cents without floating-point rounding', async () => {
     fixture.response = {
