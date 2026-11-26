@@ -8,12 +8,15 @@ import {
   customFetch,
   type Configuration,
 } from 'openid-client';
-import {
-  CLIENT_ID,
-  CLIENT_SECRET,
-  SERVER_HOST,
-  UPSTREAM_OAUTH_HOST,
-} from '../config';
+import { Redacted } from 'effect';
+
+/** The `ServerConfig` values the upstream client is built from. */
+export type UpstreamClientConfig = {
+  readonly serverHost: string;
+  readonly upstreamOAuthHost: string;
+  readonly clientId: string;
+  readonly clientSecret: Redacted.Redacted;
+};
 
 // Carries a per-call AbortSignal into the upstream fetch so callers can
 // cancel an in-flight `refreshTokenGrant` (Promise.race alone only unblocks
@@ -111,8 +114,6 @@ function combineSignals(
   return any ? any([fromContext, fromInit]) : fromContext;
 }
 
-const REDIRECT_URI = `${SERVER_HOST}/callback`;
-
 const NEON_MCP_SCOPES = [
   'openid',
   'offline',
@@ -134,7 +135,9 @@ let cachedConfig: Configuration | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-const getUpstreamConfig = async (): Promise<Configuration> => {
+const getUpstreamConfig = async (
+  client: UpstreamClientConfig,
+): Promise<Configuration> => {
   const now = Date.now();
 
   // Return cached config if still valid
@@ -142,14 +145,15 @@ const getUpstreamConfig = async (): Promise<Configuration> => {
     return cachedConfig;
   }
 
-  const url = new URL(UPSTREAM_OAUTH_HOST);
+  const url = new URL(client.upstreamOAuthHost);
+  const clientSecret = Redacted.value(client.clientSecret);
   cachedConfig = await discovery(
     url,
-    CLIENT_ID,
+    client.clientId,
     {
-      client_secret: CLIENT_SECRET,
+      client_secret: clientSecret,
     },
-    ClientSecretPost(CLIENT_SECRET),
+    ClientSecretPost(clientSecret),
     {},
   );
   // Inject a per-call AbortSignal through openid-client's customFetch hook.
@@ -200,10 +204,13 @@ const getUpstreamConfig = async (): Promise<Configuration> => {
   return cachedConfig;
 };
 
-export const upstreamAuth = async (state: string) => {
-  const config = await getUpstreamConfig();
+export const upstreamAuth = async (
+  client: UpstreamClientConfig,
+  state: string,
+) => {
+  const config = await getUpstreamConfig(client);
   return buildAuthorizationUrl(config, {
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: `${client.serverHost}/callback`,
     token_endpoint_auth_method: 'client_secret_post',
     scope: NEON_MCP_SCOPES.join(' '),
     response_type: 'code',
@@ -211,8 +218,12 @@ export const upstreamAuth = async (state: string) => {
   });
 };
 
-export const exchangeCode = async (currentUrl: URL, state: string) => {
-  const config = await getUpstreamConfig();
+export const exchangeCode = async (
+  client: UpstreamClientConfig,
+  currentUrl: URL,
+  state: string,
+) => {
+  const config = await getUpstreamConfig(client);
   return await authorizationCodeGrant(config, currentUrl, {
     expectedState: state,
     idTokenExpected: true,
@@ -220,11 +231,17 @@ export const exchangeCode = async (currentUrl: URL, state: string) => {
 };
 
 export const exchangeRefreshToken = async (
+  client: UpstreamClientConfig,
   token: string,
-  signal?: AbortSignal,
-  onRequest?: (summary: UpstreamRequestSummary) => void,
+  {
+    signal,
+    onRequest,
+  }: {
+    readonly signal?: AbortSignal;
+    readonly onRequest?: (summary: UpstreamRequestSummary) => void;
+  } = {},
 ) => {
-  const config = await getUpstreamConfig();
+  const config = await getUpstreamConfig(client);
   const runRefresh = () => refreshTokenGrant(config, token);
   const withInspection = () =>
     onRequest

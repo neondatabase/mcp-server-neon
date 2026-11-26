@@ -3,7 +3,7 @@
  * This is the single source of truth for all configuration values.
  */
 
-import { Config, Context, Effect, Layer, Option } from 'effect';
+import { Config, Context, Effect, Layer, Option, Redacted } from 'effect';
 
 // An empty SERVER_HOST or VERCEL_URL counts as unset.
 const resolveServerHost = (env: {
@@ -23,7 +23,8 @@ const resolveServerHost = (env: {
     ),
   );
 
-// Server host detection
+// The landing page (lib/landing) renders its content once at module load, so
+// it reads the host here rather than through ServerConfig.
 export const SERVER_HOST = resolveServerHost({
   serverHost: Option.fromNullishOr(process.env.SERVER_HOST),
   vercelUrl: Option.fromNullishOr(process.env.VERCEL_URL),
@@ -32,26 +33,42 @@ export const SERVER_HOST = resolveServerHost({
 /** Configuration read through Effect `Config`, for code that runs on Effect. */
 export class ServerConfig extends Context.Service<
   ServerConfig,
-  { readonly serverHost: string }
+  {
+    readonly serverHost: string;
+    /** The upstream authorization server (Hydra). */
+    readonly upstreamOAuthHost: string;
+    /** This server's client at the upstream authorization server. */
+    readonly clientId: string;
+    readonly clientSecret: Redacted.Redacted;
+  }
 >()('@neondatabase/mcp-server-neon/lib/config/ServerConfig', {
   make: Effect.gen(function* () {
+    // Local development and the web e2e suite run without upstream OAuth
+    // credentials, and every route builds this layer, so they default to empty.
     const env = yield* Config.all({
       serverHost: Config.option(Config.String('SERVER_HOST')),
       vercelUrl: Config.option(Config.String('VERCEL_URL')),
+      upstreamOAuthHost: Config.String('UPSTREAM_OAUTH_HOST').pipe(
+        Config.withDefault('https://oauth2.neon.tech'),
+      ),
+      clientId: Config.String('CLIENT_ID').pipe(Config.withDefault('')),
+      clientSecret: Config.Redacted('CLIENT_SECRET').pipe(
+        Config.withDefault(Redacted.make('')),
+      ),
     });
 
-    return { serverHost: resolveServerHost(env) };
+    return {
+      serverHost: resolveServerHost(env),
+      upstreamOAuthHost: env.upstreamOAuthHost,
+      clientId: env.clientId,
+      clientSecret: env.clientSecret,
+    };
   }),
 }) {
   static readonly layer = Layer.effect(this, this.make);
 }
 
-// OAuth configuration
-export const UPSTREAM_OAUTH_HOST =
-  process.env.UPSTREAM_OAUTH_HOST ?? 'https://oauth2.neon.tech';
-
-export const CLIENT_ID = process.env.CLIENT_ID ?? '';
-export const CLIENT_SECRET = process.env.CLIENT_SECRET ?? '';
+// The values below are read at module load, before any Effect runs.
 
 // Neon API configuration
 export const NEON_API_HOST =

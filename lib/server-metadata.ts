@@ -5,7 +5,6 @@ import { HttpServerResponse } from 'effect/http';
 import pkg from '../package.json';
 import registryEntry from '../server.json';
 import { assert } from './assert';
-import { SERVER_HOST } from './config';
 
 export const SERVER_CARD_MEDIA_TYPE = 'application/mcp-server-card+json';
 export const AI_CATALOG_MEDIA_TYPE = 'application/ai-catalog+json';
@@ -31,7 +30,7 @@ assert(
 
 export const SERVER_INFO: Implementation = serverInfo;
 
-export function buildServerCard() {
+export function buildServerCard(serverHost: string) {
   const [remote] = registryEntry.remotes;
 
   return {
@@ -46,21 +45,21 @@ export function buildServerCard() {
     remotes: [
       {
         type: remote.type,
-        url: `${SERVER_HOST}/mcp`,
+        url: `${serverHost}/mcp`,
         headers: remote.headers,
       },
     ],
   };
 }
 
-export function buildAiCatalog() {
+export function buildAiCatalog(serverHost: string) {
   return {
     specVersion: '1.0',
     entries: [
       {
         identifier: 'urn:air:neon.com:mcp:mcp',
         type: SERVER_CARD_MEDIA_TYPE,
-        url: `${SERVER_HOST}${SERVER_CARD_PATH}`,
+        url: `${serverHost}${SERVER_CARD_PATH}`,
       },
     ],
   };

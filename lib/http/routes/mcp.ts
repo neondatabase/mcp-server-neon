@@ -8,7 +8,7 @@ import {
   tokenStoreUnavailableResponse,
 } from '../../../mcp/transport/auth';
 import { isDocsOnlyRequest } from '../../../mcp/utils/grant-context';
-import { SERVER_HOST } from '../../config';
+import { ServerConfig } from '../../config';
 import { isLandingPageRequest, landingPageResponse } from '../../landing';
 import { buildResourceMetadataUrlForResourceRequest } from '../../oauth/protected-resource-metadata';
 import { invalidGrantParamResponse, originRejection } from './mcp-rejections';
@@ -58,8 +58,11 @@ const stripBody = (response: Response): Response =>
     headers: response.headers,
   });
 
-const retiredTransportResponse = (method: string): Response => {
-  const mcpUrl = new URL('/mcp', SERVER_HOST).href;
+const retiredTransportResponse = (
+  method: string,
+  serverHost: string,
+): Response => {
+  const mcpUrl = new URL('/mcp', serverHost).href;
 
   const body =
     method === 'HEAD'
@@ -94,12 +97,17 @@ const authenticated = (
     Effect.flatMap(serve),
     Effect.catchTags({
       McpAuthRejected: (rejection) =>
-        Effect.succeed(
-          authChallengeResponse(
+        Effect.gen(function* () {
+          const { serverHost } = yield* ServerConfig;
+
+          return authChallengeResponse(
             rejection,
-            buildResourceMetadataUrlForResourceRequest(resourceRequest),
-          ),
-        ),
+            buildResourceMetadataUrlForResourceRequest(
+              resourceRequest,
+              serverHost,
+            ),
+          );
+        }),
       TokenStoreUnavailable: () =>
         Effect.succeed(tokenStoreUnavailableResponse()),
     }),
@@ -118,8 +126,11 @@ const head = (normalizedReq: Request, req: Request, docsOnly: boolean) =>
 
 const transport = Effect.gen(function* () {
   const req = yield* webRequest;
+  const { serverHost } = yield* ServerConfig;
   const url = new URL(req.url);
-  const rejection = originRejection(req) ?? invalidGrantParamResponse(url, req);
+
+  const rejection =
+    originRejection(req, serverHost) ?? invalidGrantParamResponse(url, req);
 
   if (rejection !== undefined) {
     return rejection;
@@ -156,11 +167,14 @@ const transport = Effect.gen(function* () {
   return yield* flushAfterResponse(response);
 });
 
-const retired = HttpServerRequest.HttpServerRequest.pipe(
-  Effect.map((request) =>
-    HttpServerResponse.fromWeb(retiredTransportResponse(request.method)),
-  ),
-);
+const retired = Effect.gen(function* () {
+  const request = yield* HttpServerRequest.HttpServerRequest;
+  const { serverHost } = yield* ServerConfig;
+
+  return HttpServerResponse.fromWeb(
+    retiredTransportResponse(request.method, serverHost),
+  );
+});
 
 // The router matches paths case-insensitively and collapses slashes; the
 // transport answers only its exact paths, as the App Router route always did.
@@ -168,13 +182,14 @@ const exactly = <E, R>(
   path: string,
   handler: Effect.Effect<HttpServerResponse.HttpServerResponse, E, R>,
 ) =>
-  HttpServerRequest.HttpServerRequest.pipe(
-    Effect.flatMap((request) =>
-      new URL(request.originalUrl, SERVER_HOST).pathname === path
-        ? handler
-        : Effect.succeed(HttpServerResponse.empty({ status: 404 })),
-    ),
-  );
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const { serverHost } = yield* ServerConfig;
+
+    return new URL(request.originalUrl, serverHost).pathname === path
+      ? yield* handler
+      : HttpServerResponse.empty({ status: 404 });
+  });
 
 const transportResponse = transport.pipe(
   Effect.map(HttpServerResponse.fromWeb),

@@ -1,4 +1,5 @@
 import { Context, Effect, Layer, Result } from 'effect';
+import { ServerConfig } from '../config';
 import { exchangeCode, exchangeRefreshToken, upstreamAuth } from './client';
 import type { UpstreamRequestSummary } from './client';
 import { UpstreamOAuthFailed } from './upstream-oauth-failed';
@@ -47,26 +48,33 @@ export class UpstreamOAuth extends Context.Service<
     }) => Effect.Effect<UpstreamTokens, UpstreamOAuthFailed>;
   }
 >()('@neondatabase/mcp-server-neon/lib/oauth/upstream-oauth/UpstreamOAuth', {
-  make: Effect.succeed({
-    authorizationUrl: ({ state }: { readonly state: string }) =>
-      upstream('authorizationUrl', async () => upstreamAuth(state)),
-    exchangeCode: ({
-      currentUrl,
-      state,
-    }: {
-      readonly currentUrl: URL;
-      readonly state: string;
-    }) => upstream('exchangeCode', async () => exchangeCode(currentUrl, state)),
-    exchangeRefreshToken: ({
-      refreshToken,
-      onRequest,
-    }: {
-      readonly refreshToken: string;
-      readonly onRequest: (summary: UpstreamRequestSummary) => void;
-    }) =>
-      upstream('exchangeRefreshToken', async (signal) =>
-        exchangeRefreshToken(refreshToken, signal, onRequest),
-      ),
+  make: Effect.gen(function* () {
+    const config = yield* ServerConfig;
+
+    return {
+      authorizationUrl: ({ state }: { readonly state: string }) =>
+        upstream('authorizationUrl', async () => upstreamAuth(config, state)),
+      exchangeCode: ({
+        currentUrl,
+        state,
+      }: {
+        readonly currentUrl: URL;
+        readonly state: string;
+      }) =>
+        upstream('exchangeCode', async () =>
+          exchangeCode(config, currentUrl, state),
+        ),
+      exchangeRefreshToken: ({
+        refreshToken,
+        onRequest,
+      }: {
+        readonly refreshToken: string;
+        readonly onRequest: (summary: UpstreamRequestSummary) => void;
+      }) =>
+        upstream('exchangeRefreshToken', async (signal) =>
+          exchangeRefreshToken(config, refreshToken, { signal, onRequest }),
+        ),
+    };
   }),
 }) {
   static readonly layer = Layer.effect(this, this.make);

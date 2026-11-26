@@ -390,18 +390,20 @@ describe('Token refresh flow', () => {
 
       // Simulate openid-client invoking the inspector callback with a
       // realistic refresh-token request body summary before throwing.
-      mockExchange.mockImplementation(async (_token, _signal, onRequest) => {
-        if (onRequest) {
-          onRequest({
-            paramNames: ['client_id', 'grant_type', 'refresh_token'],
-            bodyByteLength: 192,
-            refreshTokenFingerprint: 'len=87,prefix=vrx1_C',
-            hasClientSecret: false,
-            hasDuplicateParams: false,
-          });
-        }
-        throw upstreamError;
-      });
+      mockExchange.mockImplementation(
+        async (_client, _token, { onRequest } = {}) => {
+          if (onRequest) {
+            onRequest({
+              paramNames: ['client_id', 'grant_type', 'refresh_token'],
+              bodyByteLength: 192,
+              refreshTokenFingerprint: 'len=87,prefix=vrx1_C',
+              hasClientSecret: false,
+              hasDuplicateParams: false,
+            });
+          }
+          throw upstreamError;
+        },
+      );
       loggerErrorSpy.mockClear();
 
       await POST(makeTokenRequest('old-refresh-token'));
@@ -577,8 +579,8 @@ describe('Token refresh flow', () => {
         vi.useFakeTimers();
         try {
           let capturedSignal: AbortSignal | undefined;
-          mockExchange.mockImplementation((_token, signal) => {
-            capturedSignal = signal;
+          mockExchange.mockImplementation((_client, _token, options) => {
+            capturedSignal = options?.signal;
             return new Promise(() => {
               /* never resolves */
             }) as never;

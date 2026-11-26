@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { GET, POST } from '../../app/api/authorize/route';
 import { model } from '../oauth/model';
 import { upstreamAuth } from '../../lib/oauth/client';
+import type { UpstreamClientConfig } from '../../lib/oauth/client';
 import { SERVER_HOST } from '../../lib/config';
 import { authTransactions } from '../oauth/auth-transaction-store';
 import { AUTH_RESTART_DESCRIPTION } from '../oauth/consent-html-headers';
@@ -32,7 +33,7 @@ vi.mock('@vercel/functions', () => ({
 
 vi.mock('../../lib/oauth/client', () => ({
   upstreamAuth: vi.fn(
-    async (state: string) =>
+    async (_client: UpstreamClientConfig, state: string) =>
       new URL(`https://oauth.example/authorize?state=${state}`),
   ),
 }));
@@ -382,7 +383,7 @@ describe('/api/authorize route integration', () => {
       scopes: ['querying'],
     });
     expect(stored.approvedScopes).toEqual(['read', 'write']);
-    expect(vi.mocked(upstreamAuth).mock.calls.at(-1)?.[0]).toBe(state);
+    expect(vi.mocked(upstreamAuth).mock.calls.at(-1)?.[1]).toBe(state);
   });
 
   it('shows a pinned roleName on confirmation and stores it on the approved grant', async () => {

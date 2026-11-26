@@ -12,7 +12,6 @@ import {
   type JSONWebKeySet,
 } from 'jose';
 import type { Client } from 'oauth2-server';
-import { SERVER_HOST } from '../config';
 import { logger } from '../../mcp/utils/logger';
 import {
   cacheTtlMs,
@@ -116,15 +115,15 @@ export function createClientAssertionVerifier(
   const verifyWith = async (
     jwks: JSONWebKeySet,
     assertion: string,
-    clientId: string,
+    expected: { readonly clientId: string; readonly serverHost: string },
   ): Promise<boolean> => {
     const { payload } = await jwtVerify(assertion, createLocalJWKSet(jwks), {
-      issuer: clientId,
-      subject: clientId,
+      issuer: expected.clientId,
+      subject: expected.clientId,
       audience: [
-        SERVER_HOST,
-        `${SERVER_HOST}/api/token`,
-        `${SERVER_HOST}/api/revoke`,
+        expected.serverHost,
+        `${expected.serverHost}/api/token`,
+        `${expected.serverHost}/api/revoke`,
       ],
       algorithms: CLIENT_ASSERTION_SIGNING_ALGORITHMS,
       requiredClaims: ['exp'],
@@ -135,11 +134,14 @@ export function createClientAssertionVerifier(
     return exp <= now() / 1000 + MAX_LIFETIME_S + CLOCK_TOLERANCE_S;
   };
 
-  return async (
-    client: Client,
-    assertion: string | undefined,
-    assertionType: string | undefined,
-  ): Promise<boolean> => {
+  return async (input: {
+    readonly client: Client;
+    readonly assertion: string | undefined;
+    readonly assertionType: string | undefined;
+    readonly serverHost: string;
+  }): Promise<boolean> => {
+    const { client, assertion, assertionType, serverHost } = input;
+
     if (!assertion || assertionType !== CLIENT_ASSERTION_TYPE) return false;
 
     const jwksUri =
@@ -148,15 +150,17 @@ export function createClientAssertionVerifier(
     const jwks = jwksUri ? await loadJwks(jwksUri, false) : inline;
     if (!jwks) return false;
 
+    const expected = { clientId: client.id, serverHost };
+
     try {
-      return await verifyWith(jwks, assertion, client.id);
+      return await verifyWith(jwks, assertion, expected);
     } catch (error) {
       // A rotated key is not in the cached set yet.
       if (jwksUri && error instanceof errors.JWKSNoMatchingKey) {
         const refreshed = await loadJwks(jwksUri, true);
         if (refreshed) {
           try {
-            return await verifyWith(refreshed, assertion, client.id);
+            return await verifyWith(refreshed, assertion, expected);
           } catch {
             return false;
           }

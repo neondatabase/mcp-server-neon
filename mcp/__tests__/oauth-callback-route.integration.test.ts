@@ -212,7 +212,11 @@ describe('/callback route integration', () => {
     expect(location.searchParams.get('code')).toBeTruthy();
     expect(location.searchParams.get('state')).toBe('client-state');
     expect(location.searchParams.get('iss')).toBe(SERVER_HOST);
-    expect(exchangeCode).toHaveBeenCalledWith(expect.any(URL), seeded.id);
+    expect(exchangeCode).toHaveBeenCalledWith(
+      expect.objectContaining({ serverHost: SERVER_HOST }),
+      expect.any(URL),
+      seeded.id,
+    );
     expect(model.saveAuthorizationCode).toHaveBeenCalledWith(
       expect.objectContaining({
         scope: 'read',

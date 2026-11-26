@@ -75,12 +75,13 @@ const PROTECTED_RESOURCE_METADATA_BASE =
 const protectedResourceMetadata = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
   const webRequest = yield* HttpServerRequest.toWeb(request);
+  const { serverHost } = yield* ServerConfig;
   const { pathname } = new URL(webRequest.url);
 
   const resource =
     pathname === PROTECTED_RESOURCE_METADATA_BASE
-      ? getHostLevelResourceIdentifierFromRequest(webRequest)
-      : deriveResourceIdentifierFromMetadataRequest(webRequest);
+      ? getHostLevelResourceIdentifierFromRequest(webRequest, serverHost)
+      : deriveResourceIdentifierFromMetadataRequest(webRequest, serverHost);
 
   return HttpServerResponse.jsonUnsafe({
     resource,
@@ -97,8 +98,15 @@ const landingMarkdown = Effect.gen(function* () {
   return HttpServerResponse.fromWeb(landingMarkdownResponse(webRequest));
 }).pipe(Effect.withSpan('Discovery.landingMarkdown'));
 
-const discoveryDocument = (build: () => object, contentType: string) =>
-  Effect.sync(() => discoveryResponse(build(), contentType));
+const discoveryDocument = (
+  build: (serverHost: string) => object,
+  contentType: string,
+) =>
+  Effect.gen(function* () {
+    const { serverHost } = yield* ServerConfig;
+
+    return discoveryResponse(build(serverHost), contentType);
+  });
 
 export const DiscoveryRoutes = Layer.mergeAll(
   HttpRouter.add(

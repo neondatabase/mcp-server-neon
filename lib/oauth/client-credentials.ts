@@ -1,5 +1,6 @@
 import { Effect, Schema } from 'effect';
 import type { Client } from 'oauth2-server';
+import { ServerConfig } from '../config';
 import {
   clientIdFromAssertion,
   verifyClientAssertion,
@@ -54,17 +55,19 @@ function extractClientCredentials(
 export async function authenticateClient(
   client: Client,
   credentials: ClientCredentials,
+  serverHost: string,
 ): Promise<boolean> {
   if (client.tokenEndpointAuthMethod === 'none') return true;
   if (
     client.tokenEndpointAuthMethod === 'private_key_jwt' &&
     (isClientIdMetadataUrl(client.id) || credentials.clientAssertion)
   ) {
-    return verifyClientAssertion(
+    return verifyClientAssertion({
       client,
-      credentials.clientAssertion,
-      credentials.clientAssertionType,
-    );
+      assertion: credentials.clientAssertion,
+      assertionType: credentials.clientAssertionType,
+      serverHost,
+    });
   }
   return credentials.clientSecret === client.secret;
 }
@@ -93,13 +96,17 @@ export const verifyClientCredentials = (
   client: Client,
   credentials: ClientCredentials,
 ) =>
-  Effect.tryPromise({
-    try: async () => authenticateClient(client, credentials),
-    catch: (error) =>
-      error instanceof ClientMetadataUnavailableError
-        ? ClientMetadataUnavailable.make({ cause: error })
-        : OAuthServerFault.make({
-            endpoint: 'client authentication',
-            cause: error,
-          }),
+  Effect.gen(function* () {
+    const { serverHost } = yield* ServerConfig;
+
+    return yield* Effect.tryPromise({
+      try: async () => authenticateClient(client, credentials, serverHost),
+      catch: (error) =>
+        error instanceof ClientMetadataUnavailableError
+          ? ClientMetadataUnavailable.make({ cause: error })
+          : OAuthServerFault.make({
+              endpoint: 'client authentication',
+              cause: error,
+            }),
+    });
   }).pipe(withSpanOkOnClientOutage('OAuthClient.authenticate'));

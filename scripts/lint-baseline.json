@@ -753,9 +753,9 @@
     "vitest(require-top-level-describe)": 2
   },
   "mcp/__tests__/oauth-client-resource.integration.test.ts": {
-    "anti-slop(no-module-mocking)": 2,
+    "anti-slop(no-module-mocking)": 1,
     "typescript(no-unsafe-assignment)": 1,
-    "vitest(prefer-import-in-mock)": 2,
+    "vitest(prefer-import-in-mock)": 1,
     "vitest(require-mock-type-parameters)": 5
   },
   "mcp/__tests__/oauth-model-client-id-metadata.test.ts": {

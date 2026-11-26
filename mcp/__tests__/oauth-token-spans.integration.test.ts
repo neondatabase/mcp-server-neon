@@ -23,9 +23,14 @@ process.env.E2E_SENTRY_PORT = '3117';
 // openid-client refuses a plain-HTTP issuer.
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-process.env.CLIENT_ID = 'token-spans-upstream-client';
+const UPSTREAM_CLIENT = {
+  id: 'token-spans-upstream-client',
+  secret: 'token-spans-upstream-secret',
+};
 
-process.env.CLIENT_SECRET = 'token-spans-upstream-secret';
+process.env.CLIENT_ID = UPSTREAM_CLIENT.id;
+
+process.env.CLIENT_SECRET = UPSTREAM_CLIENT.secret;
 
 delete process.env.KV_URL;
 
@@ -35,11 +40,13 @@ type UpstreamAnswer = { readonly status: number; readonly body: object };
 
 type Upstream = {
   readonly received: string[];
+  readonly clients: { id: string | null; secret: string | null }[];
   answer: () => Promise<UpstreamAnswer>;
 };
 
 const upstream: Upstream = {
   received: [],
+  clients: [],
   answer: async () => rotated(),
 };
 
@@ -87,8 +94,15 @@ const certificate = async () => {
   return pair;
 };
 
-const answerToken = async (refreshToken: string, response: ServerResponse) => {
-  upstream.received.push(refreshToken);
+const answerToken = async (
+  params: URLSearchParams,
+  response: ServerResponse,
+) => {
+  upstream.received.push(params.get('refresh_token') ?? '');
+  upstream.clients.push({
+    id: params.get('client_id'),
+    secret: params.get('client_secret'),
+  });
 
   const { status, body } = await upstream.answer();
 
@@ -119,12 +133,10 @@ const hydra = createServer(await certificate(), (request, response) => {
       return;
     }
 
-    const refreshToken =
-      new URLSearchParams(Buffer.concat(chunks).toString('utf8')).get(
-        'refresh_token',
-      ) ?? '';
-
-    void answerToken(refreshToken, response);
+    void answerToken(
+      new URLSearchParams(Buffer.concat(chunks).toString('utf8')),
+      response,
+    );
   });
 });
 
@@ -282,6 +294,7 @@ const refresh = async (refreshToken: string) => {
 describe('POST /api/token spans and Sentry events', () => {
   beforeEach(() => {
     upstream.received.length = 0;
+    upstream.clients.length = 0;
     upstream.answer = async () => rotated();
   });
 
@@ -302,6 +315,7 @@ describe('POST /api/token spans and Sentry events', () => {
     const pair = TokenPair.parse(await response.json());
 
     expect(upstream.received).toStrictEqual([refreshToken]);
+    expect(upstream.clients).toStrictEqual([UPSTREAM_CLIENT]);
     await expect(
       model.getRefreshToken(pair.refresh_token),
     ).resolves.toStrictEqual({
