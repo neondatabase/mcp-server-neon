@@ -115,11 +115,14 @@ const peekRacingRelease = (refreshToken: string, peer: string) => {
 
   const peek = Effect.promise(async () => {
     calls.count += 1;
-    const first = calls.count === 1;
 
-    await store.release(refreshToken, first ? peer : 'nobody');
+    if (calls.count > 1) {
+      return Option.some('cached-by-peer');
+    }
 
-    return Option.some('cached-by-peer').pipe(Option.filter(() => !first));
+    await store.release(refreshToken, peer);
+
+    return Option.none<string>();
   });
 
   return { calls, peek };
