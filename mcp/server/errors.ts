@@ -171,20 +171,14 @@ const apiClientErrorResponse = (error: NeonApiError) => {
     return response;
   }
 
+  // SDK 1.x validates present structured content against the success schema,
+  // even for errors. Keep denial details in text so those clients receive them.
   return {
     ...response,
     content: [
       ...response.content,
       { type: 'text' as const, text: `Code: ${error.code}\n${action}` },
     ],
-    structuredContent: {
-      error: {
-        message: error.message,
-        status: error.status,
-        code: error.code,
-        action,
-      },
-    },
   };
 };
 

@@ -4,6 +4,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { z } from 'zod';
 import type { GrantContext } from '../utils/grant-context';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
+import { Client as LegacyClient } from '@modelcontextprotocol/sdk/client';
+import { InMemoryTransport as LegacyInMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ServerContext } from '../types/context';
 
@@ -356,14 +358,11 @@ describe('organization spend-cap MCP protocol', () => {
         });
 
         expect(result.isError).toBe(true);
-        expect(result.structuredContent).toMatchObject({
-          error: {
-            code,
-            status: 403,
-            message: 'Denied by policy',
-            action,
-          },
-        });
+        expect(result.content).toStrictEqual([
+          { type: 'text', text: 'Denied by policy' },
+          { type: 'text', text: '[HTTP 403] Denied by policy' },
+          { type: 'text', text: `Code: ${code}\n${action}` },
+        ]);
         expect(JSON.stringify(result.content)).toContain('Organization Admin');
         expect(fixture.requests).toHaveLength(1);
         expect(
@@ -387,10 +386,41 @@ describe('organization spend-cap MCP protocol', () => {
         },
       });
 
-      expect(result.structuredContent).toMatchObject({
-        error: { code: fixture.code, status: 403 },
-      });
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result.content)).toContain(fixture.code);
+      expect(JSON.stringify(result.content)).toContain('HTTP 403');
       expect(fixture.requests.map((r) => r.method)).toStrictEqual(['PUT']);
     });
   });
+
+  it.each(['SPEND_CAP_EXCEEDED', 'INSUFFICIENT_ORG_PERMISSIONS'])(
+    'returns %s to a legacy client that validates advertised output schemas',
+    async (code) => {
+      fixture.code = code;
+      const server = await createMcpServer(context);
+      const client = new LegacyClient({ name: 'billing-test', version: '1' });
+
+      const [clientTransport, serverTransport] =
+        LegacyInMemoryTransport.createLinkedPair();
+
+      try {
+        await server.connect(serverTransport);
+        await client.connect(clientTransport);
+        await client.listTools();
+
+        const result = await client.callTool({
+          name: 'describe_project',
+          arguments: { project_id: 'p-1' },
+        });
+
+        expect(result.isError).toBe(true);
+        expect(JSON.stringify(result.content)).toContain(code);
+        expect(JSON.stringify(result.content)).toContain('Organization Admin');
+        expect(fixture.requests).toHaveLength(1);
+      } finally {
+        await client.close();
+        await server.close();
+      }
+    },
+  );
 });
