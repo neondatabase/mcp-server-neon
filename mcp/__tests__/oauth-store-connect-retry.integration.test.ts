@@ -1,6 +1,7 @@
 /**
  * The authorization-code write retries a dropped Postgres connection once,
- * through the store adapter that wraps Keyv's write failures.
+ * through the store adapter that wraps Keyv's write failures. A client lookup
+ * retries it once when the caller names the operation.
  */
 import { once } from 'node:events';
 import { createServer } from 'node:net';
@@ -55,5 +56,24 @@ describe('OAuthStore connect retry', () => {
 
     expect(Exit.isFailure(exit)).toBe(true);
     expect(connections.count).toBe(2);
+  }, 30_000);
+
+  it('retries findClient once when the caller names the operation', async () => {
+    const before = connections.count;
+
+    const exit = await Effect.runPromiseExit(
+      OAuthStore.pipe(
+        Effect.flatMap((store) =>
+          store.findClient({
+            clientId: 'connect-retry',
+            connectRetryOperation: 'test.getClient',
+          }),
+        ),
+        Effect.provide(OAuthStore.layer),
+      ),
+    );
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    expect(connections.count - before).toBe(2);
   }, 30_000);
 });

@@ -1,27 +1,49 @@
-import he from 'he';
+/**
+ * /callback on the real OAuth Postgres store and auth transactions, with a
+ * local Neon API answering the account lookup. Upstream Hydra and analytics
+ * are recording layers; a test that needs a store failure replaces one store
+ * operation with one that fails the way the store does.
+ */
+import { neon } from '@neondatabase/serverless';
 import { init } from '@sentry/node';
-import { Predicate } from 'effect';
+import { Effect, Layer, Option, Predicate } from 'effect';
+import { HttpRouter } from 'effect/http';
+import he from 'he';
+import type { AuthorizationCode } from 'oauth2-server';
 import type {
   TokenEndpointResponse,
   TokenEndpointResponseHelpers,
 } from 'openid-client';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
-import { GET } from '../../app/callback/route';
-import { model } from '../oauth/model';
-import { track } from '../analytics/analytics';
-import { exchangeCode } from '../../lib/oauth/client';
-import { logger } from '../utils/logger';
-import { seedApprovedTransaction } from './auth-transaction-fixtures';
-import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
-import { AUTH_RESTART_DESCRIPTION } from '../oauth/consent-html-headers';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+import { SERVER_HOST } from '../../lib/config';
+import { ClientMetadataUnavailableError } from '../../lib/oauth/client-id-metadata-document';
+import { ClientMetadataUnavailable } from '../../lib/oauth/client-metadata-unavailable';
+import { UpstreamOAuth } from '../../lib/oauth/upstream-oauth';
+import { UpstreamOAuthFailed } from '../../lib/oauth/upstream-oauth-failed';
+import { Analytics } from '../analytics/analytics-service';
 import {
   authTransactions,
   createAuthTransactionStore,
 } from '../oauth/auth-transaction-store';
 import { consentCookieName } from '../oauth/browser-binding';
-import { SERVER_HOST } from '../../lib/config';
-import { ClientMetadataUnavailableError } from '../../lib/oauth/client-id-metadata-document';
+import { AUTH_RESTART_DESCRIPTION } from '../oauth/consent-html-headers';
+import { OAuthStore } from '../oauth/oauth-store';
+import { OAuthStoreUnavailable } from '../oauth/oauth-store-unavailable';
+import { retryPgConnect } from '../oauth/pg-connect-retry';
+import { logger } from '../utils/logger';
+import {
+  seedApprovedTransaction,
+  seedPendingTransaction,
+} from './auth-transaction-fixtures';
+import { OAuthTestApp } from './helpers/oauth-app';
 
 // Server failures the route answers still reach Sentry; these record which.
 const reported: string[] = [];
@@ -34,21 +56,6 @@ init({
     return null;
   },
 });
-
-vi.mock('../oauth/model', () => ({
-  model: {
-    getClient: vi.fn(),
-    saveAuthorizationCode: vi.fn(),
-  },
-}));
-
-vi.mock('../../lib/oauth/client', () => ({
-  exchangeCode: vi.fn(),
-}));
-
-vi.mock('../oauth/utils', () => ({
-  generateRandomString: vi.fn(() => 'fixed-random'),
-}));
 
 // A local Neon API answers the account lookup for the upstream access token.
 await vi.hoisted(async () => {
@@ -84,14 +91,26 @@ await vi.hoisted(async () => {
   process.env.NEON_API_HOST = `http://127.0.0.1:${port}/api/v2`;
 });
 
-vi.mock('../analytics/analytics', () => ({
-  track: vi.fn(),
-  flushAnalytics: vi.fn().mockResolvedValue(undefined),
-}));
+const CLIENT_ID = `callback-route-${crypto.randomUUID()}`;
 
-vi.mock('@vercel/functions', () => ({
-  waitUntil: vi.fn(),
-}));
+const CLIENT = {
+  id: CLIENT_ID,
+  client_name: 'Callback Test Client',
+  redirect_uris: ['http://127.0.0.1:55667/callback'],
+  grants: ['authorization_code', 'refresh_token'],
+};
+
+const REQUEST = {
+  responseType: 'code',
+  clientId: CLIENT_ID,
+  redirectUri: 'http://127.0.0.1:55667/callback',
+  scope: ['read', 'write'],
+  state: 'client-state',
+};
+
+type StoreOperations = typeof OAuthStore.Service;
+
+type Tracked = Parameters<(typeof Analytics.Service)['track']>[0];
 
 type UpstreamResponse = TokenEndpointResponse & TokenEndpointResponseHelpers;
 
@@ -124,9 +143,154 @@ const upstreamTokens = (fields: { refresh_token?: string }) => {
   return tokens;
 };
 
-function buildRequest(state: string, cookie: string): NextRequest {
+/** The code exchange failing the way openid-client reports a Hydra error. */
+const rejectedExchange = (
+  message: string,
+  fields: {
+    readonly status: number;
+    readonly error: string;
+    readonly error_description: string;
+  },
+) =>
+  UpstreamOAuthFailed.make({
+    operation: 'exchangeCode',
+    cause: Object.assign(new Error(message), fields),
+  });
+
+const storeFailure = (operation: string, cause: Error) =>
+  OAuthStoreUnavailable.make({ operation, cause });
+
+const handlers: { readonly dispose: () => Promise<void> }[] = [];
+
+/**
+ * The OAuth app on its real store, with `store` replacing some of its
+ * operations, an upstream whose code exchange answers `exchange`, and
+ * analytics that records what it would send.
+ */
+const callbackApp = (
+  input: {
+    readonly exchange?: Effect.Effect<UpstreamResponse, UpstreamOAuthFailed>;
+    readonly store?: (real: StoreOperations) => Partial<StoreOperations>;
+  } = {},
+) => {
+  const exchange =
+    input.exchange ??
+    Effect.sync(() => upstreamTokens({ refresh_token: 'upstream-refresh' }));
+  const exchanges: { readonly currentUrl: URL; readonly state: string }[] = [];
+  const savedCodes: AuthorizationCode[] = [];
+  const tracked: Tracked[] = [];
+
+  const store = Layer.effect(
+    OAuthStore,
+    OAuthStore.make.pipe(
+      Effect.map((real) =>
+        OAuthStore.of({
+          ...real,
+          saveAuthorizationCode: (save) =>
+            real.saveAuthorizationCode(save).pipe(
+              Effect.tap(() =>
+                Effect.sync(() => {
+                  savedCodes.push(save.code);
+                }),
+              ),
+            ),
+          ...input.store?.(real),
+        }),
+      ),
+    ),
+  );
+
+  const notUsed = Effect.die(new Error('/callback does not call this'));
+
+  const upstream = Layer.succeed(
+    UpstreamOAuth,
+    UpstreamOAuth.of({
+      authorizationUrl: () => notUsed,
+      exchangeCode: (request) =>
+        Effect.sync(() => {
+          exchanges.push(request);
+        }).pipe(Effect.andThen(exchange)),
+      exchangeRefreshToken: () => notUsed,
+    }),
+  );
+
+  const analytics = Layer.succeed(
+    Analytics,
+    Analytics.of({
+      track: (event) =>
+        Effect.sync(() => {
+          tracked.push(event);
+        }),
+      identify: () => Effect.void,
+    }),
+  );
+
+  const handler = HttpRouter.toWebHandler(
+    Layer.mergeAll(OAuthTestApp, store, upstream, analytics),
+    { disableLogger: true },
+  );
+
+  handlers.push(handler);
+
+  return { handler: handler.handler, exchanges, savedCodes, tracked };
+};
+
+const clientLookupFailingOnce =
+  (error: OAuthStoreUnavailable | ClientMetadataUnavailable) =>
+  (real: StoreOperations): Partial<StoreOperations> => {
+    const lookups = { count: 0 };
+
+    return {
+      findClient: (lookup) =>
+        Effect.suspend(() => {
+          lookups.count += 1;
+
+          return lookups.count === 1
+            ? Effect.fail(error)
+            : real.findClient(lookup);
+        }),
+    };
+  };
+
+const onStore = async <A, E>(
+  run: (store: StoreOperations) => Effect.Effect<A, E>,
+) =>
+  Effect.runPromise(
+    OAuthStore.pipe(Effect.flatMap(run), Effect.provide(OAuthStore.layer)),
+  );
+
+/** The authorization code a redirect hands the client, as stored. */
+const storedCode = async (response: Response) => {
+  const location = new URL(response.headers.get('location') ?? '');
+
+  return onStore((store) =>
+    store.findAuthorizationCode({
+      code: location.searchParams.get('code') ?? '',
+    }),
+  );
+};
+
+const seedApproved = async (
+  options: Parameters<typeof seedApprovedTransaction>[0] = {},
+) => seedApprovedTransaction({ request: REQUEST, ...options });
+
+const logged: string[] = [];
+
+logger.on('data', (info: { message: string }) => {
+  logged.push(info.message);
+});
+
+/** This test's `[SLO] auth-callback` line for `outcome`, if any. */
+const findSloLine = (outcome = '') =>
+  logged.find((message) =>
+    message.startsWith(`[SLO] auth-callback outcome=${outcome}`),
+  );
+
+const app = callbackApp();
+
+function buildRequest(state: string, cookie: string): Request {
   const url = `http://localhost/callback?code=upstream-code&state=${encodeURIComponent(state)}`;
-  return new NextRequest(url, {
+  return new Request(url, {
     method: 'GET',
     headers: { cookie },
   });
@@ -137,10 +301,10 @@ function buildErrorRequest(
   cookie: string,
   error: string,
   errorDescription?: string,
-): NextRequest {
+): Request {
   const qs = new URLSearchParams({ error, state });
   if (errorDescription) qs.set('error_description', errorDescription);
-  return new NextRequest(`http://localhost/callback?${qs.toString()}`, {
+  return new Request(`http://localhost/callback?${qs.toString()}`, {
     method: 'GET',
     headers: { cookie },
   });
@@ -148,31 +312,32 @@ function buildErrorRequest(
 
 describe('/callback route integration', () => {
   beforeAll(async () => {
-    await ensureTestOauthDatabase();
+    await onStore((store) =>
+      store.saveClient({ client: CLIENT, registerHeaders: {} }),
+    );
   });
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    logged.length = 0;
+    app.exchanges.length = 0;
+    app.savedCodes.length = 0;
+    app.tracked.length = 0;
+  });
 
-    vi.mocked(model.getClient).mockResolvedValue({
-      id: 'client-123',
-      client_name: 'Callback Test Client',
-      redirect_uris: ['http://127.0.0.1:55667/callback'],
-    } as never);
-
-    vi.mocked(exchangeCode).mockResolvedValue(
-      upstreamTokens({ refresh_token: 'upstream-refresh' }),
-    );
-
-    vi.mocked(model.saveAuthorizationCode).mockResolvedValue({} as never);
+  afterAll(async () => {
+    await Promise.all(handlers.map(async (handler) => handler.dispose()));
   });
 
   it('answers a missing upstream refresh token with 502 and reports it', async () => {
-    vi.mocked(exchangeCode).mockResolvedValue(upstreamTokens({}));
+    const withoutRefresh = callbackApp({
+      exchange: Effect.sync(() => upstreamTokens({})),
+    });
     reported.length = 0;
 
-    const seeded = await seedApprovedTransaction();
-    const response = await GET(buildRequest(seeded.id, seeded.cookie));
+    const seeded = await seedApproved();
+    const response = await withoutRefresh.handler(
+      buildRequest(seeded.id, seeded.cookie),
+    );
 
     expect(response.status).toBe(502);
     await expect(response.json()).resolves.toStrictEqual({
@@ -185,10 +350,10 @@ describe('/callback route integration', () => {
   });
 
   it('persists the approved grant and scopes from the transaction', async () => {
-    const seeded = await seedApprovedTransaction({
+    const seeded = await seedApproved({
       request: {
         responseType: 'code',
-        clientId: 'client-123',
+        clientId: CLIENT_ID,
         redirectUri: 'http://127.0.0.1:55667/callback',
         scope: ['read', 'write'],
         state: 'client-state',
@@ -202,7 +367,7 @@ describe('/callback route integration', () => {
       approvedScopes: ['read'],
     });
 
-    const response = await GET(buildRequest(seeded.id, seeded.cookie));
+    const response = await app.handler(buildRequest(seeded.id, seeded.cookie));
 
     expect(response.status).toBe(307);
     const location = new URL(response.headers.get('location')!);
@@ -212,9 +377,10 @@ describe('/callback route integration', () => {
     expect(location.searchParams.get('code')).toBeTruthy();
     expect(location.searchParams.get('state')).toBe('client-state');
     expect(location.searchParams.get('iss')).toBe(SERVER_HOST);
-    expect(exchangeCode).toHaveBeenCalledWith(expect.any(URL), seeded.id);
-    expect(model.saveAuthorizationCode).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(app.exchanges.map(({ state }) => state)).toStrictEqual([seeded.id]);
+    expect(app.exchanges[0]?.currentUrl).toBeInstanceOf(URL);
+    await expect(storedCode(response)).resolves.toMatchObject(
+      Option.some({
         scope: 'read',
         grant: {
           projectId: 'proj-123',
@@ -225,25 +391,33 @@ describe('/callback route integration', () => {
   });
 
   it('keeps the approved transaction when the client metadata document is unreadable, so the callback can be retried', async () => {
-    const seeded = await seedApprovedTransaction();
-    vi.mocked(model.getClient).mockRejectedValueOnce(
-      new ClientMetadataUnavailableError('answered 502'),
-    );
+    const seeded = await seedApproved();
+    const unreadable = callbackApp({
+      store: clientLookupFailingOnce(
+        ClientMetadataUnavailable.make({
+          cause: new ClientMetadataUnavailableError('answered 502'),
+        }),
+      ),
+    });
 
-    const failed = await GET(buildRequest(seeded.id, seeded.cookie));
+    const failed = await unreadable.handler(
+      buildRequest(seeded.id, seeded.cookie),
+    );
     expect(failed.status).toBe(503);
-    expect(exchangeCode).not.toHaveBeenCalled();
+    expect(unreadable.exchanges).toStrictEqual([]);
     expect(await authTransactions.getById(seeded.id)).toBeDefined();
 
-    const retried = await GET(buildRequest(seeded.id, seeded.cookie));
+    const retried = await unreadable.handler(
+      buildRequest(seeded.id, seeded.cookie),
+    );
     expect(retried.status).toBe(307);
-    expect(exchangeCode).toHaveBeenCalledTimes(1);
+    expect(unreadable.exchanges).toHaveLength(1);
   });
 
   it('completes a transaction approved before the cookie prefix over HTTPS with its unprefixed cookie', async () => {
-    const seeded = await seedApprovedTransaction();
-    const response = await GET(
-      new NextRequest(
+    const seeded = await seedApproved();
+    const response = await app.handler(
+      new Request(
         `http://localhost/callback?code=upstream-code&state=${seeded.id}`,
         {
           method: 'GET',
@@ -253,14 +427,14 @@ describe('/callback route integration', () => {
     );
 
     expect(response.status).toBe(307);
-    expect(model.saveAuthorizationCode).toHaveBeenCalledOnce();
+    expect(app.savedCodes).toHaveLength(1);
   });
 
   it('rejects an HTTPS transaction whose prefixed binding is planted as an unprefixed cookie value', async () => {
-    const seeded = await seedApprovedTransaction({ hostPrefixedCookie: true });
+    const seeded = await seedApproved({ hostPrefixedCookie: true });
     const planted = `${consentCookieName(seeded.id, false)}=__Host-:${seeded.browserSecret}`;
-    const response = await GET(
-      new NextRequest(
+    const response = await app.handler(
+      new Request(
         `http://localhost/callback?code=upstream-code&state=${seeded.id}`,
         {
           method: 'GET',
@@ -270,10 +444,10 @@ describe('/callback route integration', () => {
     );
 
     expect(response.status).toBe(400);
-    expect(model.saveAuthorizationCode).not.toHaveBeenCalled();
+    expect(app.savedCodes).toStrictEqual([]);
 
-    const genuine = await GET(
-      new NextRequest(
+    const genuine = await app.handler(
+      new Request(
         `http://localhost/callback?code=upstream-code&state=${seeded.id}`,
         {
           method: 'GET',
@@ -285,10 +459,10 @@ describe('/callback route integration', () => {
   });
 
   it('carries a pinned roleName from the approved transaction onto the authorization code', async () => {
-    const seeded = await seedApprovedTransaction({
+    const seeded = await seedApproved({
       request: {
         responseType: 'code',
-        clientId: 'client-123',
+        clientId: CLIENT_ID,
         redirectUri: 'http://127.0.0.1:55667/callback',
         scope: ['read'],
         state: 'client-state',
@@ -303,11 +477,11 @@ describe('/callback route integration', () => {
       approvedScopes: ['read'],
     });
 
-    const response = await GET(buildRequest(seeded.id, seeded.cookie));
+    const response = await app.handler(buildRequest(seeded.id, seeded.cookie));
 
     expect(response.status).toBe(307);
-    expect(model.saveAuthorizationCode).toHaveBeenCalledWith(
-      expect.objectContaining({
+    await expect(storedCode(response)).resolves.toMatchObject(
+      Option.some({
         scope: 'read',
         grant: {
           projectId: null,
@@ -319,15 +493,13 @@ describe('/callback route integration', () => {
   });
 
   it('preserves * on the issued scope when the approved transaction includes it', async () => {
-    const seeded = await seedApprovedTransaction({
+    const seeded = await seedApproved({
       approvedScopes: ['read', 'write', '*'],
     });
-    const response = await GET(buildRequest(seeded.id, seeded.cookie));
+    const response = await app.handler(buildRequest(seeded.id, seeded.cookie));
     expect(response.status).toBe(307);
-    expect(model.saveAuthorizationCode).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scope: 'read write *',
-      }),
+    await expect(storedCode(response)).resolves.toMatchObject(
+      Option.some({ scope: 'read write *' }),
     );
   });
 
@@ -335,85 +507,82 @@ describe('/callback route integration', () => {
     const state = btoa(
       JSON.stringify({
         responseType: 'code',
-        clientId: 'client-123',
+        clientId: CLIENT_ID,
         redirectUri: 'https://attacker.example/callback',
         scope: ['read', 'write'],
         state: 'client-state',
       }),
     );
-    const response = await GET(buildRequest(state, ''));
+    const response = await app.handler(buildRequest(state, ''));
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: 'invalid_request',
       error_description: AUTH_RESTART_DESCRIPTION,
     });
-    expect(exchangeCode).not.toHaveBeenCalled();
-    expect(model.saveAuthorizationCode).not.toHaveBeenCalled();
+    expect(app.exchanges).toStrictEqual([]);
+    expect(app.savedCodes).toStrictEqual([]);
   });
 
   it('rejects a pending transaction at callback', async () => {
-    const { seedPendingTransaction } =
-      await import('./auth-transaction-fixtures');
-    const pending = await seedPendingTransaction();
-    const response = await GET(
+    const pending = await seedPendingTransaction({ request: REQUEST });
+    const response = await app.handler(
       buildRequest(
         pending.transaction.id,
         `neon_mcp_at_${pending.transaction.id}=${pending.browserSecret}`,
       ),
     );
     expect(response.status).toBe(400);
-    expect(exchangeCode).not.toHaveBeenCalled();
+    expect(app.exchanges).toStrictEqual([]);
   });
 
   it('rejects an expired approved transaction without minting a code', async () => {
-    const seeded = await seedApprovedTransaction();
+    const seeded = await seedApproved();
     const url = process.env.OAUTH_DATABASE_URL;
     if (!url) {
       throw new Error('OAUTH_DATABASE_URL is required');
     }
-    const { neon } = await import('@neondatabase/serverless');
     const sql = neon(url);
     await sql`
       UPDATE mcpauth.auth_transactions
       SET expires_at = now() - interval '1 minute'
       WHERE id = ${seeded.id}
     `;
-    const response = await GET(buildRequest(seeded.id, seeded.cookie));
+    const response = await app.handler(buildRequest(seeded.id, seeded.cookie));
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: 'invalid_request',
       error_description: AUTH_RESTART_DESCRIPTION,
     });
-    expect(exchangeCode).not.toHaveBeenCalled();
+    expect(app.exchanges).toStrictEqual([]);
   });
 
   it('rejects a swapped cookie from another browser', async () => {
-    const first = await seedApprovedTransaction();
-    const second = await seedApprovedTransaction();
-    const response = await GET(
+    const first = await seedApproved();
+    const second = await seedApproved();
+    const response = await app.handler(
       buildRequest(
         second.id,
         `${consentCookieName(second.id, false)}=${first.browserSecret}`,
       ),
     );
     expect(response.status).toBe(400);
-    expect(exchangeCode).not.toHaveBeenCalled();
+    expect(app.exchanges).toStrictEqual([]);
   });
 
   it('lets only one concurrent callback consume the approval', async () => {
-    const seeded = await seedApprovedTransaction();
+    const seeded = await seedApproved();
     const [first, second] = await Promise.all([
-      GET(buildRequest(seeded.id, seeded.cookie)),
-      GET(buildRequest(seeded.id, seeded.cookie)),
+      app.handler(buildRequest(seeded.id, seeded.cookie)),
+      app.handler(buildRequest(seeded.id, seeded.cookie)),
     ]);
     const statuses = [first.status, second.status].sort();
     expect(statuses).toEqual([307, 400]);
-    expect(model.saveAuthorizationCode).toHaveBeenCalledTimes(1);
+    expect(app.savedCodes).toHaveLength(1);
   });
 
   it('relays upstream `error=error` to the original client redirect and state', async () => {
-    const seeded = await seedApprovedTransaction();
-    const response = await GET(
+    const seeded = await seedApproved();
+    const response = await app.handler(
       buildErrorRequest(
         seeded.id,
         seeded.cookie,
@@ -428,12 +597,12 @@ describe('/callback route integration', () => {
     expect(url.searchParams.get('error')).toBe('error');
     expect(url.searchParams.get('state')).toBe('client-state');
     expect(url.searchParams.get('iss')).toBe(SERVER_HOST);
-    expect(exchangeCode).not.toHaveBeenCalled();
+    expect(app.exchanges).toStrictEqual([]);
   });
 
   it('relays upstream `access_denied` to client redirect_uri', async () => {
-    const seeded = await seedApprovedTransaction();
-    const response = await GET(
+    const seeded = await seedApproved();
+    const response = await app.handler(
       buildErrorRequest(
         seeded.id,
         seeded.cookie,
@@ -450,13 +619,13 @@ describe('/callback route integration', () => {
     const forged = btoa(
       JSON.stringify({
         responseType: 'code',
-        clientId: 'client-123',
+        clientId: CLIENT_ID,
         redirectUri: 'https://attacker.example/callback',
         scope: ['read', 'write'],
         state: 'stolen',
       }),
     );
-    const response = await GET(
+    const response = await app.handler(
       buildErrorRequest(forged, '', 'access_denied', 'denied'),
     );
     expect(response.status).toBe(400);
@@ -464,9 +633,8 @@ describe('/callback route integration', () => {
   });
 
   it('classifies `request_unauthorized` as correct_consent_expired', async () => {
-    const sloSpy = vi.spyOn(logger, 'info');
-    const seeded = await seedApprovedTransaction();
-    await GET(
+    const seeded = await seedApproved();
+    await app.handler(
       buildErrorRequest(
         seeded.id,
         seeded.cookie,
@@ -474,17 +642,14 @@ describe('/callback route integration', () => {
         'The login request has expired. Please try again.',
       ),
     );
-    const sloLine = sloSpy.mock.calls
-      .map(([msg]) => String(msg))
-      .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+    const sloLine = findSloLine();
     expect(sloLine).toContain('outcome=correct_consent_expired');
-    expect(sloLine).toContain('clientId=client-123');
+    expect(sloLine).toContain(`clientId=${CLIENT_ID}`);
   });
 
   it('classifies `request_forbidden` as correct_csrf_mismatch', async () => {
-    const sloSpy = vi.spyOn(logger, 'info');
-    const seeded = await seedApprovedTransaction();
-    await GET(
+    const seeded = await seedApproved();
+    await app.handler(
       buildErrorRequest(
         seeded.id,
         seeded.cookie,
@@ -492,35 +657,33 @@ describe('/callback route integration', () => {
         'The CSRF value from the token does not match the CSRF value from the data store.',
       ),
     );
-    const sloLine = sloSpy.mock.calls
-      .map(([msg]) => String(msg))
-      .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+    const sloLine = findSloLine();
     expect(sloLine).toContain('outcome=correct_csrf_mismatch');
   });
 
   it('classifies code-exchange `invalid_grant` as correct_invalid_grant', async () => {
-    const sloSpy = vi.spyOn(logger, 'info');
-    vi.mocked(exchangeCode).mockRejectedValue(
-      Object.assign(new Error('authorization code already used'), {
-        status: 400,
-        error: 'invalid_grant',
-        error_description: 'The authorization code has already been used.',
-      }),
+    const rejecting = callbackApp({
+      exchange: Effect.fail(
+        rejectedExchange('authorization code already used', {
+          status: 400,
+          error: 'invalid_grant',
+          error_description: 'The authorization code has already been used.',
+        }),
+      ),
+    });
+    const seeded = await seedApproved();
+    const response = await rejecting.handler(
+      buildRequest(seeded.id, seeded.cookie),
     );
-    const seeded = await seedApprovedTransaction();
-    const response = await GET(buildRequest(seeded.id, seeded.cookie));
     expect(response.status).toBeGreaterThanOrEqual(400);
-    const sloLine = sloSpy.mock.calls
-      .map(([msg]) => String(msg))
-      .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+    const sloLine = findSloLine();
     expect(sloLine).toContain('outcome=correct_invalid_grant');
-    expect(sloLine).toContain('clientId=client-123');
+    expect(sloLine).toContain(`clientId=${CLIENT_ID}`);
   });
 
   it('still buckets unknown upstream errors as upstream_other_error', async () => {
-    const sloSpy = vi.spyOn(logger, 'info');
-    const seeded = await seedApprovedTransaction();
-    await GET(
+    const seeded = await seedApproved();
+    await app.handler(
       buildErrorRequest(
         seeded.id,
         seeded.cookie,
@@ -528,19 +691,16 @@ describe('/callback route integration', () => {
         'Something new',
       ),
     );
-    const sloLine = sloSpy.mock.calls
-      .map(([msg]) => String(msg))
-      .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+    const sloLine = findSloLine();
     expect(sloLine).toContain('outcome=upstream_other_error');
   });
 
   describe('correct_chatgpt_invalid_request (narrow Hydra reclassification)', () => {
     it('classifies `?error=invalid_request` with rURIHost=chatgpt.com as correct_chatgpt_invalid_request', async () => {
-      const sloSpy = vi.spyOn(logger, 'info');
-      const seeded = await seedApprovedTransaction({
+      const seeded = await seedApproved({
         request: {
           responseType: 'code',
-          clientId: 'client-123',
+          clientId: CLIENT_ID,
           redirectUri: 'https://chatgpt.com/connector/oauth/aF1iFlAFZjHP',
           scope: ['read', 'write'],
           state: 'client-state',
@@ -549,7 +709,7 @@ describe('/callback route integration', () => {
           codeChallengeMethod: 'S256',
         },
       });
-      await GET(
+      await app.handler(
         buildErrorRequest(
           seeded.id,
           seeded.cookie,
@@ -557,51 +717,48 @@ describe('/callback route integration', () => {
           'The request is missing a required parameter, ...',
         ),
       );
-      const sloLine = sloSpy.mock.calls
-        .map(([msg]) => String(msg))
-        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      const sloLine = findSloLine();
       expect(sloLine).toContain('outcome=correct_chatgpt_invalid_request');
       expect(sloLine).toContain('rURIHost=chatgpt.com');
     });
 
     it('classifies code-exchange `invalid_request` with rURIHost=chatgpt.com as correct_chatgpt_invalid_request', async () => {
-      const sloSpy = vi.spyOn(logger, 'info');
-      vi.mocked(exchangeCode).mockRejectedValue(
-        Object.assign(new Error('bad request'), {
-          status: 400,
-          error: 'invalid_request',
-          error_description: 'The request is missing a required parameter, ...',
-        }),
-      );
-      const seeded = await seedApprovedTransaction({
+      const rejecting = callbackApp({
+        exchange: Effect.fail(
+          rejectedExchange('bad request', {
+            status: 400,
+            error: 'invalid_request',
+            error_description:
+              'The request is missing a required parameter, ...',
+          }),
+        ),
+      });
+      const seeded = await seedApproved({
         request: {
           responseType: 'code',
-          clientId: 'client-123',
+          clientId: CLIENT_ID,
           redirectUri: 'https://chatgpt.com/connector/oauth/aF1iFlAFZjHP',
           scope: ['read', 'write'],
           state: 'client-state',
         },
       });
-      await GET(buildRequest(seeded.id, seeded.cookie));
-      const sloLine = sloSpy.mock.calls
-        .map(([msg]) => String(msg))
-        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      await rejecting.handler(buildRequest(seeded.id, seeded.cookie));
+      const sloLine = findSloLine();
       expect(sloLine).toContain('outcome=correct_chatgpt_invalid_request');
       expect(sloLine).toContain('rURIHost=chatgpt.com');
     });
 
     it('does NOT reclassify when rURIHost is localhost', async () => {
-      const sloSpy = vi.spyOn(logger, 'info');
-      const seeded = await seedApprovedTransaction({
+      const seeded = await seedApproved({
         request: {
           responseType: 'code',
-          clientId: 'client-123',
+          clientId: CLIENT_ID,
           redirectUri: 'http://localhost:55667/oauth/callback',
           scope: ['read', 'write'],
           state: 'client-state',
         },
       });
-      await GET(
+      await app.handler(
         buildErrorRequest(
           seeded.id,
           seeded.cookie,
@@ -609,25 +766,22 @@ describe('/callback route integration', () => {
           'malformed redirect_uri',
         ),
       );
-      const sloLine = sloSpy.mock.calls
-        .map(([msg]) => String(msg))
-        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      const sloLine = findSloLine();
       expect(sloLine).toContain('outcome=upstream_other_error');
       expect(sloLine).toContain('rURIHost=localhost');
     });
 
     it('does NOT reclassify when rURIHost is some other 3rd-party connector', async () => {
-      const sloSpy = vi.spyOn(logger, 'info');
-      const seeded = await seedApprovedTransaction({
+      const seeded = await seedApproved({
         request: {
           responseType: 'code',
-          clientId: 'client-123',
+          clientId: CLIENT_ID,
           redirectUri: 'https://tasklet.ai/oauth/callback',
           scope: ['read', 'write'],
           state: 'client-state',
         },
       });
-      await GET(
+      await app.handler(
         buildErrorRequest(
           seeded.id,
           seeded.cookie,
@@ -635,25 +789,22 @@ describe('/callback route integration', () => {
           'bad params',
         ),
       );
-      const sloLine = sloSpy.mock.calls
-        .map(([msg]) => String(msg))
-        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      const sloLine = findSloLine();
       expect(sloLine).toContain('outcome=upstream_other_error');
       expect(sloLine).toContain('rURIHost=tasklet.ai');
     });
 
     it('does NOT reclassify when chatgpt.com hits a non-invalid_request error', async () => {
-      const sloSpy = vi.spyOn(logger, 'info');
-      const seeded = await seedApprovedTransaction({
+      const seeded = await seedApproved({
         request: {
           responseType: 'code',
-          clientId: 'client-123',
+          clientId: CLIENT_ID,
           redirectUri: 'https://chatgpt.com/connector/oauth/aF1iFlAFZjHP',
           scope: ['read', 'write'],
           state: 'client-state',
         },
       });
-      await GET(
+      await app.handler(
         buildErrorRequest(
           seeded.id,
           seeded.cookie,
@@ -661,20 +812,17 @@ describe('/callback route integration', () => {
           'The CSRF value from the token does not match the CSRF value from the data store.',
         ),
       );
-      const sloLine = sloSpy.mock.calls
-        .map(([msg]) => String(msg))
-        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      const sloLine = findSloLine();
       expect(sloLine).toContain('outcome=correct_csrf_mismatch');
     });
   });
 
   describe('downstream-request fingerprint on upstream errors', () => {
     it('emits stateLen, stateFp, scopeCount and redirectUri host/path', async () => {
-      const sloSpy = vi.spyOn(logger, 'info');
-      const seeded = await seedApprovedTransaction({
+      const seeded = await seedApproved({
         request: {
           responseType: 'code',
-          clientId: 'client-123',
+          clientId: CLIENT_ID,
           redirectUri: 'http://127.0.0.1:55667/callback',
           scope: ['read', 'write'],
           state: 'client-state',
@@ -683,7 +831,7 @@ describe('/callback route integration', () => {
           codeChallengeMethod: 'S256',
         },
       });
-      await GET(
+      await app.handler(
         buildErrorRequest(
           seeded.id,
           seeded.cookie,
@@ -691,9 +839,7 @@ describe('/callback route integration', () => {
           'The request is missing a required parameter, ...',
         ),
       );
-      const sloLine = sloSpy.mock.calls
-        .map(([msg]) => String(msg))
-        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      const sloLine = findSloLine();
       expect(sloLine).toContain(`stateLen=${seeded.id.length}`);
       expect(sloLine).toContain(
         `stateFp=len=${seeded.id.length},prefix=${seeded.id.slice(0, 6)}`,
@@ -706,17 +852,16 @@ describe('/callback route integration', () => {
     });
 
     it('never includes the downstream client state in the SLO line', async () => {
-      const sloSpy = vi.spyOn(logger, 'info');
-      const seeded = await seedApprovedTransaction({
+      const seeded = await seedApproved({
         request: {
           responseType: 'code',
-          clientId: 'client-123',
+          clientId: CLIENT_ID,
           redirectUri: 'http://127.0.0.1:55667/callback',
           scope: ['read', 'write'],
           state: 'secret-downstream-state-do-not-leak',
         },
       });
-      await GET(
+      await app.handler(
         buildErrorRequest(
           seeded.id,
           seeded.cookie,
@@ -724,27 +869,24 @@ describe('/callback route integration', () => {
           'malformed',
         ),
       );
-      const sloLine = sloSpy.mock.calls
-        .map(([msg]) => String(msg))
-        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      const sloLine = findSloLine();
       expect(sloLine).not.toContain('secret-downstream-state-do-not-leak');
       expect(sloLine).not.toContain(seeded.browserSecret);
     });
 
     it('includes the fingerprint on the code-exchange catch path too', async () => {
-      const sloSpy = vi.spyOn(logger, 'info');
-      vi.mocked(exchangeCode).mockRejectedValue(
-        Object.assign(new Error('bad request'), {
-          status: 400,
-          error: 'invalid_grant',
-          error_description: 'The authorization code has already been used.',
-        }),
-      );
-      const seeded = await seedApprovedTransaction();
-      await GET(buildRequest(seeded.id, seeded.cookie));
-      const sloLine = sloSpy.mock.calls
-        .map(([msg]) => String(msg))
-        .find((m) => m.startsWith('[SLO] auth-callback outcome='));
+      const rejecting = callbackApp({
+        exchange: Effect.fail(
+          rejectedExchange('bad request', {
+            status: 400,
+            error: 'invalid_grant',
+            error_description: 'The authorization code has already been used.',
+          }),
+        ),
+      });
+      const seeded = await seedApproved();
+      await rejecting.handler(buildRequest(seeded.id, seeded.cookie));
+      const sloLine = findSloLine();
       expect(sloLine).toContain('outcome=correct_invalid_grant');
       expect(sloLine).toContain(`stateLen=${seeded.id.length}`);
       expect(sloLine).toContain('scopeCount=2');
@@ -752,8 +894,8 @@ describe('/callback route integration', () => {
   });
 
   it('falls back to JSON 400 when upstream error arrives without state', async () => {
-    const response = await GET(
-      new NextRequest('http://localhost/callback?error=server_error', {
+    const response = await app.handler(
+      new Request('http://localhost/callback?error=server_error', {
         method: 'GET',
       }),
     );
@@ -765,8 +907,8 @@ describe('/callback route integration', () => {
   });
 
   it('falls back to JSON 400 when upstream error arrives with un-decodable state', async () => {
-    const response = await GET(
-      new NextRequest(
+    const response = await app.handler(
+      new Request(
         'http://localhost/callback?error=invalid_scope&state=not%2Dbase64%21',
         { method: 'GET' },
       ),
@@ -778,8 +920,8 @@ describe('/callback route integration', () => {
   });
 
   it('still returns Missing code or state when nothing useful is in the query', async () => {
-    const response = await GET(
-      new NextRequest('http://localhost/callback', { method: 'GET' }),
+    const response = await app.handler(
+      new Request('http://localhost/callback', { method: 'GET' }),
     );
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
@@ -791,7 +933,7 @@ describe('/callback route integration', () => {
   describe('completion page', () => {
     const appRequest = {
       responseType: 'code',
-      clientId: 'client-123',
+      clientId: CLIENT_ID,
       redirectUri: 'cursor://anysphere.cursor-mcp/oauth/callback',
       scope: ['read', 'write'],
       state: 'client-state',
@@ -804,15 +946,15 @@ describe('/callback route integration', () => {
     }
 
     // The page is only for browsers, which send this on every navigation.
-    function fromBrowser(request: NextRequest): NextRequest {
+    function fromBrowser(request: Request): Request {
       request.headers.set('accept', 'text/html,application/xhtml+xml');
       return request;
     }
 
     it('renders the success page for a native app redirect and hands it the code', async () => {
-      const seeded = await seedApprovedTransaction({ request: appRequest });
+      const seeded = await seedApproved({ request: appRequest });
 
-      const response = await GET(
+      const response = await app.handler(
         fromBrowser(buildRequest(seeded.id, seeded.cookie)),
       );
 
@@ -830,13 +972,13 @@ describe('/callback route integration', () => {
       expect(response.headers.getSetCookie().join('\n')).toContain(
         `${consentCookieName(seeded.id, false)}=;`,
       );
-      expect(track).toHaveBeenCalledWith(
+      expect(app.tracked).toContainEqual(
         expect.objectContaining({
           userId: 'user-1',
           event: 'auth_complete_viewed',
           properties: expect.objectContaining({
             outcome: 'success',
-            clientId: 'client-123',
+            clientId: CLIENT_ID,
             clientName: 'Callback Test Client',
           }),
         }),
@@ -844,14 +986,14 @@ describe('/callback route integration', () => {
     });
 
     it('shows success when the registered redirect_uri carries an error param', async () => {
-      const seeded = await seedApprovedTransaction({
+      const seeded = await seedApproved({
         request: {
           ...appRequest,
           redirectUri: `${appRequest.redirectUri}?error=access_denied`,
         },
       });
 
-      const response = await GET(
+      const response = await app.handler(
         fromBrowser(buildRequest(seeded.id, seeded.cookie)),
       );
 
@@ -862,9 +1004,9 @@ describe('/callback route integration', () => {
     });
 
     it('renders the cancelled page and relays access_denied to a native app', async () => {
-      const seeded = await seedApprovedTransaction({ request: appRequest });
+      const seeded = await seedApproved({ request: appRequest });
 
-      const response = await GET(
+      const response = await app.handler(
         fromBrowser(
           buildErrorRequest(seeded.id, seeded.cookie, 'access_denied'),
         ),
@@ -875,35 +1017,37 @@ describe('/callback route integration', () => {
       expect(html).toContain('Connection cancelled');
       expect(html).not.toContain('Copy prompt');
       expect(returnLink(html).searchParams.get('error')).toBe('access_denied');
-      expect(track).toHaveBeenCalledWith(
+      expect(app.tracked).toContainEqual(
         expect.objectContaining({
           event: 'auth_complete_viewed',
           properties: expect.objectContaining({
             outcome: 'cancelled',
-            clientId: 'client-123',
+            clientId: CLIENT_ID,
             clientName: 'Callback Test Client',
           }),
         }),
       );
-      expect(vi.mocked(track).mock.calls.at(-1)![0]).not.toHaveProperty(
-        'userId',
-      );
+      expect(app.tracked.at(-1)).not.toHaveProperty('userId');
     });
 
     it('keeps the query on a retryable failure so a reload completes it', async () => {
-      const seeded = await seedApprovedTransaction({ request: appRequest });
-      vi.mocked(model.getClient).mockRejectedValueOnce(
-        new ClientMetadataUnavailableError('answered 502'),
-      );
+      const seeded = await seedApproved({ request: appRequest });
+      const unreadable = callbackApp({
+        store: clientLookupFailingOnce(
+          ClientMetadataUnavailable.make({
+            cause: new ClientMetadataUnavailableError('answered 502'),
+          }),
+        ),
+      });
 
-      const failed = await GET(
+      const failed = await unreadable.handler(
         fromBrowser(buildRequest(seeded.id, seeded.cookie)),
       );
       expect(failed.status).toBe(503);
       expect(failed.headers.get('retry-after')).toBe('30');
       expect(await failed.text()).not.toContain('history.replaceState');
 
-      const retried = await GET(
+      const retried = await unreadable.handler(
         fromBrowser(buildRequest(seeded.id, seeded.cookie)),
       );
       expect(retried.status).toBe(200);
@@ -911,12 +1055,14 @@ describe('/callback route integration', () => {
     });
 
     it('lets a reload retry a server failure before the transaction is used up', async () => {
-      const seeded = await seedApprovedTransaction({ request: appRequest });
-      vi.mocked(model.getClient).mockRejectedValueOnce(
-        new Error('unexpected non-pg failure'),
-      );
+      const seeded = await seedApproved({ request: appRequest });
+      const failing = callbackApp({
+        store: clientLookupFailingOnce(
+          storeFailure('getClient', new Error('unexpected non-pg failure')),
+        ),
+      });
 
-      const failed = await GET(
+      const failed = await failing.handler(
         fromBrowser(buildRequest(seeded.id, seeded.cookie)),
       );
       expect(failed.status).toBe(500);
@@ -924,19 +1070,27 @@ describe('/callback route integration', () => {
       expect(html).toContain('Reload this page in a moment to try again.');
       expect(html).not.toContain('history.replaceState');
 
-      const retried = await GET(
+      const retried = await failing.handler(
         fromBrowser(buildRequest(seeded.id, seeded.cookie)),
       );
       expect(retried.status).toBe(200);
     });
 
     it('drops the query after a server failure that used up the transaction', async () => {
-      const seeded = await seedApprovedTransaction({ request: appRequest });
-      vi.mocked(model.saveAuthorizationCode).mockRejectedValueOnce(
-        new Error('unexpected non-pg failure'),
-      );
+      const seeded = await seedApproved({ request: appRequest });
+      const failing = callbackApp({
+        store: () => ({
+          saveAuthorizationCode: () =>
+            Effect.fail(
+              storeFailure(
+                'saveAuthorizationCode',
+                new Error('unexpected non-pg failure'),
+              ),
+            ),
+        }),
+      });
 
-      const failed = await GET(
+      const failed = await failing.handler(
         fromBrowser(buildRequest(seeded.id, seeded.cookie)),
       );
       expect(failed.status).toBe(500);
@@ -946,9 +1100,9 @@ describe('/callback route integration', () => {
     });
 
     it('keeps the plain redirect for a browser returning to a loopback client', async () => {
-      const seeded = await seedApprovedTransaction();
+      const seeded = await seedApproved();
 
-      const response = await GET(
+      const response = await app.handler(
         fromBrowser(buildRequest(seeded.id, seeded.cookie)),
       );
 
@@ -957,13 +1111,15 @@ describe('/callback route integration', () => {
       expect(location.origin).toBe('http://127.0.0.1:55667');
       expect(location.searchParams.get('code')).toBeTruthy();
       expect(location.searchParams.get('state')).toBe('client-state');
-      expect(track).not.toHaveBeenCalled();
+      expect(app.tracked).toStrictEqual([]);
     });
 
     it('keeps the native app redirect for a non-browser caller', async () => {
-      const seeded = await seedApprovedTransaction({ request: appRequest });
+      const seeded = await seedApproved({ request: appRequest });
 
-      const response = await GET(buildRequest(seeded.id, seeded.cookie));
+      const response = await app.handler(
+        buildRequest(seeded.id, seeded.cookie),
+      );
 
       expect(response.status).toBe(307);
       expect(response.headers.get('location')).toMatch(/^cursor:/);
@@ -971,62 +1127,83 @@ describe('/callback route integration', () => {
   });
 
   describe('internal_error + pg-connect retry', () => {
-    type PgConnectError = Error & { code: string };
-    const makePgXX000Error = (): PgConnectError => {
-      const err = new Error("Couldn't connect to compute node");
-      return Object.assign(err, { code: 'XX000' });
+    const makePgXX000Error = () =>
+      Object.assign(new Error("Couldn't connect to compute node"), {
+        code: 'XX000',
+      });
+
+    /**
+     * Client lookups whose first `failures` attempts fail to connect. Like
+     * the store's, a lookup retries a connect failure once when the caller
+     * names the operation.
+     */
+    const lookupsFailingToConnect = (failures: number) => {
+      const attempts = { count: 0 };
+
+      const store = (real: StoreOperations): Partial<StoreOperations> => ({
+        findClient: (lookup) => {
+          const attempt = Effect.suspend(() => {
+            attempts.count += 1;
+
+            return attempts.count <= failures
+              ? Effect.fail(storeFailure('getClient', makePgXX000Error()))
+              : real.findClient({ clientId: lookup.clientId });
+          });
+
+          return lookup.connectRetryOperation === undefined
+            ? attempt
+            : attempt.pipe(retryPgConnect(lookup.connectRetryOperation));
+        },
+      });
+
+      return { attempts, store };
     };
 
     it('emits internal_error SLO line with clientId when KV first call fails', async () => {
-      const sloSpy = vi.spyOn(logger, 'info');
-      vi.mocked(model.getClient).mockRejectedValue(
-        new Error('unexpected non-pg failure'),
+      const failing = callbackApp({
+        store: () => ({
+          findClient: () =>
+            Effect.fail(
+              storeFailure('getClient', new Error('unexpected non-pg failure')),
+            ),
+        }),
+      });
+      const seeded = await seedApproved();
+      const response = await failing.handler(
+        buildRequest(seeded.id, seeded.cookie),
       );
-      const seeded = await seedApprovedTransaction();
-      const response = await GET(buildRequest(seeded.id, seeded.cookie));
       expect(response.status).toBeGreaterThanOrEqual(500);
-      const sloLine = sloSpy.mock.calls
-        .map(([msg]) => String(msg))
-        .find((m) =>
-          m.startsWith('[SLO] auth-callback outcome=internal_error'),
-        );
-      expect(sloLine).toContain('clientId=client-123');
+      const sloLine = findSloLine('internal_error');
+      expect(sloLine).toContain(`clientId=${CLIENT_ID}`);
       expect(sloLine).toContain('reason=Error');
     });
 
     it('retries once and succeeds when the first KV call hits Postgres XX000', async () => {
-      vi.mocked(model.getClient)
-        .mockRejectedValueOnce(makePgXX000Error())
-        .mockResolvedValue({
-          id: 'client-123',
-          client_name: 'Callback Test Client',
-          redirect_uris: ['http://127.0.0.1:55667/callback'],
-        } as never);
-      const seeded = await seedApprovedTransaction();
-      const response = await GET(buildRequest(seeded.id, seeded.cookie));
+      const lookups = lookupsFailingToConnect(1);
+      const seeded = await seedApproved();
+      const response = await callbackApp({ store: lookups.store }).handler(
+        buildRequest(seeded.id, seeded.cookie),
+      );
       expect(response.status).toBe(307);
-      expect(model.getClient).toHaveBeenCalledTimes(2);
+      expect(lookups.attempts.count).toBe(2);
     });
 
     it('exhausts retries on persistent XX000 and emits internal_error with pg_connect_failure reason', async () => {
-      const sloSpy = vi.spyOn(logger, 'info');
-      vi.mocked(model.getClient).mockRejectedValue(makePgXX000Error());
-      const seeded = await seedApprovedTransaction();
-      const response = await GET(buildRequest(seeded.id, seeded.cookie));
+      const lookups = lookupsFailingToConnect(Number.POSITIVE_INFINITY);
+      const seeded = await seedApproved();
+      const response = await callbackApp({ store: lookups.store }).handler(
+        buildRequest(seeded.id, seeded.cookie),
+      );
       expect(response.status).toBeGreaterThanOrEqual(500);
-      expect(model.getClient).toHaveBeenCalledTimes(2);
-      const sloLine = sloSpy.mock.calls
-        .map(([msg]) => String(msg))
-        .find((m) =>
-          m.startsWith('[SLO] auth-callback outcome=internal_error'),
-        );
-      expect(sloLine).toContain('clientId=client-123');
+      expect(lookups.attempts.count).toBe(2);
+      const sloLine = findSloLine('internal_error');
+      expect(sloLine).toContain(`clientId=${CLIENT_ID}`);
       expect(sloLine).toContain('reason=pg_connect_failure');
     });
   });
 
   it('reads an approved transaction from a second store instance', async () => {
-    const seeded = await seedApprovedTransaction({
+    const seeded = await seedApproved({
       approvedGrant: { projectId: 'proj-other', scopes: ['schema'] },
       approvedScopes: ['read'],
     });
