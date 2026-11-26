@@ -3,6 +3,7 @@ import { Cause, Effect, ErrorReporter, Exit, Option } from 'effect';
 import { mcpRuntime, runAfterResponse } from '../../lib/effect/runtime';
 import type { McpCallbackServices } from '../../lib/effect/runtime';
 import { flushSentry } from '../sentry/flush';
+import type { NeonTool } from '../tools/tool-definition';
 import { thrownError } from '../tools/tools';
 import type { ToolCallError } from '../tools/types';
 import type { IdentifiedClient } from '../utils/client-application';
@@ -18,11 +19,12 @@ type ToolErrorReport = {
   properties: Record<string, string>;
   traceId: string;
   agent: IdentifiedClient;
+  tool: NeonTool;
 };
 
 const renderFailure = (
   cause: Cause.Cause<ToolCallError>,
-  { properties, traceId, agent }: ToolErrorReport,
+  { properties, traceId, agent, tool }: ToolErrorReport,
 ): Effect.Effect<ToolCallOutcome, ToolCallError> => {
   if (Cause.hasInterruptsOnly(cause)) {
     return Effect.failCause(cause);
@@ -39,7 +41,12 @@ const renderFailure = (
   ).pipe(
     Effect.map(
       (): ToolCallOutcome => ({
-        result: handleToolError(thrown, properties, traceId, agent),
+        result: handleToolError(thrown, {
+          properties,
+          traceId,
+          agent,
+          readOnlyTool: tool.annotations.readOnlyHint === true,
+        }),
         kind: isServerError(thrown) ? 'server-error' : 'client-error',
       }),
     ),

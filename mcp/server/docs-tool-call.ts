@@ -31,23 +31,15 @@ const docsToolProperties = (
 });
 
 const runDocsTool = (
-  {
-    toolName,
-    args,
-    traceId,
-  }: {
-    readonly toolName: string;
-    readonly args: unknown;
-    readonly traceId: string;
-  },
+  { tool, args, traceId }: Omit<Parameters<ToolCall>[0], 'ctx'>,
   agent: IdentifiedClient,
   userAgent: string | undefined,
 ) => {
-  const handler = NEON_HANDLERS[toolName];
-  const properties = docsToolProperties(toolName, agent, traceId);
+  const handler = NEON_HANDLERS[tool.name];
+  const properties = docsToolProperties(tool.name, agent, traceId);
 
-  assert(handler !== undefined, `Handler for tool ${toolName} not found`);
-  assert(Predicate.isObject(args), `${toolName} arguments were not validated`);
+  assert(handler !== undefined, `Handler for tool ${tool.name} not found`);
+  assert(Predicate.isObject(args), `${tool.name} arguments were not validated`);
 
   return renderToolCall(
     handler(
@@ -58,7 +50,7 @@ const runDocsTool = (
         userAgent,
       },
     ),
-    { properties, traceId, agent },
+    { properties, traceId, agent, tool },
   );
 };
 
@@ -91,7 +83,7 @@ export const docsToolCall =
       });
 
       const outcome = yield* Effect.suspend(() =>
-        runDocsTool({ toolName: tool.name, args, traceId }, agent, userAgent),
+        runDocsTool({ tool, args, traceId }, agent, userAgent),
       );
 
       if (outcome.kind !== 'success') {

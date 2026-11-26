@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NeonApiError, NeonClientError, NeonError } from '@neon/sdk';
+import {
+  NeonApiError,
+  NeonClientError,
+  NeonError,
+  NeonNetworkError,
+} from '@neon/sdk';
 import { createNeonTools, InspectDiagnosticError } from '@neon/tools';
 import { NeonDbError } from '@neondatabase/serverless';
 import type { captureException as sentryCaptureException } from '@sentry/node';
@@ -37,6 +42,8 @@ const properties = {
   clientApplication: agent.clientApplication,
 };
 
+const context = { properties, traceId: 'trace-1', agent, readOnlyTool: false };
+
 describe('handleToolError', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -44,7 +51,7 @@ describe('handleToolError', () => {
 
   it('tags captured exceptions with the identified agent', () => {
     const error = new Error('upstream failed');
-    const result = handleToolError(error, properties, 'trace-1', agent);
+    const result = handleToolError(error, context);
 
     expect(result.isError).toBe(true);
     expect(captureException).toHaveBeenCalledWith(error, {
@@ -62,7 +69,7 @@ describe('handleToolError', () => {
       code: '',
     });
 
-    handleToolError(error, properties, undefined, agent);
+    handleToolError(error, { ...context, traceId: undefined });
 
     expect(captureException).toHaveBeenCalledWith(error, {
       extra: { ...properties, neonApiStatus: '500' },
@@ -86,7 +93,7 @@ describe('handleToolError', () => {
       body: { message: 'please try again later' },
     });
 
-    const result = handleToolError(error, properties, 'trace-1', agent);
+    const result = handleToolError(error, context);
 
     expect(result.content).toStrictEqual([
       {
@@ -122,26 +129,46 @@ describe('handleToolError', () => {
     });
   });
 
+  it('tells the agent whether a call the Neon API never answered can be sent again', () => {
+    const error = new NeonNetworkError(
+      'Network error: no response received from the Neon API (UND_ERR_CONNECT_TIMEOUT).',
+      { reason: 'UND_ERR_CONNECT_TIMEOUT' },
+    );
+
+    const read = handleToolError(error, { ...context, readOnlyTool: true });
+    const write = handleToolError(error, context);
+
+    expect(read.content).toStrictEqual([
+      {
+        type: 'text',
+        text: [
+          'NeonNetworkError: Network error: no response received from the Neon API (UND_ERR_CONNECT_TIMEOUT).',
+          'The server already retried this read-only call. It changed nothing; call it again in a moment.',
+        ].join('\n'),
+      },
+    ]);
+    expect(write.content).toStrictEqual([
+      {
+        type: 'text',
+        text: [
+          'NeonNetworkError: Network error: no response received from the Neon API (UND_ERR_CONNECT_TIMEOUT).',
+          'This tool can change resources, so the server did not run it again. Check the current state before calling it again.',
+        ].join('\n'),
+      },
+    ]);
+    expect(
+      captureException.mock.calls.map(([captured]) => captured),
+    ).toStrictEqual([error, error]);
+  });
+
   it('does not capture client, 4xx API, or Postgres statement errors', () => {
-    handleToolError(
-      new InvalidArgumentError('bad arg'),
-      properties,
-      'trace-1',
-      agent,
-    );
-    handleToolError(
-      new NeonApiError('Not Found', { status: 404 }),
-      properties,
-      'trace-1',
-      agent,
-    );
+    handleToolError(new InvalidArgumentError('bad arg'), context);
+    handleToolError(new NeonApiError('Not Found', { status: 404 }), context);
     handleToolError(
       Object.assign(new NeonDbError('relation "t" does not exist'), {
         code: '42P01',
       }),
-      properties,
-      'trace-1',
-      agent,
+      context,
     );
 
     expect(captureException).not.toHaveBeenCalled();
@@ -175,13 +202,13 @@ describe('handleToolError', () => {
     );
 
     for (const error of [quota, blockedNetwork, loginRejected, raisedByQuery]) {
-      handleToolError(error, properties, 'trace-1', agent);
+      handleToolError(error, context);
     }
 
     expect(captureException).not.toHaveBeenCalled();
 
     for (const error of [unreadable, unreachable]) {
-      handleToolError(error, properties, 'trace-1', agent);
+      handleToolError(error, context);
     }
 
     expect(captureException.mock.calls.map(([error]) => error)).toStrictEqual([
@@ -204,7 +231,7 @@ describe('handleToolError', () => {
       },
     );
 
-    const result = handleToolError(error, properties, 'trace-1', agent);
+    const result = handleToolError(error, context);
 
     expect(result.content).toEqual([
       {
@@ -225,7 +252,7 @@ describe('handleToolError', () => {
     })['projects.get'].inputSchema.safeParse({ project_id: 'My Project' });
 
     expect(error).toHaveProperty('name', 'ZodError');
-    const result = handleToolError(error, properties, 'trace-1', agent);
+    const result = handleToolError(error, context);
 
     expect(result.isError).toBe(true);
     expect(result.content).toContainEqual(
@@ -239,9 +266,7 @@ describe('handleToolError', () => {
   it('does not capture Neon SDK client errors', () => {
     handleToolError(
       new NeonClientError('Branch has no parent and cannot be reset.'),
-      properties,
-      'trace-1',
-      agent,
+      context,
     );
 
     expect(captureException).not.toHaveBeenCalled();
@@ -257,7 +282,7 @@ describe('handleToolError', () => {
       cause,
     );
 
-    const result = handleToolError(error, properties, 'trace-1', agent);
+    const result = handleToolError(error, context);
 
     expect(result.isError).toBe(true);
     expect(captureException).toHaveBeenCalledWith(error, expect.anything());
@@ -265,7 +290,7 @@ describe('handleToolError', () => {
 
   it('captures Neon SDK errors of other kinds', () => {
     const error = new NeonError('operation failed', 'operation');
-    handleToolError(error, properties, 'trace-1', agent);
+    handleToolError(error, context);
 
     expect(captureException).toHaveBeenCalledWith(error, expect.anything());
   });
@@ -276,7 +301,7 @@ describe('handleToolError', () => {
       body: { message: 'role with that name already exists' },
     });
 
-    const result = handleToolError(error, properties, 'trace-1', agent);
+    const result = handleToolError(error, context);
 
     expect(result.isError).toBe(true);
     expect(result.content).toContainEqual(

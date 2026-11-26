@@ -85,7 +85,7 @@ export const authenticatedToolCall =
           apiKey: context.apiKey,
           userAgent,
         }),
-        { properties, traceId, agent },
+        { properties, traceId, agent, tool },
       );
 
       if (outcome.result.isError === true) {
