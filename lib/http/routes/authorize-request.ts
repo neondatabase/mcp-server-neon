@@ -4,7 +4,7 @@ import { preferenceReadOnly } from '../../../mcp/oauth/consent-mode';
 import type { DownstreamAuthRequest } from '../../../mcp/oauth/downstream-auth-request';
 import { OAuthStore } from '../../../mcp/oauth/oauth-store';
 import { resolveGrantFromResourceUri } from '../../../mcp/utils/grant-context';
-import { SERVER_HOST } from '../../config';
+import { ServerConfig } from '../../config';
 import { oauthBrowserRequest } from '../oauth-request';
 import { InvalidRequestOrigin } from './authorize-consent';
 
@@ -36,13 +36,14 @@ export const parseAuthRequest = (
  */
 export const canonicalLocation = Effect.fnUntraced(function* (url: URL) {
   const browser = yield* oauthBrowserRequest;
+  const { serverHost } = yield* ServerConfig;
 
   return yield* Effect.try({
     try: () =>
       consentCanonicalLocation(
         browser.publicOrigin,
         `${url.pathname}${url.search}`,
-        SERVER_HOST,
+        serverHost,
       ),
     catch: () => InvalidRequestOrigin.make({}),
   });

@@ -1,3 +1,4 @@
+import { Redacted } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -25,12 +26,12 @@ vi.mock('openid-client', () => ({
   customFetch: Symbol('customFetch'),
 }));
 
-vi.mock('../../lib/config', () => ({
-  CLIENT_ID: 'client-id',
-  CLIENT_SECRET: 'client-secret',
-  SERVER_HOST: 'https://mcp.neon.tech',
-  UPSTREAM_OAUTH_HOST: 'https://oauth.neon.tech',
-}));
+const upstreamClient = {
+  serverHost: 'https://mcp.neon.tech',
+  upstreamOAuthHost: 'https://oauth.neon.tech',
+  clientId: 'client-id',
+  clientSecret: Redacted.make('client-secret'),
+};
 
 describe('lib/oauth/client upstream OAuth request shape', () => {
   beforeEach(() => {
@@ -47,7 +48,7 @@ describe('lib/oauth/client upstream OAuth request shape', () => {
 
   it('does not include resource parameter in upstream authorization URL', async () => {
     const { upstreamAuth } = await import('../../lib/oauth/client');
-    await upstreamAuth('encoded-state');
+    await upstreamAuth(upstreamClient, 'encoded-state');
 
     expect(buildAuthorizationUrlMock).toHaveBeenCalledWith(
       expect.anything(),
@@ -67,7 +68,7 @@ describe('lib/oauth/client upstream OAuth request shape', () => {
     const { exchangeCode } = await import('../../lib/oauth/client');
     const callbackUrl = new URL('https://mcp.neon.tech/callback?code=abc');
 
-    await exchangeCode(callbackUrl, 'encoded-state');
+    await exchangeCode(upstreamClient, callbackUrl, 'encoded-state');
 
     expect(authorizationCodeGrantMock).toHaveBeenCalledWith(
       expect.anything(),

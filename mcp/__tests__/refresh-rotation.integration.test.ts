@@ -87,7 +87,7 @@ vi.mock('redis', () => ({
 }));
 
 vi.mock('../../lib/oauth/client', () => ({
-  exchangeRefreshToken: async (refreshToken: string) => {
+  exchangeRefreshToken: async (_client: unknown, refreshToken: string) => {
     shared.upstreamCalls++;
     if (shared.presented.has(refreshToken)) shared.reuse.push(refreshToken);
     shared.presented.add(refreshToken);

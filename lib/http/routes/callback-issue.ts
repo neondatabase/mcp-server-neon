@@ -67,7 +67,7 @@ const successAnswer = Effect.fnUntraced(function* (input: {
   const clientName: unknown = client.client_name;
 
   return FlowAnswer.Redirect({
-    location: clientRedirect({
+    location: yield* clientRedirect({
       redirectUri: request.redirectUri,
       state: request.state,
       code,

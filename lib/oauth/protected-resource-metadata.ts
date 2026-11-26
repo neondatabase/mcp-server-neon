@@ -1,5 +1,3 @@
-import { SERVER_HOST } from '@/lib/config';
-
 export const PROTECTED_RESOURCE_METADATA_PATH =
   '/.well-known/oauth-protected-resource';
 
@@ -30,7 +28,7 @@ function firstForwardedValue(value: string | null): string | null {
 
 function resolveRequestOrigin(
   request: Request,
-  fallbackServerHost = SERVER_HOST,
+  fallbackServerHost: string,
 ): string {
   const requestUrl = new URL(request.url);
   const forwardedHost = firstForwardedValue(
@@ -78,15 +76,13 @@ export function parseResourceIdentifier(resource: string): URL {
 /**
  * Host-level protected resource metadata endpoint response identifier.
  */
-export function getHostLevelResourceIdentifier(
-  serverHost = SERVER_HOST,
-): string {
+export function getHostLevelResourceIdentifier(serverHost: string): string {
   return toOriginString(serverHost);
 }
 
 export function getHostLevelResourceIdentifierFromRequest(
   request: Request,
-  fallbackServerHost = SERVER_HOST,
+  fallbackServerHost: string,
 ): string {
   return resolveRequestOrigin(request, fallbackServerHost);
 }
@@ -99,7 +95,7 @@ export function getHostLevelResourceIdentifierFromRequest(
  */
 export function deriveResourceIdentifierFromMetadataRequest(
   request: Request,
-  fallbackServerHost = SERVER_HOST,
+  fallbackServerHost: string,
 ): string {
   const url = new URL(request.url);
   const origin = resolveRequestOrigin(request, fallbackServerHost);
@@ -130,7 +126,7 @@ export function deriveResourceIdentifierFromMetadataRequest(
  */
 export function buildResourceMetadataUrlForResourceRequest(
   request: Request,
-  fallbackServerHost = SERVER_HOST,
+  fallbackServerHost: string,
 ): string {
   const url = new URL(request.url);
   const origin = resolveRequestOrigin(request, fallbackServerHost);

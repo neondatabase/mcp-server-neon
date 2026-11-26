@@ -186,7 +186,7 @@ vi.mock('../oauth/model', () => ({
 }));
 
 vi.mock('../../lib/oauth/client', () => ({
-  exchangeRefreshToken: async (rt: string) => {
+  exchangeRefreshToken: async (_client: unknown, rt: string) => {
     state.upstreamCalls++;
     if (state.upstreamLatencyMs > 0) {
       await new Promise<void>((r) => {

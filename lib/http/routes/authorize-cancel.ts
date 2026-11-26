@@ -5,11 +5,16 @@ import {
   presentToBrowser,
 } from '../../../mcp/oauth/auth-complete-response';
 import { FlowAnswer } from '../../../mcp/oauth/flow-answer';
-import { SERVER_HOST } from '../../config';
+import { ServerConfig } from '../../config';
 import { oauthBrowserRequest } from '../oauth-request';
 import { restartResponse } from './authorize-consent';
 
-const cancelRedirect = (redirectUri: string, state: string) => {
+const cancelRedirect = (input: {
+  readonly redirectUri: string;
+  readonly state: string;
+  readonly serverHost: string;
+}) => {
+  const { redirectUri, state, serverHost } = input;
   const url = new URL(redirectUri);
 
   url.searchParams.set('error', 'access_denied');
@@ -18,7 +23,7 @@ const cancelRedirect = (redirectUri: string, state: string) => {
     url.searchParams.set('state', state);
   }
 
-  url.searchParams.set('iss', SERVER_HOST);
+  url.searchParams.set('iss', serverHost);
 
   return url.href;
 };
@@ -37,13 +42,14 @@ export const cancel = Effect.fnUntraced(function* (binding: {
 
   const { clientId, redirectUri, state } = consumed.value.request;
   const browser = yield* oauthBrowserRequest;
+  const { serverHost } = yield* ServerConfig;
   const clientName = yield* clientNameForPage({ clientId, redirectUri });
 
   // A desktop app gets the same "Connection cancelled" page as a cancel
   // relayed through /callback, instead of the consent form staying up.
   return yield* presentToBrowser({
     answer: FlowAnswer.Redirect({
-      location: cancelRedirect(redirectUri, state),
+      location: cancelRedirect({ redirectUri, state, serverHost }),
       status: 303,
       clears: Option.some({ id: binding.id, secure: browser.secure }),
       context: Option.some({

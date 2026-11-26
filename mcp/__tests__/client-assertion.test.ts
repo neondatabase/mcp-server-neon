@@ -7,7 +7,6 @@ import {
   type JWK,
 } from 'jose';
 import type { Client } from 'oauth2-server';
-import { SERVER_HOST } from '../../lib/config';
 import {
   CLIENT_ASSERTION_TYPE,
   clientIdFromAssertion,
@@ -19,6 +18,7 @@ import {
   type FetchMetadataDocument,
 } from '../../lib/oauth/client-id-metadata-document';
 
+const SERVER_HOST = 'https://mcp.neon.tech';
 const CLIENT_ID = 'https://client.example.com/oauth/client.json';
 const JWKS_URI = 'https://client.example.com/oauth/jwks.json';
 const TOKEN_ENDPOINT = `${SERVER_HOST}/api/token`;
@@ -79,18 +79,24 @@ describe('client assertion verification', () => {
   it('accepts an assertion signed by a key in the client JWKS', async () => {
     const verify = verifierFor(key);
     expect(
-      await verify(cimdClient, await sign(key), CLIENT_ASSERTION_TYPE),
+      await verify({
+        client: cimdClient,
+        assertion: await sign(key),
+        assertionType: CLIENT_ASSERTION_TYPE,
+        serverHost: SERVER_HOST,
+      }),
     ).toBe(true);
   });
 
   it('accepts the issuer identifier as the audience', async () => {
     const verify = verifierFor(key);
     expect(
-      await verify(
-        cimdClient,
-        await sign(key, { aud: SERVER_HOST }),
-        CLIENT_ASSERTION_TYPE,
-      ),
+      await verify({
+        client: cimdClient,
+        assertion: await sign(key, { aud: SERVER_HOST }),
+        assertionType: CLIENT_ASSERTION_TYPE,
+        serverHost: SERVER_HOST,
+      }),
     ).toBe(true);
   });
 
@@ -103,7 +109,12 @@ describe('client assertion verification', () => {
   ])('rejects %s', async (_, claims) => {
     const verify = verifierFor(key);
     expect(
-      await verify(cimdClient, await sign(key, claims), CLIENT_ASSERTION_TYPE),
+      await verify({
+        client: cimdClient,
+        assertion: await sign(key, claims),
+        assertionType: CLIENT_ASSERTION_TYPE,
+        serverHost: SERVER_HOST,
+      }),
     ).toBe(false);
   });
 
@@ -116,19 +127,34 @@ describe('client assertion verification', () => {
       .setAudience(TOKEN_ENDPOINT)
       .setExpirationTime('1m')
       .sign(otherKey.privateKey);
-    expect(await verify(cimdClient, assertion, CLIENT_ASSERTION_TYPE)).toBe(
-      false,
-    );
+    expect(
+      await verify({
+        client: cimdClient,
+        assertion,
+        assertionType: CLIENT_ASSERTION_TYPE,
+        serverHost: SERVER_HOST,
+      }),
+    ).toBe(false);
   });
 
   it('rejects a missing assertion or the wrong assertion type', async () => {
     const verify = verifierFor(key);
-    expect(await verify(cimdClient, undefined, CLIENT_ASSERTION_TYPE)).toBe(
-      false,
-    );
-    expect(await verify(cimdClient, await sign(key), 'urn:example:other')).toBe(
-      false,
-    );
+    expect(
+      await verify({
+        client: cimdClient,
+        assertion: undefined,
+        assertionType: CLIENT_ASSERTION_TYPE,
+        serverHost: SERVER_HOST,
+      }),
+    ).toBe(false);
+    expect(
+      await verify({
+        client: cimdClient,
+        assertion: await sign(key),
+        assertionType: 'urn:example:other',
+        serverHost: SERVER_HOST,
+      }),
+    ).toBe(false);
   });
 
   it('refetches the JWKS once when a rotated key is not cached yet', async () => {
@@ -139,10 +165,20 @@ describe('client assertion verification', () => {
     const verify = createClientAssertionVerifier(fetchDocument);
 
     expect(
-      await verify(cimdClient, await sign(key), CLIENT_ASSERTION_TYPE),
+      await verify({
+        client: cimdClient,
+        assertion: await sign(key),
+        assertionType: CLIENT_ASSERTION_TYPE,
+        serverHost: SERVER_HOST,
+      }),
     ).toBe(true);
     expect(
-      await verify(cimdClient, await sign(otherKey), CLIENT_ASSERTION_TYPE),
+      await verify({
+        client: cimdClient,
+        assertion: await sign(otherKey),
+        assertionType: CLIENT_ASSERTION_TYPE,
+        serverHost: SERVER_HOST,
+      }),
     ).toBe(true);
     expect(fetchDocument).toHaveBeenCalledTimes(2);
   });
@@ -155,7 +191,12 @@ describe('client assertion verification', () => {
       body: '',
     }));
     await expect(
-      verify(cimdClient, await sign(key), CLIENT_ASSERTION_TYPE),
+      verify({
+        client: cimdClient,
+        assertion: await sign(key),
+        assertionType: CLIENT_ASSERTION_TYPE,
+        serverHost: SERVER_HOST,
+      }),
     ).rejects.toBeInstanceOf(ClientMetadataUnavailableError);
   });
 
@@ -163,11 +204,15 @@ describe('client assertion verification', () => {
     const fetchDocument = vi.fn<FetchMetadataDocument>();
     const verify = createClientAssertionVerifier(fetchDocument);
     expect(
-      await verify(
-        { ...cimdClient, jwks_uri: 'http://client.example.com/jwks.json' },
-        await sign(key),
-        CLIENT_ASSERTION_TYPE,
-      ),
+      await verify({
+        client: {
+          ...cimdClient,
+          jwks_uri: 'http://client.example.com/jwks.json',
+        },
+        assertion: await sign(key),
+        assertionType: CLIENT_ASSERTION_TYPE,
+        serverHost: SERVER_HOST,
+      }),
     ).toBe(false);
     expect(fetchDocument).not.toHaveBeenCalled();
   });
@@ -176,11 +221,16 @@ describe('client assertion verification', () => {
     const fetchDocument = vi.fn<FetchMetadataDocument>();
     const verify = createClientAssertionVerifier(fetchDocument);
     expect(
-      await verify(
-        { ...cimdClient, jwks_uri: undefined, jwks: { keys: [key.jwk] } },
-        await sign(key),
-        CLIENT_ASSERTION_TYPE,
-      ),
+      await verify({
+        client: {
+          ...cimdClient,
+          jwks_uri: undefined,
+          jwks: { keys: [key.jwk] },
+        },
+        assertion: await sign(key),
+        assertionType: CLIENT_ASSERTION_TYPE,
+        serverHost: SERVER_HOST,
+      }),
     ).toBe(true);
     expect(fetchDocument).not.toHaveBeenCalled();
   });
@@ -204,6 +254,7 @@ describe('authenticateClient', () => {
       await authenticateClient(
         { ...cimdClient, jwks: { keys: [] } },
         credentials,
+        SERVER_HOST,
       ),
     ).toBe(false);
   });
@@ -218,6 +269,7 @@ describe('authenticateClient', () => {
           secret: 'registered-secret',
         },
         { ...credentials, clientSecret: 'registered-secret' },
+        SERVER_HOST,
       ),
     ).toBe(true);
   });
@@ -227,6 +279,7 @@ describe('authenticateClient', () => {
       await authenticateClient(
         { ...cimdClient, tokenEndpointAuthMethod: 'none' },
         credentials,
+        SERVER_HOST,
       ),
     ).toBe(true);
   });
@@ -239,16 +292,18 @@ describe('authenticateClient', () => {
       secret: 's3cret',
     };
     expect(
-      await authenticateClient(client, {
-        ...credentials,
-        clientSecret: 's3cret',
-      }),
+      await authenticateClient(
+        client,
+        { ...credentials, clientSecret: 's3cret' },
+        SERVER_HOST,
+      ),
     ).toBe(true);
     expect(
-      await authenticateClient(client, {
-        ...credentials,
-        clientSecret: 'nope',
-      }),
+      await authenticateClient(
+        client,
+        { ...credentials, clientSecret: 'nope' },
+        SERVER_HOST,
+      ),
     ).toBe(false);
   });
 });

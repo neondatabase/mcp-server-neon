@@ -1,8 +1,8 @@
-import type { Effect } from 'effect';
+import { Effect } from 'effect';
 import type { AuthorizationCode, Client } from 'oauth2-server';
 import type { ApprovedAuthTransaction } from '../../../mcp/oauth/auth-transaction';
 import { generateRandomString } from '../../../mcp/oauth/utils';
-import { SERVER_HOST } from '../../config';
+import { ServerConfig } from '../../config';
 import type { resolveAccount } from './callback-account';
 
 const AUTHORIZATION_CODE_TTL_MS = 10 * 60 * 1000;
@@ -49,11 +49,12 @@ export const authorizationCode = (input: {
   };
 };
 
-export const clientRedirect = (input: {
+export const clientRedirect = Effect.fnUntraced(function* (input: {
   readonly redirectUri: string;
   readonly state: string;
   readonly code: string;
-}) => {
+}) {
+  const { serverHost } = yield* ServerConfig;
   const redirect = new URL(input.redirectUri);
 
   redirect.searchParams.set('code', input.code);
@@ -62,7 +63,7 @@ export const clientRedirect = (input: {
     redirect.searchParams.set('state', input.state);
   }
 
-  redirect.searchParams.set('iss', SERVER_HOST);
+  redirect.searchParams.set('iss', serverHost);
 
   return redirect.href;
-};
+});

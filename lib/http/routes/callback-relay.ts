@@ -4,7 +4,7 @@ import { clientNameForPage } from '../../../mcp/oauth/auth-complete-response';
 import { isAuthTransactionId } from '../../../mcp/oauth/browser-binding';
 import type { DownstreamAuthRequest } from '../../../mcp/oauth/downstream-auth-request';
 import { FlowAnswer } from '../../../mcp/oauth/flow-answer';
-import { SERVER_HOST } from '../../config';
+import { ServerConfig } from '../../config';
 import {
   classifyUpstreamError,
   emitAuthCallbackSlo,
@@ -23,6 +23,7 @@ const clientErrorRedirect = (input: {
   readonly error: string;
   readonly description: string | null;
   readonly uri: string | null;
+  readonly serverHost: string;
 }) => {
   const url = new URL(input.request.redirectUri);
 
@@ -40,7 +41,7 @@ const clientErrorRedirect = (input: {
     url.searchParams.set('state', input.request.state);
   }
 
-  url.searchParams.set('iss', SERVER_HOST);
+  url.searchParams.set('iss', input.serverHost);
 
   return url;
 };
@@ -148,9 +149,16 @@ const relayToClient = Effect.fnUntraced(function* (
 
   const clientName = yield* clientNameForPage(request);
   const browser = yield* oauthBrowserRequest;
+  const { serverHost } = yield* ServerConfig;
 
   return FlowAnswer.Redirect({
-    location: clientErrorRedirect({ request, error, description, uri }).href,
+    location: clientErrorRedirect({
+      request,
+      error,
+      description,
+      uri,
+      serverHost,
+    }).href,
     status: 307,
     clears: Option.some({ id: state, secure: browser.secure }),
     context: Option.some({
