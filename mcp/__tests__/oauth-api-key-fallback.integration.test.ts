@@ -1,287 +1,165 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { GrantContext } from '../utils/grant-context';
-import type { ApiKeyRecord } from '../oauth/kv-store';
+/**
+ * An OAuth bearer or API key on the MCP transport while the token store is
+ * down: `OAUTH_DATABASE_URL` refuses connections, so the token lookup and the
+ * API-key cache fail for real, and a loopback Neon API verifies each bearer.
+ * `oauth-api-key-fallback-store-answers.integration.test.ts` covers the store
+ * answering.
+ */
+import { describe, expect, it, vi } from 'vitest';
+import { collectKeepalives, serveLoopback } from './helpers/loopback';
+import {
+  listedToolNames,
+  mcpRequest,
+  responseBody,
+} from './helpers/mcp-request';
+import { neonAuthStandIn } from './helpers/neon-auth';
 
-const { apiKeyCache, apiKeyCacheGet, getAuthDetails, getCurrentUserInfo } =
-  vi.hoisted(() => {
-    const apiKeyCache = new Map<string, unknown>();
-    return {
-      apiKeyCache,
-      apiKeyCacheGet: vi.fn(async (key: string) => apiKeyCache.get(key)),
-      getAuthDetails: vi.fn<() => Promise<{ data: unknown }>>(),
-      getCurrentUserInfo: vi.fn<() => Promise<{ data: unknown }>>(),
-    };
-  });
+const CACHED_OAUTH_BEARER = vi.hoisted(
+  () => `oauth-cached-${crypto.randomUUID()}`,
+);
 
-vi.mock('../oauth/model', () => ({
-  model: { getAccessToken: vi.fn() },
-}));
+// No current code path caches an OAuth bearer's record, and the cache has no
+// service a test could seed, so one record is served in front of the real,
+// unreachable cache. Every other key reaches the real cache.
+vi.mock('../oauth/kv-store', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../oauth/kv-store')>();
 
-vi.mock('../oauth/kv-store', async () => {
-  const actual =
-    await vi.importActual<typeof import('../oauth/kv-store')>(
-      '../oauth/kv-store',
-    );
   return {
     ...actual,
-    getApiKeys: () => ({
-      get: apiKeyCacheGet,
-      set: async (key: string, value: unknown) => {
-        apiKeyCache.set(key, value);
-      },
-    }),
+    getApiKeys: () => {
+      const cache = actual.getApiKeys();
+
+      return {
+        ...cache,
+        get: async (key: string) =>
+          key === CACHED_OAUTH_BEARER
+            ? {
+                apiKey: key,
+                authMethod: 'oauth' as const,
+                account: { id: 'user-1', name: 'User', isOrg: false },
+              }
+            : cache.get(key),
+      };
+    },
   };
 });
 
-// The Neon API, answering from the `getAuthDetails` and `getCurrentUserInfo`
-// spies; a rejected spy is a 500.
-const answerFrom = async (spy: typeof getAuthDetails) => {
-  try {
-    const { data } = await spy();
+const neon = neonAuthStandIn();
+const upstream = await serveLoopback(neon.answer);
+const keepalives = collectKeepalives();
 
-    return Response.json(data);
-  } catch {
-    return Response.json({ message: 'Neon API 500' }, { status: 500 });
-  }
-};
+Object.assign(process.env, {
+  NEON_API_HOST: `${upstream.origin}/api/v2`,
+  NEON_MCP_DISABLE_ANALYTICS: '1',
+  SENTRY_DSN: '',
+  OAUTH_DATABASE_URL: 'postgresql://127.0.0.1:1/api-key-fallback',
+});
 
-const neonApi = async (input: string | URL | Request) => {
-  const { pathname } = new URL(input instanceof Request ? input.url : input);
-
-  if (pathname.endsWith('/auth')) {
-    return answerFrom(getAuthDetails);
-  }
-
-  if (pathname.endsWith('/users/me')) {
-    return answerFrom(getCurrentUserInfo);
-  }
-
-  if (pathname.includes('/organizations/')) {
-    return Response.json({ id: 'org-1', name: 'Org' });
-  }
-
-  throw new Error(`No fake for ${pathname}`);
-};
-
-vi.mock('../analytics/analytics', () => ({
-  track: vi.fn(),
-  identify: vi.fn(),
-  flushAnalytics: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('../utils/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    silent: false,
-  },
-}));
-
-const { identify } = await import('../analytics/analytics');
-const { model } = await import('../oauth/model');
 const { POST, GET, HEAD } = await import('../../app/api/[transport]/route');
+const { logger } = await import('../utils/logger');
 
-const OAUTH_BEARER = 'oauth-bearer-from-the-mcp-oauth-flow';
-const API_KEY = 'napi_test_api_key';
+const logged: string[] = [];
 
-function storedOAuthToken(scope: string, grant: GrantContext) {
-  return {
-    accessToken: OAUTH_BEARER,
-    scope,
-    client: { id: 'client-1', client_name: 'Cursor', grants: ['*'] },
-    user: { id: 'user-1', name: 'User', email: 'u@x.dev' },
-    grant,
-  };
-}
+logger.on('data', (info: { readonly message: string }) => {
+  logged.push(info.message);
+});
 
-function storeLookupFails() {
-  vi.mocked(model.getAccessToken).mockRejectedValue(
-    Object.assign(new Error('sorry, too many clients already'), {
-      code: '53300',
-    }),
-  );
-}
+const uniqueId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
 
-function neonSays(authMethod: ApiKeyRecord['authMethod']) {
-  getAuthDetails.mockResolvedValue({
-    data: { auth_method: authMethod, account_id: 'org-1' },
-  });
-}
+/** A bearer the Neon API reports with `authMethod`. */
+const bearerFor = (
+  authMethod: 'oauth' | 'api_key_user' | 'api_key_org',
+  user: 'answers' | 'fails' = 'answers',
+) => {
+  const bearer = uniqueId(authMethod === 'oauth' ? 'oauth-bearer' : 'napi');
 
-function request(
-  method: string,
-  path: string,
-  bearer: string,
-  body?: unknown,
-): Request {
-  return new Request(`http://localhost${path}`, {
+  neon.callers.set(bearer, { authMethod, accountId: uniqueId('acct'), user });
+
+  return bearer;
+};
+
+const request = (method: string, path: string, bearer: string) =>
+  new Request(`http://localhost${path}`, {
     method,
-    headers: {
-      Authorization: `Bearer ${bearer}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    headers: { Authorization: `Bearer ${bearer}` },
   });
-}
 
-async function listTools(bearer: string, query = '') {
+const listTools = async (bearerToken: string, queryString = '') => {
   const res = await POST(
-    request('POST', `/mcp${query}`, bearer, {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/list',
-    }),
+    mcpRequest({ method: 'tools/list', bearerToken, queryString }),
   );
-  const raw = await res.text();
-  const dataLine = raw
-    .split('\n')
-    .filter((line) => line.startsWith('data: '))
-    .pop();
-  const body: unknown = JSON.parse(dataLine ? dataLine.slice(6) : raw);
+
+  const body = responseBody(await res.text());
+
+  await keepalives.settle();
+
   return { res, body };
-}
+};
 
-function toolNames(body: unknown): string[] {
-  const parsed = body as { result?: { tools?: Array<{ name: string }> } };
-  return (parsed.result?.tools ?? []).map((tool) => tool.name);
-}
-
-function expectTokenStoreUnavailable(res: Response) {
+const expectTokenStoreUnavailable = (res: Response) => {
   expect(res.status).toBe(503);
   expect(res.headers.get('Retry-After')).toBe('5');
   expect(res.headers.get('WWW-Authenticate')).toBeNull();
-}
+};
 
-describe('OAuth bearer on the API-key path', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.stubGlobal('fetch', neonApi);
-    apiKeyCache.clear();
-    apiKeyCacheGet.mockImplementation(async (key: string) =>
-      apiKeyCache.get(key),
-    );
-    getCurrentUserInfo.mockResolvedValue({
-      data: { id: 'user-1', name: 'User', last_name: '', email: 'u@x.dev' },
-    });
-  });
-
-  it('keeps the stored read-only grant when the token store answers', async () => {
-    vi.mocked(model.getAccessToken).mockResolvedValue(
-      storedOAuthToken('read', { projectId: null, scopes: null }) as never,
-    );
-
-    const { res, body } = await listTools(OAUTH_BEARER, '?readonly=false');
-
-    expect(res.status).toBe(200);
-    expect(toolNames(body)).toContain('run_sql');
-    expect(toolNames(body)).not.toContain('create_project');
-    expect(getAuthDetails).not.toHaveBeenCalled();
-  });
-
+describe('OAuth bearer on the API-key path while the token store is down', () => {
   it('answers 503 instead of a URL grant when the token store lookup fails', async () => {
-    storeLookupFails();
-    neonSays('oauth');
-
-    const { res, body } = await listTools(OAUTH_BEARER);
+    const { res, body } = await listTools(bearerFor('oauth'));
 
     expectTokenStoreUnavailable(res);
-    expect(body).toEqual({
+    expect(body).toStrictEqual({
       error: 'Token store unavailable',
       code: 'token_store_unavailable',
     });
   });
 
   it('answers 503 even when resolving the account would fail', async () => {
-    storeLookupFails();
-    neonSays('oauth');
-    getCurrentUserInfo.mockRejectedValue(new Error('Neon API 500'));
+    const bearer = bearerFor('oauth', 'fails');
 
-    const { res } = await listTools(OAUTH_BEARER);
+    const { res } = await listTools(bearer);
 
     expectTokenStoreUnavailable(res);
-    expect(getCurrentUserInfo).not.toHaveBeenCalled();
-    expect(apiKeyCache.has(OAUTH_BEARER)).toBe(false);
+    expect(neon.requestedWith(bearer)).toStrictEqual(['/auth']);
+    // A cache write would reach the unreachable store and log its failure.
+    expect(logged).not.toContain('API key cache write failed');
+    expect(logged).not.toContain('API key cache miss, verified and cached');
   });
 
   it('answers 503 for a cached OAuth record without asking Neon again', async () => {
-    storeLookupFails();
-    apiKeyCache.set(OAUTH_BEARER, {
-      apiKey: OAUTH_BEARER,
-      authMethod: 'oauth',
-      account: { id: 'user-1', name: 'User', isOrg: false },
-    });
-
-    const { res } = await listTools(OAUTH_BEARER);
+    const { res } = await listTools(CACHED_OAUTH_BEARER);
 
     expectTokenStoreUnavailable(res);
-    expect(getAuthDetails).not.toHaveBeenCalled();
+    expect(neon.requestedWith(CACHED_OAUTH_BEARER)).toStrictEqual([]);
   });
 
-  it('identifies the account behind an API key on a cache miss only', async () => {
-    vi.mocked(model.getAccessToken).mockResolvedValue(undefined);
-    neonSays('api_key_user');
-
-    const miss = await listTools(API_KEY);
-
-    expect(miss.res.status).toBe(200);
-    expect(identify).toHaveBeenCalledExactlyOnceWith(
-      { id: 'user-1', name: 'User', email: 'u@x.dev', isOrg: false },
-      { context: { authMethod: 'api_key_user' } },
-    );
-
-    vi.mocked(identify).mockClear();
-    apiKeyCache.set(API_KEY, {
-      apiKey: API_KEY,
-      authMethod: 'api_key_user',
-      account: { id: 'user-1', name: 'User', isOrg: false },
-    });
-
-    const hit = await listTools(API_KEY);
-
-    expect(hit.res.status).toBe(200);
-    expect(identify).not.toHaveBeenCalled();
-  });
-
-  it('answers 401 with the OAuth challenge when the store has no record', async () => {
-    vi.mocked(model.getAccessToken).mockResolvedValue(undefined);
-    neonSays('oauth');
-
-    const { res } = await listTools(OAUTH_BEARER);
-
-    expect(res.status).toBe(401);
-    expect(res.headers.get('WWW-Authenticate')).toContain('Bearer');
-    expect(res.headers.get('WWW-Authenticate')).toContain('resource_metadata=');
-  });
-
+  // An authenticated route answers 503 for this bearer while the store is down.
   it.each(['/sse', '/api/sse'])(
     'retires GET %s without consulting authentication',
     async (path) => {
-      storeLookupFails();
-      neonSays('oauth');
+      const bearer = bearerFor('oauth');
 
-      const res = await GET(request('GET', path, OAUTH_BEARER));
+      const res = await GET(request('GET', path, bearer));
 
       expect(res.status).toBe(410);
       expect(res.headers.get('Content-Type')).toBe('application/json');
       await expect(res.json()).resolves.toMatchObject({
         error: 'transport_gone',
       });
-      expect(model.getAccessToken).not.toHaveBeenCalled();
+      expect(neon.requestedWith(bearer)).toStrictEqual([]);
     },
   );
 
   it('retires an SSE message POST without consulting authentication', async () => {
-    storeLookupFails();
-    neonSays('oauth');
+    const bearer = bearerFor('oauth');
 
     const res = await POST(
-      request('POST', '/api/message?sessionId=session-1', OAUTH_BEARER, {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/list',
+      new Request('http://localhost/api/message?sessionId=session-1', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${bearer}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
       }),
     );
 
@@ -289,65 +167,41 @@ describe('OAuth bearer on the API-key path', () => {
     await expect(res.json()).resolves.toMatchObject({
       error: 'transport_gone',
     });
-    expect(model.getAccessToken).not.toHaveBeenCalled();
+    expect(neon.requestedWith(bearer)).toStrictEqual([]);
   });
 
   it.each(['/mcp', '/api/mcp'])(
-    'answers HEAD %s with an empty 503 when the store is down and 401 when the record is missing',
+    'answers HEAD %s with an empty 503 when the store is down',
     async (path) => {
-      storeLookupFails();
-      neonSays('oauth');
-      const unavailable = await HEAD(request('HEAD', path, OAUTH_BEARER));
-      expectTokenStoreUnavailable(unavailable);
-      expect(await unavailable.text()).toBe('');
+      const unavailable = await HEAD(request('HEAD', path, bearerFor('oauth')));
 
-      vi.mocked(model.getAccessToken).mockResolvedValue(undefined);
-      const missing = await HEAD(request('HEAD', path, OAUTH_BEARER));
-      expect(missing.status).toBe(401);
-      expect(missing.headers.get('WWW-Authenticate')).toContain(
-        'resource_metadata=',
-      );
-      expect(await missing.text()).toBe('');
+      expectTokenStoreUnavailable(unavailable);
+      await expect(unavailable.text()).resolves.toBe('');
     },
   );
 
   it.each(['api_key_user', 'api_key_org'] as const)(
     'keeps %s working with its URL grant while the token store is down',
     async (authMethod) => {
-      storeLookupFails();
-      neonSays(authMethod);
-
       const { res, body } = await listTools(
-        API_KEY,
+        bearerFor(authMethod),
         '?readonly=true&category=querying',
       );
 
       expect(res.status).toBe(200);
-      expect(toolNames(body)).toContain('run_sql');
-      expect(toolNames(body)).not.toContain('run_sql_transaction');
-      expect(toolNames(body)).not.toContain('list_projects');
+      expect(listedToolNames(body)).toContain('run_sql');
+      expect(listedToolNames(body)).not.toContain('run_sql_transaction');
+      expect(listedToolNames(body)).not.toContain('list_projects');
     },
   );
 
   it('keeps an API key working when the API-key cache is down too', async () => {
-    storeLookupFails();
-    apiKeyCacheGet.mockRejectedValue(new Error('sorry, too many clients'));
-    neonSays('api_key_user');
+    const apiKey = bearerFor('api_key_user');
 
-    const { res, body } = await listTools(API_KEY);
+    const { res, body } = await listTools(apiKey);
 
     expect(res.status).toBe(200);
-    expect(toolNames(body)).toContain('create_project');
-  });
-
-  it('keeps an API key without a token-store record on its URL grant', async () => {
-    vi.mocked(model.getAccessToken).mockResolvedValue(undefined);
-    neonSays('api_key_org');
-
-    const { res, body } = await listTools(API_KEY, '?projectId=proj-1');
-
-    expect(res.status).toBe(200);
-    expect(toolNames(body)).not.toContain('list_projects');
-    expect(toolNames(body)).toContain('run_sql');
+    expect(listedToolNames(body)).toContain('create_project');
+    expect(logged).toContain('API key cache read failed');
   });
 });

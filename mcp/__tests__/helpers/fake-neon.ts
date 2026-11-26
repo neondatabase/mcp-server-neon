@@ -2,8 +2,9 @@ import { vi } from 'vitest';
 
 /**
  * Answers the Neon API requests the SQL tools make and the SQL-over-HTTP
- * requests `@neondatabase/serverless` sends, by stubbing global `fetch`. Both
- * the `@neon/tools` client and the serverless driver call it, so a test sees
+ * requests `@neondatabase/serverless` sends, either by stubbing global `fetch`
+ * (`stubFakeNeon`) or from a loopback server (`fakeNeon(...).answer`). Both
+ * the `@neon/tools` client and the serverless driver reach it, so a test sees
  * which role each connection asked for and which SQL ran where.
  */
 
@@ -86,7 +87,7 @@ function statementText(value: unknown): string {
   return value.query;
 }
 
-export function stubFakeNeon(options: FakeNeonOptions) {
+export function fakeNeon(options: FakeNeonOptions) {
   const api: ApiRequest[] = [];
   const sql: SqlRequest[] = [];
   const branch = {
@@ -180,17 +181,11 @@ export function stubFakeNeon(options: FakeNeonOptions) {
     return Response.json({ message: `no fake for ${path}` }, { status: 404 });
   }
 
-  const fetchMock = vi.fn(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      return request.headers.has('Neon-Connection-String')
-        ? answerSql(request)
-        : answerApi(request);
-    },
-  );
-  vi.stubGlobal('fetch', fetchMock);
-
   return {
+    answer: async (request: Request) =>
+      request.headers.has('Neon-Connection-String')
+        ? answerSql(request)
+        : answerApi(request),
     api,
     sql,
     connectionUriRequests: () =>
@@ -206,4 +201,17 @@ export function stubFakeNeon(options: FakeNeonOptions) {
   };
 }
 
-export type FakeNeon = ReturnType<typeof stubFakeNeon>;
+export const stubFakeNeon = (options: FakeNeonOptions) => {
+  const neon = fakeNeon(options);
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async (input, init) =>
+      neon.answer(new Request(input, init)),
+    ),
+  );
+
+  return neon;
+};
+
+export type FakeNeon = ReturnType<typeof fakeNeon>;
