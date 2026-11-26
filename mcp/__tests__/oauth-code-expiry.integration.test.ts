@@ -1,7 +1,6 @@
 /**
  * Authorization code expiry through /api/token and the real OAuth Postgres
- * database: the code row is stored as JSON, so its expiry reads back as a
- * string, and an expired code must still be refused.
+ * database.
  */
 import { randomUUID } from 'node:crypto';
 import { NextRequest } from 'next/server';
@@ -100,7 +99,7 @@ describe('authorization code expiry', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('answers a stored code with an unreadable expiry as a server fault', async () => {
+  it('answers a stored code without an expiry as a server fault', async () => {
     const { authorizationCode, accessToken } = await storeCode(
       new Date('not a date'),
     );
