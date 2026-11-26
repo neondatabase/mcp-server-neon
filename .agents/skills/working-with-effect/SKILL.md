@@ -34,4 +34,4 @@ Never fail with `new Error()` inside an Effect, including the `catch` of `Effect
 
 ## Tests
 
-Tests live in `mcp/__tests__/` and `e2e/`; this repo has no `src/`. `@effect/vitest` 4.x needs vitest 5 and this repo is on vitest 4, so until that upgrade, cover Effect code through the integration and end-to-end suites. No `vi.mock`, `vi.spyOn`, or module patching in new tests (`anti-slop/no-module-mocking`).
+Tests live in `mcp/__tests__/` and `e2e/`; this repo has no `src/`. Write Effect tests with `@effect/vitest`: `it.effect` for one test, `layer(SomeLayer)((it) => ...)` to provide a layer to a block instead of `Effect.provide` inside the test (`effecttsgo/strict-effect-provide`). No `vi.mock`, `vi.spyOn`, or module patching in new tests (`anti-slop/no-module-mocking`).

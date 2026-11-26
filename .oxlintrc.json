@@ -235,6 +235,13 @@
     "vitest/prefer-called-once": "off",
     // The repo does not enable vitest globals, so imports are required.
     "vitest/no-importing-vitest-globals": "off",
+    // An @effect/vitest `it.effect` block holds expects like `it` does.
+    "vitest/no-standalone-expect": [
+      "error",
+      {
+        "additionalTestBlockFunctions": ["it.effect"]
+      }
+    ],
 
     // --- Off: they fight Effect ---------------------------------------------
     // `Effect.gen(function* () {...})` is the idiom; it is never named.

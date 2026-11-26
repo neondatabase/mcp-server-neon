@@ -174,7 +174,7 @@ const callTool = async (name: string, args: z.core.util.JSONType) => {
   };
 };
 
-describe.sequential('call_api route tracking', () => {
+describe('call_api route tracking', { concurrent: false }, () => {
   it('records spec_unavailable and still runs the call when the spec fails to load', async () => {
     specStatus = 503;
 
