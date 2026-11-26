@@ -1,28 +1,27 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+/**
+ * The warnings logged for request shapes the next MCP SDK release rejects,
+ * through the deployed route on its real services. The OAuth token is saved in
+ * the test Postgres database; the log lines are read from the winston logger.
+ */
+import { Effect } from 'effect';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
-vi.mock('../oauth/model', () => ({
-  model: {
-    getAccessToken: vi.fn(),
-  },
-}));
+// No assertion reads analytics; none is sent.
+process.env.NEON_MCP_DISABLE_ANALYTICS = '1';
 
-vi.mock('../utils/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    silent: false,
-  },
-}));
+const { ensureTestOauthDatabase } =
+  await import('./ensure-test-oauth-database');
 
-const { model } = await import('../oauth/model');
-const { logger } = await import('../utils/logger');
+await ensureTestOauthDatabase();
+
 const { POST } = await import('../../app/api/[transport]/route');
+const { OAuthStore } = await import('../oauth/oauth-store');
+const { logger } = await import('../utils/logger');
 
 const DOCS_URL = 'http://localhost/api/mcp?category=docs';
 const AUTHENTICATED_URL = 'http://localhost/api/mcp';
-const OAUTH_TOKEN = 'oauth-compat-risk';
+const OAUTH_TOKEN = `oauth-compat-risk-${crypto.randomUUID()}`;
 const USER_AGENT = 'compat-risk-test/1.0';
 
 const MODERN_META = {
@@ -31,11 +30,11 @@ const MODERN_META = {
   'io.modelcontextprotocol/clientCapabilities': {},
 };
 
-async function post(
-  body: unknown,
+const post = async (
+  body: z.core.util.JSONType,
   headers: Record<string, string> = {},
   url = DOCS_URL,
-) {
+) => {
   const res = await POST(
     new Request(url, {
       method: 'POST',
@@ -48,39 +47,70 @@ async function post(
       body: JSON.stringify(body),
     }),
   );
-  await res.text();
-  return res;
-}
 
-function toolsListBatch(size: number) {
-  return Array.from({ length: size }, (_, i) => ({
+  await res.text();
+
+  return res;
+};
+
+const toolsListBatch = (size: number) =>
+  Array.from({ length: size }, (_, i) => ({
     jsonrpc: '2.0',
     id: i + 1,
     method: 'tools/list',
   }));
-}
 
-function warnedWith(message: string) {
-  return vi
-    .mocked(logger.warn)
-    .mock.calls.filter(
-      ([logged]) => typeof logged === 'string' && logged === message,
-    );
-}
+type LogLine = { readonly level: string; readonly message: string };
+
+const logged: LogLine[] = [];
+
+logger.on('data', (info: LogLine) => {
+  logged.push(info);
+});
+
+const LoggedFields = z.object({
+  batchSize: z.number().optional(),
+  method: z.string().optional(),
+  userAgent: z.string().optional(),
+});
+
+/** The fields of each warning logged with `message`. */
+const warnedWith = (message: string) =>
+  logged.flatMap((line) =>
+    line.level === 'warn' && line.message === message
+      ? [LoggedFields.parse(line)]
+      : [],
+  );
+
+const saveOAuthToken = async () =>
+  Effect.runPromise(
+    OAuthStore.pipe(
+      Effect.flatMap((store) =>
+        store.saveTokenPair({
+          token: {
+            accessToken: OAUTH_TOKEN,
+            scope: 'read write',
+            client: {
+              id: 'client-1',
+              client_name: 'compat-test',
+              grants: ['*'],
+            },
+            user: { id: 'user-1', name: 'User', email: 'user@example.com' },
+          },
+          refreshToken: `${OAUTH_TOKEN}-refresh`,
+        }),
+      ),
+      Effect.provide(OAuthStore.layer),
+    ),
+  );
 
 describe('logging requests that @modelcontextprotocol/server 2.2.0 rejects', () => {
   beforeEach(() => {
-    vi.mocked(logger.warn).mockClear();
-    vi.mocked(model.getAccessToken).mockReset();
+    logged.length = 0;
   });
 
   it('logs an authenticated batch of more than 100 messages', async () => {
-    vi.mocked(model.getAccessToken).mockResolvedValue({
-      accessToken: OAUTH_TOKEN,
-      scope: 'read write',
-      client: { id: 'client-1', client_name: 'compat-test', grants: ['*'] },
-      user: { id: 'user-1', name: 'User', email: 'user@example.com' },
-    } as never);
+    await saveOAuthToken();
 
     const res = await post(
       toolsListBatch(101),
@@ -96,25 +126,22 @@ describe('logging requests that @modelcontextprotocol/server 2.2.0 rejects', () 
     const res = await post(toolsListBatch(101), {}, AUTHENTICATED_URL);
 
     expect(res.status).toBe(401);
-    expect(warnedWith('MCP batch over 100 messages')).toEqual([]);
+    expect(warnedWith('MCP batch over 100 messages')).toStrictEqual([]);
   });
 
   it('logs a batch of more than 100 messages and still serves it', async () => {
     const res = await post(toolsListBatch(101));
 
     expect(res.status).toBe(200);
-    expect(warnedWith('MCP batch over 100 messages')).toEqual([
-      [
-        'MCP batch over 100 messages',
-        { batchSize: 101, userAgent: USER_AGENT },
-      ],
+    expect(warnedWith('MCP batch over 100 messages')).toStrictEqual([
+      { batchSize: 101, userAgent: USER_AGENT },
     ]);
   });
 
   it('does not log a batch of 100 messages', async () => {
     await post(toolsListBatch(100));
 
-    expect(warnedWith('MCP batch over 100 messages')).toEqual([]);
+    expect(warnedWith('MCP batch over 100 messages')).toStrictEqual([]);
   });
 
   it('logs a 2026-07-28 request without MCP-Protocol-Version and still serves it', async () => {
@@ -131,12 +158,7 @@ describe('logging requests that @modelcontextprotocol/server 2.2.0 rejects', () 
     expect(res.status).toBe(200);
     expect(
       warnedWith('MCP 2026-07-28 request without MCP-Protocol-Version'),
-    ).toEqual([
-      [
-        'MCP 2026-07-28 request without MCP-Protocol-Version',
-        { method: 'tools/list', userAgent: USER_AGENT },
-      ],
-    ]);
+    ).toStrictEqual([{ method: 'tools/list', userAgent: USER_AGENT }]);
   });
 
   it('does not log a 2026-07-28 request that sends MCP-Protocol-Version', async () => {
@@ -152,7 +174,7 @@ describe('logging requests that @modelcontextprotocol/server 2.2.0 rejects', () 
 
     expect(
       warnedWith('MCP 2026-07-28 request without MCP-Protocol-Version'),
-    ).toEqual([]);
+    ).toStrictEqual([]);
   });
 
   it.each([
@@ -191,7 +213,7 @@ describe('logging requests that @modelcontextprotocol/server 2.2.0 rejects', () 
       expect(res.status).toBe(400);
       expect(
         warnedWith('MCP 2026-07-28 request without MCP-Protocol-Version'),
-      ).toEqual([]);
+      ).toStrictEqual([]);
     },
   );
 
@@ -212,7 +234,7 @@ describe('logging requests that @modelcontextprotocol/server 2.2.0 rejects', () 
       const res = await post(body);
 
       expect(res.status).toBe(400);
-      expect(warnedWith('MCP batch over 100 messages')).toEqual([]);
+      expect(warnedWith('MCP batch over 100 messages')).toStrictEqual([]);
     },
   );
 
@@ -230,6 +252,6 @@ describe('logging requests that @modelcontextprotocol/server 2.2.0 rejects', () 
 
     expect(
       warnedWith('MCP 2026-07-28 request without MCP-Protocol-Version'),
-    ).toEqual([]);
+    ).toStrictEqual([]);
   });
 });

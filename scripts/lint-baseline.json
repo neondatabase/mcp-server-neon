@@ -324,25 +324,15 @@
     "vitest(prefer-strict-equal)": 2
   },
   "mcp/__tests__/auth-complete-response.test.ts": {
-    "anti-slop(no-module-mocking)": 3,
     "anti-slop(require-readable-spacing)": 8,
-    "anti-slop(require-safety-comment-for-type-assertion)": 1,
     "eslint(func-style)": 1,
     "eslint(max-params)": 2,
     "eslint(no-script-url)": 1,
-    "eslint(prefer-destructuring)": 1,
     "eslint(prefer-named-capture-group)": 1,
-    "eslint(require-unicode-regexp)": 3,
-    "typescript(no-non-null-assertion)": 3,
-    "typescript(no-unnecessary-type-assertion)": 3,
-    "typescript(no-unsafe-assignment)": 5,
-    "typescript(no-unsafe-type-assertion)": 1,
+    "eslint(require-unicode-regexp)": 2,
     "typescript(strict-boolean-expressions)": 1,
     "unicorn(prefer-string-replace-all)": 1,
-    "vitest(prefer-expect-resolves)": 1,
-    "vitest(prefer-import-in-mock)": 3,
-    "vitest(prefer-strict-equal)": 2,
-    "vitest(require-mock-type-parameters)": 4
+    "vitest(prefer-strict-equal)": 1
   },
   "mcp/__tests__/auth-transaction-fixtures.ts": {
     "anti-slop(require-readable-spacing)": 3,
@@ -477,7 +467,7 @@
     "anti-slop(no-runtime-typeof)": 5,
     "anti-slop(no-unknown-parameters)": 1,
     "anti-slop(no-unsafe-dictionary-type)": 1,
-    "anti-slop(require-readable-spacing)": 24,
+    "anti-slop(require-readable-spacing)": 22,
     "eslint(complexity)": 1,
     "eslint(curly)": 5,
     "eslint(func-style)": 9,
@@ -486,8 +476,7 @@
     "eslint(no-nested-ternary)": 1,
     "eslint(no-shadow)": 1,
     "eslint(require-unicode-regexp)": 2,
-    "unicorn(no-array-callback-reference)": 1,
-    "vitest(require-mock-type-parameters)": 1
+    "unicorn(no-array-callback-reference)": 1
   },
   "mcp/__tests__/helpers/tool-result.ts": {
     "anti-slop(no-unknown-returns)": 1,
@@ -657,26 +646,6 @@
     "vitest(prefer-strict-equal)": 3,
     "vitest(require-top-level-describe)": 1
   },
-  "mcp/__tests__/oauth-api-key-fallback.integration.test.ts": {
-    "anti-slop(no-conditional-spread)": 1,
-    "anti-slop(no-module-mocking)": 4,
-    "anti-slop(no-unknown-parameters)": 3,
-    "anti-slop(require-readable-spacing)": 7,
-    "anti-slop(require-safety-comment-for-type-assertion)": 2,
-    "eslint(func-style)": 7,
-    "eslint(max-params)": 1,
-    "eslint(no-shadow)": 1,
-    "typescript(array-type)": 1,
-    "typescript(consistent-type-imports)": 1,
-    "typescript(no-unnecessary-type-assertion)": 1,
-    "typescript(no-unsafe-type-assertion)": 2,
-    "typescript(strict-boolean-expressions)": 1,
-    "unicorn(prefer-array-find)": 1,
-    "vitest(prefer-expect-resolves)": 2,
-    "vitest(prefer-import-in-mock)": 4,
-    "vitest(prefer-strict-equal)": 1,
-    "vitest(require-mock-type-parameters)": 9
-  },
   "mcp/__tests__/oauth-authorize-route.integration.test.ts": {
     "anti-slop(no-chained-type-assertions)": 5,
     "anti-slop(no-conditional-spread)": 1,
@@ -784,34 +753,6 @@
   },
   "mcp/__tests__/pg-connect-retry.test.ts": {
     "anti-slop(require-readable-spacing)": 1
-  },
-  "mcp/__tests__/pinned-role-route.integration.test.ts": {
-    "anti-slop(no-chained-type-assertions)": 1,
-    "anti-slop(no-module-mocking)": 5,
-    "anti-slop(no-runtime-typeof)": 1,
-    "anti-slop(no-unknown-parameters)": 1,
-    "anti-slop(no-unsafe-dictionary-type)": 1,
-    "anti-slop(require-readable-spacing)": 10,
-    "anti-slop(require-safety-comment-for-type-assertion)": 4,
-    "effecttsgo(unnecessary-arrow-block)": 1,
-    "eslint(arrow-body-style)": 1,
-    "eslint(func-style)": 5,
-    "eslint(init-declarations)": 1,
-    "eslint(max-params)": 1,
-    "eslint(prefer-named-capture-group)": 1,
-    "eslint(require-unicode-regexp)": 1,
-    "import(consistent-type-specifier-style)": 1,
-    "typescript(array-type)": 2,
-    "typescript(consistent-type-imports)": 2,
-    "typescript(no-unsafe-type-assertion)": 3,
-    "typescript(strict-boolean-expressions)": 1,
-    "unicorn(prefer-array-find)": 1,
-    "vitest(prefer-expect-resolves)": 1,
-    "vitest(prefer-import-in-mock)": 5,
-    "vitest(prefer-strict-boolean-matchers)": 1,
-    "vitest(prefer-strict-equal)": 13,
-    "vitest(require-mock-type-parameters)": 10,
-    "vitest(require-top-level-describe)": 2
   },
   "mcp/__tests__/pinned-role.test.ts": {
     "anti-slop(no-unknown-parameters)": 3,
@@ -979,19 +920,6 @@
     "unicorn(numeric-separators-style)": 2,
     "vitest(prefer-strict-equal)": 1
   },
-  "mcp/__tests__/sdk-compat-risks.integration.test.ts": {
-    "anti-slop(no-module-mocking)": 2,
-    "anti-slop(no-runtime-typeof)": 1,
-    "anti-slop(no-unknown-parameters)": 1,
-    "anti-slop(require-readable-spacing)": 2,
-    "anti-slop(require-safety-comment-for-type-assertion)": 1,
-    "eslint(func-style)": 3,
-    "typescript(no-unnecessary-type-assertion)": 1,
-    "typescript(no-unsafe-type-assertion)": 1,
-    "vitest(prefer-import-in-mock)": 2,
-    "vitest(prefer-strict-equal)": 8,
-    "vitest(require-mock-type-parameters)": 5
-  },
   "mcp/__tests__/sdk-errors.test.ts": {
     "anti-slop(no-module-mocking)": 2,
     "anti-slop(require-readable-spacing)": 1,
@@ -1152,31 +1080,7 @@
     "vitest(require-top-level-describe)": 2
   },
   "mcp/__tests__/transport-dynamic-tools.integration.test.ts": {
-    "anti-slop(no-conditional-spread)": 4,
-    "anti-slop(no-module-mocking)": 5,
-    "anti-slop(no-shape-in-symbol-names)": 2,
-    "anti-slop(no-unknown-parameters)": 2,
-    "anti-slop(no-unsafe-dictionary-type)": 2,
-    "anti-slop(require-readable-spacing)": 44,
-    "anti-slop(require-safety-comment-for-type-assertion)": 7,
-    "eslint(curly)": 1,
-    "eslint(func-style)": 4,
-    "eslint(max-params)": 3,
-    "eslint(no-empty-function)": 2,
-    "typescript(array-type)": 2,
-    "typescript(consistent-type-imports)": 2,
-    "typescript(no-unnecessary-type-assertion)": 2,
-    "typescript(no-unsafe-assignment)": 31,
-    "typescript(no-unsafe-type-assertion)": 7,
-    "typescript(strict-boolean-expressions)": 3,
-    "unicorn(no-array-callback-reference)": 1,
-    "unicorn(no-await-expression-member)": 2,
-    "unicorn(numeric-separators-style)": 1,
-    "unicorn(prefer-at)": 1,
-    "vitest(no-conditional-in-test)": 9,
-    "vitest(prefer-import-in-mock)": 5,
-    "vitest(prefer-strict-equal)": 4,
-    "vitest(require-mock-type-parameters)": 10
+    "vitest(no-conditional-in-test)": 2
   },
   "mcp/__tests__/upstream-request-summary.test.ts": {
     "anti-slop(require-readable-spacing)": 6,

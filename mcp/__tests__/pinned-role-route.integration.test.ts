@@ -1,19 +1,29 @@
 /**
  * The pinned Postgres role end to end through the deployed route: a grant from
  * an OAuth token or from API-key URL params reaches the real tool handlers, and
- * the connection is resolved for that role. A stubbed `fetch` answers the Neon
- * API and the SQL endpoint and records which role was requested.
+ * the connection is resolved for that role. OAuth tokens are saved in the test
+ * Postgres database. A loopback server answers the Neon API and the SQL
+ * endpoint, records which role was requested, and collects the analytics the
+ * server sends; Sentry sends to the e2e stand-in.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { neonConfig } from '@neondatabase/serverless';
+import { flush, httpIntegration, init as initSentry } from '@sentry/node';
+import { Effect } from 'effect';
+import type { Token } from 'oauth2-server';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import type { GrantContext } from '../utils/grant-context';
+import { FAKE_PASSWORD, fakeNeon } from './helpers/fake-neon';
 import {
-  FAKE_PASSWORD,
-  stubFakeNeon,
-  type FakeNeon,
-} from './helpers/fake-neon';
-
-process.env.ANALYTICS_WRITE_KEY = '';
-process.env.SENTRY_DSN = '';
+  collectKeepalives,
+  segmentCollector,
+  serveLoopback,
+} from './helpers/loopback';
+import {
+  listedToolNames,
+  mcpRequest,
+  responseBody,
+} from './helpers/mcp-request';
 
 const PROJECT_ID = 'example-project-123';
 const BRANCH_ID = 'br-example-123';
@@ -21,176 +31,197 @@ const DATABASE = 'app_db';
 const OWNER = 'app_db_owner';
 const PINNED = 'mcp_pinned_reader';
 const PASSWORD = FAKE_PASSWORD;
-const API_KEY = 'fake-api-key-for-tests';
+const API_KEY = `napi-pinned-role-${crypto.randomUUID()}`;
 
-const mocks = vi.hoisted(() => {
-  return {
-    apiKeysGet: vi.fn(),
-    trackSpy: vi.fn(),
-    captureExceptionSpy: vi.fn(),
-    logger: {
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-      silent: false,
-    },
-  };
+const neonOptions = {
+  projectId: PROJECT_ID,
+  branchId: BRANCH_ID,
+  database: DATABASE,
+  owner: OWNER,
+  rows: () => [{ session_user: PINNED }],
+  api: (_method: string, path: string) => {
+    if (path === '/auth') {
+      return Response.json({ auth_method: 'api_key_user', account_id: 'u1' });
+    }
+
+    return path === '/users/me'
+      ? Response.json({ id: 'user-1', name: 'User', email: 'u@example.com' })
+      : undefined;
+  },
+};
+
+let neon = fakeNeon(neonOptions);
+
+const analytics = segmentCollector();
+
+const upstream = await serveLoopback(async (request) =>
+  analytics.isBatch(request) ? analytics.answer(request) : neon.answer(request),
+);
+
+const keepalives = collectKeepalives();
+
+Object.assign(process.env, {
+  NEON_API_HOST: `${upstream.origin}/api/v2`,
+  ANALYTICS_HOST: upstream.origin,
+  ANALYTICS_WRITE_KEY: 'pinned-role-route-test-key',
+  SENTRY_DSN: '',
+  E2E_SENTRY_PORT: '3130',
 });
 
-vi.mock('../oauth/model', () => ({
-  model: { getAccessToken: vi.fn() },
-}));
+// Imported once the environment is set: lib/config reads it at import.
+const { ensureTestOauthDatabase } =
+  await import('./ensure-test-oauth-database');
 
-vi.mock('../oauth/kv-store', async () => {
-  const actual =
-    await vi.importActual<typeof import('../oauth/kv-store')>(
-      '../oauth/kv-store',
-    );
-  return {
-    ...actual,
-    getApiKeys: () => ({
-      get: mocks.apiKeysGet,
-      set: vi.fn().mockResolvedValue(undefined),
-    }),
-  };
+await ensureTestOauthDatabase();
+
+// Set once the real test database is provisioned: its reachability probe and
+// schema setup go through the same driver.
+neonConfig.fetchEndpoint = `${upstream.origin}/sql`;
+
+const {
+  SENTRY_FIXTURE_DSN,
+  SENTRY_FIXTURE_ITEMS_URL,
+  startSentryFixtureServer,
+} = await import('../../e2e/sentry-fixture');
+
+await startSentryFixtureServer();
+
+// The loopback server runs in this process; tracing its requests would fill
+// the transport buffer.
+initSentry({
+  dsn: SENTRY_FIXTURE_DSN,
+  tracesSampleRate: 1,
+  integrations: [httpIntegration({ ignoreIncomingRequests: () => true })],
 });
 
-vi.mock('../analytics/analytics', () => ({
-  track: mocks.trackSpy,
-  flushAnalytics: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('@sentry/node', async () => {
-  const actual =
-    await vi.importActual<typeof import('@sentry/node')>('@sentry/node');
-  return { ...actual, captureException: mocks.captureExceptionSpy };
-});
-
-vi.mock('../utils/logger', () => ({ logger: mocks.logger }));
-
-const { model } = await import('../oauth/model');
 const { POST } = await import('../../app/api/[transport]/route');
+const { OAuthStore } = await import('../oauth/oauth-store');
+const { logger } = await import('../utils/logger');
 
-function oauthToken(accessToken: string, scope: string, grant?: GrantContext) {
-  return {
-    accessToken,
+const logged: { readonly message: string }[] = [];
+
+logger.on('data', (info: { readonly message: string }) => {
+  logged.push(info);
+});
+
+const saveOAuthToken = async (scope: string, grant?: GrantContext) => {
+  const token: Token = {
+    accessToken: `oauth-pinned-role-${crypto.randomUUID()}`,
     scope,
     client: { id: 'client-1', client_name: 'Test Client', grants: ['*'] },
     user: { id: 'user-1', name: 'User', email: 'user@example.com' },
     grant,
-  } as unknown as Awaited<ReturnType<typeof model.getAccessToken>>;
-}
+  };
 
-async function mcpCall(
-  bearerToken: string,
-  method: string,
-  params: unknown,
-  queryString = '',
-) {
-  const res = await POST(
-    new Request(`http://localhost/api/mcp${queryString}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${bearerToken}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json, text/event-stream',
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-    }),
+  await Effect.runPromise(
+    OAuthStore.pipe(
+      Effect.flatMap((store) =>
+        store.saveTokenPair({
+          token,
+          refreshToken: `${token.accessToken}-refresh`,
+        }),
+      ),
+      Effect.provide(OAuthStore.layer),
+    ),
   );
-  const raw = await res.text();
-  const dataLine = raw
-    .split('\n')
-    .filter((line) => line.startsWith('data: '))
-    .at(-1);
-  let body: unknown = raw;
-  try {
-    body = JSON.parse(dataLine ? dataLine.slice('data: '.length) : raw);
-  } catch {
-    // keep raw
-  }
-  return { status: res.status, raw, body };
-}
 
-type ToolCallBody = {
-  result?: { content: Array<{ text?: string }>; isError?: boolean };
-  error?: unknown;
+  return token.accessToken;
 };
 
-async function runSql(
+const mcpCall = async (
   bearerToken: string,
-  args: Record<string, unknown>,
+  request: { readonly method: string; readonly params: z.core.util.JSONType },
   queryString = '',
-) {
+) => {
+  const res = await POST(mcpRequest({ ...request, bearerToken, queryString }));
+  const raw = await res.text();
+
+  await keepalives.settle();
+
+  return { status: res.status, raw, body: responseBody(raw) };
+};
+
+const ToolCallBody = z.object({
+  result: z
+    .object({
+      content: z.array(z.object({ text: z.string().optional() })),
+      isError: z.boolean().optional(),
+    })
+    .optional(),
+});
+
+const runSql = async (
+  bearerToken: string,
+  args: Record<string, string>,
+  queryString = '',
+) => {
   const response = await mcpCall(
     bearerToken,
-    'tools/call',
-    { name: 'run_sql', arguments: { project_id: PROJECT_ID, ...args } },
+    {
+      method: 'tools/call',
+      params: {
+        name: 'run_sql',
+        arguments: { project_id: PROJECT_ID, ...args },
+      },
+    },
     queryString,
   );
-  return { ...response, body: response.body as ToolCallBody };
-}
 
-async function listToolNames(bearerToken: string, queryString = '') {
-  const response = await mcpCall(bearerToken, 'tools/list', {}, queryString);
-  const body = response.body as { result: { tools: Array<{ name: string }> } };
-  return body.result.tools.map((tool) => tool.name);
-}
+  return { ...response, result: ToolCallBody.parse(response.body).result };
+};
 
-let neon: FakeNeon;
+const listToolNames = async (bearerToken: string) => {
+  const { body } = await mcpCall(bearerToken, {
+    method: 'tools/list',
+    params: {},
+  });
 
-function everythingRecorded(): string {
+  return listedToolNames(body);
+};
+
+const SentryItems = z.array(z.json());
+
+/** Every event, Sentry item, and log line the server produced in this test. */
+const everythingRecorded = async () => {
+  await flush(5000);
+
+  const sentry = await fetch(SENTRY_FIXTURE_ITEMS_URL);
+
   return JSON.stringify([
-    mocks.trackSpy.mock.calls,
-    mocks.captureExceptionSpy.mock.calls,
-    Object.values(mocks.logger).map((spy) =>
-      typeof spy === 'function' ? spy.mock.calls : [],
-    ),
+    analytics.delivered,
+    SentryItems.parse(await sentry.json()),
+    logged,
   ]);
-}
+};
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  neon = stubFakeNeon({
-    projectId: PROJECT_ID,
-    branchId: BRANCH_ID,
-    database: DATABASE,
-    owner: OWNER,
-    rows: () => [{ session_user: PINNED }],
-  });
-  mocks.apiKeysGet.mockResolvedValue({
-    apiKey: API_KEY,
-    authMethod: 'api_key_user',
-    account: { id: 'user-1', name: 'User' },
-  });
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+const authRequests = () =>
+  neon.api.filter((request) => request.path === '/auth');
 
 describe('pinned role through the MCP route', () => {
+  beforeEach(() => {
+    neon = fakeNeon(neonOptions);
+    analytics.delivered.length = 0;
+    logged.length = 0;
+  });
+
   describe('OAuth token grant', () => {
     it('runs SQL as the pinned role and leaks no credentials', async () => {
-      vi.mocked(model.getAccessToken).mockResolvedValue(
-        oauthToken('oauth-pinned', 'read', {
-          projectId: null,
-          scopes: null,
-          roleName: PINNED,
-        }),
-      );
+      const token = await saveOAuthToken('read', {
+        projectId: null,
+        scopes: null,
+        roleName: PINNED,
+      });
 
-      const { status, raw, body } = await runSql('oauth-pinned', {
+      const { status, raw, result } = await runSql(token, {
         sql: 'SELECT session_user, current_user',
       });
 
       expect(status).toBe(200);
-      expect(body.result?.isError).toBeFalsy();
-      expect(neon.requestedRoles()).toEqual([PINNED]);
-      expect(neon.ownerLookups()).toEqual([]);
+      expect(result?.isError).not.toBe(true);
+      expect(neon.requestedRoles()).toStrictEqual([PINNED]);
+      expect(neon.ownerLookups()).toStrictEqual([]);
       // Read-only token: the pinned query is still in a read-only transaction.
-      expect(neon.sql).toEqual([
+      expect(neon.sql).toStrictEqual([
         expect.objectContaining({
           role: PINNED,
           transaction: true,
@@ -198,102 +229,85 @@ describe('pinned role through the MCP route', () => {
         }),
       ]);
       expect(raw).not.toContain(PASSWORD);
-      expect(raw).not.toMatch(/postgres(ql)?:\/\//);
-      expect(everythingRecorded()).not.toContain(PASSWORD);
+      expect(raw).not.toMatch(/postgres(?:ql)?:\/\//u);
+      expect(analytics.delivered).not.toStrictEqual([]);
+      await expect(everythingRecorded()).resolves.not.toContain(PASSWORD);
     });
 
     it('ignores a roleName on the URL; the token grant decides', async () => {
-      vi.mocked(model.getAccessToken).mockResolvedValue(
-        oauthToken('oauth-pinned', 'read write', {
-          projectId: null,
-          scopes: null,
-          roleName: PINNED,
-        }),
-      );
+      const token = await saveOAuthToken('read write', {
+        projectId: null,
+        scopes: null,
+        roleName: PINNED,
+      });
 
-      await runSql('oauth-pinned', { sql: 'SELECT 1' }, `?roleName=${OWNER}`);
+      await runSql(token, { sql: 'SELECT 1' }, `?roleName=${OWNER}`);
 
-      expect(neon.requestedRoles()).toEqual([PINNED]);
+      expect(neon.requestedRoles()).toStrictEqual([PINNED]);
     });
 
     it('rejects a role_name argument that differs from the pin', async () => {
-      vi.mocked(model.getAccessToken).mockResolvedValue(
-        oauthToken('oauth-pinned', 'read write', {
-          projectId: null,
-          scopes: null,
-          roleName: PINNED,
-        }),
-      );
+      const token = await saveOAuthToken('read write', {
+        projectId: null,
+        scopes: null,
+        roleName: PINNED,
+      });
 
-      const { body, raw } = await runSql('oauth-pinned', {
+      const { result, raw } = await runSql(token, {
         sql: 'SELECT 1',
         role_name: OWNER,
       });
 
-      expect(body.result?.isError).toBe(true);
+      expect(result?.isError).toBe(true);
       expect(raw).toContain('pinned to Postgres role');
-      expect(neon.connectionUriRequests()).toEqual([]);
-      expect(neon.sql).toEqual([]);
+      expect(neon.connectionUriRequests()).toStrictEqual([]);
+      expect(neon.sql).toStrictEqual([]);
     });
 
     it('does not list get_connection_string on a pinned token', async () => {
-      vi.mocked(model.getAccessToken).mockResolvedValue(
-        oauthToken('oauth-pinned', 'read write', {
+      const pinned = await listToolNames(
+        await saveOAuthToken('read write', {
           projectId: null,
           scopes: null,
           roleName: PINNED,
         }),
       );
-      const pinned = await listToolNames('oauth-pinned');
+
       expect(pinned).toContain('run_sql');
       expect(pinned).not.toContain('get_connection_string');
 
-      vi.mocked(model.getAccessToken).mockResolvedValue(
-        oauthToken('oauth-unpinned', 'read write', {
-          projectId: null,
-          scopes: null,
-        }),
+      const unpinned = await listToolNames(
+        await saveOAuthToken('read write', { projectId: null, scopes: null }),
       );
-      expect(await listToolNames('oauth-unpinned')).toContain(
-        'get_connection_string',
-      );
+
+      expect(unpinned).toContain('get_connection_string');
     });
 
     it('keeps the database owner for a legacy token without roleName', async () => {
-      vi.mocked(model.getAccessToken).mockResolvedValue(
-        oauthToken('oauth-legacy', 'read write'),
-      );
+      const token = await saveOAuthToken('read write');
 
-      await runSql('oauth-legacy', { sql: 'SELECT 1' });
+      await runSql(token, { sql: 'SELECT 1' });
 
-      expect(neon.requestedRoles()).toEqual([OWNER]);
+      expect(neon.requestedRoles()).toStrictEqual([OWNER]);
     });
 
     it('refuses a token whose stored roleName is invalid instead of falling back to the API-key path', async () => {
-      vi.mocked(model.getAccessToken).mockResolvedValue(
-        oauthToken('oauth-corrupt', 'read write', {
-          projectId: null,
-          scopes: null,
-          roleName: 'not a role',
-        }),
-      );
+      const token = await saveOAuthToken('read write', {
+        projectId: null,
+        scopes: null,
+        roleName: 'not a role',
+      });
 
-      const { status } = await runSql('oauth-corrupt', { sql: 'SELECT 1' });
+      const { status } = await runSql(token, { sql: 'SELECT 1' });
 
       expect(status).toBe(401);
-      expect(mocks.apiKeysGet).not.toHaveBeenCalled();
-      expect(neon.api).not.toContainEqual(
-        expect.objectContaining({ path: '/auth' }),
-      );
-      expect(neon.connectionUriRequests()).toEqual([]);
+      // No cache holds this bearer, so the API-key path would ask Neon.
+      expect(authRequests()).toStrictEqual([]);
+      expect(neon.connectionUriRequests()).toStrictEqual([]);
     });
   });
 
   describe('API-key URL params', () => {
-    beforeEach(() => {
-      vi.mocked(model.getAccessToken).mockResolvedValue(undefined);
-    });
-
     it('runs SQL as ?roleName and keeps ?readonly=true wrapping', async () => {
       const { raw } = await runSql(
         API_KEY,
@@ -301,8 +315,8 @@ describe('pinned role through the MCP route', () => {
         `?readonly=true&roleName=${PINNED}`,
       );
 
-      expect(neon.requestedRoles()).toEqual([PINNED]);
-      expect(neon.sql).toEqual([
+      expect(neon.requestedRoles()).toStrictEqual([PINNED]);
+      expect(neon.sql).toStrictEqual([
         expect.objectContaining({
           role: PINNED,
           transaction: true,
@@ -310,29 +324,37 @@ describe('pinned role through the MCP route', () => {
         }),
       ]);
       expect(raw).not.toContain(PASSWORD);
-      expect(everythingRecorded()).not.toContain(PASSWORD);
+      await expect(everythingRecorded()).resolves.not.toContain(PASSWORD);
     });
 
     it('uses the database owner without ?roleName', async () => {
       await runSql(API_KEY, { sql: 'SELECT 1' }, '?readonly=true');
-      expect(neon.requestedRoles()).toEqual([OWNER]);
+
+      expect(neon.requestedRoles()).toStrictEqual([OWNER]);
     });
 
     it.each(['roleName=', 'roleName=a-b', 'roleName=a&roleName=b'])(
       'rejects a malformed pin (%s) before authenticating',
       async (query) => {
-        const { status, body } = await runSql(
-          API_KEY,
-          { sql: 'SELECT 1' },
+        // No earlier request verified this key, so authenticating it would ask Neon.
+        const { status, body } = await mcpCall(
+          `napi-unverified-${crypto.randomUUID()}`,
+          {
+            method: 'tools/call',
+            params: {
+              name: 'run_sql',
+              arguments: { project_id: PROJECT_ID, sql: 'SELECT 1' },
+            },
+          },
           `?readonly=true&${query}`,
         );
 
         expect(status).toBe(400);
-        expect(body).toEqual(
+        expect(body).toStrictEqual(
           expect.objectContaining({ error: 'invalid_request' }),
         );
-        expect(mocks.apiKeysGet).not.toHaveBeenCalled();
-        expect(neon.connectionUriRequests()).toEqual([]);
+        expect(authRequests()).toStrictEqual([]);
+        expect(neon.connectionUriRequests()).toStrictEqual([]);
       },
     );
   });

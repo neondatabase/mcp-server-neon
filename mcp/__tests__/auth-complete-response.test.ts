@@ -1,55 +1,87 @@
+/**
+ * The completion page and its `auth_complete_viewed` event. Analytics is the
+ * real service, sending to a loopback Segment collector, with Vercel's request
+ * context collecting what it hands to `waitUntil`. The client lookup replaces
+ * the store's `findClient`.
+ */
 import he from 'he';
-import { Effect, Option } from 'effect';
-import type { Layer } from 'effect';
+import { Effect, Layer, Option } from 'effect';
 import { HttpServerResponse } from 'effect/http';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { waitUntil } from '@vercel/functions';
-import { flushAnalytics, track } from '../analytics/analytics';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { CompletionContext, FlowAnswer } from '../oauth/flow-answer';
 import {
-  clientNameForPage,
-  presentToBrowser,
-} from '../oauth/auth-complete-response';
-import { FlowAnswer } from '../oauth/flow-answer';
-import type { CompletionContext } from '../oauth/flow-answer';
-import { OAuthServices } from '../../lib/http/oauth-services';
-import { model } from '../oauth/model';
+  collectKeepalives,
+  segmentCollector,
+  serveLoopback,
+} from './helpers/loopback';
 
-vi.mock('../analytics/analytics', () => ({
-  track: vi.fn(),
-  flushAnalytics: vi.fn().mockResolvedValue(undefined),
-}));
+const analytics = segmentCollector();
+const collector = await serveLoopback(analytics.answer);
+const keepalives = collectKeepalives();
 
-vi.mock('@vercel/functions', () => ({
-  waitUntil: vi.fn(),
-}));
+Object.assign(process.env, {
+  ANALYTICS_HOST: collector.origin,
+  ANALYTICS_WRITE_KEY: 'auth-complete-response-test-key',
+});
 
-vi.mock('../oauth/model', () => ({
-  model: { getClient: vi.fn() },
-}));
+// Imported once the environment is set: lib/config reads it at import.
+const { Analytics } = await import('../analytics/analytics-service');
+
+const { clientNameForPage, presentToBrowser } =
+  await import('../oauth/auth-complete-response');
+
+const { FlowAnswer: flowAnswer } = await import('../oauth/flow-answer');
+const { OAuthStore } = await import('../oauth/oauth-store');
+
+const { OAuthStoreUnavailable } =
+  await import('../oauth/oauth-store-unavailable');
+
+type StoreOperations = typeof OAuthStore.Service;
+
+/** The real store with its client lookup replaced. */
+const storeFinding = (findClient: StoreOperations['findClient']) =>
+  Layer.effect(
+    OAuthStore,
+    OAuthStore.make.pipe(
+      Effect.map((real) => OAuthStore.of({ ...real, findClient })),
+    ),
+  );
 
 const APP_CALLBACK = 'cursor://anysphere.cursor-mcp/oauth/callback';
 const BROWSER_ACCEPT = 'text/html,application/xhtml+xml';
 
+type Services =
+  | Layer.Success<typeof Analytics.layer>
+  | Layer.Success<typeof OAuthStore.layer>;
+
 const run = async <A>(
-  effect: Effect.Effect<A, never, Layer.Success<typeof OAuthServices>>,
-) => Effect.runPromise(effect.pipe(Effect.provide(OAuthServices)));
+  effect: Effect.Effect<A, never, Services>,
+  store = OAuthStore.layer,
+) => Effect.runPromise(effect.pipe(Effect.provide([Analytics.layer, store])));
 
 const present = async (
   answer: FlowAnswer,
   { query = '', accept }: { query?: string; accept?: string } = {},
-) =>
-  HttpServerResponse.toWeb(
-    await run(
-      presentToBrowser({ answer, accept, query: new URLSearchParams(query) }),
-    ),
+) => {
+  const response = await run(
+    presentToBrowser({ answer, accept, query: new URLSearchParams(query) }),
   );
+
+  await keepalives.settle();
+
+  return HttpServerResponse.toWeb(response);
+};
+
+/** The `auth_complete_viewed` events delivered to Segment. */
+const tracked = () =>
+  analytics.delivered.filter((event) => event.event === 'auth_complete_viewed');
 
 const redirect = (
   location: string,
   context?: CompletionContext,
   clears?: { id: string; secure: boolean },
 ) =>
-  FlowAnswer.Redirect({
+  flowAnswer.Redirect({
     location,
     status: 307,
     clears: Option.fromUndefinedOr(clears),
@@ -71,7 +103,7 @@ const jsonError = (
     context?: CompletionContext;
   } = {},
 ) =>
-  FlowAnswer.OAuthError({
+  flowAnswer.OAuthError({
     status,
     error: body.error,
     description: body.error_description,
@@ -86,7 +118,7 @@ function returnLink(html: string): URL | undefined {
 
 describe('presentToBrowser', () => {
   beforeEach(() => {
-    vi.mocked(track).mockClear();
+    analytics.delivered.length = 0;
   });
 
   describe('native app redirects', () => {
@@ -300,7 +332,7 @@ describe('presentToBrowser', () => {
         const html = await response.text();
         expect(html).toContain('<h1>Nothing to finish here</h1>');
         expect(html).not.toContain('data-page-view-id');
-        expect(track).not.toHaveBeenCalled();
+        expect(tracked()).toStrictEqual([]);
       },
     );
 
@@ -322,9 +354,7 @@ describe('presentToBrowser', () => {
 
 describe('auth_complete_viewed', () => {
   beforeEach(() => {
-    vi.mocked(track).mockClear();
-    vi.mocked(waitUntil).mockClear();
-    vi.mocked(flushAnalytics).mockClear();
+    analytics.delivered.length = 0;
   });
 
   it('reports a success with the user and client the callback knew', async () => {
@@ -337,14 +367,23 @@ describe('auth_complete_viewed', () => {
       { accept: BROWSER_ACCEPT },
     );
 
-    expect(track).toHaveBeenCalledTimes(1);
-    const event = vi.mocked(track).mock.calls[0]![0];
-    expect(event).toEqual({
+    // Delivered by the time what the page handed to waitUntil settled.
+    const [event, ...others] = tracked();
+
+    const uuid: unknown = expect.stringMatching(/^[0-9a-f-]{36}$/u);
+
+    expect(others).toStrictEqual([]);
+    expect({
+      userId: event?.userId,
+      anonymousId: event?.anonymousId,
+      event: event?.event,
+      properties: event?.properties,
+    }).toStrictEqual({
       userId: 'user-1',
-      anonymousId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      anonymousId: uuid,
       event: 'auth_complete_viewed',
       properties: {
-        pageViewId: event.anonymousId,
+        pageViewId: event?.anonymousId,
         outcome: 'success',
         opensApp: true,
         clientId: 'client-1',
@@ -353,11 +392,8 @@ describe('auth_complete_viewed', () => {
         retryable: false,
       },
     });
-    expect(waitUntil).toHaveBeenCalledWith(
-      vi.mocked(flushAnalytics).mock.results[0]!.value,
-    );
-    expect(await response.text()).toContain(
-      `<body data-page-view-id="${event.anonymousId}">`,
+    await expect(response.text()).resolves.toContain(
+      `<body data-page-view-id="${event?.anonymousId}">`,
     );
   });
 
@@ -369,14 +405,9 @@ describe('auth_complete_viewed', () => {
       { query: '?code=c&state=s', accept: BROWSER_ACCEPT },
     );
 
-    expect(track).toHaveBeenCalledWith(
-      expect.objectContaining({
-        properties: expect.objectContaining({
-          outcome: 'failed',
-          retryable: true,
-        }),
-      }),
-    );
+    expect(tracked()).toMatchObject([
+      { properties: { outcome: 'failed', retryable: true } },
+    ]);
   });
 
   it('attributes a client registered as Claude to Claude Desktop', async () => {
@@ -387,13 +418,9 @@ describe('auth_complete_viewed', () => {
       },
     );
 
-    expect(track).toHaveBeenCalledWith(
-      expect.objectContaining({
-        properties: expect.objectContaining({
-          clientApplication: 'claude-desktop',
-        }),
-      }),
-    );
+    expect(tracked()).toMatchObject([
+      { properties: { clientApplication: 'claude-desktop' } },
+    ]);
   });
 
   it('reports a browser failure anonymously', async () => {
@@ -402,41 +429,56 @@ describe('auth_complete_viewed', () => {
       accept: BROWSER_ACCEPT,
     });
 
-    expect(track).toHaveBeenCalledWith({
-      anonymousId: expect.any(String),
+    const [event, ...others] = tracked();
+
+    expect(others).toStrictEqual([]);
+    expect(event?.anonymousId).toBeTypeOf('string');
+    expect(event).toMatchObject({
       event: 'auth_complete_viewed',
-      properties: expect.objectContaining({
+      properties: {
         outcome: 'failed',
         opensApp: false,
         clientApplication: 'unknown',
-      }),
+      },
     });
-    expect(vi.mocked(track).mock.calls[0]![0]).not.toHaveProperty('userId');
+    expect(event).not.toHaveProperty('userId');
   });
 
   it('reports nothing when the answer passes through', async () => {
     await present(redirect('http://127.0.0.1:55667/callback?code=c', {}), {
       accept: BROWSER_ACCEPT,
     });
-    expect(track).not.toHaveBeenCalled();
+
+    expect(tracked()).toStrictEqual([]);
   });
 });
 
 describe('clientNameForPage', () => {
-  beforeEach(() => {
-    vi.mocked(model.getClient).mockReset();
-  });
+  /** The real store, answering every client lookup with `found` and recording it. */
+  const storeAnswering = (found: ReturnType<StoreOperations['findClient']>) => {
+    const lookups: string[] = [];
+
+    const layer = storeFinding(({ clientId }) =>
+      Effect.sync(() => {
+        lookups.push(clientId);
+      }).pipe(Effect.andThen(found)),
+    );
+
+    return { lookups, layer };
+  };
 
   it('names a registered client whose redirect gets a page', async () => {
-    vi.mocked(model.getClient).mockResolvedValue({
-      client_name: 'Cursor',
-    } as never);
+    const store = storeAnswering(
+      Effect.succeedSome({ id: 'client-1', client_name: 'Cursor', grants: [] }),
+    );
 
     await expect(
       run(
         clientNameForPage({ clientId: 'client-1', redirectUri: APP_CALLBACK }),
+        store.layer,
       ),
     ).resolves.toBe('Cursor');
+    expect(store.lookups).toStrictEqual(['client-1']);
   });
 
   it.each([
@@ -448,18 +490,28 @@ describe('clientNameForPage', () => {
       APP_CALLBACK,
     ],
   ])('skips the lookup for %s', async (_label, clientId, redirectUri) => {
+    const store = storeAnswering(Effect.succeedNone);
+
     await expect(
-      run(clientNameForPage({ clientId, redirectUri })),
+      run(clientNameForPage({ clientId, redirectUri }), store.layer),
     ).resolves.toBeUndefined();
-    expect(model.getClient).not.toHaveBeenCalled();
+    expect(store.lookups).toStrictEqual([]);
   });
 
   it('leaves the name out when the lookup fails', async () => {
-    vi.mocked(model.getClient).mockRejectedValue(new Error('db down'));
+    const store = storeAnswering(
+      Effect.fail(
+        OAuthStoreUnavailable.make({
+          operation: 'getClient',
+          cause: new Error('db down'),
+        }),
+      ),
+    );
 
     await expect(
       run(
         clientNameForPage({ clientId: 'client-1', redirectUri: APP_CALLBACK }),
+        store.layer,
       ),
     ).resolves.toBeUndefined();
   });
