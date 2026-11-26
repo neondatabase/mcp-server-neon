@@ -59,7 +59,8 @@ const certificate = async () => {
   return pair;
 };
 
-const readBody = async (request: IncomingMessage) => {
+/** The request body as UTF-8 text. */
+export const readBody = async (request: IncomingMessage) => {
   const chunks: Buffer[] = [];
 
   for await (const chunk of request) {

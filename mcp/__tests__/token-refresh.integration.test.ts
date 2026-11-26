@@ -300,7 +300,7 @@ const failedInThePast = (
   failure: Option.Option<{ readonly failedAt: number }>,
 ) => failure.pipe(Option.map(({ failedAt }) => failedAt <= Date.now()));
 
-/** The summary of the upstream request the failure logged for `client` names. */
+/** The request summary on the upstream-failure log line for `client`. */
 const upstreamRequestLogged = (client: Client) =>
   logged.find(
     ({ message, clientId }) =>

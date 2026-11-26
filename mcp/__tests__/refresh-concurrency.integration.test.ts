@@ -4,10 +4,14 @@
  * The production failure mode guarded against: two Vercel instances receive
  * requests with the same refresh_token within milliseconds and both forward
  * it to upstream Hydra, which detects the reuse and revokes the entire chain.
- * These tests fire concurrent POST /api/token requests at the real services:
- * the OAuth Postgres store, the refresh caches, and the Postgres refresh lock
- * that every simulated instance shares, with a local HTTPS stand-in for Hydra
- * that answers after a configurable latency.
+ * These tests fire concurrent POST /api/token requests at the real OAuth
+ * Postgres store, refresh caches, and Postgres refresh lock, with a local
+ * HTTPS stand-in for Hydra that answers after a configurable latency.
+ *
+ * Only the 'Distributed lock across real HTTP listeners' group exercises the
+ * shared Postgres lock: each listener is its own instance. In the
+ * single-instance group, concurrent requests are absorbed by RefreshInflight
+ * and the refresh caches, so those cases hold even without the lock.
  *
  * The success criterion: N concurrent requests with the same RT result in
  *   - exactly **1** upstream call,
@@ -22,7 +26,7 @@ import { Effect } from 'effect';
 import { HttpRouter } from 'effect/http';
 import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { startHydraStandIn } from './helpers/hydra-stand-in';
+import { readBody, startHydraStandIn } from './helpers/hydra-stand-in';
 
 // The stand-in serves a throwaway self-signed certificate.
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -158,16 +162,6 @@ const pct = (values: number[], p: number): number => {
 // of them share the OAuth database and its refresh lock, as production
 // instances do.
 
-const readBody = async (request: IncomingMessage) => {
-  const chunks: Buffer[] = [];
-
-  for await (const chunk of request) {
-    chunks.push(Buffer.from(z.instanceof(Uint8Array).parse(chunk)));
-  }
-
-  return Buffer.concat(chunks).toString('utf8');
-};
-
 const forward = async (
   handler: ReturnType<typeof instance>,
   request: IncomingMessage,
@@ -275,7 +269,7 @@ describe('Refresh concurrency', () => {
       expect([...distinctNewRTs][0]).toContain(`${refreshToken}-rotated`);
     }, 30_000);
 
-    it('50 concurrent requests with the SAME refresh_token and a wider race window still = 1 upstream call', async () => {
+    it('50 concurrent requests with the SAME refresh_token (the largest same-token case) still = 1 upstream call', async () => {
       const refreshToken = uniqueToken('rt-shared');
       await seedToken(refreshToken);
       upstream.latencyMs = 100;
