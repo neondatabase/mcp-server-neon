@@ -678,11 +678,8 @@
     "vitest(require-mock-type-parameters)": 9
   },
   "mcp/__tests__/oauth-authorize-route.integration.test.ts": {
-    "anti-slop(no-chained-type-assertions)": 5,
     "anti-slop(no-conditional-spread)": 1,
-    "anti-slop(no-module-mocking)": 4,
-    "anti-slop(require-readable-spacing)": 107,
-    "anti-slop(require-safety-comment-for-type-assertion)": 10,
+    "anti-slop(require-readable-spacing)": 105,
     "eslint(func-style)": 6,
     "eslint(prefer-named-capture-group)": 3,
     "eslint(require-unicode-regexp)": 13,
@@ -691,7 +688,6 @@
     "typescript(no-non-null-assertion)": 4,
     "typescript(no-unnecessary-type-assertion)": 1,
     "typescript(no-unsafe-assignment)": 1,
-    "typescript(no-unsafe-type-assertion)": 5,
     "typescript(prefer-regexp-exec)": 3,
     "typescript(promise-function-async)": 1,
     "typescript(require-array-sort-compare)": 1,
@@ -699,35 +695,26 @@
     "unicorn(no-array-sort)": 1,
     "vitest(no-conditional-in-test)": 20,
     "vitest(prefer-expect-resolves)": 8,
-    "vitest(prefer-import-in-mock)": 4,
     "vitest(prefer-strict-boolean-matchers)": 3,
-    "vitest(prefer-strict-equal)": 28,
-    "vitest(require-mock-type-parameters)": 6
+    "vitest(prefer-strict-equal)": 28
   },
   "mcp/__tests__/oauth-callback-route.integration.test.ts": {
-    "anti-slop(no-module-mocking)": 5,
-    "anti-slop(require-readable-spacing)": 79,
-    "anti-slop(require-safety-comment-for-type-assertion)": 3,
+    "anti-slop(require-readable-spacing)": 62,
     "eslint(curly)": 1,
     "eslint(func-style)": 4,
     "eslint(max-params)": 1,
     "eslint(prefer-named-capture-group)": 1,
     "eslint(require-unicode-regexp)": 2,
     "import(max-dependencies)": 1,
-    "typescript(no-base-to-string)": 14,
-    "typescript(no-non-null-assertion)": 7,
+    "typescript(no-non-null-assertion)": 6,
     "typescript(no-unsafe-assignment)": 2,
-    "typescript(no-unsafe-type-assertion)": 3,
     "typescript(require-array-sort-compare)": 1,
     "typescript(strict-boolean-expressions)": 2,
     "unicorn(no-array-sort)": 1,
     "vitest(no-conditional-in-test)": 2,
-    "vitest(prefer-called-times)": 1,
     "vitest(prefer-expect-resolves)": 3,
-    "vitest(prefer-import-in-mock)": 5,
     "vitest(prefer-strict-boolean-matchers)": 5,
-    "vitest(prefer-strict-equal)": 6,
-    "vitest(require-mock-type-parameters)": 7
+    "vitest(prefer-strict-equal)": 6
   },
   "mcp/__tests__/oauth-client-binding.integration.test.ts": {
     "anti-slop(no-module-mocking)": 4,
@@ -768,16 +755,11 @@
     "vitest(require-mock-type-parameters)": 8
   },
   "mcp/__tests__/oauth-register-route.integration.test.ts": {
-    "anti-slop(no-module-mocking)": 1,
     "anti-slop(no-unknown-parameters)": 1,
     "anti-slop(require-readable-spacing)": 8,
     "anti-slop(require-safety-comment-for-type-assertion)": 6,
-    "eslint(func-style)": 1,
     "eslint(require-unicode-regexp)": 1,
-    "typescript(no-unsafe-type-assertion)": 6,
-    "vitest(prefer-called-times)": 1,
-    "vitest(prefer-import-in-mock)": 1,
-    "vitest(require-mock-type-parameters)": 2
+    "typescript(no-unsafe-type-assertion)": 6
   },
   "mcp/__tests__/origin.test.ts": {
     "eslint(no-script-url)": 1
@@ -957,20 +939,14 @@
   },
   "mcp/__tests__/route-head.integration.test.ts": {
     "anti-slop(no-known-value-widening)": 1,
-    "anti-slop(no-module-mocking)": 2,
     "anti-slop(require-readable-spacing)": 2,
-    "anti-slop(require-safety-comment-for-type-assertion)": 3,
-    "eslint(func-style)": 4,
+    "eslint(func-style)": 3,
     "eslint(init-declarations)": 1,
     "promise(avoid-new)": 1,
     "typescript(no-confusing-void-expression)": 1,
-    "typescript(no-unnecessary-type-assertion)": 3,
     "typescript(no-unsafe-assignment)": 1,
-    "typescript(no-unsafe-type-assertion)": 3,
     "typescript(promise-function-async)": 1,
-    "unicorn(numeric-separators-style)": 1,
-    "vitest(prefer-import-in-mock)": 2,
-    "vitest(require-mock-type-parameters)": 5
+    "unicorn(numeric-separators-style)": 1
   },
   "mcp/__tests__/route-transport-security.integration.test.ts": {
     "anti-slop(no-conditional-spread)": 1,

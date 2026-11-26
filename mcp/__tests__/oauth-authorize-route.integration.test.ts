@@ -1,57 +1,127 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
-import { GET, POST } from '../../app/api/authorize/route';
-import { model } from '../oauth/model';
-import { upstreamAuth } from '../../lib/oauth/client';
-import { SERVER_HOST } from '../../lib/config';
-import { authTransactions } from '../oauth/auth-transaction-store';
-import { AUTH_RESTART_DESCRIPTION } from '../oauth/consent-html-headers';
-import { SCOPE_CATEGORIES } from '../utils/grant-context';
-import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
-import { seedPendingTransaction } from './auth-transaction-fixtures';
-import { consentCookieName } from '../oauth/browser-binding';
+/**
+ * /api/authorize on the real OAuth Postgres store and auth transactions.
+ * Upstream Hydra and analytics are replaced with recording layers, so a test
+ * can see which authorization URL was requested and which events were sent.
+ */
 import { neon } from '@neondatabase/serverless';
+import { Effect, Layer } from 'effect';
+import { HttpRouter } from 'effect/http';
 import he from 'he';
-import { track } from '../analytics/analytics';
+import type { Client } from 'oauth2-server';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { SERVER_HOST } from '../../lib/config';
+import { UpstreamOAuth } from '../../lib/oauth/upstream-oauth';
+import { Analytics } from '../analytics/analytics-service';
+import { authTransactions } from '../oauth/auth-transaction-store';
+import { consentCookieName } from '../oauth/browser-binding';
+import { AUTH_RESTART_DESCRIPTION } from '../oauth/consent-html-headers';
+import { OAuthStore } from '../oauth/oauth-store';
+import { SCOPE_CATEGORIES } from '../utils/grant-context';
+import { seedPendingTransaction } from './auth-transaction-fixtures';
+import { OAuthTestApp } from './helpers/oauth-app';
 
-vi.mock('../oauth/model', () => ({
-  model: {
-    getClient: vi.fn(),
-    getClientRegisterHeaders: vi.fn(),
-  },
-}));
-
-vi.mock('../analytics/analytics', () => ({
-  track: vi.fn(),
-  flushAnalytics: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('@vercel/functions', () => ({
-  waitUntil: vi.fn(),
-}));
-
-vi.mock('../../lib/oauth/client', () => ({
-  upstreamAuth: vi.fn(
-    async (state: string) =>
-      new URL(`https://oauth.example/authorize?state=${state}`),
-  ),
-}));
+type Tracked = Parameters<(typeof Analytics.Service)['track']>[0];
 
 const VALID_CLIENT = {
-  id: 'client-123',
+  id: `authorize-route-${crypto.randomUUID()}`,
   client_name: 'Authorize Test Client',
   redirect_uris: ['http://127.0.0.1:55667/callback'],
   response_types: ['code'],
   grant_types: ['authorization_code', 'refresh_token'],
+  grants: ['authorization_code', 'refresh_token'],
   tokenEndpointAuthMethod: 'none',
   secret: '',
+};
+
+const clientLookups: string[] = [];
+
+const upstreamStates: string[] = [];
+
+const tracked: Tracked[] = [];
+
+const recordingStore = Layer.effect(
+  OAuthStore,
+  OAuthStore.make.pipe(
+    Effect.map((real) =>
+      OAuthStore.of({
+        ...real,
+        findClient: (input) =>
+          Effect.sync(() => {
+            clientLookups.push(input.clientId);
+          }).pipe(Effect.andThen(real.findClient(input))),
+      }),
+    ),
+  ),
+);
+
+const notUsed = Effect.die(new Error('/api/authorize does not call this'));
+
+const recordingUpstream = Layer.succeed(
+  UpstreamOAuth,
+  UpstreamOAuth.of({
+    authorizationUrl: ({ state }) =>
+      Effect.sync(() => {
+        upstreamStates.push(state);
+
+        return new URL(`https://oauth.example/authorize?state=${state}`);
+      }),
+    exchangeCode: () => notUsed,
+    exchangeRefreshToken: () => notUsed,
+  }),
+);
+
+const recordingAnalytics = Layer.succeed(
+  Analytics,
+  Analytics.of({
+    track: (event) =>
+      Effect.sync(() => {
+        tracked.push(event);
+      }),
+    identify: () => Effect.void,
+  }),
+);
+
+const app = HttpRouter.toWebHandler(
+  Layer.mergeAll(
+    OAuthTestApp,
+    recordingStore,
+    recordingUpstream,
+    recordingAnalytics,
+  ),
+  { disableLogger: true },
+);
+
+const registerClient = async (
+  client: Client,
+  registerHeaders: Record<string, string> = {},
+) =>
+  Effect.runPromise(
+    OAuthStore.pipe(
+      Effect.flatMap((store) => store.saveClient({ client, registerHeaders })),
+      Effect.provide(OAuthStore.layer),
+    ),
+  );
+
+const registerVariant = async (
+  fields: { readonly redirect_uris?: string | (string | number | null)[] },
+  registerHeaders: Record<string, string> = {},
+) => {
+  const client = {
+    ...VALID_CLIENT,
+    ...fields,
+    id: `authorize-route-${crypto.randomUUID()}`,
+  };
+
+  await registerClient(client, registerHeaders);
+
+  return client;
 };
 
 function buildAuthorizeRequest(
   headers: Record<string, string> = {},
   scope = 'read write',
   extraParams: Record<string, string> = {},
-): NextRequest {
+): Request {
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: VALID_CLIENT.id,
@@ -61,7 +131,7 @@ function buildAuthorizeRequest(
     ...extraParams,
   });
 
-  return new NextRequest(`${SERVER_HOST}/api/authorize?${params.toString()}`, {
+  return new Request(`${SERVER_HOST}/api/authorize?${params.toString()}`, {
     method: 'GET',
     headers,
   });
@@ -102,8 +172,8 @@ async function postAuthorize({
   for (const [name, value] of fields) {
     form.append(name, value);
   }
-  return POST(
-    new NextRequest(`${SERVER_HOST}/api/authorize`, {
+  return app.handler(
+    new Request(`${SERVER_HOST}/api/authorize`, {
       method: 'POST',
       headers: { cookie, ...(accept ? { accept } : {}) },
       body: form,
@@ -113,28 +183,32 @@ async function postAuthorize({
 
 describe('/api/authorize route integration', () => {
   beforeAll(async () => {
-    await ensureTestOauthDatabase();
+    await registerClient(VALID_CLIENT);
   });
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(model.getClient).mockResolvedValue(
-      VALID_CLIENT as unknown as Awaited<ReturnType<typeof model.getClient>>,
-    );
-    vi.mocked(model.getClientRegisterHeaders).mockResolvedValue(undefined);
+    clientLookups.length = 0;
+    upstreamStates.length = 0;
+    tracked.length = 0;
+  });
+
+  afterAll(async () => {
+    await app.dispose();
   });
 
   it.each(['host', 'x-forwarded-host'])(
     'returns invalid_request for a malformed %s header',
     async (header) => {
-      const response = await GET(buildAuthorizeRequest({ [header]: '[' }));
+      const response = await app.handler(
+        buildAuthorizeRequest({ [header]: '[' }),
+      );
 
       expect(response.status).toBe(400);
       await expect(response.json()).resolves.toEqual({
         error: 'invalid_request',
         error_description: 'Invalid request origin',
       });
-      expect(model.getClient).not.toHaveBeenCalled();
+      expect(clientLookups).toStrictEqual([]);
     },
   );
 
@@ -143,13 +217,13 @@ describe('/api/authorize route integration', () => {
     'claude://claude.ai/oauth/callback',
     'http://hermes.cobaltweb.dev/callback',
   ])('authorizes a stored scalar redirect URI %s', async (redirectUri) => {
-    vi.mocked(model.getClient).mockResolvedValue({
-      ...VALID_CLIENT,
-      redirect_uris: redirectUri,
-    } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+    const client = await registerVariant({ redirect_uris: redirectUri });
 
-    const response = await GET(
-      buildAuthorizeRequest({}, 'read write', { redirect_uri: redirectUri }),
+    const response = await app.handler(
+      buildAuthorizeRequest({}, 'read write', {
+        client_id: client.id,
+        redirect_uri: redirectUri,
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -157,25 +231,24 @@ describe('/api/authorize route integration', () => {
 
   it('authorizes valid redirects from a mixed stored array', async () => {
     const redirectUri = 'custom://client/callback';
-    vi.mocked(model.getClient).mockResolvedValue({
-      ...VALID_CLIENT,
-      redirect_uris: [42, redirectUri],
-    } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+    const client = await registerVariant({ redirect_uris: [42, redirectUri] });
 
-    const response = await GET(
-      buildAuthorizeRequest({}, 'read write', { redirect_uri: redirectUri }),
+    const response = await app.handler(
+      buildAuthorizeRequest({}, 'read write', {
+        client_id: client.id,
+        redirect_uri: redirectUri,
+      }),
     );
 
     expect(response.status).toBe(200);
   });
 
   it('returns invalid_client when stored redirect metadata has no strings', async () => {
-    vi.mocked(model.getClient).mockResolvedValue({
-      ...VALID_CLIENT,
-      redirect_uris: [42, null],
-    } as unknown as Awaited<ReturnType<typeof model.getClient>>);
+    const client = await registerVariant({ redirect_uris: [42, null] });
 
-    const response = await GET(buildAuthorizeRequest());
+    const response = await app.handler(
+      buildAuthorizeRequest({}, 'read write', { client_id: client.id }),
+    );
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
@@ -190,8 +263,8 @@ describe('/api/authorize route integration', () => {
   ])(
     'returns invalid_request for consent submitted as %s',
     async (contentType, body) => {
-      const response = await POST(
-        new NextRequest(`${SERVER_HOST}/api/authorize`, {
+      const response = await app.handler(
+        new Request(`${SERVER_HOST}/api/authorize`, {
           method: 'POST',
           headers: { 'content-type': contentType },
           body,
@@ -208,8 +281,8 @@ describe('/api/authorize route integration', () => {
   );
 
   it('returns invalid_request for malformed multipart consent data', async () => {
-    const response = await POST(
-      new NextRequest(`${SERVER_HOST}/api/authorize`, {
+    const response = await app.handler(
+      new Request(`${SERVER_HOST}/api/authorize`, {
         method: 'POST',
         headers: { 'content-type': 'multipart/form-data' },
         body: 'state=test',
@@ -224,7 +297,7 @@ describe('/api/authorize route integration', () => {
   });
 
   it('sets consent security headers', async () => {
-    const response = await GET(buildAuthorizeRequest());
+    const response = await app.handler(buildAuthorizeRequest());
     expect(response.status).toBe(200);
     expect(response.headers.get('X-Frame-Options')).toBe('DENY');
     expect(response.headers.get('Content-Security-Policy')).toBe(
@@ -241,20 +314,21 @@ describe('/api/authorize route integration', () => {
   });
 
   it('renders editable consent with Read and write checked by default', async () => {
-    const response = await GET(buildAuthorizeRequest());
+    const response = await app.handler(buildAuthorizeRequest());
     const html = await response.text();
     expect(html).toContain('scope-checkbox');
     expect(html).toMatch(/class="scope-checkbox"[\s\S]*?checked/);
     expect(html).toContain('name="projectMode"');
-    expect(upstreamAuth).not.toHaveBeenCalled();
+    expect(upstreamStates).toStrictEqual([]);
   });
 
   it('defaults Read and write to unchecked for registration x-read-only without locking it', async () => {
-    vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
-      headers: { 'x-read-only': 'true' },
-      createdAt: Date.now(),
-    });
-    const response = await GET(buildAuthorizeRequest());
+    const client = await registerVariant({}, { 'x-read-only': 'true' });
+
+    const response = await app.handler(
+      buildAuthorizeRequest({}, 'read write', { client_id: client.id }),
+    );
+
     const html = await response.text();
     const writeInput = html.match(
       /<input\s+type="radio"\s+name="scopes"\s+value="write"[\s\S]*?\/>/,
@@ -264,14 +338,15 @@ describe('/api/authorize route integration', () => {
   });
 
   it('keeps writes on a readonly=false resource despite registration x-read-only', async () => {
-    vi.mocked(model.getClientRegisterHeaders).mockResolvedValue({
-      headers: { 'x-read-only': 'true' },
-      createdAt: Date.now(),
-    });
+    const client = await registerVariant({}, { 'x-read-only': 'true' });
     const resource = 'https://mcp.neon.tech/mcp?readonly=false';
-    const getResponse = await GET(
-      buildAuthorizeRequest({}, 'read write', { resource }),
+    const getResponse = await app.handler(
+      buildAuthorizeRequest({}, 'read write', {
+        client_id: client.id,
+        resource,
+      }),
     );
+
     const html = await getResponse.text();
     expect(html).toContain('Read and write');
     expect(html).not.toContain('class="scope-checkbox"');
@@ -291,7 +366,7 @@ describe('/api/authorize route integration', () => {
 
   it('does not let authorize ?readonly=true reduce a writable confirmation resource', async () => {
     const resource = 'https://mcp.neon.tech/mcp?projectId=proj-123';
-    const getResponse = await GET(
+    const getResponse = await app.handler(
       buildAuthorizeRequest({}, 'read write', {
         resource,
         readonly: 'true',
@@ -317,7 +392,7 @@ describe('/api/authorize route integration', () => {
   it('renders confirmation without editors for a parameterized resource', async () => {
     const resource =
       'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying,schema&readonly=true';
-    const response = await GET(
+    const response = await app.handler(
       buildAuthorizeRequest({}, 'read write', { resource }),
     );
     const html = await response.text();
@@ -333,7 +408,7 @@ describe('/api/authorize route integration', () => {
   });
 
   it('returns invalid_target when resource parameter is malformed', async () => {
-    const response = await GET(
+    const response = await app.handler(
       buildAuthorizeRequest({}, 'read write', {
         resource: '/mcp?category=schema',
       }),
@@ -346,7 +421,7 @@ describe('/api/authorize route integration', () => {
   });
 
   it('returns invalid_target when resource parameter is not https', async () => {
-    const response = await GET(
+    const response = await app.handler(
       buildAuthorizeRequest({}, 'read write', {
         resource: 'http://mcp.neon.tech/mcp?category=schema',
       }),
@@ -361,7 +436,7 @@ describe('/api/authorize route integration', () => {
   it('approves a fixed project/category writable grant', async () => {
     const resource =
       'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying';
-    const getResponse = await GET(
+    const getResponse = await app.handler(
       buildAuthorizeRequest({}, 'read write', { resource }),
     );
     const html = await getResponse.text();
@@ -382,13 +457,13 @@ describe('/api/authorize route integration', () => {
       scopes: ['querying'],
     });
     expect(stored.approvedScopes).toEqual(['read', 'write']);
-    expect(vi.mocked(upstreamAuth).mock.calls.at(-1)?.[0]).toBe(state);
+    expect(upstreamStates.at(-1)).toBe(state);
   });
 
   it('shows a pinned roleName on confirmation and stores it on the approved grant', async () => {
     const resource =
       'https://mcp.neon.tech/mcp?projectId=proj-123&readonly=true&roleName=mcp_pinned_reader';
-    const getResponse = await GET(
+    const getResponse = await app.handler(
       buildAuthorizeRequest({}, 'read write', { resource }),
     );
     const html = await getResponse.text();
@@ -421,7 +496,7 @@ describe('/api/authorize route integration', () => {
   ] as const)(
     'checks setup credentials on editable consent and stores %s when chosen',
     async (choice, stored) => {
-      const getResponse = await GET(buildAuthorizeRequest());
+      const getResponse = await app.handler(buildAuthorizeRequest());
       const html = await getResponse.text();
 
       expect(html).toContain(
@@ -451,7 +526,7 @@ describe('/api/authorize route integration', () => {
   );
 
   it('stores setup credentials for a consent form without the secrets choice', async () => {
-    const getResponse = await GET(buildAuthorizeRequest());
+    const getResponse = await app.handler(buildAuthorizeRequest());
     const state = extractState(await getResponse.text());
 
     await postAuthorize({
@@ -477,7 +552,7 @@ describe('/api/authorize route integration', () => {
   it('makes a secrets resource a fixed confirmation', async () => {
     const resource = 'https://mcp.neon.tech/mcp?secrets=all';
 
-    const getResponse = await GET(
+    const getResponse = await app.handler(
       buildAuthorizeRequest({}, 'read write', { resource }),
     );
 
@@ -503,7 +578,7 @@ describe('/api/authorize route integration', () => {
   it.each(['secrets=yes', 'secrets=all&secrets=none'])(
     'returns invalid_target for a malformed secrets (%s)',
     async (query) => {
-      const response = await GET(
+      const response = await app.handler(
         buildAuthorizeRequest({}, 'read write', {
           resource: `https://mcp.neon.tech/mcp?${query}`,
         }),
@@ -519,7 +594,7 @@ describe('/api/authorize route integration', () => {
 
   it('makes a roleName-only resource a fixed confirmation', async () => {
     const resource = 'https://mcp.neon.tech/mcp?roleName=mcp_pinned_reader';
-    const getResponse = await GET(
+    const getResponse = await app.handler(
       buildAuthorizeRequest({}, 'read write', { resource }),
     );
     const html = await getResponse.text();
@@ -548,7 +623,7 @@ describe('/api/authorize route integration', () => {
   ])(
     'returns invalid_target for a malformed pinned role (%s)',
     async (query) => {
-      const response = await GET(
+      const response = await app.handler(
         buildAuthorizeRequest({}, 'read write', {
           resource: `https://mcp.neon.tech/mcp?readonly=true&${query}`,
         }),
@@ -564,7 +639,7 @@ describe('/api/authorize route integration', () => {
   it('approves a fixed read-only resource as read even when the client asked for write', async () => {
     const resource =
       'https://mcp.neon.tech/mcp?projectId=proj-123&category=querying&readonly=true';
-    const getResponse = await GET(
+    const getResponse = await app.handler(
       buildAuthorizeRequest({}, 'read write', { resource }),
     );
     const state = extractState(await getResponse.text());
@@ -583,7 +658,7 @@ describe('/api/authorize route integration', () => {
 
   it('rejects confirmation tampering that adds write', async () => {
     const resource = 'https://mcp.neon.tech/mcp?readonly=true';
-    const getResponse = await GET(
+    const getResponse = await app.handler(
       buildAuthorizeRequest({}, 'read write', { resource }),
     );
     const state = extractState(await getResponse.text());
@@ -601,11 +676,11 @@ describe('/api/authorize route integration', () => {
     });
     const stored = await authTransactions.getById(state);
     expect(stored?.status).toBe('pending');
-    expect(upstreamAuth).not.toHaveBeenCalled();
+    expect(upstreamStates).toStrictEqual([]);
   });
 
   it('rejects a forged write when the OAuth request was read-only', async () => {
-    const getResponse = await GET(buildAuthorizeRequest({}, 'read'));
+    const getResponse = await app.handler(buildAuthorizeRequest({}, 'read'));
     const state = extractState(await getResponse.text());
     const postResponse = await postAuthorize({
       state,
@@ -628,7 +703,7 @@ describe('/api/authorize route integration', () => {
   });
 
   it('persists an edited one-project subset with writes off', async () => {
-    const getResponse = await GET(buildAuthorizeRequest());
+    const getResponse = await app.handler(buildAuthorizeRequest());
     const state = extractState(await getResponse.text());
     const postResponse = await postAuthorize({
       state,
@@ -655,7 +730,7 @@ describe('/api/authorize route integration', () => {
   });
 
   it('stores a Postgres role entered on editable consent', async () => {
-    const getResponse = await GET(buildAuthorizeRequest());
+    const getResponse = await app.handler(buildAuthorizeRequest());
     const getHtml = await getResponse.text();
     expect(getHtml).toContain('name="roleName"');
     const state = extractState(getHtml);
@@ -686,7 +761,7 @@ describe('/api/authorize route integration', () => {
   });
 
   it('re-renders an invalid Postgres role with its error and keeps the transaction pending', async () => {
-    const getResponse = await GET(buildAuthorizeRequest());
+    const getResponse = await app.handler(buildAuthorizeRequest());
     const state = extractState(await getResponse.text());
     const response = await postAuthorize({
       state,
@@ -710,7 +785,7 @@ describe('/api/authorize route integration', () => {
   });
 
   it('keeps the entered role when the project ID is missing', async () => {
-    const getResponse = await GET(buildAuthorizeRequest());
+    const getResponse = await app.handler(buildAuthorizeRequest());
     const state = extractState(await getResponse.text());
     const response = await postAuthorize({
       state,
@@ -730,7 +805,7 @@ describe('/api/authorize route integration', () => {
   });
 
   it('ignores a leftover project ID when All projects is selected', async () => {
-    const getResponse = await GET(buildAuthorizeRequest());
+    const getResponse = await app.handler(buildAuthorizeRequest());
     const state = extractState(await getResponse.text());
     const postResponse = await postAuthorize({
       state,
@@ -751,7 +826,9 @@ describe('/api/authorize route integration', () => {
   });
 
   it('keeps requested * only when write is approved', async () => {
-    const getResponse = await GET(buildAuthorizeRequest({}, 'read write *'));
+    const getResponse = await app.handler(
+      buildAuthorizeRequest({}, 'read write *'),
+    );
     const state = extractState(await getResponse.text());
     const form = new FormData();
     form.set('state', state);
@@ -760,8 +837,8 @@ describe('/api/authorize route integration', () => {
     form.append('scopes', 'read');
     form.append('scopes', 'write');
     appendAllCategories(form);
-    const postResponse = await POST(
-      new NextRequest(`${SERVER_HOST}/api/authorize`, {
+    const postResponse = await app.handler(
+      new Request(`${SERVER_HOST}/api/authorize`, {
         method: 'POST',
         headers: { cookie: cookieHeader(getResponse) },
         body: form,
@@ -798,8 +875,8 @@ describe('/api/authorize route integration', () => {
   });
 
   it('rejects a cookie from another transaction', async () => {
-    const first = await GET(buildAuthorizeRequest());
-    const second = await GET(buildAuthorizeRequest());
+    const first = await app.handler(buildAuthorizeRequest());
+    const second = await app.handler(buildAuthorizeRequest());
     const secondState = extractState(await second.text());
     const response = await postAuthorize({
       state: secondState,
@@ -824,8 +901,8 @@ describe('/api/authorize route integration', () => {
       const form = new FormData();
       form.set('state', state);
       form.set('action', 'cancel');
-      return POST(
-        new NextRequest(`${SERVER_HOST}/api/authorize`, {
+      return app.handler(
+        new Request(`${SERVER_HOST}/api/authorize`, {
           method: 'POST',
           headers: { ...httpsHeaders, cookie },
           body: form,
@@ -834,7 +911,7 @@ describe('/api/authorize route integration', () => {
     };
 
     it('sets a __Host- prefixed, Secure, host-only cookie', async () => {
-      const response = await GET(buildAuthorizeRequest(httpsHeaders));
+      const response = await app.handler(buildAuthorizeRequest(httpsHeaders));
       expect(response.status).toBe(200);
       const [setCookie] = response.headers.getSetCookie();
 
@@ -851,7 +928,15 @@ describe('/api/authorize route integration', () => {
     });
 
     it('completes a consent created before the prefix with its unprefixed cookie', async () => {
-      const legacy = await seedPendingTransaction();
+      const legacy = await seedPendingTransaction({
+        request: {
+          responseType: 'code',
+          clientId: VALID_CLIENT.id,
+          redirectUri: VALID_CLIENT.redirect_uris[0],
+          scope: ['read', 'write'],
+          state: 'client-state',
+        },
+      });
       const response = await postOverHttps(
         legacy.transaction.id,
         `${consentCookieName(legacy.transaction.id, false)}=${legacy.browserSecret}`,
@@ -874,7 +959,7 @@ describe('/api/authorize route integration', () => {
     });
 
     it('does not accept the prefixed binding planted as an unprefixed cookie value', async () => {
-      const response = await GET(buildAuthorizeRequest(httpsHeaders));
+      const response = await app.handler(buildAuthorizeRequest(httpsHeaders));
       const state = extractState(await response.text());
       const [name, secret] = cookieHeader(response).split('=');
       const planted = `${name.replace(/^__Host-/, '')}=__Host-:${secret}`;
@@ -888,7 +973,7 @@ describe('/api/authorize route integration', () => {
     });
 
     it('does not accept the unprefixed cookie name', async () => {
-      const response = await GET(buildAuthorizeRequest(httpsHeaders));
+      const response = await app.handler(buildAuthorizeRequest(httpsHeaders));
       const state = extractState(await response.text());
       const unprefixed = cookieHeader(response).replace(/^__Host-/, '');
 
@@ -902,7 +987,7 @@ describe('/api/authorize route integration', () => {
   });
 
   it('cancels to the registered redirect with the original downstream state', async () => {
-    const getResponse = await GET(
+    const getResponse = await app.handler(
       buildAuthorizeRequest({}, 'read write', { state: 'orig-state' }),
     );
     const state = extractState(await getResponse.text());
@@ -920,7 +1005,7 @@ describe('/api/authorize route integration', () => {
     expect(location.searchParams.get('state')).toBe('orig-state');
     expect(location.searchParams.get('iss')).toBe(SERVER_HOST);
     expect(await authTransactions.getById(state)).toBeUndefined();
-    expect(upstreamAuth).not.toHaveBeenCalled();
+    expect(upstreamStates).toStrictEqual([]);
   });
 
   describe('cancel from the consent form', () => {
@@ -928,16 +1013,16 @@ describe('/api/authorize route integration', () => {
     const BROWSER_ACCEPT = 'text/html,application/xhtml+xml';
 
     async function cancel(redirectUri: string, accept?: string) {
-      vi.mocked(model.getClient).mockResolvedValue({
-        ...VALID_CLIENT,
-        redirect_uris: [redirectUri],
-      } as unknown as Awaited<ReturnType<typeof model.getClient>>);
-      const getResponse = await GET(
+      const client = await registerVariant({ redirect_uris: [redirectUri] });
+
+      const getResponse = await app.handler(
         buildAuthorizeRequest({}, 'read write', {
+          client_id: client.id,
           redirect_uri: redirectUri,
           state: 'orig-state',
         }),
       );
+
       const state = extractState(await getResponse.text());
       const response = await postAuthorize({
         state,
@@ -945,11 +1030,14 @@ describe('/api/authorize route integration', () => {
         fields: [['action', 'cancel']],
         accept,
       });
-      return { response, state };
+      return { response, state, client };
     }
 
     it('shows the cancelled page to a browser cancelling for a desktop app', async () => {
-      const { response, state } = await cancel(APP_REDIRECT, BROWSER_ACCEPT);
+      const { response, state, client } = await cancel(
+        APP_REDIRECT,
+        BROWSER_ACCEPT,
+      );
 
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('text/html');
@@ -964,12 +1052,12 @@ describe('/api/authorize route integration', () => {
         `${consentCookieName(state, false)}=;`,
       );
       expect(await authTransactions.getById(state)).toBeUndefined();
-      expect(track).toHaveBeenCalledWith(
+      expect(tracked).toContainEqual(
         expect.objectContaining({
           event: 'auth_complete_viewed',
           properties: expect.objectContaining({
             outcome: 'cancelled',
-            clientId: VALID_CLIENT.id,
+            clientId: client.id,
             clientName: VALID_CLIENT.client_name,
           }),
         }),
@@ -991,13 +1079,13 @@ describe('/api/authorize route integration', () => {
         expect(response.status).toBe(303);
         const location = new URL(response.headers.get('location') ?? '');
         expect(location.searchParams.get('error')).toBe('access_denied');
-        expect(track).not.toHaveBeenCalled();
+        expect(tracked).toStrictEqual([]);
       },
     );
   });
 
   it('lets only one of two concurrent approvals win', async () => {
-    const getResponse = await GET(buildAuthorizeRequest());
+    const getResponse = await app.handler(buildAuthorizeRequest());
     const html = await getResponse.text();
     const state = extractState(html);
     const cookie = cookieHeader(getResponse);
@@ -1029,13 +1117,13 @@ describe('/api/authorize route integration', () => {
   });
 
   it('keeps two authorizations for one client independent', async () => {
-    const firstGet = await GET(
+    const firstGet = await app.handler(
       buildAuthorizeRequest({}, 'read write', {
         state: 'one',
         resource: 'https://mcp.neon.tech/mcp?projectId=proj-one',
       }),
     );
-    const secondGet = await GET(
+    const secondGet = await app.handler(
       buildAuthorizeRequest({}, 'read write', {
         state: 'two',
         resource: 'https://mcp.neon.tech/mcp?projectId=proj-two',
@@ -1068,7 +1156,7 @@ describe('/api/authorize route integration', () => {
   });
 
   it('re-renders a missing project ID with a field error', async () => {
-    const getResponse = await GET(buildAuthorizeRequest());
+    const getResponse = await app.handler(buildAuthorizeRequest());
     const state = extractState(await getResponse.text());
     const response = await postAuthorize({
       state,
@@ -1098,8 +1186,8 @@ describe('/api/authorize route integration', () => {
       scope: 'read write',
       state: 'test-state',
     });
-    const response = await GET(
-      new NextRequest(
+    const response = await app.handler(
+      new Request(
         `https://preview.example/api/authorize?${params.toString()}`,
         { method: 'GET' },
       ),
@@ -1111,11 +1199,11 @@ describe('/api/authorize route integration', () => {
     expect(location.searchParams.get('client_id')).toBe(VALID_CLIENT.id);
     expect(location.searchParams.get('state')).toBe('test-state');
     expect(cookieHeader(response)).not.toContain('neon_mcp_at_');
-    expect(model.getClient).not.toHaveBeenCalled();
+    expect(clientLookups).toStrictEqual([]);
   });
 
   it('cancels an empty one-project editor without validating the ID', async () => {
-    const getResponse = await GET(buildAuthorizeRequest());
+    const getResponse = await app.handler(buildAuthorizeRequest());
     const state = extractState(await getResponse.text());
     const response = await postAuthorize({
       state,
@@ -1134,7 +1222,7 @@ describe('/api/authorize route integration', () => {
   });
 
   it('cancels after a project ID field error', async () => {
-    const getResponse = await GET(buildAuthorizeRequest());
+    const getResponse = await app.handler(buildAuthorizeRequest());
     const state = extractState(await getResponse.text());
     const cookie = cookieHeader(getResponse);
     await postAuthorize({
@@ -1165,7 +1253,7 @@ describe('/api/authorize route integration', () => {
   });
 
   it('cancels a confirmation grant', async () => {
-    const getResponse = await GET(
+    const getResponse = await app.handler(
       buildAuthorizeRequest({}, 'read write', {
         resource: 'https://mcp.neon.tech/mcp?projectId=proj-123',
       }),
@@ -1181,7 +1269,7 @@ describe('/api/authorize route integration', () => {
   });
 
   it('rejects an expired pending transaction', async () => {
-    const getResponse = await GET(buildAuthorizeRequest());
+    const getResponse = await app.handler(buildAuthorizeRequest());
     const state = extractState(await getResponse.text());
     const url = process.env.OAUTH_DATABASE_URL;
     if (!url) {
@@ -1207,6 +1295,6 @@ describe('/api/authorize route integration', () => {
       error: 'invalid_request',
       error_description: AUTH_RESTART_DESCRIPTION,
     });
-    expect(upstreamAuth).not.toHaveBeenCalled();
+    expect(upstreamStates).toStrictEqual([]);
   });
 });

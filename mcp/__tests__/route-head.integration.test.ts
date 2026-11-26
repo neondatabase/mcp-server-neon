@@ -12,33 +12,19 @@
  *              →  Vercel Runtime Timeout Error
  *
  * mcp-handler is deliberately NOT mocked here: the whole bug lives in how that
- * library dispatches by method, so a test that stubs it would prove nothing. Only
- * the OAuth token store (Postgres-backed) and the logger are replaced.
+ * library dispatches by method, so a test that stubs it would prove nothing. The
+ * route runs on its real services; the OAuth token is stored in the test Postgres
+ * database.
  *
  * Every assertion runs under a response-time budget, because the failure mode
  * under test is "never answers" rather than "answers wrongly".
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('../oauth/model', () => ({
-  model: {
-    getAccessToken: vi.fn(),
-  },
-}));
-
-vi.mock('../utils/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    silent: false,
-  },
-}));
-
-const { model } = await import('../oauth/model');
-const { HEAD, GET } = await import('../../app/api/[transport]/route');
+import { Effect } from 'effect';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { GET, HEAD } from '../../app/api/[transport]/route';
+import { OAuthStore } from '../oauth/oauth-store';
+import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
 
 /**
  * A hanging request is the bug, so waiting for vitest's default timeout would
@@ -46,21 +32,34 @@ const { HEAD, GET } = await import('../../app/api/[transport]/route');
  */
 const RESPONSE_BUDGET_MS = 2_000;
 
-const BEARER_TOKEN = 'oauth-token-head';
+const BEARER_TOKEN = `oauth-token-head-${crypto.randomUUID()}`;
 
-function buildOAuthToken() {
-  return {
-    accessToken: BEARER_TOKEN,
-    scope: 'read write',
-    client: { id: 'client-1', client_name: 'uptime-probe', grants: ['*'] },
-    user: {
-      id: 'user-A',
-      name: 'User',
-      email: 'user-a@example.com',
-      isOrg: false,
-    },
-  };
-}
+const saveOAuthToken = async () =>
+  Effect.runPromise(
+    OAuthStore.pipe(
+      Effect.flatMap((store) =>
+        store.saveTokenPair({
+          token: {
+            accessToken: BEARER_TOKEN,
+            scope: 'read write',
+            client: {
+              id: 'client-1',
+              client_name: 'uptime-probe',
+              grants: ['*'],
+            },
+            user: {
+              id: 'user-A',
+              name: 'User',
+              email: 'user-a@example.com',
+              isOrg: false,
+            },
+          },
+          refreshToken: `${BEARER_TOKEN}-refresh`,
+        }),
+      ),
+      Effect.provide(OAuthStore.layer),
+    ),
+  );
 
 async function withinBudget(
   work: Promise<Response> | Response,
@@ -97,16 +96,13 @@ function sendHead(
 }
 
 describe('HEAD on the MCP transport route', () => {
-  beforeEach(() => {
-    vi.mocked(model.getAccessToken).mockReset();
+  beforeAll(async () => {
+    await ensureTestOauthDatabase();
+    await saveOAuthToken();
   });
 
   it('answers an authenticated HEAD instead of hanging until the function times out', async () => {
     // The exact production request: a valid credential, then no response.
-    vi.mocked(model.getAccessToken).mockResolvedValue(
-      buildOAuthToken() as never,
-    );
-
     const response = await sendHead(
       'https://mcp.neon.tech/api/mcp',
       authorized(),
@@ -120,10 +116,6 @@ describe('HEAD on the MCP transport route', () => {
 
   it('answers a HEAD on the legacy /mcp path', async () => {
     // The 504s were on /mcp, which is rewritten to /api/mcp before dispatch.
-    vi.mocked(model.getAccessToken).mockResolvedValue(
-      buildOAuthToken() as never,
-    );
-
     const response = await sendHead('https://mcp.neon.tech/mcp', authorized());
 
     expect(response.status).toBe(405);
@@ -132,13 +124,14 @@ describe('HEAD on the MCP transport route', () => {
 
   it('answers an anonymous docs-only HEAD, which bypasses auth entirely', async () => {
     // ?category=docs skips the auth wrapper, so without a HEAD branch an
-    // unauthenticated probe could burn the full function runtime.
+    // unauthenticated probe could burn the full function runtime. Without
+    // that skip, this credential-less request would get the 401 challenge.
     const response = await sendHead(
       'https://mcp.neon.tech/api/mcp?category=docs',
     );
 
     expect(response.status).toBe(405);
-    expect(model.getAccessToken).not.toHaveBeenCalled();
+    expect(response.headers.get('WWW-Authenticate')).toBeNull();
     await expect(response.text()).resolves.toBe('');
   });
 
@@ -157,10 +150,6 @@ describe('HEAD on the MCP transport route', () => {
   it('leaves GET dispatch to mcp-handler', async () => {
     // Guards the fix's blast radius: GET must still reach the real library, which
     // is what produces the JSON-RPC 405 body for the POST-only transport.
-    vi.mocked(model.getAccessToken).mockResolvedValue(
-      buildOAuthToken() as never,
-    );
-
     const response = await withinBudget(
       GET(
         new Request('https://mcp.neon.tech/api/mcp', {

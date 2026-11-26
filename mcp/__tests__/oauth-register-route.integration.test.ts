@@ -1,14 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NextRequest } from 'next/server';
-import { POST, OPTIONS } from '../../app/api/register/route';
-import { model } from '../oauth/model';
-
-vi.mock('../oauth/model', () => ({
-  model: {
-    saveClient: vi.fn(),
-    saveClientRegisterHeaders: vi.fn(),
-  },
-}));
+/**
+ * /api/register on the real OAuth Postgres store. Registered clients are read
+ * back through the store; a recording layer over it shows which ones a
+ * rejected request never saved.
+ */
+import { Effect, Layer, Option } from 'effect';
+import { HttpRouter } from 'effect/http';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { OAuthStore } from '../oauth/oauth-store';
+import { OAuthTestApp } from './helpers/oauth-app';
 
 const VALID_PAYLOAD = {
   client_name: 'Codex',
@@ -18,38 +17,63 @@ const VALID_PAYLOAD = {
   token_endpoint_auth_method: 'none',
 };
 
-function buildRequest(
+type StoreOperations = typeof OAuthStore.Service;
+
+const savedClientIds: string[] = [];
+
+const recordingStore = Layer.effect(
+  OAuthStore,
+  OAuthStore.make.pipe(
+    Effect.map((real) =>
+      OAuthStore.of({
+        ...real,
+        saveClient: (input) =>
+          Effect.sync(() => {
+            savedClientIds.push(input.client.id);
+          }).pipe(Effect.andThen(real.saveClient(input))),
+      }),
+    ),
+  ),
+);
+
+const app = HttpRouter.toWebHandler(
+  Layer.mergeAll(OAuthTestApp, recordingStore),
+  { disableLogger: true },
+);
+
+const onStore = async <A, E>(
+  run: (store: StoreOperations) => Effect.Effect<A, E>,
+) =>
+  Effect.runPromise(
+    OAuthStore.pipe(Effect.flatMap(run), Effect.provide(OAuthStore.layer)),
+  );
+
+const storedClient = async (clientId: string) =>
+  onStore((store) => store.findClient({ clientId }));
+
+const register = async (
   body: unknown,
   headers: Record<string, string> = {},
-): NextRequest {
-  return new NextRequest('http://localhost/api/register', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...headers,
-    },
-    body: JSON.stringify(body),
-  });
-}
+): Promise<Response> =>
+  app.handler(
+    new Request('http://localhost/api/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify(body),
+    }),
+  );
 
 describe('/api/register route integration', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(model.saveClient).mockImplementation(async (client) => client);
-    vi.mocked(model.saveClientRegisterHeaders).mockImplementation(
-      async (_clientId, requestHeaders) => ({
-        headers: requestHeaders,
-        createdAt: Date.now(),
-      }),
-    );
+    savedClientIds.length = 0;
+  });
+
+  afterAll(async () => {
+    await app.dispose();
   });
 
   it('returns a valid response and stores register headers for a valid request', async () => {
-    const response = await POST(
-      buildRequest(VALID_PAYLOAD, {
-        'x-read-only': 'true',
-      }),
-    );
+    const response = await register(VALID_PAYLOAD, { 'x-read-only': 'true' });
     const body = (await response.json()) as {
       client_id: string;
       client_secret: string;
@@ -61,26 +85,32 @@ describe('/api/register route integration', () => {
     expect(body.client_id).toBeTypeOf('string');
     expect(body.client_secret).toBeTypeOf('string');
     expect(body.token_endpoint_auth_method).toBe('none');
-    expect(vi.mocked(model.saveClient)).toHaveBeenCalledOnce();
-    expect(vi.mocked(model.saveClientRegisterHeaders)).toHaveBeenCalledWith(
-      body.client_id,
-      expect.objectContaining({
-        'x-read-only': 'true',
-      }),
+    expect(savedClientIds).toStrictEqual([body.client_id]);
+    await expect(storedClient(body.client_id)).resolves.toMatchObject(
+      Option.some({ id: body.client_id, secret: body.client_secret }),
+    );
+    await expect(
+      onStore((store) =>
+        store.findRegisterHeaders({ clientId: body.client_id }),
+      ),
+    ).resolves.toMatchObject(
+      Option.some({ headers: { 'x-read-only': 'true' } }),
     );
   });
 
   it('generates the client_id, so a registration cannot claim a metadata document URL', async () => {
     const claimed = 'https://claude.ai/oauth/mcp-oauth-client-metadata';
-    const response = await POST(
-      buildRequest({ ...VALID_PAYLOAD, id: claimed, client_id: claimed }),
-    );
+    const response = await register({
+      ...VALID_PAYLOAD,
+      id: claimed,
+      client_id: claimed,
+    });
     const body = (await response.json()) as { client_id: string };
 
     expect(response.status).toBe(200);
     expect(body.client_id).not.toMatch(/^https:\/\//);
-    expect(vi.mocked(model.saveClient)).toHaveBeenCalledWith(
-      expect.objectContaining({ id: body.client_id }),
+    await expect(storedClient(body.client_id)).resolves.toMatchObject(
+      Option.some({ id: body.client_id }),
     );
   });
 
@@ -88,7 +118,7 @@ describe('/api/register route integration', () => {
     const { client_name, ...payloadWithoutClientName } = VALID_PAYLOAD;
     void client_name;
 
-    const response = await POST(buildRequest(payloadWithoutClientName));
+    const response = await register(payloadWithoutClientName);
     const body = (await response.json()) as {
       error: string;
       error_description: string;
@@ -97,14 +127,14 @@ describe('/api/register route integration', () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe('invalid_request');
     expect(body.error_description).toContain('client_name');
-    expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
+    expect(savedClientIds).toStrictEqual([]);
   });
 
   it('returns 400 when redirect_uris is missing', async () => {
     const { redirect_uris, ...payloadWithoutRedirectUris } = VALID_PAYLOAD;
     void redirect_uris;
 
-    const response = await POST(buildRequest(payloadWithoutRedirectUris));
+    const response = await register(payloadWithoutRedirectUris);
     const body = (await response.json()) as {
       error: string;
       error_description: string;
@@ -113,7 +143,7 @@ describe('/api/register route integration', () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe('invalid_request');
     expect(body.error_description).toContain('redirect_uris');
-    expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
+    expect(savedClientIds).toStrictEqual([]);
   });
 
   it.each([
@@ -121,16 +151,20 @@ describe('/api/register route integration', () => {
     'claude://claude.ai/oauth/callback',
     'http://hermes.cobaltweb.dev/callback',
   ])('normalizes scalar redirect URI %s', async (redirectUri) => {
-    const response = await POST(
-      buildRequest({ ...VALID_PAYLOAD, redirect_uris: redirectUri }),
-    );
+    const response = await register({
+      ...VALID_PAYLOAD,
+      redirect_uris: redirectUri,
+    });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       redirect_uris: [redirectUri],
     });
-    expect(vi.mocked(model.saveClient)).toHaveBeenCalledWith(
-      expect.objectContaining({ redirect_uris: [redirectUri] }),
+
+    const [clientId = ''] = savedClientIds;
+
+    await expect(storedClient(clientId)).resolves.toMatchObject(
+      Option.some({ redirect_uris: [redirectUri] }),
     );
   });
 
@@ -140,9 +174,10 @@ describe('/api/register route integration', () => {
       42,
       'custom://client/callback',
     ];
-    const response = await POST(
-      buildRequest({ ...VALID_PAYLOAD, redirect_uris: redirectUris }),
-    );
+    const response = await register({
+      ...VALID_PAYLOAD,
+      redirect_uris: redirectUris,
+    });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
@@ -154,21 +189,20 @@ describe('/api/register route integration', () => {
   });
 
   it('returns 400 when redirect_uris contains no strings', async () => {
-    const response = await POST(
-      buildRequest({ ...VALID_PAYLOAD, redirect_uris: [42, null] }),
-    );
+    const response = await register({
+      ...VALID_PAYLOAD,
+      redirect_uris: [42, null],
+    });
 
     expect(response.status).toBe(400);
-    expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
+    expect(savedClientIds).toStrictEqual([]);
   });
 
   it('returns 400 when grant_types contains unsupported values', async () => {
-    const response = await POST(
-      buildRequest({
-        ...VALID_PAYLOAD,
-        grant_types: ['client_credentials'],
-      }),
-    );
+    const response = await register({
+      ...VALID_PAYLOAD,
+      grant_types: ['client_credentials'],
+    });
     const body = (await response.json()) as {
       error: string;
       error_description: string;
@@ -177,16 +211,14 @@ describe('/api/register route integration', () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe('invalid_request');
     expect(body.error_description).toContain('grant_types');
-    expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
+    expect(savedClientIds).toStrictEqual([]);
   });
 
   it('returns 400 when response_types contains unsupported values', async () => {
-    const response = await POST(
-      buildRequest({
-        ...VALID_PAYLOAD,
-        response_types: ['token'],
-      }),
-    );
+    const response = await register({
+      ...VALID_PAYLOAD,
+      response_types: ['token'],
+    });
     const body = (await response.json()) as {
       error: string;
       error_description: string;
@@ -195,11 +227,11 @@ describe('/api/register route integration', () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe('invalid_request');
     expect(body.error_description).toContain('response_types');
-    expect(vi.mocked(model.saveClient)).not.toHaveBeenCalled();
+    expect(savedClientIds).toStrictEqual([]);
   });
 
   it('returns 204 and CORS headers for OPTIONS', async () => {
-    const response = await OPTIONS(
+    const response = await app.handler(
       new Request('http://localhost/api/register', { method: 'OPTIONS' }),
     );
 
