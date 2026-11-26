@@ -1,19 +1,18 @@
 /**
- * Storage backends for the refresh-token lock in `refresh-lock.ts`.
+ * Storage for the refresh-token lock in `refresh-lock.ts`.
  *
- * Each store keeps one lock per refresh token (owner + TTL) and a short-lived
+ * The store keeps one lock per refresh token (owner + TTL) and a short-lived
  * "transient upstream failure" marker. Every operation is a single atomic
- * command or statement, so the lock algorithm never has to reason about a
- * half-applied write.
+ * statement, so the lock algorithm never has to reason about a half-applied
+ * write.
  */
 
 import { createHash } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
-import { createClient, type RedisClientType } from 'redis';
 import { logger } from '../utils/logger';
 
 export type RefreshLockStore = {
-  name: 'redis' | 'postgres';
+  name: 'postgres';
   /** Take the lock if it is free or expired. Resolves true when we own it. */
   tryAcquire: (
     refreshToken: string,
@@ -61,140 +60,9 @@ function withTimeout<T>(
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Redis (Upstash via Vercel KV)
-// ─────────────────────────────────────────────────────────────────────────
-
-// Deployments from before the Postgres lock use these exact keys, so they
-// must not change while any such deployment can still serve /api/token.
-const REDIS_LOCK_KEY_PREFIX = 'mcp:refresh-lock:';
-const REDIS_TRANSIENT_KEY_PREFIX = 'mcp:refresh-transient:';
-const REDIS_OP_TIMEOUT_MS = 500;
-
-/** Atomic compare-and-delete so a slow holder can't release a TTL-replaced lock. */
-const RELEASE_LUA = `
-if redis.call("get", KEYS[1]) == ARGV[1] then
-  return redis.call("del", KEYS[1])
-else
-  return 0
-end
-`;
-
-/**
- * Compare-and-delete plus transient-marker write in one round-trip. Two
- * separate SETs on Upstash HA Redis can land on different replicas, so a
- * waiter could see the release before the marker (the 2026-05-08 07:17 UTC
- * Hydra burst: 12/12 waiters timed out instead of bailing fast).
- */
-const RELEASE_WITH_TRANSIENT_LUA = `
-if redis.call("get", KEYS[1]) == ARGV[1] then
-  redis.call("set", KEYS[2], ARGV[2], "PX", ARGV[3])
-  return redis.call("del", KEYS[1])
-else
-  return 0
-end
-`;
-
-/** Compare-and-extend: only the current owner may push the TTL out. */
-const HEARTBEAT_LUA = `
-if redis.call("get", KEYS[1]) == ARGV[1] then
-  return redis.call("pexpire", KEYS[1], ARGV[2])
-else
-  return 0
-end
-`;
-
-export function createRedisRefreshLockStore(url: string): RefreshLockStore {
-  let clientPromise: Promise<RedisClientType> | null = null;
-
-  const getClient = (): Promise<RedisClientType> => {
-    if (clientPromise) return clientPromise;
-    const client = createClient({ url }) as RedisClientType;
-    client.on('error', (err) => {
-      logger.error('refresh-lock redis error', { err });
-      clientPromise = null;
-    });
-    const pending = client.connect().then(() => client);
-    pending.catch(() => {
-      clientPromise = null;
-    });
-    clientPromise = pending;
-    return clientPromise;
-  };
-
-  const run = async <T>(
-    op: string,
-    fn: (redis: RedisClientType) => Promise<T>,
-  ): Promise<T> => {
-    const redis = await getClient();
-    return withTimeout(fn(redis), REDIS_OP_TIMEOUT_MS, op);
-  };
-
-  const lockKey = (refreshToken: string) =>
-    `${REDIS_LOCK_KEY_PREFIX}${refreshToken}`;
-  const transientKey = (refreshToken: string) =>
-    `${REDIS_TRANSIENT_KEY_PREFIX}${refreshToken}`;
-
-  return {
-    name: 'redis',
-    tryAcquire: async (refreshToken, owner, ttlMs) => {
-      const result = await run('set', (redis) =>
-        redis.set(lockKey(refreshToken), owner, { NX: true, PX: ttlMs }),
-      );
-      return result === 'OK';
-    },
-    isHeld: async (refreshToken) => {
-      const holder = await run('get', (redis) =>
-        redis.get(lockKey(refreshToken)),
-      );
-      return holder !== null;
-    },
-    extend: async (refreshToken, owner, ttlMs) => {
-      await run('heartbeat', (redis) =>
-        redis.eval(HEARTBEAT_LUA, {
-          keys: [lockKey(refreshToken)],
-          arguments: [owner, String(ttlMs)],
-        }),
-      );
-    },
-    release: async (refreshToken, owner, transientTtlMs) => {
-      if (transientTtlMs !== undefined) {
-        await run('release-with-transient', (redis) =>
-          redis.eval(RELEASE_WITH_TRANSIENT_LUA, {
-            keys: [lockKey(refreshToken), transientKey(refreshToken)],
-            arguments: [owner, '1', String(transientTtlMs)],
-          }),
-        );
-        return;
-      }
-      await run('release', (redis) =>
-        redis.eval(RELEASE_LUA, {
-          keys: [lockKey(refreshToken)],
-          arguments: [owner],
-        }),
-      );
-    },
-    markTransient: async (refreshToken, ttlMs) => {
-      await run('set-transient', (redis) =>
-        redis.set(transientKey(refreshToken), '1', { PX: ttlMs }),
-      );
-    },
-    hasTransient: async (refreshToken) => {
-      const value = await run('get-transient', (redis) =>
-        redis.get(transientKey(refreshToken)),
-      );
-      return value !== null;
-    },
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Postgres (OAUTH_DATABASE_URL)
-// ─────────────────────────────────────────────────────────────────────────
-
-// An HTTP query has a higher floor than a Redis command. The token route has
-// already queried this database before it takes the lock, so the compute is
-// awake; a slower call falls back exactly like an unreachable Redis did.
+// The token route has already queried this database before it takes the
+// lock, so the compute is awake; a slower call falls back to running without
+// the lock.
 const POSTGRES_OP_TIMEOUT_MS = 1_500;
 const CLEANUP_INTERVAL_MS = 10 * 60_000;
 // Distinct from the auth-transaction schema lock (872334901).

@@ -4,7 +4,7 @@ import {
   LOCK_POLL_INTERVAL_MS,
   LOCK_POLL_MAX_ATTEMPTS,
   WAITER_TOTAL_BUDGET_MS,
-  refreshLockStores,
+  refreshLockStore,
 } from './refresh-lock';
 import {
   acquire,
@@ -199,18 +199,17 @@ const locked = <A, E, R>(input: Locked<A, E, R>) =>
     ),
   );
 
-/** The cross-instance refresh-token lock over the configured stores. */
+/** The cross-instance refresh-token lock. */
 export class RefreshLock extends Context.Service<
   RefreshLock,
   {
     /**
-     * Runs `execute` while holding the lock on `refreshToken` in every
-     * configured store, outermost first. A caller that finds it held polls
-     * `peek` until it finds the token's answer, takes over once if the lock
-     * disappears without one, and otherwise fails with `RefreshLockTimeout`
-     * after about 8 s. A store that can't be reached is skipped; with none
-     * configured, `execute` runs directly. `peek` must be cheap and
-     * idempotent.
+     * Runs `execute` while holding the lock on `refreshToken`. A caller that
+     * finds it held polls `peek` until it finds the token's answer, takes over
+     * once if the lock disappears without one, and otherwise fails with
+     * `RefreshLockTimeout` after about 8 s. When the store can't be reached,
+     * or none is configured, `execute` runs directly. `peek` must be cheap
+     * and idempotent.
      */
     readonly withLock: <A, E1, R1, E2, R2>(input: {
       readonly refreshToken: string;
@@ -233,58 +232,56 @@ export class RefreshLock extends Context.Service<
       }) =>
         Effect.gen(function* () {
           const { refreshToken, peek } = input;
-          const stores = refreshLockStores();
+          const store = refreshLockStore();
           const markTransient = yield* Ref.make(false);
 
           const execute = input.execute({
             markTransientForWaiters: Ref.set(markTransient, true),
           });
 
-          if (stores.length === 0) {
+          if (store === undefined) {
             yield* Effect.logWarning(
-              'refresh-lock unavailable (no KV_URL or OAUTH_DATABASE_URL), falling back to direct execute',
+              'refresh-lock unavailable (no OAUTH_DATABASE_URL), falling back to direct execute',
             );
 
             return yield* execute;
           }
 
-          return yield* stores.reduceRight<
-            Effect.Effect<A, E1 | E2 | RefreshLockTimeout, R1 | R2>
-          >(
-            (inner, store) =>
-              locked({ store, refreshToken, markTransient, inner, peek }),
-            execute,
-          );
+          return yield* locked<A, E1 | E2, R1 | R2>({
+            store,
+            refreshToken,
+            markTransient,
+            inner: execute,
+            peek,
+          });
         }),
 
-      // Store errors count as no marker, so the waiter keeps polling.
+      // A store error counts as no marker, so the waiter keeps polling.
       hasTransientFailure: ({
         refreshToken,
       }: {
         readonly refreshToken: string;
       }) =>
-        Effect.suspend(() =>
-          Effect.forEach(
-            refreshLockStores(),
-            (store) =>
-              storeCall({
-                store,
-                operation: 'hasTransient',
-                run: async () => store.hasTransient(refreshToken),
-              }).pipe(
-                Effect.catchTag('RefreshLockStoreFailed', (failure) =>
-                  logStoreFallback(
-                    'refresh-lock transient marker read failed, assuming none',
-                    failure,
-                  ).pipe(Effect.as(false)),
-                ),
-              ),
-            { concurrency: 'unbounded' },
-          ),
-        ).pipe(
-          Effect.map((seen) => seen.some(Boolean)),
-          Effect.withSpan('RefreshLock.hasTransientFailure'),
-        ),
+        Effect.suspend(() => {
+          const store = refreshLockStore();
+
+          if (store === undefined) {
+            return Effect.succeed(false);
+          }
+
+          return storeCall({
+            store,
+            operation: 'hasTransient',
+            run: async () => store.hasTransient(refreshToken),
+          }).pipe(
+            Effect.catchTag('RefreshLockStoreFailed', (failure) =>
+              logStoreFallback(
+                'refresh-lock transient marker read failed, assuming none',
+                failure,
+              ).pipe(Effect.as(false)),
+            ),
+          );
+        }).pipe(Effect.withSpan('RefreshLock.hasTransientFailure')),
     }),
   },
 ) {

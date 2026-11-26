@@ -12,10 +12,6 @@ process.env.E2E_SENTRY_PORT = '3118';
 
 process.env.OAUTH_DATABASE_URL = 'postgresql://127.0.0.1:1/oauth';
 
-delete process.env.KV_URL;
-
-delete process.env.REDIS_URL;
-
 const {
   SENTRY_FIXTURE_DSN,
   SENTRY_FIXTURE_ITEMS_URL,

@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RefreshResult } from '../oauth/kv-store';
 import type { RefreshRotation } from '../oauth/model';
 import type { RefreshLockStore } from '../oauth/refresh-lock-store';
-import { __setRefreshLockStoresForTests } from '../oauth/refresh-lock';
+import { __setRefreshLockStoreForTests } from '../oauth/refresh-lock';
 
 // Server failures the route answers still reach Sentry; these record which.
 const reported: string[] = [];
@@ -195,7 +195,7 @@ describe('Token refresh flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     loggerInfoSpy.mockClear();
-    __setRefreshLockStoresForTests([passthroughLockStore]);
+    __setRefreshLockStoreForTests(passthroughLockStore);
     mockPeekTransientFailure.mockResolvedValue(false);
 
     mockModel.getClient.mockResolvedValue(TEST_CLIENT as any);
@@ -441,9 +441,9 @@ describe('Token refresh flow', () => {
     });
 
     it('marks the release hint on upstream 5xx so the lock release also writes the transient marker atomically', async () => {
-      // executeRefresh marks the ReleaseHint passed by RefreshLock.withLock
-      // instead of calling signalTransientFailure directly — see
-      // RELEASE_WITH_TRANSIENT_LUA in refresh-lock-store.ts. This test pins the
+      // executeRefresh marks the ReleaseHint passed by RefreshLock.withLock,
+      // and the store writes the marker in the same statement that releases
+      // the lock (refresh-lock-store.ts). This test pins the
       // contract: a 5xx upstream response must set markTransientForWaiters so
       // waiters bail fast as transient_upstream_5xx instead of timing out.
       const upstreamError = new Error('Internal Server Error') as Error & {
@@ -1012,18 +1012,16 @@ describe('Token refresh flow', () => {
     it('keeps a waiter waiting until the lock timeout when every store read fails, logging each once', async () => {
       mockModel.getRefreshFailure.mockRejectedValue(refused());
       mockModel.getRefreshResult.mockRejectedValue(refused());
-      __setRefreshLockStoresForTests([
-        {
-          ...passthroughLockStore,
-          tryAcquire: async () => false,
-          isHeld: async () => {
-            throw refused();
-          },
-          hasTransient: async () => {
-            throw refused();
-          },
+      __setRefreshLockStoreForTests({
+        ...passthroughLockStore,
+        tryAcquire: async () => false,
+        isHeld: async () => {
+          throw refused();
         },
-      ]);
+        hasTransient: async () => {
+          throw refused();
+        },
+      });
 
       const degraded = await answer();
 
