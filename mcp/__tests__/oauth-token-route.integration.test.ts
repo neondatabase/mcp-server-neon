@@ -53,7 +53,7 @@ describe('/api/token route integration', () => {
       authorizationCode: 'code-123',
       client,
       user: { id: 'user-1', name: 'User', email: 'user@example.com' },
-      expiresAt: new Date(Date.now() + 60_000),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
       token: {
         access_token: 'upstream-access',
         refresh_token: 'upstream-refresh',
@@ -124,7 +124,7 @@ describe('/api/token route integration', () => {
       authorizationCode: 'code-123',
       client,
       user: { id: 'user-1', name: 'User', email: 'user@example.com' },
-      expiresAt: new Date(Date.now() + 60_000),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
       token: {
         access_token: 'upstream-access',
         refresh_token: 'upstream-refresh',
@@ -185,7 +185,7 @@ describe('/api/token route integration', () => {
         client: portlessClient,
         redirectUri: 'http://localhost:54321/callback',
         user: { id: 'user-1', name: 'User', email: 'user@example.com' },
-        expiresAt: new Date(Date.now() + 60_000),
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
         token: {
           access_token: 'upstream-access',
           refresh_token: 'upstream-refresh',

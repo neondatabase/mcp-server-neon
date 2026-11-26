@@ -14,6 +14,9 @@ const CodeChallenge = Schema.Struct({
 
 const RedirectUris = Schema.Array(Schema.String);
 
+// The row is JSON, so the Date /callback stored reads back as a string.
+const CodeExpiry = Schema.Struct({ expiresAt: Schema.DateFromString });
+
 // A stored record that doesn't have the shape /callback and /api/register
 // write is the server's failure.
 export const storedFault = <A, E, R>(self: Effect.Effect<A, E, R>) =>
@@ -133,7 +136,10 @@ export const codeRejection = Effect.fnUntraced(function* (input: {
 
   const now = yield* Clock.currentTimeMillis;
 
-  if (code.expiresAt < new Date(now)) {
+  const { expiresAt } =
+    yield* Schema.decodeUnknownEffect(CodeExpiry)(code).pipe(storedFault);
+
+  if (expiresAt.getTime() <= now) {
     yield* Effect.logWarning('Authorization code expired');
 
     return yield* rejectedSome(
