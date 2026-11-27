@@ -11,7 +11,7 @@ import type { ServerContext } from '../types/context';
 
 const observed = {
   spending_limit_cents: 10_000,
-  spend_cap_enabled: true,
+  spending_limit_enabled: true,
   current_usage_cents: 10_042,
   usage_observed_at: '2026-11-25T09:00:00Z',
   invoice_period_id: 'current-invoice',
@@ -205,7 +205,7 @@ describe('organization spending limit MCP protocol', () => {
         data: { spending_limit_cents: 10_000 },
       });
       expect(result.structuredContent).not.toHaveProperty(
-        'data.spend_cap_enabled',
+        'data.spending_limit_enabled',
       );
       expect(result.structuredContent).not.toHaveProperty(
         'data.enforcement_status',
@@ -217,39 +217,40 @@ describe('organization spending limit MCP protocol', () => {
     });
   });
 
-  it.each([{}, { spend_cap_enabled: true }, { spend_cap_enabled: false }])(
-    'set forwards explicit enforcement %s',
-    async (enforcement) => {
-      await withClient(async (client) => {
-        const args = {
-          org_id: 'org-1',
-          spending_limit_cents: 10_000,
-          ...enforcement,
-        };
+  it.each([
+    {},
+    { spending_limit_enabled: true },
+    { spending_limit_enabled: false },
+  ])('set forwards explicit enforcement %s', async (enforcement) => {
+    await withClient(async (client) => {
+      const args = {
+        org_id: 'org-1',
+        spending_limit_cents: 10_000,
+        ...enforcement,
+      };
 
-        const result = await client.callTool({
-          name: names[1],
-          arguments: args,
-        });
-
-        expect(result.isError).not.toBe(true);
-        const { org_id: _, ...body } = args;
-        expect(fixture.requests.map((r) => r.method)).toStrictEqual(['PUT']);
-        expect(JSON.parse(fixture.requests[0].body)).toStrictEqual(body);
-        expect(JSON.stringify(result.content)).toContain(
-          'Configuration accepted',
-        );
-        expect(result.structuredContent).toMatchObject({
-          data: { enforcement_status: 'pending', warning: observed.warning },
-        });
+      const result = await client.callTool({
+        name: names[1],
+        arguments: args,
       });
-    },
-  );
+
+      expect(result.isError).not.toBe(true);
+      const { org_id: _, ...body } = args;
+      expect(fixture.requests.map((r) => r.method)).toStrictEqual(['PUT']);
+      expect(JSON.parse(fixture.requests[0].body)).toStrictEqual(body);
+      expect(JSON.stringify(result.content)).toContain(
+        'Configuration accepted',
+      );
+      expect(result.structuredContent).toMatchObject({
+        data: { enforcement_status: 'pending', warning: observed.warning },
+      });
+    });
+  });
 
   it('disable atomically preserves the current notification amount with a bodyless POST', async () => {
     fixture.response = {
       spending_limit_cents: 32_125,
-      spend_cap_enabled: false,
+      spending_limit_enabled: false,
       enforcement_status: 'pending',
     };
     await withClient(async (client) => {
@@ -276,7 +277,7 @@ describe('organization spending limit MCP protocol', () => {
   it('disable retains an unset notification amount', async () => {
     fixture.response = {
       spending_limit_cents: null,
-      spend_cap_enabled: false,
+      spending_limit_enabled: false,
       enforcement_status: 'pending',
     };
     await withClient(async (client) => {
@@ -295,7 +296,7 @@ describe('organization spending limit MCP protocol', () => {
       expect(result.structuredContent).toMatchObject({
         data: {
           spending_limit_cents: null,
-          spend_cap_enabled: false,
+          spending_limit_enabled: false,
           enforcement_status: 'pending',
         },
       });
@@ -398,7 +399,7 @@ describe('organization spending limit MCP protocol', () => {
 
   it.each([
     [
-      'SPEND_CAP_EXCEEDED',
+      'SPENDING_LIMIT_EXCEEDED',
       'An Organization Admin can increase or disable the spending limit in Organization Billing. Storage charges continue; recovery is asynchronous and other restrictions can remain.',
     ],
     [
@@ -440,7 +441,7 @@ describe('organization spending limit MCP protocol', () => {
         arguments: {
           org_id: 'org-1',
           spending_limit_cents: 10_000,
-          spend_cap_enabled: true,
+          spending_limit_enabled: true,
         },
       });
 
@@ -451,7 +452,7 @@ describe('organization spending limit MCP protocol', () => {
     });
   });
 
-  it.each(['SPEND_CAP_EXCEEDED', 'INSUFFICIENT_ORG_PERMISSIONS'])(
+  it.each(['SPENDING_LIMIT_EXCEEDED', 'INSUFFICIENT_ORG_PERMISSIONS'])(
     'returns %s to a legacy client that validates advertised output schemas',
     async (code) => {
       fixture.code = code;

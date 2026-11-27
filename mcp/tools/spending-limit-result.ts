@@ -1,9 +1,9 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
-export const SPEND_CAP_RESULT_SCHEMA = z.looseObject({
+export const SPENDING_LIMIT_RESULT_SCHEMA = z.looseObject({
   spending_limit_cents: z.int().nullable(),
-  spend_cap_enabled: z.boolean().nullish(),
+  spending_limit_enabled: z.boolean().nullish(),
   current_usage_cents: z.int().nullish(),
   usage_observed_at: z.string().nullish(),
   invoice_period_id: z.string().nullish(),
@@ -25,10 +25,10 @@ const usd = (cents: number | null | undefined): string => {
 };
 
 /** Host presentation; the package owns the API contract and operational notices. */
-export const spendCapToolResult = (
-  value: z.infer<typeof SPEND_CAP_RESULT_SCHEMA>,
+export const spendingLimitToolResult = (
+  value: z.infer<typeof SPENDING_LIMIT_RESULT_SCHEMA>,
 ): CallToolResult => {
-  const setting = value.spend_cap_enabled;
+  const setting = value.spending_limit_enabled;
 
   let mode = 'unavailable or unsupported';
 

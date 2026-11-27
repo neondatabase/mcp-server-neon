@@ -21,9 +21,9 @@ import type { ToolId } from './operations';
 import { assertOutputContract } from './output-contract';
 import type { NeonTool } from './tool-definition';
 import {
-  SPEND_CAP_RESULT_SCHEMA,
-  spendCapToolResult,
-} from './spend-cap-result';
+  SPENDING_LIMIT_RESULT_SCHEMA,
+  spendingLimitToolResult,
+} from './spending-limit-result';
 import type {
   ToolCallError,
   ToolHandler,
@@ -349,11 +349,11 @@ const RESULT_RENDERERS: Partial<
   >
 > = {
   'organizations.spendingLimit.get': (data) =>
-    spendCapToolResult(SPEND_CAP_RESULT_SCHEMA.parse(data)),
+    spendingLimitToolResult(SPENDING_LIMIT_RESULT_SCHEMA.parse(data)),
   'organizations.spendingLimit.set': (data) =>
-    spendCapToolResult(SPEND_CAP_RESULT_SCHEMA.parse(data)),
+    spendingLimitToolResult(SPENDING_LIMIT_RESULT_SCHEMA.parse(data)),
   'organizations.spendingLimit.disable': (data) =>
-    spendCapToolResult(SPEND_CAP_RESULT_SCHEMA.parse(data)),
+    spendingLimitToolResult(SPENDING_LIMIT_RESULT_SCHEMA.parse(data)),
   'sql.run': sqlRunResult,
   'sql.runTransaction': sqlTransactionResult,
   'resources.search': structuredResult,

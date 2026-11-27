@@ -6,7 +6,7 @@ describe('spending limit Postgres connection denial', () => {
   it('preserves SQLSTATE and the backend marker with billing guidance', () => {
     const error = Object.assign(new NeonDbError('Compute is restricted'), {
       code: '57P03',
-      detail: 'SPEND_CAP_EXCEEDED',
+      detail: 'SPENDING_LIMIT_EXCEEDED',
     });
 
     const result = handleToolError(error, {}, undefined, {
@@ -16,7 +16,7 @@ describe('spending limit Postgres connection denial', () => {
 
     expect(result.isError).toBe(true);
     expect(JSON.stringify(result.content)).toContain('57P03');
-    expect(JSON.stringify(result.content)).toContain('SPEND_CAP_EXCEEDED');
+    expect(JSON.stringify(result.content)).toContain('SPENDING_LIMIT_EXCEEDED');
     expect(JSON.stringify(result.content)).toContain(
       'increase or disable the spending limit in Organization Billing',
     );

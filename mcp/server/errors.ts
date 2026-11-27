@@ -112,11 +112,11 @@ function errorText(error: unknown): string {
         lines.push(`${label}: ${value}`);
       }
     }
-    const action = BILLING_ERROR_ACTIONS.get('SPEND_CAP_EXCEEDED');
+    const action = BILLING_ERROR_ACTIONS.get('SPENDING_LIMIT_EXCEEDED');
 
     if (
       error.code === '57P03' &&
-      error.detail?.includes('SPEND_CAP_EXCEEDED') === true &&
+      error.detail?.includes('SPENDING_LIMIT_EXCEEDED') === true &&
       action !== undefined
     ) {
       lines.push(action);
@@ -184,7 +184,7 @@ const apiClientErrorResponse = (error: NeonApiError) => {
 
 const BILLING_ERROR_ACTIONS = new Map([
   [
-    'SPEND_CAP_EXCEEDED',
+    'SPENDING_LIMIT_EXCEEDED',
     'An Organization Admin can increase or disable the spending limit in Organization Billing. Storage charges continue; recovery is asynchronous and other restrictions can remain.',
   ],
   [

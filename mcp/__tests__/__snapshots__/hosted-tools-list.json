@@ -1826,7 +1826,7 @@
                 "null"
               ]
             },
-            "spend_cap_enabled": {
+            "spending_limit_enabled": {
               "type": [
                 "boolean",
                 "null"
@@ -1923,7 +1923,7 @@
           "maximum": 9007199254740991,
           "description": "USD cents: 100 = $1."
         },
-        "spend_cap_enabled": {
+        "spending_limit_enabled": {
           "description": "Omit: new suspension on when available; existing preserves. False: emails only; true: suspension.",
           "type": "boolean"
         }
@@ -1946,7 +1946,7 @@
                 "null"
               ]
             },
-            "spend_cap_enabled": {
+            "spending_limit_enabled": {
               "type": [
                 "boolean",
                 "null"
@@ -2055,7 +2055,7 @@
                 "null"
               ]
             },
-            "spend_cap_enabled": {
+            "spending_limit_enabled": {
               "type": [
                 "boolean",
                 "null"
