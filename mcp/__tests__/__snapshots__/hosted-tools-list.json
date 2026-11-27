@@ -1907,7 +1907,7 @@
   {
     "name": "set_organization_spend_cap",
     "title": "Set spend cap",
-    "description": "Sets org cap; admin. New limits default on when available; false keeps emails.",
+    "description": "Sets org cap; admin only.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
