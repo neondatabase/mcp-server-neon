@@ -6,6 +6,8 @@
 
 # Neon MCP Server
 
+Organization spending limits: use `get_organization_spending_limit`, `set_organization_spending_limit`, and `disable_organization_spending_limit` with `org_id`. Set takes positive integer `spending_limit_cents` in USD cents. For new limits, omitted `spending_limit_enabled` defaults suspension on when rollout is available; for existing limits, omission preserves the saved setting, including notifications-only limits. Explicit `false` creates notifications only. Disable atomically retains the current amount and email notifications. Organization Admin permission is required for writes. Detection can lag by 1-2 hours and storage charges continue. Saves acknowledge configuration asynchronously; missing status is unavailable, and applied status does not confirm all workloads stopped or resumed. See [billing semantics and release prerequisites](ai-notes/organization-spending-limits.md).
+
 [![Install MCP Server in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en-US/install-mcp?name=Neon&config=eyJ1cmwiOiJodHRwczovL21jcC5uZW9uLnRlY2gvbWNwP2NhdGVnb3J5PXByb2plY3RzJmNhdGVnb3J5PWJyYW5jaGVzJmNhdGVnb3J5PWVuZHBvaW50cyZjYXRlZ29yeT1xdWVyeWluZyZjYXRlZ29yeT1zY2hlbWEifQ%3D%3D)
 [![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/powers/add?name=neon)
 

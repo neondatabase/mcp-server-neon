@@ -1,15 +1,15 @@
 [
   {
     "name": "list_organizations",
-    "title": "List organizations for the current user",
-    "description": "Lists the organizations the user belongs to; an organization API key gets its own organization. search filters by name or id.",
+    "title": "List user organizations",
+    "description": "Lists user orgs, or the key's org; search matches name or id.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "search": {
           "type": "string",
-          "description": "Part of an organization name or id, ignoring case."
+          "description": "Org name/id substring, ignoring case."
         }
       },
       "additionalProperties": false
@@ -73,7 +73,7 @@
       ]
     },
     "annotations": {
-      "title": "List organizations for the current user",
+      "title": "List user organizations",
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
@@ -1791,6 +1791,344 @@
       "title": "List Neon incidents",
       "readOnlyHint": true,
       "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "get_organization_spending_limit",
+    "title": "Get spending limit",
+    "description": "Gets spending limit and usage.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "org_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Org id."
+        }
+      },
+      "required": [
+        "org_id"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "spending_limit_cents": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "spending_limit_enabled": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "current_usage_cents": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "usage_observed_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "invoice_period_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "enforcement_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "generation": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "period_ends_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "monitoring_delay": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "warning": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "spending_limit_cents"
+          ]
+        }
+      },
+      "required": [
+        "data"
+      ]
+    },
+    "annotations": {
+      "title": "Get spending limit",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "set_organization_spending_limit",
+    "title": "Set spending limit",
+    "description": "Sets spending limit; admin only.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "org_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Org id."
+        },
+        "spending_limit_cents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "USD cents: 100 = $1."
+        },
+        "spending_limit_enabled": {
+          "description": "Omit: new suspension on when available; existing preserves. False: emails only; true: suspension.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "org_id",
+        "spending_limit_cents"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "spending_limit_cents": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "spending_limit_enabled": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "current_usage_cents": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "usage_observed_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "invoice_period_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "enforcement_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "generation": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "period_ends_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "monitoring_delay": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "warning": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "spending_limit_cents"
+          ]
+        }
+      },
+      "required": [
+        "data"
+      ]
+    },
+    "annotations": {
+      "title": "Set spending limit",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "disable_organization_spending_limit",
+    "title": "Disable spending limit",
+    "description": "Disables suspension; keeps limit and emails. Admin only.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "org_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Org id."
+        }
+      },
+      "required": [
+        "org_id"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "spending_limit_cents": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "spending_limit_enabled": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "current_usage_cents": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "usage_observed_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "invoice_period_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "enforcement_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "generation": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "period_ends_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "monitoring_delay": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "warning": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "spending_limit_cents"
+          ]
+        }
+      },
+      "required": [
+        "data"
+      ]
+    },
+    "annotations": {
+      "title": "Disable spending limit",
+      "readOnlyHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true
     }

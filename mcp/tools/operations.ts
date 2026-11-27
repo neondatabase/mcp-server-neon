@@ -41,6 +41,9 @@ export const CUSTOM_TOOL_GRANTS = {
 export type CustomToolId = keyof typeof CUSTOM_TOOL_GRANTS;
 
 export const GENERATED_TOOL_SCOPES = {
+  'organizations.spendingLimit.get': 'projects',
+  'organizations.spendingLimit.set': 'projects',
+  'organizations.spendingLimit.disable': 'projects',
   'projects.list': 'projects',
   'projects.count': 'projects',
   'projects.get': 'projects',
