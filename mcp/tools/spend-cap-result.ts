@@ -42,7 +42,7 @@ export const spendCapToolResult = (
     `Observed current-invoice usage: ${usd(value.current_usage_cents)}`,
     `Usage observed at: ${value.usage_observed_at ?? 'unavailable'}`,
     `Current invoice period: ${value.invoice_period_id ?? 'unavailable'}`,
-    `Cap status: ${value.status ?? 'unavailable'}`,
+    `Spending limit status: ${value.status ?? 'unavailable'}`,
     `Enforcement acknowledgement: ${value.enforcement_status ?? 'unavailable'}`,
     `Monitoring delay: ${value.monitoring_delay ?? 'unavailable (normally 1-2 hours)'}`,
     value.notice,

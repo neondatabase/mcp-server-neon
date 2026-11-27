@@ -1796,9 +1796,9 @@
     }
   },
   {
-    "name": "get_organization_spend_cap",
-    "title": "Get spend cap",
-    "description": "Gets org cap status and usage.",
+    "name": "get_organization_spending_limit",
+    "title": "Get spending limit",
+    "description": "Gets spending limit and usage.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1897,7 +1897,7 @@
       ]
     },
     "annotations": {
-      "title": "Get spend cap",
+      "title": "Get spending limit",
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
@@ -1905,9 +1905,9 @@
     }
   },
   {
-    "name": "set_organization_spend_cap",
-    "title": "Set spend cap",
-    "description": "Sets org cap; admin only.",
+    "name": "set_organization_spending_limit",
+    "title": "Set spending limit",
+    "description": "Sets spending limit; admin only.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2017,7 +2017,7 @@
       ]
     },
     "annotations": {
-      "title": "Set spend cap",
+      "title": "Set spending limit",
       "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,
@@ -2025,9 +2025,9 @@
     }
   },
   {
-    "name": "disable_organization_spend_cap",
-    "title": "Disable spend cap",
-    "description": "Disables cap, keeping amount and emails; admin required.",
+    "name": "disable_organization_spending_limit",
+    "title": "Disable spending limit",
+    "description": "Disables suspension; keeps limit and emails. Admin only.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2126,7 +2126,7 @@
       ]
     },
     "annotations": {
-      "title": "Disable spend cap",
+      "title": "Disable spending limit",
       "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,

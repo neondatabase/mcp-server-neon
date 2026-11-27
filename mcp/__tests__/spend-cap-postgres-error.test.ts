@@ -2,7 +2,7 @@ import { NeonDbError } from '@neondatabase/serverless';
 import { describe, expect, it } from 'vitest';
 import { handleToolError, isServerError } from '../server/errors';
 
-describe('spend-cap Postgres connection denial', () => {
+describe('spending limit Postgres connection denial', () => {
   it('preserves SQLSTATE and the backend marker with billing guidance', () => {
     const error = Object.assign(new NeonDbError('Compute is restricted'), {
       code: '57P03',
@@ -17,11 +17,13 @@ describe('spend-cap Postgres connection denial', () => {
     expect(result.isError).toBe(true);
     expect(JSON.stringify(result.content)).toContain('57P03');
     expect(JSON.stringify(result.content)).toContain('SPEND_CAP_EXCEEDED');
-    expect(JSON.stringify(result.content)).toContain('Organization Billing');
+    expect(JSON.stringify(result.content)).toContain(
+      'increase or disable the spending limit in Organization Billing',
+    );
     expect(isServerError(error)).toBe(false);
   });
 
-  it('does not classify an unrelated 57P03 as a spend-cap denial', () => {
+  it('does not classify an unrelated 57P03 as a spending limit denial', () => {
     const error = Object.assign(new NeonDbError('Compute is starting'), {
       code: '57P03',
       detail: 'Please wait',

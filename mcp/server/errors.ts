@@ -185,7 +185,7 @@ const apiClientErrorResponse = (error: NeonApiError) => {
 const BILLING_ERROR_ACTIONS = new Map([
   [
     'SPEND_CAP_EXCEEDED',
-    'An Organization Admin can increase or disable the spend cap in Organization Billing. Storage charges continue; recovery is asynchronous and other restrictions can remain.',
+    'An Organization Admin can increase or disable the spending limit in Organization Billing. Storage charges continue; recovery is asynchronous and other restrictions can remain.',
   ],
   [
     'INSUFFICIENT_ORG_PERMISSIONS',

@@ -120,7 +120,7 @@ describe('NEON_TOOLS definitions', () => {
     ).toEqual([
       'call_api',
       'create_storage_bucket',
-      'disable_organization_spend_cap',
+      'disable_organization_spending_limit',
       'get_doc',
       'list_incidents',
       'provision_neon_data_api',
@@ -128,7 +128,7 @@ describe('NEON_TOOLS definitions', () => {
       'search_docs',
       'send_auth_test_email',
       'send_feedback',
-      'set_organization_spend_cap',
+      'set_organization_spending_limit',
       'update_auth_email_provider',
       'update_auth_webhooks',
     ]);

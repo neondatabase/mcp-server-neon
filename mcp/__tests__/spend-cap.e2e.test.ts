@@ -20,7 +20,8 @@ const observed = {
   generation: 3,
   period_ends_at: '2026-12-01T00:00:00Z',
   monitoring_delay: '1-2 hours',
-  warning: 'Observed usage has reached the cap; suspension is being applied.',
+  warning:
+    'Observed usage has reached the spending limit; suspension is being applied.',
 };
 
 type RequestLog = {
@@ -124,12 +125,12 @@ const withClient = async <T>(
 };
 
 const names = [
-  'get_organization_spend_cap',
-  'set_organization_spend_cap',
-  'disable_organization_spend_cap',
+  'get_organization_spending_limit',
+  'set_organization_spending_limit',
+  'disable_organization_spending_limit',
 ];
 
-describe('organization spend-cap MCP protocol', () => {
+describe('organization spending limit MCP protocol', () => {
   beforeEach(() => {
     fixture.response = observed;
     fixture.code = '';
@@ -172,6 +173,7 @@ describe('organization spend-cap MCP protocol', () => {
       for (const expected of [
         '$100.00',
         '$100.42',
+        'Spending limit status: reached',
         'pending',
         observed.warning,
         '1-2 hours',
@@ -397,7 +399,7 @@ describe('organization spend-cap MCP protocol', () => {
   it.each([
     [
       'SPEND_CAP_EXCEEDED',
-      'An Organization Admin can increase or disable the spend cap in Organization Billing. Storage charges continue; recovery is asynchronous and other restrictions can remain.',
+      'An Organization Admin can increase or disable the spending limit in Organization Billing. Storage charges continue; recovery is asynchronous and other restrictions can remain.',
     ],
     [
       'INSUFFICIENT_ORG_PERMISSIONS',
