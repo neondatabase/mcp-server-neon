@@ -1,3 +1,5 @@
+import { GrantStateUnavailableError } from './grant-state-error';
+import { GrantRevokedError } from './grant-family';
 import { Context, Effect, Layer, Option } from 'effect';
 import type { Client } from 'oauth2-server';
 import type { RefreshFailure, RefreshResult } from './kv-store';
@@ -41,7 +43,7 @@ export class RefreshRotations extends Context.Service<
     /** The pair `client`'s own cached rotation serves now. */
     readonly ownedResult: (
       input: TokenOfClient,
-    ) => Effect.Effect<Option.Option<RefreshResult>>;
+    ) => Effect.Effect<Option.Option<RefreshResult>, OAuthStoreUnavailable>;
     /**
      * Another client presenting a rotated token records it as missing, so a
      * cached failure can belong to the owner's own rotation. Rows without a
@@ -50,7 +52,7 @@ export class RefreshRotations extends Context.Service<
      */
     readonly attributedOutcome: (
       input: TokenOfClient,
-    ) => Effect.Effect<Option.Option<RotationOutcome>>;
+    ) => Effect.Effect<Option.Option<RotationOutcome>, OAuthStoreUnavailable>;
     /** A cached failure that rejects `client`'s use of `refreshToken`. */
     readonly cachedFailure: (
       input: TokenOfClient,
@@ -81,9 +83,11 @@ export class RefreshRotations extends Context.Service<
           getOwnedRefreshResult(refreshToken, client),
         ).pipe(
           Effect.map(Option.fromUndefinedOr),
-          Effect.catchTag(
-            'OAuthStoreUnavailable',
-            continueWithout('refresh_results'),
+          Effect.catchTag('OAuthStoreUnavailable', (failure) =>
+            failure.cause instanceof GrantStateUnavailableError ||
+            failure.cause instanceof GrantRevokedError
+              ? Effect.fail(failure)
+              : continueWithout('refresh_results')(failure),
           ),
           Effect.withSpan('RefreshRotations.ownedResult'),
         ),
@@ -111,13 +115,16 @@ export class RefreshRotations extends Context.Service<
             resolveRotation(refreshToken, client, rotation.value),
           ).pipe(
             Effect.map(Option.fromUndefinedOr),
-            Effect.catchTag('OAuthStoreUnavailable', ({ cause }) =>
-              Effect.logWarning(
-                'Failed to resolve a cached refresh rotation',
-              ).pipe(
-                Effect.annotateLogs({ error: cause }),
-                Effect.as(Option.none<RotationOutcome>()),
-              ),
+            Effect.catchTag('OAuthStoreUnavailable', (failure) =>
+              failure.cause instanceof GrantStateUnavailableError ||
+              failure.cause instanceof GrantRevokedError
+                ? Effect.fail(failure)
+                : Effect.logWarning(
+                    'Failed to resolve a cached refresh rotation',
+                  ).pipe(
+                    Effect.annotateLogs({ error: failure.cause }),
+                    Effect.as(Option.none<RotationOutcome>()),
+                  ),
             ),
           );
         },

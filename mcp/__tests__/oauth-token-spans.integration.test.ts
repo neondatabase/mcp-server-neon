@@ -6,16 +6,13 @@
  * Sentry events each answer leaves, and that a client disconnect after the
  * upstream exchange started still persists the rotated pair.
  */
-import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import type { ServerResponse } from 'node:http';
 import { createServer } from 'node:https';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { flush, httpIntegration, init, startSpan } from '@sentry/node';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import { fixtureCertificate } from './oauth-fixture-certificate';
 
 process.env.E2E_SENTRY_PORT = '3117';
 
@@ -53,40 +50,6 @@ const rotated = (): UpstreamAnswer => ({
   },
 });
 
-const certificate = async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'token-spans-'));
-  const key = path.join(dir, 'key.pem');
-  const cert = path.join(dir, 'cert.pem');
-
-  const openssl = spawn(
-    'openssl',
-    [
-      'req',
-      '-x509',
-      '-newkey',
-      'rsa:2048',
-      '-nodes',
-      '-keyout',
-      key,
-      '-out',
-      cert,
-      '-days',
-      '1',
-      '-subj',
-      '/CN=127.0.0.1',
-    ],
-    { stdio: 'ignore' },
-  );
-
-  await once(openssl, 'exit');
-
-  const pair = { key: await readFile(key), cert: await readFile(cert) };
-
-  await rm(dir, { recursive: true, force: true });
-
-  return pair;
-};
-
 const answerToken = async (refreshToken: string, response: ServerResponse) => {
   upstream.received.push(refreshToken);
 
@@ -96,7 +59,7 @@ const answerToken = async (refreshToken: string, response: ServerResponse) => {
   response.end(JSON.stringify(body));
 };
 
-const hydra = createServer(await certificate(), (request, response) => {
+const hydra = createServer(await fixtureCertificate(), (request, response) => {
   const chunks: Buffer[] = [];
 
   request.on('data', (chunk: Buffer) => {
@@ -234,6 +197,15 @@ await model.saveClient({
   client_name: 'Token spans test',
 });
 
+const storedFamily = async (refreshToken: string) => {
+  const result = await model.getRefreshResult(refreshToken);
+
+  return z
+    .string()
+    .regex(/^[a-f0-9]{64}$/u)
+    .parse(result?.grantFamilyId);
+};
+
 const seedRefreshToken = async () => {
   const refreshToken = `rt-${crypto.randomUUID()}`;
   const accessToken = `at-${crypto.randomUUID()}`;
@@ -307,6 +279,8 @@ describe('POST /api/token spans and Sentry events', () => {
     ).resolves.toStrictEqual({
       refreshToken: pair.refresh_token,
       accessToken: pair.access_token,
+      clientId: client.id,
+      grantFamilyId: await storedFamily(refreshToken),
     });
     await expect(model.getRefreshToken(refreshToken)).resolves.toBeUndefined();
 
@@ -475,6 +449,8 @@ describe('POST /api/token spans and Sentry events', () => {
         ).resolves.toStrictEqual({
           refreshToken: issued.refresh_token,
           accessToken: issued.access_token,
+          clientId: client.id,
+          grantFamilyId: await storedFamily(refreshToken),
         });
       },
       { timeout: 10_000 },

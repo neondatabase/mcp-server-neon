@@ -1,3 +1,7 @@
+import {
+  activeRefreshFamily,
+  compensateLatePair,
+} from './active-refresh-family';
 import { Clock, Effect, Predicate } from 'effect';
 import type { Token } from 'oauth2-server';
 import { RefreshFailed } from './refresh-failed';
@@ -91,6 +95,7 @@ const issuedPair = Effect.fnUntraced(function* (input: {
     expiresAt,
     result: {
       access_token: tokens.access_token,
+      grantFamilyId: rotation.familyId,
       expires_in: expiresIn,
       token_type: 'bearer',
       refresh_token: refreshToken,
@@ -115,13 +120,15 @@ const scopeType = (scope: string | string[] | undefined) => {
  * have rotated the token, stopping before the new pair is cached and
  * persisted would leave the client holding a dead token.
  */
-export const rotateUpstream = Effect.fnUntraced(function* (rotation: Rotation) {
+const rotate = Effect.fnUntraced(function* (rotation: Rotation) {
   const tokens = yield* exchange(rotation);
   const pair = yield* issuedPair({ rotation, tokens });
 
-  yield* cacheResult({ rotation, pair });
-  yield* persistPair({ rotation, pair });
-  yield* cleanUp({ rotation, pair });
+  yield* cacheResult({ rotation, pair }).pipe(
+    Effect.andThen(persistPair({ rotation, pair })),
+    Effect.andThen(cleanUp({ rotation, pair })),
+    Effect.tapError((failure) => compensateLatePair(failure, rotation, pair)),
+  );
 
   yield* Effect.logInfo('Refresh token exchanged successfully');
 
@@ -138,4 +145,16 @@ export const rotateUpstream = Effect.fnUntraced(function* (rotation: Rotation) {
   );
 
   return result;
+});
+
+export const rotateUpstream = Effect.fnUntraced(function* (
+  input: Omit<Rotation, 'familyId'>,
+) {
+  const familyId = yield* activeRefreshFamily(
+    input.oldToken,
+    input.client.id,
+    input.refreshToken,
+  );
+
+  return yield* Effect.uninterruptible(rotate({ ...input, familyId }));
 });

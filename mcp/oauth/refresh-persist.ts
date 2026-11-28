@@ -1,3 +1,5 @@
+import { GrantRevokedError } from './grant-family';
+import { GrantStateUnavailableError } from './grant-state-error';
 import { Effect } from 'effect';
 import { retryLogged } from './logged-retry';
 import { OAuthStore } from './oauth-store';
@@ -35,6 +37,7 @@ export const cacheResult = Effect.fnUntraced(function* (input: {
       refreshToken: rotation.refreshToken,
       result: {
         clientId: rotation.client.id,
+        grantFamilyId: rotation.familyId,
         accessToken: pair.accessToken,
         refreshToken: pair.refreshToken,
         expiresAt: pair.expiresAt,
@@ -42,10 +45,13 @@ export const cacheResult = Effect.fnUntraced(function* (input: {
       },
     })
     .pipe(
-      Effect.catchTag('OAuthStoreUnavailable', ({ cause }) =>
-        Effect.logWarning('Failed to cache refresh result').pipe(
-          Effect.annotateLogs({ err: cause }),
-        ),
+      Effect.catchTag('OAuthStoreUnavailable', (failure) =>
+        failure.cause instanceof GrantRevokedError ||
+        failure.cause instanceof GrantStateUnavailableError
+          ? Effect.fail(failure)
+          : Effect.logWarning('Failed to cache refresh result').pipe(
+              Effect.annotateLogs({ err: failure.cause }),
+            ),
       ),
     );
 });
@@ -65,6 +71,7 @@ const saveIssuedPair = (input: {
         accessToken: pair.accessToken,
         refreshToken: pair.refreshToken,
         expires_at: pair.expiresAt,
+        grantFamilyId: input.rotation.familyId,
         client,
         user: oldToken.user,
         scope: oldToken.scope,
@@ -98,26 +105,38 @@ export const persistPair = Effect.fnUntraced(function* (input: {
     attempt: saveIssuedPair(input),
     op: 'persist refresh result',
     delaysMs: [50, 250],
-    retryable: () => true,
+    retryable: ({ cause }) =>
+      !(
+        cause instanceof GrantRevokedError ||
+        cause instanceof GrantStateUnavailableError
+      ),
     describe: failureText,
   }).pipe(
-    Effect.catchTag('OAuthStoreUnavailable', (failure) =>
-      Effect.logError(
-        'Persist after upstream rotation failed (after retry)',
-      ).pipe(
-        Effect.annotateLogs({ err: failureText(failure), clientId: client.id }),
-        Effect.andThen(
-          Effect.fail(
-            RefreshFailed.make({
-              outcome: 'transient_persist_failure',
-              status: 500,
-              error: 'server_error',
-              description: 'Failed to persist refreshed tokens',
-              cause: failure,
-            }),
-          ),
-        ),
-      ),
+    Effect.catchTag(
+      'OAuthStoreUnavailable',
+      (failure): Effect.Effect<never, OAuthStoreUnavailable | RefreshFailed> =>
+        failure.cause instanceof GrantRevokedError ||
+        failure.cause instanceof GrantStateUnavailableError
+          ? Effect.fail(failure)
+          : Effect.logError(
+              'Persist after upstream rotation failed (after retry)',
+            ).pipe(
+              Effect.annotateLogs({
+                err: failureText(failure),
+                clientId: client.id,
+              }),
+              Effect.andThen(
+                Effect.fail(
+                  RefreshFailed.make({
+                    outcome: 'transient_persist_failure',
+                    status: 500,
+                    error: 'server_error',
+                    description: 'Failed to persist refreshed tokens',
+                    cause: failure,
+                  }),
+                ),
+              ),
+            ),
     ),
     Effect.withSpan('RefreshToken.persist'),
   );

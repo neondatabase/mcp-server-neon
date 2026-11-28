@@ -32,6 +32,7 @@ export const SloOutcome = Schema.Literals([
   'cliff_upstream',
   'transient_lock_timeout',
   'transient_persist_failure',
+  'transient_revocation',
   'transient_upstream_5xx',
   'transient_upstream_network',
   'bad_request',
@@ -77,7 +78,9 @@ const sloFields = (input: {
 
   if (replay !== undefined) {
     fields.push(
-      'reason=replay_after_grace',
+      replay.reason === 'revoked'
+        ? 'reason=grant_revoked'
+        : 'reason=replay_after_grace',
       `replayAgeMs=${replay.ageMs}`,
       `replayNext=${replay.next}`,
       `clientApplication=${replay.clientApplication}`,

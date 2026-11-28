@@ -4,6 +4,8 @@
  * each answer leaves. A request the client got wrong keeps every span ok and
  * sends nothing to Sentry.
  */
+import { createServer } from 'node:https';
+import { fixtureCertificate } from './oauth-fixture-certificate';
 import { once } from 'node:events';
 import { Writable } from 'node:stream';
 import pg from 'pg';
@@ -11,15 +13,56 @@ import winston from 'winston';
 import { flush, httpIntegration, init, startSpan } from '@sentry/node';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
 
 process.env.E2E_SENTRY_PORT = '3115';
+
+// openid-client requires HTTPS. This worker uses a disposable loopback issuer.
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
+process.env.CLIENT_ID = 'synthetic-broker';
+
+process.env.CLIENT_SECRET = 'synthetic-broker-secret';
+
+const issuer = createServer(await fixtureCertificate(), (request, response) => {
+  if (request.url === '/.well-known/openid-configuration') {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(
+      JSON.stringify({
+        issuer: issuerUrl,
+        authorization_endpoint: `${issuerUrl}/authorize`,
+        token_endpoint: `${issuerUrl}/token`,
+        revocation_endpoint: `${issuerUrl}/revoke`,
+        response_types_supported: ['code'],
+      }),
+    );
+
+    return;
+  }
+
+  request.resume();
+  response.writeHead(
+    request.method === 'POST' && request.url === '/revoke' ? 200 : 404,
+  );
+  response.end();
+});
+
+issuer.listen(0, '127.0.0.1');
+
+await once(issuer, 'listening');
+
+const issuerPort = z.object({ port: z.number() }).parse(issuer.address()).port;
+const issuerUrl = `https://127.0.0.1:${issuerPort}`;
+
+process.env.UPSTREAM_OAUTH_HOST = issuerUrl;
 
 const {
   SENTRY_FIXTURE_DSN,
   SENTRY_FIXTURE_ITEMS_URL,
   startSentryFixtureServer,
 } = await import('../../e2e/sentry-fixture');
+
+const { ensureTestOauthDatabase } =
+  await import('./ensure-test-oauth-database');
 
 const databaseUrl = await ensureTestOauthDatabase();
 
@@ -175,6 +218,8 @@ const seedTokens = async (clientId: string) => {
 describe('OAuth client routes', () => {
   afterAll(async () => {
     fixture.close();
+    issuer.closeAllConnections();
+    issuer.close();
     await once(fixture, 'close');
   });
 
@@ -326,11 +371,13 @@ describe('OAuth client routes', () => {
         { description: 'OAuthStore.findClient', status: 'ok' },
         { description: 'OAuthClient.authenticate', status: 'ok' },
         { description: 'OAuthStore.revokeToken', status: 'ok' },
-        { description: 'OAuthModel.revokeOwnedRotation', status: 'ok' },
-        { description: 'OAuthModel.getRefreshToken', status: 'ok' },
-        { description: 'OAuthModel.getAccessToken', status: 'ok' },
-        { description: 'OAuthModel.deleteToken', status: 'ok' },
-        { description: 'OAuthModel.deleteRefreshToken', status: 'ok' },
+        { description: 'OAuthModel.findGrant', status: 'ok' },
+        { description: 'OAuthModel.traceGrant', status: 'ok' },
+        { description: 'OAuthModel.denyGrant', status: 'ok' },
+        { description: 'OAuthModel.traceGrant', status: 'ok' },
+        { description: 'OAuthModel.denyGrant', status: 'ok' },
+        { description: 'OAuthModel.deleteGrantRows', status: 'ok' },
+        { description: 'OAuthModel.retireGrant', status: 'ok' },
       ]);
       await expect(
         spanAttribute(name, 'OAuthRevoke.revoke', 'oauth.client_id'),

@@ -7,6 +7,7 @@ import { SloOutcome } from './refresh-slo';
 const RefreshReplay = Schema.Struct({
   ageMs: Schema.Finite,
   next: Schema.Literals(['live', 'rotated', 'gone']),
+  reason: Schema.optional(Schema.Literal('revoked')),
 });
 
 /**

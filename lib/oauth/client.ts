@@ -5,6 +5,7 @@ import {
   authorizationCodeGrant,
   ClientSecretPost,
   refreshTokenGrant,
+  tokenRevocation,
   customFetch,
   type Configuration,
 } from 'openid-client';
@@ -134,6 +135,33 @@ let cachedConfig: Configuration | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
+const upstreamFetch: typeof globalThis.fetch = (input, init) => {
+  // Best-effort diagnostic: if a caller wrapped this fetch in an
+  // inspection context, hand them a sanitized summary of the outbound
+  // body so they can include it in error logs. Never throw — diagnostics
+  // must not affect the live request.
+  const inspect = upstreamRequestInspectionContext.getStore();
+  if (inspect) {
+    try {
+      const summary = summarizeRequestBody(init?.body);
+      if (summary) inspect(summary);
+    } catch {
+      /* swallow — diagnostic only */
+    }
+  }
+  const ctxSignal = upstreamAbortSignalContext.getStore();
+  if (!ctxSignal) {
+    // No per-call signal to inject — defer to native fetch with the
+    // original args untouched. Preserves Request-object inputs, headers,
+    // body, signal, etc. exactly as openid-client constructed them.
+    return globalThis.fetch(input, init);
+  }
+  return globalThis.fetch(input, {
+    ...(init ?? {}),
+    signal: combineSignals(ctxSignal, init?.signal),
+  });
+};
+
 const getUpstreamConfig = async (): Promise<Configuration> => {
   const now = Date.now();
 
@@ -150,7 +178,7 @@ const getUpstreamConfig = async (): Promise<Configuration> => {
       client_secret: CLIENT_SECRET,
     },
     ClientSecretPost(CLIENT_SECRET),
-    {},
+    { [customFetch]: upstreamFetch },
   );
   // Inject a per-call AbortSignal through openid-client's customFetch hook.
   // The signal is read from ALS so callers (e.g. the timeout wrapper in
@@ -167,34 +195,7 @@ const getUpstreamConfig = async (): Promise<Configuration> => {
   // function instances whose cached Configuration carried that wrapper for
   // the full 1-hour cache TTL. Pure pass-through means the only requests
   // that traverse our wrapper logic are the ones that genuinely need it.
-  (cachedConfig as unknown as Record<symbol, typeof globalThis.fetch>)[
-    customFetch
-  ] = (input, init) => {
-    // Best-effort diagnostic: if a caller wrapped this fetch in an
-    // inspection context, hand them a sanitized summary of the outbound
-    // body so they can include it in error logs. Never throw — diagnostics
-    // must not affect the live request.
-    const inspect = upstreamRequestInspectionContext.getStore();
-    if (inspect) {
-      try {
-        const summary = summarizeRequestBody(init?.body);
-        if (summary) inspect(summary);
-      } catch {
-        /* swallow — diagnostic only */
-      }
-    }
-    const ctxSignal = upstreamAbortSignalContext.getStore();
-    if (!ctxSignal) {
-      // No per-call signal to inject — defer to native fetch with the
-      // original args untouched. Preserves Request-object inputs, headers,
-      // body, signal, etc. exactly as openid-client constructed them.
-      return globalThis.fetch(input, init);
-    }
-    return globalThis.fetch(input, {
-      ...(init ?? {}),
-      signal: combineSignals(ctxSignal, init?.signal),
-    });
-  };
+  cachedConfig[customFetch] = upstreamFetch;
   cacheTimestamp = now;
 
   return cachedConfig;
@@ -235,4 +236,41 @@ export const exchangeRefreshToken = async (
   // attaches it to the underlying fetch. Cancellation now actually closes
   // the socket — Promise.race alone only resolved the await wrapper.
   return upstreamAbortSignalContext.run(signal, withInspection);
+};
+
+export type IssuerTokenPair = { accessToken: string; refreshToken?: string };
+
+/** Both requests are attempted; success means both were acknowledged. */
+export const revokeUpstreamTokens = async (
+  pair: IssuerTokenPair,
+  signal?: AbortSignal,
+): Promise<void> => {
+  const deadline = combineSignals(AbortSignal.timeout(4500), signal);
+
+  if (deadline === undefined) {
+    throw new Error('Issuer retirement deadline unavailable');
+  }
+
+  await upstreamAbortSignalContext.run(deadline, async () => {
+    const config = await getUpstreamConfig();
+    const requests = [
+      tokenRevocation(config, pair.accessToken, {
+        token_type_hint: 'access_token',
+      }),
+    ];
+
+    if (pair.refreshToken !== undefined) {
+      requests.push(
+        tokenRevocation(config, pair.refreshToken, {
+          token_type_hint: 'refresh_token',
+        }),
+      );
+    }
+
+    const results = await Promise.allSettled(requests);
+
+    if (results.some((result) => result.status === 'rejected')) {
+      throw new Error('Issuer token retirement did not complete');
+    }
+  });
 };

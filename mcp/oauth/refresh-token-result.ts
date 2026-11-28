@@ -6,6 +6,7 @@ export const toMilliseconds = (seconds: number): number => seconds * 1000;
 
 /** The body of a successful refresh_token grant. */
 export type RefreshTokenResult = {
+  grantFamilyId?: string;
   access_token: string;
   expires_in: number;
   token_type: 'bearer';
@@ -21,6 +22,7 @@ export const cachedToResponse = (input: {
   readonly cached: RefreshResult;
   readonly now: number;
 }): RefreshTokenResult => ({
+  grantFamilyId: input.cached.grantFamilyId,
   access_token: input.cached.accessToken,
   expires_in: Math.max(0, toSeconds(input.cached.expiresAt - input.now)),
   token_type: 'bearer' as const,
