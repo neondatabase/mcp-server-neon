@@ -1,5 +1,4 @@
 import { Cause, Clock, Effect, ErrorReporter, Option } from 'effect';
-import { HttpServerResponse } from 'effect/http';
 import type { RefreshResult } from '../../../mcp/oauth/kv-store';
 import type { RefreshFailed } from '../../../mcp/oauth/refresh-failed';
 import { RefreshRotations } from '../../../mcp/oauth/refresh-rotations';
@@ -15,6 +14,10 @@ import {
   rejectedReplay,
   servedPair,
 } from './token-refresh-lock';
+import {
+  checkedBody,
+  answerGrantStateFailure,
+} from './token-refresh-grant-state';
 import type { Grant } from './token-refresh-lock';
 
 const answered = (outcome: SloOutcome) =>
@@ -27,6 +30,11 @@ const servedOverFailure = Effect.fnUntraced(function* (input: {
   const { grant } = input;
   const now = yield* Clock.currentTimeMillis;
 
+  const response = yield* checkedBody(
+    cachedToResponse({ cached: input.cached, now }),
+    grant,
+  );
+
   yield* emitRefreshSlo({
     outcome: 'success',
     startMs: grant.startMs,
@@ -34,11 +42,7 @@ const servedOverFailure = Effect.fnUntraced(function* (input: {
     reason: 'cache_replay_over_failure',
   });
 
-  return Option.some(
-    HttpServerResponse.jsonUnsafe(
-      cachedToResponse({ cached: input.cached, now }),
-    ),
-  );
+  return Option.some(response);
 });
 
 // Absorbs retry storms: a token upstream already rejected recently skips the
@@ -88,6 +92,7 @@ const answerFromFailureCache = Effect.fnUntraced(function* (grant: Grant) {
 
 const refreshAnswered = Effect.fnUntraced(function* (grant: Grant) {
   const result = yield* refreshUnderLock(grant);
+  const response = yield* checkedBody(result, grant);
 
   yield* Effect.logInfo('Returning refresh token response');
   yield* emitRefreshSlo({
@@ -96,7 +101,7 @@ const refreshAnswered = Effect.fnUntraced(function* (grant: Grant) {
     clientId: grant.client.id,
   });
 
-  return HttpServerResponse.jsonUnsafe(result);
+  return response;
 });
 
 // A winning peer's cached result is folded into this answer. That also
@@ -109,6 +114,8 @@ const answerFromCache = Effect.fnUntraced(function* (input: {
   readonly cached: RefreshTokenResult;
 }) {
   const { grant, failure, cached } = input;
+  const response = yield* checkedBody(cached, grant);
+
   // A recovered persist failure still counts as bad in the SLO, so the
   // metric doesn't mask Postgres degradation behind a 200.
   const recovered = failure.outcome === 'transient_persist_failure';
@@ -135,7 +142,7 @@ const answerFromCache = Effect.fnUntraced(function* (input: {
     reason: recovered ? 'recovered_via_cache' : 'cache_replay_after_error',
   });
 
-  return HttpServerResponse.jsonUnsafe(cached);
+  return response;
 });
 
 const answerRefreshFailure = Effect.fnUntraced(function* (input: {
@@ -216,16 +223,23 @@ export const refreshTokenGrant = Effect.fnUntraced(function* (input: {
   }
 
   const grant = { refreshToken, client, startMs };
-  const fast = yield* answerFromFailureCache(grant);
 
-  if (Option.isSome(fast)) {
-    return fast.value;
-  }
+  return yield* Effect.gen(function* () {
+    const fast = yield* answerFromFailureCache(grant);
 
-  return yield* refreshAnswered(grant).pipe(
-    Effect.catchTags({
-      RefreshFailed: (failure) => answerRefreshFailure({ grant, failure }),
-      RefreshLockTimeout: () => answerLockTimeout(grant),
-    }),
+    if (Option.isSome(fast)) {
+      return fast.value;
+    }
+
+    return yield* refreshAnswered(grant).pipe(
+      Effect.catchTags({
+        RefreshFailed: (failure) => answerRefreshFailure({ grant, failure }),
+        RefreshLockTimeout: () => answerLockTimeout(grant),
+      }),
+    );
+  }).pipe(
+    Effect.catchTag('OAuthStoreUnavailable', (failure) =>
+      answerGrantStateFailure(failure, grant),
+    ),
   );
 }, logFallbacksOnce);

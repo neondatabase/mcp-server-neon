@@ -1,4 +1,4 @@
-import { Effect, Layer, Option } from 'effect';
+import { Cause, Effect, ErrorReporter, Layer, Option } from 'effect';
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http';
 import { OAuthStore } from '../../../mcp/oauth/oauth-store';
 import { clientIdForSpan } from '../../oauth/client-id-span';
@@ -40,16 +40,37 @@ const revokeNamedToken = Effect.fnUntraced(function* (input: {
 
   const store = yield* OAuthStore;
 
-  yield* store.revokeToken({
-    token,
-    // An empty hint counts as no hint, so both token types are tried.
-    tokenTypeHint: Option.fromNullishOr(formData.get('token_type_hint')).pipe(
-      Option.filter((hint) => hint !== ''),
-    ),
-    clientId,
-  });
-
-  return revoked;
+  return yield* store
+    .revokeToken({
+      token,
+      // An empty hint counts as no hint, so both token types are tried.
+      tokenTypeHint: Option.fromNullishOr(formData.get('token_type_hint')).pipe(
+        Option.filter((hint) => hint !== ''),
+      ),
+      clientId,
+    })
+    .pipe(
+      Effect.as(revoked),
+      Effect.catchTag('OAuthStoreUnavailable', (failure) =>
+        ErrorReporter.report(Cause.fail(failure)).pipe(
+          Effect.andThen(
+            Effect.annotateCurrentSpan({
+              'error.type': 'GrantRevocationIncomplete',
+            }),
+          ),
+          Effect.as(
+            HttpServerResponse.jsonUnsafe(
+              {
+                error: 'temporarily_unavailable',
+                error_description:
+                  'Token revocation did not complete; please retry',
+              },
+              { status: 503, headers: { 'Retry-After': '30' } },
+            ),
+          ),
+        ),
+      ),
+    );
 });
 
 /** Authenticates the client, then revokes the token it names. */

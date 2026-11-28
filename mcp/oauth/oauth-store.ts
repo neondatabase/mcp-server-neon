@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Option } from 'effect';
+import { Context, Effect, Layer, Option, Predicate } from 'effect';
 import type { AuthorizationCode, Client, Token } from 'oauth2-server';
 import { ClientMetadataUnavailableError } from '../../lib/oauth/client-id-metadata-document';
 import {
@@ -161,6 +161,10 @@ export class OAuthStore extends Context.Service<
         model.saveRefreshToken({
           refreshToken: input.refreshToken,
           accessToken: saved.accessToken,
+          clientId: input.token.client.id,
+          grantFamilyId: Predicate.isString(saved.grantFamilyId)
+            ? saved.grantFamilyId
+            : undefined,
         }),
       );
 
@@ -168,8 +172,8 @@ export class OAuthStore extends Context.Service<
     }),
 
     findAccessToken: ({ accessToken }: { readonly accessToken: string }) =>
-      stored('getAccessToken', async () =>
-        model.getAccessToken(accessToken),
+      stored('getStoredAccessToken', async () =>
+        model.getStoredAccessToken(accessToken),
       ).pipe(Effect.map(Option.fromUndefinedOr)),
 
     findRefreshToken: ({ refreshToken }: { readonly refreshToken: string }) =>

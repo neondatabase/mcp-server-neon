@@ -14,6 +14,7 @@ import type { UpstreamTimeoutError } from './upstream-timeout-error';
 
 /** A stored refresh token of `client`'s, about to be sent upstream. */
 export type Rotation = {
+  readonly familyId: string;
   readonly refreshToken: string;
   readonly client: Client;
   readonly record: RefreshToken;

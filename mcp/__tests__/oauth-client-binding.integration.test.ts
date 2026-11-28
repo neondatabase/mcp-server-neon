@@ -20,21 +20,62 @@ import {
 } from 'vitest';
 import { z } from 'zod';
 import { ensureTestOauthDatabase } from './ensure-test-oauth-database';
+import { getTokens, getRefreshTokens } from '../oauth/kv-store';
 import { logger } from '../utils/logger';
 import type { RefreshLockStore } from '../oauth/refresh-lock-store';
 
-const upstream = { calls: 0, latencyMs: 0, rotate: true };
+type RetiredPair = { accessToken: string; refreshToken?: string };
+
+type UpstreamState = {
+  calls: number;
+  latencyMs: number;
+  rotate: boolean;
+  lastAccessToken: string;
+  lastRefreshToken: string;
+  beforeReturn: () => Promise<void>;
+  retired: RetiredPair[];
+  retirementFails: boolean;
+  beforeRetire: () => Promise<void>;
+};
+
+const upstream: UpstreamState = {
+  calls: 0,
+  latencyMs: 0,
+  rotate: true,
+  lastAccessToken: '',
+  lastRefreshToken: '',
+  beforeReturn: async () => {
+    /* No barrier unless the test installs one. */
+  },
+  retired: [],
+  retirementFails: false,
+  beforeRetire: async () => {
+    /* No retirement barrier by default. */
+  },
+};
 
 vi.mock('../../lib/oauth/client', () => ({
   exchangeRefreshToken: async () => {
     upstream.calls++;
     await new Promise((r) => setTimeout(r, upstream.latencyMs));
+    upstream.lastAccessToken = `at-${randomUUID()}`;
+    upstream.lastRefreshToken = upstream.rotate ? `rt-${randomUUID()}` : '';
+    await upstream.beforeReturn();
+
     return {
-      access_token: `at-${randomUUID()}`,
-      refresh_token: upstream.rotate ? `rt-${randomUUID()}` : undefined,
+      access_token: upstream.lastAccessToken,
+      refresh_token: upstream.lastRefreshToken || undefined,
       expiresIn: () => 3600,
       scope: 'read write',
     };
+  },
+  revokeUpstreamTokens: async (tokens: RetiredPair) => {
+    upstream.retired.push(tokens);
+    await upstream.beforeRetire();
+
+    if (upstream.retirementFails) {
+      throw new Error('Fixture issuer retirement unavailable');
+    }
   },
 }));
 
@@ -52,6 +93,7 @@ vi.mock('../utils/logger', () => ({
 }));
 
 type TestClient = { id: string; secret: string };
+
 type TokenBody = {
   access_token?: string;
   refresh_token?: string;
@@ -79,6 +121,7 @@ beforeAll(async () => {
   getRefreshResults = (await import('../oauth/kv-store')).getRefreshResults;
   tokenRoute = await import('../../app/api/token/route');
   revokeRoute = await import('../../app/api/revoke/route');
+
   for (const client of [owner, other]) {
     await model.saveClient({
       id: client.id,
@@ -95,6 +138,16 @@ beforeEach(() => {
   upstream.calls = 0;
   upstream.latencyMs = 0;
   upstream.rotate = true;
+  upstream.lastAccessToken = '';
+  upstream.lastRefreshToken = '';
+  upstream.beforeReturn = async () => {
+    /* No barrier by default. */
+  };
+  upstream.retired = [];
+  upstream.retirementFails = false;
+  upstream.beforeRetire = async () => {
+    /* No retirement barrier by default. */
+  };
 });
 
 async function seedRefreshToken(): Promise<string> {
@@ -109,6 +162,7 @@ async function seedRefreshToken(): Promise<string> {
     scope: 'read write',
   });
   await model.saveRefreshToken({ refreshToken, accessToken });
+
   return refreshToken;
 }
 
@@ -135,6 +189,7 @@ async function refresh(client: TestClient, refreshToken: string) {
       refresh_token: refreshToken,
     }),
   );
+
   return {
     status: response.status,
     body: (await response.json()) as TokenBody,
@@ -145,6 +200,7 @@ async function revoke(client: TestClient, token: string): Promise<number> {
   const response = await revokeRoute.POST(
     form('/api/revoke', client, { token }),
   );
+
   return response.status;
 }
 
@@ -187,7 +243,7 @@ describe('refresh token client binding', () => {
 
     const [intruder, ...owners] = await Promise.all([
       refresh(other, refreshToken),
-      ...Array.from({ length: 5 }, () => refresh(owner, refreshToken)),
+      ...Array.from({ length: 5 }, async () => refresh(owner, refreshToken)),
     ]);
 
     expectRejected(intruder);
@@ -231,13 +287,17 @@ describe('refresh token client binding', () => {
     const second = await refresh(owner, first);
     const secondToken = second.body.refresh_token!;
     expect((await refresh(owner, secondToken)).status).toBe(200);
+
     for (const key of [first, secondToken]) {
       const row = (await model.getRefreshResult(key))!;
       delete row.clientId;
+      delete row.grantFamilyId;
       await model.saveRefreshResult(key, row);
     }
+
     const expiry = async (key: string) =>
       (await getRefreshResults().get(key, { raw: true }))?.expires;
+
     const expiries = [await expiry(first), await expiry(secondToken)];
 
     expectRejected(await refresh(other, first));
@@ -245,6 +305,7 @@ describe('refresh token client binding', () => {
     for (const key of [first, secondToken]) {
       expect((await model.getRefreshResult(key))?.clientId).toBe(owner.id);
     }
+
     expect([await expiry(first), await expiry(secondToken)]).toEqual(expiries);
     const replay = await refresh(owner, first);
     expect(replay.status).toBe(200);
@@ -256,15 +317,18 @@ describe('refresh token client binding', () => {
     const first = await seedRefreshToken();
     const second = (await refresh(owner, first)).body.refresh_token!;
     const third = (await refresh(owner, second)).body;
-    expect(await revoke(owner, third.refresh_token!)).toBe(200);
+    await expect(revoke(owner, third.refresh_token!)).resolves.toBe(200);
+
     for (const key of [first, second]) {
       const row = (await model.getRefreshResult(key))!;
       delete row.clientId;
+      delete row.grantFamilyId;
       await model.saveRefreshResult(key, row);
     }
 
     expectRejected(await refresh(owner, first));
-    const lookups = vi.spyOn(model, 'getAccessToken');
+    const lookups = vi.spyOn(model, 'getStoredAccessToken');
+
     try {
       expectRejected(await refresh(owner, first));
       expect(lookups).not.toHaveBeenCalled();
@@ -275,12 +339,14 @@ describe('refresh token client binding', () => {
 
   it('attributes a cached rotation without a client whose new pair was never persisted', async () => {
     const rotated = await seedRefreshToken();
+
     const cached = {
       accessToken: `at-${randomUUID()}`,
       refreshToken: `rt-${randomUUID()}`,
       expiresAt: Date.now() + 3_600_000,
       scope: 'read write',
     };
+
     await model.saveRefreshResult(rotated, cached);
 
     expectRejected(await refresh(other, rotated));
@@ -299,18 +365,18 @@ describe('refresh token revocation client binding', () => {
   it('ignores another client revoking the token', async () => {
     const refreshToken = await seedRefreshToken();
 
-    expect(await revoke(other, refreshToken)).toBe(200);
+    await expect(revoke(other, refreshToken)).resolves.toBe(200);
 
-    expect(await model.getRefreshToken(refreshToken)).toBeDefined();
+    await expect(model.getRefreshToken(refreshToken)).resolves.toBeDefined();
     expect((await refresh(owner, refreshToken)).status).toBe(200);
   });
 
   it('revokes the token for its owner', async () => {
     const refreshToken = await seedRefreshToken();
 
-    expect(await revoke(owner, refreshToken)).toBe(200);
+    await expect(revoke(owner, refreshToken)).resolves.toBe(200);
 
-    expect(await model.getRefreshToken(refreshToken)).toBeUndefined();
+    await expect(model.getRefreshToken(refreshToken)).resolves.toBeUndefined();
     expectRejected(await refresh(owner, refreshToken));
     expect(upstream.calls).toBe(0);
   });
@@ -796,5 +862,795 @@ describe('refresh token replay grace period', () => {
     expectRejected(await refresh(owner, rotated));
 
     expect(upstream.calls).toBe(1);
+  });
+});
+
+const deferred = () => {
+  const { promise, resolve } = Promise.withResolvers<undefined>();
+  return {
+    promise,
+    complete: () => {
+      resolve(undefined);
+    },
+  };
+};
+
+describe('explicit revocation of a refresh family', () => {
+  it('rejects a predecessor cache replay immediately after revoking the current token', async () => {
+    const old = await seedRefreshToken();
+    const current = await rotate(old);
+    await expect(revoke(owner, current)).resolves.toBe(200);
+    expectRejected(await refresh(owner, old));
+  });
+
+  it('denies the live descendant when an older rotation is explicitly revoked', async () => {
+    const first = await seedRefreshToken();
+    const second = await rotate(first);
+    const third = await rotate(second);
+    const accessToken = upstream.lastAccessToken;
+    await expect(revoke(owner, first)).resolves.toBe(200);
+    await expect(model.getAccessToken(accessToken)).resolves.toBeUndefined();
+    expectRejected(await refresh(owner, third));
+  });
+
+  it('denies an issuer response that completes after its family was revoked', async () => {
+    const token = await seedRefreshToken();
+    const entered = deferred();
+    const release = deferred();
+    upstream.beforeReturn = async () => {
+      entered.complete();
+      await release.promise;
+    };
+
+    const pending = refresh(owner, token);
+    await entered.promise;
+
+    try {
+      await expect(revoke(owner, token)).resolves.toBe(200);
+    } finally {
+      release.complete();
+    }
+
+    expectRejected(await pending);
+    await expect(
+      model.getAccessToken(upstream.lastAccessToken),
+    ).resolves.toBeUndefined();
+  });
+
+  it('denies credentials when revocation lands after the result cache write', async () => {
+    const token = await seedRefreshToken();
+    const save = model.saveRefreshResult.bind(model);
+    const spy = vi
+      .spyOn(model, 'saveRefreshResult')
+      .mockImplementationOnce(async (key, row) => {
+        await save(key, row);
+        await expect(revoke(owner, token)).resolves.toBe(200);
+      });
+    try {
+      expectRejected(await refresh(owner, token));
+      expect(
+        await model.getAccessToken(upstream.lastAccessToken),
+      ).toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('denies credentials when revocation lands after the access-token write', async () => {
+    const token = await seedRefreshToken();
+    const save = model.saveToken.bind(model);
+    const spy = vi
+      .spyOn(model, 'saveToken')
+      .mockImplementationOnce(async (row) => {
+        const saved = await save(row);
+        await expect(revoke(owner, token)).resolves.toBe(200);
+        return saved;
+      });
+    try {
+      expectRejected(await refresh(owner, token));
+      expect(
+        await model.getAccessToken(upstream.lastAccessToken),
+      ).toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('denies the final response when revocation lands after the refresh-token write', async () => {
+    const token = await seedRefreshToken();
+    const save = model.saveRefreshToken.bind(model);
+    const spy = vi
+      .spyOn(model, 'saveRefreshToken')
+      .mockImplementationOnce(async (row) => {
+        const saved = await save(row);
+        await expect(revoke(owner, token)).resolves.toBe(200);
+        return saved;
+      });
+    try {
+      expectRejected(await refresh(owner, token));
+      expect(
+        await model.getAccessToken(upstream.lastAccessToken),
+      ).toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+type LegacyPair = { accessToken: string; refreshToken: string };
+
+const seedLegacyChain = async (boundTerminal = true): Promise<LegacyPair[]> => {
+  const pairs = Array.from({ length: 4 }, () => ({
+    accessToken: `legacy-at-${randomUUID()}`,
+    refreshToken: `legacy-rt-${randomUUID()}`,
+  }));
+
+  await Promise.all(
+    pairs.map(async (item) => {
+      await getTokens().set(item.accessToken, {
+        ...item,
+        client: { id: owner.id, grants: [] },
+        user: { id: 'legacy-user', name: 'Legacy Test User' },
+        scope: 'read write',
+        expires_at: Date.now() + 3_600_000,
+      });
+      await getRefreshTokens().set(item.refreshToken, item);
+    }),
+  );
+  await Promise.all(
+    pairs.slice(0, -1).map(async (item, index) => {
+      const next = required(pairs.at(index + 1), 'legacy successor');
+      await model.saveRefreshResult(item.refreshToken, {
+        clientId: owner.id,
+        ...next,
+        expiresAt: Date.now() + 3_600_000,
+        scope: 'read write',
+      });
+    }),
+  );
+
+  if (boundTerminal) {
+    const terminal = required(pairs.at(-1), 'terminal legacy pair');
+    const token = required(
+      await model.getStoredAccessToken(terminal.accessToken),
+      'terminal record',
+    );
+    await model.saveToken(token);
+  }
+
+  return pairs;
+};
+
+describe('legacy family cutover', () => {
+  it('keeps a recovered legacy pair denied when current revoke leaves intermediate records', async () => {
+    const pairs = await seedLegacyChain();
+    const replay = await refresh(owner, pairs[0].refreshToken);
+    expect(replay.status).toBe(200);
+    await expect(
+      model.getAccessToken(pairs[1].accessToken),
+    ).resolves.toBeDefined();
+    await expect(revoke(owner, pairs[3].refreshToken)).resolves.toBe(200);
+    await expect(
+      model.getAccessToken(pairs[1].accessToken),
+    ).resolves.toBeUndefined();
+    expectRejected(await refresh(owner, pairs[0].refreshToken));
+  });
+
+  it('denies an unbound predecessor after an ancestor cache link is removed', async () => {
+    const pairs = await seedLegacyChain();
+    await getRefreshTokens().delete(pairs[1].refreshToken);
+    const replay = await refresh(owner, pairs[1].refreshToken);
+    expect(replay.status).toBe(200);
+    await expect(
+      model.getAccessToken(pairs[2].accessToken),
+    ).resolves.toBeDefined();
+    await expect(revoke(owner, pairs[1].refreshToken)).resolves.toBe(200);
+    expectRejected(await refresh(owner, pairs[0].refreshToken));
+    await expect(
+      model.getAccessToken(pairs[2].accessToken),
+    ).resolves.toBeUndefined();
+  });
+
+  it('keeps a cold legacy token usable through guarded upgrade binding', async () => {
+    const pairs = await seedLegacyChain(false);
+    const result = await refresh(owner, pairs[3].refreshToken);
+
+    expect(result.status).toBe(200);
+    expect(upstream.calls).toBe(1);
+  });
+});
+
+describe('grant denial storage and recovery', () => {
+  it('does not override a cached failure with a pair from a revoked family', async () => {
+    const old = await seedRefreshToken();
+    const current = await rotate(old);
+    await model.saveRefreshFailure(old, {
+      failedAt: Date.now(),
+      oauthError: 'invalid_grant',
+    });
+    await expect(revoke(owner, current)).resolves.toBe(200);
+    expectRejected(await refresh(owner, old));
+  });
+
+  it('does not rescue a persistence failure with a revoked cached pair', async () => {
+    const token = await seedRefreshToken();
+    const unavailable = new Error('Fixture persistence unavailable');
+    const spy = vi.spyOn(model, 'saveToken').mockRejectedValue(unavailable);
+    spy.mockImplementationOnce(async () => {
+      const cached = required(
+        await model.getRefreshResult(token),
+        'cached result',
+      );
+      await expect(revoke(owner, token)).resolves.toBe(200);
+      await getRefreshResults().set(token, cached, 7 * DAY_MS);
+      throw unavailable;
+    });
+    try {
+      const result = await refresh(owner, token);
+      expect(result.status).not.toBe(200);
+      expect(result.body.access_token).toBeUndefined();
+      expect(result.body.refresh_token).toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('denies both the holder and a waiting refresh after explicit revocation', async () => {
+    const token = await seedRefreshToken();
+    const entered = deferred();
+    const release = deferred();
+    upstream.beforeReturn = async () => {
+      entered.complete();
+      await release.promise;
+    };
+
+    const first = refresh(owner, token);
+    await entered.promise;
+    const peeked = deferred();
+    const read = model.getRefreshRotation.bind(model);
+
+    const spy = vi
+      .spyOn(model, 'getRefreshRotation')
+      .mockImplementation(async (key) => {
+        const row = await read(key);
+        peeked.complete();
+
+        return row;
+      });
+
+    const second = refresh(owner, token);
+    await peeked.promise;
+
+    try {
+      await expect(revoke(owner, token)).resolves.toBe(200);
+    } finally {
+      release.complete();
+    }
+
+    try {
+      const results = await Promise.all([first, second]);
+      expect(
+        results
+          .map(({ status }) => status)
+          .every((status) => [400, 503].includes(status)),
+      ).toBe(true);
+      expect(results.map(({ body }) => body.access_token)).toStrictEqual([
+        undefined,
+        undefined,
+      ]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('rolls back every new marker when one alias already belongs to another grant', async () => {
+    const { accessGrantAlias } = await import('../oauth/grant-family');
+    const first = accessGrantAlias(owner.id, randomUUID());
+    const second = accessGrantAlias(owner.id, randomUUID());
+    const occupied = accessGrantAlias(owner.id, randomUUID());
+    const fresh = accessGrantAlias(owner.id, randomUUID());
+
+    await model.revokeGrant(first, owner.id, { aliases: [occupied] });
+    await expect(
+      model.revokeGrant(second, owner.id, {
+        aliases: [occupied, fresh],
+      }),
+    ).rejects.toMatchObject({
+      name: 'GrantStateUnavailableError',
+      cause: { message: 'OAuth grant denial identity conflict' },
+    });
+
+    await expect(model.isGrantRevoked(first)).resolves.toBe(true);
+    await expect(model.isGrantRevoked(occupied)).resolves.toBe(true);
+    await expect(model.isGrantRevoked(second)).resolves.toBe(false);
+    await expect(model.isGrantRevoked(fresh)).resolves.toBe(false);
+  });
+
+  it('returns retryable failure when denial cannot be persisted', async () => {
+    const token = await seedRefreshToken();
+
+    const record = required(
+      await model.getRefreshToken(token),
+      'refresh record',
+    );
+
+    const spy = vi
+      .spyOn(model, 'revokeGrant')
+      .mockRejectedValue(new Error('Fixture marker write unavailable'));
+
+    try {
+      await expect(revoke(owner, token)).resolves.toBe(503);
+      await expect(
+        model.getAccessToken(record.accessToken),
+      ).resolves.toBeDefined();
+      expect(upstream.retired).toStrictEqual([]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('does not authenticate or issue credentials when the denial read fails', async () => {
+    const token = await seedRefreshToken();
+
+    const record = required(
+      await model.getRefreshToken(token),
+      'refresh record',
+    );
+
+    const spy = vi
+      .spyOn(model, 'isGrantRevoked')
+      .mockRejectedValue(new Error('Fixture marker read unavailable'));
+
+    try {
+      await expect(model.getAccessToken(record.accessToken)).rejects.toThrow(
+        'Fixture marker read unavailable',
+      );
+      const result = await refresh(owner, token);
+      expect(result.status).not.toBe(200);
+      expect(result.body.access_token).toBeUndefined();
+      expect(result.body.refresh_token).toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('returns retryable failure for an owned cache whose family cannot be resolved', async () => {
+    const old = `orphan-${randomUUID()}`;
+    await model.saveRefreshResult(old, {
+      clientId: owner.id,
+      accessToken: `orphan-at-${randomUUID()}`,
+      refreshToken: `orphan-rt-${randomUUID()}`,
+      expiresAt: Date.now() + 3_600_000,
+    });
+    await expect(revoke(owner, old)).resolves.toBe(503);
+    expect(upstream.retired).toStrictEqual([]);
+  });
+
+  it('rejects a cyclic owned chain without treating it as unknown-token success', async () => {
+    const first = `cycle-${randomUUID()}`;
+    const second = `cycle-${randomUUID()}`;
+    await Promise.all(
+      [
+        [first, second],
+        [second, first],
+      ].map(async ([key, next]) =>
+        model.saveRefreshResult(key, {
+          clientId: owner.id,
+          grantFamilyId: 'a'.repeat(64),
+          accessToken: `cycle-at-${randomUUID()}`,
+          refreshToken: next,
+          expiresAt: Date.now() + 3_600_000,
+        }),
+      ),
+    );
+    await expect(revoke(owner, first)).resolves.toBe(503);
+    expect(upstream.retired).toStrictEqual([]);
+  });
+
+  it('rejects conflicting stored family identities before recording denial', async () => {
+    const first = await seedRefreshToken();
+    const second = await rotate(first);
+    const cached = required(await model.getRefreshResult(first), 'cache row');
+    await model.saveRefreshResult(first, {
+      ...cached,
+      grantFamilyId: 'b'.repeat(64),
+    });
+    await expect(revoke(owner, first)).resolves.toBe(503);
+    await expect(
+      model.getAccessToken(upstream.lastAccessToken),
+    ).resolves.toBeDefined();
+    const next = await refresh(owner, second);
+    expect(next.status).toBe(200);
+  });
+
+  it('keeps another bound grant of the same client working', async () => {
+    const first = await seedRefreshToken();
+    const unrelated = await seedRefreshToken();
+    await expect(revoke(owner, first)).resolves.toBe(200);
+    const next = await refresh(owner, unrelated);
+    expect(next.status).toBe(200);
+  });
+
+  it('never publishes the stored grant family in refresh responses', async () => {
+    const token = await seedRefreshToken();
+    const fresh = await refresh(owner, token);
+    const replay = await refresh(owner, token);
+    expect(fresh.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(fresh.body).not.toHaveProperty('grantFamilyId');
+    expect(replay.body).not.toHaveProperty('grantFamilyId');
+  });
+});
+
+describe('issuer retirement', () => {
+  it('requests retirement of the known current issuer pair on explicit revoke', async () => {
+    const token = await seedRefreshToken();
+
+    const stored = required(
+      await model.getRefreshToken(token),
+      'refresh token',
+    );
+
+    await expect(revoke(owner, token)).resolves.toBe(200);
+    expect(upstream.retired).toStrictEqual([
+      { accessToken: stored.accessToken, refreshToken: token },
+    ]);
+  });
+});
+
+describe('issuer retirement recovery', () => {
+  it('retries a failed issuer retirement after local source rows are gone', async () => {
+    const token = await seedRefreshToken();
+    upstream.retirementFails = true;
+    await expect(revoke(owner, token)).resolves.toBe(503);
+    await expect(model.getRefreshToken(token)).resolves.toBeUndefined();
+    expectRejected(await refresh(owner, token));
+    upstream.retirementFails = false;
+    await expect(revoke(other, token)).resolves.toBe(200);
+    expect(upstream.retired).toHaveLength(1);
+    await expect(revoke(owner, token)).resolves.toBe(200);
+    expect(upstream.retired).toHaveLength(2);
+    expect(upstream.retired[1]).toStrictEqual(upstream.retired[0]);
+  });
+
+  it('retains a late issuer pair for retry when compensation fails', async () => {
+    const token = await seedRefreshToken();
+    const entered = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    upstream.beforeReturn = async () => {
+      entered.resolve(undefined);
+      await release.promise;
+    };
+
+    const pending = refresh(owner, token);
+    await entered.promise;
+    await expect(revoke(owner, token)).resolves.toBe(200);
+    upstream.retirementFails = true;
+    release.resolve(undefined);
+    const response = await pending;
+
+    expect(response.status).toBe(503);
+    expect(response.body.access_token).toBeUndefined();
+    expect(upstream.retired).toContainEqual({
+      accessToken: upstream.lastAccessToken,
+      refreshToken: upstream.lastRefreshToken,
+    });
+    upstream.retirementFails = false;
+    const beforeRetry = upstream.retired.length;
+
+    await expect(revoke(owner, token)).resolves.toBe(200);
+    expect(upstream.retired.slice(beforeRetry)).toContainEqual({
+      accessToken: upstream.lastAccessToken,
+      refreshToken: upstream.lastRefreshToken,
+    });
+    expectRejected(await refresh(owner, upstream.lastRefreshToken));
+  });
+
+  it('keeps both refresh intents when the issuer reuses an access credential', async () => {
+    const token = await seedRefreshToken();
+
+    const record = required(
+      await model.getRefreshToken(token),
+      'refresh record',
+    );
+
+    const stored = required(
+      await model.getStoredAccessToken(record.accessToken),
+      'access record',
+    );
+
+    const family = z.string().parse(stored.grantFamilyId);
+
+    const next = {
+      accessToken: record.accessToken,
+      refreshToken: `fixture-next-${randomUUID()}`,
+    };
+
+    await model.revokeGrant(family, owner.id, {
+      pair: { accessToken: record.accessToken, refreshToken: token },
+    });
+    await model.revokeGrant(family, owner.id, { pair: next });
+    const { retireDeniedGrant } = await import('../oauth/grant-retirement');
+
+    await retireDeniedGrant(family, owner.id);
+    expect(upstream.retired).toHaveLength(2);
+    expect(upstream.retired).toContainEqual(next);
+  });
+});
+
+describe('captured legacy cache identity', () => {
+  it('denies adoption when the captured legacy cache row disappears before tracing', async () => {
+    const pairs = await seedLegacyChain();
+    await expect(revoke(owner, pairs[3].refreshToken)).resolves.toBe(200);
+    const original = model.getRefreshRotation;
+
+    const spy = vi
+      .spyOn(model, 'getRefreshRotation')
+      .mockImplementationOnce(async (key) => {
+        const captured = await original(key);
+        await model.deleteRefreshResult(key);
+
+        return captured;
+      });
+
+    try {
+      const response = await refresh(owner, pairs[0].refreshToken);
+      expect(response.status).not.toBe(200);
+      expect(response.body.access_token).toBeUndefined();
+      await expect(
+        model.getAccessToken(pairs[1].accessToken),
+      ).resolves.toBeUndefined();
+      expect(upstream.calls).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('legacy lineage evidence limits', () => {
+  it('derives independent identities when historical records have no connecting evidence', async () => {
+    const { traceGrant } = await import('../oauth/grant-family');
+    const pairs = await seedLegacyChain(false);
+
+    await model.deleteRefreshResult(pairs[1].refreshToken);
+
+    const lineage = (historicalRecord: LegacyPair) =>
+      traceGrant(
+        { clientId: owner.id, refreshToken: historicalRecord.refreshToken },
+        model,
+      );
+
+    const [earlier, later] = await Promise.all([
+      lineage(pairs[0]),
+      lineage(pairs[3]),
+    ]);
+
+    expect(earlier.familyId).not.toBe(later.familyId);
+    expect(earlier.aliases).not.toContain(later.familyId);
+  });
+});
+
+describe('revocation hints and concurrent retirement', () => {
+  it.each(['access_token', 'unexpected'])(
+    'revokes an owned refresh token with hint %s',
+    async (hint) => {
+      const token = await seedRefreshToken();
+
+      const response = await revokeRoute.POST(
+        form('/api/revoke', owner, { token, token_type_hint: hint }),
+      );
+
+      expect(response.status).toBe(200);
+      expectRejected(await refresh(owner, token));
+      expect(upstream.retired).toHaveLength(1);
+    },
+  );
+
+  it('drains a failed retirement retry even with the other token hint', async () => {
+    const token = await seedRefreshToken();
+    upstream.retirementFails = true;
+    await expect(revoke(owner, token)).resolves.toBe(503);
+    upstream.retirementFails = false;
+
+    const response = await revokeRoute.POST(
+      form('/api/revoke', owner, { token, token_type_hint: 'access_token' }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(upstream.retired).toHaveLength(2);
+  });
+
+  it('preserves a concurrently added pair while a retirement snapshot completes', async () => {
+    const token = await seedRefreshToken();
+
+    const record = required(
+      await model.getRefreshToken(token),
+      'refresh record',
+    );
+
+    const stored = required(
+      await model.getStoredAccessToken(record.accessToken),
+      'access record',
+    );
+
+    const family = z.string().parse(stored.grantFamilyId);
+
+    const pairs = Array.from({ length: 3 }, () => ({
+      accessToken: `intent-at-${randomUUID()}`,
+      refreshToken: `intent-rt-${randomUUID()}`,
+    }));
+
+    const first = required(pairs[0], 'first intent');
+    const second = required(pairs[1], 'second intent');
+    const last = required(pairs[2], 'last intent');
+    await Promise.all([
+      model.revokeGrant(family, owner.id, { pair: first }),
+      model.revokeGrant(family, owner.id, { pair: second }),
+    ]);
+    const entered = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    upstream.beforeRetire = async () => {
+      entered.resolve(undefined);
+      await release.promise;
+    };
+
+    const { retireDeniedGrant } = await import('../oauth/grant-retirement');
+
+    const { pendingRetirements } =
+      await import('../oauth/grant-revocation-store');
+
+    const draining = retireDeniedGrant(family, owner.id);
+    await entered.promise;
+    await model.revokeGrant(family, owner.id, { pair: last });
+    release.resolve(undefined);
+    await draining;
+    const retained = await pendingRetirements(family, owner.id);
+
+    expect(Object.values(retained)).toStrictEqual([last]);
+    await retireDeniedGrant(family, owner.id);
+    const completed = await pendingRetirements(family, owner.id);
+
+    expect(Object.values(completed)).toStrictEqual([]);
+    expect(upstream.retired).toHaveLength(3);
+  });
+
+  it('retires a pair that advanced between marker commit and current-pair resolution', async () => {
+    const token = await seedRefreshToken();
+
+    const record = required(
+      await model.getRefreshToken(token),
+      'refresh record',
+    );
+
+    const stored = required(
+      await model.getStoredAccessToken(record.accessToken),
+      'access record',
+    );
+
+    const next = {
+      accessToken: `advanced-at-${randomUUID()}`,
+      refreshToken: `advanced-rt-${randomUUID()}`,
+    };
+
+    const original = model.revokeGrant;
+
+    const spy = vi
+      .spyOn(model, 'revokeGrant')
+      .mockImplementation(original)
+      .mockImplementationOnce(async (id, clientId, options) => {
+        await original(id, clientId, options);
+
+        await getTokens().set(next.accessToken, { ...stored, ...next });
+        await getRefreshTokens().set(next.refreshToken, {
+          ...next,
+          clientId: owner.id,
+          grantFamilyId: id,
+        });
+        await getRefreshResults().set(
+          token,
+          {
+            ...next,
+            clientId: owner.id,
+            grantFamilyId: id,
+            expiresAt: Date.now() + 3_600_000,
+          },
+          60_000,
+        );
+      });
+
+    try {
+      await expect(revoke(owner, token)).resolves.toBe(200);
+      expect(upstream.retired).toContainEqual(next);
+      expect(upstream.retired).toContainEqual({
+        accessToken: record.accessToken,
+        refreshToken: token,
+      });
+      expectRejected(await refresh(owner, next.refreshToken));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('legacy upgrade compatibility', () => {
+  it('keeps an existing unbound bearer usable on its first request', async () => {
+    const pairs = await seedLegacyChain(false);
+    const { lookupOAuthToken } = await import('../transport/oauth-token');
+    const { Effect, Option } = await import('effect');
+
+    const result = await Effect.runPromise(
+      lookupOAuthToken(pairs[3].accessToken),
+    );
+
+    expect(Option.isSome(result)).toBe(true);
+    const bound = await model.getStoredAccessToken(pairs[3].accessToken);
+
+    expect(
+      z
+        .object({ grantFamilyId: z.string().regex(/^[a-f0-9]{64}$/u) })
+        .safeParse(bound).success,
+    ).toBe(true);
+  });
+
+  it('refreshes an existing unbound current grant without requiring another login', async () => {
+    const pairs = await seedLegacyChain(false);
+    const result = await refresh(owner, pairs[3].refreshToken);
+
+    expect(result.status).toBe(200);
+    expect(result.body.refresh_token).toBeDefined();
+    expect(result.body.access_token).toBeDefined();
+    expect(upstream.calls).toBe(1);
+  });
+
+  it('recovers an existing wholly unbound cached chain on upgrade', async () => {
+    const pairs = await seedLegacyChain(false);
+    const result = await refresh(owner, pairs[0].refreshToken);
+
+    expect(result.status).toBe(200);
+    expect(pair(result.body)).toStrictEqual([
+      pairs[1].accessToken,
+      pairs[1].refreshToken,
+    ]);
+    expect(upstream.calls).toBe(0);
+  });
+
+  it('does not adopt a legacy bearer or cache when a reachable terminal alias was revoked', async () => {
+    const pairs = await seedLegacyChain(false);
+    const { accessGrantAlias } = await import('../oauth/grant-family');
+    await model.revokeGrant(
+      accessGrantAlias(owner.id, pairs[3].accessToken),
+      owner.id,
+    );
+
+    await expect(
+      model.getAccessToken(pairs[0].accessToken),
+    ).resolves.toBeUndefined();
+    expectRejected(await refresh(owner, pairs[0].refreshToken));
+    expect(upstream.calls).toBe(0);
+  });
+
+  it('fails closed when legacy adoption cannot read the denial store', async () => {
+    const pairs = await seedLegacyChain(false);
+
+    const spy = vi
+      .spyOn(model, 'isGrantRevoked')
+      .mockRejectedValue(new Error('Fixture legacy denial read unavailable'));
+
+    try {
+      await expect(model.getAccessToken(pairs[3].accessToken)).rejects.toThrow(
+        'Fixture legacy denial read unavailable',
+      );
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('does not bind a legacy grant for a different refresh client', async () => {
+    const pairs = await seedLegacyChain(false);
+    expectRejected(await refresh(other, pairs[3].refreshToken));
+    const stored = await model.getStoredAccessToken(pairs[3].accessToken);
+
+    expect(stored?.grantFamilyId).toBeUndefined();
+    expect(upstream.calls).toBe(0);
   });
 });

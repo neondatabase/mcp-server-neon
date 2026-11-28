@@ -173,5 +173,5 @@ export const executeRefresh = (input: Refresh) =>
 
     const pair = yield* storedPair({ refreshToken, client });
 
-    return yield* Effect.uninterruptible(rotateUpstream({ ...input, ...pair }));
+    return yield* rotateUpstream({ ...input, ...pair });
   }).pipe(withRefreshSpan('RefreshToken.execute'));
